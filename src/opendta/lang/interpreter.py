@@ -144,6 +144,22 @@ class Interpreter:
         self._after(echo)
         return j + 1
 
+    def _autoload(self, word: str):
+        """Comando desconhecido: procura word.ado no adopath e roda o arquivo
+        (em silêncio, como o Stata), que deve definir o programa word."""
+        from .adopath import find_ado
+        path = find_ado(self.s, word)
+        if path is None:
+            return None
+        from ..commands.program import _run_file
+        _run_file(self.s, f'"{path}"', echo=False, new_scope=True)
+        prog = self.s.programs.get(word)
+        if prog is None:
+            # VERIFICAR: mensagem do Stata quando o .ado não define o programa
+            raise StataError(199, f"{path.name} found but program {word} not defined")
+        prog.source = str(path)
+        return prog
+
     def run_program(self, prog) -> None:
         """Corpo de um programa: sem eco (set trace mostra as linhas)."""
         self._run_range(prog.lines, 0, len(prog.lines), echo=None)
@@ -429,6 +445,8 @@ class Interpreter:
             return
 
         prog = self.s.programs.get(word)
+        if prog is None and lookup(word) is None and _plain_name(word):
+            prog = self._autoload(word)
         if prog is not None:
             from .programs import call_program
             if self.s.by_groups is not None and not prog.byable:
@@ -531,3 +549,8 @@ def _seq(a: float, step: float, b: float) -> list[float]:
             return out
         out.append(round(v, 12))
         k += 1
+
+
+def _plain_name(word: str) -> bool:
+    import re as _re
+    return _re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,31}", word) is not None

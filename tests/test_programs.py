@@ -169,3 +169,28 @@ def test_preserve_in_dofile(run, tmp_path):
     f.write_text("preserve\nkeep in 1\ntempvar z\ngen `z' = 1\n")
     run(f'quietly do "{f}"')
     assert run.session.data.nobs == 5 and run.session.data.nvars == 3
+
+
+# -- adopath ---------------------------------------------------------------------------
+
+def test_ado_autoload_which_findfile(run, tmp_path):
+    plus = tmp_path / "plus"
+    (plus / "o").mkdir(parents=True)
+    (plus / "o" / "oi.ado").write_text('*! version 1.0  exemplo\nprogram oi\n display "oi `0\'"\nend\n')
+    run(f'sysdir set PLUS "{plus}"')
+    assert run("oi mundo") == "oi mundo\n"
+    out = run("which oi")
+    assert str(plus / "o" / "oi.ado") in out and "*! version 1.0  exemplo" in out
+    assert run("which display") == "built-in command:  display\n"
+    run("which naoexiste")
+    assert run.rc == 111
+    run("findfile oi.ado")
+    assert run.session.r["fn"] == str(plus / "o" / "oi.ado")
+    run("discard")
+    assert "oi" not in run.session.programs
+    (tmp_path / "ruim.ado").write_text("display 1\n")
+    run(f'adopath + "{tmp_path}"')
+    run("ruim")
+    assert run.rc == 199
+    out = run("adopath")
+    assert "(PLUS)" in out and str(tmp_path) in out
