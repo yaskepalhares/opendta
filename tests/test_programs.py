@@ -58,3 +58,71 @@ def test_program_in_dofile_echo(run, tmp_path):
     out = run(f'do "{f}"')
     assert '. program define hi\n  1.     display "hi"\n  2. end\n' in out
     assert "\n. hi\nhi\n" in out
+
+
+# -- syntax ------------------------------------------------------------------------------
+
+def _data(run):
+    run("clear\nset obs 5\ngen idade = _n * 10\ngen renda = _n\nreplace renda = . in 2\n"
+        'gen str3 uf = "MG"')
+
+
+def test_syntax_varlist_if_in_options(run):
+    _data(run)
+    run("program p\n syntax [varlist] [if] [in] [, Detail BY(varname) "
+        "Level(integer 95) noLOG Title(string) *]\n"
+        " display \"[`varlist'][`if'][`in'][`detail'][`by'][`level'][`log'][`title'][`options']\"\nend")
+    out = run('p idade ren if idade > 10 in 1/4, d by(uf) l(90) nolog title("Um título") xyz(3)')
+    assert out == '[idade renda][if idade > 10][in 1/4][detail][uf][90][nolog][Um título][xyz(3)]\n'
+    assert run("p") == "[idade renda uf][][][][][95][][][]\n"        # varlist padrão: todas
+    run("program pn\n syntax varlist(numeric)\nend")
+    run("pn uf")
+    assert run.rc == 109
+    run("pn")
+    assert run.rc == 100
+    run("p idade, by(idade renda)")
+    assert run.rc == 103
+
+
+def test_syntax_required_and_errors(run):
+    _data(run)
+    run("program q\n syntax varname [using/] [fweight] =/exp , Gen(name)\n"
+        " display \"`varlist'|`using'|`weight'|`exp'|`gen'\"\nend")
+    assert run("q idade = 2*3 using \"a b.dta\", gen(z)") == "idade|a b.dta||2*3|z\n"
+    run("q idade = 1")
+    assert run.rc == 198                                     # gen() obrigatória
+    run("q idade renda = 1, gen(z)")
+    assert run.rc == 103
+    run("program r\n syntax [anything] [, opt]\n display `\"`anything'\"'\nend")
+    assert run('r a "b c" (d)') == 'a "b c" (d)\n'
+    run("r, outra")
+    assert run.rc == 198
+
+
+def test_syntax_newvarlist_numlist(run):
+    _data(run)
+    run("program nv\n syntax newvarlist(max=2) [, Values(numlist ascending)]\n"
+        " display \"`varlist'|`typlist'|`values'\"\nend")
+    assert run("nv a double b, v(1/3 10)") == "a b|float double|1 2 3 10\n"
+    run("nv idade")
+    assert run.rc == 110
+
+
+def test_gettoken(run):
+    run('local s `"um "dois tres" (quatro cinco) seis"\'')
+    run("gettoken a s : s\ngettoken b s : s\ngettoken c s : s, match(par)")
+    loc = run.session.macros.get_local
+    assert (loc("a"), loc("b"), loc("c"), loc("par")) == ("um", "dois tres", "quatro cinco", "(")
+    assert loc("s") == " seis"
+    run('local t "x=1,y=2"\ngettoken k t : t, parse("=,")')
+    assert loc("k") == "x" and loc("t") == "=1,y=2"
+    run('local u `"  "q" r"\'\ngettoken v : u, quotes')
+    assert loc("v") == '"q"' and loc("u") == '  "q" r'
+
+
+def test_marksample(run):
+    _data(run)
+    run("program m\n syntax varlist [if] [in]\n marksample touse\n"
+        " count if `touse'\n markout `touse' idade\n count if `touse'\nend")
+    assert run("m renda if idade < 50") == "  3\n  3\n"
+    assert not any(n.startswith("__") for n in run.session.data.names)   # temporária apagada
