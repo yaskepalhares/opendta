@@ -147,15 +147,21 @@ def _parse_numbers(cells: list[str], strict: bool) -> np.ndarray | None:
     s = np.array(cells, dtype=str)
     s = np.char.strip(s)
     miss = (s == "") | (s == ".")
+    # missing estendidos .a–.z
+    ext = (np.char.str_len(s) == 2) & np.char.startswith(s, ".") & ~miss
+    if ext.any():
+        ext &= np.char.isalpha(np.char.lstrip(s, "."))
     try:
         if (np.char.find(s, "_") >= 0).any():
             raise ValueError
-        vals = np.where(miss, "0", s).astype(np.float64)
+        vals = np.where(miss | ext, "0", s).astype(np.float64)
         if not np.isfinite(vals).all():
             raise ValueError
         vals[miss] = M.SYSMISS
+        if ext.any():
+            vals[ext] = [M.missing_code(x) for x in s[ext].tolist()]
         return vals
-    except ValueError:
+    except (ValueError, KeyError):
         pass
     # caminho lento: missing estendidos (.a), expoente com d, texto
     out = np.empty(len(cells))
@@ -216,7 +222,7 @@ def _data_rows(rows, opts: ReadOptions, header_out: list):
     k = 0          # linha de dados (1-based), para o rowrange
     pending: list[list[str]] = []
     for r in itertools.chain(lead, (cut(x) for x in it)):
-        if not any(c.strip() for c in r):
+        if not ((r and r[0].strip()) or any(c.strip() for c in r)):
             pending.append(r)
             continue
         for b in pending + [r]:
@@ -258,9 +264,9 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
             while len(cols) < width:
                 j = len(cols)
                 cols.append(_Column(j, nrows, (j + 1) in opts.stringcols, (j + 1) in opts.numericcols))
-            for c in cols:
-                j = c.index
-                c.add([r[j] if j < len(r) else "" for r in buf])
+            padded = [r if len(r) == width else r + [""] * (width - len(r)) for r in buf]
+            for c, cells in zip(cols, zip(*padded)):
+                c.add(list(cells))
             nrows += len(buf)
             buf.clear()
 
