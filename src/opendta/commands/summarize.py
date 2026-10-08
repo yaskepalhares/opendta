@@ -772,3 +772,124 @@ def cmd_xtile(s: "Session", args: str) -> None:
     col[mask] = 1 + np.searchsorted(cuts, x[mask], side="left")
     s.data.add(Variable(newname, "byte" if len(cuts) < 100 else "int", col))
     s.notify_state()
+
+
+# ---------------------------------------------------------------------------
+# tabstat
+# ---------------------------------------------------------------------------
+
+_TS_LABEL = {"mean": "mean", "count": "N", "n": "N", "sum": "sum", "max": "max", "min": "min",
+             "range": "range", "sd": "sd", "variance": "variance", "var": "variance", "cv": "cv",
+             "semean": "se(mean)", "skewness": "skewness", "kurtosis": "kurtosis", "median": "p50",
+             "iqr": "iqr"}
+
+
+def _ts_stats(spec: str) -> list[str]:
+    out = []
+    for w in spec.split():
+        w = w.lower()
+        if w == "q":
+            out += ["p25", "p50", "p75"]
+        elif w in _TS_LABEL or (w.startswith("p") and w[1:].isdigit()):
+            out.append(w)
+        else:
+            raise StataError(198, f"{w} invalid statistic")   # VERIFICAR
+    return out
+
+
+def _ts_value(stat: str, x: np.ndarray, w, wtype) -> float:
+    m = S.moments(x, w, wtype)
+    if stat in ("count", "n"):
+        return float(m.N)
+    if m.N == 0:
+        return M.SYSMISS
+    simple = {"mean": m.mean, "sum": float(m.sum), "max": m.max, "min": m.min,
+              "range": m.max - m.min, "sd": m.sd, "variance": m.var, "var": m.var,
+              "skewness": m.skewness, "kurtosis": m.kurtosis}
+    if stat in simple:
+        return simple[stat]
+    if stat == "cv":
+        return m.sd / m.mean if m.mean else M.SYSMISS
+    if stat == "semean":
+        return m.sd / math.sqrt(m.N) if m.N > 0 and m.sd < M.SYSMISS else M.SYSMISS
+    order = np.argsort(x, kind="stable")
+    xs = x[order]
+    ws = w[order] if w is not None and wtype in ("fweight", "aweight") else None
+    if stat == "median":
+        return S.percentile(xs, 50, ws)
+    if stat == "iqr":
+        return S.percentile(xs, 75, ws) - S.percentile(xs, 25, ws)
+    return S.percentile(xs, float(stat[1:]), ws)
+
+
+@command("tabstat")
+def cmd_tabstat(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    o = match_options(p.options, {"by": 2, "statistics": 1, "stats": 5, "columns": 1, "format": 1,
+                                  "nototal": 3, "missing": 1, "longstub": 1, "save": 2,
+                                  "casewise": 1, "labelwidth": 3, "varwidth": 4,
+                                  "noseparator": 5}) if p.options.strip() else {}
+    stats = _ts_stats(str(o.get("statistics", o.get("stats", "mean"))))
+    vars_ = numeric_vars(s, p.varlist, allow_string=False)
+    base = touse(s, p)
+    w, wtype, base = weights(s, p, base, ("aweight", "fweight"))
+    if o.get("casewise"):
+        for v in vars_:
+            base &= S.valid(v.data)
+    fmt = str(o.get("format", "%9.0g")).strip() if o.get("format") not in (None, True) else "%9.0g"
+    cols_stats = str(o.get("columns", "variables")).strip().lower().startswith("s")
+    out = s.output
+
+    def value(stat, v, mask):
+        sel = mask & S.valid(v.data)
+        return _ts_value(stat, v.data[sel], w[sel] if w is not None else None, wtype)
+
+    def fmtv(x):
+        return "." if x >= M.SYSMISS else format_value(x, fmt, pad=False).strip()
+
+    if not o.get("by"):
+        if cols_stats:
+            heads = [_TS_LABEL.get(st_, st_) for st_ in stats]
+            out.write("\n    variable |" + "".join(f"{h:>10}" for h in heads) + "\n", "text")
+            out.write("-" * 13 + "+" + "-" * (10 * len(heads)) + "\n", "text")
+            for v in vars_:
+                out.write(f"{name12(v.name):>12} |", "text")
+                out.write("".join(f"{fmtv(value(st_, v, base)):>10}" for st_ in stats) + "\n", "result")
+            out.write("-" * (14 + 10 * len(heads)) + "\n", "text")
+        else:
+            out.write("\n   stats |" + "".join(f"{_abbrev(v.name, 8):>10}" for v in vars_) + "\n", "text")
+            out.write("-" * 9 + "+" + "-" * (10 * len(vars_)) + "\n", "text")
+            for st_ in stats:
+                out.write(f"{_TS_LABEL.get(st_, st_):>8} |", "text")
+                out.write("".join(f"{fmtv(value(st_, v, base)):>10}" for v in vars_) + "\n", "result")
+            out.write("-" * (10 + 10 * len(vars_)) + "\n", "text")
+        return
+    # by(): uma linha (ou bloco) por categoria
+    from .tabulate import _categories, _codes
+    bv = s.data.get(s.expand_varlist(str(o["by"]).strip())[0])
+    cats, labels, ok = _categories(s, bv, base, missing=bool(o.get("missing")), nolabel=False)
+    codes = _codes(bv, cats)
+    W = max([8, len(bv.name)] + [len(x) for x in labels])
+    names = ", ".join(_TS_LABEL.get(st_, st_) for st_ in stats)
+    if len(stats) > 1 or len(vars_) > 1:
+        lead = f"Summary statistics: {names}" if len(stats) > 1 else \
+            f"Summary for variables: {' '.join(v.name for v in vars_)}"
+        out.write(f"\n{lead}\n", "text")
+        label = f" ({bv.label})" if bv.label else ""
+        out.write(f"  by categories of: {bv.name}{label}\n", "text")
+    out.write("\n" + f"{_abbrev(bv.name, W):>{W}} |" + "".join(
+        f"{_abbrev(v.name, 8):>10}" for v in vars_) + "\n", "text")
+    sep = "-" * (W + 1) + "+" + "-" * (10 * len(vars_)) + "\n"
+    out.write(sep, "text")
+    groups = [(labels[k], ok & (codes == k)) for k in range(len(cats))]
+    if not o.get("nototal"):
+        groups.append(("Total", ok))
+    for gi, (label, mask) in enumerate(groups):
+        if label == "Total" and gi:
+            out.write(sep, "text")
+        for k, st_ in enumerate(stats):
+            out.write(f"{(label if k == 0 else ''):>{W}} |", "text")
+            out.write("".join(f"{fmtv(value(st_, v, mask)):>10}" for v in vars_) + "\n", "result")
+        if len(stats) > 1 and gi < len(groups) - 1 and groups[gi + 1][0] != "Total":
+            out.write(sep, "text")
+    out.write("-" * (W + 2 + 10 * len(vars_)) + "\n", "text")

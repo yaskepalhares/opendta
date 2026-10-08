@@ -114,3 +114,13 @@ def test_fisher_rxc_matches_2x2():
     from opendta.commands.tabulate import fisher_rxc
     for T in ([[3, 1], [1, 3]], [[5, 0], [1, 4]], [[2, 7], [8, 2]]):
         assert fisher_rxc(np.array(T)) == pytest.approx(fisher_exact(T)[1], abs=1e-9)
+
+
+def test_tabstat(run):
+    data(run)
+    out = run("tabstat x y, stats(mean sd n)")
+    assert "    mean |  17.44737        81" in out and "       N |        19        20" in out
+    out = run("tabstat x, by(grupo) stats(mean sd)")
+    assert "Controle |      17.6" in out and "   Total |  17.44737" in out
+    out = run("tabstat x y, s(p50 iqr) c(s)")
+    assert "variable |       p50       iqr" in out
