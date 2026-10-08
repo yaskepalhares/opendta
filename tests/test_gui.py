@@ -8,6 +8,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
 
+@pytest.fixture(autouse=True)
+def isolated_prefs(tmp_path, monkeypatch):
+    """Preferências num .ini temporário: os testes não dependem das
+    preferências reais de quem roda o pytest (nem as alteram)."""
+    monkeypatch.setenv("OPENDTA_SETTINGS", str(tmp_path / "opendta-prefs.ini"))
+
+
 @pytest.fixture(scope="module")
 def app():
     from PySide6.QtCore import QStandardPaths
