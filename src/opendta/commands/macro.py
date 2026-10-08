@@ -126,7 +126,169 @@ def extended_function(s: "Session", text: str) -> str:
     m = re.match(r"^piece\s+(\S+)\s+(\S+)\s+of\s+(.*)$", t, re.S)
     if m:
         return _piece(int(float(m.group(1))), int(float(m.group(2))), strip_outer_quotes(m.group(3)))
-    raise StataError(198, f"função estendida ainda não implementada: {t.split()[0] if t else ''}")
+    value = _data_function(s, t)
+    if value is not None:
+        return value
+    word = t.split()[0] if t else ""
+    # VERIFICAR: mensagem do Stata para função estendida desconhecida
+    raise StataError(198, f"{word} not allowed")
+
+
+def _var(s: "Session", name: str):
+    from ..core.varlist import resolve_name
+    return s.data.get(resolve_name(s.data, name.strip()))
+
+
+def _data_function(s: "Session", t: str) -> str | None:
+    """Funções que consultam os dados, rótulos, características, arquivos e
+    resultados guardados."""
+    import fnmatch
+    from pathlib import Path
+
+    m = re.fullmatch(r"(type|format|f|fo|for|form|forma)\s+(\S+)", t)
+    if m:
+        v = _var(s, m.group(2))
+        return v.vtype if m.group(1) == "type" else v.fmt
+    m = re.fullmatch(r"value\s+l(?:a|ab|abe|abel)?\s+(\S+)", t)
+    if m:
+        return _var(s, m.group(1)).value_label
+    m = re.fullmatch(r"var(?:iable)?\s+l(?:a|ab|abe|abel)?\s+(\S+)", t)
+    if m:
+        return _var(s, m.group(1)).label
+    if re.fullmatch(r"data\s+l(?:a|ab|abe|abel)?", t):
+        return s.data.label
+    if t == "sortedby":
+        return " ".join(s.data.sortlist)
+    m = re.fullmatch(r"label\s+\((\S+)\)\s+(\S+)(?:\s+(\d+))?(\s*,\s*strict)?", t)
+    if m:
+        v = _var(s, m.group(1))
+        return _label_text(s, v.value_label, m.group(2), m.group(3), bool(m.group(4)))
+    m = re.fullmatch(r"label\s+(\S+)\s+(\S+)(?:\s+(\d+))?(\s*,\s*strict)?", t)
+    if m:
+        if m.group(1) not in s.data.value_labels and m.group(2) != "maxlength":
+            raise StataError(111, f"value label {m.group(1)} not found")
+        return _label_text(s, m.group(1), m.group(2), m.group(3), bool(m.group(4)))
+    m = re.fullmatch(r"char\s+(\S+)\[([^\]]*)\]", t)
+    if m:
+        owner = m.group(1) if m.group(1) == "_dta" else _var(s, m.group(1)).name
+        chars = s.data.chars.get(owner, {})
+        if m.group(2) == "":
+            return " ".join(chars)
+        return chars.get(m.group(2), "")
+    m = re.fullmatch(r'dir\s+(\S+|"[^"]*")\s+(files|dirs|other)\s+(\S+|"[^"]*")(\s*,.*)?', t)
+    if m:
+        folder = Path(strip_outer_quotes(m.group(1))).expanduser()
+        pattern = strip_outer_quotes(m.group(3))
+        opts = (m.group(4) or "").replace(",", " ").split()
+        if not folder.is_dir():
+            if "nofail" in opts:
+                return ""
+            raise StataError(601, f"directory {folder} not found")   # VERIFICAR
+        kind = m.group(2)
+        respect = "respectcase" in opts
+        out = []
+        for p in sorted(folder.iterdir(), key=lambda x: x.name):
+            if kind == "files":
+                ok = p.is_file()
+            elif kind == "dirs":
+                ok = p.is_dir()
+            else:
+                ok = not (p.is_file() or p.is_dir())
+            name = p.name
+            if name.startswith(".") and not pattern.startswith("."):
+                continue                       # ocultos só com padrão explícito
+            hit = (fnmatch.fnmatchcase(name, pattern) if respect
+                   else fnmatch.fnmatchcase(name.lower(), pattern.lower()))
+            if ok and hit:
+                out.append(f'"{name}"')
+        return " ".join(out)
+    m = re.fullmatch(r"sysdir\s+(\S+)", t)
+    if m:
+        from ..lang.adopath import sysdir
+        return sysdir(s).get(m.group(1).upper(), m.group(1))
+    m = re.fullmatch(r"permname\s+(\S+)(?:\s*,\s*length\((\d+)\))?", t)
+    if m:
+        base = re.sub(r"[^A-Za-z0-9_]", "_", m.group(1))[: int(m.group(2) or 32)]
+        name, k = base, 0
+        while s.data.has(name):
+            k += 1
+            name = f"{base[: 32 - len(str(k))]}{k}"
+        return name
+    m = re.fullmatch(r"(copy|strlen|length|ustrlen|udstrlen)\s+(local|global)\s+(\S+)", t)
+    if m:
+        store = s.macros.get_local if m.group(2) == "local" else s.macros.get_global
+        text = store(m.group(3))
+        if m.group(1) == "copy":
+            return text
+        return str(len(text.encode("utf-8")) if m.group(1) in ("strlen", "length") else len(text))
+    m = re.fullmatch(r'subinstr\s+(local|global)\s+(\S+)\s+("[^"]*"|`"[^`]*"\'|\S+)\s+'
+                     r'("[^"]*"|`"[^`]*"\'|\S+)(\s*,.*)?', t, re.S)
+    if m:
+        store = s.macros.get_local if m.group(1) == "local" else s.macros.get_global
+        text = store(m.group(2))
+        old, new = strip_outer_quotes(m.group(3)), strip_outer_quotes(m.group(4))
+        opts = m.group(5) or ""
+        count_m = re.search(r"count\((local|global)\s+(\w+)\)", opts)
+        all_ = re.search(r"\ball\b", opts) is not None
+        word = re.search(r"\bword\b", opts) is not None
+        if word:
+            words = split_words(text, keep_quotes=True)
+            n = 0
+            outw = []
+            for w in words:
+                if w == old and (all_ or n == 0):
+                    n += 1
+                    if new:
+                        outw.append(new)
+                else:
+                    outw.append(w)
+            result = " ".join(outw)
+        else:
+            n = text.count(old) if all_ else min(1, text.count(old))
+            result = text.replace(old, new) if all_ else text.replace(old, new, 1)
+        if count_m:
+            setter = s.macros.set_local if count_m.group(1) == "local" else s.macros.set_global
+            setter(count_m.group(2), str(n))
+        return result
+    m = re.fullmatch(r"([rse])\((scalars|macros|matrices|functions)\)", t)
+    if m:
+        store = {"r": s.r, "e": s.e, "s": s.sret}[m.group(1)]
+        kind = m.group(2)
+        if kind == "scalars":
+            names = [k for k, v in store.items() if not isinstance(v, str) and not hasattr(v, "shape")]
+        elif kind == "macros":
+            names = [k for k, v in store.items() if isinstance(v, str)]
+        elif kind == "matrices":
+            names = [k for k, v in store.items() if hasattr(v, "rows")]
+        else:
+            names = []
+        return " ".join(sorted(names, reverse=False))
+    m = re.fullmatch(r"(rownames|colnames|rowfullnames|colfullnames|roweq|coleq)\s+(\S+)", t)
+    if m:
+        from .matrix import matrix_names
+        return matrix_names(s, m.group(2), m.group(1))
+    m = re.fullmatch(r"(rowsof|colsof)\s+(\S+)", t)
+    if m:
+        from .matrix import get_matrix
+        mat = get_matrix(s, m.group(2))
+        return str(mat.rows if m.group(1) == "rowsof" else mat.cols)
+    return None
+
+
+def _label_text(s: "Session", lbl: str, value: str, length: str | None, strict: bool) -> str:
+    labels = s.data.value_labels.get(lbl, {})
+    if value == "maxlength":
+        return str(max((len(x) for x in labels.values()), default=0))
+    try:
+        x = float(value)
+    except ValueError:
+        raise StataError(198, "invalid syntax")
+    text = labels.get(int(x)) if x == int(x) else None
+    if text is None:
+        text = "" if strict else number_to_macro(x)
+    if length:
+        text = text[: int(length)]
+    return text
 
 
 def _capture_display(s: "Session", args: str) -> str:

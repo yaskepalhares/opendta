@@ -8,7 +8,7 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 1c (arquivos de dados)
+## Estado atual: fase 2 (linguagem de programação)
 
 Já funciona:
 
@@ -23,6 +23,8 @@ Já funciona:
 - erros com as mensagens e os códigos `r(#)` do Stata, seguidos de uma explicação do OpenDTA: o que deu errado no comando e como resolver (desligue com `set hints off`, ou pelo menu Help → Explain Errors);
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
+- programação: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, funções estendidas de macro, `matrix`, `.ado` de terceiros no adopath, `log`/`cmdlog`, `assert`, `set trace` e `timer`;
+- Viewer com `help` em SMCL (páginas próprias e as de pacotes instalados);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
 - `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
 - arquivos `.dta`: leitura própria dos formatos 113 a 119 (Stata 8 em diante) e gravação nos formatos 114, 115, 117, 118 e 119, com rótulos, notas e características; formatos ainda mais antigos são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;

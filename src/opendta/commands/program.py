@@ -52,12 +52,16 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
     lines = split_commands(source)
 
     out = s.output
+    scope = None
     if new_scope:
         argv = split_words(rest)
         frame = {str(k): v for k, v in enumerate(argv, start=1)}
         if rest:
             frame["0"] = rest
         s.macros.push_frame(frame)
+        from ..lang.programs import Scope
+        scope = Scope("do", str(path))
+        s.scopes.append(scope)
     if not echo:
         out.quiet_depth += 1
     s.do_depth += 1
@@ -87,6 +91,8 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
             out.quiet_depth -= 1
         if new_scope:
             s.macros.pop_frame()
+            s.scopes.remove(scope)
+            s.close_scope(scope)      # temporários e preserve do do-file
     if echo:
         out.ensure_line_start()
         out.write(". \nend of do-file\n", "text")
@@ -116,7 +122,8 @@ def cmd_exit(s: "Session", args: str) -> None:
         clear_all = "clear" in opts.split() or "STATA" in opts.split()
     t = t.strip()
     rc = int(float(s.eval(t))) if t else 0
-    if s.do_depth == 0:
+    in_program = any(sc.kind == "program" for sc in s.scopes)
+    if s.do_depth == 0 and not in_program:
         clear_all = True
     raise ExitRequest(rc, clear_all=clear_all)
 

@@ -71,7 +71,8 @@ Resolver = Callable[[str], str]
 
 def expand(text: str, store: MacroStore, *,
            eval_inline: Resolver | None = None,
-           extended: Resolver | None = None) -> str:
+           extended: Resolver | None = None,
+           results: Callable[[str, str], str] | None = None) -> str:
     """Expande todas as referências a macros em `text`.
 
     eval_inline recebe o texto após '=' em `=exp' e devolve a string resultante.
@@ -92,7 +93,7 @@ def expand(text: str, store: MacroStore, *,
         if c == "'" and stack:
             p = stack.pop()
             inner = s[p + 1:i]
-            value = _resolve_local(inner, store, eval_inline, extended)
+            value = _resolve_local(inner, store, eval_inline, extended, results)
             s = s[:p] + value + s[i + 1:]
             i = p + len(value)
             continue
@@ -115,10 +116,18 @@ def expand(text: str, store: MacroStore, *,
     return s
 
 
+_RESULT_REF = re.compile(r"^([recs])\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)$")
+
+
 def _resolve_local(inner: str, store: MacroStore,
                    eval_inline: Resolver | None,
-                   extended: Resolver | None) -> str:
+                   extended: Resolver | None,
+                   results: Callable[[str, str], str] | None = None) -> str:
     stripped = inner.strip()
+    m = _RESULT_REF.match(stripped)
+    if m and results is not None:
+        # `r(name)', `e(name)', `s(name)', `c(name)'
+        return results(m.group(1), m.group(2))
     if stripped.startswith("="):
         if eval_inline is None:
             raise StataError(198, "invalid syntax")

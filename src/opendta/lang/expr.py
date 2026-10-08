@@ -149,6 +149,7 @@ class Call(Node):
 class Subscript(Node):
     name: str
     index: Node | str
+    index2: Node | None = None          # A[i,j]: elemento de matriz
 
 
 @dataclass
@@ -298,9 +299,19 @@ class Parser:
                 self.advance()
                 return Subscript(name, raw)
             idx = self.parse_expr()
+            if self.tok.kind == "op" and self.tok.value == ",":
+                self.advance()
+                idx2 = self.parse_expr()
+                self.expect_op("]")
+                return Subscript(name, idx, idx2)
             self.expect_op("]")
             return Subscript(name, idx)
         return Name(name)
+
+
+# funções cujo 1º argumento é o nome de uma matriz (ver commands/matrix.py)
+MATRIX_FUNCS = {"rowsof", "colsof", "el", "trace", "det", "issymmetric", "rownumb",
+                "colnumb", "matmissing", "mreldif"}
 
 
 def parse(text: str) -> Node:
@@ -339,8 +350,15 @@ def evaluate(node: Node, ctx: Context) -> Value:
     if isinstance(node, Call):
         if node.name in _RAW_ARG_FUNCS:
             return ctx.resolve_result(node.name, node.raw)
+        if node.name in MATRIX_FUNCS:
+            from ..commands.matrix import matrix_scalar
+            return matrix_scalar(ctx.s, node.name, node.args, lambda a: evaluate(a, ctx))
         return ctx.call_function(node.name, [evaluate(a, ctx) for a in node.args])
     if isinstance(node, Subscript):
+        if node.index2 is not None:
+            from ..commands.matrix import matrix_element
+            return matrix_element(ctx.s, node.name, evaluate(node.index, ctx),
+                                  evaluate(node.index2, ctx))
         idx = node.index if isinstance(node.index, str) else evaluate(node.index, ctx)
         return ctx.resolve_subscript(node.name, idx)
     if isinstance(node, Unary):

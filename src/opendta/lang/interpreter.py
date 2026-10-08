@@ -91,6 +91,8 @@ class Interpreter:
         word = _first_word(raw)
         if raw == "}":
             raise StataError(198, "unexpected }")
+        if len(word) >= 2 and "program".startswith(word) and self._is_definition(raw):
+            return self._define_program(lines, i, end, echo=echo)
         if raw.endswith("{"):
             j = self._block_end(lines, i, end)
             return self._run_block(lines, i, j, end, echo=echo)
@@ -105,6 +107,75 @@ class Interpreter:
         self.execute(raw)
         self._after(echo)
         return i + 1
+
+    # -- programas --------------------------------------------------------------
+    @staticmethod
+    def _is_definition(raw: str) -> bool:
+        rest = split_command(raw)[1].strip()
+        first = rest.split(",")[0].split()
+        if not first:
+            return False
+        return first[0] not in ("drop", "dir", "list", "li", "l")
+
+    def _define_program(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
+        """program [define] nome ... end: guarda o corpo sem executar."""
+        from .programs import make_program, parse_definition
+
+        header = self.s.expand(lines[i].text.strip())
+        name, options = parse_definition(split_command(header)[1])
+        j = i + 1
+        while j < end and not (lines[j].kind == "cmd" and lines[j].text.strip() == "end"):
+            j += 1
+        if j >= end:
+            raise StataError(198, "program define: end not found")   # VERIFICAR
+        if echo:
+            # VERIFICAR: numeração do corpo no eco de program define
+            out = self.s.output
+            out.echo_command(lines[i].echo_lines)
+            for k, ln in enumerate(lines[i + 1:j + 1], start=1):
+                first, *rest = ln.echo_lines
+                out.write(f"{k:>3}. {first}\n", "command")
+                for cont in rest:
+                    out.write(f"> {cont}\n", "command")
+        if name in self.s.programs:
+            raise StataError(110, f"{name} already defined")
+        self.s.programs[name] = make_program(name, options, list(lines[i + 1:j]),
+                                             self.s.current_dofile)
+        self._after(echo)
+        return j + 1
+
+    def _autoload(self, word: str):
+        """Comando desconhecido: procura word.ado no adopath e roda o arquivo
+        (em silêncio, como o Stata), que deve definir o programa word."""
+        from .adopath import find_ado
+        path = find_ado(self.s, word)
+        if path is None:
+            return None
+        from ..commands.program import _run_file
+        _run_file(self.s, f'"{path}"', echo=False, new_scope=True)
+        prog = self.s.programs.get(word)
+        if prog is None:
+            # VERIFICAR: mensagem do Stata quando o .ado não define o programa
+            raise StataError(199, f"{path.name} found but program {word} not defined")
+        prog.source = str(path)
+        return prog
+
+    def run_program(self, prog) -> None:
+        """Corpo de um programa: sem eco (set trace mostra as linhas)."""
+        tracing = self._tracing()
+        if tracing:
+            # VERIFICAR: largura e alinhamento das linhas begin/end do trace
+            pad = "  " * self._trace_depth()
+            label = f" begin {prog.name} ---"
+            self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+                                "text", force=True)
+        try:
+            self._run_range(prog.lines, 0, len(prog.lines), echo=None)
+        finally:
+            if tracing:
+                label = f" end {prog.name} ---"
+                self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+                                    "text", force=True)
 
     def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
         """input var1 var2 ... seguido de linhas de dados até `end`."""
@@ -346,7 +417,21 @@ class Interpreter:
     def execute(self, raw: str) -> None:
         """Expande macros e executa um comando de uma linha."""
         text = self.s.expand(raw)
+        if self._tracing():
+            # set trace on: linha original (- ) e expandida (= ) dentro de programas
+            out = self.s.output
+            pad = "  " * self._trace_depth()
+            out.write(f"{pad}- {raw.strip()}\n", "text", force=True)
+            if text.strip() != raw.strip():
+                out.write(f"{pad}= {text.strip()}\n", "text", force=True)
         self._execute_expanded(text)
+
+    def _tracing(self) -> bool:
+        return (self.s.settings.get("trace", "off") == "on"
+                and any(sc.kind == "program" for sc in self.s.scopes))
+
+    def _trace_depth(self) -> int:
+        return sum(1 for sc in self.s.scopes if sc.kind == "program")
 
     def _execute_expanded(self, text: str) -> None:
         from ..commands.registry import lookup
@@ -386,6 +471,20 @@ class Interpreter:
             self._with_prefixes(words, lambda: self._execute_expanded(body))
             return
 
+        prog = self.s.programs.get(word)
+        if prog is None and lookup(word) is None and _plain_name(word):
+            prog = self._autoload(word)
+        if prog is not None:
+            from .programs import call_program
+            if self.s.by_groups is not None and not prog.byable:
+                raise StataError(190, f"{word} may not be combined with by")
+            try:
+                call_program(self.s, prog, rest)
+            except StataError as err:
+                if err.context is None:
+                    err.context = (word, text)
+                raise
+            return
         spec = lookup(word)
         if spec is None:
             err = StataError(199, f"command {word} is unrecognized")
@@ -477,3 +576,8 @@ def _seq(a: float, step: float, b: float) -> list[float]:
             return out
         out.append(round(v, 12))
         k += 1
+
+
+def _plain_name(word: str) -> bool:
+    import re as _re
+    return _re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,31}", word) is not None

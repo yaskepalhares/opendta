@@ -237,3 +237,25 @@ def test_help_hints_toggle(app):
     w.act_hints.trigger()
     assert w.prefs.hints
     w.close()
+
+
+def test_viewer_help_and_log(app, tmp_path, monkeypatch):
+    from opendta.gui.main_window import MainWindow
+
+    monkeypatch.chdir(tmp_path)
+    w = MainWindow()
+    w.run_command("help describe")
+    v = w.viewer
+    assert v is not None and v.isVisible() and "describe" in v.windowTitle()
+    assert "Describe the dataset" in v.browser.toPlainText()
+    v.open_topic("hints")
+    assert "set hints" in v.browser.toPlainText()
+    v.go(-1)
+    assert "Describe the dataset" in v.browser.toPlainText()
+    w.run_command("log using t, text")
+    assert w.session.logs
+    w.toggle_log()                                   # fecha o log aberto
+    assert not w.session.logs and (tmp_path / "t.log").exists()
+    w.run_command("help naoexiste")
+    assert w.session.rc == 111
+    w.close()

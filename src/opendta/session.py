@@ -110,7 +110,10 @@ class EvalContext:
             return s.creturn(raw)
         store = {"r": s.r, "e": s.e, "s": s.sret}[kind]
         if raw in store:
-            return store[raw]
+            v = store[raw]
+            if hasattr(v, "rows") and hasattr(v, "data"):
+                raise StataError(109, "type mismatch")   # matriz numa expressão escalar
+            return v
         return M.SYSMISS
 
     def call_function(self, name: str, args: list[Value]) -> Value:
@@ -139,6 +142,10 @@ class Session:
         self.current_dofile = ""
         # ganchos da interface gráfica (por exemplo "browse"); sem GUI, ficam vazios
         self.ui_hooks: dict[str, Callable[..., None]] = {}
+        # programas do usuário e escopos (programas e do-files em execução)
+        from .lang.programs import Program, Scope
+        self.programs: dict[str, Program] = {}
+        self.scopes: list[Scope] = []
 
         from .lang.interpreter import Interpreter
         from . import commands  # noqa: F401  (registra os comandos)
@@ -152,6 +159,29 @@ class Session:
         for fn in list(self._state_listeners):
             fn()
 
+    # -- escopos ------------------------------------------------------------------
+    def close_scope(self, scope) -> None:
+        """Desfaz o que o programa/do-file deixou: temporários e preserve."""
+        ds = self.data
+        if scope.tempvars:
+            gone = [n for n in scope.tempvars if ds.has(n)]
+            if gone:
+                changed = ds.changed
+                ds.drop_vars(gone)
+                ds.changed = changed
+        for name in scope.tempnames:
+            self.scalars.pop(name, None)
+            getattr(self, "matrices", {}).pop(name, None)
+        for path in scope.tempfiles:
+            for p in (path, path.with_suffix(".dta")):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        if scope.preserved is not None:
+            from .commands.preserve import restore_preserved
+            restore_preserved(self, scope)
+
     # -- utilidades ---------------------------------------------------------
     def set_rc(self, rc: int) -> None:
         self.rc = int(rc)
@@ -159,7 +189,24 @@ class Session:
     def expand(self, text: str) -> str:
         return expand(text, self.macros,
                       eval_inline=self._inline_eval,
-                      extended=self._extended)
+                      extended=self._extended,
+                      results=self._result_text)
+
+    def _result_text(self, kind: str, name: str) -> str:
+        """`r(x)' e afins: texto da macro ou do escalar; vazio se não existir."""
+        if kind == "c":
+            v = self.creturn(name)
+        else:
+            store = {"r": self.r, "e": self.e, "s": self.sret}[kind]
+            if name not in store:
+                return ""
+            v = store[name]
+        if isinstance(v, str):
+            return v
+        from .commands.matrix import Matrix
+        if isinstance(v, Matrix):
+            return "matrix"     # VERIFICAR
+        return number_to_macro(float(v))
 
     def _inline_eval(self, text: str) -> str:
         v = self.eval(text)
@@ -265,6 +312,8 @@ class Session:
 
     def run_command(self, line: str) -> int:
         """Comando digitado na janela Command: eco '. linha' e execução."""
+        from .commands.logcmd import record_command
+        record_command(self, line)
         self.output.echo_command(line)
         try:
             rc = self.run(line, echo=False)
@@ -278,6 +327,8 @@ class Session:
     def run_text(self, text: str) -> int:
         """Várias linhas digitadas ou coladas na janela Command: rodam como um
         trecho de do-file (blocos inteiros, eco linha a linha)."""
+        from .commands.logcmd import record_command
+        record_command(self, text)
         try:
             self.interp.run_lines(split_commands(text), echo=True)
             rc = 0

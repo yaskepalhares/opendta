@@ -19,7 +19,7 @@ import numpy as np
 from ..core import missing as M
 from ..core.errors import StataError, type_mismatch
 from . import functions as F
-from .expr import (Binary, Call, Name, Node, Num, Str, Subscript, Unary,
+from .expr import (MATRIX_FUNCS, Binary, Call, Name, Node, Num, Str, Subscript, Unary,
                    _RAW_ARG_FUNCS, _binary)
 
 if TYPE_CHECKING:
@@ -198,8 +198,15 @@ def evaluate_vec(node: Node, ctx: VectorContext) -> Any:
     if isinstance(node, Call):
         if node.name in _RAW_ARG_FUNCS:
             return ctx.s.context.resolve_result(node.name, node.raw)
+        if node.name in MATRIX_FUNCS:
+            from ..commands.matrix import matrix_scalar
+            return matrix_scalar(ctx.s, node.name, node.args, lambda a: evaluate_vec(a, ctx))
         return ctx.call(node.name, [evaluate_vec(a, ctx) for a in node.args])
     if isinstance(node, Subscript):
+        if node.index2 is not None:
+            from ..commands.matrix import matrix_element
+            return matrix_element(ctx.s, node.name, evaluate_vec(node.index, ctx),
+                                  evaluate_vec(node.index2, ctx))
         idx = node.index if isinstance(node.index, str) else evaluate_vec(node.index, ctx)
         return ctx.subscript(node.name, idx)
     if isinstance(node, Unary):
