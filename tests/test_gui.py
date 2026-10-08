@@ -89,3 +89,43 @@ def test_theme_switch(app):
     assert app.palette().color(QPalette.ColorRole.Window).lightness() > 200
     assert "#ffffff" in w.results.styleSheet()
     w.close()
+
+
+def test_command_pane_resizable_and_multiline(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.resize(1000, 700)
+    w.show()
+    app.processEvents()
+    # a divisória deixa a Command crescer
+    w.splitter.setSizes([300, 300])
+    app.processEvents()
+    assert w.command.height() > 200
+
+    # Enter executa; Shift+Enter quebra a linha
+    w.command.setFocus()
+    QTest.keyClicks(w.command, "display 1")
+    QTest.keyClick(w.command, Qt.Key.Key_Return, Qt.KeyboardModifier.ShiftModifier)
+    QTest.keyClicks(w.command, "display 2")
+    assert w.command.text() == "display 1\ndisplay 2"
+    QTest.keyClick(w.command, Qt.Key.Key_Return)
+    text = w.results.toPlainText()
+    assert ". display 1\n1\n" in text and ". display 2\n2\n" in text
+    assert w.command.text() == ""
+
+    # histórico com PgUp
+    QTest.keyClick(w.command, Qt.Key.Key_PageUp)
+    assert w.command.text() == "display 1\ndisplay 2"
+
+    # um bloco colado roda inteiro, como trecho de do-file
+    w.command.setText('forvalues i = 1/2 {\n    display "i = `i\'"\n}')
+    QTest.keyClick(w.command, Qt.Key.Key_Return)
+    text = w.results.toPlainText()
+    assert "  2.     display" in text and "i = 1\ni = 2\n" in text
+    last = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    assert last.text(0) == "forvalues i = 1/2 { …" and last.text(1) == ""
+    w.close()

@@ -262,6 +262,20 @@ class Session:
             self.notify_state()
         return rc
 
+    def run_text(self, text: str) -> int:
+        """Várias linhas digitadas ou coladas na janela Command: rodam como um
+        trecho de do-file (blocos inteiros, eco linha a linha)."""
+        try:
+            self.interp.run_lines(split_commands(text), echo=True)
+            rc = 0
+        except StataError as e:
+            self.output.error(e.message, e.rc)
+            self.set_rc(e.rc)
+            rc = e.rc
+        finally:
+            self.notify_state()
+        return rc
+
     def run_file(self, path: str | Path, args: str = "", *, echo: bool = True) -> int:
         quoted = f'"{path}"' + (f" {args}" if args else "")
         cmd = "do" if echo else "run"

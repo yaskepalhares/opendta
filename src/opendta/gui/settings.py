@@ -62,6 +62,16 @@ class Preferences:
     def font_size(self, value: int) -> None:
         self._s.setValue("fonts/size", int(value))
 
+    # posição das janelas e altura da Command
+    def layout(self):
+        return (self._s.value("layout/geometry"), self._s.value("layout/state"),
+                self._s.value("layout/splitter"))
+
+    def save_layout(self, geometry, state, splitter) -> None:
+        self._s.setValue("layout/geometry", geometry)
+        self._s.setValue("layout/state", state)
+        self._s.setValue("layout/splitter", splitter)
+
     def reset(self) -> None:
         self._s.clear()
 
