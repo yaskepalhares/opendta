@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.DS_Store
+Thumbs.db
+
+# logs gerados ao rodar do-files; os esperados do Stata ficam versionados
+*.log
+!compat/expected/*.log
+compat/out/
