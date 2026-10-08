@@ -118,15 +118,14 @@ register("digamma", 1)(_num(lambda x: float(special.digamma(x))))
 
 @register("round", 1, 2)
 def _round(x: Value, y: Value = 1.0) -> float:
-    """VERIFICAR: arredondamento de meio (.5) — aqui, para longe do zero."""
+    """round(x, y) = y * floor(x/y + .5): meio arredondado para cima
+    (round(-2.5) = -2), confirmado nos logs do Stata."""
     x, y = _n(x), _n(y)
     if _miss(x, y):
         return M.SYSMISS
     if y == 0:
         return x
-    q = x / y
-    r = math.floor(abs(q) + 0.5) * (1 if q >= 0 else -1)
-    return M.normalize(r * y)
+    return M.normalize(math.floor(x / y + 0.5) * y)
 
 
 @register("mod", 2)
@@ -203,7 +202,26 @@ alias("length", "strlen")
 register("ustrlen", 1)(_str1(lambda s: float(len(s))))
 register("strupper", 1)(_str1(lambda s: s.upper()))
 register("strlower", 1)(_str1(lambda s: s.lower()))
-register("strproper", 1)(_str1(lambda s: s.title()))
+def _proper(s: str) -> str:
+    """Maiúscula em letras ASCII que vêm depois de algo que não é letra ASCII.
+    Como no Stata, caracteres acentuados contam como "não letra":
+    proper("joão") = "JoãO" (use ustrtitle() para texto Unicode)."""
+    out = []
+    prev_letter = False
+    for ch in s:
+        is_letter = ch.isascii() and ch.isalpha()
+        if is_letter:
+            out.append(ch.lower() if prev_letter else ch.upper())
+        else:
+            out.append(ch)
+        prev_letter = is_letter
+    return "".join(out)
+
+
+register("strproper", 1)(_str1(_proper))
+register("ustrtitle", 1)(_str1(lambda s: s.title()))
+register("ustrupper", 1)(_str1(lambda s: s.upper()))
+register("ustrlower", 1)(_str1(lambda s: s.lower()))
 alias("upper", "strupper")
 alias("lower", "strlower")
 alias("proper", "strproper")
@@ -304,7 +322,7 @@ def _real(s: Value) -> float:
 def _string(x: Value, fmt: Value = "%9.0g") -> str:
     """VERIFICAR: string(n) sem formato usa %9.0g."""
     x = _n(x)
-    return format_value(x, parse_format(_s(fmt)), pad=False).strip()
+    return format_value(x, parse_format(_s(fmt)), pad=False, dp=False).strip()
 
 
 alias("strofreal", "string")
@@ -312,14 +330,13 @@ alias("strofreal", "string")
 
 @register("abbrev", 2)
 def _abbrev(s: Value, n: Value) -> str:
+    """abbrev("variavel_muito_longa", 10) = "variavel~a": os primeiros n-2
+    caracteres, '~' e o último caractere (observado no Stata). n mínimo: 5."""
     s, n = _s(s), int(_n(n))
+    n = max(n, 5)
     if len(s) <= n:
         return s
-    if n < 5:
-        n = 5
-    if len(s) <= n:
-        return s
-    return s[: n - 1] + "~"
+    return s[: n - 2] + "~" + s[-1]
 
 
 # expressões regulares: regexm guarda as capturas para regexs()

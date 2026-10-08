@@ -1,0 +1,145 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
+  log type:  text
+ opened on:   8 Oct 2026, 15:15:04
+
+. * Fase 1a: criação de dados, tipos, generate/replace, describe, list, count.
+. clear
+
+. set obs 6
+number of observations (_N) was 0, now 6
+
+. gen id = _n
+
+. gen x = id * 1.5
+
+. gen y = 1 if id > 2
+(2 missing values generated)
+
+. gen byte b = 2.7
+
+. gen byte big = 200 in 1/3
+(3 missing values generated)
+
+. gen float f = 0.1
+
+. gen double d = 0.1
+
+. count if f == 0.1
+  0
+
+. count if d == 0.1
+  6
+
+. count if f == float(0.1)
+  6
+
+. gen s = "obs" + string(id)
+
+. replace x = . in 3
+(1 real change made, 1 to missing)
+
+. replace x = x[_n-1] if missing(x)
+(1 real change made)
+
+. replace b = 1000 in 1
+variable b was byte now int
+(1 real change made)
+
+. replace b = 1.5 in 2
+variable b was int now float
+(1 real change made)
+
+. replace b = b
+(0 real changes made)
+
+. replace s = "observação longa" in 1
+variable s was str4 now str18
+(1 real change made)
+
+. label variable x "Valor de x"
+
+. describe
+
+Contains data
+  obs:             6                          
+ vars:             8                          
+ size:           282                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              float   %9.0g                 
+x               float   %9.0g                 Valor de x
+y               float   %9.0g                 
+b               float   %8.0g                 
+big             byte    %8.0g                 
+f               float   %9.0g                 
+d               double  %10.0g                
+s               str18   %18s                  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +--------------------------------------------------------+
+     | id     x   y      b   big    f    d                  s |
+     |--------------------------------------------------------|
+  1. |  1   1.5   .   1000     .   .1   .1   observação longa |
+  2. |  2     3   .    1.5     .   .1   .1               obs2 |
+  3. |  3     3   1      2     .   .1   .1               obs3 |
+  4. |  4     6   1      2     .   .1   .1               obs4 |
+  5. |  5   7.5   1      2     .   .1   .1               obs5 |
+     |--------------------------------------------------------|
+  6. |  6     9   1      2     .   .1   .1               obs6 |
+     +--------------------------------------------------------+
+
+. list id x s in 1/3, noobs
+
+  +-----------------------------+
+  | id     x                  s |
+  |-----------------------------|
+  |  1   1.5   observação longa |
+  |  2     3               obs2 |
+  |  3     3               obs3 |
+  +-----------------------------+
+
+. list id x, clean
+
+       id     x  
+  1.    1   1.5  
+  2.    2     3  
+  3.    3     3  
+  4.    4     6  
+  5.    5   7.5  
+  6.    6     9  
+
+. list id x if id > 3, sep(2)
+
+     +----------+
+     | id     x |
+     |----------|
+  4. |  4     6 |
+  5. |  5   7.5 |
+     |----------|
+  6. |  6     9 |
+     +----------+
+
+. display x[2] " " _N " " s[1]
+3 6 observação longa
+
+. count
+  6
+
+. count if missing(y)
+  2
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
+  log type:  text
+ closed on:   8 Oct 2026, 15:15:04
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

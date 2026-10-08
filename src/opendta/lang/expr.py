@@ -249,7 +249,7 @@ class Parser:
             if t.value == "-":
                 return Unary("-", self.parse_expr(_UMINUS_BP))
             if t.value == "+":
-                return self.parse_expr(_UMINUS_BP)
+                return Unary("+", self.parse_expr(_UMINUS_BP))
             if t.value in ("!", "~"):
                 return Unary("!", self.parse_expr(_NOT_BP))
             raise syntax_error()
@@ -347,6 +347,11 @@ def evaluate(node: Node, ctx: Context) -> Value:
         v = evaluate(node.operand, ctx)
         if node.op == "!":
             return 0.0 if _truth(v) else 1.0
+        if node.op == "+":
+            if isinstance(v, str):
+                # display "a" + "b" termina em erro r(198) no Stata
+                raise StataError(198, "invalid syntax")
+            return v
         if isinstance(v, str):
             raise type_mismatch()
         return M.SYSMISS if M.is_missing(v) else _num(-v)

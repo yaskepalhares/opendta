@@ -34,9 +34,18 @@ from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
+from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
 from .settings import Preferences
-from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme
+from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme, apply_theme, results_scheme
+
+
+def _human_size(nbytes: int) -> str:
+    for unit in ("bytes", "K", "M", "G"):
+        if nbytes < 1024 or unit == "G":
+            return f"{nbytes:,} {unit}" if unit == "bytes" else f"{nbytes:,.2f}{unit}"
+        nbytes /= 1024
+    return str(nbytes)
 
 
 def monospace_font(prefs: Preferences | None = None) -> QFont:
@@ -61,6 +70,8 @@ def monospace_font(prefs: Preferences | None = None) -> QFont:
 # ---------------------------------------------------------------------------
 
 class ResultsView(QPlainTextEdit):
+    MAX_SEGMENTS = 200_000
+
     def __init__(self, scheme: ResultsScheme = STANDARD):
         super().__init__()
         self.setReadOnly(True)
@@ -68,7 +79,13 @@ class ResultsView(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setFont(monospace_font())
         self.setObjectName("Results")
-        self.setStyleSheet(f"QPlainTextEdit#Results {{ background: {scheme.background}; }}")
+        self._segments: list[tuple[str, str]] = []   # para redesenhar ao trocar o tema
+        self.set_scheme(scheme)
+
+    def set_scheme(self, scheme: ResultsScheme) -> None:
+        self._scheme = scheme
+        self.setStyleSheet(f"QPlainTextEdit#Results {{ background: {scheme.background}; "
+                           f"color: {scheme.colors['text']}; }}")
         self._formats: dict[str, QTextCharFormat] = {}
         for style, color in scheme.colors.items():
             fmt = QTextCharFormat()
@@ -76,8 +93,20 @@ class ResultsView(QPlainTextEdit):
             if style in scheme.bold:
                 fmt.setFontWeight(QFont.Weight.Bold)
             self._formats[style] = fmt
+        if self._segments:
+            segments, self._segments = self._segments, []
+            super().clear()
+            for text, style in segments:
+                self.append_styled(text, style)
+
+    def clear(self) -> None:  # noqa: D401
+        self._segments = []
+        super().clear()
 
     def append_styled(self, text: str, style: str) -> None:
+        self._segments.append((text, style))
+        if len(self._segments) > self.MAX_SEGMENTS:
+            del self._segments[: len(self._segments) // 2]
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.insertText(text, self._formats.get(style, self._formats["text"]))
@@ -89,19 +118,46 @@ class ResultsView(QPlainTextEdit):
 # Command
 # ---------------------------------------------------------------------------
 
-class CommandLine(QLineEdit):
+class CommandLine(QPlainTextEdit):
+    """Janela Command: redimensionável e com várias linhas.
+
+    Enter executa; Shift+Enter quebra a linha. Texto colado com várias
+    linhas é executado linha a linha. PgUp/PgDn percorrem o histórico; as
+    setas ↑/↓ também, enquanto o comando tiver uma linha só."""
+
     submitted = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.setFont(monospace_font())
         self.setObjectName("Command")
+        self.setTabChangesFocus(True)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         self.history: list[str] = []
         self._pos = 0
-        self.returnPressed.connect(self._submit)
+        self._update_min_height()
+
+    def setFont(self, font) -> None:  # noqa: N802
+        super().setFont(font)
+        self._update_min_height()
+
+    def _update_min_height(self) -> None:
+        # pelo menos uma linha visível, qualquer que seja a fonte
+        self.setMinimumHeight(self.fontMetrics().lineSpacing() + 14)
+
+    # compatibilidade com a API de QLineEdit usada pela janela
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setText(self, text: str) -> None:  # noqa: N802
+        self.setPlainText(text)
+        self.moveCursor(QTextCursor.MoveOperation.End)
+
+    def insert(self, text: str) -> None:
+        self.insertPlainText(text)
 
     def _submit(self) -> None:
-        text = self.text()
+        text = self.toPlainText()
         if not text.strip():
             return
         self.history.append(text)
@@ -109,15 +165,27 @@ class CommandLine(QLineEdit):
         self.clear()
         self.submitted.emit(text)
 
+    def _recall(self, step: int) -> None:
+        if not self.history:
+            return
+        self._pos = min(max(self._pos + step, 0), len(self.history))
+        self.setText(self.history[self._pos] if self._pos < len(self.history) else "")
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
         key = event.key()
-        if key in (Qt.Key.Key_PageUp, Qt.Key.Key_Up) and self.history:
-            self._pos = max(0, self._pos - 1)
-            self.setText(self.history[self._pos])
+        mods = event.modifiers()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if mods & Qt.KeyboardModifier.ShiftModifier:
+                self.insertPlainText("\n")
+            else:
+                self._submit()
             return
-        if key in (Qt.Key.Key_PageDown, Qt.Key.Key_Down) and self.history:
-            self._pos = min(len(self.history), self._pos + 1)
-            self.setText(self.history[self._pos] if self._pos < len(self.history) else "")
+        single = "\n" not in self.toPlainText()
+        if key == Qt.Key.Key_PageUp or (key == Qt.Key.Key_Up and single):
+            self._recall(-1)
+            return
+        if key == Qt.Key.Key_PageDown or (key == Qt.Key.Key_Down and single):
+            self._recall(+1)
             return
         if key == Qt.Key.Key_Escape:
             self.clear()
@@ -170,6 +238,7 @@ class MainWindow(QMainWindow):
         self.session.add_state_listener(self.refresh_state)
         self.refresh_state()
         self.apply_preferences()
+        self._restore_layout()
         self.command.setFocus()
         self.setAcceptDrops(True)
 
@@ -177,16 +246,20 @@ class MainWindow(QMainWindow):
     def _build_central(self) -> None:
         self.results = ResultsView()
         self.command = CommandLine()
-        self.command.submitted.connect(self.run_command)
+        self.command.submitted.connect(self.run_commands)
 
+        # Results e Command separados por uma divisória arrastável nos dois sentidos
         split = QSplitter(Qt.Orientation.Vertical)
+        split.setObjectName("CentralSplitter")
+        split.setHandleWidth(6)
         split.addWidget(_titled("Results", self.results))
         split.addWidget(_titled("Command", self.command))
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 0)
         split.setCollapsible(0, False)
         split.setCollapsible(1, False)
-        split.setSizes([700, 60])
+        split.setSizes([700, 70])
+        self.splitter = split
         self.setCentralWidget(split)
 
     def _dock(self, title: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
@@ -208,8 +281,8 @@ class MainWindow(QMainWindow):
         self.review.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.review.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.review.header().setStretchLastSection(False)
-        self.review.itemClicked.connect(lambda it, _c: self.command.setText(it.text(0)))
-        self.review.itemDoubleClicked.connect(lambda it, _c: self.run_command(it.text(0)))
+        self.review.itemClicked.connect(lambda it, _c: self.command.setText(self._review_text(it)))
+        self.review.itemDoubleClicked.connect(lambda it, _c: self.run_commands(self._review_text(it)))
         review_box = QWidget()
         lay = QVBoxLayout(review_box)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -229,6 +302,11 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         self.var_filter = QLineEdit()
         self.var_filter.setPlaceholderText("Filter variables here")
+        self.var_filter.textChanged.connect(self._filter_variables)
+        self.variables.itemSelectionChanged.connect(self._show_variable_properties)
+        # duplo clique envia o nome para a janela Command, como no Stata
+        self.variables.itemDoubleClicked.connect(
+            lambda it, _c: (self.command.insert(it.text(0) + " "), self.command.setFocus()))
         lay.addWidget(self.var_filter)
         lay.addWidget(self.variables)
         self.dock_variables = self._dock("Variables", var_box, Qt.DockWidgetArea.RightDockWidgetArea)
@@ -357,6 +435,7 @@ class MainWindow(QMainWindow):
             for name, text, slot, phase in group:
                 accent = ACCENT_RED if name == "break" else None
                 act = QAction(icon(name, accent), text, self)
+                act.setData((name, accent))
                 act.setToolTip(text + (f" — {_PENDING[phase]}" if phase else ""))
                 act.setEnabled(slot is not None)
                 if slot is not None:
@@ -378,7 +457,9 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("""
             QLabel#PaneTitle { background: palette(window); border-bottom: 1px solid palette(mid);
                                padding: 4px 0; font-weight: 600; }
-            QLineEdit#Command { border: none; padding: 5px; background: palette(base); }
+            QPlainTextEdit#Command { border: none; padding: 3px; background: palette(base); }
+            QSplitter#CentralSplitter::handle { background: palette(window); }
+            QSplitter#CentralSplitter::handle:hover { background: palette(mid); }
             QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
             QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 4px; }
             QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
@@ -387,19 +468,47 @@ class MainWindow(QMainWindow):
         """)
 
     # -- ações ---------------------------------------------------------------
+    def run_commands(self, text: str) -> None:
+        """Texto da janela Command. Uma linha: comando comum. Várias linhas:
+        rodam juntas como um trecho de do-file (blocos { } inteiros)."""
+        lines = [ln for ln in text.splitlines() if ln.strip()]
+        if len(lines) <= 1:
+            self.run_command(lines[0] if lines else text)
+            return
+        try:
+            rc = self.session.run_text("\n".join(lines))
+        except ExitRequest:
+            self.close()
+            return
+        self._add_review(text, rc)
+        self.command.setFocus()
+
+    def _add_review(self, text: str, rc: int) -> None:
+        first = text.strip().splitlines()[0]
+        shown = first + (" …" if "\n" in text.strip() else "")
+        item = QTreeWidgetItem([shown, str(rc) if rc else ""])
+        item.setData(0, Qt.ItemDataRole.UserRole, text)
+        item.setToolTip(0, text)
+        if rc:
+            err = QColor(results_scheme(self.prefs.theme).colors["error"])
+            for col in (0, 1):
+                item.setForeground(col, err)
+        self.review.addTopLevelItem(item)
+        self.review.scrollToItem(item)
+
     def run_command(self, line: str) -> None:
         try:
             rc = self.session.run_command(line)
         except ExitRequest:
             self.close()
             return
-        item = QTreeWidgetItem([line, str(rc) if rc else ""])
-        if rc:
-            for col in (0, 1):
-                item.setForeground(col, QColor("#cc0000"))
-        self.review.addTopLevelItem(item)
-        self.review.scrollToItem(item)
+        self._add_review(line, rc)
         self.command.setFocus()
+
+    @staticmethod
+    def _review_text(item) -> str:
+        full = item.data(0, Qt.ItemDataRole.UserRole)
+        return full if full else item.text(0)
 
     def _filter_review(self, text: str) -> None:
         for k in range(self.review.topLevelItemCount()):
@@ -422,7 +531,8 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def apply_preferences(self) -> None:
-        """Aplica fonte e ícone escolhidos (também chamado na abertura)."""
+        """Aplica tema, fonte e ícone escolhidos (também chamado na abertura)."""
+        self.apply_theme(self.prefs.theme)
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
@@ -431,6 +541,38 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.setWindowIcon(ico)
+
+    # -- layout salvo entre sessões -------------------------------------------
+    def _restore_layout(self) -> None:
+        geo, state, split = self.prefs.layout()
+        if geo:
+            self.restoreGeometry(geo)
+        if state:
+            self.restoreState(state)
+        if split:
+            self.splitter.restoreState(split)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
+        super().closeEvent(event)
+
+    def apply_theme(self, theme: str) -> None:
+        """Tema claro ou escuro da interface inteira, independente do sistema."""
+        app = QApplication.instance()
+        if app is not None:
+            apply_theme(app, theme)
+        set_icon_theme(theme)
+        self.results.set_scheme(results_scheme(theme))
+        err = QColor(results_scheme(theme).colors["error"])
+        for k in range(self.review.topLevelItemCount()):
+            it = self.review.topLevelItem(k)
+            if it.text(1):
+                for col in (0, 1):
+                    it.setForeground(col, err)
+        for act in getattr(self, "toolbar_actions", {}).values():
+            name, accent = act.data()
+            act.setIcon(icon(name, accent))
+        self._apply_styles()
 
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",
@@ -442,14 +584,57 @@ class MainWindow(QMainWindow):
     def refresh_state(self) -> None:
         cwd = os.getcwd()
         self.cwd_label.setText(cwd)
-        self.setWindowTitle(f"OpenDTA {__version__} — {Path(cwd).name or cwd}")
+        ds = self.session.data
+        title = Path(ds.filename).name if ds.filename else (Path(cwd).name or cwd)
+        self.setWindowTitle(f"OpenDTA {__version__} — {title}")
+
+        # Variables
+        selected = self._selected_variable()
+        self.variables.clear()
+        for v in ds.vars:
+            item = QTreeWidgetItem([v.name, v.label])
+            self.variables.addTopLevelItem(item)
+            if v.name == selected:
+                item.setSelected(True)
+        self._filter_variables(self.var_filter.text())
+
+        # Properties > Data
+        size = ds.width() * ds.nobs
         data_props = {
-            "Filename": "", "Variables": str(0), "Observations": str(self.session.nobs),
+            "Filename": Path(ds.filename).name if ds.filename else "",
+            "Label": ds.label,
+            "Notes": "",
+            "Variables": f"{ds.nvars:,}",
+            "Observations": f"{ds.nobs:,}",
+            "Size": _human_size(size),
+            "Memory": _human_size(size),
+            "Sorted by": " ".join(ds.sortlist),
         }
         for k in range(self._prop_data.childCount()):
             child = self._prop_data.child(k)
-            if child.text(0) in data_props:
-                child.setText(1, data_props[child.text(0)])
+            child.setText(1, data_props.get(child.text(0), ""))
+        self._show_variable_properties()
+
+    def _selected_variable(self) -> str:
+        items = self.variables.selectedItems()
+        return items[0].text(0) if items else ""
+
+    def _filter_variables(self, text: str) -> None:
+        for k in range(self.variables.topLevelItemCount()):
+            it = self.variables.topLevelItem(k)
+            it.setHidden(bool(text) and text.lower() not in (it.text(0) + " " + it.text(1)).lower())
+
+    def _show_variable_properties(self) -> None:
+        name = self._selected_variable()
+        ds = self.session.data
+        props = {}
+        if name and ds.has(name):
+            v = ds.get(name)
+            props = {"Name": v.name, "Label": v.label, "Type": v.vtype, "Format": v.fmt,
+                     "Value label": v.value_label, "Notes": ""}
+        for k in range(self._prop_vars.childCount()):
+            child = self._prop_vars.child(k)
+            child.setText(1, props.get(child.text(0), ""))
 
     # -- arrastar e soltar do-files -------------------------------------------
     def dragEnterEvent(self, event) -> None:  # noqa: N802

@@ -56,59 +56,93 @@ class Interpreter:
     # Execução de uma sequência de linhas
     # ------------------------------------------------------------------
     def run_lines(self, lines: list[LogicalLine], *, echo: bool = False) -> None:
-        self._run_range(lines, 0, len(lines), echo=echo)
+        self._run_range(lines, 0, len(lines), echo="top" if echo else None)
 
-    def _run_range(self, lines: list[LogicalLine], start: int, end: int, *, echo: bool) -> None:
+    def _run_range(self, lines: list[LogicalLine], start: int, end: int, *, echo: str | None) -> None:
         i = start
         while i < end:
             i = self._run_one(lines, i, end, echo=echo)
 
-    def _run_one(self, lines: list[LogicalLine], i: int, end: int, *, echo: bool) -> int:
-        raw = lines[i].text.strip()
-        word = _first_word(raw)
+    # Modos de eco (observados nos logs do Stata):
+    #   "top"    comando de nível superior do do-file: '. linha', saída, linha em branco
+    #   "inline" linha dentro de if/else ou de bloco quietly/capture: '. linha', sem
+    #            linha em branco depois
+    #   None     sem eco (corpo de laços, que são ecoados inteiros antes de rodar)
+    def _echo(self, ln: LogicalLine, echo: str | None) -> None:
+        if echo:
+            self.s.output.echo_command(ln.echo_lines)
 
+    def _after(self, echo: str | None) -> None:
+        if echo == "top":
+            self.s.output.end_command()
+
+    def _run_one(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
+        ln = lines[i]
+        out = self.s.output
+        if ln.kind == "comment":
+            self._echo(ln, echo)
+            return i + 1
+        if ln.kind == "delimit":
+            self._echo(ln, echo)
+            out.write(f"delimiter now {ln.text.split()[-1]}\n", "text")
+            return i + 1
+
+        raw = ln.text.strip()
+        word = _first_word(raw)
         if raw == "}":
             raise StataError(198, "unexpected }")
-
         if raw.endswith("{"):
             j = self._block_end(lines, i, end)
-            if echo:
-                self._echo_block(lines, i, j)
-            return self._run_block(lines, i, j, end)
-
-        if echo:
-            self.s.output.echo_command(raw)
-
-        if raw.startswith("#delimit"):
-            # VERIFICAR: mensagem exibida pelo Stata após #delimit
-            self.s.output.write(f"delimiter now {raw.split()[-1]}\n", "text")
-            return i + 1
+            return self._run_block(lines, i, j, end, echo=echo)
+        if word == "input":
+            return self._run_input(lines, i, end, echo=echo)
         if word == "if":
-            return self._run_if_chain(lines, i, end)
+            return self._run_if_chain(lines, i, end, echo=echo)
         if word == "else":
             raise StataError(198, "else without if")
 
+        self._echo(ln, echo)
         self.execute(raw)
+        self._after(echo)
         return i + 1
 
-    def _echo_block(self, lines: list[LogicalLine], i: int, j: int) -> None:
+    def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
+        """input var1 var2 ... seguido de linhas de dados até `end`."""
+        from ..commands.data import run_input
+
+        raw = self.s.expand(lines[i].text.strip())
+        spec = split_command(raw)[1]
+        j = i + 1
+        rows: list[str] = []
+        while j < end and lines[j].text.strip() != "end":
+            rows.append(self.s.expand(lines[j].text.strip()))
+            j += 1
+        if j >= end:
+            raise StataError(198, "input: end not found")
         out = self.s.output
-        out.echo_command(lines[i].text.strip())
+        if echo:
+            self._echo(lines[i], echo)
+            # cabeçalho: 3 espaços e cada nome alinhado à direita em 11 colunas
+            names = [n for n in spec.split()
+                     if not re.match(r"^(byte|int|long|float|double|str\d*|strL)$", n)]
+            out.write("\n   " + "".join(f"{n:>11}" for n in names) + "\n", "text")
+            for k, ln in enumerate(lines[i + 1:j + 1], start=1):
+                out.write(f"{k:>3}. {ln.echo_lines[0].strip()}\n", "command")
+        run_input(self.s, spec, rows)
+        self._after(echo)
+        return j + 1
+
+    def _echo_numbered(self, lines: list[LogicalLine], i: int, j: int) -> None:
+        """Eco de laço: cabeçalho e corpo numerado, antes da execução."""
+        out = self.s.output
+        out.echo_command(lines[i].echo_lines)
         k = 2
         for ln in lines[i + 1:j + 1]:
-            out.write(f"{k:>3}. {ln.text.strip()}\n", "command")
+            first, *rest = ln.echo_lines
+            out.write(f"{k:>3}. {first}\n", "command")
+            for cont in rest:
+                out.write(f"> {cont}\n", "command")
             k += 1
-        # else encadeados também são ecoados
-        nxt = j + 1
-        while nxt < len(lines) and _first_word(lines[nxt].text) == "else":
-            if lines[nxt].text.strip().endswith("{"):
-                jj = self._block_end(lines, nxt, len(lines))
-            else:
-                jj = nxt
-            for ln in lines[nxt:jj + 1]:
-                out.write(f"{k:>3}. {ln.text.strip()}\n", "command")
-                k += 1
-            nxt = jj + 1
 
     # ------------------------------------------------------------------
     # Blocos
@@ -117,6 +151,8 @@ class Interpreter:
     def _block_end(lines: list[LogicalLine], i: int, end: int) -> int:
         depth = 0
         for k in range(i, end):
+            if lines[k].kind != "cmd":
+                continue
             t = lines[k].text.strip()
             if t == "}":
                 depth -= 1
@@ -128,42 +164,62 @@ class Interpreter:
                 depth += 1
         raise StataError(198, "unexpected end of file")
 
-    def _run_block(self, lines: list[LogicalLine], i: int, j: int, end: int) -> int:
+    def _run_block(self, lines: list[LogicalLine], i: int, j: int, end: int, *, echo: str | None) -> int:
         raw = lines[i].text.strip()
         header = raw[:-1].rstrip()
         word, rest = split_command(header)
 
         if word == "if":
-            return self._run_if_chain(lines, i, end)
+            return self._run_if_chain(lines, i, end, echo=echo)
         if word == "else":
             raise StataError(198, "else without if")
+        loop = None
         if _is_abbrev(word, "forvalues", 4):
-            self._forvalues(rest, lines, i + 1, j)
-            return j + 1
-        if word == "foreach":
-            self._foreach(rest, lines, i + 1, j)
-            return j + 1
-        if word == "while":
-            self._while(rest, lines, i + 1, j)
+            loop = self._forvalues
+        elif word == "foreach":
+            loop = self._foreach
+        elif word == "while":
+            loop = self._while
+        if loop is not None:
+            if echo:
+                self._echo_numbered(lines, i, j)
+            loop(rest, lines, i + 1, j)
+            self._after(echo)
             return j + 1
         prefix = _is_prefix_word(word)
         if prefix is not None or header == "":
-            self._prefixed_block(header, lines, i + 1, j)
+            self._prefixed_block(header, lines, i, j, echo=echo)
             return j + 1
         raise StataError(198, "invalid syntax")
 
-    def _prefixed_block(self, header: str, lines: list[LogicalLine], a: int, b: int) -> None:
-        """quietly { ... }, capture { ... }, capture noisily { ... }"""
-        words = header.replace(":", " ").split()
-        self._with_prefixes(words, lambda: self._run_range(lines, a, b, echo=False))
+    def _prefixed_block(self, header: str, lines: list[LogicalLine], i: int, j: int,
+                        *, echo: str | None) -> None:
+        """quietly { ... }, capture { ... }, capture noisily { ... }
+
+        O cabeçalho é ecoado; as linhas internas são ecoadas uma a uma ao
+        rodar (e somem sob quietly/capture, como no Stata)."""
+        words = [_is_prefix_word(w) or w for w in header.replace(":", " ").split()]
+        self._echo(lines[i], echo)
+        inner = "inline" if echo else None
+        self._with_prefixes(words, lambda: self._run_range(lines, i + 1, j, echo=inner), block=True)
+        visible = "noisily" in words or not ({"quietly", "capture"} & set(words))
+        if echo and visible:
+            self._echo(lines[j], inner)
+        self._after(echo)
 
     # -- if / else ------------------------------------------------------------
-    def _run_if_chain(self, lines: list[LogicalLine], i: int, end: int) -> int:
+    def _run_if_chain(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
+        """if / else if / else. Com eco, cada linha aparece ao ser alcançada,
+        inclusive as do ramo não executado (que não produzem saída)."""
         taken = False
         idx = i
         first = True
+        inner = "inline" if echo else None
         while idx < end:
-            raw = lines[idx].text.strip()
+            ln = lines[idx]
+            if ln.kind != "cmd":
+                break
+            raw = ln.text.strip()
             word, rest = split_command(raw)
             if first:
                 if word != "if":
@@ -178,45 +234,43 @@ class Interpreter:
                 else:
                     kind, cond_text = "else", rest
             first = False
+            self._echo(ln, echo)
 
             is_block = raw.endswith("{")
             if is_block:
                 j = self._block_end(lines, idx, end)
-                body = (idx + 1, j)
-                nxt = j + 1
-                cond_src = cond_text[:-1].strip() if kind == "if" else ""
                 if kind == "else" and cond_text[:-1].strip():
                     raise syntax_error()
-                single_cmd = None
+                run_it = False
+                if not taken:
+                    run_it = True if kind == "else" else self._truth(self.s.expand(cond_text[:-1].strip()))
+                if run_it:
+                    taken = True
+                    self._run_range(lines, idx + 1, j, echo=inner)
+                elif echo:
+                    for ln2 in lines[idx + 1:j]:
+                        self._echo(ln2, inner)
+                self._echo(lines[j], inner)
+                nxt = j + 1
             else:
-                body = None
-                nxt = idx + 1
-                cond_src = cond_text
-
-            if not taken:
-                if kind == "if":
-                    expanded = self.s.expand(cond_src)
-                    if is_block:
-                        ok = self._truth(expanded)
-                        single_cmd = None
-                    else:
+                if not taken:
+                    if kind == "if":
+                        expanded = self.s.expand(cond_text)
                         p = Parser(expanded, stop_on_unknown=True)
                         node = p.parse_expr()
                         ok = self._truth_node(node)
-                        single_cmd = expanded[p.offset:].strip()
-                        if not single_cmd:
+                        cmd = expanded[p.offset:].strip()
+                        if not cmd:
                             raise StataError(198, "invalid syntax")
-                else:
-                    ok = True
-                    single_cmd = None if is_block else self.s.expand(cond_text)
-                if ok:
-                    taken = True
-                    if body is not None:
-                        self._run_range(lines, body[0], body[1], echo=False)
-                    elif single_cmd:
-                        self._execute_expanded(single_cmd)
+                    else:
+                        ok, cmd = True, self.s.expand(cond_text)
+                    if ok:
+                        taken = True
+                        self._execute_expanded(cmd)
+                nxt = idx + 1
+            self._after(echo)
             idx = nxt
-            if kind == "else" and not raw.startswith("else if") and _first_word(rest) != "if":
+            if kind == "else":
                 break
         return idx
 
@@ -234,7 +288,7 @@ class Interpreter:
     def _loop_body(self, lines: list[LogicalLine], a: int, b: int) -> bool:
         """Executa o corpo; devolve False se houve `continue, break`."""
         try:
-            self._run_range(lines, a, b, echo=False)
+            self._run_range(lines, a, b, echo=None)
         except ContinueLoop:
             return True
         except BreakLoop:
@@ -304,6 +358,17 @@ class Interpreter:
         if not word:
             raise StataError(198, "invalid syntax")
 
+        if word == "by" or _is_abbrev(word, "bysort", 3):
+            from .syntax import find_top, parse_by
+            colon = find_top(rest, ":")
+            if colon == -1:
+                raise StataError(198, "invalid syntax")
+            bp = parse_by(rest[:colon])
+            if word != "by":
+                bp.sort = True
+            self.s.run_by(bp, rest[colon + 1:].strip())
+            return
+
         prefix = _is_prefix_word(word)
         if prefix is not None:
             words = [prefix]
@@ -324,9 +389,11 @@ class Interpreter:
         spec = lookup(word)
         if spec is None:
             raise StataError(199, f"command {word} is unrecognized")
+        if self.s.by_groups is not None and not spec.byable and not spec.prefix:
+            raise StataError(190, f"{spec.name} may not be combined with by")
         spec.fn(self.s, rest)
 
-    def _with_prefixes(self, words: list[str], action) -> None:
+    def _with_prefixes(self, words: list[str], action, block: bool = False) -> None:
         out = self.s.output
         full = [_is_prefix_word(w) or w for w in words]
         for w in full:
@@ -341,13 +408,14 @@ class Interpreter:
                 out.capture_depth += 1
             try:
                 if inner:
-                    self._with_prefixes(inner, action)
+                    self._with_prefixes(inner, action, block)
                 else:
                     action()
                 self.s.set_rc(0)
             except StataError as e:
                 if noisy:
-                    out.error(e.message, e.rc)
+                    # capture noisily cmd: só a mensagem; em bloco, também r(#)
+                    out.error(e.message, e.rc, show_rc=block)
                 self.s.set_rc(e.rc)
             finally:
                 if not noisy:

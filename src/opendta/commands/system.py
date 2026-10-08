@@ -24,9 +24,18 @@ def cmd_set(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     name, value = words[0], " ".join(words[1:])
     if name == "obs":
-        raise StataError(198, "set obs chega na fase 1 (dados em memória)")
+        from .data import set_obs
+        set_obs(s, value)
+        s.notify_state()
+        return
     if name in ("more", "rmsg", "varabbrev", "trace") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
+    if name == "dp":
+        v = value.split(",")[0].strip()
+        if v not in ("comma", "period"):
+            raise StataError(198, "invalid syntax")
+        from ..core.formats import set_decimal_comma
+        set_decimal_comma(v == "comma")
     s.settings[name] = value.split(",")[0].strip()
 
 
@@ -62,7 +71,8 @@ def cmd_clear(s: "Session", args: str) -> None:
             s.sret.clear()
         if t in ("all", "*"):
             s.scalars.clear()
-        s.nobs = 0
+        if t in ("", "all", "*"):
+            s.data.clear()
         s.notify_state()
         return
     raise StataError(198, "invalid syntax")
@@ -106,7 +116,7 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
         out.write("\nscalars:\n", "text")
         for k, v in scalars.items():
             out.write(f"{prefix + '(' + k + ')':>20} =  ", "text")
-            out.write(format_value(v, "%9.0g", pad=False, sign_outside_width=True) + "\n", "result")
+            out.write(format_value(v, "%10.0g", pad=False) + "\n", "result")
     if macros:
         out.write("\nmacros:\n", "text")
         for k, v in macros.items():

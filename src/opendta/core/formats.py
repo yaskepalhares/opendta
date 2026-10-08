@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as _dt
 import re
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 
 from . import missing as M
 from .errors import StataError
@@ -64,6 +65,24 @@ def is_format(text: str) -> bool:
 
 
 DEFAULT_NUMERIC = parse_format("%9.0g")
+DISPLAY_NUMERIC = parse_format("%10.0g")   # display sem formato explícito
+MACRO_NUMERIC = parse_format("%18.0g")     # local x = exp, `=exp'
+
+# set dp comma|period: muda o separador decimal dos formatos de exibição
+# (não afeta string() nem macros, confirmado nos logs do Stata).
+_DP = {"comma": False}
+
+
+def set_decimal_comma(on: bool) -> None:
+    _DP["comma"] = bool(on)
+
+
+def decimal_comma() -> bool:
+    return _DP["comma"]
+
+
+def _swap_dp(s: str) -> str:
+    return s.translate(str.maketrans({".": ",", ",": "."}))
 
 
 def _pad(s: str, fmt: Format) -> str:
@@ -73,10 +92,10 @@ def _pad(s: str, fmt: Format) -> str:
 
 
 def format_value(value, fmt: Format | str = DEFAULT_NUMERIC, *, pad: bool = True,
-                 sign_outside_width: bool = False) -> str:
+                 dp: bool = True, sign_outside_width: bool = False) -> str:
     """Formata número ou string. `pad=False` remove o preenchimento (display
-    sem formato explícito). `sign_outside_width=True` faz o sinal de menos
-    não consumir largura em %g (comportamento observado no display)."""
+    sem formato explícito). `dp=False` ignora `set dp comma` (string(), macros).
+    `sign_outside_width` é aceito por compatibilidade e não tem mais efeito."""
     if isinstance(fmt, str):
         fmt = parse_format(fmt)
     if isinstance(value, str):
@@ -88,95 +107,91 @@ def format_value(value, fmt: Format | str = DEFAULT_NUMERIC, *, pad: bool = True
     if M.is_missing(x):
         out = M.missing_name(x)
     elif fmt.kind == "f":
-        out = f"{x:,.{fmt.decimals}f}" if fmt.comma else f"{x:.{fmt.decimals}f}"
+        out = _fmt_f(x, fmt.decimals, fmt.comma)
         if fmt.zero_pad and not fmt.left:
             out = out.zfill(fmt.width)
     elif fmt.kind == "e":
-        out = f"{x:.{fmt.decimals}e}"
+        out = _fmt_e(x, fmt.decimals)
     elif fmt.kind == "g":
-        out = _general(x, fmt, sign_outside_width)
+        out = general(x, fmt.width)
     elif fmt.kind == "t":
         out = _date(x, fmt)
     else:
         out = repr(x)
+    if dp and _DP["comma"] and fmt.kind in ("f", "g", "e") and not M.is_missing(x):
+        out = _swap_dp(out)
     return _pad(out, fmt) if pad else out
 
 
-def _strip_leading_zero(s: str) -> str:
-    if s.startswith("0."):
-        return s[1:]
-    if s.startswith("-0."):
-        return "-" + s[2:]
-    return s
+def _fmt_f(x: float, decimals: int, comma: bool = False) -> str:
+    """Notação fixa com arredondamento de meio para cima sobre o valor binário
+    exato (o Stata dá 1.235e+03 para 1234.5 em %10.3e; o Python daria 1.234)."""
+    q = Decimal(x).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    return f"{q:,.{decimals}f}" if comma else f"{q:.{decimals}f}"
 
 
-def _sig_digits(s: str) -> int:
-    digits = re.sub(r"[^0-9]", "", s.split("e")[0])
-    return len(digits.lstrip("0"))
+def _fmt_e(x: float, decimals: int) -> str:
+    if x == 0:
+        return f"{0:.{decimals}e}"
+    d = Decimal(x)
+    exp = d.adjusted()
+    mant = (d.scaleb(-exp)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    if abs(mant) >= 10:
+        exp += 1
+        mant = (d.scaleb(-exp)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    return f"{mant:.{decimals}f}" + _exp_text(exp)
 
 
-def _general(x: float, fmt: Format, sign_outside_width: bool) -> str:
-    """%w.0g: mostra o máximo de dígitos significativos que cabem em w.
+def _exp_text(e: int) -> str:
+    return f"e{'-' if e < 0 else '+'}{abs(e):02d}"
 
-    VERIFICAR: regra exata de escolha entre notação fixa e exponencial.
-    Aqui escolhemos a que exibe mais dígitos significativos (empate: fixa).
+
+def general(x: float, width: int) -> str:
+    """Formato %w.0g, com a regra observada nos logs do Stata 14:
+
+    * uma posição fica reservada para o sinal: o número usa no máximo
+      A = w - 1 caracteres, e o '-' ocupa a posição reservada;
+    * no máximo P = w - 2 dígitos significativos;
+    * notação exponencial quando o expoente (após arredondar para P dígitos)
+      é < -4 ou >= P, como o %g da linguagem C; senão, notação fixa sem zeros
+      à direita e sem o zero antes do ponto (.5);
+    * na exponencial, a mantissa ocupa todo o espaço: 1.235e+09 em %10.0g.
     """
+    if x == 0:
+        return "0"
     neg = x < 0
     ax = -x if neg else x
-    w = fmt.width
-    if neg and not sign_outside_width:
-        w -= 1
-    w = max(w, 1)
+    A = max(width - 1, 1)
+    P = max(width - 2, 1)
 
-    # inteiros que cabem
-    if ax == int(ax) and len(str(int(ax))) <= w:
-        s = str(int(ax))
-        return "-" + s if neg else s
-
-    candidates: list[str] = []
-
-    # notação fixa
-    int_digits = len(str(int(ax))) if ax >= 1 else 0
-    if int_digits <= w:
-        decimals = w - int_digits - 1
-        if fmt.decimals > 0:
-            decimals = min(decimals, fmt.decimals)
-        if decimals >= 0:
-            s = f"{ax:.{decimals}f}"
-            if ax < 1:
-                s = _strip_leading_zero(s)
-                if len(s) > w:  # sem zero à esquerda sobra uma casa
-                    s = s[:w]
-            if len(s) <= w and _sig_digits(s) > 0:
-                candidates.append(s)
-
-    # notação exponencial: d.ddde+XX
-    exp = f"{ax:e}".split("e")[1]
-    exp_len = 1 + len(exp)  # 'e' + sinal + dígitos
-    mant = w - exp_len - 2  # '1.' + decimais
-    if mant >= 0:
-        s = f"{ax:.{mant}e}"
-        if len(s) <= w:
-            candidates.append(s)
-
-    if not candidates:
-        s = f"{ax:.0e}"
-    else:
-        fixed = [c for c in candidates if "e" not in c]
-        expo = [c for c in candidates if "e" in c]
-        if fixed and (not expo or _sig_digits(fixed[0]) >= _sig_digits(expo[0])):
-            s = fixed[0]
+    X = int(_fmt_e(ax, P - 1).split("e")[1])
+    out = None
+    if -4 <= X < P:
+        decimals = max(0, P - 1 - X)
+        while decimals >= 0:
+            s = _fmt_f(ax, decimals)
             if "." in s:
-                s = s.rstrip("0").rstrip(".") or "0"
-        else:
-            s = expo[0]
-    return "-" + s if neg else s
+                s = s.rstrip("0").rstrip(".")
+            if s.startswith("0."):
+                s = s[1:]
+            if len(s) <= A and s not in ("", "0", "."):
+                out = s
+                break
+            decimals -= 1
+    if out is None:
+        # exponencial: d.ddd...e+XX ocupando A caracteres
+        for d in range(max(A - 2 - 4, 0), -1, -1):
+            s = _fmt_e(ax, d)
+            if len(s) <= A or d == 0:
+                out = s
+                break
+    return "-" + out if neg else out
 
 
 def _date(x: float, fmt: Format) -> str:
     if fmt.sub != "d":
         # outros formatos %t chegam na fase 1
-        return _general(x, DEFAULT_NUMERIC, False)
+        return general(x, DEFAULT_NUMERIC.width)
     try:
         d = STATA_EPOCH + _dt.timedelta(days=int(x // 1))
     except OverflowError:
@@ -185,19 +200,8 @@ def _date(x: float, fmt: Format) -> str:
 
 
 def number_to_macro(x: float) -> str:
-    """Como um número vira texto em `local x = exp` e `=exp'.
-
-    VERIFICAR: precisão exata usada pelo Stata (aqui, a menor representação
-    que preserva o double, sem o zero à esquerda).
-    """
+    """Como um número vira texto em `local x = exp` e `=exp': formato %18.0g
+    (16 dígitos significativos), confirmado nos logs do Stata."""
     if M.is_missing(x):
         return M.missing_name(x)
-    if x == int(x) and abs(x) < 1e16:
-        return str(int(x))
-    s = repr(x)
-    if "e" in s:
-        mant, exp = s.split("e")
-        sign = exp[0] if exp[0] in "+-" else "+"
-        digits = exp.lstrip("+-").rjust(2, "0")
-        s = f"{mant}e{sign}{digits}"
-    return _strip_leading_zero(s)
+    return general(x, MACRO_NUMERIC.width)

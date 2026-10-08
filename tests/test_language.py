@@ -56,7 +56,9 @@ def test_prefixes(run):
     assert run('quietly {\n di "a"\n noisily di "b"\n}') == "b\n"
     assert run("capture error 111\ndi _rc") == "111\n"
     assert run("capture di 1\ndi _rc") == "0\n"
-    assert run("capture noisily error 198").endswith("r(198);\n")
+    # como no Stata: capture noisily mostra a mensagem, mas não o r(#)
+    assert run("capture noisily error 198") == "invalid syntax\n"
+    assert run("capture noisily {\n error 198\n}") == "invalid syntax\nr(198);\n"
 
 
 def test_errors(run):
@@ -65,15 +67,17 @@ def test_errors(run):
     assert run.rc == 199
     run("di nada")
     assert run.rc == 111
-    run('di "a" + 1')
+    run('di ("a" + 1)')
     assert run.rc == 109
+    # string no início do display é texto literal: "a" seguido de +1
+    assert run('di "a" + 1') == "a1\n"
 
 
 def test_abbreviations(run):
     assert run("di 1") == "1\n"
     assert run("disp 1") == "1\n"
-    run("d 1")
-    assert run.rc == 199  # 'd' é describe, que chega na fase 1
+    out = run("d")
+    assert run.rc == 0 and "Contains data" in out   # 'd' é describe
 
 
 def test_scalar(run):

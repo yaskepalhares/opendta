@@ -1,0 +1,91 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
+  log type:  text
+ opened on:   8 Oct 2026, 15:15:04
+
+. * Mensagens de erro e códigos de retorno.
+. capture noisily foo
+command foo is unrecognized
+
+. display _rc
+199
+
+. capture noisily display nada
+nada not found
+
+. display _rc
+111
+
+. capture noisily display "a" + 1
+a1
+
+. display _rc
+0
+
+. capture noisily display 1 +
+invalid syntax
+
+. display _rc
+198
+
+. capture noisily error 111
+invalid syntax
+
+. capture noisily error 198
+invalid syntax
+
+. capture noisily error 459
+something that should be true of your data is not
+
+. capture noisily nope(1)
+command nope is unrecognized
+
+. capture noisily display nope(1)
+unknown function nope()
+
+. display _rc
+133
+
+. capture error 7
+
+. display _rc
+7
+
+. capture display 1
+
+. display _rc
+0
+
+. capture noisily confirm number abc
+'abc' found where number expected
+
+. capture noisily confirm integer number 1.5
+'1.5' found where integer expected
+
+. capture noisily quietly display nada
+nada not found
+
+. scalar s1 = 10
+
+. scalar s2 = "texto"
+
+. display s1 * 2
+20
+
+. display s2
+texto
+
+. scalar list s1
+        s1 =         10
+
+. capture noisily scalar drop naoexiste
+scalar naoexiste not found
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
+  log type:  text
+ closed on:   8 Oct 2026, 15:15:04
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

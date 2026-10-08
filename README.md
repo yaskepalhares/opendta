@@ -6,7 +6,7 @@ O objetivo é que um do-file escrito para o Stata 14 rode no OpenDTA sem altera�
 
 > Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
 
-## Estado atual: fase 0 (fundação)
+## Estado atual: fase 1a (dados em memória)
 
 Já funciona:
 
@@ -20,9 +20,11 @@ Já funciona:
 - `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` e `error`;
 - erros com as mensagens e os códigos `r(#)` do Stata;
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
-- console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`).
+- console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
+- dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format` e `compress`.
 
-Ainda não há dados em memória (`use`, `generate`, `summarize`…). Isso começa na fase 1.
+Ainda não há leitura e gravação de `.dta` (`use`, `save`), que chegam na fase 1b, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
 
 ## Instalação
 
