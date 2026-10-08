@@ -24,7 +24,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QFontDatabase, QKeySequence,
                            QTextCharFormat, QTextCursor)
-from PySide6.QtWidgets import (QDockWidget, QFileDialog, QHeaderView, QLabel,
+from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
                                QLineEdit, QMainWindow, QMenu, QMessageBox,
                                QPlainTextEdit, QSplitter, QToolBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
@@ -34,18 +34,24 @@ from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
-from .theme import MONOSPACE_FAMILIES, MONOSPACE_SIZE, STANDARD, ResultsScheme
+from .preferences import PreferencesDialog
+from .settings import Preferences
+from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme
 
 
-def monospace_font() -> QFont:
+def monospace_font(prefs: Preferences | None = None) -> QFont:
+    """Fonte das janelas de texto: a escolhida nas preferências, ou o padrão do
+    sistema (Menlo no macOS, Courier New no Windows, DejaVu Sans Mono no Linux)."""
+    prefs = prefs or Preferences()
     available = set(QFontDatabase.families())
-    for fam in MONOSPACE_FAMILIES:
+    candidates = [prefs.font_family] + MONOSPACE_FALLBACKS
+    for fam in candidates:
         if fam in available:
-            f = QFont(fam, MONOSPACE_SIZE)
+            f = QFont(fam, prefs.font_size)
             break
     else:
         f = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        f.setPointSize(MONOSPACE_SIZE)
+        f.setPointSize(prefs.font_size)
     f.setStyleHint(QFont.StyleHint.Monospace)
     return f
 
@@ -151,8 +157,8 @@ class MainWindow(QMainWindow):
     def __init__(self, session: Session | None = None):
         super().__init__()
         self.session = session or Session()
+        self.prefs = Preferences()
         self.resize(1280, 800)
-        self.setWindowIcon(app_icon())
         self._build_central()
         self._build_docks()
         self._build_menus()
@@ -163,6 +169,7 @@ class MainWindow(QMainWindow):
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
         self.refresh_state()
+        self.apply_preferences()
         self.command.setFocus()
         self.setAcceptDrops(True)
 
@@ -284,7 +291,7 @@ class MainWindow(QMainWindow):
         self._action(m, "Find...", phase=8)
         m.addSeparator()
         self._action(m, "Clear Results", self.results.clear)
-        self._action(m, "Preferences", phase=8)
+        self._action(m, "Preferences...", self.show_preferences, shortcut="Ctrl+,")
 
         m = mb.addMenu("&Data")
         self._action(m, "Describe data", phase=1)
@@ -408,6 +415,22 @@ class MainWindow(QMainWindow):
         path = QFileDialog.getExistingDirectory(self, "Change working directory", os.getcwd())
         if path:
             self.run_command(f'cd "{path}"')
+
+    def show_preferences(self) -> None:
+        dlg = PreferencesDialog(self.prefs, self)
+        dlg.applied.connect(self.apply_preferences)
+        dlg.exec()
+
+    def apply_preferences(self) -> None:
+        """Aplica fonte e ícone escolhidos (também chamado na abertura)."""
+        font = monospace_font(self.prefs)
+        for w in (self.results, self.command, self.review):
+            w.setFont(font)
+        ico = app_icon(self.prefs.app_icon)
+        self.setWindowIcon(ico)
+        app = QApplication.instance()
+        if app is not None:
+            app.setWindowIcon(ico)
 
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",

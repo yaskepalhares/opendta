@@ -84,12 +84,10 @@ def icon(name: str, accent: str | None = None) -> QIcon:
     return themed_icon(name, is_dark(), accent)
 
 
-def app_icon() -> QIcon:
-    """Ícone do aplicativo (variante clara ou escura, conforme o tema)."""
-    variant = "opendta-dark.png" if is_dark() else "opendta.png"
-    path = APPICON_DIR / variant
-    if not path.exists():
-        path = APPICON_DIR / "opendta.png"
+def app_icon(variant: str = "light") -> QIcon:
+    """Ícone do aplicativo. Padrão: "Tabela" claro; "dark" usa a versão escura."""
+    name = "opendta-dark.png" if variant == "dark" else "opendta.png"
+    path = APPICON_DIR / name
     return QIcon(str(path)) if path.exists() else QIcon()
 
 
