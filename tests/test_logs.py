@@ -54,3 +54,21 @@ def test_timer_creturn_trace(run):
     assert re.search(r"-+ begin tr ---", out) and "- display `a'" in out and "= display 5" in out
     run("set trace off")
     assert run("tr") == "5\n"
+
+
+def test_help_text_and_smcl(run, tmp_path):
+    from opendta.core.smcl import render_html, render_text
+    out = run("help describe")
+    assert "describe --" in out and "Describe the dataset" in out
+    out = run("help gen")
+    assert "generate --" in out
+    run("help nada")
+    assert run.rc == 111
+    src = "{smcl}\n{title:T}\n{pstd}\nUse {cmd:x} and {help list}.{p_end}\n{synopt:{opt s:hort}}desc{p_end}\n"
+    assert "Use x and list." in render_text(src) and "short" in render_text(src)
+    html = render_html(src)
+    assert '<a href="help:list"' in html and "<b>x</b>" in html and "<u>s</u>" in html
+    (tmp_path / "a.smcl").write_text("{smcl}\n{res}resultado{txt}\n")
+    assert run(f'view "{tmp_path / "a.smcl"}"') == "resultado\n"
+    out = run("search matrix")
+    assert "[matrix]" in out

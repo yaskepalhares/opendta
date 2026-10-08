@@ -32,7 +32,7 @@ opendta = "opendta.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-opendta = ["gui/icons/*.svg", "gui/appicon/*.png"]
+opendta = ["gui/icons/*.svg", "gui/appicon/*.png", "help/*.sthlp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

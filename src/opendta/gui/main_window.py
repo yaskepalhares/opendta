@@ -35,6 +35,7 @@ from ..core.errors import ExitRequest
 from ..session import Session
 from .data_browser import DataBrowser
 from .variables_manager import VariablesManager
+from .viewer import Viewer
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
@@ -257,6 +258,9 @@ class MainWindow(QMainWindow):
         self.varmanager: VariablesManager | None = None
         self.session.ui_hooks["browse"] = self.show_browser
         self.session.ui_hooks["varmanage"] = self.show_variables_manager
+        self.viewer: Viewer | None = None
+        self.session.ui_hooks["help"] = self.show_viewer
+        self.session.ui_hooks["view"] = self.show_viewer
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -373,8 +377,11 @@ class MainWindow(QMainWindow):
         self._action(m, "Change working directory...", self.choose_directory)
         m.addSeparator()
         log = m.addMenu("Log")
-        self._action(log, "Begin...", phase=2)
-        self._action(log, "Close", phase=2)
+        self._action(log, "Begin...", self.begin_log)
+        self._action(log, "Close", lambda: self.run_command("log close"))
+        self._action(log, "Suspend", lambda: self.run_command("log off"))
+        self._action(log, "Resume", lambda: self.run_command("log on"))
+        self._action(log, "View...", self.view_file)
         self._action(m, "Print...", phase=8)
         m.addSeparator()
         self._action(m, "Exit", self.close)
@@ -418,12 +425,13 @@ class MainWindow(QMainWindow):
         self._action(m, "Command", lambda: self.command.setFocus())
         self._action(m, "Results", lambda: self.results.setFocus())
         self._action(m, "Graph", phase=7)
-        self._action(m, "Viewer", phase=2)
+        self._action(m, "Viewer", lambda: self.run_command("help"))
         self._action(m, "Data Editor", lambda: self.run_command("browse"))
         self._action(m, "Do-file Editor", phase=8)
 
         m = mb.addMenu("&Help")
-        self._action(m, "Search...", phase=2)
+        self._action(m, "Search...", self.search_help)
+        self._action(m, "Contents", lambda: self.run_command("help"))
         m.addSeparator()
         self.act_hints = QAction("Explain Errors (set hints)", self, checkable=True)
         self.act_hints.setToolTip("After an error message, explain what went wrong and how to fix "
@@ -448,7 +456,8 @@ class MainWindow(QMainWindow):
         groups = [
             [("open", "Open", self.open_dataset, 1), ("save", "Save", self.save_dataset, 1),
              ("print", "Print", None, 8)],
-            [("log", "Log", None, 2), ("viewer", "Viewer", None, 2), ("graph", "Graph", None, 7),
+            [("log", "Log (begin or close)", self.toggle_log, 2),
+             ("viewer", "Viewer", lambda: self.run_command("help"), 2), ("graph", "Graph", None, 7),
              ("dofile", "Do-file Editor", None, 8)],
             [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit"), 1),
              ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse"), 1),
@@ -602,6 +611,46 @@ class MainWindow(QMainWindow):
         self.browser.show()
         self.browser.raise_()
         self.browser.activateWindow()
+
+    # -- Viewer e log ---------------------------------------------------------------
+    def show_viewer(self, path, title: str) -> None:
+        if self.viewer is None:
+            font = monospace_font(self.prefs)
+            self.viewer = Viewer(self.session, self, font_family=font.family(),
+                                 font_size=max(9, font.pointSize()), dark=self.prefs.theme == "dark",
+                                 run=self._run_from_editor)
+            self.viewer.setWindowFlag(Qt.WindowType.Window, True)
+        self.viewer.dark = self.prefs.theme == "dark"
+        self.viewer.show_page(path, title)
+        self.viewer.show()
+        self.viewer.raise_()
+        self.viewer.activateWindow()
+
+    def search_help(self) -> None:
+        self.run_command("help")
+        if self.viewer is not None:
+            self.viewer.field.setFocus()
+            self.viewer.field.selectAll()
+
+    def begin_log(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, "Begin log", os.path.join(os.getcwd(), "log.smcl"),
+                                              "SMCL log (*.smcl);;Text log (*.log)")
+        if path:
+            # o diálogo já confirmou a substituição
+            opts = "replace text" if path.lower().endswith(".log") else "replace"
+            self.run_command(f'log using "{path}", {opts}')
+
+    def toggle_log(self) -> None:
+        if getattr(self.session, "logs", None):
+            self.run_command("log close")
+        else:
+            self.begin_log()
+
+    def view_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "View", os.getcwd(),
+                                              "Logs and help (*.smcl *.log *.sthlp *.txt);;All files (*)")
+        if path:
+            self.run_command(f'view "{path}"')
 
     def show_variables_manager(self) -> None:
         if self.varmanager is None:
