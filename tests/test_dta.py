@@ -211,7 +211,7 @@ def test_numeric_edges(run, tmp_path, release):
         "byte": np.array([-127, 100, -1, 0]),
         "int": np.array([-32767, 32740, -1, 0]),
         "long": np.array([-2147483647, 2147483620, -1, 0]),
-        "float": f32([-1.7014117e38, 1.7014117e38, -0.1791305, -1e-30]),
+        "float": f32([-1.7014117331926443e38, 1.7014117331926443e38, -0.1791305, -1e-30]),
         "double": np.array([-8.98846567431158e307, 8.98846567431158e307, -0.5, -1e-300]),
     }
     for t, vals in cols.items():
@@ -222,3 +222,27 @@ def test_numeric_edges(run, tmp_path, release):
     back = read_dta(p)
     for a, b in zip(ds.vars, back.vars):
         assert np.array_equal(a.data, b.data), a.name
+
+
+def test_chunked_io_and_atomic_replace(run, tmp_path, release, monkeypatch):
+    """Blocos minúsculos forçam vários blocos de leitura e gravação."""
+    import opendta.io.dta as D
+    monkeypatch.setattr(D, "CHUNK_BYTES", 64)
+    ds = build(run, release)
+    p = tmp_path / "c.dta"
+    write_dta(ds, p, release=release)
+    _check_same(ds, read_dta(p))
+    # falha no meio da gravação: o arquivo antigo continua intacto
+    before = p.read_bytes()
+    monkeypatch.setattr(D, "_write_body", lambda *a, **k: (_ for _ in ()).throw(OSError("disco cheio")))
+    with pytest.raises(OSError):
+        write_dta(ds, p, release=release)
+    assert p.read_bytes() == before
+    assert not list(tmp_path.glob("*.opendta-tmp"))
+
+
+def test_native_storage_sizes(run):
+    run("clear\nset obs 1000\ngen byte b = 1\ngen int i = 1\ngen long l = 1\n"
+        "gen float f = 1\ngen double d = 1")
+    d = run.session.data
+    assert [d.get(n).raw.nbytes for n in "bilfd"] == [1000, 2000, 4000, 4000, 8000]

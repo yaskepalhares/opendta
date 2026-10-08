@@ -20,13 +20,14 @@ contra a ReadStat e por arquivos gravados e abertos no Stata 14.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import struct
 from pathlib import Path
 
 import numpy as np
 
 from ..core import missing as M
-from ..core.dataset import Dataset, Variable, default_format, str_len
+from ..core.dataset import Dataset, Variable, default_format
 from ..core.errors import StataError
 
 # códigos de tipo (117+)
@@ -35,12 +36,10 @@ T_STRL = 32768
 _TYPE_CODE = {"double": T_DOUBLE, "float": T_FLOAT, "long": T_LONG, "int": T_INT, "byte": T_BYTE}
 _CODE_TYPE = {v: k for k, v in _TYPE_CODE.items()}
 _NP = {"double": "f8", "float": "f4", "long": "i4", "int": "i2", "byte": "i1"}
+# os vetores nativos das variáveis (core/storage.py) já usam a codificação de
+# missing do formato: ler e gravar é copiar bytes
 _SIZE = {"double": 8, "float": 4, "long": 4, "int": 2, "byte": 1}
 
-# códigos de missing nos tipos inteiros: '.' e depois .a ... .z
-_INT_MISS = {"byte": 101, "int": 32741, "long": 2147483621}
-_FLOAT_MISS_BITS = 0x7F000000
-_FLOAT_MISS_STEP = 0x00000800
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -57,57 +56,6 @@ class _Layout:
         self.fmt = 49 if release == 117 else 57
         self.varlabel = 81 if release == 117 else 321
         self.sort_size = 4 if release == 119 else 2
-
-
-# ---------------------------------------------------------------------------
-# Conversão de valores numéricos
-# ---------------------------------------------------------------------------
-
-def _to_disk(values: np.ndarray, vtype: str) -> np.ndarray:
-    """Valores do OpenDTA (float64 com códigos de missing) para o tipo em disco."""
-    v = np.asarray(values, dtype=np.float64)
-    miss = v >= M.SYSMISS
-    if vtype == "double":
-        return v.astype("<f8")
-    # índice do missing: 0 para '.', 1..26 para .a..z
-    idx = np.zeros(len(v), dtype=np.int64)
-    if miss.any():
-        codes = [M.SYSMISS] + [M.EXTENDED[c] for c in "abcdefghijklmnopqrstuvwxyz"]
-        for k, code in enumerate(codes):
-            idx[v == code] = k
-    if vtype == "float":
-        out = np.where(miss, 0.0, v).astype("<f4")
-        if miss.any():
-            bits = out.view("<u4").copy()
-            bits[miss] = _FLOAT_MISS_BITS + idx[miss] * _FLOAT_MISS_STEP
-            out = bits.view("<f4")
-        return out
-    base = _INT_MISS[vtype]
-    return np.where(miss, base + idx, np.where(miss, 0, v)).astype("<" + _NP[vtype])
-
-
-def _from_disk(raw: np.ndarray, vtype: str) -> np.ndarray:
-    """Valores em disco (little-endian) para float64 com os códigos de missing
-    do OpenDTA. Em double os códigos são os mesmos do formato."""
-    codes = np.array([M.SYSMISS] + [M.EXTENDED[c] for c in "abcdefghijklmnopqrstuvwxyz"])
-    if vtype == "double":
-        return raw.astype(np.float64)
-    if vtype == "float":
-        bits = np.ascontiguousarray(raw.astype("<f4")).view("<u4")
-        v = raw.astype(np.float64)
-        # só os positivos acima do maior float válido; com sinal (bit 31) é número
-        miss = (bits >= _FLOAT_MISS_BITS) & (bits < 0x80000000)
-        if miss.any():
-            k = ((bits[miss] - _FLOAT_MISS_BITS) // _FLOAT_MISS_STEP).astype(np.int64).clip(0, 26)
-            v[miss] = codes[k]
-        return v
-    ints = raw.astype(np.int64)
-    v = ints.astype(np.float64)
-    base = _INT_MISS[vtype]
-    miss = ints >= base
-    if miss.any():
-        v[miss] = codes[(ints[miss] - base).clip(0, 26)]
-    return v
 
 
 # ---------------------------------------------------------------------------
@@ -131,171 +79,217 @@ def _timestamp(now: _dt.datetime | None = None) -> str:
     return f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year} {now.hour:02d}:{now.minute:02d}"
 
 
+CHUNK_BYTES = 32 * 2**20      # dados gravados e lidos em blocos de ~32 MB
+_CACHE_MAX = 50_000           # valores distintos por variável string antes de desistir do cache
+
+
+def _widths(ds: Dataset) -> list[int]:
+    out = []
+    for v in ds.vars:
+        if v.vtype == "strL":
+            out.append(8)
+        elif v.is_string:
+            out.append(int(v.vtype[3:]))
+        else:
+            out.append(_SIZE[v.vtype])
+    return out
+
+
 def write_dta(ds: Dataset, path: str | Path, *, release: int = 118,
               timestamp: str | None = None) -> str:
-    """Grava ds em path e devolve o carimbo de data gravado no cabeçalho."""
+    """Grava ds em path e devolve o carimbo de data gravado no cabeçalho.
+
+    Os dados vão para o disco em blocos de linhas, sem montar o arquivo
+    inteiro na memória. A gravação é feita num arquivo temporário na mesma
+    pasta, que só substitui o destino no fim: uma falha no meio não destrói
+    o arquivo antigo."""
     if release not in (117, 118, 119):
         raise StataError(198, f"dta release {release} not supported")
-    L = _Layout(release)
     if release == 118 and ds.nvars > 32767:
-        release, L = 119, _Layout(119)
+        release = 119
+    L = _Layout(release)
     _ENC["enc"] = "latin-1" if release == 117 else "utf-8"
     K, N = ds.nvars, ds.nobs
-    out = bytearray()
+    path = Path(path)
+    tmp = path.with_name(path.name + ".opendta-tmp")
     offsets: dict[str, int] = {}
-
-    def tag(name: str) -> None:
-        out.extend(f"<{name}>".encode())
-
-    def end(name: str) -> None:
-        out.extend(f"</{name}>".encode())
-
-    offsets["stata_dta"] = 0
-    tag("stata_dta")
-    tag("header")
-    out.extend(f"<release>{release}</release>".encode())
-    out.extend(b"<byteorder>LSF</byteorder>")
-    out.extend(b"<K>" + K.to_bytes(L.k_size, "little") + b"</K>")
-    out.extend(b"<N>" + N.to_bytes(L.n_size, "little") + b"</N>")
-    label = _enc(ds.label)[:320 if release != 117 else 80]
-    out.extend(b"<label>" + len(label).to_bytes(L.label_len_size, "little") + label + b"</label>")
     ts_text = timestamp if timestamp is not None else _timestamp()
-    ts = ts_text.encode("ascii")
-    out.extend(b"<timestamp>" + bytes([len(ts)]) + ts + b"</timestamp>")
-    end("header")
 
-    offsets["map"] = len(out)
-    tag("map")
-    map_pos = len(out)
-    out.extend(b"\x00" * 8 * 14)          # preenchido no fim
-    end("map")
-
-    offsets["variable_types"] = len(out)
-    tag("variable_types")
-    for v in ds.vars:
-        if v.vtype == "strL":
-            code = T_STRL
-        elif v.is_string:
-            code = int(v.vtype[3:])
-        else:
-            code = _TYPE_CODE[v.vtype]
-        out.extend(code.to_bytes(2, "little"))
-    end("variable_types")
-
-    offsets["varnames"] = len(out)
-    tag("varnames")
-    for v in ds.vars:
-        out.extend(_fixed(v.name, L.name))
-    end("varnames")
-
-    offsets["sortlist"] = len(out)
-    tag("sortlist")
-    names = ds.names
-    for k in range(K + 1):
-        idx = names.index(ds.sortlist[k]) + 1 if k < len(ds.sortlist) else 0
-        out.extend(idx.to_bytes(L.sort_size, "little"))
-    end("sortlist")
-
-    offsets["formats"] = len(out)
-    tag("formats")
-    for v in ds.vars:
-        out.extend(_fixed(v.fmt, L.fmt))
-    end("formats")
-
-    offsets["value_label_names"] = len(out)
-    tag("value_label_names")
-    for v in ds.vars:
-        out.extend(_fixed(v.value_label, L.name))
-    end("value_label_names")
-
-    offsets["variable_labels"] = len(out)
-    tag("variable_labels")
-    for v in ds.vars:
-        out.extend(_fixed(v.label, L.varlabel))
-    end("variable_labels")
-
-    offsets["characteristics"] = len(out)
-    tag("characteristics")
-    for owner, chars in getattr(ds, "chars", {}).items():
-        for cname, content in chars.items():
-            body = _fixed(owner, L.name) + _fixed(cname, L.name) + _enc(content) + b"\x00"
-            out.extend(b"<ch>" + len(body).to_bytes(4, "little") + body + b"</ch>")
-    end("characteristics")
-
-    # dados: registros de largura fixa, montados coluna a coluna
-    offsets["data"] = len(out)
-    tag("data")
-    strls: list[tuple[int, int, bytes]] = []
-    widths = []
-    for v in ds.vars:
-        if v.vtype == "strL":
-            widths.append(8)
-        elif v.is_string:
-            widths.append(int(v.vtype[3:]))
-        else:
-            widths.append(_SIZE[v.vtype])
-    rec = sum(widths)
-    block = np.zeros((N, rec), dtype=np.uint8)
-    pos = 0
-    for j, (v, w) in enumerate(zip(ds.vars, widths)):
-        if v.vtype == "strL":
-            for i, text in enumerate(v.data):
-                if text == "":
-                    continue                       # (0,0) indica string vazia
-                vv, oo = j + 1, i + 1
-                if release == 117:
-                    ref = vv.to_bytes(4, "little") + oo.to_bytes(4, "little")
-                else:
-                    ref = vv.to_bytes(2, "little") + oo.to_bytes(6, "little")
-                block[i, pos:pos + 8] = np.frombuffer(ref, dtype=np.uint8)
-                strls.append((vv, oo, _enc(str(text))))
-        elif v.is_string:
-            for i, text in enumerate(v.data):
-                b = _enc(str(text))[:w]
-                if b:
-                    block[i, pos:pos + len(b)] = np.frombuffer(b, dtype=np.uint8)
-        else:
-            disk = _to_disk(v.data, v.vtype)
-            block[:, pos:pos + w] = disk.view(np.uint8).reshape(N, w) if N else block[:, pos:pos + w]
-        pos += w
-    out.extend(block.tobytes())
-    end("data")
-
-    offsets["strls"] = len(out)
-    tag("strls")
-    for vv, oo, payload in strls:
-        o_bytes = oo.to_bytes(4 if release == 117 else 8, "little")
-        out.extend(b"GSO" + vv.to_bytes(4, "little") + o_bytes + bytes([130])
-                   + (len(payload) + 1).to_bytes(4, "little") + payload + b"\x00")
-    end("strls")
-
-    offsets["value_labels"] = len(out)
-    tag("value_labels")
-    for lname, mapping in ds.value_labels.items():
-        items = sorted(mapping.items())
-        txt = bytearray()
-        offs, vals = [], []
-        for val, text in items:
-            offs.append(len(txt))
-            vals.append(int(val))
-            txt.extend(_enc(text) + b"\x00")
-        n = len(items)
-        table = (n.to_bytes(4, "little") + len(txt).to_bytes(4, "little")
-                 + b"".join(o.to_bytes(4, "little") for o in offs)
-                 + b"".join(struct.pack("<i", val) for val in vals) + bytes(txt))
-        out.extend(b"<lbl>" + len(table).to_bytes(4, "little") + _fixed(lname, L.name)
-                   + b"\x00" * 3 + table + b"</lbl>")
-    end("value_labels")
-    offsets["stata_dta_end"] = len(out)
-    end("stata_dta")
-    offsets["eof"] = len(out)
-
-    order = ["stata_dta", "map", "variable_types", "varnames", "sortlist", "formats",
-             "value_label_names", "variable_labels", "characteristics", "data", "strls",
-             "value_labels", "stata_dta_end", "eof"]
-    out[map_pos:map_pos + 8 * 14] = b"".join(offsets[k].to_bytes(8, "little") for k in order)
-    Path(path).write_bytes(bytes(out))
+    try:
+        _write_body(ds, tmp, release, L, K, N, ts_text, offsets)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    os.replace(tmp, path)
     return ts_text
+
+
+def _write_body(ds: Dataset, tmp: Path, release: int, L: "_Layout", K: int, N: int,
+                ts_text: str, offsets: dict[str, int]) -> None:
+    with open(tmp, "wb") as f:
+        out = bytearray()
+
+        def flush() -> None:
+            f.write(out)
+            out.clear()
+
+        def here() -> int:
+            return f.tell() + len(out)
+
+        def tag(name: str) -> None:
+            out.extend(f"<{name}>".encode())
+
+        def end(name: str) -> None:
+            out.extend(f"</{name}>".encode())
+
+        offsets["stata_dta"] = 0
+        tag("stata_dta")
+        tag("header")
+        out.extend(f"<release>{release}</release>".encode())
+        out.extend(b"<byteorder>LSF</byteorder>")
+        out.extend(b"<K>" + K.to_bytes(L.k_size, "little") + b"</K>")
+        out.extend(b"<N>" + N.to_bytes(L.n_size, "little") + b"</N>")
+        label = _enc(ds.label)[:320 if release != 117 else 80]
+        out.extend(b"<label>" + len(label).to_bytes(L.label_len_size, "little") + label + b"</label>")
+        ts = ts_text.encode("ascii")
+        out.extend(b"<timestamp>" + bytes([len(ts)]) + ts + b"</timestamp>")
+        end("header")
+
+        offsets["map"] = here()
+        tag("map")
+        map_pos = here()
+        out.extend(b"\x00" * 8 * 14)          # preenchido no fim
+        end("map")
+
+        offsets["variable_types"] = here()
+        tag("variable_types")
+        for v in ds.vars:
+            if v.vtype == "strL":
+                code = T_STRL
+            elif v.is_string:
+                code = int(v.vtype[3:])
+            else:
+                code = _TYPE_CODE[v.vtype]
+            out.extend(code.to_bytes(2, "little"))
+        end("variable_types")
+
+        offsets["varnames"] = here()
+        tag("varnames")
+        for v in ds.vars:
+            out.extend(_fixed(v.name, L.name))
+        end("varnames")
+
+        offsets["sortlist"] = here()
+        tag("sortlist")
+        pos_of = {n: k for k, n in enumerate(ds.names, start=1)}
+        for k in range(K + 1):
+            idx = pos_of[ds.sortlist[k]] if k < len(ds.sortlist) else 0
+            out.extend(idx.to_bytes(L.sort_size, "little"))
+        end("sortlist")
+
+        offsets["formats"] = here()
+        tag("formats")
+        for v in ds.vars:
+            out.extend(_fixed(v.fmt, L.fmt))
+        end("formats")
+
+        offsets["value_label_names"] = here()
+        tag("value_label_names")
+        for v in ds.vars:
+            out.extend(_fixed(v.value_label, L.name))
+        end("value_label_names")
+
+        offsets["variable_labels"] = here()
+        tag("variable_labels")
+        for v in ds.vars:
+            out.extend(_fixed(v.label, L.varlabel))
+        end("variable_labels")
+
+        offsets["characteristics"] = here()
+        tag("characteristics")
+        for owner, chars in getattr(ds, "chars", {}).items():
+            for cname, content in chars.items():
+                body = _fixed(owner, L.name) + _fixed(cname, L.name) + _enc(content) + b"\x00"
+                out.extend(b"<ch>" + len(body).to_bytes(4, "little") + body + b"</ch>")
+        end("characteristics")
+
+        # dados: registros de largura fixa, gravados em blocos de linhas
+        offsets["data"] = here()
+        tag("data")
+        flush()
+        widths = _widths(ds)
+        rec = sum(widths)
+        strls: list[tuple[int, int, bytes]] = []
+        step = max(1, CHUNK_BYTES // max(rec, 1))
+        for start in range(0, N, step):
+            stop = min(N, start + step)
+            n = stop - start
+            block = np.zeros((n, rec), dtype=np.uint8)
+            pos = 0
+            for j, (v, w) in enumerate(zip(ds.vars, widths)):
+                part = v.raw[start:stop]
+                if v.vtype == "strL":
+                    refs = np.zeros((n, 8), dtype=np.uint8)
+                    for i, text in enumerate(part):
+                        if text == "":
+                            continue                   # (0,0) indica string vazia
+                        vv, oo = j + 1, start + i + 1
+                        if release == 117:
+                            ref = vv.to_bytes(4, "little") + oo.to_bytes(4, "little")
+                        else:
+                            ref = vv.to_bytes(2, "little") + oo.to_bytes(6, "little")
+                        refs[i] = np.frombuffer(ref, dtype=np.uint8)
+                        strls.append((vv, oo, _enc(str(text))))
+                    block[:, pos:pos + 8] = refs
+                elif v.is_string:
+                    # dtype S{w}: completa com zeros, como no formato
+                    enc = np.array([_enc(str(x))[:w] for x in part], dtype=f"S{w}")
+                    block[:, pos:pos + w] = enc.view(np.uint8).reshape(n, w)
+                else:
+                    disk = np.ascontiguousarray(part, dtype="<" + _NP[v.vtype])
+                    block[:, pos:pos + w] = disk.view(np.uint8).reshape(n, w)
+                pos += w
+            f.write(block.data)
+            del block
+        end("data")
+
+        offsets["strls"] = here()
+        tag("strls")
+        for vv, oo, payload in strls:
+            o_bytes = oo.to_bytes(4 if release == 117 else 8, "little")
+            out.extend(b"GSO" + vv.to_bytes(4, "little") + o_bytes + bytes([130])
+                       + (len(payload) + 1).to_bytes(4, "little") + payload + b"\x00")
+            if len(out) > CHUNK_BYTES:
+                flush()
+        end("strls")
+
+        offsets["value_labels"] = here()
+        tag("value_labels")
+        for lname, mapping in ds.value_labels.items():
+            items = sorted(mapping.items())
+            txt = bytearray()
+            offs, vals = [], []
+            for val, text in items:
+                offs.append(len(txt))
+                vals.append(int(val))
+                txt.extend(_enc(text) + b"\x00")
+            n = len(items)
+            table = (n.to_bytes(4, "little") + len(txt).to_bytes(4, "little")
+                     + b"".join(o.to_bytes(4, "little") for o in offs)
+                     + b"".join(struct.pack("<i", val) for val in vals) + bytes(txt))
+            out.extend(b"<lbl>" + len(table).to_bytes(4, "little") + _fixed(lname, L.name)
+                       + b"\x00" * 3 + table + b"</lbl>")
+        end("value_labels")
+        offsets["stata_dta_end"] = here()
+        end("stata_dta")
+        offsets["eof"] = here()
+        flush()
+
+        order = ["stata_dta", "map", "variable_types", "varnames", "sortlist", "formats",
+                 "value_label_names", "variable_labels", "characteristics", "data", "strls",
+                 "value_labels", "stata_dta_end", "eof"]
+        f.seek(map_pos)
+        f.write(b"".join(offsets[k].to_bytes(8, "little") for k in order))
 
 
 # ---------------------------------------------------------------------------
@@ -358,14 +352,19 @@ def read_dta(path: str | Path) -> Dataset:
     p = Path(path)
     if not p.exists():
         raise StataError(601, f"file {p} not found")
-    data = p.read_bytes()
-    if data.startswith(b"<stata_dta>"):
-        return _read_117plus(data, p)
+    with open(p, "rb") as f:
+        if f.read(11) == b"<stata_dta>":
+            return _read_117plus(f, p)
     return _read_legacy(p)
 
 
-def _read_117plus(data: bytes, path: Path) -> Dataset:
-    r = _Reader(data)
+def _read_117plus(f, path: Path) -> Dataset:
+    """Lê os metadados de uma vez, os dados em blocos de linhas direto para
+    os vetores nativos de cada variável, e o fim do arquivo (strLs e rótulos)
+    de uma vez."""
+    f.seek(0)
+    head = f.read(4096)
+    r = _Reader(head)
     r.expect("<stata_dta><header><release>")
     release = int(r.until("</release>"))
     if release not in (117, 118, 119):
@@ -383,6 +382,12 @@ def _read_117plus(data: bytes, path: Path) -> Dataset:
     ts = r.take(r.uint(1)).decode("ascii", "replace")
     r.expect("</timestamp></header><map>")
     offsets = [r.uint(8) for _ in range(14)]
+    bo = r.bo
+
+    # metadados: tudo antes de <data>
+    f.seek(0)
+    r = _Reader(f.read(offsets[9]))
+    r.bo = bo
 
     def seek(k: int, name: str) -> None:
         r.p = offsets[k]
@@ -427,12 +432,67 @@ def _read_117plus(data: bytes, path: Path) -> Dataset:
         else:
             raise StataError(610, f"unknown variable type {c}")
 
-    seek(9, "data")
+    # dados, em blocos
+    f.seek(offsets[9])
+    if f.read(6) != b"<data>":
+        raise StataError(610, "file not Stata format")
     rec = sum(widths)
-    block = np.frombuffer(r.take(rec * N), dtype=np.uint8).reshape(N, rec) if N else np.zeros((0, rec), np.uint8)
+    cols: list[np.ndarray] = []
+    for vtype in vtypes:
+        if vtype == "strL":
+            cols.append(np.zeros((N, 8), dtype=np.uint8))
+        elif vtype.startswith("str"):
+            cols.append(np.empty(N, dtype=object))
+        else:
+            cols.append(np.empty(N, dtype=_NP[vtype]))
+    # strings repetidas (categorias, municípios...) viram um único objeto str:
+    # 8 bytes por célula em vez de ~60. Desliga para variáveis quase únicas.
+    caches: list[dict | None] = [{} for _ in vtypes]
+    step = max(1, CHUNK_BYTES // max(rec, 1))
+    for start in range(0, N, step):
+        stop = min(N, start + step)
+        n = stop - start
+        buf = f.read(n * rec)
+        if len(buf) != n * rec:
+            raise StataError(610, "file not Stata format (data section truncated)")
+        block = np.frombuffer(buf, dtype=np.uint8).reshape(n, rec)
+        pos = 0
+        for j, (vtype, w) in enumerate(zip(vtypes, widths)):
+            part = block[:, pos:pos + w]
+            if vtype == "strL":
+                cols[j][start:stop] = part
+            elif vtype.startswith("str"):
+                fixed = np.ascontiguousarray(part).view(f"S{w}").reshape(n).tolist()
+                cache = caches[j]
+                if cache is None:
+                    cols[j][start:stop] = [_cstr(x, release) for x in fixed]
+                else:
+                    out = []
+                    for x in fixed:
+                        s = cache.get(x)
+                        if s is None:
+                            s = cache[x] = _cstr(x, release)
+                        out.append(s)
+                    cols[j][start:stop] = out
+                    if len(cache) > _CACHE_MAX:
+                        caches[j] = None
+            else:
+                raw = np.ascontiguousarray(part).view(bo + _NP[vtype]).reshape(n)
+                cols[j][start:stop] = raw            # converte a ordem dos bytes se preciso
+            pos += w
+        del block, buf
 
-    # strLs
-    seek(10, "strls")
+    # fim do arquivo: strLs e rótulos de valor
+    f.seek(offsets[10])
+    r = _Reader(f.read())
+    r.bo = bo
+    base = offsets[10]
+
+    def seek_tail(k: int, name: str) -> None:
+        r.p = offsets[k] - base
+        r.expect(f"<{name}>")
+
+    seek_tail(10, "strls")
     gso: dict[tuple[int, int], str] = {}
     while r.b.startswith(b"GSO", r.p):
         r.p += 3
@@ -445,8 +505,7 @@ def _read_117plus(data: bytes, path: Path) -> Dataset:
             payload = payload[:-1]
         gso[(v, o)] = _cstr(payload + b"\x00", release)
 
-    # rótulos de valor
-    seek(11, "value_labels")
+    seek_tail(11, "value_labels")
     value_labels: dict[str, dict[int, str]] = {}
     while r.b.startswith(b"<lbl>", r.p):
         r.p += 5
@@ -464,28 +523,30 @@ def _read_117plus(data: bytes, path: Path) -> Dataset:
 
     ds = Dataset()
     ds.nobs = N
-    pos = 0
-    for j, (name, vtype, w) in enumerate(zip(names, vtypes, widths)):
-        col = block[:, pos:pos + w]
+    for j, (name, vtype) in enumerate(zip(names, vtypes)):
+        col = cols[j]
         if vtype == "strL":
-            refs = col.copy()
-            vals = []
-            for i in range(N):
-                rb = refs[i].tobytes()
-                if release == 117:
-                    vv, oo = int.from_bytes(rb[:4], "little"), int.from_bytes(rb[4:], "little")
-                else:
-                    vv, oo = int.from_bytes(rb[:2], "little"), int.from_bytes(rb[2:], "little")
-                vals.append(gso.get((vv, oo), "") if vv else "")
-            arr = np.array(vals, dtype=object)
+            if release == 117:
+                vv = col[:, :4].copy().view("<u4").reshape(N).astype(np.int64)
+                oo = col[:, 4:].copy().view("<u4").reshape(N).astype(np.int64)
+            else:
+                vv = col[:, :2].copy().view("<u2").reshape(N).astype(np.int64)
+                o8 = np.zeros((N, 8), dtype=np.uint8)
+                o8[:, :6] = col[:, 2:]
+                oo = o8.view("<u8").reshape(N).astype(np.int64)
+            arr = np.array([gso.get((a, b), "") if a else "" for a, b in zip(vv.tolist(), oo.tolist())],
+                           dtype=object)
+            var = Variable(name, vtype, arr)
         elif vtype.startswith("str"):
-            arr = np.array([_cstr(col[i].tobytes(), release) for i in range(N)], dtype=object)
+            var = Variable(name, vtype, col)
         else:
-            raw = np.ascontiguousarray(col).view(r.bo + _NP[vtype]).reshape(N)
-            arr = _from_disk(raw.astype("<" + _NP[vtype]), vtype)
-        pos += w
-        ds.vars.append(Variable(name, vtype, arr, fmt=fmts[j] or default_format(vtype),
-                                label=varlabels[j], value_label=vlabels[j]))
+            var = Variable(name, vtype, np.empty(0))
+            var.raw = col
+        var.fmt = fmts[j] or default_format(vtype)
+        var.label = varlabels[j]
+        var.value_label = vlabels[j]
+        ds.vars.append(var)
+        cols[j] = None
     ds.sortlist = [names[k - 1] for k in sort_idx if k > 0 and k <= K]
     ds.label = label
     ds.timestamp = ts
