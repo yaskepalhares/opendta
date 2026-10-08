@@ -413,7 +413,7 @@ def _opts(text: str) -> dict:
     return match_options(re.sub(r"\bV\b", "v", text), _OPTS) if text.strip() else {}
 
 
-_OPTS = {"missing": 1, "nolabel": 5, "sort": 4, "generate": 3, "matcell": 7, "matrow": 7,
+_OPTS = {"missing": 1, "nolabel": 5, "sort": 4, "generate": 3, "matcell": 7, "matrow": 6,
          "matcol": 7, "chi2": 2, "lrchi2": 3, "v": 1, "gamma": 1, "taub": 2, "exact": 2,
          "row": 1, "column": 3, "cell": 4, "expected": 5, "nofreq": 5, "nokey": 5, "all": 3,
          "plot": 4, "subpop": 3, "wrap": 4, "nolog": 5, "firstonly": 5}

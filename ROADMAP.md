@@ -51,12 +51,28 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `assert`, `set trace`, `creturn list`, `timer`
 - [ ] Páginas de help para todos os comandos (hoje: as principais, escritas do zero)
 
-## Fase 3: estatística descritiva e manipulação
+## Fase 3: estatística descritiva e manipulação ✅
 
-- [ ] `summarize` (`detail`), `tabulate` (uma e duas vias, `chi2`, `exact`, `row`/`col`), `tabstat`, `table`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`
-- [ ] `egen` (todas as funções), `collapse`, `contract`, `reshape`, `merge`, `append`, `joinby`, `cross`, `expand`, `fillin`
-- [ ] `duplicates`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`, `isid`, `levelsof`, `distinct`
-- [ ] Gerador de números aleatórios: `runiform()`, `rnormal()` etc. A sequência exata do Stata não é documentada, então os resultados serão estatisticamente equivalentes, mas não idênticos.
+**3a ✅**
+- [x] `summarize` (`detail`, `meanonly`, pesos), `tabstat`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `_pctile`, `xtile`
+- [x] `tabulate` (uma e duas vias, `row`/`col`/`cell`/`expected`, `chi2`, `lrchi2`, `V`, `gamma`, `taub`, `exact` por enumeração), `tab1`, `tab2`, `table`
+
+**3b ✅**
+- [x] `egen`: funções de grupo (`count`, `mean`, `sd`, `total`, `min`, `max`, `median`, `mode`, `pctile`, `iqr`, `skew`, `kurt`, `mad`, `mdev`, `std`, `rank`), `group`, `tag`, `seq`, `fill`, `cut`, `concat`, `ends`, `diff` e funções de linha (`row*`, `any*`)
+- [x] `collapse` (todas as estatísticas, pesos, `cw`), `contract`, `expand`, `fillin`
+- [x] `merge` (1:1, m:1, 1:m, m:m, `_n`, `update`/`replace`, `keep()`, `assert()`, `keepusing()`), `append`, `joinby`, `cross`
+- [x] `reshape long`/`wide` (com `@`, `string` e repetição da última especificação)
+
+**3c ✅**
+- [x] `duplicates` (report/examples/list/tag/drop), `isid`, `levelsof`
+- [x] `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`
+- O `distinct` não é comando oficial: é um pacote do SSC e roda pelo adopath (fase 2).
+
+**3d ✅**
+- [x] Gerador Mersenne Twister de 64 bits (o mt64 do Stata 14), `set seed` (número ou estado), `c(seed)`, `set rng`
+- [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. A conversão da semente e os algoritmos de cada distribuição não são documentados: os resultados são estatisticamente equivalentes, mas não idênticos aos do Stata (casos em `compat/do/0307_aleatorios.do`).
+
+**Pendências da fase** (marcadas `VERIFICAR` no código, com casos em `compat/do/03*.do`): posições de colunas de `merge` e `reshape`, tipos e rótulos das variáveis criadas por `collapse`/`contract`, e textos de algumas mensagens de erro.
 
 ## Fase 4: Mata
 

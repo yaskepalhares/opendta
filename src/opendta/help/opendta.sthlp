@@ -26,6 +26,21 @@ a command name, or click a topic below.
 {p2col :{help assert}}check that a condition holds{p_end}
 {p2colreset}{...}
 
+{title:Statistics and data management}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help summarize}}summary statistics ({cmd:tabstat}, {cmd:centile}, {cmd:correlate}...){p_end}
+{p2col :{help ttest}}tests for means and proportions ({cmd:prtest}, {cmd:ci}){p_end}
+{p2col :{help tabulate}}frequency tables ({cmd:tab1}, {cmd:tab2}, {cmd:table}){p_end}
+{p2col :{help egen}}extensions to generate{p_end}
+{p2col :{help collapse}}group statistics ({cmd:contract}, {cmd:expand}, {cmd:fillin}){p_end}
+{p2col :{help merge}}combine datasets ({cmd:append}, {cmd:joinby}, {cmd:cross}){p_end}
+{p2col :{help reshape}}wide and long forms{p_end}
+{p2col :{help recode}}recode and convert ({cmd:encode}, {cmd:destring}, {cmd:split}...){p_end}
+{p2col :{help duplicates}}duplicates, {cmd:isid}, {cmd:levelsof}{p_end}
+{p2col :{help set_seed:set seed}}random numbers{p_end}
+{p2colreset}{...}
+
 {title:Programming}
 
 {p2colset 5 24 26 2}{...}

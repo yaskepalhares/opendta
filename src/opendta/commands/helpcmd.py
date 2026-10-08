@@ -31,6 +31,16 @@ ALIASES = {
     "tempname": "preserve", "return": "program", "ereturn": "program", "sreturn": "program",
     "args": "syntax", "gettoken": "syntax", "marksample": "syntax", "markout": "syntax",
     "mat": "matrix", "cmdlog": "log", "set_hints": "hints", "hint": "hints",
+    "su": "summarize", "sum": "summarize", "summ": "summarize", "tabstat": "summarize",
+    "centile": "summarize", "pctile": "summarize", "_pctile": "summarize", "xtile": "summarize",
+    "correlate": "summarize", "corr": "summarize", "pwcorr": "summarize",
+    "prtest": "ttest", "ci": "ttest", "ta": "tabulate", "tab": "tabulate", "tab1": "tabulate",
+    "tab2": "tabulate", "table": "tabulate", "contract": "collapse", "expand": "collapse",
+    "fillin": "collapse", "append": "merge", "joinby": "merge", "cross": "merge",
+    "encode": "recode", "decode": "recode", "destring": "recode", "tostring": "recode",
+    "split": "recode", "mvencode": "recode", "mvdecode": "recode", "isid": "duplicates",
+    "levelsof": "duplicates", "seed": "set_seed", "rng": "set_seed", "set_rng": "set_seed",
+    "runiform": "set_seed", "rnormal": "set_seed",
 }
 
 
