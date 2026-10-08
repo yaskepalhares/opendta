@@ -96,9 +96,17 @@ def decode(raw: np.ndarray, vtype: str) -> np.ndarray:
 
 
 def decode_one(x, vtype: str) -> float:
+    """Um valor só (list, Data Browser, replace sequencial): sem criar vetores."""
     if vtype == "double":
         return float(x)
-    return float(decode(np.array([x], dtype=DTYPE[vtype]), vtype)[0])
+    if vtype == "float":
+        bits = int(np.float32(x).view(np.uint32))
+        if FLOAT_MISS_BITS <= bits < 0x80000000:
+            return float(_CODES[min((bits - FLOAT_MISS_BITS) // FLOAT_MISS_STEP, 26)])
+        return float(x)
+    k = int(x)
+    base = INT_MISS[vtype]
+    return float(k) if k < base else float(_CODES[min(k - base, 26)])
 
 
 def encode_one(x: float, vtype: str):
