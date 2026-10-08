@@ -40,15 +40,16 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `infile` (formato livre e com dicionário), `infix`, `file open/write/read/close`
 - [x] Data Editor com edição de células (gera `replace`/`set obs`/`generate`) e Variables Manager
 
-## Fase 2: linguagem de programação completa
+## Fase 2: linguagem de programação completa ✅
 
-- [ ] `program define`/`end`, `syntax`, `args`, `gettoken`, `marksample`, `markout`
-- [ ] `return`, `ereturn`, `sreturn`; `tempvar`, `tempname`, `tempfile`; `preserve`/`restore`
-- [ ] Todas as funções estendidas de macro (`: variable label`, `: type`, `: dir`, `: list`…)
-- [ ] `matrix` (definição, operadores, funções, `matrix list`)
-- [ ] Busca de `.ado` no adopath (permite rodar pacotes do SSC); `which`, `findfile`
-- [ ] `log using`/`log close`, `cmdlog`; Viewer com renderizador de SMCL e `help`
-- [ ] `assert`, `set trace`, `creturn list` completo, `timer`
+- [x] `program define`/`end`, `syntax`, `args`, `gettoken`, `marksample`, `markout`
+- [x] `return`, `ereturn`, `sreturn`; `tempvar`, `tempname`, `tempfile`; `preserve`/`restore`
+- [x] Funções estendidas de macro (`: variable label`, `: type`, `: format`, `: label`, `: char`, `: dir`, `: list`, `: subinstr`, `: permname`, `: r(scalars)`…)
+- [x] `matrix` (definição, operadores, funções, submatrizes, `matrix list`, nomes de linhas e colunas)
+- [x] Busca de `.ado` no adopath (permite rodar pacotes do SSC); `sysdir`, `adopath`, `which`, `findfile`, `discard`
+- [x] `log using`/`log close` (texto e SMCL), `cmdlog`; Viewer com renderizador de SMCL, `help`, `view`, `search`
+- [x] `assert`, `set trace`, `creturn list`, `timer`
+- [ ] Páginas de help para todos os comandos (hoje: as principais, escritas do zero)
 
 ## Fase 3: estatística descritiva e manipulação
 
