@@ -64,3 +64,15 @@ def test_dictionaries(run, here):
     (here / "x.dct").write_text("infix dictionary using fx.raw {\n long id 1-6\n str nome 7-16\n}\n")
     run("infix using x.dct, clear")
     assert list(run.session.data.get("id").data) == [123, 124]
+
+
+def test_file_write_read(run, here):
+    run('file open h using t.txt, write replace\n'
+        'file write h "a" _tab "b" _n `""q" x"\' _n %5.2f (1/3) _n\nfile close h')
+    assert (here / "t.txt").read_text() == 'a\tb\n"q" x\n 0.33\n'
+    out = run("file open h using t.txt, write")
+    assert run.rc == 602
+    run("file open r using t.txt, read\nfile read r l1\nfile read r l2")
+    assert run.session.macros.get_local("l2") == '"q" x'
+    run("file read r l3\nfile read r l4\nfile close r")
+    assert run.session.r["eof"] == 1.0

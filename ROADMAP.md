@@ -34,10 +34,11 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `insheet`, `outsheet`, `import delimited`, `export delimited`
 - [x] File > Open/Save, arrastar e soltar `.dta`, Data Browser somente leitura
 
-**1c**
-- [ ] Gravação nos formatos 114/115 (`saveold, version(11|12)`)
-- [ ] `import excel`/`export excel`, `infile`, `infix`
-- [ ] Data Editor com edição de células e Variables Manager
+**1c ✅**
+- [x] Formatos 113–115 (Stata 8–12): leitura própria; gravação 114/115 com `saveold, version(11|12)`
+- [x] `import excel`/`export excel` (.xlsx; .xls com o pacote xlrd)
+- [x] `infile` (formato livre e com dicionário), `infix`, `file open/write/read/close`
+- [x] Data Editor com edição de células (gera `replace`/`set obs`/`generate`) e Variables Manager
 
 ## Fase 2: linguagem de programação completa
 

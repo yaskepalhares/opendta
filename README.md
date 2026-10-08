@@ -8,7 +8,7 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 1b (arquivos de dados)
+## Estado atual: fase 1c (arquivos de dados)
 
 Já funciona:
 
@@ -25,12 +25,14 @@ Já funciona:
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
 - `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
-- arquivos `.dta`: leitura e gravação próprias dos formatos 117 (Stata 13), 118 (Stata 14) e 119, com rótulos, notas e características; formatos antigos (até 115) são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
+- arquivos `.dta`: leitura própria dos formatos 113 a 119 (Stata 8 em diante) e gravação nos formatos 114, 115, 117, 118 e 119, com rótulos, notas e características; formatos ainda mais antigos são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
 - `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
 - texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
-- File > Open/Save/Save as, arrastar um `.dta` para a janela e o Data Browser (`browse`), por enquanto só para leitura.
+- planilhas: `import excel` e `export excel`;
+- texto em formato livre e em colunas fixas: `infile` (inclusive com dicionário `.dct`) e `infix`; `file open/write/read/close`;
+- File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`).
 
-Ainda não há `import excel`, `infile` nem edição de células no Data Editor, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
+Ainda não há comandos estatísticos (`summarize`, `tabulate`…), que chegam na fase 3.
 
 ## Instalação (macOS)
 
