@@ -19,6 +19,7 @@ import numpy as np
 
 from ..core import missing as M
 from ..core import stats as S
+from ..core.grouping import group_ids
 from ..core.dataset import Variable, check_name, smallest_type_for, str_type_for
 from ..core.errors import StataError
 from ..lang.functions import _string
@@ -33,33 +34,10 @@ if TYPE_CHECKING:
 _TYPES = ("byte", "int", "long", "float", "double")
 
 
-def _group_ids(s: "Session", by: list[str], mask: np.ndarray, *, missing: bool = True) -> np.ndarray:
-    """Id de grupo (0..k-1) por observação, em ordem crescente dos valores;
+def _group_ids(s: "Session", by: list[str], mask: np.ndarray) -> np.ndarray:
+    """Id de grupo (0..k-1) por observação, em ordem crescente das chaves;
     -1 fora da máscara."""
-    n = s.data.nobs
-    ids = np.full(n, -1, dtype=np.int64)
-    if not by:
-        ids[mask] = 0
-        return ids
-    keys = []
-    for name in by:
-        v = s.data.get(name)
-        if v.is_string:
-            _, inv = np.unique(v.raw.astype(str), return_inverse=True)
-            keys.append(inv.astype(np.float64))
-        else:
-            keys.append(v.data)
-    sel = mask.copy()
-    if not missing:
-        for name, k in zip(by, keys):
-            v = s.data.get(name)
-            sel &= (k < M.SYSMISS) if not v.is_string else np.array([x != "" for x in v.raw])
-    if not sel.any():
-        return ids
-    mat = np.column_stack([k[sel] for k in keys])
-    _, inv = np.unique(mat, axis=0, return_inverse=True)
-    ids[sel] = inv.ravel()
-    return ids
+    return group_ids(s.data, by, mask)[0]
 
 
 def _by_reduce(x: np.ndarray, ids: np.ndarray, fn) -> np.ndarray:
