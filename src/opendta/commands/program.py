@@ -116,7 +116,8 @@ def cmd_exit(s: "Session", args: str) -> None:
         clear_all = "clear" in opts.split() or "STATA" in opts.split()
     t = t.strip()
     rc = int(float(s.eval(t))) if t else 0
-    if s.do_depth == 0:
+    in_program = any(sc.kind == "program" for sc in s.scopes)
+    if s.do_depth == 0 and not in_program:
         clear_all = True
     raise ExitRequest(rc, clear_all=clear_all)
 

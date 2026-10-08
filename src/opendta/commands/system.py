@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from .. import __version__
 from ..core.errors import StataError
-from ..core.formats import format_value
 from .registry import command
 
 if TYPE_CHECKING:
@@ -113,41 +112,3 @@ def cmd_about(s: "Session", args: str) -> None:
     out.write(f"Python {sys.version.split()[0]} em {platform.system()}\n", "text")
 
 
-def _results_list(s: "Session", store: dict, prefix: str) -> None:
-    out = s.output
-    scalars = {k: v for k, v in store.items() if not isinstance(v, str)}
-    macros = {k: v for k, v in store.items() if isinstance(v, str)}
-    if scalars:
-        out.write("\nscalars:\n", "text")
-        for k, v in scalars.items():
-            out.write(f"{prefix + '(' + k + ')':>20} =  ", "text")
-            out.write(format_value(v, "%10.0g", pad=False) + "\n", "result")
-    if macros:
-        out.write("\nmacros:\n", "text")
-        for k, v in macros.items():
-            out.write(f"{prefix + '(' + k + ')':>20} : ", "text")
-            out.write(f'"{v}"\n', "result")
-
-
-@command("return")
-def cmd_return(s: "Session", args: str) -> None:
-    sub = args.strip()
-    if sub in ("list", "li", "l"):
-        _results_list(s, s.r, "r")
-        return
-    if sub in ("clear",):
-        s.r.clear()
-        return
-    raise StataError(198, "return scalar/local chegam com program define (fase 2)")
-
-
-@command("ereturn")
-def cmd_ereturn(s: "Session", args: str) -> None:
-    sub = args.strip()
-    if sub in ("list", "li", "l"):
-        _results_list(s, s.e, "e")
-        return
-    if sub == "clear":
-        s.e.clear()
-        return
-    raise StataError(198, "invalid syntax")
