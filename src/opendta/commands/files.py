@@ -256,11 +256,10 @@ def cmd_char(s: "Session", args: str) -> None:
 # browse / edit (abrem o Data Browser na interface gráfica)
 # ---------------------------------------------------------------------------
 
-def _browse(s: "Session", args: str) -> None:
+def _browse(s: "Session", args: str, *, edit: bool = False) -> None:
     from ..lang.syntax import Parsed
     p = parse_standard(args)
-    if p.options.strip():
-        match_options(p.options, {"nolabel": 3})
+    o = match_options(p.options, {"nolabel": 3}) if p.options.strip() else {}
     names = unique(expand(s.data, p.varlist)) if p.varlist.strip() else None
     rows = None
     if p.if_ or p.in_:
@@ -268,7 +267,7 @@ def _browse(s: "Session", args: str) -> None:
     hook = s.ui_hooks.get("browse")
     if hook is not None:
         # sem interface (modo batch) o Stata também não mostra nada
-        hook(names, rows)
+        hook(names, rows, edit=edit, nolabel=bool(o.get("nolabel")))
 
 
 @command("browse", "br")
@@ -278,8 +277,7 @@ def cmd_browse(s: "Session", args: str) -> None:
 
 @command("edit", "ed")
 def cmd_edit(s: "Session", args: str) -> None:
-    # a edição de células chega na fase de ferramentas; por ora abre em Browse
-    _browse(s, args)
+    _browse(s, args, edit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -342,3 +340,10 @@ def cmd_erase(s: "Session", args: str) -> None:
 @command("rm")
 def cmd_rm(s: "Session", args: str) -> None:
     _erase(s, args)
+
+
+@command("varmanage")
+def cmd_varmanage(s: "Session", args: str) -> None:
+    hook = s.ui_hooks.get("varmanage")
+    if hook is not None:
+        hook()
