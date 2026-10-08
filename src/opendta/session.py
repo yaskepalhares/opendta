@@ -312,6 +312,8 @@ class Session:
 
     def run_command(self, line: str) -> int:
         """Comando digitado na janela Command: eco '. linha' e execução."""
+        from .commands.logcmd import record_command
+        record_command(self, line)
         self.output.echo_command(line)
         try:
             rc = self.run(line, echo=False)
@@ -325,6 +327,8 @@ class Session:
     def run_text(self, text: str) -> int:
         """Várias linhas digitadas ou coladas na janela Command: rodam como um
         trecho de do-file (blocos inteiros, eco linha a linha)."""
+        from .commands.logcmd import record_command
+        record_command(self, text)
         try:
             self.interp.run_lines(split_commands(text), echo=True)
             rc = 0

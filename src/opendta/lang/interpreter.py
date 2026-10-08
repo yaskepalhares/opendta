@@ -162,7 +162,20 @@ class Interpreter:
 
     def run_program(self, prog) -> None:
         """Corpo de um programa: sem eco (set trace mostra as linhas)."""
-        self._run_range(prog.lines, 0, len(prog.lines), echo=None)
+        tracing = self._tracing()
+        if tracing:
+            # VERIFICAR: largura e alinhamento das linhas begin/end do trace
+            pad = "  " * self._trace_depth()
+            label = f" begin {prog.name} ---"
+            self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+                                "text", force=True)
+        try:
+            self._run_range(prog.lines, 0, len(prog.lines), echo=None)
+        finally:
+            if tracing:
+                label = f" end {prog.name} ---"
+                self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+                                    "text", force=True)
 
     def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
         """input var1 var2 ... seguido de linhas de dados até `end`."""
@@ -404,7 +417,21 @@ class Interpreter:
     def execute(self, raw: str) -> None:
         """Expande macros e executa um comando de uma linha."""
         text = self.s.expand(raw)
+        if self._tracing():
+            # set trace on: linha original (- ) e expandida (= ) dentro de programas
+            out = self.s.output
+            pad = "  " * self._trace_depth()
+            out.write(f"{pad}- {raw.strip()}\n", "text", force=True)
+            if text.strip() != raw.strip():
+                out.write(f"{pad}= {text.strip()}\n", "text", force=True)
         self._execute_expanded(text)
+
+    def _tracing(self) -> bool:
+        return (self.s.settings.get("trace", "off") == "on"
+                and any(sc.kind == "program" for sc in self.s.scopes))
+
+    def _trace_depth(self) -> int:
+        return sum(1 for sc in self.s.scopes if sc.kind == "program")
 
     def _execute_expanded(self, text: str) -> None:
         from ..commands.registry import lookup
