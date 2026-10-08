@@ -76,3 +76,56 @@ def test_type(run, here):
     assert run("type a.txt, showtabs") == "linha 1\na<T>b\n"
     out = run("type nada.txt")
     assert run.rc == 601 and "file nada.txt not found" in out
+
+
+# -- leitura em blocos (CHUNK_ROWS pequeno força vários blocos) ------------------------
+
+@pytest.fixture
+def small_chunks(monkeypatch):
+    import opendta.io.delimited as D
+    monkeypatch.setattr(D, "CHUNK_ROWS", 3)
+
+
+def test_chunked_late_text_and_ragged(here, small_chunks):
+    # 'cod' é numérico nos primeiros blocos e vira texto na 8ª linha;
+    # a 3ª coluna só aparece na 5ª linha; linhas em branco no fim somem
+    lines = ["id,cod"] + [f"{i},0{i}" for i in range(1, 8)] + ["8,X9"]
+    lines[5] += ",extra"
+    (here / "c.csv").write_text("\n".join(lines) + "\n,\n\n")
+    ds = read_delimited(here / "c.csv")
+    assert ds.nobs == 8 and ds.names == ["id", "cod", "v3"]
+    assert ds.get("cod").vtype == "str2"
+    assert list(ds.get("cod").data) == ["01", "02", "03", "04", "05", "06", "07", "X9"]
+    assert ds.get("v3").data[4] == "extra" and ds.get("v3").data[0] == ""
+
+
+def test_chunked_numbers_and_missing(here, small_chunks):
+    (here / "n.csv").write_text("a,b,c\n1,.a,nan\n2,,x\n3,1d2,y\n4,.,z\n")
+    ds = read_delimited(here / "n.csv")
+    assert list(ds.get("a").data) == [1, 2, 3, 4]
+    from opendta.core import missing as M
+    b = ds.get("b").data
+    assert M.missing_name(b[0]) == ".a" and M.is_missing(b[1]) and b[2] == 100
+    assert ds.get("c").is_string                    # 'nan' não é número no Stata
+
+
+def test_rowrange_colrange_latin1(here, small_chunks):
+    (here / "l.csv").write_bytes("nome,x,y\nJosé,1,2\nAna,3,4\nBia,5,6\nCaio,7,8\n".encode("latin-1"))
+    ds = read_delimited(here / "l.csv", ReadOptions(rowrange=(2, 3), colrange=(1, 2)))
+    assert ds.names == ["nome", "x"] and list(ds.get("nome").data) == ["Ana", "Bia"]
+    assert read_delimited(here / "l.csv").get("nome").data[0] == "José"
+
+
+def test_export_import_round_trip(run, here, small_chunks):
+    run("clear\nset obs 10\ngen id = _n\ngen double d = _n / 4 - 1\ngen float f = -_n / 3\n"
+        'gen str5 s = "a,b" in 1/3\nreplace s = `"q"q"\' in 4\nreplace d = .b in 5')
+    run("export delimited t, replace")
+    text = (here / "t.csv").read_text().splitlines()
+    assert text[1] == '1,-.75,-.33333334,"a,b"'
+    assert text[4] == '4,0,-1.3333334,"q""q"'
+    assert text[5].split(",")[1] == ".b"
+    run("import delimited t, clear")
+    d = run.session.data
+    assert list(d.get("id").data) == list(range(1, 11))
+    assert d.get("s").data[3] == 'q"q'
+    assert d.get("d").data[0] == -0.75

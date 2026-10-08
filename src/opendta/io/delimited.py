@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import io
+import itertools
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from ..core import missing as M
+from ..core import storage
 from ..core.dataset import (NAME_RE, RESERVED, Dataset, Variable, smallest_type_for,
                             str_len, str_type_for)
 
@@ -38,24 +40,13 @@ class ReadOptions:
     stripquotes: str = "default"        # default | yes | no
 
 
-def _decode(raw: bytes, encoding: str | None) -> str:
-    if encoding:
-        return raw.decode(encoding)
-    if raw.startswith(b"\xef\xbb\xbf"):
-        return raw[3:].decode("utf-8")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw.decode("latin-1")
-
-
-def _sniff(text: str) -> str:
+def _sniff(first_line: str) -> str:
     # VERIFICAR: o Stata detecta vírgula ou tabulação pela primeira linha
-    first = text.split("\n", 1)[0]
-    return "\t" if first.count("\t") > first.count(",") else ","
+    return "\t" if first_line.count("\t") > first_line.count(",") else ","
 
 
 def split_rows(text: str, delimiter: str, bindquote: str = "loose") -> list[list[str]]:
+    """Divide um texto inteiro em linhas e células (usado em testes e trechos curtos)."""
     if bindquote == "nobind":
         return [line.split(delimiter) for line in text.splitlines()]
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter,
@@ -95,48 +86,218 @@ def make_name(raw: str, case: str) -> str | None:
     return t
 
 
-def read_delimited(path: str | Path, opts: ReadOptions | None = None) -> Dataset:
-    opts = opts or ReadOptions()
-    text = _decode(Path(path).read_bytes(), opts.encoding)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    delim = opts.delimiter or _sniff(text)
-    rows = split_rows(text, delim, opts.bindquote)
-    while rows and all(c.strip() == "" for c in rows[-1]):
-        rows.pop()
-    ncols = max((len(r) for r in rows), default=0)
-    rows = [r + [""] * (ncols - len(r)) for r in rows]
+CHUNK_ROWS = 50_000           # linhas convertidas por vez
+_STR_CACHE_MAX = 50_000       # valores distintos guardados por coluna de texto
 
+
+class _Column:
+    """Coluna em construção. Começa numérica; vira texto na primeira célula
+    que não é número (a não ser com numericcols)."""
+
+    def __init__(self, index: int, offset: int, force_str: bool, force_num: bool):
+        self.index = index
+        self.offset = offset             # linhas anteriores ao aparecimento da coluna
+        self.numeric = not force_str
+        self.force_num = force_num
+        self.num_chunks: list[np.ndarray] = []
+        self.text: list[str] = []
+        self.maxlen = 1
+        self.cache: dict[str, str] | None = {}
+        self.flipped_late = False        # virou texto depois do 1º bloco: precisa reler
+
+    def add_text(self, cells) -> None:
+        cache = self.cache
+        if cache is None:
+            self.text.extend(cells)
+            longest = max((str_len(s) for s in cells), default=0)
+        else:
+            longest = 0
+            for s in cells:
+                hit = cache.get(s)
+                if hit is None:
+                    hit = cache[s] = s
+                    n = str_len(s)
+                    if n > longest:
+                        longest = n
+                self.text.append(hit)
+            if len(cache) > _STR_CACHE_MAX:
+                self.cache = None
+        self.maxlen = max(self.maxlen, longest)
+
+    def add(self, cells: list[str]) -> None:
+        if not self.numeric:
+            self.add_text(cells)
+            return
+        vals = _parse_numbers(cells, strict=not self.force_num)
+        if vals is None:                 # apareceu texto
+            self.numeric = False
+            if self.num_chunks or self.offset:
+                self.flipped_late = True
+                self.num_chunks = []
+            else:
+                self.add_text(cells)
+            return
+        self.num_chunks.append(vals)
+
+
+def _parse_numbers(cells: list[str], strict: bool) -> np.ndarray | None:
+    """Converte um bloco de células em float64. None se houver texto (strict)."""
+    if not cells:
+        return np.empty(0)
+    s = np.array(cells, dtype=str)
+    s = np.char.strip(s)
+    miss = (s == "") | (s == ".")
+    try:
+        if (np.char.find(s, "_") >= 0).any():
+            raise ValueError
+        vals = np.where(miss, "0", s).astype(np.float64)
+        if not np.isfinite(vals).all():
+            raise ValueError
+        vals[miss] = M.SYSMISS
+        return vals
+    except ValueError:
+        pass
+    # caminho lento: missing estendidos (.a), expoente com d, texto
+    out = np.empty(len(cells))
+    for i, c in enumerate(cells):
+        if _numeric_cell(c):
+            out[i] = _to_number(c)
+        elif strict:
+            return None
+        else:
+            out[i] = M.SYSMISS
+    return out
+
+
+def _open_rows(path: Path, opts: ReadOptions, encoding: str):
+    """Arquivo aberto e iterador de linhas (listas de células)."""
+    f = open(path, encoding=encoding, newline="")
+    first = f.readline()
+    f.seek(0)
+    delim = opts.delimiter or _sniff(first)
+    if opts.bindquote == "nobind":
+        rows = (line.rstrip("\r\n").split(delim) for line in f)
+    else:
+        rows = csv.reader(f, delimiter=delim, quotechar='"', doublequote=True, strict=False)
+    return f, rows
+
+
+def _data_rows(rows, opts: ReadOptions, header_out: list):
+    """Aplica cabeçalho, colrange e rowrange; descarta linhas em branco no fim.
+    O cabeçalho encontrado é posto em header_out[0]."""
     c0, c1 = opts.colrange
     c0 = (c0 or 1) - 1
-    c1 = c1 or ncols
-    rows = [r[c0:c1] for r in rows]
-    ncols = max(0, min(c1, ncols) - c0)
+    r0, r1 = opts.rowrange
+    it = iter(rows)
 
-    # linha de nomes
-    header: list[str] | None = None
+    def cut(r: list[str]) -> list[str]:
+        return r[c0:c1] if (c0 or c1) else r
+
+    header_out.append(None)
+    lead: list[list[str]] = []
     if opts.varnames is None:
         # VERIFICAR: heurística de detecção dos nomes na 1ª linha (aqui: todas
         # as células preenchidas da 1ª linha são texto não numérico)
-        if rows:
-            filled = [c for c in rows[0] if c.strip()]
-            if filled and not any(_numeric_cell(c) for c in filled):
-                header = rows[0]
-                rows = rows[1:]
+        first = next(it, None)
+        if first is None:
+            return
+        first = cut(first)
+        filled = [c for c in first if c.strip()]
+        if filled and not any(_numeric_cell(c) for c in filled):
+            header_out[0] = first
+        else:
+            lead = [first]
     elif opts.varnames > 0:
-        k = opts.varnames - 1
-        header = rows[k] if k < len(rows) else None
-        rows = rows[k + 1:]
+        for _ in range(opts.varnames - 1):
+            next(it, None)
+        h = next(it, None)
+        header_out[0] = cut(h) if h is not None else None
 
-    r0, r1 = opts.rowrange
-    if r0 or r1:
-        # VERIFICAR: aqui rowrange conta as linhas de dados (depois do cabeçalho)
-        rows = rows[(r0 or 1) - 1:(r1 or len(rows))]
+    k = 0          # linha de dados (1-based), para o rowrange
+    pending: list[list[str]] = []
+    for r in itertools.chain(lead, (cut(x) for x in it)):
+        if not any(c.strip() for c in r):
+            pending.append(r)
+            continue
+        for b in pending + [r]:
+            k += 1
+            # VERIFICAR: aqui rowrange conta as linhas de dados (depois do cabeçalho)
+            if r0 and k < r0:
+                continue
+            if r1 and k > r1:
+                return
+            yield b
+        pending = []
+
+
+def read_delimited(path: str | Path, opts: ReadOptions | None = None) -> Dataset:
+    opts = opts or ReadOptions()
+    encodings = [opts.encoding] if opts.encoding else ["utf-8-sig", "latin-1"]
+    last: Exception | None = None
+    for enc in encodings:
+        try:
+            return _read(Path(path), opts, enc)
+        except UnicodeDecodeError as e:
+            last = e
+    raise last  # type: ignore[misc]
+
+
+def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
+    header_box: list = []
+    cols: list[_Column] = []
+    nrows = 0
+    f, rows = _open_rows(path, opts, encoding)
+    with f:
+        buf: list[list[str]] = []
+
+        def flush() -> None:
+            nonlocal nrows
+            if not buf:
+                return
+            width = max(len(r) for r in buf)
+            while len(cols) < width:
+                j = len(cols)
+                cols.append(_Column(j, nrows, (j + 1) in opts.stringcols, (j + 1) in opts.numericcols))
+            for c in cols:
+                j = c.index
+                c.add([r[j] if j < len(r) else "" for r in buf])
+            nrows += len(buf)
+            buf.clear()
+
+        for r in _data_rows(rows, opts, header_box):
+            buf.append(r)
+            if len(buf) >= CHUNK_ROWS:
+                flush()
+        flush()
+
+    header = header_box[0] if header_box else None
+    if header is not None:
+        while len(cols) < len(header):
+            j = len(cols)
+            cols.append(_Column(j, nrows, (j + 1) in opts.stringcols, (j + 1) in opts.numericcols))
+
+    # colunas que viraram texto depois do 1º bloco: relê só elas
+    late = [c for c in cols if c.flipped_late]
+    if late:
+        for c in late:
+            c.text, c.cache, c.maxlen, c.offset = [], {}, 1, 0
+        f, rows = _open_rows(path, opts, encoding)
+        with f:
+            chunk: list[list[str]] = []
+            for r in _data_rows(rows, opts, []):
+                chunk.append(r)
+                if len(chunk) >= CHUNK_ROWS:
+                    for c in late:
+                        c.add_text([x[c.index] if c.index < len(x) else "" for x in chunk])
+                    chunk = []
+            for c in late:
+                c.add_text([x[c.index] if c.index < len(x) else "" for x in chunk])
 
     ds = Dataset()
-    ds.nobs = len(rows)
+    ds.nobs = nrows
     used: set[str] = set()
-    for j in range(ncols):
-        col = [r[j] for r in rows]
+    for c in cols:
+        j = c.index
         raw_name = header[j] if header is not None and j < len(header) else ""
         name = make_name(raw_name, opts.case) if raw_name.strip() else None
         if name is None or name in used:
@@ -145,12 +306,10 @@ def read_delimited(path: str | Path, opts: ReadOptions | None = None) -> Dataset
         # VERIFICAR: o cabeçalho original vira rótulo quando o nome teve de mudar
         # (além da caixa)
         label = raw_name.strip() if raw_name.strip() and name.lower() != raw_name.strip().lower() else ""
-        force_str = (j + 1) in opts.stringcols
-        force_num = (j + 1) in opts.numericcols
-        numeric = not force_str and (force_num or all(_numeric_cell(c) for c in col))
-        if numeric:
-            vals = np.array([_to_number(c) if _numeric_cell(c) else M.SYSMISS for c in col],
-                            dtype=np.float64)
+        if c.numeric:
+            parts = ([np.full(c.offset, M.SYSMISS)] if c.offset else []) + c.num_chunks
+            vals = np.concatenate(parts) if parts else np.full(nrows, M.SYSMISS)
+            c.num_chunks = []
             vtype = smallest_type_for(vals)
             if vtype == "float" and opts.asdouble:
                 vtype = "double"
@@ -159,14 +318,12 @@ def read_delimited(path: str | Path, opts: ReadOptions | None = None) -> Dataset
                 # inteiros grandes ficam double; decimais viram float (VERIFICAR)
                 if not (nm.size and np.all(nm == np.trunc(nm))):
                     vtype = "float"
-            if vtype == "float":
-                ok = vals < M.SYSMISS
-                vals[ok] = vals[ok].astype(np.float32).astype(np.float64)
-            var = Variable(name, vtype, vals)
+            var = Variable(name, vtype, vals)       # float: arredonda para precisão simples
+            del vals
         else:
-            vals = np.array(col, dtype=object)
-            width = max((str_len(s) for s in col), default=1)
-            var = Variable(name, str_type_for(width), vals)
+            text = ([""] * c.offset if c.offset else []) + c.text
+            c.text = []
+            var = Variable(name, str_type_for(c.maxlen), text)
         var.label = label
         ds.vars.append(var)
     ds.changed = True
@@ -188,54 +345,82 @@ class WriteOptions:
 
 
 def number_text(x: float, vtype: str, fmt: str | None = None, *, leading_zero: bool = False) -> str:
-    if x >= M.SYSMISS:
-        return "" if M.missing_name(x) == "." else M.missing_name(x)
-    if fmt:
+    """Texto de um valor, igual ao que export delimited grava."""
+    if fmt and x < M.SYSMISS:
         from ..core.formats import format_value
         return format_value(x, fmt, pad=False).strip()
-    if vtype in ("byte", "int", "long"):
-        return str(int(x))
-    v = np.float32(x) if vtype == "float" else np.float64(x)
-    if v == 0 or 1e-5 <= abs(v) < 1e16:
-        t = np.format_float_positional(v, trim="-")
+    v = Variable("_", vtype, np.array([x], dtype=np.float64))
+    return str(_number_cells(v, v.raw, leading_zero)[0])
+
+
+def _number_cells(v: Variable, raw: np.ndarray, leading_zero: bool) -> np.ndarray:
+    """Texto de cada valor numérico (vetor de str), sem laço em Python."""
+    dec = storage.decode(raw, v.vtype)
+    miss = dec >= M.SYSMISS
+    out = np.empty(len(dec), dtype=object)
+    if v.vtype in ("byte", "int", "long"):
+        txt = raw.astype(np.int64).astype(str)
     else:
-        t = np.format_float_scientific(v, trim="-")
-    if not leading_zero:
-        if t.startswith("0."):
-            t = t[1:]
-        elif t.startswith("-0."):
-            t = "-" + t[2:]
-    return t
+        vals = raw if v.vtype == "float" else dec
+        whole = ~miss & (dec == np.trunc(dec)) & (np.abs(dec) < 1e15)
+        txt = np.where(miss, 0, vals).astype(str)
+        if whole.any():
+            txt = txt.astype(object)
+            txt[whole] = dec[whole].astype(np.int64).astype(str)
+            txt = txt.astype(str)
+        if not leading_zero:
+            m = np.char.startswith(txt, "0.")
+            if m.any():
+                txt[m] = np.char.replace(txt[m], "0.", ".", count=1)
+            m = np.char.startswith(txt, "-0.")
+            if m.any():
+                txt[m] = np.char.replace(txt[m], "-0.", "-.", count=1)
+    out[:] = txt
+    if miss.any():
+        out[miss] = [("" if M.missing_name(x) == "." else M.missing_name(x)) for x in dec[miss]]
+    return out
 
 
 def write_delimited(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarray,
                     opts: WriteOptions | None = None) -> None:
+    """Grava em blocos de linhas, montando cada coluna de uma vez."""
     opts = opts or WriteOptions()
     d = opts.delimiter
     vars_ = [ds.get(n) for n in names]
+    special = (d, '"', "\n", "\r")
 
     def q(s: str) -> str:
-        if opts.quote or d in s or '"' in s or "\n" in s:
+        if opts.quote or any(ch in s for ch in special):
             return '"' + s.replace('"', '""') + '"'
         return s
 
-    lines: list[str] = []
-    if opts.varnames:
-        lines.append(d.join(v.name for v in vars_))
-    for i in rows:
-        cells = []
-        for v in vars_:
-            x = v.data[i]
-            if v.is_string:
-                cells.append(q(str(x)))
-                continue
-            x = float(x)
-            if not opts.nolabel and v.value_label and x < M.SYSMISS and x == int(x):
-                lab = ds.value_labels.get(v.value_label, {})
-                if int(x) in lab:
-                    cells.append(q(lab[int(x)]))
+    rows = np.asarray(rows)
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        if opts.varnames:
+            f.write(d.join(v.name for v in vars_) + "\n")
+        for start in range(0, len(rows), CHUNK_ROWS):
+            idx = rows[start:start + CHUNK_ROWS]
+            columns = []
+            for v in vars_:
+                part = v.raw[idx]
+                if v.is_string:
+                    columns.append([q(s) for s in part.tolist()])
                     continue
-            cells.append(number_text(x, v.vtype, v.fmt if opts.datafmt else None,
-                                     leading_zero=opts.leading_zero))
-        lines.append(d.join(cells))
-    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+                if opts.datafmt:
+                    from ..core.formats import format_value
+                    dec = storage.decode(part, v.vtype)
+                    cells = np.array([("" if x >= M.SYSMISS and M.missing_name(x) == "."
+                                       else M.missing_name(x) if x >= M.SYSMISS
+                                       else format_value(x, v.fmt, pad=False).strip()) for x in dec],
+                                     dtype=object)
+                else:
+                    cells = _number_cells(v, part, opts.leading_zero)
+                lab = ds.value_labels.get(v.value_label, {}) if v.value_label and not opts.nolabel else {}
+                if lab:
+                    dec = storage.decode(part, v.vtype)
+                    for value, text in lab.items():
+                        hit = dec == value
+                        if hit.any():
+                            cells[hit] = q(text)
+                columns.append(cells.tolist())
+            f.write("".join(d.join(r) + "\n" for r in zip(*columns)) if columns else "")
