@@ -152,7 +152,7 @@ def cmd_replace(s: "Session", args: str) -> None:
     old = var.data.copy()
     if var.is_string:
         changed, note = ds.set_string(var, np.asarray(new_values, dtype=object), rows)
-        to_missing = int(sum(1 for i in rows if var.data[i] == "" and old[i] != ""))
+        to_missing = int(sum(1 for i in rows if var.raw[i] == "" and old[i] != ""))
     else:
         changed, note = ds.set_numeric(var, np.asarray(new_values, dtype=np.float64), rows,
                                        promote=not opts.get("nopromote"))
@@ -169,7 +169,7 @@ def cmd_replace(s: "Session", args: str) -> None:
 def _replace_sequential(s: "Session", var: Variable, node, rows: np.ndarray) -> np.ndarray:
     """replace x = x[_n-1] ... usa valores já substituídos nas obs anteriores."""
     ctx = ObsContext(s, groups(s))
-    original = var.data.copy()
+    original = var.raw.copy()
     out = []
     try:
         for i in rows:
@@ -179,10 +179,10 @@ def _replace_sequential(s: "Session", var: Variable, node, rows: np.ndarray) -> 
             if not var.is_string:
                 v, _ = fit_numeric(np.array([v]), var.vtype)
                 v = float(v[0])
-            var.data[i] = v
+            var.set_value(i, v)
             out.append(v)
     finally:
-        var.data = original
+        var.raw = original
     return np.array(out, dtype=object if var.is_string else np.float64)
 
 
@@ -254,7 +254,7 @@ def _by_header(s: "Session", first_obs: int) -> None:
     parts = []
     for k in keys:
         var = ds.get(k)
-        v = var.data[first_obs]
+        v = var.value(first_obs)
         from ..core.formats import format_value
         shown = v if var.is_string else format_value(float(v), var.fmt, pad=False).strip()
         if not var.is_string and var.value_label:
@@ -516,7 +516,7 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                 text = raw
                 if var.vtype != "strL" and str_len(text) > int(var.vtype[3:]):
                     text = text.encode("utf-8")[:int(var.vtype[3:])].decode("utf-8", "ignore")
-                var.data[i] = text
+                var.set_value(i, text)
             else:
                 if raw in ("", "."):
                     v = M.SYSMISS
@@ -526,5 +526,5 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                     except ValueError:
                         raise StataError(198, f"'{raw}' cannot be read as a number")
                 fitted, _ = fit_numeric(np.array([v]), var.vtype)
-                var.data[i] = fitted[0]
+                var.set_value(i, fitted[0])
     s.notify_state()

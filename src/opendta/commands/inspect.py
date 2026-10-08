@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def cell_text(ds: "Dataset", var: "Variable", i: int, *, use_labels: bool = True) -> str:
-    v = var.data[i]
+    v = var.value(i)
     if var.is_string:
         return str(v)
     x = float(v)

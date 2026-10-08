@@ -682,7 +682,7 @@ class MainWindow(QMainWindow):
             "Variables": f"{ds.nvars:,}",
             "Observations": f"{ds.nobs:,}",
             "Size": _human_size(size),
-            "Memory": _human_size(size),
+            "Memory": _human_size(sum(v.nbytes for v in ds.vars)),
             "Sorted by": " ".join(ds.sortlist),
         }
         for k in range(self._prop_data.childCount()):

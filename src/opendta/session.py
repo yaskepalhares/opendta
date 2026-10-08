@@ -99,9 +99,8 @@ class EvalContext:
         if isinstance(index, str):
             raise StataError(109, "type mismatch")
         k = int(index) if not M.is_missing(index) else 0
-        if 1 <= k <= len(var.data):
-            v = var.data[k - 1]
-            return v if var.is_string else float(v)
+        if 1 <= k <= len(var):
+            return var.value(k - 1)
         return "" if var.is_string else M.SYSMISS
 
     def resolve_result(self, kind: str, raw: str) -> Value:
