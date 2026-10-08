@@ -19,7 +19,7 @@ Já funciona:
 - os prefixos `quietly`, `noisily` e `capture` (também em blocos `{ }`);
 - `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` e `error`;
 - erros com as mensagens e os códigos `r(#)` do Stata;
-- interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus e barra de ferramentas;
+- interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`).
 
 Ainda não há dados em memória (`use`, `generate`, `summarize`…). Isso começa na fase 1.
@@ -44,6 +44,10 @@ opendta arquivo.do           # abre a interface e executa o do-file
 opendta --console            # console de texto
 opendta -b do arquivo.do     # modo batch: grava arquivo.log no diretório atual
 ```
+
+## Ícone
+
+O ícone do aplicativo ("Tabela") tem versão clara (padrão) e escura, escolhida em **Edit → Preferences**. Os conjuntos completos (Windows `.ico`, macOS `.icns`, Linux, web) estão em `assets/icons/opendta/` e `assets/icons/opendta-dark/`, e as fontes SVG ficam em `assets/icons/icon-work/`.
 
 ## Testes
 

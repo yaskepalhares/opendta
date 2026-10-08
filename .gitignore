@@ -13,3 +13,6 @@ Thumbs.db
 *.log
 !compat/expected/*.log
 compat/out/
+
+# imagens de revisão geradas pelo icon-creator (as fontes SVG ficam versionadas)
+assets/icons/icon-work/*.png

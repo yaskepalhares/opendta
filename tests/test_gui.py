@@ -10,6 +10,8 @@ QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
 @pytest.fixture(scope="module")
 def app():
+    from PySide6.QtCore import QStandardPaths
+    QStandardPaths.setTestModeEnabled(True)   # não toca nas preferências reais
     return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
@@ -27,4 +29,26 @@ def test_main_window_runs_commands(app):
     assert w.review.topLevelItem(1).text(1) == "199"
     titles = [d.windowTitle() for d in (w.dock_review, w.dock_variables, w.dock_properties)]
     assert titles == ["Review", "Variables", "Properties"]
+    w.close()
+
+
+def test_preferences_icon_and_font(app, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.settings import Preferences
+    from opendta.gui.theme import default_monospace
+
+    store = QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat)
+    prefs = Preferences(store)
+    assert prefs.app_icon == "light"                      # padrão: ícone claro
+    assert prefs.font_family == default_monospace()[0]
+
+    w = MainWindow()
+    w.prefs = prefs
+    prefs.app_icon = "dark"
+    prefs.font_size = 14
+    w.apply_preferences()
+    assert not w.windowIcon().isNull()
+    assert w.results.font().pointSize() == 14
     w.close()
