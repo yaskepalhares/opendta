@@ -111,20 +111,25 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
         raise StataError(602, f"file {shown} already exists")
     if opts.get("version"):
         v = int(str(opts["version"]))
-        if v == 13:
-            release = 117
-        elif v in (14, 15):
-            release = 118
-        else:
-            raise StataError(198, f"option version({v}) not supported by OpenDTA (use 13 or 14)")
+        release = {11: 114, 12: 115, 13: 117, 14: 118}.get(v, 0)
+        if not release:
+            # VERIFICAR: mensagem do Stata para version() fora de 11–14
+            raise StataError(198, "option version() must be 11, 12, 13, or 14")
     if not exists and opts.get("replace"):
         s.output.write(f"(note: file {shown} not found)\n", "text")
-    if old_note and release == 117:
+    if old_note and release in (114, 115, 117):
         # VERIFICAR: avisos do saveold do Stata 14
-        s.output.write("(saving in Stata 13 format)\n", "text")
+        version = {114: 11, 115: 12, 117: 13}[release]
+        s.output.write(f"(saving in Stata {version} format)\n", "text")
         if not opts.get("version"):
             s.output.write("(FYI, saveold has options version(12) and version(11) "
                            "that write files in older Stata formats)\n", "text")
+        if release in (114, 115):
+            from ..io.dta import _old_vars
+            _, cut = _old_vars(ds)
+            for name in cut:
+                # VERIFICAR: aviso de strings cortadas em 244 caracteres
+                s.output.write(f"(note: variable {name} truncated to str244)\n", "text")
     try:
         ds.timestamp = write_dta(ds, path, release=release)
     except OSError as e:
