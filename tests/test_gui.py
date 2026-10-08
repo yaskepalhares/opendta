@@ -129,3 +129,36 @@ def test_command_pane_resizable_and_multiline(app):
     last = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
     assert last.text(0) == "forvalues i = 1/2 { …" and last.text(1) == ""
     w.close()
+
+
+def test_open_save_and_browser(app, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+
+    from opendta.gui.main_window import MainWindow
+
+    monkeypatch.chdir(tmp_path)
+    w = MainWindow()
+    w.run_commands('clear\ninput str4 nome nota\n"Ana" 1\n"Bia" 2\nend\n'
+                   'label define n 1 "um"\nlabel values nota n')
+    w.run_command("browse")
+    b = w.browser
+    assert b is not None and b.isVisible()
+    m = b.model
+    assert (m.rowCount(), m.columnCount()) == (2, 2)
+    assert m.headerData(0, Qt.Orientation.Horizontal) == "nome"
+    assert m.data(m.index(0, 1)) == "um"           # rótulo de valor
+    assert m.data(m.index(1, 1)) == "2"            # sem rótulo
+    w.run_command("browse nota if nota == 2")
+    assert (m.rowCount(), m.columnCount()) == (1, 1)
+    assert m.headerData(0, Qt.Orientation.Vertical) == "2"
+
+    # Save (sem nome ainda) usa Save as; aqui o caminho vem direto
+    w.run_command(f'save "{tmp_path / "d.dta"}"')
+    w.run_command("replace nota = 3 in 1")
+    assert w.save_dataset() is True                 # regrava pelo caminho absoluto
+    w.run_command("clear")
+    w.open_dataset(str(tmp_path / "d.dta"))
+    assert w.session.data.nobs == 2
+    assert m.rowCount() == 2                        # o browser acompanha os dados
+    assert float(w.session.data.get("nota").data[0]) == 3
+    w.close()

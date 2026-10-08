@@ -1,12 +1,14 @@
 # OpenDTA
 
-Interpretador de do-files com interface no estilo do Stata 14. É um projeto pessoal de estudo, com acesso restrito.
+**An open-source interpreter for statistical analysis built around do-files and `.dta` data files.**
 
-O objetivo é que um do-file escrito para o Stata 14 rode no OpenDTA sem alteração, com a mesma sintaxe e os mesmos comandos, abreviações, regras de missing e resultados guardados. A saída na janela Results deve ser a mais próxima possível da original. O plano completo está no [ROADMAP](ROADMAP.md).
+OpenDTA runs analysis scripts (do-files), reads and writes `.dta` datasets and comes with a desktop interface: Results, Command, Review, Variables and Properties windows, plus a data browser. The goal is a free and transparent tool for reproducible statistical work, from data management to estimation, complex survey analysis and graphics, able to run existing scripts without changes.
 
-> Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
+It is a personal study project under active development. It will be released as open source; the license is still to be defined. The full plan is in the [ROADMAP](ROADMAP.md).
 
-## Estado atual: fase 1a (dados em memória)
+*A documentação abaixo está em português.*
+
+## Estado atual: fase 1b (arquivos de dados)
 
 Já funciona:
 
@@ -22,30 +24,36 @@ Já funciona:
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
-- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format` e `compress`.
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
+- arquivos `.dta`: leitura e gravação próprias dos formatos 117 (Stata 13), 118 (Stata 14) e 119, com rótulos, notas e características; formatos antigos (até 115) são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
+- `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
+- texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
+- File > Open/Save/Save as, arrastar um `.dta` para a janela e o Data Browser (`browse`), por enquanto só para leitura.
 
-Ainda não há leitura e gravação de `.dta` (`use`, `save`), que chegam na fase 1b, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
+Ainda não há `import excel`, `infile` nem edição de células no Data Editor, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
 
-## Instalação
+## Instalação (macOS)
 
-Requer Python 3.11 ou mais recente.
+Requer Python 3.11 ou mais recente. No Terminal:
 
 ```bash
 git clone https://github.com/yaskepalhares/opendta.git
 cd opendta
-python -m venv .venv
-# Windows: .venv\Scripts\activate     macOS/Linux: source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+No Linux os comandos são os mesmos. No Windows, o ambiente é ativado com `.venv\Scripts\activate`.
+
 ## Uso
 
-```bash
-opendta                      # abre a interface gráfica
-opendta arquivo.do           # abre a interface e executa o do-file
-opendta --console            # console de texto
-opendta -b do arquivo.do     # modo batch: grava arquivo.log no diretório atual
-```
+| Comando | O que faz |
+|---|---|
+| `opendta` | abre a interface gráfica |
+| `opendta arquivo.do` | abre a interface e executa o do-file |
+| `opendta --console` | console de texto |
+| `opendta -b do arquivo.do` | modo batch: grava `arquivo.log` no diretório atual |
 
 ## Ícone
 
@@ -53,12 +61,7 @@ O ícone do aplicativo ("Tabela") tem versão clara (padrão) e escura, escolhid
 
 ## Testes
 
-```bash
-pytest                       # testes automáticos
-python tools/compare.py      # compara com os logs de referência do Stata 14
-```
-
-A comparação com o Stata está descrita em [docs/como-testar.md](docs/como-testar.md).
+Os testes automáticos rodam com `pytest`. A comparação com os logs de referência do Stata 14 roda com `python tools/compare.py`. O passo a passo completo no macOS está em [docs/como-testar.md](docs/como-testar.md).
 
 ## Organização do código
 
@@ -76,3 +79,7 @@ compat/
 tools/
   compare.py  roda compat/do no OpenDTA e compara com compat/expected
 ```
+
+## Aviso
+
+Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela; a compatibilidade com do-files do Stata 14 é construída só a partir de documentação pública e observação de comportamento. Veja a [política de desenvolvimento](docs/politica-clean-room.md).

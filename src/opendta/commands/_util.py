@@ -69,9 +69,7 @@ class ObsContext:
     def resolve_name(self, name: str) -> Any:
         ds = self.s.data
         if ds.has(name):
-            var = ds.get(name)
-            v = var.data[self.i]
-            return v if var.is_string else float(v)
+            return ds.get(name).value(self.i)
         if name in self.s.scalars:
             return self.s.scalars[name]
         if name == "_n":
@@ -89,8 +87,7 @@ class ObsContext:
             raise StataError(109, "type mismatch")
         k = int(index) if not M.is_missing(index) else 0
         if 1 <= k <= self.g.size[self.i]:
-            v = var.data[self.g.start[self.i] + k - 1]
-            return v if var.is_string else float(v)
+            return var.value(self.g.start[self.i] + k - 1)
         return "" if var.is_string else M.SYSMISS
 
     def resolve_result(self, kind: str, raw: str) -> Any:

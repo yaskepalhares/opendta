@@ -152,7 +152,7 @@ def cmd_replace(s: "Session", args: str) -> None:
     old = var.data.copy()
     if var.is_string:
         changed, note = ds.set_string(var, np.asarray(new_values, dtype=object), rows)
-        to_missing = int(sum(1 for i in rows if var.data[i] == "" and old[i] != ""))
+        to_missing = int(sum(1 for i in rows if var.raw[i] == "" and old[i] != ""))
     else:
         changed, note = ds.set_numeric(var, np.asarray(new_values, dtype=np.float64), rows,
                                        promote=not opts.get("nopromote"))
@@ -169,7 +169,7 @@ def cmd_replace(s: "Session", args: str) -> None:
 def _replace_sequential(s: "Session", var: Variable, node, rows: np.ndarray) -> np.ndarray:
     """replace x = x[_n-1] ... usa valores já substituídos nas obs anteriores."""
     ctx = ObsContext(s, groups(s))
-    original = var.data.copy()
+    original = var.raw.copy()
     out = []
     try:
         for i in rows:
@@ -179,10 +179,10 @@ def _replace_sequential(s: "Session", var: Variable, node, rows: np.ndarray) -> 
             if not var.is_string:
                 v, _ = fit_numeric(np.array([v]), var.vtype)
                 v = float(v[0])
-            var.data[i] = v
+            var.set_value(i, v)
             out.append(v)
     finally:
-        var.data = original
+        var.raw = original
     return np.array(out, dtype=object if var.is_string else np.float64)
 
 
@@ -254,7 +254,7 @@ def _by_header(s: "Session", first_obs: int) -> None:
     parts = []
     for k in keys:
         var = ds.get(k)
-        v = var.data[first_obs]
+        v = var.value(first_obs)
         from ..core.formats import format_value
         shown = v if var.is_string else format_value(float(v), var.fmt, pad=False).strip()
         if not var.is_string and var.value_label:
@@ -410,6 +410,68 @@ def cmd_compress(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# recast
+# ---------------------------------------------------------------------------
+
+def _truncate_bytes(text: str, n: int) -> str:
+    b = text.encode("utf-8")[:n]
+    return b.decode("utf-8", errors="ignore")
+
+
+@command("recast")
+def cmd_recast(s: "Session", args: str) -> None:
+    head, comma, opts_text = args.partition(",")
+    opts = match_options(opts_text, {"force": 5}) if comma else {}
+    words = head.split(None, 1)
+    if len(words) < 2:
+        raise StataError(100, "varlist required")
+    newt = words[0]
+    if newt == "str":
+        raise StataError(198, "invalid syntax")
+    if not (newt in NUMERIC_TYPES or re.match(r"^str(\d+|L)$", newt)):
+        raise StataError(198, f"{newt} invalid type")   # VERIFICAR
+    if newt.startswith("str") and newt != "strL" and not 1 <= int(newt[3:]) <= STR_MAX:
+        raise StataError(198, f"{newt} invalid type")
+    ds = s.data
+    for n in unique(expand(ds, words[1])):
+        var = ds.get(n)
+        if var.vtype == newt:
+            continue
+        if var.is_string != is_string_type(newt):
+            raise StataError(109, f"{n}: {var.vtype} cannot be recast to {newt}")   # VERIFICAR
+        if var.is_string:
+            if newt == "strL":
+                new = var.data
+                changed = 0
+            else:
+                width = int(newt[3:])
+                new = np.array([_truncate_bytes(x, width) for x in var.data], dtype=object)
+                changed = int(sum(a != b for a, b in zip(var.data, new)))
+        else:
+            new, _ = fit_numeric(var.data, newt)
+            same = (new == var.data) | ((new >= M.SYSMISS) & (var.data >= M.SYSMISS)
+                                         & (new.view(np.int64) == var.data.view(np.int64)))
+            changed = int((~same).sum())
+        if changed and not opts.get("force"):
+            # VERIFICAR: texto e código de retorno quando há perda sem force
+            _note(s, f"{n}:  {plural(changed, 'value')} would be changed; not changed")
+            continue
+        if changed:
+            _note(s, f"{n}:  {plural(changed, 'value')} changed")
+        if var.fmt == default_format(var.vtype):
+            var.fmt = default_format(newt)
+        var.vtype = newt
+        if var.is_string:
+            var.data = new
+            if changed:
+                ds._unsort_from(n)   # VERIFICAR: recast com mudança desfaz a ordenação
+        else:
+            ds.set_numeric(var, new, promote=False)
+        ds.changed = True
+    s.notify_state()
+
+
+# ---------------------------------------------------------------------------
 # input (os dados vêm nas linhas seguintes, até `end`)
 # ---------------------------------------------------------------------------
 
@@ -454,7 +516,7 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                 text = raw
                 if var.vtype != "strL" and str_len(text) > int(var.vtype[3:]):
                     text = text.encode("utf-8")[:int(var.vtype[3:])].decode("utf-8", "ignore")
-                var.data[i] = text
+                var.set_value(i, text)
             else:
                 if raw in ("", "."):
                     v = M.SYSMISS
@@ -464,5 +526,5 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                     except ValueError:
                         raise StataError(198, f"'{raw}' cannot be read as a number")
                 fitted, _ = fit_numeric(np.array([v]), var.vtype)
-                var.data[i] = fitted[0]
+                var.set_value(i, fitted[0])
     s.notify_state()

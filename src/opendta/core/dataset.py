@@ -1,11 +1,12 @@
 """Conjunto de dados em memória.
 
-Cada variável numérica é guardada como um vetor float64 que usa os mesmos
-códigos de missing do resto do OpenDTA (ver core/missing.py), qualquer que
-seja o tipo de armazenamento declarado. O tipo (byte, int, long, float,
-double) define a faixa de valores aceitos e a precisão: uma variável float
-guarda valores arredondados para precisão simples, exatamente como no
-Stata, de modo que `gen x = 0.1` seguido de `count if x == 0.1` dá 0.
+Cada variável numérica fica na memória no próprio tipo (byte = 1 byte,
+int = 2, long e float = 4, double = 8), como no Stata; ver core/storage.py.
+Os cálculos usam vetores float64 com os códigos de missing do OpenDTA (ver
+core/missing.py), obtidos por `Variable.data`. O tipo define a faixa de
+valores aceitos e a precisão: uma variável float guarda valores em
+precisão simples, de modo que `gen x = 0.1` seguido de
+`count if x == 0.1` dá 0.
 
 Strings são vetores de objetos Python (str). O tipo str# acompanha o maior
 comprimento em bytes (UTF-8); acima de 2045 bytes a variável vira strL.
@@ -21,11 +22,11 @@ Faixas (manual [D] data types):
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 
 import numpy as np
 
 from . import missing as M
+from . import storage
 from .errors import StataError
 
 NUMERIC_TYPES = ("byte", "int", "long", "float", "double")
@@ -34,7 +35,7 @@ INT_RANGES = {
     "int": (-32767, 32740),
     "long": (-2147483647, 2147483620),
 }
-FLOAT_MAX = 1.70141173319e38
+FLOAT_MAX = 1.7014117331926443e38   # maior float não missing (bits 0x7effffff)
 STR_MAX = 2045
 TYPE_ORDER = {"byte": 0, "int": 1, "long": 2, "float": 3, "double": 4}
 _STR_TYPE = re.compile(r"^str(\d+|L)$")
@@ -121,28 +122,89 @@ def smallest_type_for(values: np.ndarray) -> str:
     return "double"
 
 
-@dataclass
 class Variable:
-    name: str
-    vtype: str
-    data: np.ndarray
-    fmt: str = ""
-    label: str = ""
-    value_label: str = ""
-    notes: list[str] = field(default_factory=list)
+    """Uma variável. Numéricas ficam no tipo nativo (ver core/storage.py) em
+    `raw`; `data` devolve o vetor float64 para cálculos e aceita um float64
+    na atribuição. Strings ficam num vetor de objetos str (`raw` e `data`
+    são o mesmo vetor).
 
-    def __post_init__(self) -> None:
-        if not self.fmt:
-            self.fmt = default_format(self.vtype)
+    `data` é só para leitura: para mudar um valor use `set_value`, ou
+    atribua um vetor inteiro a `data`. Para um valor só, `value(i)` evita
+    decodificar a coluna inteira."""
+
+    def __init__(self, name: str, vtype: str, data, fmt: str = "", label: str = "",
+                 value_label: str = "", notes: list[str] | None = None) -> None:
+        self.name = name
+        self._vtype = vtype
+        self.fmt = fmt or default_format(vtype)
+        self.label = label
+        self.value_label = value_label
+        self.notes = notes if notes is not None else []
+        self.raw: np.ndarray = np.empty(0)
+        self.data = data
+
+    def __repr__(self) -> str:
+        return f"Variable({self.name!r}, {self._vtype!r}, n={len(self.raw)})"
+
+    # -- tipo ----------------------------------------------------------------
+    @property
+    def vtype(self) -> str:
+        return self._vtype
+
+    @vtype.setter
+    def vtype(self, new: str) -> None:
+        if new == self._vtype:
+            return
+        if is_string_type(new) != is_string_type(self._vtype):
+            raise ValueError("troca entre número e string exige uma variável nova")
+        if not is_string_type(new):
+            values = self.data
+            self._vtype = new
+            self.raw = storage.encode(values, new)
+        else:
+            self._vtype = new
 
     @property
     def is_string(self) -> bool:
-        return is_string_type(self.vtype)
+        return is_string_type(self._vtype)
+
+    # -- valores ---------------------------------------------------------------
+    @property
+    def data(self) -> np.ndarray:
+        if self.is_string or self._vtype == "double":
+            view = self.raw.view()
+            view.flags.writeable = False
+            return view
+        return storage.decode(self.raw, self._vtype)
+
+    @data.setter
+    def data(self, values) -> None:
+        if self.is_string:
+            self.raw = np.array(values, dtype=object, copy=True)
+        else:
+            self.raw = storage.encode(values, self._vtype)
+
+    def value(self, i: int):
+        x = self.raw[i]
+        return x if self.is_string else storage.decode_one(x, self._vtype)
+
+    def set_value(self, i: int, x) -> None:
+        self.raw[i] = x if self.is_string else storage.encode_one(float(x), self._vtype)
+
+    def __len__(self) -> int:
+        return len(self.raw)
+
+    @property
+    def nbytes(self) -> int:
+        """Memória ocupada pelos valores (strings: estimativa pelo conteúdo)."""
+        if self.is_string:
+            return int(sum(len(s) for s in self.raw)) + 8 * len(self.raw)
+        return int(self.raw.nbytes)
 
     def max_strlen(self) -> int:
-        if not self.is_string or len(self.data) == 0:
+        if not self.is_string or len(self.raw) == 0:
             return 1
-        return max((str_len(s) for s in self.data), default=1) or 1
+        return max((str_len(s) for s in self.raw), default=1) or 1
 
 
 class Dataset:
@@ -153,7 +215,10 @@ class Dataset:
         self.notes: list[str] = []
         self.value_labels: dict[str, dict[int, str]] = {}
         self.sortlist: list[str] = []
-        self.filename = ""
+        self.filename = ""             # como foi digitado (describe mostra assim)
+        self.fullpath = ""             # caminho absoluto, para save sem nome
+        self.timestamp = ""            # data de gravação ("13 Apr 2014 17:45")
+        self.chars: dict[str, dict[str, str]] = {}   # características (_dta e variáveis)
         self.changed = False
 
     # -- consulta --------------------------------------------------------
@@ -212,8 +277,8 @@ class Dataset:
             if v.is_string:
                 pad = np.array([""] * extra, dtype=object)
             else:
-                pad = np.full(extra, M.SYSMISS)
-            v.data = np.concatenate([v.data, pad])
+                pad = np.full(extra, storage.missing_raw(v.vtype), dtype=v.raw.dtype)
+            v.raw = np.concatenate([v.raw, pad])
         self.nobs = n
         self._touch()
 
@@ -221,18 +286,19 @@ class Dataset:
         if self.has(var.name):
             raise StataError(110, f"variable {var.name} already defined")
         check_name(var.name)
-        if len(var.data) != self.nobs:
+        if len(var) != self.nobs:
             raise ValueError("tamanho do vetor diferente do número de observações")
         if position is None:
             self.vars.append(var)
         else:
             self.vars.insert(position, var)
-        self.sortlist = []
-        self._touch()
+        self._touch()   # criar variável não desfaz a ordenação
 
     def drop_vars(self, names: list[str]) -> None:
         drop = set(names)
         self.vars = [v for v in self.vars if v.name not in drop]
+        for n in drop:
+            self.chars.pop(n, None)
         self.sortlist = [s for s in self.sortlist if s not in drop]
         if not self.vars:
             self.nobs = 0
@@ -244,14 +310,14 @@ class Dataset:
         removed = int(self.nobs - mask.sum())
         if removed:
             for v in self.vars:
-                v.data = v.data[mask]
+                v.raw = v.raw[mask]
             self.nobs = int(mask.sum())
             self._touch()
         return removed
 
     def reorder_obs(self, order: np.ndarray) -> None:
         for v in self.vars:
-            v.data = v.data[order]
+            v.raw = v.raw[order]
         self._touch()
 
     def rename(self, old: str, new: str) -> None:
@@ -262,6 +328,8 @@ class Dataset:
         check_name(new)
         self.get(old).name = new
         self.sortlist = [new if s == old else s for s in self.sortlist]
+        if old in self.chars:
+            self.chars[new] = self.chars.pop(old)
         self._touch()
 
     def order(self, names: list[str], *, last: bool = False,
@@ -287,10 +355,10 @@ class Dataset:
         """Grava valores numéricos (todas as linhas ou só `rows`), promovendo o
         tipo se necessário, como faz o replace. Devolve (nº de mudanças,
         mensagem de promoção ou None)."""
-        new_full = var.data.copy()
         if rows is None:
             new_full = np.asarray(values, dtype=np.float64).copy()
         else:
+            new_full = np.array(var.data, dtype=np.float64)
             new_full[rows] = values
         note = None
         if promote and var.vtype not in ("double",):
@@ -308,12 +376,14 @@ class Dataset:
         fitted, _ = fit_numeric(new_full, var.vtype)
         changed = int(np.sum(fitted != var.data))
         var.data = fitted
+        if changed:
+            self._unsort_from(var.name)
         self._touch()
         return changed, note
 
     def set_string(self, var: Variable, values: np.ndarray, rows: np.ndarray | None = None
                    ) -> tuple[int, str | None]:
-        new_full = var.data.copy()
+        new_full = np.array(var.raw, dtype=object)
         if rows is None:
             new_full = np.array(values, dtype=object)
         else:
@@ -330,5 +400,12 @@ class Dataset:
                 var.vtype = target
         changed = int(sum(1 for a, b in zip(new_full, var.data) if a != b))
         var.data = new_full
+        if changed:
+            self._unsort_from(var.name)
         self._touch()
         return changed, note
+
+    def _unsort_from(self, name: str) -> None:
+        """Alterar uma variável de ordenação desfaz a ordenação a partir dela."""
+        if name in self.sortlist:
+            self.sortlist = self.sortlist[:self.sortlist.index(name)]

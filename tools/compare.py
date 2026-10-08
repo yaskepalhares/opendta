@@ -30,10 +30,14 @@ _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
 _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set dp)\b")
 
 
+# carimbo de data do .dta (describe): muda a cada execução
+_STAMP = re.compile(r"\b\d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+
+
 def normalize(text: str) -> list[str]:
     out: list[str] = []
     for raw in text.splitlines():
-        line = raw.rstrip()
+        line = _STAMP.sub("<data>", raw.rstrip())
         if not line or set(line) <= {"-"} or _HEADER.match(line) or _SKIP.match(line):
             continue
         if line in (".",):
