@@ -244,6 +244,8 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._apply_styles()
 
+        self.session.settings["hints"] = "on" if self.prefs.hints else "off"
+        self.session.ui_hooks["set_permanently"] = self._set_permanently
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
         self.refresh_state()
@@ -422,6 +424,15 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu("&Help")
         self._action(m, "Search...", phase=2)
+        m.addSeparator()
+        self.act_hints = QAction("Explain Errors (set hints)", self, checkable=True)
+        self.act_hints.setToolTip("After an error message, explain what went wrong and how to fix "
+                                  "it. Same as typing \"set hints on\" or \"set hints off\".")
+        self.act_hints.setStatusTip(self.act_hints.toolTip())
+        self.act_hints.triggered.connect(self._toggle_hints)
+        m.addAction(self.act_hints)
+        self._action(m, "About Error Explanations", self.show_hints_help)
+        m.addSeparator()
         self._action(m, "About OpenDTA", self.show_about)
 
         for menu in mb.findChildren(QMenu):
@@ -671,6 +682,31 @@ class MainWindow(QMainWindow):
         if getattr(self, "browser", None) is not None:
             self.browser.set_dark(theme == "dark")
 
+    def _set_permanently(self, name: str, value: str) -> None:
+        """set ..., permanently: lembrado na próxima abertura (só hints, por ora)."""
+        if name == "hints":
+            self.prefs.hints = value == "on"
+
+    def _toggle_hints(self, on: bool) -> None:
+        # vira comando, para ficar em Results e Review como qualquer set
+        self.run_command(f"set hints {'on' if on else 'off'}, permanently")
+
+    def show_hints_help(self) -> None:
+        QMessageBox.information(
+            self, "Error explanations",
+            "<p>When a command fails, OpenDTA shows the usual error message and return "
+            "code <tt>r(#)</tt>, and between them a short explanation of what went wrong "
+            "in that command and a hint on how to fix it:</p>"
+            "<pre>. replace nota = 9 in 2\nObs. nos. out of range\n"
+            "  \u2192 \"in 2\" asks for observations that do not exist; ...\n"
+            "    Hint: create observations with \"set obs #\" ...\nr(198);</pre>"
+            "<p>The return codes do not change, so <tt>capture</tt> and <tt>_rc</tt> work as "
+            "before. Errors raised on purpose with <tt>error #</tt> are not explained.</p>"
+            "<p><b>set hints on</b> &nbsp;turns the explanations on (default)<br>"
+            "<b>set hints off</b> &nbsp;shows only the error message and return code</p>"
+            "<p>Add <b>, permanently</b> to remember the choice the next time OpenDTA "
+            "opens. The menu item <i>Help \u2192 Explain Errors</i> does that.</p>")
+
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",
                           f"<b>OpenDTA {__version__}</b><br>"
@@ -679,6 +715,8 @@ class MainWindow(QMainWindow):
                           "o OpenDTA não é afiliado à StataCorp.")
 
     def refresh_state(self) -> None:
+        if hasattr(self, "act_hints"):
+            self.act_hints.setChecked(self.session.settings.get("hints", "on") == "on")
         cwd = os.getcwd()
         self.cwd_label.setText(cwd)
         ds = self.session.data

@@ -37,6 +37,11 @@ def cmd_set(s: "Session", args: str) -> None:
         from ..core.formats import set_decimal_comma
         set_decimal_comma(v == "comma")
     s.settings[name] = value.split(",")[0].strip()
+    opts = value.partition(",")[2].strip()
+    if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:
+        hook = s.ui_hooks.get("set_permanently")
+        if hook is not None:
+            hook(name, s.settings[name])
 
 
 @command("version", "vers")

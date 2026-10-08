@@ -221,3 +221,19 @@ def test_data_editor_and_variables_manager(app, tmp_path, monkeypatch):
     assert d.names[1] == "nf" and d.get("nf").label == "Nota final"
     assert vm.data(vm.index(1, 0)) == "nf"
     w.close()
+
+
+def test_help_hints_toggle(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    assert w.act_hints.isChecked()
+    w.act_hints.trigger()                        # desliga pelo menu Help
+    assert w.session.settings["hints"] == "off" and not w.prefs.hints
+    assert ". set hints off, permanently" in w.results.toPlainText()
+    w.run_command("set hints on")                # sem permanently: não grava
+    assert w.act_hints.isChecked() and not w.prefs.hints
+    w.act_hints.trigger()
+    w.act_hints.trigger()
+    assert w.prefs.hints
+    w.close()
