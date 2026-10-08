@@ -53,20 +53,13 @@ No Linux os comandos são os mesmos. No Windows, o ambiente é ativado com `.ven
 | `opendta --console` | console de texto |
 | `opendta -b do arquivo.do` | modo batch: grava `arquivo.log` no diretório atual |
 
-O passo a passo de testes e da comparação com o Stata está em [docs/como-testar.md](docs/como-testar.md).
-
 ## Ícone
 
 O ícone do aplicativo ("Tabela") tem versão clara (padrão) e escura, escolhida em **Edit → Preferences**. Os conjuntos completos (Windows `.ico`, macOS `.icns`, Linux, web) estão em `assets/icons/opendta/` e `assets/icons/opendta-dark/`, e as fontes SVG ficam em `assets/icons/icon-work/`.
 
 ## Testes
 
-```bash
-pytest                       # testes automáticos
-python tools/compare.py      # compara com os logs de referência do Stata 14
-```
-
-A comparação com o Stata está descrita em [docs/como-testar.md](docs/como-testar.md).
+Os testes automáticos rodam com `pytest`. A comparação com os logs de referência do Stata 14 roda com `python tools/compare.py`. O passo a passo completo no macOS está em [docs/como-testar.md](docs/como-testar.md).
 
 ## Organização do código
 
