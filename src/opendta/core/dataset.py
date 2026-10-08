@@ -221,6 +221,25 @@ class Dataset:
         self.chars: dict[str, dict[str, str]] = {}   # características (_dta e variáveis)
         self.changed = False
 
+    def copy(self) -> "Dataset":
+        """Cópia independente (preserve)."""
+        import copy as _copy
+        new = Dataset()
+        for v in self.vars:
+            nv = Variable(v.name, v.vtype, np.empty(0), fmt=v.fmt, label=v.label,
+                          value_label=v.value_label, notes=list(v.notes))
+            nv.raw = v.raw.copy()
+            new.vars.append(nv)
+        new.nobs = self.nobs
+        new.label = self.label
+        new.notes = list(self.notes)
+        new.value_labels = _copy.deepcopy(self.value_labels)
+        new.sortlist = list(self.sortlist)
+        new.filename, new.fullpath, new.timestamp = self.filename, self.fullpath, self.timestamp
+        new.chars = _copy.deepcopy(self.chars)
+        new.changed = self.changed
+        return new
+
     # -- consulta --------------------------------------------------------
     @property
     def nvars(self) -> int:

@@ -126,3 +126,46 @@ def test_marksample(run):
         " count if `touse'\n markout `touse' idade\n count if `touse'\nend")
     assert run("m renda if idade < 50") == "  3\n  3\n"
     assert not any(n.startswith("__") for n in run.session.data.names)   # temporária apagada
+
+
+# -- temporários e preserve ----------------------------------------------------------------
+
+def test_tempvar_tempname_tempfile(run, tmp_path):
+    _data(run)
+    run("program t\n tempvar a b\n tempname sc\n tempfile f\n gen `a' = idade * 2\n"
+        " scalar `sc' = 5\n save `f'\n global keep \"`a' `sc' `f'\"\n display \"`a'\"\nend")
+    out = run("t")
+    a, sc, f = run.session.macros.get_global("keep").split(" ", 2)
+    assert out.splitlines()[-1].startswith("__") and not run.session.data.has(a)
+    assert sc not in run.session.scalars
+    from pathlib import Path
+    assert not Path(f).exists() and not Path(f + ".dta").exists()
+
+
+def test_preserve_restore(run):
+    _data(run)
+    run("preserve\ndrop if idade > 20")
+    assert run.session.data.nobs == 2
+    run("restore")
+    assert run.session.data.nobs == 5
+    run("restore")
+    assert run.rc == 622
+    run("preserve\npreserve")
+    assert run.rc == 621
+    run("restore, not\nkeep in 1")
+    assert run.session.data.nobs == 1
+    _data(run)
+    run("preserve\nkeep in 1/2\nrestore, preserve\nkeep in 1\nrestore")
+    assert run.session.data.nobs == 5
+    # dentro de programa: restaura sozinho no fim, mesmo com erro
+    run("program pr\n preserve\n drop in 1/3\n error 459\nend")
+    run("capture pr")
+    assert run.session.data.nobs == 5
+
+
+def test_preserve_in_dofile(run, tmp_path):
+    _data(run)
+    f = tmp_path / "p.do"
+    f.write_text("preserve\nkeep in 1\ntempvar z\ngen `z' = 1\n")
+    run(f'quietly do "{f}"')
+    assert run.session.data.nobs == 5 and run.session.data.nvars == 3
