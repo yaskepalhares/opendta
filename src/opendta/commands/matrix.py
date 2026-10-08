@@ -113,7 +113,7 @@ _TOKEN = re.compile(r"""
   | (?P<range>\.\.\.|\.\.)
   | (?P<miss>\.[a-z]?)
   | (?P<str>"[^"]*")
-  | (?P<op>[-+*#/'\\,()\[\]])
+  | (?P<op>[-+*#/'\\,()\[\]^])
   | (?P<ws>\s+)
 """, re.X)
 
@@ -194,7 +194,20 @@ class _Parser:
         if self.is_op("+"):
             self.take()
             return self.unary()
-        return self.postfix()
+        return self.power()
+
+    def power(self) -> Matrix:
+        """x^y só entre escalares (1 x 1), como dentro de (`i', `i'^2)."""
+        base = self.postfix()
+        if self.is_op("^"):
+            self.take()
+            exp = self.unary()
+            if base.data.shape != (1, 1) or exp.data.shape != (1, 1):
+                raise StataError(503, "conformability error")
+            x = self.s.eval(f"({float(base.data[0, 0])!r})^({float(exp.data[0, 0])!r})") \
+                if base.data[0, 0] < M.SYSMISS and exp.data[0, 0] < M.SYSMISS else M.SYSMISS
+            return Matrix(np.array([[float(x)]]))
+        return base
 
     def postfix(self) -> Matrix:
         m = self.primary()

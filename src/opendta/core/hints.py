@@ -46,6 +46,13 @@ def _join(items: list[str], limit: int = 8) -> str:
     return ", ".join(shown) + more
 
 
+# comandos que não seguem a sintaxe padrão [varlist] [=exp] [if] [in] ...
+_FREE_SYNTAX = {"matrix", "display", "local", "global", "file", "program", "forvalues",
+                "foreach", "while", "if", "scalar", "set", "label", "notes", "char",
+                "syntax", "gettoken", "tokenize", "args", "import", "export", "macro",
+                "return", "ereturn", "sreturn", "adopath", "sysdir", "infix", "infile"}
+
+
 def _in_qualifier(text: str) -> str | None:
     m = re.search(r"\bin\s+([-\w/]+)", text)
     return m.group(1) if m else None
@@ -150,6 +157,9 @@ def explain(err: "StataError", s: "Session") -> list[str]:
             problems.append("there is more than one comma (options come after a single comma)")
         if problems:
             return two("OpenDTA could not read this command: " + "; ".join(problems) + ".")
+        if command in _FREE_SYNTAX:
+            return two(f"OpenDTA could not read this {command} command.",
+                       "check quotes, parentheses and the order of its parts.")
         if command:
             return two(f"OpenDTA could not read this {command} command.",
                        f'check the order of the parts: {command} [varlist] [= exp] '
