@@ -198,3 +198,27 @@ def test_notes_and_char(run, here):
     run("save c\nuse c, clear")
     assert run.session.data.chars["x"]["fonte"] == "censo"
     assert "* indicated variables have notes" in run("describe")
+
+
+def test_numeric_edges(run, tmp_path, release):
+    """Negativos e extremos de cada tipo (um float negativo já virou missing)."""
+    import numpy as np
+
+    from opendta.core.dataset import Dataset, Variable
+    ds = Dataset()
+    f32 = lambda xs: np.array(xs, dtype=np.float32).astype(np.float64)
+    cols = {
+        "byte": np.array([-127, 100, -1, 0]),
+        "int": np.array([-32767, 32740, -1, 0]),
+        "long": np.array([-2147483647, 2147483620, -1, 0]),
+        "float": f32([-1.7014117e38, 1.7014117e38, -0.1791305, -1e-30]),
+        "double": np.array([-8.98846567431158e307, 8.98846567431158e307, -0.5, -1e-300]),
+    }
+    for t, vals in cols.items():
+        ds.vars.append(Variable(f"x_{t}", t, np.asarray(vals, dtype=np.float64)))
+    ds.nobs = 4
+    p = tmp_path / "edges.dta"
+    write_dta(ds, p, release=release)
+    back = read_dta(p)
+    for a, b in zip(ds.vars, back.vars):
+        assert np.array_equal(a.data, b.data), a.name

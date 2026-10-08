@@ -95,7 +95,8 @@ def _from_disk(raw: np.ndarray, vtype: str) -> np.ndarray:
     if vtype == "float":
         bits = np.ascontiguousarray(raw.astype("<f4")).view("<u4")
         v = raw.astype(np.float64)
-        miss = bits >= _FLOAT_MISS_BITS
+        # só os positivos acima do maior float válido; com sinal (bit 31) é número
+        miss = (bits >= _FLOAT_MISS_BITS) & (bits < 0x80000000)
         if miss.any():
             k = ((bits[miss] - _FLOAT_MISS_BITS) // _FLOAT_MISS_STEP).astype(np.int64).clip(0, 26)
             v[miss] = codes[k]
