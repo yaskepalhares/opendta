@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 COMPAT = ROOT / "compat"
 _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
-_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set dp)\b")
+_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints))\b")
 
 
 # carimbo de data do .dta (describe): muda a cada execução
@@ -50,11 +50,11 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     from opendta.cli import run_batch
 
     outdir.mkdir(parents=True, exist_ok=True)
-    target = dofile
-    if setup:
-        # roda `setup` (ex.: set dp comma) antes, sem aparecer no log comparado
-        target = outdir / dofile.name
-        target.write_text(f"quietly {setup}\n" + dofile.read_text(encoding="utf-8"), encoding="utf-8")
+    # explicações de erro do OpenDTA desligadas: o Stata não as tem.
+    # `setup` (ex.: set dp comma) roda antes, sem aparecer no log comparado
+    target = outdir / dofile.name
+    pre = "quietly set hints off\n" + (f"quietly {setup}\n" if setup else "")
+    target.write_text(pre + dofile.read_text(encoding="utf-8"), encoding="utf-8")
     cwd = os.getcwd()
     os.chdir(outdir)
     try:

@@ -7,6 +7,9 @@ from opendta.session import Session
 class Runner:
     def __init__(self):
         self.session = Session()
+        # os testes conferem a saída no formato do Stata; as explicações de
+        # erro do OpenDTA têm testes próprios (test_hints.py)
+        self.session.settings["hints"] = "off"
         self.cap = Capture()
         self.session.output.add_listener(self.cap)
 

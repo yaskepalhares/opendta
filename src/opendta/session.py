@@ -49,6 +49,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "trace": "off",
     "seed": "123456789",
     "dp": "period",
+    "hints": "on",       # OpenDTA: explicação depois das mensagens de erro
 }
 
 
@@ -246,10 +247,21 @@ class Session:
             lines = split_commands(source)
             self.interp.run_lines(lines, echo=echo)
         except StataError as e:
-            self.output.error(e.message, e.rc)
+            self.report_error(e)
             self.set_rc(e.rc)
             return e.rc
         return 0
+
+    def report_error(self, e: StataError, *, show_rc: bool = True) -> None:
+        """Mensagem de erro (como no Stata), explicação do OpenDTA e r(#)."""
+        lines: list[str] = []
+        if self.settings.get("hints", "on") == "on":
+            from .core.hints import explain
+            try:
+                lines = explain(e, self)
+            except Exception:  # noqa: BLE001 - uma explicação nunca derruba o erro original
+                lines = []
+        self.output.error(e.message, e.rc, show_rc=show_rc, hints=lines)
 
     def run_command(self, line: str) -> int:
         """Comando digitado na janela Command: eco '. linha' e execução."""
@@ -270,7 +282,7 @@ class Session:
             self.interp.run_lines(split_commands(text), echo=True)
             rc = 0
         except StataError as e:
-            self.output.error(e.message, e.rc)
+            self.report_error(e)
             self.set_rc(e.rc)
             rc = e.rc
         finally:

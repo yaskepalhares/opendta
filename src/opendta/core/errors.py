@@ -11,10 +11,14 @@ from __future__ import annotations
 class StataError(Exception):
     """Erro que encerra um comando e define _rc."""
 
-    def __init__(self, rc: int, message: str = ""):
+    def __init__(self, rc: int, message: str = "", *, hint: str | None = None):
         super().__init__(message)
         self.rc = int(rc)
         self.message = message
+        # explicação própria (várias linhas); sem ela, core/hints.py tenta uma
+        self.hint = hint
+        # (nome do comando, texto do comando), anexado pelo interpretador
+        self.context: tuple[str, str] | None = None
 
 
 class ExitRequest(Exception):

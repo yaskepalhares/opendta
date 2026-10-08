@@ -22,6 +22,7 @@ class ResultsScheme:
         "error": "#cc0000",
         "input": "#000000",
         "command": "#000000",
+        "hint": "#6b5a00",      # explicação dos erros (OpenDTA)
     })
     bold: frozenset[str] = frozenset({"result", "input"})
 
@@ -36,6 +37,7 @@ DARK_RESULTS = ResultsScheme(
         "error": "#ff6b68",
         "input": "#ffffff",
         "command": "#d4d4d6",
+        "hint": "#e5c07b",
     },
 )
 

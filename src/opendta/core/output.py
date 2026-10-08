@@ -63,12 +63,16 @@ class Output:
         if self.column != 0:
             self.newline(force=force)
 
-    def error(self, message: str, rc: int, *, show_rc: bool = True) -> None:
+    def error(self, message: str, rc: int, *, show_rc: bool = True,
+              hints: list[str] | None = None) -> None:
         """Mensagem de erro e r(#); — mostradas mesmo sob quietly (mas não
-        sob capture)."""
+        sob capture). `hints`: explicação do OpenDTA, entre as duas."""
         self.ensure_line_start(force=True)
         if message:
             self.write(message + "\n", "error", force=True)
+        for k, line in enumerate(hints or []):
+            prefix = "  \u2192 " if k == 0 else "    "
+            self.write(prefix + line + "\n", "hint", force=True)
         if show_rc:
             self.write(f"r({rc});\n", "error", force=True)
 
