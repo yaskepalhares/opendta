@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QFontDatabase, QKeySequence,
                            QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
@@ -34,6 +34,7 @@ from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
 from .data_browser import DataBrowser
+from .variables_manager import VariablesManager
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
@@ -243,6 +244,8 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._apply_styles()
 
+        self.session.settings["hints"] = "on" if self.prefs.hints else "off"
+        self.session.ui_hooks["set_permanently"] = self._set_permanently
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
         self.refresh_state()
@@ -251,7 +254,9 @@ class MainWindow(QMainWindow):
         self.command.setFocus()
         self.setAcceptDrops(True)
         self.browser: DataBrowser | None = None
+        self.varmanager: VariablesManager | None = None
         self.session.ui_hooks["browse"] = self.show_browser
+        self.session.ui_hooks["varmanage"] = self.show_variables_manager
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -386,7 +391,7 @@ class MainWindow(QMainWindow):
         self._action(m, "Describe data", lambda: self.run_command("describe"))
         self._action(m, "Data Editor", lambda: self.run_command("browse"))
         self._action(m, "Create or change data", phase=1)
-        self._action(m, "Variables Manager", phase=1)
+        self._action(m, "Variables Manager", lambda: self.run_command("varmanage"))
         self._action(m, "Data utilities", phase=3)
         self._action(m, "Sort", phase=1)
         self._action(m, "Combine datasets", phase=3)
@@ -419,6 +424,15 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu("&Help")
         self._action(m, "Search...", phase=2)
+        m.addSeparator()
+        self.act_hints = QAction("Explain Errors (set hints)", self, checkable=True)
+        self.act_hints.setToolTip("After an error message, explain what went wrong and how to fix "
+                                  "it. Same as typing \"set hints on\" or \"set hints off\".")
+        self.act_hints.setStatusTip(self.act_hints.toolTip())
+        self.act_hints.triggered.connect(self._toggle_hints)
+        m.addAction(self.act_hints)
+        self._action(m, "About Error Explanations", self.show_hints_help)
+        m.addSeparator()
         self._action(m, "About OpenDTA", self.show_about)
 
         for menu in mb.findChildren(QMenu):
@@ -438,7 +452,7 @@ class MainWindow(QMainWindow):
              ("dofile", "Do-file Editor", None, 8)],
             [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit"), 1),
              ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse"), 1),
-             ("variables", "Variables Manager", None, 1)],
+             ("variables", "Variables Manager", lambda: self.run_command("varmanage"), 1)],
             [("more", "Clear --more-- condition", None, 8), ("break", "Break", None, 8)],
         ]
         self.toolbar_actions: dict[str, QAction] = {}
@@ -575,16 +589,35 @@ class MainWindow(QMainWindow):
         self.run_command(f'save "{path}", replace')
         return self.session.rc == 0
 
-    def show_browser(self, columns=None, rows=None) -> None:
+    def show_browser(self, columns=None, rows=None, *, edit: bool = False,
+                     nolabel: bool = False) -> None:
         if self.browser is None:
-            self.browser = DataBrowser(self.session, monospace_font(self.prefs), self)
+            self.browser = DataBrowser(self.session, monospace_font(self.prefs), self,
+                                       run=self._run_from_editor)
             self.browser.setWindowFlag(Qt.WindowType.Window, True)
             self.browser.set_dark(self.prefs.theme == "dark")
+        self.browser.model.nolabel = nolabel
         self.browser.model.set_subset(columns, rows)
-        self.browser.refresh()
+        self.browser.set_mode(edit)
         self.browser.show()
         self.browser.raise_()
         self.browser.activateWindow()
+
+    def show_variables_manager(self) -> None:
+        if self.varmanager is None:
+            self.varmanager = VariablesManager(self.session, monospace_font(self.prefs), self,
+                                               run=self._run_from_editor)
+            self.varmanager.setWindowFlag(Qt.WindowType.Window, True)
+        self.varmanager.refresh()
+        self.varmanager.show()
+        self.varmanager.raise_()
+        self.varmanager.activateWindow()
+
+    def _run_from_editor(self, line: str) -> int:
+        """Comando gerado pelo Data Editor ou pelo Variables Manager: ecoa em
+        Results e entra em Review, como no Stata."""
+        self.run_command(line)
+        return self.session.rc
 
     def choose_do_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Do", os.getcwd(), "Do-files (*.do *.ado);;All files (*)")
@@ -649,6 +682,31 @@ class MainWindow(QMainWindow):
         if getattr(self, "browser", None) is not None:
             self.browser.set_dark(theme == "dark")
 
+    def _set_permanently(self, name: str, value: str) -> None:
+        """set ..., permanently: lembrado na próxima abertura (só hints, por ora)."""
+        if name == "hints":
+            self.prefs.hints = value == "on"
+
+    def _toggle_hints(self, on: bool) -> None:
+        # vira comando, para ficar em Results e Review como qualquer set
+        self.run_command(f"set hints {'on' if on else 'off'}, permanently")
+
+    def show_hints_help(self) -> None:
+        QMessageBox.information(
+            self, "Error explanations",
+            "<p>When a command fails, OpenDTA shows the usual error message and return "
+            "code <tt>r(#)</tt>, and between them a short explanation of what went wrong "
+            "in that command and a hint on how to fix it:</p>"
+            "<pre>. replace nota = 9 in 2\nObs. nos. out of range\n"
+            "  \u2192 \"in 2\" asks for observations that do not exist; ...\n"
+            "    Hint: create observations with \"set obs #\" ...\nr(198);</pre>"
+            "<p>The return codes do not change, so <tt>capture</tt> and <tt>_rc</tt> work as "
+            "before. Errors raised on purpose with <tt>error #</tt> are not explained.</p>"
+            "<p><b>set hints on</b> &nbsp;turns the explanations on (default)<br>"
+            "<b>set hints off</b> &nbsp;shows only the error message and return code</p>"
+            "<p>Add <b>, permanently</b> to remember the choice the next time OpenDTA "
+            "opens. The menu item <i>Help \u2192 Explain Errors</i> does that.</p>")
+
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",
                           f"<b>OpenDTA {__version__}</b><br>"
@@ -657,6 +715,8 @@ class MainWindow(QMainWindow):
                           "o OpenDTA não é afiliado à StataCorp.")
 
     def refresh_state(self) -> None:
+        if hasattr(self, "act_hints"):
+            self.act_hints.setChecked(self.session.settings.get("hints", "on") == "on")
         cwd = os.getcwd()
         self.cwd_label.setText(cwd)
         ds = self.session.data
@@ -689,8 +749,15 @@ class MainWindow(QMainWindow):
             child = self._prop_data.child(k)
             child.setText(1, data_props.get(child.text(0), ""))
         self._show_variable_properties()
-        if getattr(self, "browser", None) is not None:
+        # as janelas auxiliares se atualizam depois do comando terminar
+        # (a edição de uma célula dispara comandos de dentro do próprio modelo)
+        QTimer.singleShot(0, self._refresh_aux_windows)
+
+    def _refresh_aux_windows(self) -> None:
+        if getattr(self, "browser", None) is not None and self.browser.isVisible():
             self.browser.refresh()
+        if getattr(self, "varmanager", None) is not None and self.varmanager.isVisible():
+            self.varmanager.refresh()
 
     def _selected_variable(self) -> str:
         items = self.variables.selectedItems()

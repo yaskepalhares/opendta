@@ -143,7 +143,7 @@ O leitor e o gravador de `.dta` são próprios. Nos testes automáticos, cada ar
    ```
    No Stata, abra cada um e rode `describe`, `notes`, `char list` e `list`. Qualquer aviso do Stata ao abrir o arquivo é uma divergência.
 
-Os do-files `compat/do/0104_arquivos.do` e `0105_delimitado.do` criam e apagam os próprios arquivos na pasta atual.
+Os do-files `compat/do/0104_arquivos.do` a `0107_infile_infix.do` criam e apagam os próprios arquivos (`.dta`, CSV, Excel e texto) na pasta atual, com nomes começando por `odta_`.
 
 ## Reportar uma divergência encontrada no uso
 

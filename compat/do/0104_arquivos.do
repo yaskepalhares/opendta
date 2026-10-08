@@ -45,7 +45,16 @@ recast str3 nome, force
 capture noisily recast byte nome
 describe
 list
+capture erase odta_v12.dta
+saveold odta_v12, version(12)
+use odta_v12, clear
+describe
+capture erase odta_v11.dta
+saveold odta_v11, version(11)
+capture noisily saveold odta_v9, version(9)
 erase odta_pessoas.dta
 erase odta_outro.dta
 erase odta_v13.dta
+erase odta_v12.dta
+erase odta_v11.dta
 capture noisily erase odta_pessoas.dta

@@ -44,6 +44,15 @@ class Preferences:
 
     # fonte das janelas Results, Command e Review
     @property
+    def hints(self) -> bool:
+        """Explicação dos erros (set hints) ligada ao abrir o programa."""
+        return str(self._s.value("behavior/hints", "on")) != "off"
+
+    @hints.setter
+    def hints(self, on: bool) -> None:
+        self._s.setValue("behavior/hints", "on" if on else "off")
+
+    @property
     def font_family(self) -> str:
         return str(self._s.value("fonts/family", default_monospace()[0]))
 

@@ -111,20 +111,25 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
         raise StataError(602, f"file {shown} already exists")
     if opts.get("version"):
         v = int(str(opts["version"]))
-        if v == 13:
-            release = 117
-        elif v in (14, 15):
-            release = 118
-        else:
-            raise StataError(198, f"option version({v}) not supported by OpenDTA (use 13 or 14)")
+        release = {11: 114, 12: 115, 13: 117, 14: 118}.get(v, 0)
+        if not release:
+            # VERIFICAR: mensagem do Stata para version() fora de 11–14
+            raise StataError(198, "option version() must be 11, 12, 13, or 14")
     if not exists and opts.get("replace"):
         s.output.write(f"(note: file {shown} not found)\n", "text")
-    if old_note and release == 117:
+    if old_note and release in (114, 115, 117):
         # VERIFICAR: avisos do saveold do Stata 14
-        s.output.write("(saving in Stata 13 format)\n", "text")
+        version = {114: 11, 115: 12, 117: 13}[release]
+        s.output.write(f"(saving in Stata {version} format)\n", "text")
         if not opts.get("version"):
             s.output.write("(FYI, saveold has options version(12) and version(11) "
                            "that write files in older Stata formats)\n", "text")
+        if release in (114, 115):
+            from ..io.dta import _old_vars
+            _, cut = _old_vars(ds)
+            for name in cut:
+                # VERIFICAR: aviso de strings cortadas em 244 caracteres
+                s.output.write(f"(note: variable {name} truncated to str244)\n", "text")
     try:
         ds.timestamp = write_dta(ds, path, release=release)
     except OSError as e:
@@ -251,11 +256,10 @@ def cmd_char(s: "Session", args: str) -> None:
 # browse / edit (abrem o Data Browser na interface gráfica)
 # ---------------------------------------------------------------------------
 
-def _browse(s: "Session", args: str) -> None:
+def _browse(s: "Session", args: str, *, edit: bool = False) -> None:
     from ..lang.syntax import Parsed
     p = parse_standard(args)
-    if p.options.strip():
-        match_options(p.options, {"nolabel": 3})
+    o = match_options(p.options, {"nolabel": 3}) if p.options.strip() else {}
     names = unique(expand(s.data, p.varlist)) if p.varlist.strip() else None
     rows = None
     if p.if_ or p.in_:
@@ -263,7 +267,7 @@ def _browse(s: "Session", args: str) -> None:
     hook = s.ui_hooks.get("browse")
     if hook is not None:
         # sem interface (modo batch) o Stata também não mostra nada
-        hook(names, rows)
+        hook(names, rows, edit=edit, nolabel=bool(o.get("nolabel")))
 
 
 @command("browse", "br")
@@ -273,8 +277,7 @@ def cmd_browse(s: "Session", args: str) -> None:
 
 @command("edit", "ed")
 def cmd_edit(s: "Session", args: str) -> None:
-    # a edição de células chega na fase de ferramentas; por ora abre em Browse
-    _browse(s, args)
+    _browse(s, args, edit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -337,3 +340,10 @@ def cmd_erase(s: "Session", args: str) -> None:
 @command("rm")
 def cmd_rm(s: "Session", args: str) -> None:
     _erase(s, args)
+
+
+@command("varmanage")
+def cmd_varmanage(s: "Session", args: str) -> None:
+    hook = s.ui_hooks.get("varmanage")
+    if hook is not None:
+        hook()

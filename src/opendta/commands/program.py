@@ -76,7 +76,7 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
         raise StataError(198, "continue outside loop")
     except StataError as e:
         if echo:
-            out.error(e.message, e.rc)
+            s.report_error(e)
             out.write("\nend of do-file\n", "text", force=True)
             raise StataError(e.rc, "")
         raise
@@ -129,7 +129,8 @@ def cmd_error(s: "Session", args: str) -> None:
     rc = int(float(s.eval(t)))
     if rc == 0:
         return
-    raise StataError(rc, STANDARD_MESSAGES.get(rc, ""))
+    # erro pedido de propósito (error #): sem explicação do OpenDTA
+    raise StataError(rc, STANDARD_MESSAGES.get(rc, ""), hint="")
 
 
 @command("continue")

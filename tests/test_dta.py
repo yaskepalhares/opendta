@@ -246,3 +246,45 @@ def test_native_storage_sizes(run):
         "gen float f = 1\ngen double d = 1")
     d = run.session.data
     assert [d.get(n).raw.nbytes for n in "bilfd"] == [1000, 2000, 4000, 4000, 8000]
+
+
+@pytest.mark.parametrize("old", [114, 115])
+def test_old_formats(run, tmp_path, old):
+    """114/115: gravação própria, leitura própria e leitura pela ReadStat."""
+    ds = build(run, 117)                     # acentos em Latin-1, como no Stata 12
+    p = tmp_path / f"o{old}.dta"
+    write_dta(ds, p, release=old)
+    raw = p.read_bytes()
+    assert raw[0] == old and raw[1] == 2
+    back = read_dta(p)
+    assert back.names == ds.names
+    for a, b in zip(ds.vars, back.vars):
+        if a.vtype == "strL":
+            assert b.vtype == "str244" and b.data[2] == "x" * 244
+            continue
+        assert a.vtype == b.vtype and a.fmt == b.fmt and a.label == b.label
+        if a.is_string:
+            assert list(a.data) == list(b.data)
+        else:
+            assert np.array_equal(a.data.view(np.int64), b.data.view(np.int64)), a.name
+    assert back.value_labels == ds.value_labels and back.sortlist == ["l"]
+    assert back.chars["i"]["note1"] == "nota da variável"
+    pyreadstat = pytest.importorskip("pyreadstat")
+    df, meta = pyreadstat.read_dta(str(p), user_missing=True, output_format="dict")
+    assert list(df) == ds.names and meta.file_label == "Teste dta"
+    assert list(df["l"]) == [-70000, 1, 70000] and df["b"][0] == "a"
+    assert meta.variable_value_labels["b"] == {1.0: "Sim", 2.0: "Não"}
+
+
+def test_saveold_versions(run, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run('clear\nset obs 1\ngen strL t = "y" * 300\ngen x = 1')
+    out = run("saveold v12, version(12)")
+    assert "(saving in Stata 12 format)" in out and "variable t truncated to str244" in out
+    assert (tmp_path / "v12.dta").read_bytes()[0] == 115
+    run("saveold v11, version(11)")
+    assert (tmp_path / "v11.dta").read_bytes()[0] == 114
+    run("use v11, clear")
+    assert run.session.data.get("t").vtype == "str244"
+    out = run("saveold v9, version(9)")
+    assert run.rc == 198

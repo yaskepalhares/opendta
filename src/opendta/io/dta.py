@@ -1,10 +1,11 @@
 """Leitura e gravação de arquivos .dta.
 
-Implementação própria dos formatos 117 (Stata 13), 118 (Stata 14/15) e 119
-(Stata 15+, mais de 32.767 variáveis), escrita a partir da especificação
-pública do formato. Formatos anteriores (até 115) são lidos pela ReadStat
-(pyreadstat), que também serve, nos testes, de verificação independente
-de tudo o que este módulo lê e grava.
+Implementação própria dos formatos 113 a 115 (Stata 8 a 12, só leitura em
+113), 117 (Stata 13), 118 (Stata 14/15) e 119 (Stata 15+, mais de 32.767
+variáveis), escrita a partir da especificação pública do formato. Formatos
+anteriores a 113 são lidos pela ReadStat (pyreadstat), que também serve,
+nos testes, de verificação independente de tudo o que este módulo lê e
+grava.
 
 Estrutura dos formatos 117+ (seções delimitadas por marcadores de texto):
 
@@ -95,6 +96,232 @@ def _widths(ds: Dataset) -> list[int]:
     return out
 
 
+def _fill_block(vars_, widths: list[int], rec: int, start: int, stop: int, release: int,
+                strls: list[tuple[int, int, bytes]]) -> np.ndarray:
+    """Registros das observações start..stop-1, prontos para o disco."""
+    n = stop - start
+    block = np.zeros((n, rec), dtype=np.uint8)
+    pos = 0
+    for j, (v, w) in enumerate(zip(vars_, widths)):
+        part = v.raw[start:stop]
+        if v.vtype == "strL":
+            refs = np.zeros((n, 8), dtype=np.uint8)
+            for i, text in enumerate(part):
+                if text == "":
+                    continue                   # (0,0) indica string vazia
+                vv, oo = j + 1, start + i + 1
+                if release == 117:
+                    ref = vv.to_bytes(4, "little") + oo.to_bytes(4, "little")
+                else:
+                    ref = vv.to_bytes(2, "little") + oo.to_bytes(6, "little")
+                refs[i] = np.frombuffer(ref, dtype=np.uint8)
+                strls.append((vv, oo, _enc(str(text))))
+            block[:, pos:pos + 8] = refs
+        elif v.is_string:
+            # dtype S{w}: completa com zeros, como no formato
+            enc = np.array([_enc(str(x))[:w] for x in part], dtype=f"S{w}")
+            block[:, pos:pos + w] = enc.view(np.uint8).reshape(n, w)
+        else:
+            disk = np.ascontiguousarray(part, dtype="<" + _NP[v.vtype])
+            block[:, pos:pos + w] = disk.view(np.uint8).reshape(n, w)
+        pos += w
+    return block
+
+
+# ---------------------------------------------------------------------------
+# Formatos 114 e 115 (Stata 10 a 12): cabeçalho binário de tamanho fixo
+# ---------------------------------------------------------------------------
+
+_OLD_TYPE = {"byte": 251, "int": 252, "long": 253, "float": 254, "double": 255}
+_OLD_TYPE_BACK = {v: k for k, v in _OLD_TYPE.items()}
+OLD_STR_MAX = 244
+
+
+def _old_vars(ds: Dataset) -> tuple[list, list[str]]:
+    """Variáveis prontas para 114/115: strL e str acima de 244 viram str244
+    (cortando o texto). Devolve (variáveis, nomes das que foram cortadas)."""
+    out, cut = [], []
+    for v in ds.vars:
+        if v.is_string and (v.vtype == "strL" or int(v.vtype[3:]) > OLD_STR_MAX):
+            texts = [_enc(str(x))[:OLD_STR_MAX].decode("latin-1") for x in v.raw]
+            nv = Variable(v.name, f"str{OLD_STR_MAX}", texts, fmt=v.fmt, label=v.label,
+                          value_label=v.value_label)
+            if any(len(_enc(str(x))) > OLD_STR_MAX for x in v.raw):
+                cut.append(v.name)
+            out.append(nv)
+        else:
+            out.append(v)
+    return out, cut
+
+
+def _write_old_body(ds: Dataset, tmp: Path, release: int, ts_text: str) -> None:
+    vars_, _ = _old_vars(ds)
+    K, N = len(vars_), ds.nobs
+    if K > 32767:
+        raise StataError(900, "too many variables for this file format")
+    with open(tmp, "wb") as f:
+        out = bytearray()
+        out += bytes([release, 2, 1, 0])               # versão, LOHI, filetype, livre
+        out += K.to_bytes(2, "little") + N.to_bytes(4, "little")
+        out += _fixed(ds.label, 81)
+        out += _fixed(ts_text, 18)
+        for v in vars_:
+            out.append(int(v.vtype[3:]) if v.is_string else _OLD_TYPE[v.vtype])
+        for v in vars_:
+            out += _fixed(v.name, 33)
+        pos_of = {n: k for k, n in enumerate([v.name for v in vars_])}
+        for k in range(K + 1):
+            idx = pos_of[ds.sortlist[k]] + 1 if k < len(ds.sortlist) else 0
+            out += idx.to_bytes(2, "little")
+        for v in vars_:
+            out += _fixed(v.fmt, 49)
+        for v in vars_:
+            out += _fixed(v.value_label, 33)
+        for v in vars_:
+            out += _fixed(v.label, 81)
+        # campos de expansão: características
+        for owner, chars in getattr(ds, "chars", {}).items():
+            for cname, content in chars.items():
+                body = _fixed(owner, 33) + _fixed(cname, 33) + _enc(content) + b"\x00"
+                out += bytes([1]) + len(body).to_bytes(4, "little") + body
+        out += b"\x00" * 5
+        f.write(out)
+
+        widths = [int(v.vtype[3:]) if v.is_string else _SIZE[v.vtype] for v in vars_]
+        rec = sum(widths)
+        step = max(1, CHUNK_BYTES // max(rec, 1))
+        for start in range(0, N, step):
+            block = _fill_block(vars_, widths, rec, start, min(N, start + step), release, [])
+            f.write(block.data)
+            del block
+
+        out = bytearray()
+        for lname, mapping in ds.value_labels.items():
+            items = sorted(mapping.items())
+            txt = bytearray()
+            offs, vals = [], []
+            for val, text in items:
+                offs.append(len(txt))
+                vals.append(int(val))
+                txt.extend(_enc(text) + b"\x00")
+            n = len(items)
+            table = (n.to_bytes(4, "little") + len(txt).to_bytes(4, "little")
+                     + b"".join(o.to_bytes(4, "little") for o in offs)
+                     + b"".join(struct.pack("<i", val) for val in vals) + bytes(txt))
+            out += len(table).to_bytes(4, "little") + _fixed(lname, 33) + b"\x00" * 3 + table
+        f.write(out)
+
+
+def _read_old(path: Path) -> Dataset:
+    """Formatos 113, 114 e 115 (Stata 8 a 12)."""
+    with open(path, "rb") as f:
+        head = f.read(109)
+        release, bo_code = head[0], head[1]
+        bo = ">" if bo_code == 1 else "<"
+        big = bo == ">"
+
+        def u(b: bytes) -> int:
+            return int.from_bytes(b, "big" if big else "little")
+
+        K = u(head[4:6])
+        N = u(head[6:10])
+        label = _cstr(head[10:91], 117)
+        ts = _cstr(head[91:109], 117)
+        fmt_len = 12 if release == 113 else 49
+        meta_len = K + 33 * K + 2 * (K + 1) + fmt_len * K + 33 * K + 81 * K
+        meta = f.read(meta_len)
+        p = 0
+        codes = list(meta[p:p + K]); p += K
+        names = [_cstr(meta[p + 33 * i:p + 33 * (i + 1)], 117) for i in range(K)]; p += 33 * K
+        sort_idx = [u(meta[p + 2 * i:p + 2 * i + 2]) for i in range(K + 1)]; p += 2 * (K + 1)
+        fmts = [_cstr(meta[p + fmt_len * i:p + fmt_len * (i + 1)], 117) for i in range(K)]
+        p += fmt_len * K
+        vlabels = [_cstr(meta[p + 33 * i:p + 33 * (i + 1)], 117) for i in range(K)]; p += 33 * K
+        varlabels = [_cstr(meta[p + 81 * i:p + 81 * (i + 1)], 117) for i in range(K)]
+
+        chars: dict[str, dict[str, str]] = {}
+        while True:
+            hdr = f.read(5)
+            if len(hdr) < 5:
+                raise StataError(610, "file not Stata format")
+            dtype, n = hdr[0], u(hdr[1:5])
+            if dtype == 0 and n == 0:
+                break
+            body = f.read(n)
+            if dtype == 1 and n >= 66:
+                owner, cname = _cstr(body[:33], 117), _cstr(body[33:66], 117)
+                chars.setdefault(owner, {})[cname] = _cstr(body[66:], 117)
+
+        vtypes, widths = [], []
+        for c in codes:
+            if c in _OLD_TYPE_BACK:
+                vtypes.append(_OLD_TYPE_BACK[c])
+                widths.append(_SIZE[_OLD_TYPE_BACK[c]])
+            elif 1 <= c <= OLD_STR_MAX:
+                vtypes.append(f"str{c}")
+                widths.append(c)
+            else:
+                raise StataError(610, f"unknown variable type {c}")
+        rec = sum(widths)
+        cols: list = [np.empty(N, dtype=object) if t.startswith("str") else np.empty(N, dtype=_NP[t])
+                      for t in vtypes]
+        step = max(1, CHUNK_BYTES // max(rec, 1))
+        for start in range(0, N, step):
+            stop = min(N, start + step)
+            n = stop - start
+            buf = f.read(n * rec)
+            if len(buf) != n * rec:
+                raise StataError(610, "file not Stata format (data section truncated)")
+            block = np.frombuffer(buf, dtype=np.uint8).reshape(n, rec)
+            pos = 0
+            for j, (vtype, w) in enumerate(zip(vtypes, widths)):
+                part = block[:, pos:pos + w]
+                if vtype.startswith("str"):
+                    fixed = np.ascontiguousarray(part).view(f"S{w}").reshape(n).tolist()
+                    cols[j][start:stop] = [_cstr(x, 117) for x in fixed]
+                else:
+                    cols[j][start:stop] = np.ascontiguousarray(part).view(bo + _NP[vtype]).reshape(n)
+                pos += w
+
+        value_labels: dict[str, dict[int, str]] = {}
+        while True:
+            hdr = f.read(4)
+            if len(hdr) < 4:
+                break
+            n_table = u(hdr)
+            lname = _cstr(f.read(33), 117)
+            f.read(3)
+            table = f.read(n_table)
+            n = u(table[0:4])
+            txtlen = u(table[4:8])
+            offs = np.frombuffer(table[8:8 + 4 * n], dtype=bo + "i4")
+            vals = np.frombuffer(table[8 + 4 * n:8 + 8 * n], dtype=bo + "i4")
+            txt = table[8 + 8 * n:8 + 8 * n + txtlen]
+            value_labels[lname] = {int(v): _cstr(txt[int(o):], 117) for o, v in zip(offs, vals)}
+
+    ds = Dataset()
+    ds.nobs = N
+    for j, (name, vtype) in enumerate(zip(names, vtypes)):
+        if vtype.startswith("str"):
+            var = Variable(name, vtype, cols[j])
+        else:
+            var = Variable(name, vtype, np.empty(0))
+            var.raw = cols[j]
+        var.fmt = fmts[j] or default_format(vtype)
+        var.label = varlabels[j]
+        var.value_label = vlabels[j]
+        ds.vars.append(var)
+    ds.sortlist = [names[k - 1] for k in sort_idx if 0 < k <= K]
+    ds.label = label
+    ds.timestamp = ts
+    ds.value_labels = value_labels
+    ds.chars = chars
+    ds.filename = str(path)
+    ds.fullpath = str(Path(path).resolve())
+    ds.changed = False
+    return ds
+
+
 def write_dta(ds: Dataset, path: str | Path, *, release: int = 118,
               timestamp: str | None = None) -> str:
     """Grava ds em path e devolve o carimbo de data gravado no cabeçalho.
@@ -103,12 +330,10 @@ def write_dta(ds: Dataset, path: str | Path, *, release: int = 118,
     inteiro na memória. A gravação é feita num arquivo temporário na mesma
     pasta, que só substitui o destino no fim: uma falha no meio não destrói
     o arquivo antigo."""
-    if release not in (117, 118, 119):
+    if release not in (114, 115, 117, 118, 119):
         raise StataError(198, f"dta release {release} not supported")
     if release == 118 and ds.nvars > 32767:
         release = 119
-    L = _Layout(release)
-    _ENC["enc"] = "latin-1" if release == 117 else "utf-8"
     K, N = ds.nvars, ds.nobs
     path = Path(path)
     tmp = path.with_name(path.name + ".opendta-tmp")
@@ -116,7 +341,13 @@ def write_dta(ds: Dataset, path: str | Path, *, release: int = 118,
     ts_text = timestamp if timestamp is not None else _timestamp()
 
     try:
-        _write_body(ds, tmp, release, L, K, N, ts_text, offsets)
+        if release in (114, 115):
+            _ENC["enc"] = "latin-1"
+            _write_old_body(ds, tmp, release, ts_text)
+        else:
+            L = _Layout(release)
+            _ENC["enc"] = "latin-1" if release == 117 else "utf-8"
+            _write_body(ds, tmp, release, L, K, N, ts_text, offsets)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -223,32 +454,7 @@ def _write_body(ds: Dataset, tmp: Path, release: int, L: "_Layout", K: int, N: i
         step = max(1, CHUNK_BYTES // max(rec, 1))
         for start in range(0, N, step):
             stop = min(N, start + step)
-            n = stop - start
-            block = np.zeros((n, rec), dtype=np.uint8)
-            pos = 0
-            for j, (v, w) in enumerate(zip(ds.vars, widths)):
-                part = v.raw[start:stop]
-                if v.vtype == "strL":
-                    refs = np.zeros((n, 8), dtype=np.uint8)
-                    for i, text in enumerate(part):
-                        if text == "":
-                            continue                   # (0,0) indica string vazia
-                        vv, oo = j + 1, start + i + 1
-                        if release == 117:
-                            ref = vv.to_bytes(4, "little") + oo.to_bytes(4, "little")
-                        else:
-                            ref = vv.to_bytes(2, "little") + oo.to_bytes(6, "little")
-                        refs[i] = np.frombuffer(ref, dtype=np.uint8)
-                        strls.append((vv, oo, _enc(str(text))))
-                    block[:, pos:pos + 8] = refs
-                elif v.is_string:
-                    # dtype S{w}: completa com zeros, como no formato
-                    enc = np.array([_enc(str(x))[:w] for x in part], dtype=f"S{w}")
-                    block[:, pos:pos + w] = enc.view(np.uint8).reshape(n, w)
-                else:
-                    disk = np.ascontiguousarray(part, dtype="<" + _NP[v.vtype])
-                    block[:, pos:pos + w] = disk.view(np.uint8).reshape(n, w)
-                pos += w
+            block = _fill_block(ds.vars, widths, rec, start, stop, release, strls)
             f.write(block.data)
             del block
         end("data")
@@ -353,8 +559,11 @@ def read_dta(path: str | Path) -> Dataset:
     if not p.exists():
         raise StataError(601, f"file {p} not found")
     with open(p, "rb") as f:
-        if f.read(11) == b"<stata_dta>":
+        head = f.read(11)
+        if head == b"<stata_dta>":
             return _read_117plus(f, p)
+    if len(head) >= 4 and head[0] in (113, 114, 115) and head[1] in (1, 2) and head[2] == 1:
+        return _read_old(p)
     return _read_legacy(p)
 
 

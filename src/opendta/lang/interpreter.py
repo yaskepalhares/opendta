@@ -388,10 +388,17 @@ class Interpreter:
 
         spec = lookup(word)
         if spec is None:
-            raise StataError(199, f"command {word} is unrecognized")
+            err = StataError(199, f"command {word} is unrecognized")
+            err.context = (word, text)
+            raise err
         if self.s.by_groups is not None and not spec.byable and not spec.prefix:
             raise StataError(190, f"{spec.name} may not be combined with by")
-        spec.fn(self.s, rest)
+        try:
+            spec.fn(self.s, rest)
+        except StataError as err:
+            if err.context is None:
+                err.context = (spec.name, text)   # para a explicação do erro
+            raise
 
     def _with_prefixes(self, words: list[str], action, block: bool = False) -> None:
         out = self.s.output
@@ -415,7 +422,7 @@ class Interpreter:
             except StataError as e:
                 if noisy:
                     # capture noisily cmd: só a mensagem; em bloco, também r(#)
-                    out.error(e.message, e.rc, show_rc=block)
+                    self.s.report_error(e, show_rc=block)
                 self.s.set_rc(e.rc)
             finally:
                 if not noisy:

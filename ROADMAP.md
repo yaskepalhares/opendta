@@ -34,10 +34,11 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `insheet`, `outsheet`, `import delimited`, `export delimited`
 - [x] File > Open/Save, arrastar e soltar `.dta`, Data Browser somente leitura
 
-**1c**
-- [ ] Gravação nos formatos 114/115 (`saveold, version(11|12)`)
-- [ ] `import excel`/`export excel`, `infile`, `infix`
-- [ ] Data Editor com edição de células e Variables Manager
+**1c ✅**
+- [x] Formatos 113–115 (Stata 8–12): leitura própria; gravação 114/115 com `saveold, version(11|12)`
+- [x] `import excel`/`export excel` (.xlsx; .xls com o pacote xlrd)
+- [x] `infile` (formato livre e com dicionário), `infix`, `file open/write/read/close`
+- [x] Data Editor com edição de células (gera `replace`/`set obs`/`generate`) e Variables Manager
 
 ## Fase 2: linguagem de programação completa
 
@@ -86,4 +87,13 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 ## Fase 8: restante do Stata 14 e ferramentas da interface
 
 - [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
-- [ ] Do-file Editor com realce de sintaxe e execução de seleção; Variables Manager; diálogos dos menus; Preferences; impressão
+- [ ] Do-file Editor com realce de sintaxe e execução de seleção; diálogos dos menus; impressão
+
+## Fase 9 (última): idioma da interface
+
+- [ ] Seletor de idioma em Preferences: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
+- [ ] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário
+
+## Melhorias em relação ao Stata (ao longo das fases)
+
+- [x] Explicação dos erros: depois da mensagem e antes do r(#), uma linha diz o que deu errado no contexto do comando e outra sugere como resolver (nomes parecidos, arquivos parecidos na pasta, número de observações…). Em inglês; `set hints off` desliga

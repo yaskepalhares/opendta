@@ -159,6 +159,81 @@ def test_open_save_and_browser(app, tmp_path, monkeypatch):
     w.run_command("clear")
     w.open_dataset(str(tmp_path / "d.dta"))
     assert w.session.data.nobs == 2
+    app.processEvents()
     assert m.rowCount() == 2                        # o browser acompanha os dados
     assert float(w.session.data.get("nota").data[0]) == 3
+    w.close()
+
+
+def test_edit_commands_unit(app):
+    import numpy as np
+    from opendta.core.dataset import Dataset, Variable
+    from opendta.gui.data_browser import edit_commands
+    ds = Dataset()
+    ds.nobs = 2
+    ds.vars = [Variable("x", "byte", np.array([1.0, 2.0])), Variable("s", "str5", ["a", "b"])]
+    ds.value_labels = {"sim": {1: "Sim", 2: "Não"}}
+    ds.vars[0].value_label = "sim"
+    assert edit_commands(ds, ds.vars[0], 1, "7") == ["replace x = 7 in 2"]
+    assert edit_commands(ds, ds.vars[0], 0, "Não") == ["replace x = 2 in 1"]
+    assert edit_commands(ds, ds.vars[0], 0, "") == ["replace x = . in 1"]
+    assert edit_commands(ds, ds.vars[1], 2, 'di"z') == ["set obs 3", 'replace s = `"di"z"\' in 3']
+    assert edit_commands(ds, None, 0, "abc") == ['generate var1 = "abc" in 1']
+    with pytest.raises(ValueError):
+        edit_commands(ds, ds.vars[0], 0, "talvez")
+
+
+def test_data_editor_and_variables_manager(app, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+
+    from opendta.gui.main_window import MainWindow
+
+    monkeypatch.chdir(tmp_path)
+    w = MainWindow()
+    w.run_commands('clear\ninput str4 nome nota\n"Ana" 1\n"Bia" 2\nend')
+    w.run_command("edit")
+    b = w.browser
+    m = b.model
+    assert b.windowTitle() == "Data Editor (Edit)"
+    assert (m.rowCount(), m.columnCount()) == (3, 3)          # linha e coluna para novos
+    assert m.setData(m.index(1, 1), "9")
+    app.processEvents()
+    assert float(w.session.data.get("nota").data[1]) == 9
+    assert ". replace nota = 9 in 2" in w.results.toPlainText()
+    assert m.setData(m.index(2, 0), "Caio")                    # nova observação
+    app.processEvents()
+    assert w.session.data.nobs == 3 and w.session.data.get("nome").data[2] == "Caio"
+    assert m.setData(m.index(0, 2), "5")                       # nova variável
+    app.processEvents()
+    assert w.session.data.names == ["nome", "nota", "var1"]
+    review = [w.review.topLevelItem(k).text(0) for k in range(w.review.topLevelItemCount())]
+    assert "set obs 3" in review and "generate var1 = 5 in 1" in review
+    w.run_command("browse")
+    assert b.windowTitle() == "Data Editor (Browse)" and not (m.flags(m.index(0, 0)) & Qt.ItemFlag.ItemIsEditable)
+
+    w.run_command("varmanage")
+    vm = w.varmanager.model
+    assert vm.rowCount() == 3 and vm.data(vm.index(1, 0)) == "nota"
+    assert vm.setData(vm.index(1, 1), "Nota final")
+    assert vm.setData(vm.index(1, 0), "nf")
+    app.processEvents()
+    d = w.session.data
+    assert d.names[1] == "nf" and d.get("nf").label == "Nota final"
+    assert vm.data(vm.index(1, 0)) == "nf"
+    w.close()
+
+
+def test_help_hints_toggle(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    assert w.act_hints.isChecked()
+    w.act_hints.trigger()                        # desliga pelo menu Help
+    assert w.session.settings["hints"] == "off" and not w.prefs.hints
+    assert ". set hints off, permanently" in w.results.toPlainText()
+    w.run_command("set hints on")                # sem permanently: não grava
+    assert w.act_hints.isChecked() and not w.prefs.hints
+    w.act_hints.trigger()
+    w.act_hints.trigger()
+    assert w.prefs.hints
     w.close()
