@@ -1,0 +1,136 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
+  log type:  text
+ opened on:   8 Oct 2026, 15:15:04
+
+. * Fase 1a: input, label, rename, order, format, drop/keep, compress.
+. clear
+
+. input str8 nome idade sexo
+
+          nome      idade       sexo
+  1. "Ana" 30 2
+  2. "Bruno" 25 1
+  3. "Carla" . 2
+  4. "Davi" 41 1
+  5. end
+
+. label define sx 1 "Masculino" 2 "Feminino"
+
+. label values sexo sx
+
+. label list sx
+sx:
+           1 Masculino
+           2 Feminino
+
+. list
+
+     +---------------------------+
+     |  nome   idade        sexo |
+     |---------------------------|
+  1. |   Ana      30    Feminino |
+  2. | Bruno      25   Masculino |
+  3. | Carla       .    Feminino |
+  4. |  Davi      41   Masculino |
+     +---------------------------+
+
+. list, nolabel
+
+     +----------------------+
+     |  nome   idade   sexo |
+     |----------------------|
+  1. |   Ana      30      2 |
+  2. | Bruno      25      1 |
+  3. | Carla       .      2 |
+  4. |  Davi      41      1 |
+     +----------------------+
+
+. capture noisily label define sx 3 "Outro"
+label sx already defined
+
+. label define sx 3 "Outro", add
+
+. label list
+sx:
+           1 Masculino
+           2 Feminino
+           3 Outro
+
+. rename idade age
+
+. order sexo
+
+. format age %5.1f
+
+. describe
+
+Contains data
+  obs:             4                          
+ vars:             3                          
+ size:            64                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sexo            float   %9.0g      sx         
+nome            str8    %9s                   
+age             float   %5.1f                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +--------------------------+
+     |      sexo    nome    age |
+     |--------------------------|
+  1. |  Feminino     Ana   30.0 |
+  2. | Masculino   Bruno   25.0 |
+  3. |  Feminino   Carla      . |
+  4. | Masculino    Davi   41.0 |
+     +--------------------------+
+
+. drop if missing(age)
+(1 observation deleted)
+
+. keep nome age
+
+. compress
+  variable age was float now byte
+  variable nome was str8 now str5
+  (18 bytes saved)
+
+. describe
+
+Contains data
+  obs:             3                          
+ vars:             2                          
+ size:            18                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str5    %9s                   
+age             byte    %5.1f                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily drop naoexiste
+variable naoexiste not found
+
+. capture noisily gen nome = 1
+variable nome already defined
+
+. capture noisily gen n2 = nome + 1
+type mismatch
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
+  log type:  text
+ closed on:   8 Oct 2026, 15:15:04
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,119 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0005_controle.log
+  log type:  text
+ opened on:   8 Oct 2026, 15:15:04
+
+. * Laços, condicionais e o eco de blocos.
+. forvalues i = 1/3 {
+  2.     display "i = `i'"
+  3. }
+i = 1
+i = 2
+i = 3
+
+. forvalues i = 10(-5)0 {
+  2.     display `i'
+  3. }
+10
+5
+0
+
+. forvalues i = 1 3 to 7 {
+  2.     display `i'
+  3. }
+1
+3
+5
+7
+
+. forvalues i = 0(.25)1 {
+  2.     display `i'
+  3. }
+0
+.25
+.5
+.75
+1
+
+. foreach x in a "b c" d {
+  2.     display "[`x']"
+  3. }
+[a]
+[b c]
+[d]
+
+. foreach n of numlist 1/3 10 {
+  2.     display `n'
+  3. }
+1
+2
+3
+10
+
+. local nomes ana beto
+
+. foreach p of local nomes {
+  2.     display "`p'"
+  3. }
+ana
+beto
+
+. local k 0
+
+. while `k' < 3 {
+  2.     local ++k
+  3.     display "k = `k'"
+  4. }
+k = 1
+k = 2
+k = 3
+
+. forvalues i = 1/5 {
+  2.     if `i' == 2 continue
+  3.     if `i' == 4 continue, break
+  4.     display `i'
+  5. }
+1
+3
+
+. local x 5
+
+. if `x' > 3 {
+.     display "maior"
+maior
+. }
+
+. else {
+.     display "menor"
+. }
+
+. if `x' > 10 {
+.     display "A"
+. }
+
+. else if `x' > 4 {
+.     display "B"
+B
+. }
+
+. else {
+.     display "C"
+. }
+
+. if `x' == 5 display "linha única"
+linha única
+
+. quietly {
+aparece
+
+. display "fim"
+fim
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0005_controle.log
+  log type:  text
+ closed on:   8 Oct 2026, 15:15:04
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

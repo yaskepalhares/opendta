@@ -44,6 +44,7 @@ def cmd_display(s: "Session", args: str) -> None:
     # a saída é acumulada e só escrita no fim: se houver erro, nada aparece
     pending: list[tuple[str, str]] = []
     col = out.column
+    last_literal: str | None = None
 
     def put(piece: str, st: str) -> None:
         nonlocal col
@@ -115,6 +116,7 @@ def cmd_display(s: "Session", args: str) -> None:
         lit = _literal(rest)
         if lit is not None:
             text_value, consumed = lit
+            last_literal = text_value
             i += consumed
             emit(format_value(text_value, fmt) if fmt is not None and fmt.kind == "s" else text_value)
             fmt = None
@@ -125,7 +127,14 @@ def cmd_display(s: "Session", args: str) -> None:
         if p.at_end():
             raise StataError(198, "invalid syntax")
         node = p.parse_expr()
-        value = evaluate(node, s.context)
+        try:
+            value = evaluate(node, s.context)
+        except StataError as e:
+            # display "a" + "b": o Stata responde 'a+"b" invalid name'
+            # (VERIFICAR a regra geral desta mensagem)
+            if e.rc == 198 and last_literal is not None and rest.lstrip().startswith("+"):
+                raise StataError(198, f'{last_literal}{"".join(rest.split())} invalid name')
+            raise
         consumed = p.offset
         if consumed == 0:
             raise StataError(198, "invalid syntax")

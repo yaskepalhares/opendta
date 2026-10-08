@@ -76,6 +76,10 @@ def test_functions(run):
     assert run.eval("year(mdy(10, 8, 2026))") == 2026
     assert run.eval('date("08oct2026", "DMY")') == run.eval("mdy(10, 8, 2026)")
     assert run.eval('regexm("abc123", "[0-9]+")') == 1
+    # comportamentos observados no Stata (compat/expected/0003)
+    assert run.eval('proper("joão da silva")') == "JoãO Da Silva"
+    assert run.eval('abbrev("variavel_muito_longa", 10)') == "variavel~a"
+    assert run.eval("round(-2.5)") == -2 and run.eval("round(-1.5)") == -1
 
 
 def test_unknown_function(run):
