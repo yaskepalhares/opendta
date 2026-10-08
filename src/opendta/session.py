@@ -110,7 +110,10 @@ class EvalContext:
             return s.creturn(raw)
         store = {"r": s.r, "e": s.e, "s": s.sret}[kind]
         if raw in store:
-            return store[raw]
+            v = store[raw]
+            if hasattr(v, "rows") and hasattr(v, "data"):
+                raise StataError(109, "type mismatch")   # matriz numa expressão escalar
+            return v
         return M.SYSMISS
 
     def call_function(self, name: str, args: list[Value]) -> Value:
