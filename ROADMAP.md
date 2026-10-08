@@ -17,7 +17,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Console, modo batch e ferramenta de comparação com logs do Stata
 - [x] Testes automáticos e integração contínua
 
-## Fase 1: dados em memória (em andamento)
+## Fase 1: dados em memória e arquivos (em andamento)
 
 **1a ✅**
 - [x] Conjunto de dados com tipos `byte`, `int`, `long`, `float`, `double`, `str#` e `strL`, com a precisão de `float` reproduzida
@@ -27,11 +27,17 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `clear`, `set obs`, `describe`, `list`, `generate`, `replace`, `drop`, `keep`, `rename`, `order`, `sort`, `gsort`, `label` (variable/define/values/list/dir/drop/data), `format`, `count`, `compress`, `input`
 - [x] Janelas Variables e Properties ligadas aos dados
 
-**1b**
-- [ ] Leitura e gravação de `.dta`: formatos 114/115 (Stata 10–12), 117 (13) e 118 (14), com rótulos de valor, notas e características
-- [ ] `use`, `save`, `recast`, `notes`, `browse`/`edit`
-- [ ] `insheet`, `import delimited`, `import excel`, `export delimited`, `infile`
-- [ ] Data Editor e Data Browser
+**1b ✅**
+- [x] Leitura e gravação próprias de `.dta` nos formatos 117 (13), 118 (14) e 119, com rótulos de valor, notas e características; verificação cruzada com a ReadStat nos testes
+- [x] Leitura de `.dta` antigos (até 115, Stata 12 e anteriores) pela ReadStat (`pip install pyreadstat`)
+- [x] `use`, `save`, `saveold`, `recast`, `notes`, `char`, `type`, `erase`, `browse`/`edit`
+- [x] `insheet`, `outsheet`, `import delimited`, `export delimited`
+- [x] File > Open/Save, arrastar e soltar `.dta`, Data Browser somente leitura
+
+**1c**
+- [ ] Gravação nos formatos 114/115 (`saveold, version(11|12)`)
+- [ ] `import excel`/`export excel`, `infile`, `infix`
+- [ ] Data Editor com edição de células e Variables Manager
 
 ## Fase 2: linguagem de programação completa
 

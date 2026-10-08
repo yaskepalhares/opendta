@@ -6,7 +6,7 @@ O objetivo é que um do-file escrito para o Stata 14 rode no OpenDTA sem altera�
 
 > Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
 
-## Estado atual: fase 1a (dados em memória)
+## Estado atual: fase 1b (arquivos de dados)
 
 Já funciona:
 
@@ -22,9 +22,13 @@ Já funciona:
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
-- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format` e `compress`.
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
+- arquivos `.dta`: leitura e gravação próprias dos formatos 117 (Stata 13), 118 (Stata 14) e 119, com rótulos, notas e características; formatos antigos (até 115) são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
+- `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
+- texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
+- File > Open/Save/Save as, arrastar um `.dta` para a janela e o Data Browser (`browse`), por enquanto só para leitura.
 
-Ainda não há leitura e gravação de `.dta` (`use`, `save`), que chegam na fase 1b, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
+Ainda não há `import excel`, `infile` nem edição de células no Data Editor, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
 
 ## Instalação
 
