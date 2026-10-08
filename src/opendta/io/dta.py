@@ -503,23 +503,24 @@ def _read_legacy(path: Path) -> Dataset:
     except ImportError:
         raise StataError(610, "file format not supported: install pyreadstat to read older .dta files")
     try:
-        df, meta = pyreadstat.read_dta(str(path), user_missing=True)
+        # saída em dicionário de listas: dispensa o pandas
+        cols, meta = pyreadstat.read_dta(str(path), user_missing=True, output_format="dict")
     except Exception as e:  # noqa: BLE001
         raise StataError(610, f"file not Stata format ({e})")
     rs_types = {"int8": "byte", "int16": "int", "int32": "long", "float": "float", "double": "double"}
     ds = Dataset()
-    ds.nobs = len(df)
-    for name in df.columns:
+    ds.nobs = len(next(iter(cols.values()), []))
+    for name, column in cols.items():
         rt = meta.readstat_variable_types.get(name, "double")
         fmt = meta.original_variable_types.get(name, "")
         if rt == "string":
             width = meta.variable_storage_width.get(name, 1) or 1
             vtype = f"str{width}"
-            arr = np.array(["" if (x is None or x != x) else _fix_text(str(x)) for x in df[name]], dtype=object)
+            arr = np.array(["" if (x is None or x != x) else _fix_text(str(x)) for x in column], dtype=object)
         else:
             vtype = rs_types.get(rt, "double")
             vals = []
-            for x in df[name]:
+            for x in column:
                 if isinstance(x, str) and len(x) == 1 and x.isalpha():
                     vals.append(M.EXTENDED[x.lower()])
                 elif x is None or x != x:

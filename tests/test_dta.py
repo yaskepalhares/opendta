@@ -101,8 +101,8 @@ def test_readstat_reads_ours(run, tmp_path, release):
     ds = build(run, release)
     p = tmp_path / f"r{release}.dta"
     write_dta(ds, p, release=release)
-    df, meta = pyreadstat.read_dta(str(p), user_missing=True)
-    assert list(df.columns) == ds.names
+    df, meta = pyreadstat.read_dta(str(p), user_missing=True, output_format="dict")
+    assert list(df) == ds.names
     assert meta.file_label == "Teste dta"
     assert meta.column_names_to_labels["s"] == "Nome"
     assert meta.variable_value_labels["b"] == {1.0: "Sim", 2.0: "Não"}
@@ -110,18 +110,18 @@ def test_readstat_reads_ours(run, tmp_path, release):
         "b": "int8", "i": "int16", "l": "int32", "f": "float", "d": "double",
         "s": "string", "longo": "string"}
     assert meta.original_variable_types["d"] == "%12.4f"
-    assert df["l"].tolist() == [-70000, 1, 70000]
-    assert df["i"].tolist() == [-5, 7, 300]
-    assert df["f"].iloc[2] == 1.5
-    assert df["b"].iloc[0] == "a"            # .a vira "a" com user_missing
-    assert df["d"].iloc[1] == "z"
-    assert df["longo"].iloc[2] == "x" * 3000
+    assert list(df["l"]) == [-70000, 1, 70000]
+    assert list(df["i"]) == [-5, 7, 300]
+    assert df["f"][2] == 1.5
+    assert df["b"][0] == "a"                 # .a vira "a" com user_missing
+    assert df["d"][1] == "z"
+    assert df["longo"][2] == "x" * 3000
 
 
 @pytest.mark.parametrize("version", [8, 10, 11, 12, 13, 14, 15])
 def test_we_read_readstat(tmp_path, version):
     pyreadstat = pytest.importorskip("pyreadstat")
-    import pandas as pd
+    pd = pytest.importorskip("pandas")      # a gravação pela ReadStat pede um DataFrame
     df = pd.DataFrame({"n": [1.5, None, 3.0], "k": [1, 2, 3], "t": ["a", "b", "ç"]})
     p = tmp_path / f"v{version}.dta"
     pyreadstat.write_dta(df, str(p), version=version, file_label="rs",
