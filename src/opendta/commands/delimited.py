@@ -178,6 +178,10 @@ def cmd_import(s: "Session", args: str) -> None:
     if len(sub) >= 5 and "delimited".startswith(sub):
         import_delimited(s, rest)
         return
+    if len(sub) >= 3 and "excel".startswith(sub):
+        from .excel import import_excel
+        import_excel(s, rest)
+        return
     raise StataError(199, f"import {sub} not yet available in OpenDTA")
 
 
@@ -186,6 +190,10 @@ def cmd_export(s: "Session", args: str) -> None:
     sub, _, rest = args.strip().partition(" ")
     if len(sub) >= 5 and "delimited".startswith(sub):
         export_delimited(s, rest)
+        return
+    if len(sub) >= 3 and "excel".startswith(sub):
+        from .excel import export_excel
+        export_excel(s, rest)
         return
     raise StataError(199, f"export {sub} not yet available in OpenDTA")
 

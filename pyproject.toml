@@ -13,11 +13,14 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "PySide6>=6.6",
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
 # leitura de .dta antigos (formatos 114/115 e anteriores) pela ReadStat
 legacy = ["pyreadstat>=1.3"]
+# planilhas .xls antigas (import excel); .xlsx usa o openpyxl, já incluído
+xls = ["xlrd>=2.0"]
 # pyreadstat também serve de verificador independente nos testes de .dta;
 # o pandas só é usado nos testes, para gravar arquivos pela ReadStat
 dev = ["pytest>=8", "pyreadstat>=1.3", "pandas>=2"]
