@@ -26,13 +26,14 @@ from PySide6.QtGui import (QAction, QColor, QFont, QFontDatabase, QKeySequence,
                            QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QHeaderView, QLabel,
                                QLineEdit, QMainWindow, QMenu, QMessageBox,
-                               QPlainTextEdit, QSplitter, QStyle, QToolBar,
+                               QPlainTextEdit, QSplitter, QToolBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
 from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
+from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .theme import MONOSPACE_FAMILIES, MONOSPACE_SIZE, STANDARD, ResultsScheme
 
 
@@ -151,6 +152,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session = session or Session()
         self.resize(1280, 800)
+        self.setWindowIcon(app_icon())
         self._build_central()
         self._build_docks()
         self._build_menus()
@@ -330,29 +332,30 @@ class MainWindow(QMainWindow):
         tb = QToolBar("Toolbar")
         tb.setObjectName("Toolbar")
         tb.setMovable(False)
-        st = self.style()
-        P = QStyle.StandardPixmap
-        items = [
-            ("Open", P.SP_DialogOpenButton, None, 1),
-            ("Save", P.SP_DialogSaveButton, None, 1),
-            ("Print", P.SP_FileIcon, None, 8),
-            ("Log", P.SP_FileDialogDetailedView, None, 2),
-            ("Viewer", P.SP_FileDialogInfoView, None, 2),
-            ("Graph", P.SP_DesktopIcon, None, 7),
-            ("Do-file Editor", P.SP_FileDialogContentsView, None, 8),
-            ("Data Editor (Edit)", P.SP_FileDialogListView, None, 1),
-            ("Data Browser (Browse)", P.SP_FileDialogStart, None, 1),
-            ("Variables Manager", P.SP_DirIcon, None, 1),
-            ("Clear --more-- condition", P.SP_ArrowDown, None, 8),
-            ("Break", P.SP_BrowserStop, None, 8),
+        tb.setIconSize(TOOLBAR_SIZE)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        # mesma disposição da barra do Stata 14; desenho próprio (gui/icons/)
+        groups = [
+            [("open", "Open", None, 1), ("save", "Save", None, 1), ("print", "Print", None, 8)],
+            [("log", "Log", None, 2), ("viewer", "Viewer", None, 2), ("graph", "Graph", None, 7),
+             ("dofile", "Do-file Editor", None, 8)],
+            [("dataeditor", "Data Editor (Edit)", None, 1), ("databrowser", "Data Browser (Browse)", None, 1),
+             ("variables", "Variables Manager", None, 1)],
+            [("more", "Clear --more-- condition", None, 8), ("break", "Break", None, 8)],
         ]
-        for text, pix, slot, phase in items:
-            act = QAction(st.standardIcon(pix), text, self)
-            act.setToolTip(text + (f" — {_PENDING[phase]}" if phase else ""))
-            act.setEnabled(slot is not None)
-            if slot is not None:
-                act.triggered.connect(slot)
-            tb.addAction(act)
+        self.toolbar_actions: dict[str, QAction] = {}
+        for gi, group in enumerate(groups):
+            if gi:
+                tb.addSeparator()
+            for name, text, slot, phase in group:
+                accent = ACCENT_RED if name == "break" else None
+                act = QAction(icon(name, accent), text, self)
+                act.setToolTip(text + (f" — {_PENDING[phase]}" if phase else ""))
+                act.setEnabled(slot is not None)
+                if slot is not None:
+                    act.triggered.connect(slot)
+                tb.addAction(act)
+                self.toolbar_actions[name] = act
         self.addToolBar(tb)
 
     def _build_statusbar(self) -> None:
@@ -366,9 +369,14 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self) -> None:
         self.setStyleSheet("""
-            QLabel#PaneTitle { background: #e8e8e8; border-bottom: 1px solid #c8c8c8;
-                               padding: 3px 0; font-weight: bold; }
-            QLineEdit#Command { border: none; padding: 4px; background: #ffffff; }
+            QLabel#PaneTitle { background: palette(window); border-bottom: 1px solid palette(mid);
+                               padding: 4px 0; font-weight: 600; }
+            QLineEdit#Command { border: none; padding: 5px; background: palette(base); }
+            QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
+            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 4px; }
+            QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
+            QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
+            QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
         """)
 
     # -- ações ---------------------------------------------------------------
