@@ -18,6 +18,7 @@ from . import __version__
 from .core import missing as M
 from .core.errors import ExitRequest, StataError
 from .core.formats import number_to_macro
+from .core.dataset import Dataset
 from .core.output import Output
 from .lang import functions as F
 from .lang.expr import parse, evaluate
@@ -56,9 +57,24 @@ class EvalContext:
     def __init__(self, session: "Session"):
         self.s = session
 
+    def _variable(self, name: str):
+        ds = self.s.data
+        if ds.has(name):
+            return ds.get(name)
+        if self.s.settings.get("varabbrev", "on") == "on" and name not in self.s.scalars:
+            matches = [n for n in ds.names if n.startswith(name)]
+            if len(matches) == 1:
+                return ds.get(matches[0])
+            if len(matches) > 1:
+                raise StataError(111, f"{name} ambiguous abbreviation")
+        return None
+
     def resolve_name(self, name: str) -> Value:
+        """Fora do contexto de observações (display, scalar, if de programação),
+        uma variável vale o seu valor na 1ª observação, como x[1]."""
         s = self.s
-        # fase 1: variáveis têm precedência sobre scalars
+        if s.data.has(name):
+            return self.resolve_subscript(name, 1.0)
         if name in s.scalars:
             return s.scalars[name]
         if name == "_pi":
@@ -66,15 +82,26 @@ class EvalContext:
         if name == "_rc":
             return float(s.rc)
         if name == "_N":
-            return float(s.nobs)
+            return float(s.data.nobs)
         if name == "_n":
             return 1.0
+        if self._variable(name) is not None:
+            return self.resolve_subscript(name, 1.0)
         raise StataError(111, f"{name} not found")
 
     def resolve_subscript(self, name: str, index: Any) -> Value:
         if name in ("_b", "_se", "_coef"):
             raise StataError(111, f"[{index}] not found")
-        raise StataError(111, f"{name} not found")
+        var = self._variable(name)
+        if var is None:
+            raise StataError(111, f"{name} not found")
+        if isinstance(index, str):
+            raise StataError(109, "type mismatch")
+        k = int(index) if not M.is_missing(index) else 0
+        if 1 <= k <= len(var.data):
+            v = var.data[k - 1]
+            return v if var.is_string else float(v)
+        return "" if var.is_string else M.SYSMISS
 
     def resolve_result(self, kind: str, raw: str) -> Value:
         s = self.s
@@ -103,7 +130,8 @@ class Session:
         self.rc = 0
         self.settings: dict[str, str] = dict(DEFAULT_SETTINGS)
         self.version = 14.0
-        self.nobs = 0          # fase 1: dados em memória
+        self.data = Dataset()
+        self.by_groups = None   # Groups ativo durante um prefixo by
         self.context = EvalContext(self)
         self._state_listeners: list[Callable[[], None]] = []
         self.do_depth = 0
@@ -142,7 +170,12 @@ class Session:
         return evaluate(parse(text), self.context)
 
     def expand_varlist(self, text: str) -> list[str]:
-        raise StataError(111, "variable not found (dados chegam na fase 1)")
+        from .core.varlist import expand as _expand
+        return _expand(self.data, text, abbrev=self.settings.get("varabbrev", "on") == "on")
+
+    @property
+    def nobs(self) -> int:
+        return self.data.nobs
 
     def creturn(self, name: str) -> Value:
         now = _dt.datetime.now()
@@ -160,10 +193,12 @@ class Session:
             "mindouble": M.MINDOUBLE,
             "epsdouble": M.EPSDOUBLE,
             "smallestdouble": 2.0 ** -1022,
-            "N": float(self.nobs),
-            "k": 0.0,
+            "N": float(self.data.nobs),
+            "k": float(self.data.nvars),
+            "width": float(self.data.width()),
+            "changed": float(self.data.changed),
             "rc": float(self.rc),
-            "filename": "",
+            "filename": self.data.filename,
             "level": float(self.settings["level"]),
             "more": self.settings["more"],
             "linesize": float(self.settings["linesize"]),
@@ -177,6 +212,28 @@ class Session:
         if name not in values:
             return M.SYSMISS
         return values[name]
+
+    # -- by -----------------------------------------------------------------
+    def run_by(self, bp, command_text: str) -> None:
+        """Executa `command_text` com o prefixo by/bysort."""
+        from .core import sorting
+        from .lang.vexpr import Groups
+
+        ds = self.data
+        keys = self.expand_varlist(" ".join(bp.keys))
+        extra = self.expand_varlist(" ".join(bp.sort_extra)) if bp.sort_extra else []
+        if bp.sort:
+            sorting.sort(ds, keys + extra)
+        elif not sorting.is_sorted(ds, keys + extra):
+            raise StataError(5, "not sorted")
+        groups = Groups.from_columns([ds.get(k).data for k in keys])
+        saved = self.by_groups, getattr(self, "_by_keys", [])
+        self.by_groups, self._by_keys = groups, keys
+        try:
+            self.interp._execute_expanded(command_text)
+        finally:
+            self.by_groups, self._by_keys = saved
+        self.notify_state()
 
     # -- execução -------------------------------------------------------------
     def run(self, source: str, *, echo: bool = False) -> int:

@@ -24,7 +24,10 @@ def cmd_set(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     name, value = words[0], " ".join(words[1:])
     if name == "obs":
-        raise StataError(198, "set obs chega na fase 1 (dados em memória)")
+        from .data import set_obs
+        set_obs(s, value)
+        s.notify_state()
+        return
     if name in ("more", "rmsg", "varabbrev", "trace") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
     s.settings[name] = value.split(",")[0].strip()
@@ -62,7 +65,8 @@ def cmd_clear(s: "Session", args: str) -> None:
             s.sret.clear()
         if t in ("all", "*"):
             s.scalars.clear()
-        s.nobs = 0
+        if t in ("", "all", "*"):
+            s.data.clear()
         s.notify_state()
         return
     raise StataError(198, "invalid syntax")

@@ -21,19 +21,20 @@ class CommandSpec:
     min_abbrev: int
     fn: CommandFn
     prefix: bool = False  # quietly, noisily, capture, version: recebem um comando
+    byable: bool = False  # aceita o prefixo by
 
 
 REGISTRY: dict[str, CommandSpec] = {}
 
 
-def command(name: str, abbrev: str | None = None, *, prefix: bool = False):
+def command(name: str, abbrev: str | None = None, *, prefix: bool = False, byable: bool = False):
     """Registra um comando. `abbrev` é a forma mínima aceita (padrão: nome completo)."""
     minimal = abbrev or name
     if not name.startswith(minimal):
         raise ValueError(f"abreviação {minimal!r} não é prefixo de {name!r}")
 
     def deco(fn: CommandFn) -> CommandFn:
-        REGISTRY[name] = CommandSpec(name, len(minimal), fn, prefix)
+        REGISTRY[name] = CommandSpec(name, len(minimal), fn, prefix, byable)
         return fn
     return deco
 

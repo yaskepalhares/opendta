@@ -17,16 +17,21 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Console, modo batch e ferramenta de comparação com logs do Stata
 - [x] Testes automáticos e integração contínua
 
-## Fase 1: dados em memória
+## Fase 1: dados em memória (em andamento)
 
-- [ ] Conjunto de dados com tipos `byte`, `int`, `long`, `float`, `double`, `str#` e `strL`, com a precisão de `float` reproduzida
+**1a ✅**
+- [x] Conjunto de dados com tipos `byte`, `int`, `long`, `float`, `double`, `str#` e `strL`, com a precisão de `float` reproduzida
+- [x] varlists: abreviações, curingas (`*`, `?`, `~`), intervalos (`a-c`), `_all`
+- [x] Qualificadores `if` e `in` e o prefixo `by`/`bysort` (pesos são reconhecidos na sintaxe; o uso chega com os comandos estatísticos)
+- [x] `_n`, `_N`, `x[_n-1]`, `sum()` e expressões vetorizadas; `replace` sequencial com subscritos
+- [x] `clear`, `set obs`, `describe`, `list`, `generate`, `replace`, `drop`, `keep`, `rename`, `order`, `sort`, `gsort`, `label` (variable/define/values/list/dir/drop/data), `format`, `count`, `compress`, `input`
+- [x] Janelas Variables e Properties ligadas aos dados
+
+**1b**
 - [ ] Leitura e gravação de `.dta`: formatos 114/115 (Stata 10–12), 117 (13) e 118 (14), com rótulos de valor, notas e características
-- [ ] varlists: abreviações, curingas (`*`, `?`, `~`), intervalos (`a-c`), `_all`
-- [ ] Qualificadores `if` e `in`, pesos (`fweight`, `aweight`, `pweight`, `iweight`) e o prefixo `by`/`bysort`
-- [ ] `_n`, `_N`, `x[_n-1]` e expressões vetorizadas
-- [ ] `use`, `save`, `clear`, `set obs`, `describe`, `list`, `generate`, `replace`, `drop`, `keep`, `rename`, `order`, `sort`, `gsort`, `label` (variable/define/values/list), `format`, `count`, `compress`, `recast`, `notes`, `browse`/`edit`
-- [ ] `insheet`, `import delimited`, `import excel`, `export delimited`, `infile`, `input`
-- [ ] Janelas Variables e Properties ligadas aos dados; Data Editor e Data Browser
+- [ ] `use`, `save`, `recast`, `notes`, `browse`/`edit`
+- [ ] `insheet`, `import delimited`, `import excel`, `export delimited`, `infile`
+- [ ] Data Editor e Data Browser
 
 ## Fase 2: linguagem de programação completa
 

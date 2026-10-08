@@ -79,6 +79,8 @@ class Interpreter:
         if echo:
             self.s.output.echo_command(raw)
 
+        if word == "input" or (word == "inp"):
+            return self._run_input(lines, i, end, echo=echo)
         if raw.startswith("#delimit"):
             # VERIFICAR: mensagem exibida pelo Stata após #delimit
             self.s.output.write(f"delimiter now {raw.split()[-1]}\n", "text")
@@ -90,6 +92,29 @@ class Interpreter:
 
         self.execute(raw)
         return i + 1
+
+    def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: bool) -> int:
+        """input var1 var2 ... seguido de linhas de dados até `end`."""
+        from ..commands.data import run_input
+
+        raw = self.s.expand(lines[i].text.strip())
+        spec = split_command(raw)[1]
+        j = i + 1
+        rows: list[str] = []
+        while j < end and lines[j].text.strip() != "end":
+            rows.append(self.s.expand(lines[j].text.strip()))
+            j += 1
+        if j >= end:
+            raise StataError(198, "input: end not found")
+        out = self.s.output
+        if echo:
+            # VERIFICAR: cabeçalho exibido pelo input
+            names = spec.split()
+            out.write("\n" + "".join(f"{n:>11}" for n in names if not n.startswith(("byte", "int", "long", "float", "double", "str"))) + "\n", "text")
+            for k, r in enumerate(rows + ["end"], start=1):
+                out.write(f"{k:>3}. {r}\n", "command")
+        run_input(self.s, spec, rows)
+        return j + 1
 
     def _echo_block(self, lines: list[LogicalLine], i: int, j: int) -> None:
         out = self.s.output
@@ -304,6 +329,17 @@ class Interpreter:
         if not word:
             raise StataError(198, "invalid syntax")
 
+        if word == "by" or _is_abbrev(word, "bysort", 3):
+            from .syntax import find_top, parse_by
+            colon = find_top(rest, ":")
+            if colon == -1:
+                raise StataError(198, "invalid syntax")
+            bp = parse_by(rest[:colon])
+            if word != "by":
+                bp.sort = True
+            self.s.run_by(bp, rest[colon + 1:].strip())
+            return
+
         prefix = _is_prefix_word(word)
         if prefix is not None:
             words = [prefix]
@@ -324,6 +360,8 @@ class Interpreter:
         spec = lookup(word)
         if spec is None:
             raise StataError(199, f"command {word} is unrecognized")
+        if self.s.by_groups is not None and not spec.byable and not spec.prefix:
+            raise StataError(190, f"{spec.name} may not be combined with by")
         spec.fn(self.s, rest)
 
     def _with_prefixes(self, words: list[str], action) -> None:

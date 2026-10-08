@@ -39,6 +39,14 @@ from .settings import Preferences
 from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme
 
 
+def _human_size(nbytes: int) -> str:
+    for unit in ("bytes", "K", "M", "G"):
+        if nbytes < 1024 or unit == "G":
+            return f"{nbytes:,} {unit}" if unit == "bytes" else f"{nbytes:,.2f}{unit}"
+        nbytes /= 1024
+    return str(nbytes)
+
+
 def monospace_font(prefs: Preferences | None = None) -> QFont:
     """Fonte das janelas de texto: a escolhida nas preferências, ou o padrão do
     sistema (Menlo no macOS, Courier New no Windows, DejaVu Sans Mono no Linux)."""
@@ -229,6 +237,11 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         self.var_filter = QLineEdit()
         self.var_filter.setPlaceholderText("Filter variables here")
+        self.var_filter.textChanged.connect(self._filter_variables)
+        self.variables.itemSelectionChanged.connect(self._show_variable_properties)
+        # duplo clique envia o nome para a janela Command, como no Stata
+        self.variables.itemDoubleClicked.connect(
+            lambda it, _c: (self.command.insert(it.text(0) + " "), self.command.setFocus()))
         lay.addWidget(self.var_filter)
         lay.addWidget(self.variables)
         self.dock_variables = self._dock("Variables", var_box, Qt.DockWidgetArea.RightDockWidgetArea)
@@ -442,14 +455,57 @@ class MainWindow(QMainWindow):
     def refresh_state(self) -> None:
         cwd = os.getcwd()
         self.cwd_label.setText(cwd)
-        self.setWindowTitle(f"OpenDTA {__version__} — {Path(cwd).name or cwd}")
+        ds = self.session.data
+        title = Path(ds.filename).name if ds.filename else (Path(cwd).name or cwd)
+        self.setWindowTitle(f"OpenDTA {__version__} — {title}")
+
+        # Variables
+        selected = self._selected_variable()
+        self.variables.clear()
+        for v in ds.vars:
+            item = QTreeWidgetItem([v.name, v.label])
+            self.variables.addTopLevelItem(item)
+            if v.name == selected:
+                item.setSelected(True)
+        self._filter_variables(self.var_filter.text())
+
+        # Properties > Data
+        size = ds.width() * ds.nobs
         data_props = {
-            "Filename": "", "Variables": str(0), "Observations": str(self.session.nobs),
+            "Filename": Path(ds.filename).name if ds.filename else "",
+            "Label": ds.label,
+            "Notes": "",
+            "Variables": f"{ds.nvars:,}",
+            "Observations": f"{ds.nobs:,}",
+            "Size": _human_size(size),
+            "Memory": _human_size(size),
+            "Sorted by": " ".join(ds.sortlist),
         }
         for k in range(self._prop_data.childCount()):
             child = self._prop_data.child(k)
-            if child.text(0) in data_props:
-                child.setText(1, data_props[child.text(0)])
+            child.setText(1, data_props.get(child.text(0), ""))
+        self._show_variable_properties()
+
+    def _selected_variable(self) -> str:
+        items = self.variables.selectedItems()
+        return items[0].text(0) if items else ""
+
+    def _filter_variables(self, text: str) -> None:
+        for k in range(self.variables.topLevelItemCount()):
+            it = self.variables.topLevelItem(k)
+            it.setHidden(bool(text) and text.lower() not in (it.text(0) + " " + it.text(1)).lower())
+
+    def _show_variable_properties(self) -> None:
+        name = self._selected_variable()
+        ds = self.session.data
+        props = {}
+        if name and ds.has(name):
+            v = ds.get(name)
+            props = {"Name": v.name, "Label": v.label, "Type": v.vtype, "Format": v.fmt,
+                     "Value label": v.value_label, "Notes": ""}
+        for k in range(self._prop_vars.childCount()):
+            child = self._prop_vars.child(k)
+            child.setText(1, props.get(child.text(0), ""))
 
     # -- arrastar e soltar do-files -------------------------------------------
     def dragEnterEvent(self, event) -> None:  # noqa: N802

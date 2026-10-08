@@ -72,8 +72,8 @@ def test_errors(run):
 def test_abbreviations(run):
     assert run("di 1") == "1\n"
     assert run("disp 1") == "1\n"
-    run("d 1")
-    assert run.rc == 199  # 'd' é describe, que chega na fase 1
+    out = run("d")
+    assert run.rc == 0 and "Contains data" in out   # 'd' é describe
 
 
 def test_scalar(run):

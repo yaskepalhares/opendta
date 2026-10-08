@@ -52,3 +52,23 @@ def test_preferences_icon_and_font(app, tmp_path):
     assert not w.windowIcon().isNull()
     assert w.results.font().pointSize() == 14
     w.close()
+
+
+def test_variables_panel_follows_data(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.run_command("set obs 3")
+    w.run_command("gen idade = 20 + _n")
+    w.run_command('label variable idade "Idade em anos"')
+    assert w.variables.topLevelItemCount() == 1
+    item = w.variables.topLevelItem(0)
+    assert (item.text(0), item.text(1)) == ("idade", "Idade em anos")
+    item.setSelected(True)
+    props = {w._prop_vars.child(k).text(0): w._prop_vars.child(k).text(1)
+             for k in range(w._prop_vars.childCount())}
+    assert props["Type"] == "float" and props["Format"] == "%9.0g"
+    data = {w._prop_data.child(k).text(0): w._prop_data.child(k).text(1)
+            for k in range(w._prop_data.childCount())}
+    assert data["Observations"] == "3" and data["Variables"] == "1"
+    w.close()
