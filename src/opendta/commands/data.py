@@ -49,7 +49,7 @@ def set_obs(s: "Session", value: str) -> None:
     if n < old:
         raise StataError(198, f"obs must be at least {old}" if old else "invalid syntax")
     s.data.set_obs(n)
-    _note(s, f"obs was {old}, now {n}")
+    _note(s, f"number of observations (_N) was {old}, now {n}")
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +104,11 @@ def cmd_generate(s: "Session", args: str) -> None:
             vtype = s.settings.get("type", "float")
         col = broadcast(value, n).astype(np.float64).copy()
         col[~mask] = M.SYSMISS
-        col, _ = fit_numeric(col, vtype)
+        # conta só os missing da expressão e das obs excluídas por if/in; valores
+        # fora da faixa do tipo também viram missing, mas não entram na conta
+        # (gen byte b = 200 in 1/3 informa 3, observado no Stata)
         nmiss = int(np.sum(col >= M.SYSMISS))
+        col, _ = fit_numeric(col, vtype)
 
     var = Variable(target, vtype, col, value_label=vlabel)
     position = None
@@ -371,6 +374,8 @@ _BYTES = {"byte": 1, "int": 2, "long": 4, "float": 4, "double": 8}
 def cmd_compress(s: "Session", args: str) -> None:
     ds = s.data
     names = expand(ds, args) if args.strip() else ds.names
+    # numéricas primeiro, depois strings (ordem observada no Stata)
+    names = [n for n in names if not ds.get(n).is_string] + [n for n in names if ds.get(n).is_string]
     saved = 0
     for n in names:
         var = ds.get(n)

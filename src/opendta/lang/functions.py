@@ -118,15 +118,14 @@ register("digamma", 1)(_num(lambda x: float(special.digamma(x))))
 
 @register("round", 1, 2)
 def _round(x: Value, y: Value = 1.0) -> float:
-    """VERIFICAR: arredondamento de meio (.5) — aqui, para longe do zero."""
+    """round(x, y) = y * floor(x/y + .5): meio arredondado para cima
+    (round(-2.5) = -2), confirmado nos logs do Stata."""
     x, y = _n(x), _n(y)
     if _miss(x, y):
         return M.SYSMISS
     if y == 0:
         return x
-    q = x / y
-    r = math.floor(abs(q) + 0.5) * (1 if q >= 0 else -1)
-    return M.normalize(r * y)
+    return M.normalize(math.floor(x / y + 0.5) * y)
 
 
 @register("mod", 2)
@@ -304,7 +303,7 @@ def _real(s: Value) -> float:
 def _string(x: Value, fmt: Value = "%9.0g") -> str:
     """VERIFICAR: string(n) sem formato usa %9.0g."""
     x = _n(x)
-    return format_value(x, parse_format(_s(fmt)), pad=False).strip()
+    return format_value(x, parse_format(_s(fmt)), pad=False, dp=False).strip()
 
 
 alias("strofreal", "string")

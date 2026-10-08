@@ -2,7 +2,7 @@ from opendta.lang.lexer import split_commands
 
 
 def texts(src):
-    return [ln.text for ln in split_commands(src)]
+    return [ln.text for ln in split_commands(src) if ln.kind != "comment"]
 
 
 def test_line_comments():
@@ -28,4 +28,11 @@ def test_delimit():
 
 def test_line_numbers():
     lines = split_commands("\n\ndisplay 1\n* c\ndisplay 2\n")
-    assert [ln.lineno for ln in lines] == [3, 5]
+    assert [(ln.lineno, ln.kind) for ln in lines] == [(3, "cmd"), (4, "comment"), (5, "cmd")]
+
+
+def test_raw_lines_for_echo():
+    src = '#delimit ;\ndisplay "a"\n    "b";\n#delimit cr\n    di 1 // x\n'
+    lines = split_commands(src)
+    assert lines[1].raw == ('display "a"', '    "b";')
+    assert lines[3].raw == ("    di 1 // x",)

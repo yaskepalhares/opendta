@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 COMPAT = ROOT / "compat"
 _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
-_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize)\b")
+_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set dp)\b")
 
 
 def normalize(text: str) -> list[str]:
@@ -42,14 +42,19 @@ def normalize(text: str) -> list[str]:
     return out
 
 
-def run_opendta(dofile: Path, outdir: Path) -> Path:
+def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     from opendta.cli import run_batch
 
     outdir.mkdir(parents=True, exist_ok=True)
+    target = dofile
+    if setup:
+        # roda `setup` (ex.: set dp comma) antes, sem aparecer no log comparado
+        target = outdir / dofile.name
+        target.write_text(f"quietly {setup}\n" + dofile.read_text(encoding="utf-8"), encoding="utf-8")
     cwd = os.getcwd()
     os.chdir(outdir)
     try:
-        run_batch(str(dofile), [])
+        run_batch(str(target), [])
     finally:
         os.chdir(cwd)
     return outdir / (dofile.stem + ".log")
@@ -59,13 +64,17 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("prefix", nargs="?", default="")
     p.add_argument("--show-diff", action="store_true")
+    p.add_argument("--expected", default=str(COMPAT / "expected"),
+                   help="pasta com os logs de referência (padrão: compat/expected)")
+    p.add_argument("--setup", default="",
+                   help="comando rodado antes de cada do-file, ex.: 'set dp comma'")
     ns = p.parse_args(argv)
 
     files = sorted(f for f in (COMPAT / "do").glob("*.do") if f.name.startswith(ns.prefix))
     passed = failed = missing = 0
     for f in files:
-        got = run_opendta(f, COMPAT / "out")
-        exp = COMPAT / "expected" / (f.stem + ".log")
+        got = run_opendta(f, COMPAT / "out", ns.setup)
+        exp = Path(ns.expected) / (f.stem + ".log")
         if not exp.exists():
             print(f"  ?  {f.stem:<32} sem log de referência do Stata")
             missing += 1

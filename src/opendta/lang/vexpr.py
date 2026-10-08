@@ -207,6 +207,10 @@ def evaluate_vec(node: Node, ctx: VectorContext) -> Any:
         if node.op == "!":
             t = truth(v)
             return (~t).astype(np.float64) if is_vec(t) else (0.0 if t else 1.0)
+        if node.op == "+":
+            if is_str(v):
+                raise StataError(198, "invalid syntax")
+            return v
         if is_str(v):
             raise type_mismatch()
         if not is_vec(v):
@@ -297,9 +301,8 @@ def _round(x, y=1.0):
     y = np.asarray(y, dtype=np.float64)
     miss = (x >= SYS) | (y >= SYS)
     with np.errstate(all="ignore"):
-        q = np.where(y == 0, x, x / np.where(y == 0, 1, y))
-        r = np.floor(np.abs(q) + 0.5) * np.sign(q) * np.where(y == 0, 1, y)
-        r = np.where(y == 0, x, r)
+        safe = np.where(y == 0, 1.0, y)
+        r = np.where(y == 0, x, np.floor(x / safe + 0.5) * safe)
     return _clean(r, miss)
 
 

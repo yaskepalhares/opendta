@@ -44,7 +44,7 @@ STANDARD_MESSAGES: dict[int, str] = {
     101: "varlist not allowed",
     109: "type mismatch",
     110: "already defined",
-    111: "not found",
+    111: "invalid syntax",   # texto exibido por `error 111` no Stata (observado)
     130: "expression too long",
     132: "too many '(' or '['",
     133: "unknown function",

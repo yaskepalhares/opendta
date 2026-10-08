@@ -63,18 +63,30 @@ class Output:
         if self.column != 0:
             self.newline(force=force)
 
-    def error(self, message: str, rc: int) -> None:
-        """Mensagem de erro seguida de r(#); — mostrada mesmo sob quietly."""
+    def error(self, message: str, rc: int, *, show_rc: bool = True) -> None:
+        """Mensagem de erro e r(#); — mostradas mesmo sob quietly (mas não
+        sob capture)."""
         self.ensure_line_start(force=True)
         if message:
             self.write(message + "\n", "error", force=True)
-        self.write(f"r({rc});\n", "error", force=True)
+        if show_rc:
+            self.write(f"r({rc});\n", "error", force=True)
 
-    def echo_command(self, line: str) -> None:
-        """Eco '. comando' como a janela Results faz."""
+    def echo_command(self, lines) -> None:
+        """Eco '. comando' como a janela Results faz; linhas de continuação
+        aparecem com '> '."""
+        if isinstance(lines, str):
+            lines = (lines,)
+        self.ensure_line_start()
+        first, *rest = lines
+        self.write(". " + first + "\n", "command")
+        for cont in rest:
+            self.write("> " + cont + "\n", "command")
+
+    def end_command(self) -> None:
+        """Linha em branco depois de cada comando (como no Stata)."""
         self.ensure_line_start()
         self.write("\n")
-        self.write(". " + line + "\n", "command")
 
 
 class Capture:

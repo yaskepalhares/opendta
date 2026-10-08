@@ -11,7 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 from ..core.errors import StataError
-from ..core.formats import format_value, parse_format, DEFAULT_NUMERIC
+from ..core.formats import DISPLAY_NUMERIC, format_value, parse_format
 from ..lang.expr import Parser, evaluate
 from .registry import command
 
@@ -41,9 +41,21 @@ def cmd_display(s: "Session", args: str) -> None:
     text = args
     n = len(text)
 
+    # a saída é acumulada e só escrita no fim: se houver erro, nada aparece
+    pending: list[tuple[str, str]] = []
+    col = out.column
+
+    def put(piece: str, st: str) -> None:
+        nonlocal col
+        if not piece:
+            return
+        pending.append((piece, st))
+        nl = piece.rfind("\n")
+        col = col + len(piece) if nl == -1 else len(piece) - nl - 1
+
     def emit(piece: str) -> None:
         nonlocal dup
-        out.write(piece * dup, style)
+        put(piece * dup, style)
         dup = 1
 
     while i < n:
@@ -74,13 +86,13 @@ def cmd_display(s: "Session", args: str) -> None:
                 num = int(num)
             i += m.end()
             if name in ("newline", "n"):
-                out.write("\n" * (num if num is not None else 1), style)
+                put("\n" * (num if num is not None else 1), style)
             elif name in ("column", "col"):
                 target = (num or 1) - 1
-                if out.column < target:
-                    out.write(" " * (target - out.column), style)
+                if col < target:
+                    put(" " * (target - col), style)
             elif name == "skip":
-                out.write(" " * (num if num is not None else 1), style)
+                put(" " * (num if num is not None else 1), style)
             elif name == "dup":
                 dup = max(num or 0, 0)
             elif name == "char":
@@ -95,6 +107,17 @@ def cmd_display(s: "Session", args: str) -> None:
         if m and rest.startswith("%"):
             fmt = parse_format(m.group(0))
             i += m.end()
+            continue
+
+        # "texto" ou `"texto"' no início de uma diretiva é texto literal, não
+        # o começo de uma expressão: display "a" + 1 mostra a1 (observado no
+        # Stata); para concatenar strings use parênteses: display ("a" + "b")
+        lit = _literal(rest)
+        if lit is not None:
+            text_value, consumed = lit
+            i += consumed
+            emit(format_value(text_value, fmt) if fmt is not None and fmt.kind == "s" else text_value)
+            fmt = None
             continue
 
         # expressão
@@ -112,9 +135,35 @@ def cmd_display(s: "Session", args: str) -> None:
         elif fmt is not None:
             piece = format_value(value, fmt)
         else:
-            piece = format_value(value, DEFAULT_NUMERIC, pad=False, sign_outside_width=True)
+            piece = format_value(value, DISPLAY_NUMERIC, pad=False)
         fmt = None
         emit(piece)
 
     if not cont:
-        out.write("\n", style)
+        put("\n", style)
+    for piece, st in pending:
+        out.write(piece, st)
+
+
+def _literal(rest: str):
+    """Se `rest` começa com uma string entre aspas, devolve (texto, tamanho)."""
+    if rest.startswith('`"'):
+        depth, j = 1, 2
+        while j < len(rest) and depth:
+            if rest.startswith('`"', j):
+                depth += 1
+                j += 2
+            elif rest.startswith("\"'", j):
+                depth -= 1
+                j += 2
+            else:
+                j += 1
+        if depth:
+            raise StataError(198, "unmatched quote")
+        return rest[2:j - 2], j
+    if rest.startswith('"'):
+        j = rest.find('"', 1)
+        if j == -1:
+            raise StataError(198, "unmatched quote")
+        return rest[1:j], j + 1
+    return None

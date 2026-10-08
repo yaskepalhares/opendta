@@ -48,6 +48,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "varabbrev": "on",
     "trace": "off",
     "seed": "123456789",
+    "dp": "period",
 }
 
 
@@ -201,6 +202,7 @@ class Session:
             "filename": self.data.filename,
             "level": float(self.settings["level"]),
             "more": self.settings["more"],
+            "dp": self.settings.get("dp", "period"),
             "linesize": float(self.settings["linesize"]),
             "type": self.settings["type"],
             "seed": self.settings["seed"],
@@ -256,6 +258,7 @@ class Session:
         except ExitRequest:
             raise
         finally:
+            self.output.end_command()
             self.notify_state()
         return rc
 

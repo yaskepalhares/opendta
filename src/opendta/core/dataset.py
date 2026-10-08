@@ -302,9 +302,8 @@ class Dataset:
             if TYPE_ORDER[needed] > TYPE_ORDER[var.vtype]:
                 target = needed
             if target != var.vtype:
+                # o formato de exibição não muda (b byte %8.0g vira float %8.0g)
                 note = f"variable {var.name} was {var.vtype} now {target}"
-                if var.fmt == default_format(var.vtype):
-                    var.fmt = default_format(target)
                 var.vtype = target
         fitted, _ = fit_numeric(new_full, var.vtype)
         changed = int(np.sum(fitted != var.data))

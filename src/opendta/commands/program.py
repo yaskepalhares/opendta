@@ -63,6 +63,8 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
     s.do_depth += 1
     saved_file = s.current_dofile
     s.current_dofile = str(path)
+    if echo:
+        out.end_command()
     try:
         s.interp.run_lines(lines, echo=echo)
     except ExitRequest as e:
@@ -87,7 +89,7 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
             s.macros.pop_frame()
     if echo:
         out.ensure_line_start()
-        out.write("\nend of do-file\n", "text")
+        out.write(". \nend of do-file\n", "text")
 
 
 @command("do")

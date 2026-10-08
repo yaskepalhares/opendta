@@ -35,10 +35,11 @@ def cell_text(ds: "Dataset", var: "Variable", i: int, *, use_labels: bool = True
 
 
 def _left_aligned(var: "Variable", use_labels: bool) -> bool:
+    """Strings seguem a justificação do formato (%-18s à esquerda, %18s à
+    direita); números, com ou sem rótulo de valor, ficam à direita."""
     if var.is_string:
-        fmt = parse_format(var.fmt)
-        return fmt.left or not fmt.text.startswith("%")
-    return bool(use_labels and var.value_label)
+        return parse_format(var.fmt).left
+    return False
 
 
 @command("list", "l", byable=True)
@@ -70,29 +71,31 @@ def cmd_list(s: "Session", args: str) -> None:
         widths.append(w)
     left = [_left_aligned(v, use_labels) for v in vars_]
 
-    def fmt_row(texts: list[str], header: bool = False) -> str:
+    def fmt_row(texts: list[str]) -> str:
         parts = []
         for t, w, lft in zip(texts, widths, left):
             parts.append(t.ljust(w) if lft else t.rjust(w))
-        joiner = " | " if divider else "  "
-        return joiner.join(parts)
+        return (" | " if divider else "   ").join(parts)
 
+    # layout observado nos logs do Stata: 3 espaços entre colunas, rótulo da
+    # observação "  1." seguido de " | " (tabela) ou de 3 espaços (clean)
     obs_w = max(3, len(str(int(rows[-1]) + 1))) if len(rows) else 3
-    pad = " " * (obs_w + 2) if show_obs else ""
-    header = fmt_row([v.name for v in vars_], header=True)
+    header = fmt_row([v.name for v in vars_])
     inner = len(header) + 2
 
     out.ensure_line_start()
     out.write("\n", "text")
     if clean:
+        lead = " " * (obs_w + 1 + 3) if show_obs else ""
         if not opts.get("noheader"):
-            out.write(pad + " " + header + "\n", "text")
-        for k, (i, r) in enumerate(zip(rows, cells)):
-            label = f"{int(i) + 1:>{obs_w}}. " if show_obs else ""
-            out.write(label + " ", "text")
-            out.write(fmt_row(r) + "\n", "result")
+            out.write(lead + header + "  \n", "text")
+        for i, r in zip(rows, cells):
+            label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else ""
+            out.write(label, "text")
+            out.write(fmt_row(r) + "  \n", "result")
         return
 
+    pad = " " * (obs_w + 2) if show_obs else "  "
     out.write(pad + "+" + "-" * inner + "+\n", "text")
     if not opts.get("noheader"):
         out.write(pad + "| " + header + " |\n", "text")
@@ -100,7 +103,7 @@ def cmd_list(s: "Session", args: str) -> None:
     for k, (i, r) in enumerate(zip(rows, cells)):
         if sep and k and k % sep == 0:
             out.write(pad + "|" + "-" * inner + "|\n", "text")
-        label = f"{int(i) + 1:>{obs_w}}. " if show_obs else ""
+        label = f"{int(i) + 1:>{obs_w}}. " if show_obs else "  "
         out.write(label + "| ", "text")
         out.write(fmt_row(r), "result")
         out.write(" |\n", "text")

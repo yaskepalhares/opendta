@@ -69,6 +69,7 @@ def run_batch(dofile: str, args: list[str]) -> int:
             rc = s.run(cmd)
         except ExitRequest as e:
             rc = e.rc
+        s.output.end_command()
     return rc
 
 

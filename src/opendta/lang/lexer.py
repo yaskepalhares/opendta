@@ -20,7 +20,13 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class LogicalLine:
     text: str
-    lineno: int  # linha (1-based) em que o comando começa
+    lineno: int                  # linha (1-based) em que o comando começa
+    raw: tuple[str, ...] = ()    # linhas físicas originais, para o eco
+    kind: str = "cmd"            # "cmd", "comment" ou "delimit"
+
+    @property
+    def echo_lines(self) -> tuple[str, ...]:
+        return self.raw or (self.text,)
 
 
 def _is_delimit(cmd: str) -> str | None:
@@ -40,6 +46,9 @@ def _is_delimit(cmd: str) -> str | None:
 
 
 def split_commands(source: str) -> list[LogicalLine]:
+    """Comentários de linha inteira (`*` e `//`) também entram na lista, com
+    kind="comment": o Stata os ecoa ao executar um do-file."""
+    physical = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[LogicalLine] = []
     mode = "cr"
     buf: list[str] = []
@@ -54,20 +63,25 @@ def split_commands(source: str) -> list[LogicalLine]:
     def at_word_start(pos: int) -> bool:
         return pos == 0 or source[pos - 1] in " \t\n\r"
 
+    def raw_lines(first: int, last: int) -> tuple[str, ...]:
+        return tuple(ln.rstrip() for ln in physical[first - 1:last])
+
     def flush() -> None:
         nonlocal buf, start_line, mode
         text = "".join(buf).strip()
         buf = []
         if not text:
             return
+        raw = raw_lines(start_line, line)
         if text.startswith("*"):
-            return  # comentário de linha
+            out.append(LogicalLine(text, start_line, raw, "comment"))
+            return
         new_mode = _is_delimit(text)
         if new_mode is not None:
             mode = new_mode
-            out.append(LogicalLine("#delimit " + new_mode, start_line))
+            out.append(LogicalLine("#delimit " + new_mode, start_line, raw, "delimit"))
             return
-        out.append(LogicalLine(text, start_line))
+        out.append(LogicalLine(text, start_line, raw))
 
     def note_start() -> None:
         nonlocal start_line
@@ -140,6 +154,9 @@ def split_commands(source: str) -> list[LogicalLine]:
             continue
         if source.startswith("//", i) and at_word_start(i):
             j = source.find("\n", i)
+            if not "".join(buf).strip():
+                # linha inteira de comentário: só para o eco
+                out.append(LogicalLine("", line, raw_lines(line, line), "comment"))
             i = n if j == -1 else j
             continue
         if c == "\n":

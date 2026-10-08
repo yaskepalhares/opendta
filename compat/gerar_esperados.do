@@ -13,6 +13,10 @@ set more off
 set linesize 255
 capture log close
 
+* as referências usam ponto decimal; a configuração original é restaurada no fim
+local dp_original = c(dp)
+set dp period
+
 local arquivos : dir "do" files "*.do"
 foreach f of local arquivos {
     local nome = subinstr("`f'", ".do", "", .)
@@ -20,4 +24,5 @@ foreach f of local arquivos {
     capture noisily do "do/`f'"
     log close
 }
+set dp `dp_original'
 display as result "Logs gerados em compat/expected/"

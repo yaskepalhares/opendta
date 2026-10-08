@@ -1,6 +1,8 @@
-* Funções de string.
-display "a" + "b"
-display "ab" * 3
+* Funções de string. Para concatenar no display é preciso usar parênteses:
+* uma string entre aspas no início de uma diretiva é texto literal.
+capture noisily display "a" + "b"
+display ("a" + "b")
+display ("ab" * 3)
 display strlen("abc")
 display length("abc")
 display upper("Abc") lower("ABC") proper("joão da silva")
@@ -25,7 +27,7 @@ display strmatch("abc", "?b?")
 display regexm("abc123", "[0-9]+")
 display regexs(0)
 display regexr("abc123", "[0-9]+", "X")
-display "abc" < "abd"
-display "B" < "a"
+display ("abc" < "abd")
+display ("B" < "a")
 display abbrev("variavel_muito_longa", 10)
 display inlist("b", "a", "b")
