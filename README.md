@@ -1,10 +1,12 @@
 # OpenDTA
 
-Interpretador de do-files com interface no estilo do Stata 14. É um projeto pessoal de estudo, com acesso restrito.
+**An open-source interpreter for statistical analysis built around do-files and `.dta` data files.**
 
-O objetivo é que um do-file escrito para o Stata 14 rode no OpenDTA sem alteração, com a mesma sintaxe e os mesmos comandos, abreviações, regras de missing e resultados guardados. A saída na janela Results deve ser a mais próxima possível da original. O plano completo está no [ROADMAP](ROADMAP.md).
+OpenDTA runs analysis scripts (do-files), reads and writes `.dta` datasets and comes with a desktop interface: Results, Command, Review, Variables and Properties windows, plus a data browser. The goal is a free and transparent tool for reproducible statistical work, from data management to estimation, complex survey analysis and graphics, able to run existing scripts without changes.
 
-> Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
+It is a personal study project under active development. It will be released as open source; the license is still to be defined. The full plan is in the [ROADMAP](ROADMAP.md).
+
+*A documentação abaixo está em português.*
 
 ## Estado atual: fase 1b (arquivos de dados)
 
@@ -77,3 +79,7 @@ compat/
 tools/
   compare.py  roda compat/do no OpenDTA e compara com compat/expected
 ```
+
+## Aviso
+
+Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela; a compatibilidade com do-files do Stata 14 é construída só a partir de documentação pública e observação de comportamento. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
