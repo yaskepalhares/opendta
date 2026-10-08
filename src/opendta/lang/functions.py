@@ -465,3 +465,21 @@ register("maxdouble", 0)(lambda: M.MAXDOUBLE)
 register("mindouble", 0)(lambda: M.MINDOUBLE)
 register("epsdouble", 0)(lambda: M.EPSDOUBLE)
 register("smallestdouble", 0)(lambda: 2.0 ** -1022)
+
+
+# -- números aleatórios (core/rng.py) --------------------------------------------
+
+def _random(name: str) -> Impl:
+    def fn(*args: Value) -> float:
+        from ..core import rng
+        return float(rng.draw(name, [_n(a) for a in args], 1)[0])
+    return fn
+
+
+def _register_random() -> None:
+    from ..core.rng import DISTRIBUTIONS
+    for _name, (_lo, _hi, _) in DISTRIBUTIONS.items():
+        register(_name, _lo, _hi)(_random(_name))
+
+
+_register_random()

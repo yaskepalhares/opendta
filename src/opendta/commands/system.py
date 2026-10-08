@@ -27,6 +27,9 @@ def cmd_set(s: "Session", args: str) -> None:
         set_obs(s, value)
         s.notify_state()
         return
+    if name in ("seed", "rng"):
+        _set_rng(s, name, value)
+        return
     if name in ("more", "rmsg", "varabbrev", "trace", "hints") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
     if name == "dp":
@@ -41,6 +44,32 @@ def cmd_set(s: "Session", args: str) -> None:
         hook = s.ui_hooks.get("set_permanently")
         if hook is not None:
             hook(name, s.settings[name])
+
+
+def _set_rng(s: "Session", name: str, value: str) -> None:
+    from ..core import rng
+    v = value.strip()
+    if name == "rng":
+        # VERIFICAR: kiss32 (gerador do Stata 13 e anteriores) não implementado
+        if v not in ("default", "mt64"):
+            raise StataError(198, f"rng {v} not available")
+        s.settings["rng"] = v
+        return
+    if v.startswith("X"):
+        try:
+            rng.RNG.set_state(v)
+        except ValueError:
+            raise StataError(198, "invalid seed state")   # VERIFICAR
+        return
+    try:
+        seed = int(v)
+    except ValueError:
+        raise StataError(198, "invalid syntax")
+    if not 0 <= seed <= 2147483647:
+        # VERIFICAR texto
+        raise StataError(198, "seed must be between 0 and 2,147,483,647")
+    rng.RNG.seed(seed)
+    s.settings["seed"] = str(seed)
 
 
 @command("version", "vers")

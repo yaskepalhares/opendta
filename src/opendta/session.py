@@ -135,6 +135,8 @@ class Session:
         self.settings: dict[str, str] = dict(DEFAULT_SETTINGS)
         self.version = 14.0
         self.data = Dataset()
+        from .core import rng
+        rng.reset(int(self.settings["seed"]))
         self.by_groups = None   # Groups ativo durante um prefixo by
         self.context = EvalContext(self)
         self._state_listeners: list[Callable[[], None]] = []
@@ -254,7 +256,10 @@ class Session:
             "dp": self.settings.get("dp", "period"),
             "linesize": float(self.settings["linesize"]),
             "type": self.settings["type"],
-            "seed": self.settings["seed"],
+            "seed": _rng_state(),
+            "rngstate": _rng_state(),
+            "rng": self.settings.get("rng", "default"),
+            "rng_current": "mt64",
             "alpha": "a b c d e f g h i j k l m n o p q r s t u v w x y z",
             "ALPHA": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z",
             "Mons": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
@@ -344,3 +349,8 @@ class Session:
         quoted = f'"{path}"' + (f" {args}" if args else "")
         cmd = "do" if echo else "run"
         return self.run(f"{cmd} {quoted}")
+
+
+def _rng_state() -> str:
+    from .core import rng
+    return rng.RNG.state()
