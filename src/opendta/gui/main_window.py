@@ -33,11 +33,20 @@ from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderVi
 from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
+from .data_browser import DataBrowser
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
 from .settings import Preferences
 from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme, apply_theme, results_scheme
+
+
+def _dta_notes(ds) -> list[str]:
+    try:
+        n = int(ds.chars.get("_dta", {}).get("note0", "0"))
+    except ValueError:
+        return []
+    return [ds.chars["_dta"].get(f"note{k}", "") for k in range(1, n + 1)]
 
 
 def _human_size(nbytes: int) -> str:
@@ -241,6 +250,8 @@ class MainWindow(QMainWindow):
         self._restore_layout()
         self.command.setFocus()
         self.setAcceptDrops(True)
+        self.browser: DataBrowser | None = None
+        self.session.ui_hooks["browse"] = self.show_browser
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -349,9 +360,9 @@ class MainWindow(QMainWindow):
         mb = self.menuBar()
 
         m = mb.addMenu("&File")
-        self._action(m, "Open...", shortcut="Ctrl+O", phase=1)
-        self._action(m, "Save", shortcut="Ctrl+S", phase=1)
-        self._action(m, "Save as...", phase=1)
+        self._action(m, "Open...", self.open_dataset, shortcut="Ctrl+O")
+        self._action(m, "Save", self.save_dataset, shortcut="Ctrl+S")
+        self._action(m, "Save as...", self.save_dataset_as, shortcut="Ctrl+Shift+S")
         m.addSeparator()
         self._action(m, "Do...", self.choose_do_file)
         self._action(m, "Change working directory...", self.choose_directory)
@@ -372,8 +383,8 @@ class MainWindow(QMainWindow):
         self._action(m, "Preferences...", self.show_preferences, shortcut="Ctrl+,")
 
         m = mb.addMenu("&Data")
-        self._action(m, "Describe data", phase=1)
-        self._action(m, "Data Editor", phase=1)
+        self._action(m, "Describe data", lambda: self.run_command("describe"))
+        self._action(m, "Data Editor", lambda: self.run_command("browse"))
         self._action(m, "Create or change data", phase=1)
         self._action(m, "Variables Manager", phase=1)
         self._action(m, "Data utilities", phase=3)
@@ -403,7 +414,7 @@ class MainWindow(QMainWindow):
         self._action(m, "Results", lambda: self.results.setFocus())
         self._action(m, "Graph", phase=7)
         self._action(m, "Viewer", phase=2)
-        self._action(m, "Data Editor", phase=1)
+        self._action(m, "Data Editor", lambda: self.run_command("browse"))
         self._action(m, "Do-file Editor", phase=8)
 
         m = mb.addMenu("&Help")
@@ -421,10 +432,12 @@ class MainWindow(QMainWindow):
         tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         # mesma disposição da barra do Stata 14; desenho próprio (gui/icons/)
         groups = [
-            [("open", "Open", None, 1), ("save", "Save", None, 1), ("print", "Print", None, 8)],
+            [("open", "Open", self.open_dataset, 1), ("save", "Save", self.save_dataset, 1),
+             ("print", "Print", None, 8)],
             [("log", "Log", None, 2), ("viewer", "Viewer", None, 2), ("graph", "Graph", None, 7),
              ("dofile", "Do-file Editor", None, 8)],
-            [("dataeditor", "Data Editor (Edit)", None, 1), ("databrowser", "Data Browser (Browse)", None, 1),
+            [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit"), 1),
+             ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse"), 1),
              ("variables", "Variables Manager", None, 1)],
             [("more", "Clear --more-- condition", None, 8), ("break", "Break", None, 8)],
         ]
@@ -436,7 +449,7 @@ class MainWindow(QMainWindow):
                 accent = ACCENT_RED if name == "break" else None
                 act = QAction(icon(name, accent), text, self)
                 act.setData((name, accent))
-                act.setToolTip(text + (f" — {_PENDING[phase]}" if phase else ""))
+                act.setToolTip(text + (f" — {_PENDING[phase]}" if phase and slot is None else ""))
                 act.setEnabled(slot is not None)
                 if slot is not None:
                     act.triggered.connect(slot)
@@ -515,6 +528,64 @@ class MainWindow(QMainWindow):
             it = self.review.topLevelItem(k)
             it.setHidden(bool(text) and text.lower() not in it.text(0).lower())
 
+    # -- arquivos de dados ---------------------------------------------------
+    def _confirm_discard(self) -> bool:
+        """Dados alterados: oferece salvar antes de substituir. False = cancelar."""
+        ds = self.session.data
+        if not (ds.changed and ds.nvars):
+            return True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("Data in memory have changed.")
+        box.setInformativeText("Do you want to save the changes before opening another dataset?")
+        box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
+                               | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Save)
+        answer = box.exec()
+        if answer == QMessageBox.StandardButton.Cancel:
+            return False
+        if answer == QMessageBox.StandardButton.Save:
+            return self.save_dataset()
+        return True
+
+    def open_dataset(self, path: str | None = None) -> None:
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, "Open", os.getcwd(),
+                                                  "Stata data (*.dta);;All files (*)")
+        if not path or not self._confirm_discard():
+            return
+        self.run_command(f'use "{path}", clear')
+
+    def save_dataset(self) -> bool:
+        ds = self.session.data
+        if not ds.fullpath:
+            return self.save_dataset_as()
+        self.run_command(f'save "{ds.fullpath}", replace')
+        return self.session.rc == 0
+
+    def save_dataset_as(self) -> bool:
+        ds = self.session.data
+        start = ds.filename or os.path.join(os.getcwd(), "untitled.dta")
+        path, _ = QFileDialog.getSaveFileName(self, "Save as", start, "Stata data (*.dta)")
+        if not path:
+            return False
+        if not path.lower().endswith(".dta"):
+            path += ".dta"
+        # o diálogo já confirmou a substituição, por isso replace
+        self.run_command(f'save "{path}", replace')
+        return self.session.rc == 0
+
+    def show_browser(self, columns=None, rows=None) -> None:
+        if self.browser is None:
+            self.browser = DataBrowser(self.session, monospace_font(self.prefs), self)
+            self.browser.setWindowFlag(Qt.WindowType.Window, True)
+            self.browser.set_dark(self.prefs.theme == "dark")
+        self.browser.model.set_subset(columns, rows)
+        self.browser.refresh()
+        self.browser.show()
+        self.browser.raise_()
+        self.browser.activateWindow()
+
     def choose_do_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Do", os.getcwd(), "Do-files (*.do *.ado);;All files (*)")
         if path:
@@ -536,6 +607,8 @@ class MainWindow(QMainWindow):
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
+        if getattr(self, "browser", None) is not None:
+            self.browser.table.setFont(font)
         ico = app_icon(self.prefs.app_icon)
         self.setWindowIcon(ico)
         app = QApplication.instance()
@@ -573,6 +646,8 @@ class MainWindow(QMainWindow):
             name, accent = act.data()
             act.setIcon(icon(name, accent))
         self._apply_styles()
+        if getattr(self, "browser", None) is not None:
+            self.browser.set_dark(theme == "dark")
 
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",
@@ -603,7 +678,7 @@ class MainWindow(QMainWindow):
         data_props = {
             "Filename": Path(ds.filename).name if ds.filename else "",
             "Label": ds.label,
-            "Notes": "",
+            "Notes": str(len(_dta_notes(ds))) if _dta_notes(ds) else "",
             "Variables": f"{ds.nvars:,}",
             "Observations": f"{ds.nobs:,}",
             "Size": _human_size(size),
@@ -614,6 +689,8 @@ class MainWindow(QMainWindow):
             child = self._prop_data.child(k)
             child.setText(1, data_props.get(child.text(0), ""))
         self._show_variable_properties()
+        if getattr(self, "browser", None) is not None:
+            self.browser.refresh()
 
     def _selected_variable(self) -> str:
         items = self.variables.selectedItems()
@@ -646,3 +723,6 @@ class MainWindow(QMainWindow):
             path = url.toLocalFile()
             if path.lower().endswith((".do", ".ado")):
                 self.run_command(f'do "{path}"')
+            elif path.lower().endswith(".dta"):
+                self.open_dataset(path)
+                break
