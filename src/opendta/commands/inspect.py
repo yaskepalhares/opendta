@@ -137,8 +137,12 @@ def cmd_describe(s: "Session", args: str) -> None:
     out.write(src + "\n", "text")
     label = ds.label
     out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
-    out.write(f" vars:{ds.nvars:>14,}\n", "text")
+    ts = getattr(ds, "timestamp", "") if ds.filename else ""
+    out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts if ts else "") + "\n", "text")
     out.write(f" size:{ds.width() * ds.nobs:>14,}\n", "text")
+    # VERIFICAR: aviso de notas no cabeçalho do describe
+    if ds.chars.get("_dta", {}).get("note0"):
+        out.write(" " * 46 + "(_dta has notes)\n", "text")
     if not opts.get("short"):
         out.write(_LINE + "\n", "text")
         out.write("              storage   display    value\n", "text")
@@ -147,9 +151,13 @@ def cmd_describe(s: "Session", args: str) -> None:
         for n in names:
             v = ds.get(n)
             shown = n if len(n) <= 15 or opts.get("fullnames") else n[:14] + "~"
-            line = f"{shown:<16}{v.vtype:<8}{v.fmt:<11}{v.value_label:<11}{v.label}"
+            star = "*" if ds.chars.get(n, {}).get("note0") else " "
+            line = f"{shown:<16}{v.vtype:<8}{v.fmt:<11}{v.value_label:<10}{star}{v.label}"
             out.write(line.rstrip() + "\n", "text")
     out.write(_LINE + "\n", "text")
+    if any(ds.chars.get(n, {}).get("note0") for n in names):
+        out.write("                                * indicated variables have notes\n", "text")
+        out.write(_LINE + "\n", "text")
     out.write("Sorted by: " + " ".join(ds.sortlist) + "\n", "text")
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")

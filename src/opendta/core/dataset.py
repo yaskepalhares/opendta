@@ -153,7 +153,10 @@ class Dataset:
         self.notes: list[str] = []
         self.value_labels: dict[str, dict[int, str]] = {}
         self.sortlist: list[str] = []
-        self.filename = ""
+        self.filename = ""             # como foi digitado (describe mostra assim)
+        self.fullpath = ""             # caminho absoluto, para save sem nome
+        self.timestamp = ""            # data de gravação ("13 Apr 2014 17:45")
+        self.chars: dict[str, dict[str, str]] = {}   # características (_dta e variáveis)
         self.changed = False
 
     # -- consulta --------------------------------------------------------
@@ -227,12 +230,13 @@ class Dataset:
             self.vars.append(var)
         else:
             self.vars.insert(position, var)
-        self.sortlist = []
-        self._touch()
+        self._touch()   # criar variável não desfaz a ordenação
 
     def drop_vars(self, names: list[str]) -> None:
         drop = set(names)
         self.vars = [v for v in self.vars if v.name not in drop]
+        for n in drop:
+            self.chars.pop(n, None)
         self.sortlist = [s for s in self.sortlist if s not in drop]
         if not self.vars:
             self.nobs = 0
@@ -262,6 +266,8 @@ class Dataset:
         check_name(new)
         self.get(old).name = new
         self.sortlist = [new if s == old else s for s in self.sortlist]
+        if old in self.chars:
+            self.chars[new] = self.chars.pop(old)
         self._touch()
 
     def order(self, names: list[str], *, last: bool = False,
@@ -308,6 +314,8 @@ class Dataset:
         fitted, _ = fit_numeric(new_full, var.vtype)
         changed = int(np.sum(fitted != var.data))
         var.data = fitted
+        if changed:
+            self._unsort_from(var.name)
         self._touch()
         return changed, note
 
@@ -330,5 +338,12 @@ class Dataset:
                 var.vtype = target
         changed = int(sum(1 for a, b in zip(new_full, var.data) if a != b))
         var.data = new_full
+        if changed:
+            self._unsort_from(var.name)
         self._touch()
         return changed, note
+
+    def _unsort_from(self, name: str) -> None:
+        """Alterar uma variável de ordenação desfaz a ordenação a partir dela."""
+        if name in self.sortlist:
+            self.sortlist = self.sortlist[:self.sortlist.index(name)]

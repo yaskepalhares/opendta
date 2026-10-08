@@ -410,6 +410,68 @@ def cmd_compress(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# recast
+# ---------------------------------------------------------------------------
+
+def _truncate_bytes(text: str, n: int) -> str:
+    b = text.encode("utf-8")[:n]
+    return b.decode("utf-8", errors="ignore")
+
+
+@command("recast")
+def cmd_recast(s: "Session", args: str) -> None:
+    head, comma, opts_text = args.partition(",")
+    opts = match_options(opts_text, {"force": 5}) if comma else {}
+    words = head.split(None, 1)
+    if len(words) < 2:
+        raise StataError(100, "varlist required")
+    newt = words[0]
+    if newt == "str":
+        raise StataError(198, "invalid syntax")
+    if not (newt in NUMERIC_TYPES or re.match(r"^str(\d+|L)$", newt)):
+        raise StataError(198, f"{newt} invalid type")   # VERIFICAR
+    if newt.startswith("str") and newt != "strL" and not 1 <= int(newt[3:]) <= STR_MAX:
+        raise StataError(198, f"{newt} invalid type")
+    ds = s.data
+    for n in unique(expand(ds, words[1])):
+        var = ds.get(n)
+        if var.vtype == newt:
+            continue
+        if var.is_string != is_string_type(newt):
+            raise StataError(109, f"{n}: {var.vtype} cannot be recast to {newt}")   # VERIFICAR
+        if var.is_string:
+            if newt == "strL":
+                new = var.data
+                changed = 0
+            else:
+                width = int(newt[3:])
+                new = np.array([_truncate_bytes(x, width) for x in var.data], dtype=object)
+                changed = int(sum(a != b for a, b in zip(var.data, new)))
+        else:
+            new, _ = fit_numeric(var.data, newt)
+            same = (new == var.data) | ((new >= M.SYSMISS) & (var.data >= M.SYSMISS)
+                                         & (new.view(np.int64) == var.data.view(np.int64)))
+            changed = int((~same).sum())
+        if changed and not opts.get("force"):
+            # VERIFICAR: texto e código de retorno quando há perda sem force
+            _note(s, f"{n}:  {plural(changed, 'value')} would be changed; not changed")
+            continue
+        if changed:
+            _note(s, f"{n}:  {plural(changed, 'value')} changed")
+        if var.fmt == default_format(var.vtype):
+            var.fmt = default_format(newt)
+        var.vtype = newt
+        if var.is_string:
+            var.data = new
+            if changed:
+                ds._unsort_from(n)   # VERIFICAR: recast com mudança desfaz a ordenação
+        else:
+            ds.set_numeric(var, new, promote=False)
+        ds.changed = True
+    s.notify_state()
+
+
+# ---------------------------------------------------------------------------
 # input (os dados vêm nas linhas seguintes, até `end`)
 # ---------------------------------------------------------------------------
 

@@ -16,7 +16,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# leitura de .dta antigos (formatos 114/115 e anteriores) pela ReadStat
+legacy = ["pyreadstat>=1.2"]
+# pyreadstat também serve de verificador independente nos testes de .dta
+dev = ["pytest>=8", "pyreadstat>=1.2"]
 
 [project.scripts]
 opendta = "opendta.cli:main"

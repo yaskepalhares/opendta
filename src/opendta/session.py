@@ -137,6 +137,8 @@ class Session:
         self._state_listeners: list[Callable[[], None]] = []
         self.do_depth = 0
         self.current_dofile = ""
+        # ganchos da interface gráfica (por exemplo "browse"); sem GUI, ficam vazios
+        self.ui_hooks: dict[str, Callable[..., None]] = {}
 
         from .lang.interpreter import Interpreter
         from . import commands  # noqa: F401  (registra os comandos)

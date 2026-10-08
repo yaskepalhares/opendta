@@ -220,3 +220,22 @@ def test_compress(run):
     out = run("compress")
     assert "variable id was float now byte" in out
     assert run.session.data.get("id").vtype == "byte"
+
+
+def test_recast(run):
+    run("clear\nset obs 3\ngen double x = _n + 0.5\ngen y = _n\ngen str5 s = \"abcde\"")
+    out = run("recast int x")
+    assert "x:  3 values would be changed; not changed" in out
+    assert run.session.data.get("x").vtype == "double"
+    out = run("recast int x, force")
+    assert "x:  3 values changed" in out
+    d = run.session.data
+    assert d.get("x").vtype == "int" and list(d.get("x").data) == [1, 2, 3]
+    assert run("recast byte y") == ""
+    assert d.get("y").vtype == "byte"
+    run("recast str3 s, force")
+    assert d.get("s").vtype == "str3" and d.get("s").data[0] == "abc"
+    run("recast strL s")
+    assert d.get("s").vtype == "strL"
+    run("recast str3 y")
+    assert run.rc == 109
