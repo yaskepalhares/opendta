@@ -34,9 +34,10 @@ from .. import __version__
 from ..core.errors import ExitRequest
 from ..session import Session
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
+from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
 from .settings import Preferences
-from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme
+from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme, apply_theme, results_scheme
 
 
 def _human_size(nbytes: int) -> str:
@@ -69,6 +70,8 @@ def monospace_font(prefs: Preferences | None = None) -> QFont:
 # ---------------------------------------------------------------------------
 
 class ResultsView(QPlainTextEdit):
+    MAX_SEGMENTS = 200_000
+
     def __init__(self, scheme: ResultsScheme = STANDARD):
         super().__init__()
         self.setReadOnly(True)
@@ -76,7 +79,13 @@ class ResultsView(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setFont(monospace_font())
         self.setObjectName("Results")
-        self.setStyleSheet(f"QPlainTextEdit#Results {{ background: {scheme.background}; }}")
+        self._segments: list[tuple[str, str]] = []   # para redesenhar ao trocar o tema
+        self.set_scheme(scheme)
+
+    def set_scheme(self, scheme: ResultsScheme) -> None:
+        self._scheme = scheme
+        self.setStyleSheet(f"QPlainTextEdit#Results {{ background: {scheme.background}; "
+                           f"color: {scheme.colors['text']}; }}")
         self._formats: dict[str, QTextCharFormat] = {}
         for style, color in scheme.colors.items():
             fmt = QTextCharFormat()
@@ -84,8 +93,20 @@ class ResultsView(QPlainTextEdit):
             if style in scheme.bold:
                 fmt.setFontWeight(QFont.Weight.Bold)
             self._formats[style] = fmt
+        if self._segments:
+            segments, self._segments = self._segments, []
+            super().clear()
+            for text, style in segments:
+                self.append_styled(text, style)
+
+    def clear(self) -> None:  # noqa: D401
+        self._segments = []
+        super().clear()
 
     def append_styled(self, text: str, style: str) -> None:
+        self._segments.append((text, style))
+        if len(self._segments) > self.MAX_SEGMENTS:
+            del self._segments[: len(self._segments) // 2]
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         cursor.insertText(text, self._formats.get(style, self._formats["text"]))
@@ -370,6 +391,7 @@ class MainWindow(QMainWindow):
             for name, text, slot, phase in group:
                 accent = ACCENT_RED if name == "break" else None
                 act = QAction(icon(name, accent), text, self)
+                act.setData((name, accent))
                 act.setToolTip(text + (f" — {_PENDING[phase]}" if phase else ""))
                 act.setEnabled(slot is not None)
                 if slot is not None:
@@ -408,8 +430,9 @@ class MainWindow(QMainWindow):
             return
         item = QTreeWidgetItem([line, str(rc) if rc else ""])
         if rc:
+            err = QColor(results_scheme(self.prefs.theme).colors["error"])
             for col in (0, 1):
-                item.setForeground(col, QColor("#cc0000"))
+                item.setForeground(col, err)
         self.review.addTopLevelItem(item)
         self.review.scrollToItem(item)
         self.command.setFocus()
@@ -435,7 +458,8 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def apply_preferences(self) -> None:
-        """Aplica fonte e ícone escolhidos (também chamado na abertura)."""
+        """Aplica tema, fonte e ícone escolhidos (também chamado na abertura)."""
+        self.apply_theme(self.prefs.theme)
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
@@ -444,6 +468,24 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.setWindowIcon(ico)
+
+    def apply_theme(self, theme: str) -> None:
+        """Tema claro ou escuro da interface inteira, independente do sistema."""
+        app = QApplication.instance()
+        if app is not None:
+            apply_theme(app, theme)
+        set_icon_theme(theme)
+        self.results.set_scheme(results_scheme(theme))
+        err = QColor(results_scheme(theme).colors["error"])
+        for k in range(self.review.topLevelItemCount()):
+            it = self.review.topLevelItem(k)
+            if it.text(1):
+                for col in (0, 1):
+                    it.setForeground(col, err)
+        for act in getattr(self, "toolbar_actions", {}).values():
+            name, accent = act.data()
+            act.setIcon(icon(name, accent))
+        self._apply_styles()
 
     def show_about(self) -> None:
         QMessageBox.about(self, "About OpenDTA",

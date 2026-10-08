@@ -72,3 +72,20 @@ def test_variables_panel_follows_data(app):
             for k in range(w._prop_data.childCount())}
     assert data["Observations"] == "3" and data["Variables"] == "1"
     w.close()
+
+
+def test_theme_switch(app):
+    from PySide6.QtGui import QPalette
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.run_command("display 1")
+    w.apply_theme("dark")
+    assert app.palette().color(QPalette.ColorRole.Window).lightness() < 100
+    assert "#1e1f22" in w.results.styleSheet()
+    assert "\n1\n" in w.results.toPlainText()          # saída redesenhada
+    w.apply_theme("light")
+    assert app.palette().color(QPalette.ColorRole.Window).lightness() > 200
+    assert "#ffffff" in w.results.styleSheet()
+    w.close()

@@ -10,8 +10,12 @@ def run_gui(args: list[str] | None = None) -> int:
 
     from .main_window import MainWindow
 
+    from .settings import Preferences
+    from .theme import apply_theme
+
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("OpenDTA")
+    apply_theme(app, Preferences().theme)   # antes de criar a janela: sem piscar
     win = MainWindow()
     win.show()
     # `opendta arquivo.do` abre a janela e executa o do-file, como o Stata faz

@@ -23,6 +23,19 @@ class PreferencesDialog(QDialog):
         self.prefs = prefs
         lay = QVBoxLayout(self)
 
+        # tema da interface
+        box = QGroupBox("Aparência da interface")
+        row = QHBoxLayout(box)
+        self.theme_group = QButtonGroup(self)
+        for key, label in (("light", "Claro (padrão)"), ("dark", "Escuro")):
+            rb = QRadioButton(label)
+            rb.setProperty("theme", key)
+            rb.setChecked(prefs.theme == key)
+            self.theme_group.addButton(rb)
+            row.addWidget(rb)
+        row.addStretch(1)
+        lay.addWidget(box)
+
         # ícone do aplicativo
         box = QGroupBox("Ícone do aplicativo")
         row = QHBoxLayout(box)
@@ -66,8 +79,12 @@ class PreferencesDialog(QDialog):
         self.size_box.setValue(size)
         for b in self.icon_group.buttons():
             b.setChecked(b.property("variant") == "light")
+        for b in self.theme_group.buttons():
+            b.setChecked(b.property("theme") == "light")
 
     def _ok(self) -> None:
+        theme = self.theme_group.checkedButton()
+        self.prefs.theme = theme.property("theme") if theme else "light"
         checked = self.icon_group.checkedButton()
         self.prefs.app_icon = checked.property("variant") if checked else "light"
         self.prefs.font_family = self.family.currentFont().family()

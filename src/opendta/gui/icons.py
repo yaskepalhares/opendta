@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
-from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 ICON_DIR = Path(__file__).with_name("icons")
@@ -23,23 +23,17 @@ DARK_INK = "#e5e5ea"
 ACCENT_RED = "#ff453a"
 
 
+_THEME = {"name": "light"}
+
+
+def set_theme(name: str) -> None:
+    """Tema atual da interface; os ícones seguem esta escolha, não o sistema."""
+    _THEME["name"] = name
+    themed_icon.cache_clear()
+
+
 def is_dark() -> bool:
-    app = QGuiApplication.instance()
-    if app is None:
-        return False
-    hints = app.styleHints()
-    scheme = getattr(hints, "colorScheme", None)
-    if scheme is not None:
-        try:
-            from PySide6.QtCore import Qt as _Qt
-            value = scheme()
-            if value == _Qt.ColorScheme.Dark:
-                return True
-            if value == _Qt.ColorScheme.Light:
-                return False
-        except (AttributeError, TypeError):
-            pass
-    return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+    return _THEME["name"] == "dark"
 
 
 def _render(name: str, color: str, size: int, ratio: float) -> QPixmap:

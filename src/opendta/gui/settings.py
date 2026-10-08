@@ -32,6 +32,16 @@ class Preferences:
     def app_icon(self, value: str) -> None:
         self._s.setValue("appearance/app_icon", value if value in APP_ICON_VARIANTS else "light")
 
+    # tema da interface (independente do sistema)
+    @property
+    def theme(self) -> str:
+        v = str(self._s.value("appearance/theme", "light"))
+        return v if v in ("light", "dark") else "light"
+
+    @theme.setter
+    def theme(self, value: str) -> None:
+        self._s.setValue("appearance/theme", value if value in ("light", "dark") else "light")
+
     # fonte das janelas Results, Command e Review
     @property
     def font_family(self) -> str:
