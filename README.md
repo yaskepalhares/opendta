@@ -30,26 +30,30 @@ Já funciona:
 
 Ainda não há `import excel`, `infile` nem edição de células no Data Editor, nem comandos estatísticos (`summarize`, `tabulate`…), da fase 3.
 
-## Instalação
+## Instalação (macOS)
 
-Requer Python 3.11 ou mais recente.
+Requer Python 3.11 ou mais recente. No Terminal:
 
 ```bash
 git clone https://github.com/yaskepalhares/opendta.git
 cd opendta
-python -m venv .venv
-# Windows: .venv\Scripts\activate     macOS/Linux: source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+No Linux os comandos são os mesmos. No Windows, o ambiente é ativado com `.venv\Scripts\activate`.
+
 ## Uso
 
-```bash
-opendta                      # abre a interface gráfica
-opendta arquivo.do           # abre a interface e executa o do-file
-opendta --console            # console de texto
-opendta -b do arquivo.do     # modo batch: grava arquivo.log no diretório atual
-```
+| Comando | O que faz |
+|---|---|
+| `opendta` | abre a interface gráfica |
+| `opendta arquivo.do` | abre a interface e executa o do-file |
+| `opendta --console` | console de texto |
+| `opendta -b do arquivo.do` | modo batch: grava `arquivo.log` no diretório atual |
+
+O passo a passo de testes e da comparação com o Stata está em [docs/como-testar.md](docs/como-testar.md).
 
 ## Ícone
 
