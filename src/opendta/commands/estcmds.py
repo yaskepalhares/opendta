@@ -57,3 +57,27 @@ def cmd_lincom(s: "Session", args: str) -> None:
 def cmd_estimates(s: "Session", args: str) -> None:
     from ..estimation.postest import cmd_estimates as run
     run(s, args)
+
+
+@command("logit", "logit")
+def cmd_logit(s: "Session", args: str) -> None:
+    from ..estimation.models import cmd_logit as run
+    run(s, args)
+
+
+@command("logistic", "logistic")
+def cmd_logistic(s: "Session", args: str) -> None:
+    from ..estimation.models import cmd_logistic as run
+    run(s, args)
+
+
+@command("probit", "probit")
+def cmd_probit(s: "Session", args: str) -> None:
+    from ..estimation.models import cmd_probit as run
+    run(s, args)
+
+
+@command("poisson", "poisson")
+def cmd_poisson(s: "Session", args: str) -> None:
+    from ..estimation.models import cmd_poisson as run
+    run(s, args)

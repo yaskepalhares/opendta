@@ -126,7 +126,7 @@ def level_text(level: float) -> str:
 
 def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df: float | None,
                level: float, vcetype: str = "", coef_title: str = "Coef.",
-               footer: bool = True, eq_headers: bool = False) -> None:
+               footer: bool = True, eq_headers: bool = False, eform: bool = False) -> None:
     out = s.output
     lv = level_text(level)
     ci = f"[{lv}% Conf. Interval]"
@@ -137,7 +137,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."
         out.write(f"{'':>12} |" + " " * max(start - 14, 1) + lab + "\n", "text")
     stat_h = "t    P>|t|" if stat == "t" else "z    P>|z|"
-    out.write(f"{abbrev(depvar):>12} |  {coef_title:>9}   Std. Err.      {stat_h}     {ci:>20}\n", "text")
+    out.write(f"{abbrev(depvar):>12} | {coef_title:>10}   Std. Err.      {stat_h}     {ci:>20}\n", "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     c = crit(stat, level, df)
     for r in rows:
@@ -168,6 +168,8 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             tval = b / se
             p = pvalue(stat, tval, df)
             lo, hi = b - c * se, b + c * se
+            if eform:
+                b, se, lo, hi = np.exp(b), np.exp(b) * se, np.exp(lo), np.exp(hi)
             out.write(f"  {g9(b):>9}  {g9(se):>9}  {tval:>7.2f}  {p:>6.3f}    {g9(lo):>9}   {g9(hi):>9}\n",
                       "result")
         else:

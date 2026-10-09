@@ -120,3 +120,48 @@ def test_estimates_store_restore(run):
     assert run.eval("_b[x1]") > 1
     out = run("estimates table a")
     assert "Variable |" in out
+
+
+ML_DATA = """clear
+set seed 611
+set obs 80
+gen x1 = round(runiform()*10, .1)
+gen x2 = round(runiform()*5, .01)
+gen y = runiform() < invlogit(-2 + .3*x1 - .2*x2)
+gen c = floor(-ln(runiform())*exp(.1 + .1*x1))
+"""
+
+
+def test_logit_score_is_zero_at_estimate(run):
+    run(ML_DATA)
+    out = run("logit y x1 x2")
+    assert "Iteration 0:   log likelihood =" in out and "Logistic regression" in out
+    y, x1, x2 = _arrays(run, "y", "x1", "x2")
+    b = run.session.e["b"].data.ravel()
+    X = np.column_stack([x1, x2, np.ones_like(x1)])
+    p = 1 / (1 + np.exp(-X @ b))
+    assert np.allclose(X.T @ (y - p), 0, atol=1e-6)
+    H = (X * (p * (1 - p))[:, None]).T @ X
+    assert run.eval("_se[x1]") == pytest.approx(np.sqrt(np.linalg.inv(H)[0, 0]), rel=1e-6)
+    assert run.eval("e(chi2)") == pytest.approx(2 * (run.eval("e(ll)") - run.eval("e(ll_0)")))
+
+
+def test_logistic_odds_ratios_and_predict(run):
+    run(ML_DATA)
+    out = run("logistic y x1 x2")
+    assert "Odds Ratio" in out and "Iteration" not in out
+    out = run("predict p")
+    assert "(option pr assumed; Pr(y))" in out
+    (p,) = _arrays(run, "p")
+    assert np.all((p > 0) & (p < 1))
+
+
+def test_poisson_matches_score_equations(run):
+    run(ML_DATA)
+    run("poisson c x1 x2")
+    c, x1, x2 = _arrays(run, "c", "x1", "x2")
+    b = run.session.e["b"].data.ravel()
+    X = np.column_stack([x1, x2, np.ones_like(x1)])
+    assert np.allclose(X.T @ (c - np.exp(X @ b)), 0, atol=1e-6)
+    out = run("poisson c x1 x2, irr vce(robust)")
+    assert "IRR" in out and "Wald chi2(2)" in out and "log pseudolikelihood" in out
