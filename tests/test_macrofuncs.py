@@ -23,7 +23,7 @@ def test_strings_and_dirs(run, tmp_path):
     run('local s "a b a c a"\nlocal t : subinstr local s "a" "x", all count(local n)')
     assert loc("t") == "x b x c x" and loc("n") == "3"
     run('local t : subinstr local s "a" "", word count(local n)')
-    assert loc("t") == " b a c a"     # o Stata mantém o espaço and loc("n") == "1"
+    assert loc("t") == " b a c a" and loc("n") == "1"     # o Stata mantém o espaço
     run("local u : copy local s\nlocal v : strlen local s")
     assert loc("u") == "a b a c a" and loc("v") == "9"
     (tmp_path / "um.do").write_text("")
