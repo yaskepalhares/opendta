@@ -232,17 +232,10 @@ def _data_function(s: "Session", t: str) -> str | None:
         all_ = re.search(r"\ball\b", opts) is not None
         word = re.search(r"\bword\b", opts) is not None
         if word:
-            words = split_words(text, keep_quotes=True)
-            n = 0
-            outw = []
-            for w in words:
-                if w == old and (all_ or n == 0):
-                    n += 1
-                    if new:
-                        outw.append(new)
-                else:
-                    outw.append(w)
-            result = " ".join(outw)
+            # troca a palavra no lugar, sem mexer nos espaços em volta
+            # ("a b a" sem o 1º "a" vira " b a"; observado no Stata 14)
+            pattern = r"(?<!\S)" + re.escape(old) + r"(?!\S)"
+            result, n = re.subn(pattern, lambda _m: new, text, count=0 if all_ else 1)
         else:
             n = text.count(old) if all_ else min(1, text.count(old))
             result = text.replace(old, new) if all_ else text.replace(old, new, 1)

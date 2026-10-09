@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 COMPAT = ROOT / "compat"
 _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
-_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints))\b")
+_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints|linesize))\b")
 
 
 # carimbo de data do .dta (describe): muda a cada execução
@@ -57,7 +57,9 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     # explicações de erro do OpenDTA desligadas: o Stata não as tem.
     # `setup` (ex.: set dp comma) roda antes, sem aparecer no log comparado
     target = outdir / dofile.name
-    pre = "quietly set hints off\n" + (f"quietly {setup}\n" if setup else "")
+    # gerar_esperados.do roda os casos com set linesize 255
+    pre = ("quietly set hints off\nquietly set linesize 255\n"
+           + (f"quietly {setup}\n" if setup else ""))
     target.write_text(pre + dofile.read_text(encoding="utf-8"), encoding="utf-8")
     # restos de um caso interrompido (odta_*) não podem afetar o seguinte;
     # gerar_esperados.do faz a mesma limpeza no Stata

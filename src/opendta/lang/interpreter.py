@@ -163,18 +163,20 @@ class Interpreter:
     def run_program(self, prog) -> None:
         """Corpo de um programa: sem eco (set trace mostra as linhas)."""
         tracing = self._tracing()
+        # linhas begin/end ocupam a largura da tela (set linesize; observado
+        # no Stata 14 com linesize 255)
+        width = int(float(self.s.settings.get("linesize", 80)))
+        pad = "  " * self._trace_depth()
         if tracing:
-            # VERIFICAR: largura e alinhamento das linhas begin/end do trace
-            pad = "  " * self._trace_depth()
             label = f" begin {prog.name} ---"
-            self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+            self.s.output.write(pad + "-" * max(4, width - len(pad) - len(label)) + label + "\n",
                                 "text", force=True)
         try:
             self._run_range(prog.lines, 0, len(prog.lines), echo=None)
         finally:
             if tracing:
                 label = f" end {prog.name} ---"
-                self.s.output.write(pad + "-" * max(4, 72 - len(pad) - len(label)) + label + "\n",
+                self.s.output.write(pad + "-" * max(4, width - len(pad) - len(label)) + label + "\n",
                                     "text", force=True)
 
     def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
@@ -446,7 +448,9 @@ class Interpreter:
                 and any(sc.kind == "program" for sc in self.s.scopes))
 
     def _trace_depth(self) -> int:
-        return sum(1 for sc in self.s.scopes if sc.kind == "program")
+        # um programa chamado de um do-file aparece com 4 espaços (Stata 14);
+        # VERIFICAR o recuo de programas aninhados
+        return sum(1 for sc in self.s.scopes if sc.kind == "program") + 1
 
     def _execute_expanded(self, text: str) -> None:
         from ..commands.registry import lookup
@@ -486,7 +490,10 @@ class Interpreter:
             self._with_prefixes(words, lambda: self._execute_expanded(body))
             return
 
-        prog = self.s.programs.get(word)
+        # comandos internos (inclusive abreviados) vêm antes dos programas:
+        # com `program define pr`, digitar `pr` ainda chama `program`
+        # (observado no Stata 14, compat/expected/0201_programas.log)
+        prog = None if lookup(word) is not None else self.s.programs.get(word)
         if prog is None and lookup(word) is None and _plain_name(word):
             prog = self._autoload(word)
         if prog is not None:
