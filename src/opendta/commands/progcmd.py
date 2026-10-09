@@ -178,7 +178,8 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
         out.write("\nscalars:\n", "text")
         for k, v in scalars.items():
             out.write(f"{prefix + '(' + k + ')':>22} =  ", "text")
-            out.write(format_value(float(v), "%10.0g", pad=False) + "\n", "result")
+            # valores com até 16 algarismos (%18.0g), como no Stata 14 (compat 0501, 0504)
+            out.write(format_value(float(v), "%18.0g", pad=False).strip() + "\n", "result")
     if macros:
         out.write("\nmacros:\n", "text")
         for k, v in macros.items():

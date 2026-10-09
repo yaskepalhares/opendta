@@ -169,8 +169,11 @@ def cmd_regress(s: "Session", args: str) -> None:
     o = smp.o
     ds = s.data
     w, N = smp.weights_for_fit()
-    notes = fvars.drop_collinear(smp.cols, smp.constant, w)
     out = s.output
+    if smp.wtype in ("aweight", "pweight"):
+        tot = float(smp.w[smp.mask].sum())
+        out.write(f"(sum of wgt is {format_value(tot, '%12.4e')})\n", "text")
+    notes = fvars.drop_collinear(smp.cols, smp.constant, w)
     for nm in notes:
         out.write(f"note: {nm} omitted because of collinearity\n", "text")
     est_cols = [c for c in smp.cols if c.values is not None]
@@ -234,11 +237,19 @@ def cmd_regress(s: "Session", args: str) -> None:
                 Vb = XtWXi @ meat @ XtWXi
         vcetype = {"robust": "Robust", "cluster": "Robust", "hc2": "Robust HC2",
                    "hc3": "Robust HC3"}[smp.vce]
+    Vb = (Vb + Vb.T) / 2
     # F
     slopes = list(range(len(est_cols)))
     F = SYS
+    df_m_robust = len(slopes)
     if smp.vce == "ols":
-        F = (mss / df_m) / s2 if df_m > 0 else SYS
+        F = (mss / df_m) / s2 if df_m > 0 else 0.0
+    elif smp.vce == "cluster" and np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300)) < k:
+        # poucos clusters: V tem posto menor que k; o Stata mostra F(posto-1, G-1)
+        # com valor missing (compat 0501). VERIFICAR o caso geral.
+        rk = np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300))
+        df_m_robust = rk - (1 if smp.constant else 0)
+        F = SYS
     elif slopes:
         bb = beta[slopes]
         VV = Vb[np.ix_(slopes, slopes)]
@@ -265,7 +276,7 @@ def cmd_regress(s: "Session", args: str) -> None:
         semap[c.name] = np.sqrt(V_full[i, i]) if V_full[i, i] > 0 else 0.0
     if smp.constant:
         bmap["_cons"], semap["_cons"] = b_full[-1], np.sqrt(max(V_full[-1, -1], 0))
-    df_m_report = df_m if smp.vce == "ols" else len(slopes)
+    df_m_report = df_m if smp.vce == "ols" else df_m_robust
     est = Estimates("regress", smp.depname, names, b_full, V_full, smp.n, "t", df_r)
     est.rows = rows_from_columns(smp.cols, bmap, semap, ds, constant=smp.constant)
     est.cols = smp.cols

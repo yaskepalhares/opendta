@@ -50,6 +50,7 @@ class CoefRow:
     b: float = 0.0
     se: float = 0.0
     eq: str = ""
+    name: str = ""                # nome em e(b), para estimates table
 
 
 @dataclass
@@ -184,6 +185,11 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
     rows: list[CoefRow] = []
     i = 0
     n = len(cols)
+
+    def blank_before():
+        if rows and rows[-1].kind != "blank":
+            rows.append(CoefRow("blank"))
+
     while i < n:
         c = cols[i]
         j = i + 1
@@ -191,33 +197,44 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
             while j < n and cols[j].group == c.group:
                 j += 1
         group = cols[i:j]
-        grouped = bool(c.group) and (c.group[0] == "t" or len(group) > 1 or c.rowlab != "--.")
+        shown = [g for g in group if not g.base or show_base]
+        interaction = "#" in c.name
+        grouped = bool(c.group) and (len(shown) > 1 or (c.group[0] == "t" and interaction)
+                                     or (c.group[0] == "v" and c.rowlab != "--."))
         if not grouped:
-            for g in group:
-                lab = g.labels[0] if g.labels else g.name
-                if g.omitted:
-                    rows.append(CoefRow("omitted", lab))
+            # uma linha só: "x", "1.h" (fator com um nível), "c.x#c.x"; as
+            # interações ficam entre linhas em branco (compat 0502)
+            if interaction:
+                blank_before()
+            for g in shown:
+                lab = g.labels[0] if (g.labels and not g.group) or (g.group and g.group[0] == "v") \
+                    else _strip_b(g.name)
+                if g.base:
+                    rows.append(CoefRow("base", lab, name=g.name))
+                elif g.omitted:
+                    rows.append(CoefRow("omitted", lab, name=g.name))
                 else:
-                    rows.append(CoefRow("coef", lab, b[g.name], se[g.name]))
+                    rows.append(CoefRow("coef", lab, b[g.name], se[g.name], name=g.name))
+            if interaction:
+                rows.append(CoefRow("blank"))
             i = j
             continue
-        if rows and rows[-1].kind != "blank":
-            rows.append(CoefRow("blank"))
+        blank_before()
         rows.append(CoefRow("header", c.labels[0] if c.group[0] == "t" else c.group[1]))
         for g in group:
             lab = (_cell_label(ds, g) + " ") if g.group[0] == "t" else g.rowlab
             if g.base:
                 if show_base:
-                    rows.append(CoefRow("base", lab))
+                    rows.append(CoefRow("base", lab, name=g.name))
                 continue
             if g.omitted:
-                rows.append(CoefRow("omitted", lab))
+                rows.append(CoefRow("omitted", lab, name=g.name))
                 continue
-            rows.append(CoefRow("coef", lab, b[g.name], se[g.name]))
+            rows.append(CoefRow("coef", lab, b[g.name], se[g.name], name=g.name))
         rows.append(CoefRow("blank"))
         i = j
     if constant:
-        rows.append(CoefRow("coef", "_cons", b["_cons"], se["_cons"]))
+        rows.append(CoefRow("coef", "_cons", b["_cons"], se["_cons"], name="_cons"))
     elif rows and rows[-1].kind == "blank":
         rows.pop()
     return rows
@@ -225,6 +242,11 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
 
 def _head_label(head: str) -> str:
     return head
+
+
+def _strip_b(name: str) -> str:
+    import re
+    return "#".join(re.sub(r"^(\d+)(?:b|bn|o)+\.", r"\1.", p) for p in name.split("#"))
 
 
 def _cell_label(ds, col) -> str:
@@ -249,4 +271,4 @@ def _cell_label(ds, col) -> str:
         except Exception:   # noqa: BLE001
             pass
         texts.append(txt)
-    return " ".join(texts) if texts else col.labels[1]
+    return "#".join(texts) if texts else col.labels[1]

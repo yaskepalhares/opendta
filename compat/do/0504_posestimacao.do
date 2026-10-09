@@ -1,6 +1,7 @@
 * Fase 5a: predict, test, testparm, lincom e estimates.
 clear
 estimates clear
+ereturn clear
 set seed 31
 set obs 40
 gen g = 1 + mod(_n, 3)

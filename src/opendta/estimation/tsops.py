@@ -55,7 +55,7 @@ def require_ts(ds: "Dataset") -> TSInfo:
     info = ts_info(ds)
     if info is None:
         # VERIFICAR texto exato
-        raise StataError(111, "time variable not set, use tsset varname ...")
+        raise StataError(111, "time variable not set")
     return info
 
 
@@ -85,9 +85,15 @@ def shift(ds: "Dataset", values: np.ndarray, k: int) -> np.ndarray:
 
 
 def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> np.ndarray:
-    """Aplica uma sequência de operadores (letra, ordem) a um vetor."""
+    """Aplica os operadores (letra, ordem) a um vetor. L e F se somam num
+    deslocamento líquido (LF.y = y, como no Stata, compat 0503); D e S são
+    aplicados antes do deslocamento (os operadores comutam)."""
     x = np.asarray(values, dtype=np.float64)
-    for op, k in ops:
+    net = sum(k for op, k in ops if op == "L") - sum(k for op, k in ops if op == "F")
+    rest = [(op, k) for op, k in ops if op not in "LF"]
+    if net:
+        rest.append(("L", net) if net > 0 else ("F", -net))
+    for op, k in rest:
         for _ in range(k if op in "DS" else 1):
             if op == "L":
                 y = shift(ds, x, k)
@@ -156,7 +162,7 @@ def _declare(s: "Session", args: str, *, xt: bool) -> None:
             _report(s, p, info.tvar if info else "", info.delta if info else 1.0, xt=True)
         else:
             if info is None:
-                raise StataError(111, "time variable not set, use tsset varname ...")   # VERIFICAR
+                raise StataError(111, "time variable not set")
             _report(s, info.panel, info.tvar, info.delta, xt=False)
         return
     names = [resolve_name(ds, w) for w in words]
@@ -220,37 +226,53 @@ def _report(s: "Session", panel: str, tvar: str, delta: float, *, xt: bool) -> N
             if vals and any(v != vals[0] for v in vals):
                 lens = {len(v) for v in vals}
                 balance = "weakly balanced" if len(lens) == 1 else "unbalanced"
-        out.write(f"{'panel variable:':>21}  ", "text")
+        out.write(f"{'panel variable:':>22}  ", "text")
         out.write(f"{panel} ({balance})\n", "result")
     if t is not None:
         ok = t < SYS
         if panel:
             ok &= pv < SYS
         tmin, tmax = (float(t[ok].min()), float(t[ok].max())) if ok.any() else (SYS, SYS)
-        gaps = False
+        ngaps = 0
         if ok.any():
             groups: dict[float, list[float]] = {}
             for p_, tt in zip(pv[ok], t[ok]):
                 groups.setdefault(p_, []).append(tt)
             for ts in groups.values():
                 ts = sorted(ts)
-                if any(abs((b - a) - delta) > 1e-9 for a, b in zip(ts, ts[1:])):
-                    gaps = True
-                    break
+                ngaps += sum(1 for a, b in zip(ts, ts[1:]) if abs((b - a) - delta) > 1e-9)
+        gaps = ngaps > 0
         line = f"{tvar}, {_fmt_time(ds, tvar, tmin)} to {_fmt_time(ds, tvar, tmax)}"
         if gaps:
-            line += ", but with gaps"   # VERIFICAR
-        out.write(f"{'time variable:':>21}  ", "text")
+            line += ", but with a gap" if ngaps == 1 else ", but with gaps"
+        out.write(f"{'time variable:':>22}  ", "text")
         out.write(line + "\n", "result")
         fmt = ds.get(tvar).fmt
         unit = "unit" if not fmt.startswith("%t") else _UNITS.get(fmt[2:3], "unit")
         dtext = f"{delta:g} {unit}" + ("s" if delta != 1 else "")
-        out.write(f"{'delta:':>21}  ", "text")
+        out.write(f"{'delta:':>22}  ", "text")
         out.write(dtext + "\n", "result")
-        s.r.update({"tmax": tmax, "tmin": tmin, "tdelta": float(delta), "gaps": 1.0 if gaps else 0.0})
-        s.r["timevar"] = tvar
-        s.r["unit"] = unit if unit != "unit" else "generic"
-        s.r["tsfmt"] = ds.get(tvar).fmt
+        tfmt = ds.get(tvar).fmt
+        code = tfmt[2:3] if tfmt.startswith("%t") else ""
+        tmins, tmaxs = _fmt_time(ds, tvar, tmin), _fmt_time(ds, tvar, tmax)
+        res = {}
+        if panel:
+            res["balanced"] = balance
+        res["tmins"], res["tmaxs"], res["tdeltas"] = tmins, tmaxs, dtext
+        res["tsfmt"] = tfmt
+        res["unit1"] = code or "."     # VERIFICAR para formatos %t
+        if code:
+            res["unit"] = {"d": "daily", "w": "weekly", "m": "monthly", "q": "quarterly",
+                           "h": "halfyearly", "y": "yearly", "c": "clocktime", "C": "clocktime"}[code]
+        res["timevar"] = tvar
+        if panel:
+            res["panelvar"] = panel
+            pvals = pv[pv < SYS]
+            res["imin"] = float(pvals.min()) if len(pvals) else SYS
+            res["imax"] = float(pvals.max()) if len(pvals) else SYS
+        res["tmin"], res["tmax"], res["tdelta"] = tmin, tmax, float(delta)
+        s.r = res          # o Stata lista na ordem inversa da gravação
+        return
     if panel:
         s.r["panelvar"] = panel
 

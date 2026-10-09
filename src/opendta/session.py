@@ -119,7 +119,10 @@ class EvalContext:
         eq = ""
         if ":" in text:
             eq, text = text.split(":", 1)
-        i = _coef_index(est, self.s, text, eq.strip())
+        try:
+            i = _coef_index(est, self.s, text, eq.strip())
+        except StataError:
+            raise StataError(111, f"[{text}] not found")
         if name == "_se":
             v = float(est.V[i, i])
             return float(_np.sqrt(v)) if v > 0 else 0.0

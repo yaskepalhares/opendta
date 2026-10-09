@@ -47,7 +47,7 @@ _NUM = re.compile(r"(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 _MISS = re.compile(r"\.([a-z])?(?![A-Za-z0-9_])")
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # operadores de séries temporais numa expressão: L.y, L2.y, D.y, LD.y ([U] 13.9)
-_TSNAME = re.compile(r"(?:[LFDS]\d*)+\.[A-Za-z_][A-Za-z0-9_]*")
+_TSNAME = re.compile(r"(?:(?:[LFDS]\d*)+\.)+[A-Za-z_][A-Za-z0-9_]*")
 _OPS = ("==", "!=", "~=", ">=", "<=", "+", "-", "*", "/", "^", "!", "~",
         ">", "<", "&", "|", "(", ")", "[", "]", ",", "=")
 

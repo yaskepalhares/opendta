@@ -64,8 +64,9 @@ def test_factor_variables_names(run):
 def test_collinearity_note(run):
     run(DATA + "gen x3 = 2*x1\n")
     out = run("regress y x1 x3 x2")
-    assert "note: x3 omitted because of collinearity" in out
-    assert "x3 |          0  (omitted)" in out
+    # como o Stata (compat 0501): com x3 = 2*x1, sai x1
+    assert "note: x1 omitted because of collinearity" in out
+    assert "x1 |          0  (omitted)" in out
 
 
 def test_tsset_and_lags(run):

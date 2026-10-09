@@ -1,6 +1,7 @@
 * Fase 5a: regress (tabela ANOVA, coeficientes, vce, pesos, opções).
 clear
 estimates clear
+ereturn clear
 set seed 2024
 set obs 60
 gen g = ceil(_n/20)

@@ -1,10 +1,11 @@
 * Fase 5a: tsset, xtset e operadores de séries temporais.
 clear
 estimates clear
+ereturn clear
 set obs 15
 gen t = _n
 gen y = 10 + 2*t + mod(t*7, 5)
-gen x = mod(t*3, 7)
+gen x = mod(t*3, 7) + t/10
 capture noisily gen ly = L.y
 tsset t
 tsset

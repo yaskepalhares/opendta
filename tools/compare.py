@@ -11,6 +11,11 @@ Para cada compat/do/NOME.do:
 
 Antes de comparar, cabeçalho e rodapé do log, linhas `. do ...`/`. log close`
 e espaços no fim das linhas são descartados; linhas em branco são ignoradas.
+
+Números com 15 ou mais algarismos significativos (return list, ereturn list)
+podem diferir no último algarismo: a ordem das somas em ponto flutuante não é
+a mesma do Stata. Essas linhas contam como iguais quando o resto do texto é
+idêntico e a diferença relativa é menor que 1e-12.
 """
 
 from __future__ import annotations
@@ -48,6 +53,34 @@ def normalize(text: str) -> list[str]:
     if len(out) >= 2 and out[-2] == "end of do-file" and re.fullmatch(r"r\(\d+\);", out[-1]):
         out.pop()
     return out
+
+
+_NUM = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:e[-+]\d+)?")
+
+
+def _digits(tok: str) -> int:
+    mant = tok.lstrip("-").split("e")[0].replace(".", "").lstrip("0")
+    return len(mant)
+
+
+def _close_line(a: str, b: str) -> bool:
+    """Mesma linha a menos de ruído no 16º algarismo de números longos."""
+    if _NUM.sub("#", a) != _NUM.sub("#", b):
+        return False
+    na, nb = _NUM.findall(a), _NUM.findall(b)
+    for x, y in zip(na, nb):
+        if x == y:
+            continue
+        if min(_digits(x), _digits(y)) < 15:
+            return False
+        fx, fy = float(x), float(y)
+        if abs(fx - fy) > 1e-12 * max(abs(fx), abs(fy)):
+            return False
+    return True
+
+
+def same_logs(a: list[str], b: list[str]) -> bool:
+    return len(a) == len(b) and all(x == y or _close_line(x, y) for x, y in zip(a, b))
 
 
 def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
@@ -110,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         a = normalize(exp.read_text(encoding="utf-8", errors="replace"))
         b = normalize(got.read_text(encoding="utf-8", errors="replace"))
-        if a == b:
+        if same_logs(a, b):
             print(f"  ok {f.stem}")
             passed += 1
         else:

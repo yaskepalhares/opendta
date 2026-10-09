@@ -293,9 +293,9 @@ def term_missing(ds: "Dataset", terms: list[Term]) -> np.ndarray:
 def _levels(ds: "Dataset", c: Component, x: np.ndarray) -> tuple[list[float], float | None]:
     vals = x[x < SYS]
     if np.any(vals < 0):
-        raise StataError(452, "factor variables may not contain negative values")
+        raise StataError(452, f"{c.var}:  factor variables may not contain negative values")
     if np.any(vals != np.trunc(vals)):
-        raise StataError(452, "factor variables may not contain noninteger values")
+        raise StataError(452, f"{c.var}:  factor variables may not contain noninteger values")
     levels = sorted(set(vals.tolist()))
     if c.levels is not None:
         levels = [lv for lv in levels if lv in set(c.levels)]
@@ -413,43 +413,52 @@ def ts_rowlabel(ops: list) -> str:
 
 def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = None,
                    tol: float = 1e-13) -> list[str]:
-    """Marca como omitidas as colunas colineares com as anteriores (e a
-    constante); devolve os nomes para as notas "omitted because of
-    collinearity". VERIFICAR a tolerância do _rmcoll."""
-    notes = []
-    kept: list[np.ndarray] = []
-    n = None
-    for c in cols:
-        if c.values is not None:
-            n = len(c.values)
-            break
-    if n is None:
+    """Marca como omitidas as colunas colineares; devolve os nomes para as
+    notas "omitted because of collinearity".
+
+    Varre a matriz de produtos cruzados (centrada, se há constante) como o
+    invsym() do Stata, que escolhe as colunas "para minimizar o erro de
+    arredondamento": a cada passo, o maior elemento restante da diagonal.
+    Com x3 = 2*x1, o Stata omite x1 (compat 0501). VERIFICAR a regra geral
+    e a tolerância."""
+    notes: list[str] = []
+    live = [c for c in cols if not c.base and not c.omitted and c.values is not None]
+    if not live:
         return notes
-    sw = np.sqrt(w) if w is not None else np.ones(n)
-    Q: list[np.ndarray] = []
+    n = len(live[0].values)
+    ww = np.ones(n) if w is None else np.asarray(w, dtype=np.float64)
+    X = np.column_stack([c.values for c in live])
     if constant:
-        q = sw / np.linalg.norm(sw) if np.linalg.norm(sw) > 0 else sw
-        Q.append(q)
-    for c in cols:
-        if c.base or c.omitted or c.values is None:
+        X = X - (ww @ X) / ww.sum()
+    A = (X * ww[:, None]).T @ X
+    k = A.shape[0]
+    orig = np.diag(A).copy()
+    done = np.zeros(k, dtype=bool)
+    dropped = np.zeros(k, dtype=bool)
+    for _ in range(k):
+        cand = [j for j in range(k) if not done[j]]
+        if not cand:
+            break
+        j = max(cand, key=lambda q: A[q, q])
+        d = A[j, j]
+        done[j] = True
+        if d <= tol * max(orig[j], 1e-300) or orig[j] <= 0:
+            dropped[j] = True
             continue
-        v = c.values * sw
-        norm0 = float(v @ v)
-        r = v.copy()
-        for _ in range(2):
-            for q in Q:
-                r -= (q @ r) * q
-        res = float(r @ r)
-        # relativo à variação da coluna em torno da média (como o _rmcoll)
-        centered = v - (v @ Q[0]) * Q[0] if constant and Q else v
-        scale = float(centered @ centered) if constant else norm0
-        if norm0 == 0 or scale == 0 or res <= tol * max(scale, 1e-300) or res <= 1e-26 * max(norm0, 1):
+        # varredura (sweep) no pivô j
+        row = A[j, :].copy()
+        A = A - np.outer(row, row) / d
+        A[j, :] = 0
+        A[:, j] = 0
+    # colunas não varridas que zeraram também são colineares
+    for j in range(k):
+        if not done[j] and A[j, j] <= tol * max(orig[j], 1e-300):
+            dropped[j] = True
+    for j, c in enumerate(live):
+        if dropped[j] or orig[j] <= 0:
             c.omitted = True
             c.values = None
             notes.append(c.name)
-            continue
-        Q.append(r / np.sqrt(res))
-        kept.append(v)
     return notes
 
 

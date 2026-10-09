@@ -499,7 +499,7 @@ def cmd_testparm(s: "Session", args: str) -> None:
     if o.get("equal"):
         cons = []
         for j in idx[1:]:
-            cons.append(({idx[0]: 1.0, j: -1.0}, 0.0))
+            cons.append(({idx[0]: -1.0, j: 1.0}, 0.0))
     else:
         cons = [({i: 1.0}, 0.0) for i in idx]
     _wald(s, est, cons)
@@ -535,16 +535,10 @@ def cmd_lincom(s: "Session", args: str) -> None:
     else:
         coef_table(s, est.depvar, [CoefRow("coef", "(1)", val, se)], stat=est.stat, df=est.df_r,
                    level=lev)
-    s.r = {}
-    from .results import pvalue
-    tv = val / se if se > 0 else SYS
-    s.r = {"estimate": val, "se": se, "df": float(est.df_r) if est.df_r else SYS}
-    if est.stat == "t":
-        s.r["t"] = tv
-    else:
-        s.r["z"] = tv
-    s.r["p"] = pvalue(est.stat, tv, est.df_r) if se > 0 else SYS
-    s.r = dict(reversed(list(s.r.items())))
+    # r(): só estimate, se e df no Stata 14 (compat 0504); a lista sai invertida
+    s.r = {"estimate": val, "se": se}
+    if est.df_r:
+        s.r["df"] = float(est.df_r)
 
 
 def _eform_line(s, est, ev, ese, tv, p, lo, hi, lev, title):
@@ -606,6 +600,7 @@ def cmd_estimates(s: "Session", args: str) -> None:
             raise StataError(111, f"estimation result {name} not found")
         _restore(s, st_[name])
         s.e["_estimates_name"] = name   # VERIFICAR: e(_estimates_name)
+        s.output.write(f"(results {name} are active now)\n", "text")
         return
     if sub in ("dir",):
         if not st_:
@@ -652,16 +647,18 @@ def cmd_estimates(s: "Session", args: str) -> None:
 
 
 def _est_dir(s: "Session", st_: dict) -> None:
+    """Layout do Stata 14 (compat 0504): a coluna title é o título dado por
+    estimates title, não e(title)."""
     out = s.output
     out.write("\n", "text")
-    out.write("-" * 77 + "\n", "text")
-    out.write(f"{'name':>12} | {'command':>11}  {'depvar':>12}  {'npar':>5}  title \n", "text")
-    out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
+    out.write("-" * 55 + "\n", "text")
+    out.write(f"{'name':>12} | {'command':<12} {'depvar':<12} {'npar':>4}  title \n", "text")
+    out.write("-" * 13 + "+" + "-" * 41 + "\n", "text")
     for name, snap in st_.items():
         e = snap["e"]
         b = e.get("b")
         npar = b.cols if b is not None else 0
         out.write(f"{name:>12} | ", "text")
-        out.write(f"{e.get('cmd', ''):>11}  {e.get('depvar', ''):>12}  {npar:>5}  {e.get('title', '')}\n",
-                  "result")
-    out.write("-" * 77 + "\n", "text")
+        out.write(f"{e.get('cmd', ''):<12} {e.get('depvar', ''):<12} {npar:>4}  "
+                  f"{snap.get('title', '')}\n", "result")
+    out.write("-" * 55 + "\n", "text")

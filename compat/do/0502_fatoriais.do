@@ -1,6 +1,7 @@
 * Fase 5a: variáveis fatoriais e interações em regress.
 clear
 estimates clear
+ereturn clear
 set seed 77
 set obs 48
 gen g = 1 + mod(_n, 3)
