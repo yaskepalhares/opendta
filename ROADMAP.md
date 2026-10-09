@@ -74,9 +74,9 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 **Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/diferencas_conhecidas.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
 
-## Fase 4: Mata (em andamento)
+## Fase 4: Mata ✅
 
-**4a–4c ✅ (primeira versão, aguardando conferência com o Stata)**
+**4a–4c ✅**
 - [x] Lexer e analisador com a precedência do Mata; tipos real, string, complex, pointer e struct; escalares, vetores e matrizes
 - [x] Operadores (aritméticos, com dois-pontos, transposta, Kronecker, junções `,` e `\`, sequências `..` e `::`, relacionais, lógicos, `?:`), subscritos `[i,j]` e `[|...|]`, missing propagados como no Stata
 - [x] Controle de fluxo (`if`, `for`, `while`, `do`, `break`, `continue`, `return`), funções do usuário com tipos, argumentos opcionais e passagem por referência, `struct`, ponteiros
@@ -84,18 +84,18 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Biblioteca: ~150 funções (matemáticas, matriciais, estatísticas, missing, strings, `printf`/`sprintf`)
 - [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
 
-**4d**
+**4d ✅**
 - [x] Exibição, mensagens e erros conferidos com o Stata 14 (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
 - [x] `st_view` que grava nos dados ao atribuir a elementos; arrays associativos (`asarray`); `optimize()` com avaliadores d0/d1/d2 e técnicas nr/bfgs
-- [ ] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`)
-- [ ] Classes; `moptimize()` (junto com o `ml` da fase 5)
+- [x] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`; no `optimize()` d0, só o ruído das derivadas numéricas difere)
+- `moptimize()` passou para a fase 5, junto com o `ml`; classes do Mata, para a fase 8
 
 ## Fase 5: estimação
 
 - [ ] Variáveis fatoriais (`i.`, `c.`, `#`, `##`) e operadores de séries temporais (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
 - [ ] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
 - [ ] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `xtlogit`, `areg`
-- [ ] Erros-padrão robustos, por cluster e bootstrap; motor `ml` (máxima verossimilhança)
+- [ ] Erros-padrão robustos, por cluster e bootstrap; motor `ml` (máxima verossimilhança) e `moptimize()` do Mata
 
 ## Fase 6: amostras complexas
 
@@ -113,6 +113,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 ## Fase 8: restante do Stata 14 e ferramentas da interface
 
+- [ ] Classes do Mata (`class`, herança, métodos virtuais)
 - [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
 - [ ] Do-file Editor com realce de sintaxe e execução de seleção; diálogos dos menus; impressão
 
