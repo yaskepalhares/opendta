@@ -8,7 +8,7 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 3 (estatística descritiva e manipulação de dados)
+## Estado atual: fase 4 (Mata)
 
 Já funciona:
 
@@ -21,6 +21,7 @@ Já funciona:
 - os prefixos `quietly`, `noisily` e `capture` (também em blocos `{ }`);
 - `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` e `error`;
 - erros com as mensagens e os códigos `r(#)` do Stata, seguidos de uma explicação do OpenDTA: o que deu errado no comando e como resolver (desligue com `set hints off`, ou pelo menu Help → Explain Errors);
+- notação científica com expoente sobrescrito na exibição (`1.0000×10¹⁰` em vez de `1.00000e+10`); `set superscript off` volta à forma do Stata, e texto que pode ser lido de volta (`string()`, macros, `file write`, exportação) sempre usa a forma do Stata;
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
 - programação: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, funções estendidas de macro, `matrix`, `.ado` de terceiros no adopath, `log`/`cmdlog`, `assert`, `set trace` e `timer`;
@@ -37,7 +38,9 @@ Já funciona:
 - manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
 - números aleatórios: Mersenne Twister de 64 bits, `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições.
 
-Ainda não há estimação (`regress`, `logit`…) nem Mata, que vêm nas fases 4 e 5.
+- Mata: blocos `mata ... end`, funções do usuário, structs e ponteiros, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
+
+Ainda não há estimação (`regress`, `logit`…), que vem na fase 5.
 
 ## Instalação (macOS)
 

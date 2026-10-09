@@ -48,10 +48,12 @@ a command name, or click a topic below.
 {p2col :{help syntax}}parse a program's arguments{p_end}
 {p2col :{help matrix}}matrices and matrix expressions{p_end}
 {p2col :{help log}}record the session in a file{p_end}
+{p2col :{help mata}}the matrix programming language{p_end}
 {p2colreset}{...}
 
 {title:OpenDTA additions}
 
 {p2colset 5 24 26 2}{...}
 {p2col :{help hints}}error explanations ({cmd:set hints}){p_end}
+{p2col :{help superscript}}superscript exponents, 1.0×10¹⁰ ({cmd:set superscript}){p_end}
 {p2colreset}{...}

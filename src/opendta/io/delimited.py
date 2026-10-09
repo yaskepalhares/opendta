@@ -363,8 +363,9 @@ class WriteOptions:
 def number_text(x: float, vtype: str, fmt: str | None = None, *, leading_zero: bool = False) -> str:
     """Texto de um valor, igual ao que export delimited grava."""
     if fmt and x < M.SYSMISS:
-        from ..core.formats import format_value
-        return format_value(x, fmt, pad=False).strip()
+        from ..core.formats import format_value, plain_numbers
+        with plain_numbers():
+            return format_value(x, fmt, pad=False).strip()
     v = Variable("_", vtype, np.array([x], dtype=np.float64))
     return str(_number_cells(v, v.raw, leading_zero)[0])
 
@@ -425,12 +426,13 @@ def write_delimited(ds: Dataset, path: str | Path, names: list[str], rows: np.nd
                     columns.append([q(s) for s in part.tolist()])
                     continue
                 if opts.datafmt:
-                    from ..core.formats import format_value
+                    from ..core.formats import format_value, plain_numbers
                     dec = storage.decode(part, v.vtype)
-                    cells = np.array([("" if x >= M.SYSMISS and M.missing_name(x) == "."
-                                       else M.missing_name(x) if x >= M.SYSMISS
-                                       else format_value(x, v.fmt, pad=False).strip()) for x in dec],
-                                     dtype=object)
+                    with plain_numbers():
+                        cells = np.array([("" if x >= M.SYSMISS and M.missing_name(x) == "."
+                                           else M.missing_name(x) if x >= M.SYSMISS
+                                           else format_value(x, v.fmt, pad=False).strip()) for x in dec],
+                                         dtype=object)
                 else:
                     cells = _number_cells(v, part, opts.leading_zero)
                 lab = ds.value_labels.get(v.value_label, {}) if v.value_label and not opts.nolabel else {}

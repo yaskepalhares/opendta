@@ -23,8 +23,20 @@ def _console_listener(text: str, style: str) -> None:
     sys.stdout.flush()
 
 
+def _terminal_has_superscripts() -> bool:
+    """Terminais sem UTF-8 (ex.: cp1252 redirecionado no Windows) não têm ⁻ e
+    ⁴…⁹; nesse caso o console usa a forma do Stata (e+10)."""
+    try:
+        "×10⁻⁰¹²³⁴⁵⁶⁷⁸⁹".encode(sys.stdout.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
 def run_console() -> int:
     s = Session()
+    if not _terminal_has_superscripts():
+        s.run("quietly set superscript off")
     s.output.add_listener(_console_listener)
     print(f"OpenDTA {__version__} — console. Digite 'exit' para sair.")
     while True:

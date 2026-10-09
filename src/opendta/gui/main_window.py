@@ -246,6 +246,8 @@ class MainWindow(QMainWindow):
         self._apply_styles()
 
         self.session.settings["hints"] = "on" if self.prefs.hints else "off"
+        if not self.prefs.superscript:
+            self.session.run("quietly set superscript off")
         self.session.ui_hooks["set_permanently"] = self._set_permanently
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
@@ -440,6 +442,13 @@ class MainWindow(QMainWindow):
         self.act_hints.triggered.connect(self._toggle_hints)
         m.addAction(self.act_hints)
         self._action(m, "About Error Explanations", self.show_hints_help)
+        self.act_superscript = QAction("Superscript Exponents (set superscript)", self, checkable=True)
+        self.act_superscript.setToolTip("Show scientific notation as 1.0000\u00d710\u00b9\u2070 "
+                                        "instead of 1.00000e+10. Same as typing \"set superscript "
+                                        "on\" or \"set superscript off\".")
+        self.act_superscript.setStatusTip(self.act_superscript.toolTip())
+        self.act_superscript.triggered.connect(self._toggle_superscript)
+        m.addAction(self.act_superscript)
         m.addSeparator()
         self._action(m, "About OpenDTA", self.show_about)
 
@@ -732,9 +741,14 @@ class MainWindow(QMainWindow):
             self.browser.set_dark(theme == "dark")
 
     def _set_permanently(self, name: str, value: str) -> None:
-        """set ..., permanently: lembrado na próxima abertura (só hints, por ora)."""
+        """set ..., permanently: lembrado na próxima abertura (hints e superscript)."""
         if name == "hints":
             self.prefs.hints = value == "on"
+        elif name == "superscript":
+            self.prefs.superscript = value == "on"
+
+    def _toggle_superscript(self, on: bool) -> None:
+        self.run_command(f"set superscript {'on' if on else 'off'}, permanently")
 
     def _toggle_hints(self, on: bool) -> None:
         # vira comando, para ficar em Results e Review como qualquer set
@@ -766,6 +780,8 @@ class MainWindow(QMainWindow):
     def refresh_state(self) -> None:
         if hasattr(self, "act_hints"):
             self.act_hints.setChecked(self.session.settings.get("hints", "on") == "on")
+        if hasattr(self, "act_superscript"):
+            self.act_superscript.setChecked(self.session.settings.get("superscript", "on") == "on")
         cwd = os.getcwd()
         self.cwd_label.setText(cwd)
         ds = self.session.data

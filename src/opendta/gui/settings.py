@@ -64,6 +64,15 @@ class Preferences:
         self._s.setValue("behavior/hints", "on" if on else "off")
 
     @property
+    def superscript(self) -> bool:
+        """Expoente sobrescrito na notação científica (set superscript) ao abrir."""
+        return str(self._s.value("behavior/superscript", "on")) != "off"
+
+    @superscript.setter
+    def superscript(self, on: bool) -> None:
+        self._s.setValue("behavior/superscript", "on" if on else "off")
+
+    @property
     def font_family(self) -> str:
         return str(self._s.value("fonts/family", default_monospace()[0]))
 

@@ -25,6 +25,8 @@ foreach f of local arquivos {
     foreach r of local restos {
         capture erase "`r'"
     }
+    * cada caso começa com o Mata vazio (funções de um caso não vazam para o outro)
+    capture mata: mata clear
     log using "expected/`nome'.log", text replace
     capture noisily do "do/`f'"
     log close

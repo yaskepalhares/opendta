@@ -74,18 +74,28 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 **Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/diferencas_conhecidas.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
 
-## Fase 4: Mata
+## Fase 4: Mata ✅
 
-- [ ] Interpretador de Mata: tipos, operadores matriciais, funções, controle de fluxo
-- [ ] Integração com os dados: `st_data`, `st_view`, `st_store`, `st_local`, `st_numscalar`, `st_matrix`
-- [ ] Biblioteca de funções Mata usada pelos comandos de estimação
+**4a–4c ✅**
+- [x] Lexer e analisador com a precedência do Mata; tipos real, string, complex, pointer e struct; escalares, vetores e matrizes
+- [x] Operadores (aritméticos, com dois-pontos, transposta, Kronecker, junções `,` e `\`, sequências `..` e `::`, relacionais, lógicos, `?:`), subscritos `[i,j]` e `[|...|]`, missing propagados como no Stata
+- [x] Controle de fluxo (`if`, `for`, `while`, `do`, `break`, `continue`, `return`), funções do usuário com tipos, argumentos opcionais e passagem por referência, `struct`, ponteiros
+- [x] Blocos `mata`/`mata:` ... `end` com o eco do Stata, `mata: instrução`, `mata clear/describe/drop`; erros no formato do Mata (`<istmt>:  3499  x not found`)
+- [x] Biblioteca: ~150 funções (matemáticas, matriciais, estatísticas, missing, strings, `printf`/`sprintf`)
+- [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
+
+**4d ✅**
+- [x] Exibição, mensagens e erros conferidos com o Stata 14 (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
+- [x] `st_view` que grava nos dados ao atribuir a elementos; arrays associativos (`asarray`); `optimize()` com avaliadores d0/d1/d2 e técnicas nr/bfgs
+- [x] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`; no `optimize()` d0, só o ruído das derivadas numéricas difere)
+- `moptimize()` passou para a fase 5, junto com o `ml`; classes do Mata, para a fase 8
 
 ## Fase 5: estimação
 
 - [ ] Variáveis fatoriais (`i.`, `c.`, `#`, `##`) e operadores de séries temporais (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
 - [ ] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
 - [ ] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `xtlogit`, `areg`
-- [ ] Erros-padrão robustos, por cluster e bootstrap; motor `ml` (máxima verossimilhança)
+- [ ] Erros-padrão robustos, por cluster e bootstrap; motor `ml` (máxima verossimilhança) e `moptimize()` do Mata
 
 ## Fase 6: amostras complexas
 
@@ -103,6 +113,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 ## Fase 8: restante do Stata 14 e ferramentas da interface
 
+- [ ] Classes do Mata (`class`, herança, métodos virtuais)
 - [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
 - [ ] Do-file Editor com realce de sintaxe e execução de seleção; diálogos dos menus; impressão
 
@@ -114,3 +125,4 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 ## Melhorias em relação ao Stata (ao longo das fases)
 
 - [x] Explicação dos erros: depois da mensagem e antes do r(#), uma linha diz o que deu errado no contexto do comando e outra sugere como resolver (nomes parecidos, arquivos parecidos na pasta, número de observações…). Em inglês; `set hints off` desliga
+- [x] Expoente sobrescrito na notação científica exibida (`1.0000×10¹⁰`, `2.5×10⁻⁵`), mantendo a largura do formato; `set superscript off` (ou Help → Superscript Exponents) volta ao `e+10` do Stata. `string()`, macros, `file write`, exportação e `sprintf()`/`strofreal()` do Mata ficam sempre na forma do Stata

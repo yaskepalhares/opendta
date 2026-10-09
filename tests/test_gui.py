@@ -246,6 +246,25 @@ def test_help_hints_toggle(app):
     w.close()
 
 
+def test_help_superscript_toggle(app):
+    from opendta.core.formats import superscript
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    assert w.act_superscript.isChecked() and superscript()
+    w.run_command("display 1e10/3")
+    assert "3.333×10⁹" in w.results.toPlainText()
+    w.act_superscript.trigger()                  # desliga pelo menu Help
+    assert w.session.settings["superscript"] == "off" and not w.prefs.superscript
+    assert not superscript()
+    w.close()
+    w2 = MainWindow()                            # lembrado na próxima abertura
+    assert not w2.act_superscript.isChecked() and not superscript()
+    w2.act_superscript.trigger()
+    assert w2.prefs.superscript and superscript()
+    w2.close()
+
+
 def test_viewer_help_and_log(app, tmp_path, monkeypatch):
     from opendta.gui.main_window import MainWindow
 

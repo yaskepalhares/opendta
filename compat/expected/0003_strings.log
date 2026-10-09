@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0003_strings.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 10:27:09
 
 . * Funções de string. Para concatenar no display é preciso usar parênteses:
 . * uma string entre aspas no início de uma diretiva é texto literal.
@@ -104,5 +104,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0003_strings.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 10:27:09
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
