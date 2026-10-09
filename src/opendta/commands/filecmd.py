@@ -179,7 +179,9 @@ def cmd_file(s: "Session", args: str) -> None:
     if sub in ("open",):
         _open(s, rest)
     elif sub in ("write", "w"):
-        _write(s, rest)
+        from ..core.formats import plain_numbers
+        with plain_numbers():          # o arquivo guarda o número como o Stata
+            _write(s, rest)
     elif sub in ("read", "r"):
         _read(s, rest)
     elif sub == "close":

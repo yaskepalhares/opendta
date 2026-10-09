@@ -8,6 +8,7 @@ estão marcados com "VERIFICAR" e têm casos na suíte compat/.
 from __future__ import annotations
 
 import datetime as _dt
+from contextlib import contextmanager
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
@@ -82,6 +83,34 @@ def decimal_comma() -> bool:
     return _DP["comma"]
 
 
+# set superscript on|off (OpenDTA): na exibição, a notação científica usa
+# expoente sobrescrito (1.0000×10¹⁰ em vez de 1.00000e+10). Ligado por padrão;
+# o compare.py e os testes de formato desligam, porque o Stata usa e+XX.
+# Nunca vale para texto que pode ser lido de volta: string(), macros,
+# file write, export, sprintf() do Mata (dp=False ou plain_numbers()).
+_SUP = {"on": True}
+_SUP_DIGITS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def set_superscript(on: bool) -> None:
+    _SUP["on"] = bool(on)
+
+
+def superscript() -> bool:
+    return _SUP["on"]
+
+
+@contextmanager
+def plain_numbers():
+    """Desliga o expoente sobrescrito enquanto o bloco roda (texto que vira dado)."""
+    saved = _SUP["on"]
+    _SUP["on"] = False
+    try:
+        yield
+    finally:
+        _SUP["on"] = saved
+
+
 def _swap_dp(s: str) -> str:
     return s.translate(str.maketrans({".": ",", ",": "."}))
 
@@ -112,9 +141,9 @@ def format_value(value, fmt: Format | str = DEFAULT_NUMERIC, *, pad: bool = True
         if fmt.zero_pad and not fmt.left:
             out = out.zfill(fmt.width)
     elif fmt.kind == "e":
-        out = _fmt_e(x, fmt.decimals)
+        out = _fmt_e(x, fmt.decimals, sup=dp and _SUP["on"])
     elif fmt.kind == "g":
-        out = general(x, fmt.width)
+        out = general(x, fmt.width, sup=dp and _SUP["on"])
     elif fmt.kind == "t":
         out = _date(x, fmt)
     else:
@@ -131,23 +160,25 @@ def _fmt_f(x: float, decimals: int, comma: bool = False) -> str:
     return f"{q:,.{decimals}f}" if comma else f"{q:.{decimals}f}"
 
 
-def _fmt_e(x: float, decimals: int) -> str:
+def _fmt_e(x: float, decimals: int, sup: bool = False) -> str:
     if x == 0:
-        return f"{0:.{decimals}e}"
+        return f"{0:.{decimals}f}" + _exp_text(0, sup)
     d = Decimal(x)
     exp = d.adjusted()
     mant = (d.scaleb(-exp)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
     if abs(mant) >= 10:
         exp += 1
         mant = (d.scaleb(-exp)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
-    return f"{mant:.{decimals}f}" + _exp_text(exp)
+    return f"{mant:.{decimals}f}" + _exp_text(exp, sup)
 
 
-def _exp_text(e: int) -> str:
+def _exp_text(e: int, sup: bool = False) -> str:
+    if sup:
+        return "×10" + str(e).translate(_SUP_DIGITS)
     return f"e{'-' if e < 0 else '+'}{abs(e):02d}"
 
 
-def general(x: float, width: int) -> str:
+def general(x: float, width: int, sup: bool = False) -> str:
     """Formato %w.0g, com a regra observada nos logs do Stata 14:
 
     * uma posição fica reservada para o sinal: o número usa no máximo
@@ -157,6 +188,9 @@ def general(x: float, width: int) -> str:
       é < -4 ou >= P, como o %g da linguagem C; senão, notação fixa sem zeros
       à direita e sem o zero antes do ponto (.5);
     * na exponencial, a mantissa ocupa todo o espaço: 1.235e+09 em %10.0g.
+
+    Com `sup` (set superscript on), a exponencial sai como 1.2346×10⁹ e a
+    mantissa perde os dígitos necessários para caber na mesma largura.
     """
     if x == 0:
         return "0"
@@ -182,7 +216,7 @@ def general(x: float, width: int) -> str:
     if out is None:
         # exponencial: d.ddd...e+XX ocupando A caracteres
         for d in range(max(A - 2 - 4, 0), -1, -1):
-            s = _fmt_e(ax, d)
+            s = _fmt_e(ax, d, sup)
             if len(s) <= A or d == 0:
                 out = s
                 break

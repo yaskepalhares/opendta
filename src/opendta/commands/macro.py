@@ -292,8 +292,10 @@ def _capture_display(s: "Session", args: str) -> str:
     saved = out._listeners, out.column, out.quiet_depth, out.noisy_depth
     out._listeners = [cap]
     out.quiet_depth = out.noisy_depth = 0
+    from ..core.formats import plain_numbers
     try:
-        cmd_display(s, args + " _continue")
+        with plain_numbers():          # texto de macro pode ser lido de volta
+            cmd_display(s, args + " _continue")
     finally:
         out._listeners, out.column, out.quiet_depth, out.noisy_depth = saved
     return cap.text

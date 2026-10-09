@@ -30,7 +30,7 @@ def cmd_set(s: "Session", args: str) -> None:
     if name in ("seed", "rng"):
         _set_rng(s, name, value)
         return
-    if name in ("more", "rmsg", "varabbrev", "trace", "hints") and value.split(",")[0].strip() not in ("on", "off"):
+    if name in ("more", "rmsg", "varabbrev", "trace", "hints", "superscript") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
     if name == "dp":
         v = value.split(",")[0].strip()
@@ -38,6 +38,9 @@ def cmd_set(s: "Session", args: str) -> None:
             raise StataError(198, "invalid syntax")
         from ..core.formats import set_decimal_comma
         set_decimal_comma(v == "comma")
+    if name == "superscript":
+        from ..core.formats import set_superscript
+        set_superscript(value.split(",")[0].strip() == "on")
     s.settings[name] = value.split(",")[0].strip()
     opts = value.partition(",")[2].strip()
     if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:

@@ -920,6 +920,13 @@ def _C(eng, v, r):
 # strings
 # ---------------------------------------------------------------------------
 
+def _plain(x: float, fmt: str) -> str:
+    """Número em texto que vira dado: sem expoente sobrescrito."""
+    from ..core.formats import plain_numbers
+    with plain_numbers():
+        return format_value(x, fmt, pad=False).strip()
+
+
 @lib("strofreal", 1, 2)
 def _strofreal(eng, v, r):
     fmt = v[1].str_scalar() if len(v) > 1 else "%9.0g"
@@ -927,7 +934,7 @@ def _strofreal(eng, v, r):
     out = np.empty(a.shape, dtype=object)
     for idx in np.ndindex(a.shape):
         x = float(a[idx])
-        out[idx] = M.missing_name(x) if x >= SYS else format_value(x, fmt, pad=False).strip()
+        out[idx] = M.missing_name(x) if x >= SYS else _plain(x, fmt)
     return MV(out, "string")
 
 
@@ -1086,7 +1093,9 @@ def _printf(eng, v, r):
 
 @lib("sprintf", 1, 99)
 def _sprintf(eng, v, r):
-    return string(sprintf(v[0].str_scalar(), v[1:]))
+    from ..core.formats import plain_numbers
+    with plain_numbers():              # vira dado: sem expoente sobrescrito
+        return string(sprintf(v[0].str_scalar(), v[1:]))
 
 
 @lib("errprintf", 1, 99)
