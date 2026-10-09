@@ -245,7 +245,7 @@ class Interpreter:
                 if self.s.data.has(n):
                     fmt = self.s.data.get(n).fmt
                 else:
-                    fmt = default_format(pending_type or self.s.settings.get("type", "float"))
+                    fmt = default_format(pending_type or self.s.default_type())
                 pending_type = None
                 m = re.match(r"^%-?(\d+)", fmt)
                 width = (int(m.group(1)) if m else 9) + 2

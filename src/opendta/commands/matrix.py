@@ -566,10 +566,17 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
     cells = [[format_value(float(x), f, pad=False).strip() if x < M.SYSMISS
               else M.missing_name(float(x)) for x in row] for row in mat.data]
     rw = max([len(n) for n in mat.rownames] + [0]) if names else 0
-    # todas as colunas têm a mesma largura: o maior valor ou nome de coluna
-    # (observado no Stata 14, compat/expected/0203_matrix.log)
     shown = [cells[i][j] for i in range(mat.rows) for j in range(mat.cols) if not sym or i >= j]
-    w_all = max([len(c) for c in mat.colnames] if names else [0])
+    # nomes com operadores (1b.k, L.x) ocupam duas linhas: "1b." sobre "k"
+    split = names and any("." in c for c in mat.colnames)
+    if split:
+        heads = [(c[: c.rfind(".") + 1], c[c.rfind(".") + 1:]) if "." in c else ("", c)
+                 for c in mat.colnames]
+    else:
+        heads = [("", c) for c in mat.colnames]
+    # todas as colunas com a largura do maior valor ou nome
+    # (observado no Stata 14, compat/expected/0203_matrix.log)
+    w_all = max([max(len(a), len(b)) for a, b in heads] if names else [0])
     w_all = max([w_all] + [len(c) for c in shown])
     widths = [w_all] * mat.cols
     if header:
@@ -577,10 +584,14 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
         extra = f":  {show_title}" if show_title else ""
         out.write(f"\n{lead}{title}[{mat.rows},{mat.cols}]{extra}\n", "text")
     if names:
-        line = " " * rw + "".join("  " + c.rjust(w) for c, w in zip(mat.colnames, widths))
+        if split:
+            # a parte do operador fica uma coluna à direita (compat 0502)
+            line = " " * (rw + 1) + "".join("  " + a.rjust(w) for (a, _), w in zip(heads, widths))
+            out.write(line.rstrip() + "\n", "text")
+        line = " " * rw + "".join("  " + b.rjust(w) for (_, b), w in zip(heads, widths))
         out.write(line + "\n", "text")
     for i in range(mat.rows):
-        out.write((mat.rownames[i].ljust(rw) if names else ""), "text")
+        out.write((mat.rownames[i].rjust(rw) if names else ""), "text")
         last = i + 1 if sym else mat.cols
         out.write("".join("  " + cells[i][j].rjust(widths[j]) for j in range(last)) + "\n", "result")
 

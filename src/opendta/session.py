@@ -51,6 +51,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "dp": "period",
     "hints": "on",       # OpenDTA: explicação depois das mensagens de erro
     "superscript": "on",  # OpenDTA: 1.0000×10¹⁰ em vez de 1.00000e+10 na exibição
+    "numerics": "stata",  # OpenDTA: precise = contas mais exatas (estimation/numerics.py)
 }
 
 
@@ -78,6 +79,10 @@ class EvalContext:
         s = self.s
         if s.data.has(name):
             return self.resolve_subscript(name, 1.0)
+        if "." in name:
+            from .lang.vexpr import ts_value
+            v = ts_value(s, name)
+            return float(v[0]) if len(v) else M.SYSMISS
         if name in s.scalars:
             return s.scalars[name]
         if name == "_pi":
@@ -94,7 +99,7 @@ class EvalContext:
 
     def resolve_subscript(self, name: str, index: Any) -> Value:
         if name in ("_b", "_se", "_coef"):
-            raise StataError(111, f"[{index}] not found")
+            return self._coef(name, index)
         var = self._variable(name)
         if var is None:
             raise StataError(111, f"{name} not found")
@@ -105,7 +110,30 @@ class EvalContext:
             return var.value(k - 1)
         return "" if var.is_string else M.SYSMISS
 
+    def _coef(self, name: str, index: Any) -> Value:
+        """_b[x], _se[x], _b[eq:x], [eq]_b[x] da última estimação."""
+        from .estimation.postest import _coef_index
+        from .estimation.results import current
+        import numpy as _np
+        est = current(self.s)
+        text = str(index).strip()
+        eq = ""
+        if ":" in text:
+            eq, text = text.split(":", 1)
+        try:
+            i = _coef_index(est, self.s, text, eq.strip())
+        except StataError:
+            raise StataError(111, f"[{text}] not found")
+        if name == "_se":
+            v = float(est.V[i, i])
+            return float(_np.sqrt(v)) if v > 0 else 0.0
+        return float(est.b[i])
+
     def resolve_result(self, kind: str, raw: str) -> Value:
+        if kind == "e" and raw.strip() == "sample":
+            from .estimation.postest import esample
+            m = esample(self.s)
+            return 1.0 if len(m) and m[0] else 0.0
         s = self.s
         if kind == "c":
             return s.creturn(raw)
@@ -140,6 +168,8 @@ class Session:
         rng.reset(int(self.settings["seed"]))
         from .core.formats import set_superscript
         set_superscript(self.settings["superscript"] == "on")
+        from .estimation.numerics import set_precise
+        set_precise(self.settings["numerics"] == "precise")
         self.by_groups = None   # Groups ativo durante um prefixo by
         self.context = EvalContext(self)
         self._mata = None
@@ -160,6 +190,14 @@ class Session:
     # -- notificações para a interface --------------------------------------
     def add_state_listener(self, fn: Callable[[], None]) -> None:
         self._state_listeners.append(fn)
+
+    def default_type(self) -> str:
+        """Tipo das variáveis novas: set type; com set numerics precise, double
+        no lugar de float."""
+        vt = self.settings.get("type", "float")
+        if vt == "float" and self.settings.get("numerics", "stata") == "precise":
+            return "double"
+        return vt
 
     def notify_state(self) -> None:
         for fn in list(self._state_listeners):

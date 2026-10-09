@@ -56,4 +56,5 @@ a command name, or click a topic below.
 {p2colset 5 24 26 2}{...}
 {p2col :{help hints}}error explanations ({cmd:set hints}){p_end}
 {p2col :{help superscript}}superscript exponents, 1.0×10¹⁰ ({cmd:set superscript}){p_end}
+{p2col :{help numerics}}Stata arithmetic or more precise arithmetic ({cmd:set numerics}){p_end}
 {p2colreset}{...}

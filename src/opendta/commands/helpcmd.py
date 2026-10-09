@@ -31,7 +31,7 @@ ALIASES = {
     "tempname": "preserve", "return": "program", "ereturn": "program", "sreturn": "program",
     "args": "syntax", "gettoken": "syntax", "marksample": "syntax", "markout": "syntax",
     "mat": "matrix", "cmdlog": "log", "set_hints": "hints", "hint": "hints",
-    "set_superscript": "superscript",
+    "set_superscript": "superscript", "set_numerics": "numerics",
     "su": "summarize", "sum": "summarize", "summ": "summarize", "tabstat": "summarize",
     "centile": "summarize", "pctile": "summarize", "_pctile": "summarize", "xtile": "summarize",
     "correlate": "summarize", "corr": "summarize", "pwcorr": "summarize",

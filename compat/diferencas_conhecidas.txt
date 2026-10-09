@@ -6,3 +6,4 @@
 0307_aleatorios       rnormal(), runiformint() e rpoisson() ainda não reproduzem o Stata (runiform, rbinomial, rchi2(2) e rexponential já reproduzem)
 0309_aleatorios_2     mesmo motivo do 0307 (rnormal usa três uniformes por sorteio, algoritmo não documentado)
 0406_mata_optimize    com avaliador d0, o gradiente no ótimo e os últimos dígitos de V são ruído das derivadas numéricas (~1e-12 e ~1e-8); a busca do passo do Stata não é documentada em detalhe. Log das iterações, parâmetros, valor e o caso d1 batem
+0507_poisson          no exposure(t), o limite superior do IC de _cons difere no 7º algarismo (.102692 x .1026919): o Stata reporta um ponto ainda não totalmente convergido; coeficientes, log e demais linhas batem
