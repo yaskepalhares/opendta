@@ -165,3 +165,39 @@ def test_poisson_matches_score_equations(run):
     assert np.allclose(X.T @ (c - np.exp(X @ b)), 0, atol=1e-3)
     out = run("poisson c x1 x2, irr vce(robust)")
     assert "IRR" in out and "Wald chi2(2)" in out and "log pseudolikelihood" in out
+
+
+def test_glm_binomial_equals_logit(run):
+    run(ML_DATA)
+    run("quietly logit y x1 x2")
+    b1 = run.session.e["b"].data.ravel().copy()
+    run("quietly glm y x1 x2, family(binomial)")
+    b2 = run.session.e["b"].data.ravel()
+    assert np.allclose(b1, b2, atol=1e-6)
+
+
+def test_fixed_effects_match_dummies(run):
+    run("clear\nset seed 9\nset obs 40\ngen id = ceil(_n/4)\ngen t = mod(_n-1,4)+1\n"
+        "gen x = runiform()*10 + id\ngen y = x + id + runiform()\nqui xtset id t")
+    run("quietly regress y x i.id")
+    bx = run.eval("_b[x]")
+    run("quietly xtreg y x, fe")
+    assert run.eval("_b[x]") == pytest.approx(bx, rel=1e-10)
+    run("quietly areg y x, absorb(id)")
+    assert run.eval("_b[x]") == pytest.approx(bx, rel=1e-10)
+
+
+def test_margins_linear_model(run):
+    run(DATA)
+    run("quietly regress y x1 x2")
+    out = run("margins, dydx(x1)")
+    assert "Average marginal effects" in out
+    assert run.session.r["b"].data[0, 0] == pytest.approx(run.eval("_b[x1]"), rel=1e-6)
+
+
+def test_ordered_and_multinomial_run(run):
+    run(ML_DATA + "gen r = 1 + (x1 > 3) + (x1 > 7)\n")
+    out = run("ologit r x2")
+    assert "/cut1" in out and "/cut2" in out
+    out = run("mlogit r x2")
+    assert "(base outcome)" in out
