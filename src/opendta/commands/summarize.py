@@ -254,7 +254,7 @@ def cmd_ci(s: "Session", args: str) -> None:
                 se = m.sd / math.sqrt(n) if n > 0 and m.sd < M.SYSMISS else M.SYSMISS
                 lo, hi = S.t_ci(mean, se, n - 1, level) if n > 1 else (M.SYSMISS, M.SYSMISS)
             out.write(f"{name12(v.name):>12} |", "text")
-            out.write(f" {n:>10,.0f}" + "   " + g9(mean) + "   " + g9(se) + "    " + g9(lo).rjust(11)
+            out.write(f" {n:>10,.0f}" + "   " + g9(mean) + "   " + g9(se) + "    " + g9(lo).rjust(12)
                       + "   " + g9(hi).rjust(9) + "\n", "result")
             s.r = {"N": float(n), "mean": mean, "se": se, "lb": lo, "ub": hi, "level": level}
 
@@ -268,11 +268,12 @@ def _clopper(k: float, n: float, level: float) -> tuple[float, float]:
 
 
 def _ttest_table(s: "Session", rows: list[tuple[str, float, float, float, float, float, float]],
-                 level: float, *, title: str, foot_rows: list | None = None) -> None:
+                 level: float, *, title: str, foot_rows: list | None = None,
+                 head: str = "Variable") -> None:
     out = s.output
     out.write(f"\n{title}\n", "text")
     out.write("-" * 78 + "\n", "text")
-    out.write(f"{'Variable':>8} |     Obs        Mean    Std. Err.   Std. Dev.   [{level:g}% Conf. Interval]\n",
+    out.write(f"{head:>8} |     Obs        Mean    Std. Err.   Std. Dev.   [{level:g}% Conf. Interval]\n",
               "text")
     out.write("-" * 9 + "+" + "-" * 68 + "\n", "text")
 
@@ -406,7 +407,7 @@ def _ttest_paired(s, v, other, mask, level):
     _ttest_table(s, rows, level, title="Paired t test", foot_rows=foot)
     t = md.mean / sed if sed else M.SYSMISS
     out = s.output
-    out.write(f" mean(diff) = mean({v.name} - {other.name})".ljust(66) + f"t = {t:>8.4f}\n", "text")
+    out.write(f"     mean(diff) = mean({v.name} - {other.name})".ljust(66) + f"t = {t:>8.4f}\n", "text")
     out.write(" Ho: mean(diff) = 0".ljust(49) + f"degrees of freedom = {n - 1:>8}\n", "text")
     _ha_lines(s, "mean(diff)", "0", "t", t, n - 1)
     lo_p, two, up = _pvals(t, n - 1)
@@ -456,10 +457,11 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
     foot = [("combined", len(allx), ma.mean, sea, ma.sd, *S.t_ci(ma.mean, sea, len(allx) - 1, level))]
     title = "Two-sample t test with unequal variances" if (unequal or welch) else \
         "Two-sample t test with equal variances"
-    _ttest_table(s, rows, level, title=title, foot_rows=foot)
+    _ttest_table(s, rows, level, title=title, foot_rows=foot, head="Group")
     lo, hi = S.t_ci(diff, sed, df, level)
     out = s.output
-    out.write(f"{'diff':>8} |" + " " * 8 + "   " + g9(diff) + "   " + g9(sed) + " " * 12 + "    " + g9(lo)
+    out.write("-" * 9 + "+" + "-" * 68 + "\n", "text")
+    out.write(f"{'diff':>8} |" + " " * 8 + "   " + g9(diff) + "   " + g9(sed) + " " * 15 + g9(lo)
               + "   " + g9(hi) + "\n", "result")
     out.write("-" * 78 + "\n", "text")
     t = diff / sed
@@ -467,7 +469,9 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
     dflabel = "Satterthwaite's degrees of freedom" if unequal else (
         "Welch's degrees of freedom" if welch else "degrees of freedom")
     if unequal or welch:
-        out.write("Ho: diff = 0".ljust(78 - len(dflabel) - 3 - 8) + f"{dflabel} = {df:>8.4f}\n", "text")
+        # graus de liberdade não inteiros em %8.0g ("5.58439"; Stata 14)
+        out.write("Ho: diff = 0".ljust(78 - len(dflabel) - 3 - 8) + f"{dflabel} = "
+                  + format_value(df, "%8.0g") + "\n", "text")
     else:
         out.write("Ho: diff = 0".ljust(49) + f"degrees of freedom = {df:>8.0f}\n", "text")
     _ha_lines(s, "diff", "0", "t", t, df)
@@ -499,19 +503,20 @@ def cmd_prtest(s: "Session", args: str) -> None:
     z = (ph - p0) / math.sqrt(p0 * (1 - p0) / n)
     zc = S.z_crit(level)
     out = s.output
-    out.write("\nOne-sample test of proportion" + f"{v.name}: Number of obs = {n:>10,}".rjust(49) + "\n",
-              "text")
+    title = "One-sample test of proportion"
+    out.write("\n" + title + f"{v.name}: Number of obs = {n:>8,}".rjust(78 - len(title)) + "\n", "text")
     out.write("-" * 78 + "\n", "text")
-    out.write(f"{'Variable':>8} |       Mean   Std. Err.                     [{level:g}% Conf. Interval]\n",
+    out.write(f"    Variable |       Mean   Std. Err.                     [{level:g}% Conf. Interval]\n",
               "text")
-    out.write("-" * 9 + "+" + "-" * 68 + "\n", "text")
-    out.write(f"{_abbrev(v.name, 8):>8} |", "text")
-    out.write("   " + g9(ph) + "   " + g9(se) + " " * 25 + g9(ph - zc * se) + "   " + g9(ph + zc * se) + "\n",
+    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+    out.write(f"{name12(v.name):>12} |", "text")
+    out.write("  " + g9(ph) + "  " + g9(se) + " " * 21 + g9(ph - zc * se) + "   " + g9(ph + zc * se) + "\n",
               "result")
     out.write("-" * 78 + "\n", "text")
     out.write(f"    p = proportion({v.name})".ljust(66) + f"z = {z:>8.4f}\n", "text")
-    out.write(f"Ho: p = {_num(p0)}\n", "text")
-    _ha_lines(s, "p", _num(p0), "z", z, None)
+    # o valor da hipótese aparece com zero à esquerda ("Ho: p = 0.5"; Stata 14)
+    out.write(f"Ho: p = {p0:g}\n", "text")
+    _ha_lines(s, "p", f"{p0:g}", "z", z, None)
     lo_p, two, up = _pvals(z, None)
     s.r = {"N_1": float(n), "P_1": ph, "z": z, "p": two, "p_l": lo_p, "p_u": up}
 
@@ -573,7 +578,7 @@ def cmd_correlate(s: "Session", args: str) -> None:
             out.write(f"   {g9(mean[j])}    {g9(sd[j])}    {g9(X[:, j].min())}    {g9(X[:, j].max())}\n",
                       "result")
     mat = cov if o.get("covariance") else corr
-    cells = [[(format_value(float(mat[i, j]), "%9.4f" if not o.get("covariance") else "%9.0g",
+    cells = [[(format_value(float(mat[i, j]), "%9.4f" if not o.get("covariance") else "%8.0g",
                             pad=False).strip()) for j in range(len(names))] for i in range(len(names))]
     _corr_table(s, names, cells)
     s.r = {"N": float(n)}
@@ -656,7 +661,6 @@ def cmd_pwcorr(s: "Session", args: str) -> None:
 
 @command("centile", byable=True)
 def cmd_centile(s: "Session", args: str) -> None:
-    from scipy import stats as st
     p = parse_standard(args)
     o = match_options(p.options, {"centile": 1, "cci": 3, "normal": 1, "meansd": 1,
                                   "level": 1}) if p.options.strip() else {}
@@ -667,26 +671,51 @@ def cmd_centile(s: "Session", args: str) -> None:
     mask = touse(s, p)
     out = s.output
     head = "-- Binom. Interp. --" if not (o.get("normal") or o.get("meansd")) else "-- Normal, based on --"
-    out.write("\n" + " " * 54 + head + "\n", "text")
+    out.write("\n" + " " * 55 + head + "\n", "text")
     out.write(f"    Variable |       Obs  Percentile    Centile        [{level:g}% Conf. Interval]\n", "text")
     out.write("-" * 13 + "+" + "-" * 61 + "\n", "text")
     alpha = 1 - level / 100
+    held_any = False
+    s.r = {}
     for v in vars_:
         xs = np.sort(v.data[mask & S.valid(v.data)])
         n = len(xs)
         for k, c in enumerate(cents):
             q = c / 100
             val = S.centile_value(xs, c)
-            # VERIFICAR: limites binomiais interpolados
-            j = int(st.binom.ppf(alpha / 2, n, q))
-            kk = int(st.binom.ppf(1 - alpha / 2, n, q)) + 1
-            lo = float(xs[max(0, min(n - 1, j - 1))]) if n else M.SYSMISS
-            hi = float(xs[max(0, min(n - 1, kk - 1))]) if n else M.SYSMISS
+            (lo, lo_held), (hi, hi_held) = (_binom_limit(xs, q, alpha / 2),
+                                            _binom_limit(xs, q, 1 - alpha / 2))
+            held = lo_held or hi_held
+            held_any |= held
             name = f"{name12(v.name):>12}" if k == 0 else " " * 12
             out.write(name + " |", "text")
             obs = f"{n:>10,}" if k == 0 else " " * 10
-            out.write(f"{obs}{c:>12g}    {g9(val)}       {g9(lo)}   {g9(hi)}\n", "result")
-            s.r = {"N": float(n), f"c_{k + 1}": val, f"lb_{k + 1}": lo, f"ub_{k + 1}": hi}
+            out.write(f"{obs}{c:>11g}   {g9(val)}       {g9(lo)}   {g9(hi)}" + ("*" if held else "") + "\n",
+                      "result")
+            s.r.update({"N": float(n), f"c_{k + 1}": val, f"lb_{k + 1}": lo, f"ub_{k + 1}": hi})
+    if held_any:
+        out.write("\n* Lower (upper) confidence limit held at minimum (maximum) of sample\n", "text")
+
+
+def _binom_limit(xs: np.ndarray, q: float, target: float) -> tuple[float, bool]:
+    """Limite de confiança binomial interpolado do centil q ([R] centile).
+    Acha k com F(k-1) < target <= F(k), F a função de distribuição da
+    Binomial(n, q), e interpola entre x_(k) e x_(k+1) pela fração
+    (target - F(k-1)) / (F(k) - F(k-1)). Fora da amostra, o limite fica
+    no mínimo ou no máximo (marcado com * na saída). Conferido com
+    compat/expected/0301_summarize.log."""
+    from scipy import stats as st
+    n = len(xs)
+    if n == 0:
+        return M.SYSMISS, False
+    F = st.binom.cdf(np.arange(n + 1), n, q)
+    k = int(np.searchsorted(F, target - 1e-12, side="left"))
+    if k <= 0:
+        return float(xs[0]), True
+    if k >= n:
+        return float(xs[-1]), True
+    f = (target - F[k - 1]) / (F[k] - F[k - 1])
+    return float(xs[k - 1] + f * (xs[k] - xs[k - 1])), False
 
 
 def _pct_values(xs: np.ndarray, w, qs: list[float]) -> list[float]:

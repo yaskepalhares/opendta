@@ -141,7 +141,8 @@ def test_fillin(run):
 def test_append(run, files):
     run(f'use "{files}/m", clear\nappend using "{files}/u", generate(fonte)')
     assert run.rc == 0
-    assert names(run) == ["id", "nome", "renda", "idade", "fonte"]
+    # generate() fica logo depois das variáveis da master (Stata 14)
+    assert names(run) == ["id", "nome", "renda", "fonte", "idade"]
     assert col(run, "fonte") == [0, 0, 0, 0, 1, 1, 1]
     assert col(run, "renda")[4:] == [11, 22, 44]
     assert list(run.session.data.get("nome").raw)[4:] == ["", "", ""]
@@ -187,13 +188,14 @@ def test_merge_1to1_report(run, files):
         "    matched                                 2  (_merge==3)\n"
         "    -----------------------------------------\n")
     assert out == expected
-    assert col(run, "id") == [1, 2, 3, 4, 5]
-    assert col(run, "_merge") == [3, 3, 1, 2, 1]
-    assert col(run, "renda")[:4] == [10, MISS, 30, 44]
+    # master na ordem original, depois as obs. só da using (Stata 14)
+    assert col(run, "id") == [1, 2, 3, 5, 4]
+    assert col(run, "_merge") == [3, 3, 1, 1, 2]
+    assert col(run, "renda") == [10, MISS, 30, 50, 44]
     assert col(run, "idade")[:2] == [20, 30]
     ds = run.session.data
     assert ds.value_labels["_merge"][3] == "matched (3)"
-    assert ds.sortlist == ["id"]
+    assert ds.sortlist == [] and ds.get("_merge").fmt == "%23.0g"
 
 
 def test_merge_update_replace(run, files):
@@ -207,7 +209,8 @@ def test_merge_update_replace(run, files):
 def test_merge_keep_keepusing_nogen(run, files):
     run(f'use "{files}/m", clear')
     out = run(f'merge 1:1 id using "{files}/u", keep(match) keepusing(idade) nogenerate')
-    assert "matched                                 2  (_merge==3)" in out
+    # com nogenerate, sem a anotação (_merge==3)
+    assert "    matched                                 2\n" in out
     assert names(run) == ["id", "nome", "renda", "idade"]
     assert col(run, "renda") == [10, MISS]
 
@@ -280,7 +283,9 @@ joinby k using "{d}/j1"
     assert run.session.data.nobs == 4
     assert col(run, "b") == [10, 10, 20, 20]
     run(f'clear\ninput k b\n1 10\n3 30\nend\njoinby k using "{d}/j1", unmatched(both) _merge(m)')
-    assert col(run, "m") == [3, 3, 2, 1]
+    # master na ordem original; só da using no fim
+    assert col(run, "m") == [3, 3, 1, 2]
+    assert run.session.data.names == ["k", "b", "m", "a"]
     run(f'clear\nset obs 2\ngen c = _n\ncross using "{d}/j1"')
     assert run.session.data.nobs == 6
     assert col(run, "c") == [1, 1, 1, 2, 2, 2]

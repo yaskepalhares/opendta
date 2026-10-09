@@ -140,16 +140,20 @@ def cmd_describe(s: "Session", args: str) -> None:
 
     out.ensure_line_start()
     out.write("\n", "text")
-    src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
-    out.write(src + "\n", "text")
-    label = ds.label
-    out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
-    ts = getattr(ds, "timestamp", "") if ds.filename else ""
-    out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts.strip() if ts else "") + "\n", "text")
-    dta_notes = " " * 26 + "(_dta has notes)" if ds.chars.get("_dta", {}).get("note0") else ""
-    out.write(f" size:{ds.width() * ds.nobs:>14,}{dta_notes}\n", "text")
+    # com varlist, o Stata 14 mostra só a tabela das variáveis
+    only_vars = bool(p.varlist.strip())
+    if not only_vars:
+        src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
+        out.write(src + "\n", "text")
+        label = ds.label
+        out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
+        ts = getattr(ds, "timestamp", "") if ds.filename else ""
+        out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts.strip() if ts else "") + "\n", "text")
+        dta_notes = " " * 26 + "(_dta has notes)" if ds.chars.get("_dta", {}).get("note0") else ""
+        out.write(f" size:{ds.width() * ds.nobs:>14,}{dta_notes}\n", "text")
     if not opts.get("short"):
-        out.write(_LINE + "\n", "text")
+        if not only_vars:
+            out.write(_LINE + "\n", "text")
         out.write("              storage   display    value\n", "text")
         out.write("variable name   type    format     label      variable label\n", "text")
         out.write(_LINE + "\n", "text")
@@ -161,10 +165,13 @@ def cmd_describe(s: "Session", args: str) -> None:
             fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFICAR regra do corte
             line = f"{shown:<16}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
+    if only_vars:
+        # VERIFICAR: rodapé de notas com varlist
+        return
     out.write(_LINE + "\n", "text")
     if any(ds.chars.get(n, {}).get("note0") for n in names):
         out.write(" " * 44 + "* indicated variables have notes\n", "text")
         out.write(_LINE + "\n", "text")
-    out.write("Sorted by: " + " ".join(ds.sortlist) + "\n", "text")
+    out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 espaços (Stata 14)
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")

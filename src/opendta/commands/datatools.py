@@ -141,7 +141,13 @@ def _dup_list(s: "Session", names: list[str], ids: np.ndarray, k: int, sizes: np
         head.append(str(i + 1))
         rows.append(head + [cell_text(ds, ds.get(n), int(i)) for n in names])
         group_of_row.append(g)
-    titles = ["group:"] + (["#"] if examples else []) + (["e.g. obs:"] if examples else ["obs:"]) + names
+    # com um só grupo de duplicatas o Stata 14 omite a coluna group: (VERIFICAR
+    # com vários grupos); em examples o título é "e.g. obs" sem dois-pontos
+    show_group = len(dup_groups) > 1
+    if not show_group:
+        rows = [r[1:] for r in rows]
+    titles = (["group:"] if show_group else []) + (["#"] if examples else []) + \
+        (["e.g. obs"] if examples else ["obs:"]) + names
     widths = [max(len(t), *(len(r[j]) for r in rows)) for j, t in enumerate(titles)]
     from .inspect import _left_aligned
     left = [False] * (len(titles) - len(names)) + [_left_aligned(ds.get(n), True) for n in names]
@@ -263,7 +269,7 @@ def cmd_encode(s: "Session", args: str) -> None:
     for i in np.flatnonzero(mask):
         codes[i] = rev[v.raw[i]]
     ds.value_labels[lname] = lab
-    ds.add(Variable(gen, "long", codes, value_label=lname, label=v.label))
+    ds.add(Variable(gen, "long", codes, fmt="%8.0g", value_label=lname, label=v.label))  # %8.0g: Stata 14
     s.notify_state()
 
 
@@ -380,18 +386,23 @@ def cmd_destring(s: "Session", args: str) -> None:
             if opts.get("percent") and "%" in t and x < M.SYSMISS:
                 x /= 100
             vals[i] = x
+        # mensagens observadas no Stata 14 (as marcadas VERIFICAR são deduzidas)
+        problem = ("contains characters not specified in ignore()" if ignore
+                   else "contains nonnumeric characters")
         if bad and not opts.get("force"):
-            w(f"{name}: contains nonnumeric characters; no "
-              f"{'replace' if opts.get('replace') else 'generate'}\n", "text")
+            w(f"{name} {problem}; no {'replace' if opts.get('replace') else 'generate'}\n", "text")
             continue
         vtype = smallest_type_for(vals)
         if vtype == "double" and opts.get("float"):
             vtype = "float"
-        how = "all characters numeric" if not removed else \
-            "characters " + " ".join(sorted(removed)) + " removed"
         if bad:
-            how = "contains nonnumeric characters"
-        w(f"{name}: {how}; {verb} as {vtype}\n", "text")
+            w(f"{name} {problem}; {target} {verb} as {vtype}\n", "text")
+        elif removed:
+            chars = sorted(removed)
+            word = "character" if len(chars) == 1 else "characters"
+            w(f"{name}: {word} {' '.join(chars)} removed; {verb} as {vtype}\n", "text")   # VERIFICAR
+        else:
+            w(f"{name} has all characters numeric; {verb} as {vtype}\n", "text")   # VERIFICAR
         nv = Variable(target, vtype, vals, label=v.label)
         if opts.get("replace"):
             pos = ds.index(name)
@@ -554,7 +565,7 @@ def cmd_mvdecode(s: "Session", args: str) -> None:
         n = int((new != x).sum())
         if n:
             ds.set_numeric(v, new, promote=False)
-            s.output.write(f"{name}: {plural(n, 'missing value')} generated\n", "text")   # VERIFICAR
+            s.output.write(f"{name:>12}: {plural(n, 'missing value')} generated\n", "text")
     s.notify_state()
 
 
@@ -585,7 +596,7 @@ def cmd_mvencode(s: "Session", args: str) -> None:
         n = int((new != x).sum())
         if n:
             ds.set_numeric(v, new)
-            s.output.write(f"{name}: {plural(n, 'missing value')} recoded\n", "text")   # VERIFICAR
+            s.output.write(f"{name:>12}: {plural(n, 'missing value')} recoded\n", "text")
     s.notify_state()
 
 
@@ -738,6 +749,6 @@ def cmd_recode(s: "Session", args: str) -> None:
             ds.set_numeric(v, new, promote=False)
             if lname:
                 v.value_label = lname
-            w(f"({plural(changes, 'change')} made to {name})\n", "text")
+            w(f"({name}: {plural(changes, 'change')} made)\n", "text")
     s.notify_state()
 

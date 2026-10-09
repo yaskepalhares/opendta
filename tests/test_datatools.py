@@ -49,7 +49,8 @@ def test_duplicates_tag_list_drop(people):
     run("duplicates tag nome, gen(d)")
     assert col(run, "d") == [2, 0, 2, 0, 2]
     out = run("duplicates list nome x")
-    assert "| group:   obs:   nome   x |" in out
+    # um só grupo de duplicatas: sem a coluna group: (Stata 14)
+    assert "| obs:   nome   x |" in out
     assert out.count("ana") == 3
     run("duplicates drop nome")
     assert run.rc == 198
@@ -109,13 +110,14 @@ def test_encode_decode(people):
 def test_destring(people):
     run = people
     out = run("destring v, gen(n1)")
-    assert out == "v: contains nonnumeric characters; no generate\n"
+    assert out == "v contains nonnumeric characters; no generate\n"
     run("replace v = \"40\" in 4")
     out = run("destring v, gen(n1) ignore(\"$,\")")
     assert out == "v: characters $ , removed; generated as byte\n"
     assert col(run, "n1") == [10, 25, 30, 40, 7]
     out = run("destring v, replace force")
-    assert "replaced as byte" in out and "(2 missing values generated)" in out
+    assert "v contains nonnumeric characters; v replaced as byte" in out
+    assert "(2 missing values generated)" in out
     assert run.session.data.names.index("v") == 2
     run("destring v, replace dpcomma")
     assert run.rc == 0
@@ -154,7 +156,7 @@ def test_split(run):
 def test_mvdecode_mvencode(run):
     run("clear\nset obs 4\ngen a = _n\nreplace a = -9 in 2\nreplace a = -8 in 3")
     out = run("mvdecode a, mv(-9 -8)")
-    assert out == "a: 2 missing values generated\n"
+    assert out == "           a: 2 missing values generated\n"
     run("mvencode a, mv(-1)")
     assert col(run, "a") == [1, -1, -1, 4]
     run("replace a = .a in 1\nmvdecode a, mv(-1=.b)")
@@ -169,14 +171,14 @@ def test_mvdecode_mvencode(run):
 def test_recode(run):
     run("clear\nset obs 6\ngen v = _n\nreplace v = . in 6")
     out = run("recode v (1 2 = 1) (3/4 = 2) (missing = 9) (else = 0)")
-    assert out == "(5 changes made to v)\n"     # 1 → 1 não conta
+    assert out == "(v: 5 changes made)\n"     # 1 → 1 não conta
     assert col(run, "v") == [1, 1, 2, 2, 0, 9]
 
 
 def test_recode_counts_only_changes(run):
     run("clear\nset obs 5\ngen v = _n")
     out = run("recode v (1 2 = 1) (min/3 = 7)")
-    assert out == "(2 changes made to v)\n"
+    assert out == "(v: 2 changes made)\n"
     assert col(run, "v") == [1, 1, 7, 4, 5]
 
 

@@ -83,6 +83,8 @@ input c
 2
 end
 cross using odta_j
+* a ordem do cross no Stata depende do desempate do sort: ordena antes de listar
+sort c k a
 list
 clear
 input id

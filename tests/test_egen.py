@@ -46,7 +46,7 @@ def test_group_stats_match_numpy(base):
         assert (col(run, "c")[g == k] == len(v)).all()
         assert (col(run, "lo")[g == k] == np.float32(v.min())).all()
         assert (col(run, "hi")[g == k] == np.float32(v.max())).all()
-    assert run.session.data.get("c").vtype == "long"
+    assert run.session.data.get("c").vtype == "float"      # tipo padrão (Stata 14)
 
 
 def test_by_prefix_equals_by_option(base):
@@ -165,7 +165,7 @@ egen rs = rowsd(x y g)
     Z = np.column_stack([x, y, g])
     Zn = np.where(Z >= MISS, np.nan, Z)
     assert np.allclose(col(run, "rs"), np.nanstd(Zn, 1, ddof=1), rtol=1e-6)
-    assert run.session.data.get("rn").vtype == "byte"
+    assert run.session.data.get("rn").vtype == "float"
 
 
 def test_rowtotal_missing_option(run):

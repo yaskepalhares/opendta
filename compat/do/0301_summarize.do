@@ -36,6 +36,8 @@ centile x, centile(25 50 75)
 pctile p = x, nq(4)
 list p in 1/4
 xtile q = x, nq(3)
+* o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+sort grupo x
 list x q
 tabstat x y, stats(mean sd min max n) by(grupo)
 tabstat x y, statistics(p25 p50 p75) columns(statistics)

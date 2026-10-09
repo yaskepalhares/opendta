@@ -30,6 +30,35 @@ if TYPE_CHECKING:
     from ..session import Session
 
 
+def _explain(s: "Session", head: str, paragraphs: list[str]) -> str:
+    """Mensagem longa do reshape: parágrafos com recuo de 4, quebrados na
+    largura de set linesize (como o Stata)."""
+    import textwrap
+    width = int(float(s.settings.get("linesize", 80)))
+    out = [head]
+    for par in paragraphs:
+        if par.startswith("@"):            # bloco literal (figura, exemplo)
+            out.append(par[1:])
+        elif par == "":
+            out.append("")
+        else:
+            out.extend(textwrap.wrap(par, width, initial_indent="    ", subsequent_indent="    ",
+                                     break_on_hyphens=False) or ["    "])
+    return "\n".join(out)
+
+
+_PICTURE = """
+         long                                wide
+        +---------------+                   +------------------+
+        | i   j   a   b |                   | i   a1 a2  b1 b2 |
+        |---------------| <--- reshape ---> |------------------|
+        | 1   1   1   2 |                   | 1   1   3   2  4 |
+        | 1   2   3   4 |                   | 2   5   7   6  8 |
+        | 2   1   5   6 |                   +------------------+
+        | 2   2   7   8 |
+        +---------------+"""
+
+
 def _wide_name(stub: str, j: str) -> str:
     return stub.replace("@", j) if "@" in stub else stub + j
 
@@ -155,18 +184,23 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
         if bad:
             raise StataError(198, "j values must be integers")   # VERIFICAR
     # i deve identificar as observações
-    ids, k = group_ids(ds, ivars)
-    if k != ds.nobs:
-        raise StataError(9, f"variable {' '.join(ivars)} does not uniquely identify the observations\n"
-                            f"    Your data are currently wide.  You are performing a reshape long.  "
-                            f"You specified\n    i({' '.join(ivars)}) and j({jname}).  In the current wide "
-                            f"form, variable {' '.join(ivars)}\n    should uniquely identify the "
-                            f"observations.")   # VERIFICAR
     s.output.write(f"(note: j = {' '.join(_jtext(x) for x in jvals)})\n", "text")
     for stub in stubs:
         for x in jvals:
             if x not in found[stub]:
                 s.output.write(f"(note: {_wide_name(stub, _jtext(x))} not found)\n", "text")
+    # i deve identificar as observações (texto observado no Stata 14)
+    ids, k = group_ids(ds, ivars)
+    if k != ds.nobs:
+        il = " ".join(ivars)
+        word = "variable" if len(ivars) == 1 else "variables"
+        verb = "does" if len(ivars) == 1 else "do"
+        raise StataError(9, _explain(s, f"{word} {il} {verb} not uniquely identify the observations", [
+            f"Your data are currently wide.  You are performing a reshape long.  You specified i({il}) "
+            f"and j({jname}).  In the current wide form, {word} {il} should uniquely identify the "
+            "observations.  Remember this picture:",
+            "@" + _PICTURE,
+            "Type reshape error for a list of the problem observations."]))
     xij_names = {nm for st in stubs for x, nm in found[st].items() if x in set(jvals)}
     for stub in stubs:
         ln = _long_name(stub)
@@ -179,7 +213,6 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     new = Dataset()
     new.label, new.notes, new.value_labels = ds.label, list(ds.notes), ds.value_labels
     new.nobs = n0 * nj
-    others = [v for v in ds.vars if v.name not in ivars and v.name not in xij_names]
     for nm in ivars:
         v = ds.get(nm)
         nv = Variable(nm, v.vtype, np.empty(0), fmt=v.fmt, label=v.label, value_label=v.value_label)
@@ -190,12 +223,10 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
         jv = Variable(jname, jtype, np.array([jvals[t] for t in jidx], dtype=object))
     else:
         jarr = np.array(jvals, dtype=np.float64)[jidx]
-        jv = Variable(jname, smallest_type_for(np.array(jvals, dtype=np.float64)), jarr)   # VERIFICAR tipo
-    new.vars.append(jv)
-    for v in others:
-        nv = Variable(v.name, v.vtype, np.empty(0), fmt=v.fmt, label=v.label, value_label=v.value_label)
-        nv.raw = v.raw[rows]
-        new.vars.append(nv)
+        # tipo mínimo, mas formato %9.0g (byte %9.0g; observado no Stata 14)
+        jv = Variable(jname, smallest_type_for(np.array(jvals, dtype=np.float64)), jarr, fmt="%9.0g")
+    long_vars: dict[str, Variable] = {}
+    last_of: dict[str, str] = {}             # variável larga mais à direita de cada stub
     table_rows = []
     for stub in stubs:
         names = [found[stub].get(x) for x in jvals]
@@ -221,8 +252,22 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
                       value_label=present[0].value_label)
         # linha a linha: (obs 1, j1), (obs 1, j2), ..., (obs 2, j1), ...
         nv.raw = np.stack(cols, axis=1).reshape(-1).copy()
-        new.vars.append(nv)
+        long_vars[stub] = nv
+        last_of[max((nm for nm in names if nm), key=ds.index)] = stub
         table_rows.append((" ".join(nm for nm in names if nm), _long_name(stub)))
+    new.vars.append(jv)
+    # cada variável longa fica no lugar da última variável larga do seu stub;
+    # as demais mantêm a ordem (observado no Stata 14)
+    for v in ds.vars:
+        if v.name in ivars:
+            continue
+        if v.name in xij_names:
+            if v.name in last_of:
+                new.vars.append(long_vars[last_of[v.name]])
+            continue
+        nv = Variable(v.name, v.vtype, np.empty(0), fmt=v.fmt, label=v.label, value_label=v.value_label)
+        nv.raw = v.raw[rows]
+        new.vars.append(nv)
     new.changed = True
     s.data = new
     sorting.sort(new, ivars + [jname])
@@ -250,17 +295,19 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
             raise StataError(498, f"variable {jname} contains missing values")   # VERIFICAR
         jvals = [float(x) for x in parse_numlist(jvals_spec)] if jvals_spec else sorted(set(jcol.tolist()))
     jtexts = [_jtext(x) for x in jvals]
+    s.output.write(f"(note: j = {' '.join(jtexts)})\n", "text")
     ids, k = group_ids(ds, ivars)
     # (i, j) único
     pair_ids, kp = group_ids(ds, ivars + [jname])
     ilist = " ".join(ivars)
     if kp != n0:
-        raise StataError(9, f"values of variable {jname} not unique within {ilist}\n"
-                            f"    Your data are currently long.  You are performing a reshape wide.  "
-                            f"You specified\n    i({ilist}) and j({jname}).  There are observations "
-                            f"within i({ilist}) with the\n    same value of j({jname}).  In the long "
-                            f"data, variables i() and j() together\n    must uniquely identify the "
-                            f"observations.")   # VERIFICAR
+        raise StataError(9, _explain(s, f"values of variable {jname} not unique within {ilist}", [
+            f"Your data are currently long.  You are performing a reshape wide.  You specified "
+            f"i({ilist}) and j({jname}).  There are observations within i({ilist}) with the same "
+            f"value of j({jname}).  In the long data, variables i() and j() together must uniquely "
+            "identify the observations.",
+            "@" + _PICTURE,
+            "Type reshape error for a list of the problem observations."]))   # VERIFICAR
     others = [v for v in ds.vars if v.name not in ivars and v.name != jname and v.name not in longs]
     from ..core.grouping import first_index
     first = first_index(ids, k)
@@ -271,14 +318,23 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
         else:
             same = bool(np.all(col == col[first[ids]]))
         if not same:
-            raise StataError(9, f"variable {v.name} not constant within {ilist}\n"
-                                f"    Your data are currently long.  You are performing a reshape wide.  "
-                                f"You typed\n    something like\n\n        . reshape wide a b, "
-                                f"i({ilist}) j({jname})\n\n    There are variables other than a, b, "
-                                f"{ilist}, {jname} in your data.  They must be\n    constant within "
-                                f"{ilist} because that is the only way they can fit into wide data\n"
-                                f"    without loss of information.")   # VERIFICAR
-    s.output.write(f"(note: j = {' '.join(jtexts)})\n", "text")
+            raise StataError(9, _explain(s, f"variable {v.name} not constant within {ilist}", [
+                "Your data are currently long.  You are performing a reshape wide.  You typed "
+                "something like",
+                "",
+                f"@        . reshape wide a b, i({ilist}) j({jname})",
+                "",
+                f"There are variables other than a, b, {ilist}, {jname} in your data.  They must be "
+                f"constant within {ilist} because that is the only way they can fit into wide data "
+                "without loss of information.",
+                "",
+                f"The variable or variables listed above are not constant within {ilist}.  Perhaps "
+                "the values are in error.  Type reshape error for a list of the problem "
+                "observations.",
+                "",
+                "Either that, or the values vary because they should vary, in which case you must "
+                "either add the variables to the list of xij variables to be reshaped, or drop "
+                "them."]))
     pos = {x: t for t, x in enumerate(jvals)}
     jpos = np.array([pos.get(x, -1) for x in (jcol.tolist())], dtype=np.int64)
     if (jpos < 0).any():
@@ -309,8 +365,9 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
                 vals = Variable("_t", src.vtype, np.full(k, M.SYSMISS)).raw.copy()
             sel = keep & (jpos == t)
             vals[ids[sel]] = src.raw[sel]
-            nv = Variable(wn, src.vtype, np.empty(0), fmt=src.fmt, value_label=src.value_label)
-            # VERIFICAR: o Stata põe rótulos como "80 inc" nas variáveis largas?
+            # rótulo "80 inc" (valor de j e nome da variável longa; Stata 14)
+            nv = Variable(wn, src.vtype, np.empty(0), fmt=src.fmt, value_label=src.value_label,
+                          label=f"{jt} {src.label or ln}")
             nv.raw = vals
             wide_vars[(t, stub)] = nv
             names.append(wn)

@@ -5,15 +5,14 @@ Twister de 64 bits (mt64). Aqui ele segue o algoritmo publicado por
 Matsumoto e Nishimura (init_genrand64 + genrand64_int64). Detalhes não
 documentados ficam marcados VERIFICAR (caso compat/do/0307_aleatorios.do):
 
-* como o Stata transforma `set seed #` no estado inicial (aqui:
-  init_genrand64(#));
-* como o inteiro de 64 bits vira um double em (0,1) (aqui: os 52 bits
-  altos + 1/2, como genrand64_real3);
-* os algoritmos de rnormal() e das demais distribuições (aqui: inversão
-  da função de distribuição, um uniforme por sorteio).
-
-Por isso as sequências não coincidem necessariamente com as do Stata;
-coincidem entre execuções do OpenDTA com a mesma semente.
+* `set seed #` vira o estado inicial por init_genrand64(#) e o inteiro de
+  64 bits vira um double em (0,1) pelos 52 bits altos + 1/2 (como
+  genrand64_real3). Com isso runiform() reproduz exatamente a sequência do
+  Stata 14 (conferido em compat/expected/0307_aleatorios.log com as
+  sementes 0, 42, 123 e 2147483647).
+* rnormal() e as demais distribuições usam inversão da função de
+  distribuição, um uniforme por sorteio; o Stata usa outros algoritmos
+  (não documentados), então essas sequências ainda diferem (VERIFICAR).
 """
 
 from __future__ import annotations

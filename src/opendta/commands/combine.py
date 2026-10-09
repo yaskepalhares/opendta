@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ..core import missing as M
-from ..core import sorting
 from ..core.dataset import (TYPE_ORDER, Dataset, Variable, check_name, default_format,
                             is_string_type, str_len, str_type_for)
 from ..core.errors import StataError
@@ -29,7 +28,7 @@ from ..core.grouping import joint_keys
 from ..core.storage import missing_raw
 from ..io.dta import read_dta
 from ..lang.syntax import match_options, parse_standard
-from ..lang.words import split_words, strip_outer_quotes
+from ..lang.words import split_words
 from .files import dta_path
 from .registry import command
 
@@ -146,6 +145,7 @@ def cmd_append(s: "Session", args: str) -> None:
     usings = [load_using(f) for f in files]
     force = bool(opts.get("force"))
     origin = [np.zeros(ds.nobs)]
+    gen_pos = ds.nvars        # a variável de generate() fica logo depois das da master
     for j, U in enumerate(usings, start=1):
         if opts.get("keep") not in (None, True):
             from ..core.varlist import expand
@@ -184,7 +184,7 @@ def cmd_append(s: "Session", args: str) -> None:
     ds.sortlist = []
     ds.changed = True
     if gen:
-        ds.add(Variable(gen, "byte", np.concatenate(origin)))
+        ds.add(Variable(gen, "byte", np.concatenate(origin)), position=gen_pos)
     s.notify_state()
 
 
@@ -264,7 +264,17 @@ def _pairs(kind: str, gm: np.ndarray, gu: np.ndarray, k: int) -> tuple[np.ndarra
             pu.append(ru)
     if not pm:
         return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64)
-    return np.concatenate(pm).astype(np.int64), np.concatenate(pu).astype(np.int64)
+    a, b = np.concatenate(pm).astype(np.int64), np.concatenate(pu).astype(np.int64)
+    return _master_order(a, b)
+
+
+def _master_order(pm: np.ndarray, pu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Ordem do resultado no Stata 14: as observações da master na ordem
+    original (cada uma seguida dos seus pares da using), depois as que só
+    existem na using, na ordem delas (compat/expected/0308_merge_append.log)."""
+    only_u = pm < 0
+    order = np.lexsort((pu, np.where(only_u, pu, pm), only_u))
+    return pm[order], pu[order]
 
 
 def _take(v: Variable, rows: np.ndarray, vtype: str | None = None) -> np.ndarray:
@@ -277,10 +287,19 @@ def _take(v: Variable, rows: np.ndarray, vtype: str | None = None) -> np.ndarray
     return out
 
 
-def _report(s: "Session", codes: np.ndarray, genname: str, update: bool) -> None:
+def _assert_text(allowed: set[int]) -> str:
+    """Texto do erro de assert(); "matched" observado no Stata 14, o resto
+    deduzido (VERIFICAR)."""
+    parts = {1: "from master", 2: "from using", 3: "matched", 4: "matched (update)",
+             5: "matched (conflict)"}
+    return " or ".join(parts[k] for k in sorted(allowed))
+
+
+def _report(s: "Session", codes: np.ndarray, genname: str | None, update: bool) -> None:
+    """Tabela de resultados; com nogenerate, sem as anotações (_merge==#)."""
     def line(label: str, n: int, indent: int, code: int | None = None) -> None:
         left = " " * indent + label
-        tail = f"  ({genname}=={code})" if code is not None else ""
+        tail = f"  ({genname}=={code})" if code is not None and genname else ""
         s.output.write(left, "text")
         s.output.write(f"{n:,}".rjust(45 - len(left)), "result")
         s.output.write(tail + "\n", "text")
@@ -418,11 +437,6 @@ def cmd_merge(s: "Session", args: str) -> None:
     if update:
         codes = np.where(both & conflict, 5, np.where(both & upd_any, 4, codes))
 
-    if opts.get("assert") not in (None, True):
-        allowed = _results(str(opts["assert"]))
-        if not np.isin(codes, sorted(allowed)).all():
-            raise StataError(9, f"merge:  after merge, not all observations from "
-                                f"{strip_outer_quotes(str(opts['assert']))}")   # VERIFICAR
     keep = np.ones(len(codes), dtype=bool)
     if opts.get("keep") not in (None, True):
         keep = np.isin(codes, sorted(_results(str(opts["keep"]))))
@@ -433,22 +447,32 @@ def cmd_merge(s: "Session", args: str) -> None:
     new.chars = ds.chars
     new.value_labels = ds.value_labels
     new.filename, new.fullpath, new.timestamp = ds.filename, ds.fullpath, ds.timestamp
-    new.nobs = int(keep.sum())
+    new.nobs = len(codes)
     for nv in new_vars:
-        nv.raw = nv.raw[keep]
         new.vars.append(nv)
-    codes = codes[keep]
     if not opts.get("nolabel"):
         used = {v.value_label for v in U.vars if v.value_label}
         _merge_value_labels(s, new, U, used)
     if not nogen:
-        new.vars.append(Variable(genname, "byte", codes.astype(np.float64), value_label="_merge"))
+        # %23.0g: a largura do maior rótulo de _merge (observado no Stata 14)
+        new.vars.append(Variable(genname, "byte", codes.astype(np.float64), fmt="%23.0g",
+                                 value_label="_merge"))
         new.value_labels["_merge"] = dict(_MERGE_LABELS)
-    new.sortlist = list(keys) if keys else []
+    new.sortlist = []          # o Stata 14 não marca o resultado como ordenado
     new.changed = True
+    if opts.get("assert") not in (None, True):
+        allowed = _results(str(opts["assert"]))
+        if not np.isin(codes, sorted(allowed)).all():
+            s.data = new
+            s.notify_state()
+            raise StataError(9, f"merge:  after merge, not all observations {_assert_text(allowed)}\n"
+                                "        (merged result left in memory)")
+    if not keep.all():
+        new.keep_obs(keep)
+        codes = codes[keep]
     s.data = new
     if not opts.get("noreport"):
-        _report(s, codes, genname, update)
+        _report(s, codes, None if nogen else genname, update)
     s.notify_state()
 
 
@@ -497,6 +521,7 @@ def cmd_joinby(s: "Session", args: str) -> None:
             pu_l.append(ru)
     pm = np.concatenate(pm_l).astype(np.int64) if pm_l else np.zeros(0, dtype=np.int64)
     pu = np.concatenate(pu_l).astype(np.int64) if pu_l else np.zeros(0, dtype=np.int64)
+    pm, pu = _master_order(pm, pu)
     both = (pm >= 0) & (pu >= 0)
     new = Dataset()
     new.label = ds.label
@@ -523,6 +548,16 @@ def cmd_joinby(s: "Session", args: str) -> None:
         nv.raw = vals
         _fix_strings(nv)
         new.vars.append(nv)
+    if unmatched != "none":
+        # _merge fica entre as variáveis da master e as da using, com rótulos
+        # próprios do joinby (observado no Stata 14)
+        if new.has(gname) or U.has(gname):
+            raise StataError(110, f"variable {gname} already defined")
+        codes = np.where(pm < 0, 2, np.where(pu < 0, 1, 3)).astype(np.float64)
+        new.vars.append(Variable(gname, "byte", codes, value_label=gname))   # VERIFICAR formato
+        new.value_labels = dict(new.value_labels)
+        new.value_labels[gname] = {1: "only in master data", 2: "only in using data",
+                                   3: "both in master and using data"}
     for uv in U.vars:
         if ds.has(uv.name):
             continue
@@ -532,14 +567,8 @@ def cmd_joinby(s: "Session", args: str) -> None:
         new.vars.append(nv)
     if not opts.get("nolabel"):
         _merge_value_labels(s, new, U, {v.value_label for v in U.vars if v.value_label})
-    if unmatched != "none":
-        if new.has(gname):
-            raise StataError(110, f"variable {gname} already defined")
-        codes = np.where(pm < 0, 2, np.where(pu < 0, 1, 3)).astype(np.float64)
-        new.vars.append(Variable(gname, "byte", codes))
     new.changed = True
     s.data = new
-    sorting.sort(new, keys)   # VERIFICAR ordem das observações
     s.notify_state()
 
 

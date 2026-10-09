@@ -234,7 +234,10 @@ def cmd_collapse(s: "Session", args: str) -> None:
             used_labels.add(v.value_label)
     for stat, name, src in items:
         v = ds.get(src)
-        lab = f"({stat}) {v.label or src}"     # VERIFICAR
+        # rótulo com o nome (não o rótulo) da origem e percentis como "p 50";
+        # o formato da origem é mantido (observado no Stata 14)
+        shown_stat = f"p {stat[1:]}" if re.fullmatch(r"p\d.*", stat) else stat
+        lab = f"({shown_stat}) {src}"
         if v.is_string:
             if stat not in _STRING_OK:
                 raise StataError(109, "type mismatch")
@@ -253,14 +256,11 @@ def cmd_collapse(s: "Session", args: str) -> None:
             vtype = v.vtype
             vlab = v.value_label
         elif stat == "count":
-            vtype = "long" if np.all(res == np.trunc(res)) else "double"   # VERIFICAR
-            fmt = ""
+            vtype = "long" if np.all(res == np.trunc(res)) else "double"
         elif stat in ("sum", "rawsum"):
-            vtype, fmt = "double", ""                                       # VERIFICAR
+            vtype = "double"
         else:
-            vtype = "double" if v.vtype == "double" else "float"           # VERIFICAR
-            if v.vtype in ("byte", "int", "long"):
-                fmt = ""
+            vtype = "double" if v.vtype == "double" else "float"           # VERIFICAR origem inteira
         nv = Variable(name, vtype, res, fmt=fmt or default_format(vtype), label=lab, value_label=vlab)
         if vlab:
             used_labels.add(vlab)
@@ -337,9 +337,10 @@ def cmd_contract(s: "Session", args: str) -> None:
     ftype = smallest_type_for(freq) if k else "byte"   # VERIFICAR tipo de _freq
     if ftype in ("float", "double"):
         ftype = "long"
+    # formatos observados no Stata 14: _freq %12.0g e cfreq %10.0g, mesmo byte
     columns = {
-        "freq": (freq, ftype, "", "Frequency"),
-        "cfreq": (np.cumsum(freq), ftype, "", "Cumulative frequency"),
+        "freq": (freq, ftype, "%12.0g", "Frequency"),
+        "cfreq": (np.cumsum(freq), ftype, "%10.0g", "Cumulative frequency"),
         "percent": (freq / total * 100 if total else freq * 0, ptype, pfmt, "Percent"),
         "cpercent": (np.cumsum(freq) / total * 100 if total else freq * 0, ptype, pfmt,
                      "Cumulative percent"),

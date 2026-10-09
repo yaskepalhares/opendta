@@ -48,8 +48,8 @@ def test_seed_state_roundtrip(run):
 
 
 def test_seed_errors(run):
-    run("set seed -1")
-    assert run.rc == 198
+    run("set seed -1")                  # o Stata 14 aceita
+    assert run.rc == 0
     run("set seed abc")
     assert run.rc == 198
     run("set seed X123")
@@ -109,3 +109,12 @@ def test_invalid_parameters_give_missing(run):
 def test_vector_parameters(run):
     run("set obs 4\ngen m = _n * 100\ngen x = rnormal(m, 0)")
     assert list(col(run, "x")) == [100, 200, 300, 400]
+
+
+def test_runiform_matches_stata14():
+    # valores de compat/expected/0307_aleatorios.log (Stata/SE 14.0)
+    cases = {123: [0.31320017867847072, 0.55597911939485856], 0: [0.15979336337046079],
+             2147483647: [0.16803268731662413]}
+    for seed, want in cases.items():
+        got = MT64(seed).uniform(len(want))
+        assert [float(f"{x:.17f}") for x in got] == want

@@ -160,6 +160,7 @@ def cmd_egen(s: "Session", args: str) -> None:
     ids = _group_ids(s, by, mask)
     n = ds.nobs
     is_string = False
+    auto_int = False          # tipo inteiro mínimo (seq(); observado no Stata 14)
     default_type = s.settings.get("type", "float")
     fn_l = fn.lower()
 
@@ -176,7 +177,6 @@ def cmd_egen(s: "Session", args: str) -> None:
             x = np.where(mask, x, M.SYSMISS)
             if fn_l == "count":
                 res = _by_reduce(x, ids, lambda a: float((a < M.SYSMISS).sum()))
-                vtype = vtype or "long"   # VERIFICAR
             elif fn_l == "mean":
                 res = _by_reduce(x, ids, _nonmiss(lambda a: float(a.mean())))
             elif fn_l == "sd":
@@ -234,7 +234,6 @@ def cmd_egen(s: "Session", args: str) -> None:
                 sel &= S.valid(v.data) if not v.is_string else np.array([x != "" for x in v.raw])
         gids = _group_ids(s, vs, sel)
         res = np.where(gids >= 0, gids + 1.0, M.SYSMISS)
-        vtype = vtype or ("int" if gids.max(initial=0) < 32000 else "long")   # VERIFICAR
         if o.get("label"):
             _group_labels(s, name, vs, gids)
     elif fn_l == "tag":
@@ -254,6 +253,7 @@ def cmd_egen(s: "Session", args: str) -> None:
                 res[i] = 1.0
         vtype = vtype or "byte"
     elif fn_l == "seq":
+        auto_int = True
         start = int(o.get("from", 1))
         to = o.get("to")
         block = int(o.get("block", 1))
@@ -310,6 +310,17 @@ def cmd_egen(s: "Session", args: str) -> None:
             texts.append(t[:maxlen] if maxlen else t)
         res = texts
         is_string = True
+        # largura: soma das larguras das variáveis e da pontuação (str6 para
+        # g + "-" + str4, mesmo se o maior resultado tem 5; Stata 14)
+        widths = []
+        for v in vs:
+            if v.is_string:
+                widths.append(int(v.vtype[3:]) if v.vtype != "strL" else 1)
+            else:
+                widths.append(max((len(_string(x, fmt) if fmt else _string(x)) for x in v.data), default=1))
+        concat_width = sum(widths) + len(punct) * max(0, len(vs) - 1)
+        if maxlen:
+            concat_width = min(concat_width, maxlen)
     elif fn_l == "ends":
         v = _row_vars(s, arg)[0]
         punct = _text_opt(o, "punct", " ")
@@ -372,13 +383,15 @@ def cmd_egen(s: "Session", args: str) -> None:
             else:
                 raise StataError(133, f"unknown egen function {fn}()")
         res = np.where(np.isnan(res) | ~mask, M.SYSMISS, res)
-        if fn_l in ("anycount", "anymatch", "rownonmiss", "rowmiss"):
-            vtype = vtype or "byte"   # VERIFICAR
+        if fn_l in ("anycount", "anymatch"):
+            vtype = vtype or "byte"
     else:
         raise StataError(133, f"unknown egen function {fn}()")
 
     if is_string:
         longest = max((len(t.encode("utf-8")) for t in res), default=1) or 1
+        if fn_l == "concat":
+            longest = max(longest, concat_width)
         nv = Variable(name, vtype if vtype and vtype.startswith("str") else str_type_for(longest),
                       np.array(res, dtype=object))
         ds.add(nv)
@@ -388,14 +401,32 @@ def cmd_egen(s: "Session", args: str) -> None:
         t = vtype or default_type
         if t not in _TYPES:
             raise StataError(109, "type mismatch")
-        if t in ("byte", "int", "long") and not vtype:
-            t = max(t, smallest_type_for(res), key=lambda z: _TYPES.index(z))
-        nv = Variable(name, t, res)
+        if auto_int and not vtype:
+            t = smallest_type_for(res)
+        nv = Variable(name, t, res, label=_label_for(fn_l, arg, o))
         ds.add(nv)
         nmiss = int((nv.data >= M.SYSMISS).sum())
     if nmiss:
         s.output.write(f"({plural(nmiss, 'missing value')} generated)\n", "text")
     s.notify_state()
+
+
+_LABELS = {"rank": "rank of ({})", "std": "Standardized values of ({})", "group": "group({})",
+           "tag": "tag({})"}
+
+
+def _label_for(fn: str, arg: str, o: dict) -> str:
+    """Rótulo que o egen põe na variável nova (observado no Stata 14; as
+    demais funções não rotulam)."""
+    a = " ".join(arg.split())
+    if fn == "rank":
+        how = next((k for k in ("field", "track", "unique") if o.get(k)), "")
+        return (how + " " if how else "") + f"rank of ({a})"
+    if fn == "anycount":
+        vals = " ".join(str(o.get("values", "")).split())
+        return f"{a} == {vals}"
+    fmt = _LABELS.get(fn)
+    return fmt.format(a) if fmt else ""
 
 
 def _group_labels(s: "Session", name: str, vs: list[str], gids: np.ndarray) -> None:

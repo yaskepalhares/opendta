@@ -65,10 +65,9 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
         seed = int(v)
     except ValueError:
         raise StataError(198, "invalid syntax")
-    if not 0 <= seed <= 2147483647:
-        # VERIFICAR texto
-        raise StataError(198, "seed must be between 0 and 2,147,483,647")
-    rng.RNG.seed(seed)
+    # o Stata 14 aceita sementes negativas sem erro (compat 0307); como as
+    # converte em estado não é documentado: aqui, complemento de dois em 64 bits
+    rng.RNG.seed(seed % 2**64)   # VERIFICAR sementes negativas
     s.settings["seed"] = str(seed)
 
 

@@ -39,4 +39,6 @@ list g x novo
 restore
 drop if g == 2 & h == 1
 fillin g h
+* o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+sort g h x
 list
