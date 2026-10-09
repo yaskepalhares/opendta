@@ -81,3 +81,69 @@ def cmd_probit(s: "Session", args: str) -> None:
 def cmd_poisson(s: "Session", args: str) -> None:
     from ..estimation.models import cmd_poisson as run
     run(s, args)
+
+
+@command("ologit", "ologit")
+def cmd_ologit(s: "Session", args: str) -> None:
+    from ..estimation.models2 import cmd_ologit as run
+    run(s, args)
+
+
+@command("oprobit", "oprobit")
+def cmd_oprobit(s: "Session", args: str) -> None:
+    from ..estimation.models2 import cmd_oprobit as run
+    run(s, args)
+
+
+@command("mlogit", "mlogit")
+def cmd_mlogit(s: "Session", args: str) -> None:
+    from ..estimation.models2 import cmd_mlogit as run
+    run(s, args)
+
+
+@command("nbreg", "nbreg")
+def cmd_nbreg(s: "Session", args: str) -> None:
+    from ..estimation.models2 import cmd_nbreg as run
+    run(s, args)
+
+
+@command("tobit", "tobit")
+def cmd_tobit(s: "Session", args: str) -> None:
+    from ..estimation.models2 import cmd_tobit as run
+    run(s, args)
+
+
+@command("glm", "glm")
+def cmd_glm(s: "Session", args: str) -> None:
+    from ..estimation.glm import cmd_glm as run
+    run(s, args)
+
+
+@command("xtreg", "xtreg")
+def cmd_xtreg(s: "Session", args: str) -> None:
+    from ..estimation.panel import cmd_xtreg as run
+    run(s, args)
+
+
+@command("areg", "areg")
+def cmd_areg(s: "Session", args: str) -> None:
+    from ..estimation.panel import cmd_areg as run
+    run(s, args)
+
+
+@command("ivregress", "ivregress")
+def cmd_ivregress(s: "Session", args: str) -> None:
+    from ..estimation.panel import cmd_ivregress as run
+    run(s, args)
+
+
+@command("margins", "margins")
+def cmd_margins(s: "Session", args: str) -> None:
+    from ..estimation.margins import cmd_margins as run
+    run(s, args)
+
+
+@command("nlcom", "nlcom")
+def cmd_nlcom(s: "Session", args: str) -> None:
+    from ..estimation.margins import cmd_nlcom as run
+    run(s, args)

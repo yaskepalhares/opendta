@@ -471,7 +471,19 @@ def cmd_test(s: "Session", args: str) -> None:
     else:
         # test varlist: cada coeficiente = 0 (aceita fatoriais e curingas)
         exprs = _coef_names(s, est, text)
-    cons = [_constraint(s, est, e) for e in exprs]
+    multi = est.eqnames and len(set(est.eqnames)) > 1
+    if multi and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
+        # várias equações: a variável em todas as equações em que é estimada
+        # (VERIFICAR a ordem e as equações de base do mlogit)
+        cons = []
+        for e in exprs:
+            for i, (nm, eq) in enumerate(zip(est.names, est.eqnames)):
+                if _same(nm, e) and est.V[i, i] > 0:
+                    cons.append(({i: 1.0}, 0.0))
+        if not cons:
+            raise StataError(111, f"{exprs[0]} not found")
+    else:
+        cons = [_constraint(s, est, e) for e in exprs]
     if o.get("accumulate"):
         cons = getattr(s, "_test_accum", []) + cons
     s._test_accum = cons

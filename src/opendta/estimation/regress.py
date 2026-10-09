@@ -54,12 +54,14 @@ class Sample:
     """Dependente, colunas e amostra de um comando de estimação."""
 
     def __init__(self, s: "Session", args: str, *, opts_spec: dict[str, int], weights=("aweight",
-                 "fweight", "iweight", "pweight"), need_dep: bool = True, constant_opt: bool = True):
+                 "fweight", "iweight", "pweight"), need_dep: bool = True, constant_opt: bool = True,
+                 extra_vars: str = ""):
         with fvars.caching():
-            self._init(s, args, opts_spec=opts_spec, weights=weights, need_dep=need_dep)
+            self._init(s, args, opts_spec=opts_spec, weights=weights, need_dep=need_dep,
+                       extra_vars=extra_vars)
 
     def _init(self, s: "Session", args: str, *, opts_spec: dict[str, int], weights,
-              need_dep: bool) -> None:
+              need_dep: bool, extra_vars: str = "") -> None:
         from ..commands._util import touse
         from ..commands.summarize import weights as get_weights
         self.s = s
@@ -83,7 +85,8 @@ class Sample:
         rest = " ".join(toks[1:] if need_dep else toks)
         self.terms = fvars.expand_fv(ds, rest) if rest.strip() else []
         mask = touse(s, p)
-        bad = fvars.term_missing(ds, dep_terms + self.terms)
+        extra = fvars.expand_fv(ds, extra_vars) if extra_vars.strip() else []
+        bad = fvars.term_missing(ds, dep_terms + self.terms + extra)
         mask &= ~bad
         self.w, self.wtype, mask = get_weights(s, p, mask, weights)
         self.mask = mask

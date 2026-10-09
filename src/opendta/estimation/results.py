@@ -142,7 +142,8 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
     c = crit(stat, level, df)
     for r in rows:
         if r.kind == "eq":
-            out.write(f"{abbrev(r.label):<12} |\n", "result")
+            out.write(f"{abbrev(r.label):<12} |", "result")
+            out.write(("  " + r.eq if r.eq else "") + "\n", "text")   # ex.: (base outcome)
             continue
         if r.kind == "header":
             out.write(f"{abbrev(r.label):>12} |\n", "text")
@@ -164,6 +165,16 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             out.write("          0  (empty)\n", "result")
             continue
         b, se = r.b, r.se
+        if r.kind == "aux":
+            # parâmetros auxiliares (/cut1, /sigma, alpha): sem z e P>|z|; o
+            # intervalo pode vir pronto (transformado) em r.eq = "lo hi"
+            if r.eq:
+                lo, hi = (float(v) for v in r.eq.split())
+            else:
+                lo, hi = b - c * se, b + c * se
+            out.write(f"  {g9(b):>9}  {g9(se):>9}" + " " * 17 + f"    {g9(lo):>9}   {g9(hi):>9}\n",
+                      "result")
+            continue
         if se > 0 and np.isfinite(se) and abs(se) < SYS:
             tval = b / se
             p = pvalue(stat, tval, df)
