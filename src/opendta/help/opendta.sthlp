@@ -48,6 +48,7 @@ a command name, or click a topic below.
 {p2col :{help syntax}}parse a program's arguments{p_end}
 {p2col :{help matrix}}matrices and matrix expressions{p_end}
 {p2col :{help log}}record the session in a file{p_end}
+{p2col :{help mata}}the matrix programming language{p_end}
 {p2colreset}{...}
 
 {title:OpenDTA additions}

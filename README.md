@@ -8,7 +8,7 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 3 (estatística descritiva e manipulação de dados)
+## Estado atual: fase 4 (Mata)
 
 Já funciona:
 
@@ -37,7 +37,9 @@ Já funciona:
 - manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
 - números aleatórios: Mersenne Twister de 64 bits, `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições.
 
-Ainda não há estimação (`regress`, `logit`…) nem Mata, que vêm nas fases 4 e 5.
+- Mata: blocos `mata ... end`, funções do usuário, structs e ponteiros, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
+
+Ainda não há estimação (`regress`, `logit`…), que vem na fase 5.
 
 ## Instalação (macOS)
 

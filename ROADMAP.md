@@ -74,11 +74,19 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 **Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/diferencas_conhecidas.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
 
-## Fase 4: Mata
+## Fase 4: Mata (em andamento)
 
-- [ ] Interpretador de Mata: tipos, operadores matriciais, funções, controle de fluxo
-- [ ] Integração com os dados: `st_data`, `st_view`, `st_store`, `st_local`, `st_numscalar`, `st_matrix`
-- [ ] Biblioteca de funções Mata usada pelos comandos de estimação
+**4a–4c ✅ (primeira versão, aguardando conferência com o Stata)**
+- [x] Lexer e analisador com a precedência do Mata; tipos real, string, complex, pointer e struct; escalares, vetores e matrizes
+- [x] Operadores (aritméticos, com dois-pontos, transposta, Kronecker, junções `,` e `\`, sequências `..` e `::`, relacionais, lógicos, `?:`), subscritos `[i,j]` e `[|...|]`, missing propagados como no Stata
+- [x] Controle de fluxo (`if`, `for`, `while`, `do`, `break`, `continue`, `return`), funções do usuário com tipos, argumentos opcionais e passagem por referência, `struct`, ponteiros
+- [x] Blocos `mata`/`mata:` ... `end` com o eco do Stata, `mata: instrução`, `mata clear/describe/drop`; erros no formato do Mata (`<istmt>:  3499  x not found`)
+- [x] Biblioteca: ~150 funções (matemáticas, matriciais, estatísticas, missing, strings, `printf`/`sprintf`)
+- [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
+
+**4d**
+- [ ] Conferir exibição, mensagens e comportamento de erro com o Stata 14 (casos `compat/do/04*.do`)
+- [ ] `st_view` que escreve nos dados; classes; `asarray`; `optimize()` e `moptimize()` (usados na estimação)
 
 ## Fase 5: estimação
 
