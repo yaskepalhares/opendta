@@ -85,8 +85,10 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
 
 **4d**
-- [ ] Conferir exibição, mensagens e comportamento de erro com o Stata 14 (casos `compat/do/04*.do`)
-- [ ] `st_view` que escreve nos dados; classes; `asarray`; `optimize()` e `moptimize()` (usados na estimação)
+- [x] Exibição, mensagens e erros conferidos com o Stata 14 (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
+- [x] `st_view` que grava nos dados ao atribuir a elementos; arrays associativos (`asarray`); `optimize()` com avaliadores d0/d1/d2 e técnicas nr/bfgs
+- [ ] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`)
+- [ ] Classes; `moptimize()` (junto com o `ml` da fase 5)
 
 ## Fase 5: estimação
 

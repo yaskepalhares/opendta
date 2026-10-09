@@ -63,6 +63,12 @@ Missing: {cmd:missing nonmissing hasmissing editmissing editvalue}.
 Strings: {cmd:strlen substr strupper strlower strtrim strpos subinstr
 strofreal strtoreal tokens invtokens}; output: {cmd:printf sprintf display
 errprintf}.
+Associative arrays: {cmd:asarray_create asarray asarray_contains
+asarray_remove asarray_elements asarray_keys asarray_notfound}.
+Optimization: {cmd:optimize_init}, {cmd:optimize_init_evaluator},
+{cmd:_evaluatortype} (d0, d1, d2), {cmd:_params}, {cmd:_which},
+{cmd:_technique} (nr, bfgs), {cmd:_argument}, {cmd:_tracelevel},
+{cmd:_conv_*}, {cmd:optimize()} and {cmd:optimize_result_*}.
 {p_end}
 
 {pstd}
@@ -70,6 +76,6 @@ Stata interface: {cmd:st_data st_sdata st_view st_store st_sstore st_addvar
 st_addobs st_nobs st_nvar st_varindex st_varname st_local st_global
 st_numscalar st_strscalar st_matrix st_matrixrowstripe st_matrixcolstripe
 st_vartype st_varformat st_varlabel stata _stata}.
-{cmd:st_view()} returns a copy of the data in OpenDTA: changing it does not
-change the dataset; use {cmd:st_store()}.
+Assigning to elements of a view ({cmd:V[i,j] = x}) stores the values in the
+dataset, as in Stata.
 {p_end}

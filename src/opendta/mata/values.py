@@ -53,9 +53,10 @@ class StructVal:
 
 
 class MV:
-    __slots__ = ("a", "t")
+    __slots__ = ("a", "t", "view")
 
     def __init__(self, a, t: str = "real"):
+        self.view = None        # st_view: (nomes das variáveis, linhas) para gravar de volta
         arr = np.asarray(a, dtype=object if t in ("string", "pointer", "struct") else
                          (np.complex128 if t == "complex" else np.float64))
         if arr.ndim == 0:

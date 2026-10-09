@@ -305,3 +305,66 @@ def test_st_data_row_range(run):
     mata(run, "a = st_data((1, 3), 1)\nb = st_data((1 \\ 3), 1)")
     assert val(run, "a").a.ravel().tolist() == [1, 2, 3]
     assert val(run, "b").a.ravel().tolist() == [1, 3]
+
+
+def test_st_view_writes_back(run):
+    run("set obs 3\ngen x = _n")
+    mata(run, 'V = .\nst_view(V, ., "x")\nV[2,1] = 99\nV[.,1] = V[.,1] :* 2\nW = V\nW[1,1] = -1')
+    assert list(run.session.data.get("x").data) == [2, 198, 6]      # W é cópia comum
+
+
+def test_asarray(run):
+    out = mata(run, 'A = asarray_create()\nasarray(A, "um", 1)\nasarray(A, "dois", (2, 2))\n'
+                    'asarray(A, "dois")\nasarray_contains(A, "tres")\nasarray_elements(A)\n'
+                    'asarray_remove(A, "um")\nasarray_keys(A)')
+    assert "  1 |  2   2  |" in out
+    assert "  0\n  2\n" in out
+    assert out.endswith("  dois\n")          # uma chave só: escalar
+
+
+def test_optimize_quadratic_and_logit():
+    from opendta.session import Session
+    s = Session()
+    s.run("""mata
+void q(todo, p, v, g, H)
+{
+    v = -(p[1] - 1)^2 - (p[2] + 2)^2 - p[1]*p[2]
+}
+S = optimize_init()
+optimize_init_evaluator(S, &q())
+optimize_init_params(S, (0, 0))
+optimize_init_tracelevel(S, "none")
+p = optimize(S)
+void lg(todo, b, y, X, v, g, H)
+{
+    real colvector xb, pr
+    xb = X * b'
+    pr = invlogit(xb)
+    v = sum(y :* ln(pr) + (1 :- y) :* ln(1 :- pr))
+    if (todo >= 1) g = ((y - pr)' * X)
+}
+y = (0\\0\\1\\1\\0\\1\\1\\1)
+X = ((1\\2\\3\\4\\5\\6\\7\\8), J(8, 1, 1))
+T = optimize_init()
+optimize_init_evaluator(T, &lg())
+optimize_init_evaluatortype(T, "d1")
+optimize_init_argument(T, 1, y)
+optimize_init_argument(T, 2, X)
+optimize_init_params(T, (0, 0))
+optimize_init_tracelevel(T, "none")
+b = optimize(T)
+V = optimize_result_V(T)
+end""")
+    g = s.mata.globals.vars
+    assert np.allclose(g["p"].a, [[8 / 3, -10 / 3]], atol=1e-6)
+    # logit conferido com statsmodels/fórmula fechada: MLE de (x, cons)
+    import scipy.optimize as so
+    yy = np.array([0, 0, 1, 1, 0, 1, 1, 1.0])
+    xx = np.column_stack([np.arange(1, 9.0), np.ones(8)])
+
+    def nll(b):
+        xb = xx @ b
+        return -np.sum(yy * xb - np.log1p(np.exp(xb)))
+    ref = so.minimize(nll, np.zeros(2), method="BFGS", options={"gtol": 1e-10}).x
+    assert np.allclose(g["b"].a.ravel(), ref, atol=1e-5)
+    assert g["V"].a[0, 0] > 0

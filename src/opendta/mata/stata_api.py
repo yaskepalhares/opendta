@@ -1,8 +1,10 @@
 """Funções st_* do Mata: leitura e gravação de dados, macros, escalares e
 matrizes do Stata ([M-5] st_data(), st_store(), st_local()...).
 
-st_view() devolve uma cópia dos dados: alterar a matriz não altera a base
-(no Stata, a view escreve nos dados; VERIFICAR/limitação conhecida).
+st_view() devolve uma matriz ligada aos dados: atribuir a elementos dela
+(V[i,j] = x, V[.,1] = ...) grava na base, como no Stata. A leitura é uma
+fotografia do momento do st_view (no Stata, a view acompanha os dados;
+VERIFICAR mudanças feitas na base depois do st_view).
 """
 
 from __future__ import annotations
@@ -141,20 +143,37 @@ def _st_sdata(eng, v, r):
     return _data(eng, v, strings=True)
 
 
-@lib("st_view", 3, 4, outs=(0,))
-def _st_view(eng, v, r):
-    val = _data(eng, v[1:], strings=False)
+def _view(eng, v, r, strings: bool) -> None:
+    val = _data(eng, v[1:], strings=strings)
+    rows = _obs_rows(eng, v[1], v[3] if len(v) > 3 else None)
+    val.view = (_var_names(eng, v[2]), rows)
     if r[0] is not None:
         r[0].set(val)
+
+
+@lib("st_view", 3, 4, outs=(0,))
+def _st_view(eng, v, r):
+    _view(eng, v, r, strings=False)
     return None
 
 
 @lib("st_sview", 3, 4, outs=(0,))
 def _st_sview(eng, v, r):
-    val = _data(eng, v[1:], strings=True)
-    if r[0] is not None:
-        r[0].set(val)
+    _view(eng, v, r, strings=True)
     return None
+
+
+def write_view(eng, base: MV, cols) -> None:
+    """Grava nas variáveis as colunas alteradas de uma view."""
+    names, rows = base.view
+    ds = _ds(eng)
+    for j in sorted(set(int(c) for c in cols)):
+        var = ds.get(names[j])
+        if var.is_string:
+            ds.set_string(var, np.array(base.a[:, j], dtype=object), rows)
+        else:
+            ds.set_numeric(var, np.asarray(base.a[:, j], dtype=np.float64), rows, promote=False)
+    eng.s.notify_state()
 
 
 def _store(eng, v, *, strings: bool) -> None:

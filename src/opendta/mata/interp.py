@@ -604,6 +604,9 @@ class MataEngine:
             elif val.shape != block:
                 raise MataError(3200, "conformability error")
             base.a[np.ix_(r, c)] = val
+            if base.view is not None:
+                from .stata_api import write_view
+                write_view(self, base, c)
             return
         raise MataError(3000, "invalid lval")
 
@@ -665,6 +668,27 @@ class MataEngine:
             if not e.where:
                 e.where.append(name + "()")
             raise
+
+    def call_with_values(self, f: FuncDef, values: list[MV]) -> list:
+        """Chama f com valores (não expressões) e devolve o valor final de cada
+        parâmetro (os "argumentos de saída" de avaliadores, como em optimize)."""
+        local = Frame(f.name)
+        for p, v in zip(f.params, values):
+            local.vars[p.name] = v.copy()
+            local.types[p.name] = (p.eltype, p.org)
+        self.depth += 1
+        self.argc.append(len(values))
+        try:
+            self.exec(f.body, local)
+        except _Return:
+            pass
+        except MataError as e:
+            e.where.append(f.name + "()")
+            raise
+        finally:
+            self.depth -= 1
+            self.argc.pop()
+        return [local.vars.get(p.name) for p in f.params[:len(values)]]
 
     def call_user(self, f: FuncDef, args: list, fr: Frame):
         n = len(args)
