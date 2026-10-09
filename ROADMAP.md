@@ -72,7 +72,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Gerador Mersenne Twister de 64 bits (o mt64 do Stata 14), `set seed` (número ou estado), `c(seed)`, `set rng`
 - [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. A conversão da semente e os algoritmos de cada distribuição não são documentados: os resultados são estatisticamente equivalentes, mas não idênticos aos do Stata (casos em `compat/do/0307_aleatorios.do`).
 
-**Conferência com o Stata 14**: os casos `compat/do/0001`–`0308` têm referência gerada no Stata/SE 14.0 e batem, exceto por diferenças conhecidas: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2), `rnormal()` e as demais distribuições (o `runiform()` já reproduz a sequência exata do Stata) e três casos que ganharam um `sort` antes de listar, porque o `sort` do Stata desempata ao acaso. Os casos `0108` e `0309` aguardam referência.
+**Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/diferencas_conhecidas.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
 
 ## Fase 4: Mata
 
