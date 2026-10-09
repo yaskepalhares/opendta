@@ -71,16 +71,17 @@ def import_excel(s: "Session", args: str) -> None:
     if o.get("describe"):
         rows = describe_excel(path)
         out = s.output
-        # VERIFICAR: layout da descrição das planilhas
-        width = max([len(n) for n, _ in rows] + [5])
-        out.write(f"\n  {'Sheet':>{width}} | Range\n", "text")
-        out.write(f"  {'-' * width}-+-{'-' * 20}\n", "text")
+        width = max([len(n) + 4 for n, _ in rows] + [10])
+        out.write(f"\n{'Sheet':>{width}} | Range\n", "text")
+        out.write(f"  {'-' * (width - 1)}+{'-' * 9}\n", "text")
         for name, rng in rows:
-            out.write(f"  {name:>{width}} | {rng}\n", "text")
-        s.r = {"N_worksheet": float(len(rows))}
-        for k, (name, rng) in enumerate(rows, start=1):
-            s.r[f"worksheet_{k}"] = name
+            out.write(f"{name:>{width}} | {rng}\n", "text")
+        # gravados do último para o primeiro: return list mostra worksheet_1 antes
+        s.r = {}
+        for k, (name, rng) in reversed(list(enumerate(rows, start=1))):
             s.r[f"range_{k}"] = rng
+            s.r[f"worksheet_{k}"] = name
+        s.r["N_worksheet"] = float(len(rows))
         return
     ds = s.data
     if ds.changed and ds.nvars and not o.get("clear"):
@@ -99,8 +100,6 @@ def import_excel(s: "Session", args: str) -> None:
     opts.allstring = bool(o.get("allstring"))
     new = read_excel(path, opts)
     s.data = new
-    s.output.write(f"({new.nvars} var{'s' if new.nvars != 1 else ''}, "
-                   f"{new.nobs:,} ob{'s' if new.nobs != 1 else ''})\n", "text")
     s.notify_state()
 
 

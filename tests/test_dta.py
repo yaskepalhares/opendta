@@ -169,10 +169,13 @@ def test_use_messages(run, here):
 
 def test_use_subset(run, here):
     run("clear\nset obs 4\ngen x = _n\ngen y = 10*_n\nsave a")
-    run("use y using a if x > 2, clear")
+    run("use y using a if y > 20, clear")
     d = run.session.data
     assert d.names == ["y"]
     assert list(d.get("y").data) == [30, 40]
+    # o if só enxerga as variáveis lidas; o erro deixa a memória vazia (Stata 14)
+    out = run("use y using a if x > 2, clear")
+    assert run.rc == 111 and run.session.data.nvars == 0
     run("use a in 2/3, clear")
     assert list(run.session.data.get("x").data) == [2, 3]
 
@@ -280,10 +283,13 @@ def test_saveold_versions(run, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     run('clear\nset obs 1\ngen strL t = "y" * 300\ngen x = 1')
     out = run("saveold v12, version(12)")
-    assert "(saving in Stata 12 format)" in out and "variable t truncated to str244" in out
+    assert "(saving in Stata 12 format, which can be read by Stata 11 or 12)" in out
+    assert "variable t truncated to str244" in out
     assert (tmp_path / "v12.dta").read_bytes()[0] == 115
-    run("saveold v11, version(11)")
-    assert (tmp_path / "v11.dta").read_bytes()[0] == 114
+    out = run("saveold v11, version(11)")
+    # o Stata 14 grava version(11) no formato 115, que o Stata 11 lê
+    assert "(saving in Stata 12 format, which Stata 11 can read)" in out
+    assert (tmp_path / "v11.dta").read_bytes()[0] == 115
     run("use v11, clear")
     assert run.session.data.get("t").vtype == "str244"
     out = run("saveold v9, version(9)")

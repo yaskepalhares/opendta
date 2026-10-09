@@ -8,14 +8,14 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 2 (linguagem de programação)
+## Estado atual: fase 3 (estatística descritiva e manipulação de dados)
 
 Já funciona:
 
 - leitura de do-files: comentários `*`, `//` e `/* */` (aninhados), continuação `///` e `#delimit ;`;
 - macros locais e globais, incluindo aninhamento (``` ``i'' ```), `` `=exp' ``, `` `++i' ``, `local ++i` e funções estendidas (`word count`, `word # of`, `display`, `list`, `piece`, `env`);
 - expressões com a precedência do Stata e as regras de missing (`.`, `.a`–`.z`);
-- 106 nomes de função (contando sinônimos como `trim`/`strtrim`): matemáticas, de string, lógicas, distribuições e datas;
+- 123 nomes de função (contando sinônimos como `trim`/`strtrim`): matemáticas, de string, lógicas, distribuições, datas e números aleatórios;
 - `display` com formatos (`%9.2f`, `%10.3e`, `%-12s`, `%td`…) e diretivas (`_col`, `_skip`, `_dup`, `_n`, `_continue`, `as`…);
 - `forvalues`, `foreach`, `while`, `if`/`else if`/`else`, `continue` e `continue, break`;
 - os prefixos `quietly`, `noisily` e `capture` (também em blocos `{ }`);
@@ -32,9 +32,12 @@ Já funciona:
 - texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
 - planilhas: `import excel` e `export excel`;
 - texto em formato livre e em colunas fixas: `infile` (inclusive com dicionário `.dct`) e `infix`; `file open/write/read/close`;
-- File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`).
+- File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`);
+- estatística descritiva: `summarize`, `tabstat`, `tabulate` (com `chi2`, `exact`, `gamma`, `taub`…), `tab1`, `tab2`, `table`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, com `fweight`, `aweight` e `iweight`;
+- manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
+- números aleatórios: Mersenne Twister de 64 bits, `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições.
 
-Ainda não há comandos estatísticos (`summarize`, `tabulate`…), que chegam na fase 3.
+Ainda não há estimação (`regress`, `logit`…) nem Mata, que vêm nas fases 4 e 5.
 
 ## Instalação (macOS)
 

@@ -169,18 +169,23 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
     scalars = {k: v for k, v in store.items() if isinstance(v, float) or isinstance(v, int)}
     macros = {k: v for k, v in store.items() if isinstance(v, str)}
     mats = {k: v for k, v in store.items() if isinstance(v, Matrix)}
+    # o Stata lista do último resultado gravado para o primeiro (observado
+    # em compat/expected/0201_programas.log) e alinha os nomes em 22 colunas
+    scalars = dict(reversed(list(scalars.items())))
+    macros = dict(reversed(list(macros.items())))
+    mats = dict(reversed(list(mats.items())))
     if scalars:
         out.write("\nscalars:\n", "text")
         for k, v in scalars.items():
-            out.write(f"{prefix + '(' + k + ')':>20} =  ", "text")
+            out.write(f"{prefix + '(' + k + ')':>22} =  ", "text")
             out.write(format_value(float(v), "%10.0g", pad=False) + "\n", "result")
     if macros:
         out.write("\nmacros:\n", "text")
         for k, v in macros.items():
-            out.write(f"{prefix + '(' + k + ')':>20} : ", "text")
+            out.write(f"{prefix + '(' + k + ')':>22} : ", "text")
             out.write(f'"{v}"\n', "result")
     if mats:
         out.write("\nmatrices:\n", "text")
         for k, v in mats.items():
-            out.write(f"{prefix + '(' + k + ')':>20} :  ", "text")
+            out.write(f"{prefix + '(' + k + ')':>22} :  ", "text")
             out.write(f"{v.rows} x {v.cols}\n", "result")

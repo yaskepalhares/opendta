@@ -1,0 +1,257 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0104_arquivos.log
+  log type:  text
+ opened on:   9 Oct 2026, 00:51:08
+
+. * Fase 1b: use, save, saveold, notes, char, describe com arquivo.
+. * Cria e apaga arquivos temporários na pasta atual.
+. clear
+
+. input str6 nome idade
+
+          nome      idade
+  1. "Ana" 30
+  2. "Bia" .
+  3. "Caio" 41
+  4. end
+
+. label data "Pessoas"
+
+. label variable idade "Idade (anos)"
+
+. notes: arquivo criado no teste
+
+. notes: segunda nota
+
+. notes idade: idade em anos completos
+
+. char idade[fonte] "questionario"
+
+. char list
+  _dta[note2]:                segunda nota
+  _dta[note0]:                2
+  _dta[note1]:                arquivo criado no teste
+  idade[fonte]:               questionario
+  idade[note1]:               idade em anos completos
+  idade[note0]:               1
+
+. notes
+
+_dta:
+  1.  arquivo criado no teste
+  2.  segunda nota
+
+idade:
+  1.  idade em anos completos
+
+. sort nome
+
+. capture erase odta_pessoas.dta
+
+. save odta_pessoas
+file odta_pessoas.dta saved
+
+. capture noisily save odta_pessoas
+file odta_pessoas.dta already exists
+
+. save odta_pessoas, replace
+file odta_pessoas.dta saved
+
+. capture erase odta_outro.dta
+
+. save odta_outro, replace
+(note: file odta_outro.dta not found)
+file odta_outro.dta saved
+
+. gen x = 1
+
+. capture noisily use odta_pessoas
+no; data in memory would be lost
+
+. use odta_pessoas, clear
+(Pessoas)
+
+. describe
+
+Contains data from odta_pessoas.dta
+  obs:             3                          Pessoas
+ vars:             2                          9 Oct 2026 00:51
+ size:            30                          (_dta has notes)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str6    %9s                   
+idade           float   %9.0g               * Idade (anos)
+                                            * indicated variables have notes
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: nome
+
+. notes list idade
+
+idade:
+  1.  idade em anos completos
+
+. list
+
+     +--------------+
+     | nome   idade |
+     |--------------|
+  1. |  Ana      30 |
+  2. |  Bia       . |
+  3. | Caio      41 |
+     +--------------+
+
+. capture noisily use nome using odta_pessoas if idade < ., clear
+(Pessoas)
+idade not found
+
+. list
+
+. use odta_pessoas in 2/3, clear
+(Pessoas)
+
+. list
+
+     +--------------+
+     | nome   idade |
+     |--------------|
+  1. |  Bia       . |
+  2. | Caio      41 |
+     +--------------+
+
+. capture noisily use odta_naoexiste, clear
+file odta_naoexiste.dta not found
+
+. capture erase odta_v13.dta
+
+. saveold odta_v13
+(saving in Stata 13 format)
+(FYI, saveold has options version(12) and version(11) that write files in older Stata formats)
+file odta_v13.dta saved
+
+. use odta_v13, clear
+(Pessoas)
+
+. describe
+
+Contains data from odta_v13.dta
+  obs:             2                          Pessoas
+ vars:             2                          9 Oct 2026 00:51
+ size:            20                          (_dta has notes)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str6    %9s                   
+idade           float   %9.0g               * Idade (anos)
+                                            * indicated variables have notes
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: nome
+
+. notes drop _dta
+  (2 notes dropped)
+
+. notes
+
+idade:
+  1.  idade em anos completos
+
+. gen double d = _n + 0.5
+
+. capture noisily recast int d
+d:  2 values would be changed; not changed
+
+. recast int d, force
+d:  2 values changed
+
+. recast str3 nome, force
+nome:  1 value changed
+
+. capture noisily recast byte nome
+nome:  byte invalid
+
+. describe
+
+Contains data from odta_v13.dta
+  obs:             2                          Pessoas
+ vars:             3                          9 Oct 2026 00:51
+ size:            18                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str3    %9s                   
+idade           float   %9.0g               * Idade (anos)
+d               int     %10.0g                
+                                            * indicated variables have notes
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: nome
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +------------------+
+     | nome   idade   d |
+     |------------------|
+  1. |  Bia       .   1 |
+  2. |  Cai      41   2 |
+     +------------------+
+
+. capture erase odta_v12.dta
+
+. saveold odta_v12, version(12)
+(saving in Stata 12 format, which can be read by Stata 11 or 12)
+file odta_v12.dta saved
+
+. use odta_v12, clear
+(Pessoas)
+
+. describe
+
+Contains data from odta_v12.dta
+  obs:             2                          Pessoas
+ vars:             3                          9 Oct 2026 00:51
+ size:            18                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str3    %9s                   
+idade           float   %9.0g               * Idade (anos)
+d               int     %10.0g                
+                                            * indicated variables have notes
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: nome
+
+. capture erase odta_v11.dta
+
+. saveold odta_v11, version(11)
+(saving in Stata 12 format, which Stata 11 can read)
+file odta_v11.dta saved
+
+. capture noisily saveold odta_v9, version(9)
+version(9) invalid
+    Stata 14 can write .dta files for Stata 14, 13, 12, or 11.  It cannot write .dta formats older than that.  (Stata 11 was released in 2009.)
+
+. erase odta_pessoas.dta
+
+. erase odta_outro.dta
+
+. erase odta_v13.dta
+
+. erase odta_v12.dta
+
+. erase odta_v11.dta
+
+. capture noisily erase odta_pessoas.dta
+file odta_pessoas.dta not found
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0104_arquivos.log
+  log type:  text
+ closed on:   9 Oct 2026, 00:51:08
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

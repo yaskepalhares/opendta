@@ -1,10 +1,14 @@
 """Preferências persistentes da interface (QSettings).
 
 Ficam no local padrão de cada sistema: registro no Windows, .plist no macOS
-e ~/.config no Linux.
+e ~/.config no Linux. Com a variável de ambiente OPENDTA_SETTINGS apontando
+para um arquivo .ini, ficam nesse arquivo (os testes usam isso para não
+ler nem alterar as preferências de quem roda o pytest).
 """
 
 from __future__ import annotations
+
+import os
 
 from PySide6.QtCore import QSettings
 
@@ -18,9 +22,16 @@ APP_ICON_VARIANTS = {
 }
 
 
+def default_store() -> QSettings:
+    path = os.environ.get("OPENDTA_SETTINGS")
+    if path:
+        return QSettings(path, QSettings.Format.IniFormat)
+    return QSettings(ORG, APP)
+
+
 class Preferences:
     def __init__(self, settings: QSettings | None = None):
-        self._s = settings or QSettings(ORG, APP)
+        self._s = settings or default_store()
 
     # ícone do aplicativo
     @property

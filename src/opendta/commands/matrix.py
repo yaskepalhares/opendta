@@ -566,10 +566,12 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
     cells = [[format_value(float(x), f, pad=False).strip() if x < M.SYSMISS
               else M.missing_name(float(x)) for x in row] for row in mat.data]
     rw = max([len(n) for n in mat.rownames] + [0]) if names else 0
-    widths = []
-    for j, cname in enumerate(mat.colnames):
-        col = [cells[i][j] for i in range(mat.rows) if not sym or i >= j]
-        widths.append(max([len(cname) if names else 0] + [len(c) for c in col]))
+    # todas as colunas têm a mesma largura: o maior valor ou nome de coluna
+    # (observado no Stata 14, compat/expected/0203_matrix.log)
+    shown = [cells[i][j] for i in range(mat.rows) for j in range(mat.cols) if not sym or i >= j]
+    w_all = max([len(c) for c in mat.colnames] if names else [0])
+    w_all = max([w_all] + [len(c) for c in shown])
+    widths = [w_all] * mat.cols
     if header:
         lead = "symmetric " if sym else ""
         extra = f":  {show_title}" if show_title else ""
@@ -607,7 +609,10 @@ def _define(s: "Session", text: str) -> None:
         x = _scalar(s, rhs)
         mat.data[i - 1, j - 1] = x
         return
-    _store(s)[name] = evaluate_matrix(s, rhs)
+    value = evaluate_matrix(s, rhs)
+    store = _store(s)
+    store.pop(name, None)       # redefinir conta como a mais recente (matrix dir)
+    store[name] = value
 
 
 def _input(s: "Session", text: str) -> None:
@@ -683,8 +688,9 @@ def cmd_matrix(s: "Session", args: str) -> None:
             del store[n]
         return
     if sub in ("dir",):
-        for n, mat in sorted(_store(s).items()):
-            s.output.write(f"{n:>18}[{mat.rows},{mat.cols}]\n", "text")   # VERIFICAR
+        # da mais recente para a mais antiga, nome alinhado em 13 colunas
+        for n, mat in reversed(list(_store(s).items())):
+            s.output.write(f"{n:>13}[{mat.rows},{mat.cols}]\n", "text")
         return
     if sub in ("rename", "ren"):
         a, b = rest.split()

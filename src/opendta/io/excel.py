@@ -140,12 +140,12 @@ def _cell_text(v) -> str:
     if isinstance(v, float) and v.is_integer() and abs(v) < 1e15:
         return str(int(v))
     if isinstance(v, _dt.datetime):
-        # VERIFICAR: texto de datas com allstring
+        # allstring: a data como o Excel a mostra (m/d/aaaa; observado no Stata 14)
         if not (v.hour or v.minute or v.second or v.microsecond):
-            return v.date().isoformat()
-        return v.isoformat(sep=" ")
+            return f"{v.month}/{v.day}/{v.year}"
+        return f"{v.month}/{v.day}/{v.year} {v.hour}:{v.minute:02d}:{v.second:02d}"   # VERIFICAR
     if isinstance(v, _dt.date):
-        return v.isoformat()
+        return f"{v.month}/{v.day}/{v.year}"
     return str(v)
 
 
@@ -155,8 +155,9 @@ def _make_name(raw: str, case: str) -> str | None:
         t = t.lower()
     elif case == "upper":
         t = t.upper()
-    # VERIFICAR: troca de caracteres inválidos por _ e corte em 32
-    t = re.sub(r"[^A-Za-z0-9_]", "_", t)[:32]
+    # caracteres inválidos são removidos ("Renda mensal" → Rendamensal,
+    # observado no Stata 14)
+    t = re.sub(r"[^A-Za-z0-9_]", "", t)[:32]
     if not t or not NAME_RE.match(t) or t in RESERVED:
         return None
     return t
@@ -223,7 +224,9 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
                 vals[i] = (delta.days * 86_400_000 + delta.seconds * 1000
                            + delta.microseconds // 1000) if has_time else delta.days
             vtype = "double" if has_time else smallest_type_for(vals)
-            var = Variable(name, vtype, vals, fmt="%tc" if has_time else "%td")
+            # VERIFICAR: formato de data-hora (o de data foi observado no Stata 14)
+            var = Variable(name, vtype, vals,
+                           fmt="%tcnn/dd/CCYY_hh:MM:SS" if has_time else "%tdnn/dd/CCYY")
         elif is_num:
             vals = np.array([M.SYSMISS if v is None or v == "" else float(v) for v in col])
             vtype = smallest_type_for(vals)
@@ -231,7 +234,11 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
                 vtype = "double"        # VERIFICAR: decimais do Excel ficam double
             var = Variable(name, vtype, vals)
         else:
-            texts = [_cell_text(v) for v in col]
+            # datas como texto ficam alinhadas à direita em 10 posições: o
+            # Stata cria str10 e lista "1/1/2020" numa coluna de 10 (VERIFICAR
+            # se o espaço fica mesmo no texto)
+            texts = [_cell_text(v).rjust(10) if isinstance(v, (_dt.datetime, _dt.date)) else _cell_text(v)
+                     for v in col]
             width = max((str_len(s) for s in texts), default=1) or 1
             var = Variable(name, str_type_for(width), texts)
         var.label = label
@@ -287,7 +294,7 @@ def _excel_values(ds: Dataset, v: Variable, idx: np.ndarray, nolabel: bool) -> l
     return out
 
 
-_NUMBER_FORMAT = {"date": "yyyy-mm-dd", "datetime": "yyyy-mm-dd hh:mm:ss"}  # VERIFICAR
+_NUMBER_FORMAT = {"date": "m/d/yyyy", "datetime": "m/d/yyyy h:mm:ss"}  # VERIFICAR
 
 
 def write_excel(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarray,

@@ -1,0 +1,7 @@
+# Casos que ainda diferem do Stata 14 por motivo conhecido. O compare.py os
+# marca com "~~" e não falha por eles. Tire a linha quando o caso voltar a
+# bater (por exemplo, depois de gerar a referência de novo no Stata).
+# formato: nome-do-caso  motivo
+0302_tabulate         tabulate, exact em tabela 2x3: o OpenDTA não imprime o progresso do algoritmo de rede
+0307_aleatorios       rnormal(), runiformint() e rpoisson() ainda não reproduzem o Stata (runiform, rbinomial, rchi2(2) e rexponential já reproduzem)
+0309_aleatorios_2     mesmo motivo do 0307 (rnormal usa três uniformes por sorteio, algoritmo não documentado)

@@ -1,0 +1,186 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0105_delimitado.log
+  log type:  text
+ opened on:   9 Oct 2026, 00:51:08
+
+. * Fase 1b: export delimited, import delimited, insheet, outsheet, type.
+. * Cria e apaga arquivos temporários na pasta atual.
+. clear
+
+. input str20 nome idade double renda str2 uf
+
+                     nome      idade       renda         uf
+  1. "Ana" 30 1500.5 "SP"
+  2. "Bia, a grande" . 2000 "RJ"
+  3. "Caio" 41 0.25 "MG"
+  4. end
+
+. label define id 30 "trinta"
+
+. label values idade id
+
+. export delimited odta_p.csv, replace
+(note: file odta_p.csv not found)
+file odta_p.csv saved
+
+. type odta_p.csv
+nome,idade,renda,uf
+Ana,trinta,1500.5,SP
+"Bia, a grande",,2000,RJ
+Caio,41,.25,MG
+
+. capture noisily export delimited odta_p.csv
+file odta_p.csv already exists
+
+. export delimited nome renda using odta_q if idade < ., replace quote nolabel
+(note: file odta_q.csv not found)
+file odta_q.csv saved
+
+. type odta_q.csv
+nome,renda
+"Ana",1500.5
+"Caio",.25
+
+. export delimited using odta_r.txt, replace delimiter(tab) novarnames
+(note: file odta_r.txt not found)
+file odta_r.txt saved
+
+. type odta_r.txt, showtabs
+Ana<T>trinta<T>1500.5<T>SP
+Bia, a grande<T><T>2000<T>RJ
+Caio<T>41<T>.25<T>MG
+
+. import delimited odta_p.csv, clear
+(4 vars, 3 obs)
+
+. describe
+
+Contains data
+  obs:             3                          
+ vars:             4                          
+ size:            75                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str13   %13s                  
+idade           str6    %9s                   
+renda           float   %9.0g                 
+uf              str2    %9s                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +--------------------------------------+
+     |          nome    idade    renda   uf |
+     |--------------------------------------|
+  1. |           Ana   trinta   1500.5   SP |
+  2. | Bia, a grande              2000   RJ |
+  3. |          Caio       41      .25   MG |
+     +--------------------------------------+
+
+. import delimited odta_p.csv, clear varnames(nonames)
+(4 vars, 4 obs)
+
+. describe
+
+Contains data
+  obs:             4                          
+ vars:             4                          
+ size:           108                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+v1              str13   %13s                  
+v2              str6    %9s                   
+v3              str6    %9s                   
+v4              str2    %9s                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +--------------------------------------+
+     |            v1       v2       v3   v4 |
+     |--------------------------------------|
+  1. |          nome    idade    renda   uf |
+  2. |           Ana   trinta   1500.5   SP |
+  3. | Bia, a grande              2000   RJ |
+  4. |          Caio       41      .25   MG |
+     +--------------------------------------+
+
+. import delimited odta_p.csv, clear stringcols(2) asdouble
+(4 vars, 3 obs)
+
+. describe
+
+Contains data
+  obs:             3                          
+ vars:             4                          
+ size:            87                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str13   %13s                  
+idade           str6    %9s                   
+renda           double  %10.0g                
+uf              str2    %9s                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. outsheet using odta_o, replace
+(note: file odta_o.out not found)
+
+. type odta_o.out
+nome    idade   renda   uf
+"Ana"   "trinta"        1500.5  "SP"
+"Bia, a grande" ""      2000    "RJ"
+"Caio"  "41"    .25     "MG"
+
+. outsheet nome uf using odta_o.csv, comma noquote replace
+(note: file odta_o.csv not found)
+
+. type odta_o.csv
+nome,uf
+Ana,SP
+Bia, a grande,RJ
+Caio,MG
+
+. insheet using odta_o.csv, clear
+(3 vars, 4 obs)
+
+. list
+
+     +----------------------+
+     |   v1         v2   v3 |
+     |----------------------|
+  1. | nome         uf      |
+  2. |  Ana         SP      |
+  3. |  Bia   a grande   RJ |
+  4. | Caio         MG      |
+     +----------------------+
+
+. erase odta_p.csv
+
+. erase odta_q.csv
+
+. erase odta_r.txt
+
+. erase odta_o.out
+
+. erase odta_o.csv
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0105_delimitado.log
+  log type:  text
+ closed on:   9 Oct 2026, 00:51:08
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

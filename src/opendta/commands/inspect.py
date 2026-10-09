@@ -65,10 +65,17 @@ def cmd_list(s: "Session", args: str) -> None:
     divider = bool(opts.get("divider"))
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
+    # nomes maiores que a coluna são abreviados para max(abbreviate(#), largura
+    # dos valores); o padrão é ab(8) ("Rendamensal" → "Rendam~l")
+    ab = int(opts["abbreviate"]) if isinstance(opts.get("abbreviate"), str) else 8
+    from ..lang.functions import _abbrev
+    titles = []
     widths = []
     for j, v in enumerate(vars_):
-        w = max([len(v.name)] + [len(r[j]) for r in cells])
-        widths.append(w)
+        data_w = max([len(r[j]) for r in cells], default=0)
+        title = v.name if len(v.name) <= max(ab, data_w) else _abbrev(v.name, float(max(ab, data_w)))
+        titles.append(title)
+        widths.append(max([len(title), data_w]))
     left = [_left_aligned(v, use_labels) for v in vars_]
 
     def fmt_row(texts: list[str]) -> str:
@@ -80,7 +87,7 @@ def cmd_list(s: "Session", args: str) -> None:
     # layout observado nos logs do Stata: 3 espaços entre colunas, rótulo da
     # observação "  1." seguido de " | " (tabela) ou de 3 espaços (clean)
     obs_w = max(3, len(str(int(rows[-1]) + 1))) if len(rows) else 3
-    header = fmt_row([v.name for v in vars_])
+    header = fmt_row(titles)
     inner = len(header) + 2
 
     out.ensure_line_start()
@@ -133,18 +140,20 @@ def cmd_describe(s: "Session", args: str) -> None:
 
     out.ensure_line_start()
     out.write("\n", "text")
-    src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
-    out.write(src + "\n", "text")
-    label = ds.label
-    out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
-    ts = getattr(ds, "timestamp", "") if ds.filename else ""
-    out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts if ts else "") + "\n", "text")
-    out.write(f" size:{ds.width() * ds.nobs:>14,}\n", "text")
-    # VERIFICAR: aviso de notas no cabeçalho do describe
-    if ds.chars.get("_dta", {}).get("note0"):
-        out.write(" " * 46 + "(_dta has notes)\n", "text")
+    # com varlist, o Stata 14 mostra só a tabela das variáveis
+    only_vars = bool(p.varlist.strip())
+    if not only_vars:
+        src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
+        out.write(src + "\n", "text")
+        label = ds.label
+        out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
+        ts = getattr(ds, "timestamp", "") if ds.filename else ""
+        out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts.strip() if ts else "") + "\n", "text")
+        dta_notes = " " * 26 + "(_dta has notes)" if ds.chars.get("_dta", {}).get("note0") else ""
+        out.write(f" size:{ds.width() * ds.nobs:>14,}{dta_notes}\n", "text")
     if not opts.get("short"):
-        out.write(_LINE + "\n", "text")
+        if not only_vars:
+            out.write(_LINE + "\n", "text")
         out.write("              storage   display    value\n", "text")
         out.write("variable name   type    format     label      variable label\n", "text")
         out.write(_LINE + "\n", "text")
@@ -152,12 +161,17 @@ def cmd_describe(s: "Session", args: str) -> None:
             v = ds.get(n)
             shown = n if len(n) <= 15 or opts.get("fullnames") else n[:14] + "~"
             star = "*" if ds.chars.get(n, {}).get("note0") else " "
-            line = f"{shown:<16}{v.vtype:<8}{v.fmt:<11}{v.value_label:<10}{star}{v.label}"
+            # formatos longos aparecem cortados ("%tdnn/dd/CCYY" → "%td..")
+            fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFICAR regra do corte
+            line = f"{shown:<16}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
+    if only_vars:
+        # VERIFICAR: rodapé de notas com varlist
+        return
     out.write(_LINE + "\n", "text")
     if any(ds.chars.get(n, {}).get("note0") for n in names):
-        out.write("                                * indicated variables have notes\n", "text")
+        out.write(" " * 44 + "* indicated variables have notes\n", "text")
         out.write(_LINE + "\n", "text")
-    out.write("Sorted by: " + " ".join(ds.sortlist) + "\n", "text")
+    out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 espaços (Stata 14)
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")

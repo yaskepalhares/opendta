@@ -95,11 +95,14 @@ class FreeVar:
     name: str            # "" para _skip
     vtype: str
     skip: int = 0
+    value_label: str = ""    # nome:rótulo; com automatic, textos viram códigos
 
 
 def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
-              ) -> tuple[Dataset, list[str], bool]:
-    """Devolve (dados, avisos, terminou no meio de uma observação)."""
+              ) -> tuple[Dataset, list[tuple[str, str, int]], bool]:
+    """Devolve (dados, avisos (texto, variável, registro 0-based), terminou no
+    meio de uma observação). `automatic` só vale para variáveis declaradas
+    com :rótulo (observado no Stata 14)."""
     tokens = tokenize_free(text)
     width = sum(v.skip if not v.name else 1 for v in spec)
     if width == 0:
@@ -109,7 +112,7 @@ def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
     if partial:
         nobs += 1
         tokens += [""] * (width - rest)
-    warnings: list[str] = []
+    warnings: list[tuple[str, str, int]] = []
     ds = Dataset()
     ds.nobs = nobs
     pos = 0
@@ -134,17 +137,17 @@ def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
         for i, s in enumerate(col):
             x = to_number(s)
             if x is None:
-                if automatic:
+                if automatic and v.value_label:
                     x = labels.setdefault(s, len(labels) + 1)
                 else:
-                    # VERIFICAR: texto do aviso
-                    warnings.append(f"'{s}' cannot be read as a number for {v.name}[{i + 1}]")
+                    warnings.append((s, v.name, i))
                     x = M.SYSMISS
             vals[i] = x
         var = Variable(v.name, v.vtype, vals)
-        if labels:
-            ds.value_labels[v.name] = {code: text for text, code in labels.items()}
-            var.value_label = v.name
+        if v.value_label:
+            if labels:
+                ds.value_labels[v.value_label] = {code: text for text, code in labels.items()}
+            var.value_label = v.value_label
         ds.vars.append(var)
     ds.changed = True
     return ds, warnings, partial

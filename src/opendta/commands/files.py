@@ -65,23 +65,24 @@ def cmd_use(s: "Session", args: str) -> None:
         for v in new.vars:
             v.value_label = ""
     keep = unique(expand(new, want_vars)) if want_vars else None
-    old = s.data
+    if keep is not None:
+        # o if só enxerga as variáveis lidas (observado no Stata 14)
+        new.drop_vars([n for n in new.names if n not in set(keep)])
     s.data = new
-    try:
-        if if_ or in_:
-            # VERIFICAR: aqui o if pode usar variáveis fora do varlist
-            # (avaliado antes de descartar as colunas).
+    if new.label:
+        s.output.write(f"({new.label})\n", "text")
+    if if_ or in_:
+        try:
             from ..lang.syntax import Parsed
             mask = touse(s, Parsed(if_=if_, in_=in_))
             new.keep_obs(mask)
-    except Exception:
-        s.data = old
-        raise
-    if keep is not None:
-        new.drop_vars([n for n in new.names if n not in set(keep)])
+        except StataError:
+            # o Stata já trocou os dados: um erro no if deixa a memória vazia
+            from ..core.dataset import Dataset
+            s.data = Dataset()
+            s.notify_state()
+            raise
     new.changed = bool(want_vars or if_ or in_)
-    if new.label:
-        s.output.write(f"({new.label})\n", "text")
     s.notify_state()
 
 
@@ -111,16 +112,19 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
         raise StataError(602, f"file {shown} already exists")
     if opts.get("version"):
         v = int(str(opts["version"]))
-        release = {11: 114, 12: 115, 13: 117, 14: 118}.get(v, 0)
+        # o Stata 14 grava version(11) no formato do Stata 12 (115), que o 11 lê
+        release = {11: 115, 12: 115, 13: 117, 14: 118}.get(v, 0)
         if not release:
-            # VERIFICAR: mensagem do Stata para version() fora de 11–14
-            raise StataError(198, "option version() must be 11, 12, 13, or 14")
+            raise StataError(198, f"version({opts['version']}) invalid\n    Stata 14 can write .dta "
+                                  "files for Stata 14, 13, 12, or 11.  It cannot write .dta formats "
+                                  "older than that.  (Stata 11 was released in 2009.)")
     if not exists and opts.get("replace"):
         s.output.write(f"(note: file {shown} not found)\n", "text")
     if old_note and release in (114, 115, 117):
-        # VERIFICAR: avisos do saveold do Stata 14
         version = {114: 11, 115: 12, 117: 13}[release]
-        s.output.write(f"(saving in Stata {version} format)\n", "text")
+        asked = int(str(opts["version"])) if opts.get("version") else 13
+        tail = {12: ", which can be read by Stata 11 or 12", 11: ", which Stata 11 can read"}.get(asked, "")
+        s.output.write(f"(saving in Stata {version} format{tail})\n", "text")
         if not opts.get("version"):
             s.output.write("(FYI, saveold has options version(12) and version(11) "
                            "that write files in older Stata formats)\n", "text")
@@ -166,6 +170,14 @@ def _notes_of(s: "Session", owner: str) -> list[str]:
     return [chars.get(f"note{k}", "") for k in range(1, n + 1)]
 
 
+def _touch_char(chars: dict, key: str, value: str) -> None:
+    """Grava uma característica. O Stata lista as características da mais
+    recente para a mais antiga, e alterar uma existente a torna a mais
+    recente (observado em compat/expected/0104_arquivos.log)."""
+    chars.pop(key, None)
+    chars[key] = value
+
+
 def _set_notes(s: "Session", owner: str, notes: list[str]) -> None:
     chars = s.data.chars.setdefault(owner, {})
     for k in [k for k in chars if re.match(r"^note\d+$", k)]:
@@ -179,6 +191,15 @@ def _set_notes(s: "Session", owner: str, notes: list[str]) -> None:
     s.data.changed = True
 
 
+def _add_note(s: "Session", owner: str, text: str) -> None:
+    """Nova nota: primeiro atualiza note0 (a contagem), depois cria note#."""
+    chars = s.data.chars.setdefault(owner, {})
+    n = len(_notes_of(s, owner)) + 1
+    _touch_char(chars, "note0", str(n))
+    _touch_char(chars, f"note{n}", text)
+    s.data.changed = True
+
+
 @command("notes", "note")
 def cmd_notes(s: "Session", args: str) -> None:
     t = args.strip()
@@ -189,16 +210,19 @@ def cmd_notes(s: "Session", args: str) -> None:
         if owner != "_dta":
             owner = resolve_name(ds, owner)
         text = m.group(2).strip()
-        _set_notes(s, owner, _notes_of(s, owner) + [text])
+        _add_note(s, owner, text)
         return
     words = t.split()
     if words and words[0] == "drop":
         targets = words[1:] or ["_all"]
         owners = ["_dta"] + ds.names if targets == ["_all"] else [
             "_dta" if w == "_dta" else resolve_name(ds, w) for w in targets]
+        dropped = 0
         for o in owners:
+            dropped += len(_notes_of(s, o))
             if _notes_of(s, o):
                 _set_notes(s, o, [])
+        s.output.write(f"  ({dropped} note{'s' if dropped != 1 else ''} dropped)\n", "text")
         return
     if words and words[0] in ("list", "l", "li", "lis"):
         words = words[1:]
@@ -233,7 +257,7 @@ def cmd_char(s: "Session", args: str) -> None:
         value = strip_outer_quotes(m.group(3)) if m.group(3).strip() else ""
         chars = ds.chars.setdefault(owner, {})
         if value:
-            chars[m.group(2)] = value
+            _touch_char(chars, m.group(2), value)
         else:
             chars.pop(m.group(2), None)
             if not chars:
@@ -243,10 +267,13 @@ def cmd_char(s: "Session", args: str) -> None:
     if sub in ("list", "l", "li", "lis", ""):
         targets = rest.split()
         out = s.output
-        for owner, chars in ds.chars.items():
+        owners = [o for o in ["_dta"] + ds.names if o in ds.chars]
+        owners += [o for o in ds.chars if o not in owners]
+        for owner in owners:
+            chars = ds.chars[owner]
             if targets and owner not in targets:
                 continue
-            for name, value in chars.items():
+            for name, value in reversed(list(chars.items())):
                 out.write(f"  {owner}[{name}]:".ljust(30) + f"{value}\n", "text")
         return
     raise StataError(198, "invalid syntax")

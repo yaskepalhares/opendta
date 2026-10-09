@@ -37,14 +37,28 @@ def _path(text: str, ext: str) -> Path:
     return p
 
 
+def _echo_dictionary(s: "Session", text: str) -> None:
+    """O infile com dicionário mostra o dicionário, da linha `dictionary`
+    até a chave que fecha (observado no Stata 14, compat 0108)."""
+    lines = text.splitlines()
+    start = next((k for k, ln in enumerate(lines) if re.search(r"\bdictionary\b", ln)), None)
+    if start is None:
+        return
+    for ln in lines[start:]:
+        s.output.write(ln.rstrip() + "\n", "text")
+        if ln.strip().startswith("}") or ln.rstrip().endswith("}"):
+            break
+
+
 def _check_empty(s: "Session", clear: bool) -> None:
     ds = s.data
     if ds.nvars and not clear:
-        # VERIFICAR: o infile exige dados vazios ou a opção clear
-        raise StataError(4, "no; data in memory would be lost")
+        # observado no Stata 14 (infile; VERIFICAR o infix)
+        raise StataError(18, "you must start with an empty dataset")
 
 
-def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None) -> None:
+def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None,
+            warnings: list | None = None, partial: bool = False) -> None:
     names = [v.name for v in new.vars]
     if len(set(names)) != len(names):
         dup = next(n for n in names if names.count(n) > 1)
@@ -52,11 +66,22 @@ def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None) -> N
     old = s.data
     s.data = new
     try:
-        if if_ or in_:
-            new.keep_obs(touse(s, Parsed(if_=if_, in_=in_)))
+        mask = touse(s, Parsed(if_=if_, in_=in_)) if (if_ or in_) else None
     except Exception:
         s.data = old
         raise
+    # avisos de valores não numéricos: o Stata numera pela posição que o
+    # registro ocupa nos dados no momento da leitura (os registros descartados
+    # antes pelo if não contam; observado no Stata 14)
+    for k, (text, name, rec) in enumerate(warnings or []):
+        if k >= 20:
+            break
+        obs = int(mask[:rec].sum()) + 1 if mask is not None else rec + 1
+        s.output.write(f"'{text}' cannot be read as a number for {name}[{obs}]\n", "text")
+    if partial:
+        s.output.write("(eof not at end of obs)\n", "text")
+    if mask is not None:
+        new.keep_obs(mask)
     n = new.nobs
     s.output.write(f"({n:,} observation{'s' if n != 1 else ''} read)\n", "text")
     s.notify_state()
@@ -91,8 +116,11 @@ def parse_free_spec(text: str, default_type: str) -> list[FreeVar]:
         if tok in _TYPES or re.fullmatch(r"str\d*|strL", tok):
             vtype = tok
             continue
+        lbl = ""
+        if ":" in tok:
+            tok, lbl = tok.split(":", 1)
         for name in _expand_names(tok):
-            spec.append(FreeVar(name, vtype))
+            spec.append(FreeVar(name, vtype, value_label=lbl))
         vtype = default_type
     if not any(v.name for v in spec):
         raise StataError(100, "varlist required")
@@ -109,7 +137,9 @@ def cmd_infile(s: "Session", args: str) -> None:
     if not p.varlist.strip():
         # dicionário
         dpath = _path(p.using, ".dct")
-        d = parse_dictionary(read_text(dpath), "infile")
+        dtext = read_text(dpath)
+        d = parse_dictionary(dtext, "infile")
+        _echo_dictionary(s, dtext)
         if o.get("using"):
             data = read_text(_path(str(o["using"]), ".raw"))
         elif d.datafile:
@@ -127,11 +157,7 @@ def cmd_infile(s: "Session", args: str) -> None:
     spec = parse_free_spec(p.varlist, s.settings.get("type", "float"))
     text = read_text(_path(p.using, ".raw"))
     new, warnings, partial = read_free(text, spec, automatic=bool(o.get("automatic")))
-    for w in warnings[:20]:
-        s.output.write(w + "\n", "text")
-    if partial:
-        s.output.write("(eof not at end of obs)\n", "text")
-    _finish(s, new, p.if_, p.in_)
+    _finish(s, new, p.if_, p.in_, warnings, partial)
 
 
 @command("infix")

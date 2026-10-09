@@ -60,6 +60,8 @@ def _open(s: "Session", rest: str) -> None:
     if o.get("write"):
         if path.exists() and not (o.get("replace") or o.get("append")):
             raise StataError(602, f"file {file} already exists")
+        if o.get("replace") and not path.exists():
+            s.output.write(f"(note: file {file} not found)\n", "text")
         mode = "a" if o.get("append") else "w"
         fh = open(path, mode, encoding="utf-8", newline="")
     elif o.get("read"):

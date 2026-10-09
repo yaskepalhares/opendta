@@ -159,6 +159,8 @@ class VectorContext:
     def call(self, name: str, args: list[Any]) -> Any:
         if name == "sum" and len(args) == 1:
             return self._running_sum(args[0])
+        if name in _RANDOM:
+            return self._random(name, args)
         if not any(is_vec(a) for a in args):
             return F.call(name, args)
         fast = _FAST.get(name)
@@ -173,6 +175,23 @@ class VectorContext:
         if any(isinstance(r, str) for r in results):
             return np.array(results, dtype=object)
         return np.array(results, dtype=np.float64)
+
+    def _random(self, name: str, args: list[Any]) -> np.ndarray:
+        """Um sorteio por observação (só as da amostra em generate/replace)."""
+        from ..core import rng
+        lo, hi, _ = rng.DISTRIBUTIONS[name]
+        if not (lo <= len(args) <= hi):
+            raise StataError(198, "invalid syntax")
+        if any(is_str(a) for a in args):
+            raise type_mismatch()
+        mask = getattr(self.s, "_rng_mask", None)
+        if mask is None or len(mask) != self.n:
+            return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
+        # só as observações da amostra sorteiam (generate/replace com if/in)
+        idx = np.flatnonzero(mask)
+        out = np.full(self.n, SYS)
+        out[idx] = rng.draw(name, [broadcast(a, self.n)[idx] if is_vec(a) else a for a in args], len(idx))
+        return out
 
     def _running_sum(self, x: Any) -> np.ndarray:
         if is_str(x):
@@ -383,6 +402,9 @@ def _float(x):
     miss = x >= SYS
     return np.where(miss, x, x.astype(np.float32).astype(np.float64))
 
+
+_RANDOM = {"runiform", "runiformint", "rnormal", "rbinomial", "rpoisson", "rchi2", "rt", "rbeta",
+           "rgamma", "rexponential", "rlogistic", "rweibull", "rnbinomial", "rhypergeometric"}
 
 _FAST = {
     "abs": _unary_num(np.abs),

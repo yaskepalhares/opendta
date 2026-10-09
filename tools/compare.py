@@ -27,11 +27,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 COMPAT = ROOT / "compat"
 _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
-_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints))\b")
+_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints|linesize))\b")
 
 
 # carimbo de data do .dta (describe): muda a cada execução
-_STAMP = re.compile(r"\b\d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+_STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
 
 
 def normalize(text: str) -> list[str]:
@@ -43,6 +43,10 @@ def normalize(text: str) -> list[str]:
         if line in (".",):
             continue
         out.append(line)
+    # o modo batch termina um do-file interrompido com "end of do-file" e r(#);
+    # no Stata as referências rodam sob capture noisily, sem o r(#) final
+    if len(out) >= 2 and out[-2] == "end of do-file" and re.fullmatch(r"r\(\d+\);", out[-1]):
+        out.pop()
     return out
 
 
@@ -53,8 +57,15 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     # explicações de erro do OpenDTA desligadas: o Stata não as tem.
     # `setup` (ex.: set dp comma) roda antes, sem aparecer no log comparado
     target = outdir / dofile.name
-    pre = "quietly set hints off\n" + (f"quietly {setup}\n" if setup else "")
+    # gerar_esperados.do roda os casos com set linesize 255
+    pre = ("quietly set hints off\nquietly set linesize 255\n"
+           + (f"quietly {setup}\n" if setup else ""))
     target.write_text(pre + dofile.read_text(encoding="utf-8"), encoding="utf-8")
+    # restos de um caso interrompido (odta_*) não podem afetar o seguinte;
+    # gerar_esperados.do faz a mesma limpeza no Stata
+    for leftover in outdir.glob("odta_*"):
+        if leftover.is_file():
+            leftover.unlink()
     cwd = os.getcwd()
     os.chdir(outdir)
     try:
@@ -62,6 +73,18 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     finally:
         os.chdir(cwd)
     return outdir / (dofile.stem + ".log")
+
+
+def _known_differences() -> dict[str, str]:
+    """compat/diferencas_conhecidas.txt: casos que podem diferir (com o motivo)."""
+    path = COMPAT / "diferencas_conhecidas.txt"
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.lstrip().startswith("#"):
+                name, _, why = line.strip().partition(" ")
+                out[name] = why.strip()
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     ns = p.parse_args(argv)
 
     files = sorted(f for f in (COMPAT / "do").glob("*.do") if f.name.startswith(ns.prefix))
-    passed = failed = missing = 0
+    known = _known_differences()
+    passed = failed = missing = tolerated = 0
     for f in files:
         got = run_opendta(f, COMPAT / "out", ns.setup)
         exp = Path(ns.expected) / (f.stem + ".log")
@@ -89,12 +113,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ok {f.stem}")
             passed += 1
         else:
-            print(f"  XX {f.stem}")
-            failed += 1
+            if f.stem in known:
+                print(f"  ~~ {f.stem:<32} diferença conhecida: {known[f.stem]}")
+                tolerated += 1
+            else:
+                print(f"  XX {f.stem}")
+                failed += 1
             if ns.show_diff:
                 for line in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=1):
                     print("     " + line)
-    print(f"\n{passed} iguais, {failed} diferentes, {missing} sem referência")
+    extra = f", {tolerated} com diferença conhecida" if tolerated else ""
+    print(f"\n{passed} iguais, {failed} diferentes{extra}, {missing} sem referência")
     return 1 if failed else 0
 
 

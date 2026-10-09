@@ -1,0 +1,89 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0202_macros_funcoes.log
+  log type:  text
+ opened on:   9 Oct 2026, 00:51:08
+
+. * Fase 2: funções estendidas de macro.
+. clear
+
+. set obs 2
+number of observations (_N) was 0, now 2
+
+. gen byte idade = 1
+
+. label variable idade "Idade (anos)"
+
+. label define sx 1 "Masc" 2 "Fem"
+
+. label values idade sx
+
+. format idade %5.1f
+
+. label data "Base de teste"
+
+. char idade[fonte] "censo"
+
+. sort idade
+
+. local a : type idade
+
+. local b : format idade
+
+. local c : value label idade
+
+. local d : variable label idade
+
+. local e : data label
+
+. local f : sortedby
+
+. local g : label sx 2
+
+. local h : label (idade) 1
+
+. local i : label sx 9
+
+. local j : char idade[fonte]
+
+. display "`a'|`b'|`c'|`d'|`e'|`f'|`g'|`h'|`i'|`j'"
+byte|%5.1f|sx|Idade (anos)|Base de teste|idade|Fem|Masc|9|censo
+
+. local s "a b a c a"
+
+. local t : subinstr local s "a" "x", all count(local n)
+
+. display "`t' (`n')"
+x b x c x (3)
+
+. local t : subinstr local s "a" "", word
+
+. display "[`t']"
+[ b a c a]
+
+. local u : list uniq s
+
+. local v : list sizeof s
+
+. local w : word count `s'
+
+. local x : word 2 of `s'
+
+. display "`u'|`v'|`w'|`x'"
+a b c|5|5|b
+
+. local y : permname idade
+
+. display "`y'"
+idade1
+
+. capture noisily local z : type naoexiste
+variable naoexiste not found
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0202_macros_funcoes.log
+  log type:  text
+ closed on:   9 Oct 2026, 00:51:08
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

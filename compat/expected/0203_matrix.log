@@ -1,0 +1,144 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0203_matrix.log
+  log type:  text
+ opened on:   9 Oct 2026, 00:51:08
+
+. * Fase 2: matrix.
+. matrix drop _all
+
+. matrix A = (1,2\3,4)
+
+. matrix list A
+
+A[2,2]
+    c1  c2
+r1   1   2
+r2   3   4
+
+. matrix B = A'
+
+. matrix C = A*B
+
+. matrix list C
+
+symmetric C[2,2]
+    r1  r2
+r1   5
+r2  11  25
+
+. matrix D = A + 2*I(2)
+
+. matrix list D
+
+D[2,2]
+    c1  c2
+r1   3   2
+r2   3   6
+
+. matrix S = (4,2\2,3)
+
+. matrix list S
+
+symmetric S[2,2]
+    c1  c2
+r1   4
+r2   2   3
+
+. matrix Si = inv(S)
+
+. matrix list Si
+
+symmetric Si[2,2]
+      r1    r2
+c1  .375
+c2  -.25    .5
+
+. matrix list Si, format(%9.4f)
+
+symmetric Si[2,2]
+         r1       r2
+c1   0.3750
+c2  -0.2500   0.5000
+
+. matrix rownames A = a b
+
+. matrix colnames A = x y
+
+. matrix list A
+
+A[2,2]
+   x  y
+a  1  2
+b  3  4
+
+. display rowsof(A) " " colsof(A) " " el(A,2,1) " " A[1,2] " " trace(S) " " det(S)
+2 2 3 2 7 8
+
+. local r : rownames A
+
+. display "`r'"
+a b
+
+. matrix E = A[1..2, "y"]
+
+. matrix list E
+
+E[2,1]
+   y
+a  2
+b  4
+
+. matrix F = nullmat(F) \ (1,2)
+
+. matrix F = F \ (3,4)
+
+. matrix list F
+
+F[2,2]
+    c1  c2
+r1   1   2
+r2   3   4
+
+. matrix v = vecdiag(S)
+
+. matrix list v
+
+v[1,2]
+    c1  c2
+r1   4   3
+
+. matrix J1 = J(2,3,0)
+
+. matrix list J1
+
+J1[2,3]
+    c1  c2  c3
+r1   0   0   0
+r2   0   0   0
+
+. capture noisily matrix X = A + J(3,3,1)
+conformability error
+
+. capture noisily matrix list nada
+matrix nada not found
+
+. matrix dir
+           J1[2,3]
+            v[1,2]
+            F[2,2]
+            E[2,1]
+           Si[2,2]
+            S[2,2]
+            D[2,2]
+            C[2,2]
+            B[2,2]
+            A[2,2]
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0203_matrix.log
+  log type:  text
+ closed on:   9 Oct 2026, 00:51:08
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

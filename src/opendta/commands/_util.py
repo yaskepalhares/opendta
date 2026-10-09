@@ -26,6 +26,17 @@ def eval_vector(s: "Session", text: str) -> Any:
     return evaluate_vec(parse(text), VectorContext(s, groups(s)))
 
 
+def eval_sample(s: "Session", text: str, mask: np.ndarray) -> Any:
+    """Como eval_vector, mas as funções aleatórias só sorteiam para as
+    observações da amostra (if/in), na ordem delas, como o Stata: assim
+    `gen u = runiform() if x` consome a mesma sequência que no Stata."""
+    s._rng_mask = mask
+    try:
+        return eval_vector(s, text)
+    finally:
+        s._rng_mask = None
+
+
 def touse(s: "Session", p: Parsed) -> np.ndarray:
     n = s.data.nobs
     mask = np.ones(n, dtype=bool)

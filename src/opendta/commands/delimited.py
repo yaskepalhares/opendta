@@ -156,14 +156,19 @@ def _export(s: "Session", args: str, opts: WriteOptions, spec: dict[str, int], *
         opts.quote = True
     if o.get("noquote"):
         opts.quote = False
-    if path.exists() and not o.get("replace"):
+        opts.never_quote = True
+    existed = path.exists()
+    if existed and not o.get("replace"):
         raise StataError(602, f"file {path} already exists")
+    if not existed and o.get("replace"):
+        s.output.write(f"(note: file {path} not found)\n", "text")
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     try:
         write_delimited(ds, path, names, rows, opts)
     except OSError as e:
         raise StataError(603, f"file {path} could not be opened ({e.strerror})")
-    # VERIFICAR: o Stata 14 não mostra mensagem ao exportar
+    if not old:
+        s.output.write(f"file {path} saved\n", "text")   # outsheet não mostra
 
 
 def export_delimited(s: "Session", args: str) -> None:
@@ -216,6 +221,8 @@ def cmd_insheet(s: "Session", args: str) -> None:
     if o.get("nonames"):
         opts.varnames = 0
     opts.asdouble = bool(o.get("double"))
+    opts.header_must_cover = True
+    opts.trim_cells = True
     _load(s, text_path(file, ".raw"), opts, bool(o.get("clear")), namelist.split())
 
 
