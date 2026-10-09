@@ -55,6 +55,11 @@ class Sample:
 
     def __init__(self, s: "Session", args: str, *, opts_spec: dict[str, int], weights=("aweight",
                  "fweight", "iweight", "pweight"), need_dep: bool = True, constant_opt: bool = True):
+        with fvars.caching():
+            self._init(s, args, opts_spec=opts_spec, weights=weights, need_dep=need_dep)
+
+    def _init(self, s: "Session", args: str, *, opts_spec: dict[str, int], weights,
+              need_dep: bool) -> None:
         from ..commands._util import touse
         from ..commands.summarize import weights as get_weights
         self.s = s
@@ -181,12 +186,7 @@ def cmd_regress(s: "Session", args: str) -> None:
         if (est_cols or smp.constant) else np.zeros((smp.n, 0))
     y = smp.y
     k = X.shape[1]
-    XtWX = X.T @ (X * w[:, None])
-    try:
-        XtWXi = np.linalg.pinv(XtWX) if k else np.zeros((0, 0))
-    except np.linalg.LinAlgError:
-        raise StataError(430, "matrix not positive definite")   # VERIFICAR
-    beta = XtWXi @ (X.T @ (w * y)) if k else np.zeros(0)
+    beta, XtWXi = _ols(X, y, w, smp.constant)
     yhat = X @ beta if k else np.zeros(smp.n)
     resid = y - yhat
     rss = float(np.sum(w * resid ** 2))
@@ -312,6 +312,47 @@ def cmd_regress(s: "Session", args: str) -> None:
         est.beta = _std_coefs(smp, w, bmap)
     display_regress(s, est, header=not o.get("noheader"), table=not o.get("notable"),
                     beta=bool(o.get("beta")))
+
+
+def _ols(X: np.ndarray, y: np.ndarray, w: np.ndarray, constant: bool):
+    """Coeficientes e (X'WX)⁻¹ (ordem: inclinações, depois a constante).
+
+    set numerics stata: como o regress do Stata, produtos cruzados dos
+    desvios em relação às médias (a constante sai de ȳ - x̄'b), invertidos
+    sem truncar autovalores pequenos.
+    set numerics precise: decomposição QR de W^(1/2)X (erro proporcional a
+    κ(X), não a κ(X)²)."""
+    from .numerics import precise
+    k = X.shape[1]
+    if k == 0:
+        return np.zeros(0), np.zeros((0, 0))
+    if precise():
+        sw = np.sqrt(w)
+        Q, R = np.linalg.qr(X * sw[:, None])
+        beta = np.linalg.solve(R, Q.T @ (sw * y))
+        Rinv = np.linalg.solve(R, np.eye(k))
+        return beta, Rinv @ Rinv.T
+    W = float(w.sum())
+    if constant:
+        Xs = X[:, :-1]
+        m = (w @ Xs) / W
+        ybar = float(w @ y) / W
+        Xc = Xs - m
+        yc = y - ybar
+        if Xs.shape[1]:
+            A = np.linalg.inv((Xc * w[:, None]).T @ Xc)
+            b = A @ (Xc.T @ (w * yc))
+        else:
+            A = np.zeros((0, 0))
+            b = np.zeros(0)
+        cons = ybar - float(m @ b)
+        full = np.zeros((k, k))
+        full[:-1, :-1] = A
+        full[:-1, -1] = full[-1, :-1] = -(A @ m)
+        full[-1, -1] = 1.0 / W + float(m @ A @ m)
+        return np.append(b, cons), full
+    A = np.linalg.inv((X * w[:, None]).T @ X)
+    return A @ (X.T @ (w * y)), A
 
 
 def _std_coefs(smp: Sample, w: np.ndarray, bmap: dict) -> dict:

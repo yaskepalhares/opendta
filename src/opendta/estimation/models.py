@@ -332,9 +332,9 @@ def _eform_row(r: CoefRow) -> CoefRow:
 # ---------------------------------------------------------------------------
 
 def predict_ml(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
-    from .postest import design_all
-    X, ok = design_all(s, est)
-    xb = X @ est.b
+    from .postest import design_all, xb_all
+    xb, ok = xb_all(s, est)
+    X = None
     if est.offset_name and stat not in ("xb_nooffset",):
         ds = s.data
         name = est.offset_name
@@ -350,6 +350,7 @@ def predict_ml(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     if stat == "xb":
         return np.where(ok, xb, SYS), ""
     if stat == "stdp":
+        X, _ = design_all(s, est)
         sp = np.sqrt(np.maximum(np.einsum("ij,jk,ik->i", X, est.V, X), 0))
         return np.where(ok, sp, SYS), ""
     if cmd in ("logit", "logistic", "probit"):
@@ -364,7 +365,8 @@ def predict_ml(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
                 note = "(option n assumed; predicted number of events)"
             return np.where(ok, np.exp(xb), SYS), note
         if stat == "ir":
-            return np.where(ok, np.exp(X @ est.b), SYS), ""
+            xb0, _ = xb_all(s, est)
+            return np.where(ok, np.exp(xb0), SYS), ""
     raise StataError(198, f"option {stat} not allowed")
 
 

@@ -98,6 +98,21 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
             converged = True
             log.append((it, ll, ""))
             break
+    if converged and k:
+        from .numerics import precise
+        if precise():
+            # set numerics precise: passos de Newton extras (fora do log) até o
+            # gradiente parar de diminuir, levando b ao máximo exato
+            for _ in range(5):
+                try:
+                    bn = b - np.linalg.solve(H, g)
+                except np.linalg.LinAlgError:
+                    break
+                lln, gn, Hn = fun(bn, 2)
+                if not np.isfinite(lln) or lln < ll - 1e-12 * max(1.0, abs(ll)) or \
+                        np.linalg.norm(gn) >= np.linalg.norm(g):
+                    break
+                b, ll, g, H = bn, lln, gn, Hn
     return MLResult(b, ll, g, H, it, converged, log)
 
 

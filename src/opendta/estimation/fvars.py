@@ -270,7 +270,44 @@ def has_fv_or_ts(text: str) -> bool:
 # colunas
 # ---------------------------------------------------------------------------
 
+_CACHE: dict | None = None
+
+
+class caching:
+    """Dentro do bloco, cada variável (com seus operadores) é calculada uma
+    vez só, mesmo que apareça em vários termos (i.g, i.g#c.x, c.x##c.x)."""
+
+    def __enter__(self):
+        global _CACHE
+        self._saved = _CACHE
+        if _CACHE is None:
+            _CACHE = {}
+        return self
+
+    def __exit__(self, *exc):
+        global _CACHE
+        _CACHE = self._saved
+        return False
+
+
 def comp_values(ds: "Dataset", c: Component) -> np.ndarray:
+    if _CACHE is not None:
+        key = (id(ds), c.var, tuple(c.ts), _precise())
+        hit = _CACHE.get(key)
+        if hit is not None:
+            return hit
+        val = _comp_values(ds, c)
+        _CACHE[key] = val
+        return val
+    return _comp_values(ds, c)
+
+
+def _precise() -> bool:
+    from .numerics import precise
+    return precise()
+
+
+def _comp_values(ds: "Dataset", c: Component) -> np.ndarray:
     v = ds.get(c.var)
     if v.is_string:
         raise StataError(109, "string variables not allowed in varlist;\n"
@@ -278,7 +315,7 @@ def comp_values(ds: "Dataset", c: Component) -> np.ndarray:
     x = v.data.astype(np.float64)
     if c.ts:
         x = tsops.apply_ops(ds, c.ts, x)
-        if v.vtype != "double" and any(op in "DS" for op, _ in c.ts):
+        if v.vtype != "double" and any(op in "DS" for op, _ in c.ts) and not _precise():
             # o Stata guarda D.x e S.x numa variável temporária float quando
             # x não é double (compat 0503: LD.x muda o 9º algarismo do RSS)
             ok = x < SYS

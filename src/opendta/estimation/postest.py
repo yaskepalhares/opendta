@@ -47,15 +47,12 @@ def _display(s: "Session", est: Estimates, **kw) -> None:
 # matriz de delineamento para predict (todas as observações)
 # ---------------------------------------------------------------------------
 
-def design_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
-    """X para todas as observações (na ordem de e(b)) e máscara de não missing."""
+def _columns(s: "Session", est: Estimates):
+    """Gera (índice em e(b), coluna) para todas as observações, sem montar X."""
     ds = s.data
     n = ds.nobs
-    cols = []
-    ok = ~fvars.term_missing(ds, est.terms)
-    for c in est.cols:
+    for j, c in enumerate(est.cols):
         if c.values is None:
-            cols.append(np.zeros(n))
             continue
         t = est.terms[c.term]
         y = np.ones(n)
@@ -67,11 +64,34 @@ def design_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
                 k += 1
             else:
                 y = y * np.where(x < SYS, x, 0.0)
-        cols.append(y)
+        yield j, y
     if est.constant:
-        cols.append(np.ones(n))
-    X = np.column_stack(cols) if cols else np.zeros((n, 0))
+        yield len(est.cols), np.ones(n)
+
+
+def design_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
+    """X para todas as observações (na ordem de e(b)) e máscara de não missing."""
+    ds = s.data
+    n = ds.nobs
+    with fvars.caching():
+        ok = ~fvars.term_missing(ds, est.terms)
+        k = len(est.b)
+        X = np.zeros((n, k))
+        for j, col in _columns(s, est):
+            X[:, j] = col
     return X, ok
+
+
+def xb_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
+    """xb para todas as observações, acumulado coluna a coluna (sem guardar X)."""
+    ds = s.data
+    with fvars.caching():
+        ok = ~fvars.term_missing(ds, est.terms)
+        xb = np.zeros(ds.nobs)
+        for j, col in _columns(s, est):
+            if est.b[j] != 0:
+                xb += est.b[j] * col
+    return xb, ok
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +145,7 @@ def cmd_predict(s: "Session", args: str) -> None:
 
 
 def _predict_regress(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
-    X, ok = design_all(s, est)
-    b = est.b
-    xb = X @ b
+    xb, ok = xb_all(s, est)
     xb = np.where(ok, xb, SYS)
     note = ""
     if stat in ("", "xb"):
@@ -136,6 +154,9 @@ def _predict_regress(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         return xb, note
     ds = s.data
     yv = fvars.comp_values(ds, est.depcomp)
+    if stat == "residuals":
+        return np.where(ok & (yv < SYS), yv - xb, SYS), ""
+    X, _ = design_all(s, est)
     V = est.V
     if stat == "residuals":
         return np.where(ok & (yv < SYS), yv - xb, SYS), ""

@@ -154,7 +154,7 @@ def cmd_infile(s: "Session", args: str) -> None:
         return
     if o.get("byvariable"):
         raise StataError(198, "option byvariable() not yet supported by OpenDTA")
-    spec = parse_free_spec(p.varlist, s.settings.get("type", "float"))
+    spec = parse_free_spec(p.varlist, s.default_type())
     text = read_text(_path(p.using, ".raw"))
     new, warnings, partial = read_free(text, spec, automatic=bool(o.get("automatic")))
     _finish(s, new, p.if_, p.in_, warnings, partial)

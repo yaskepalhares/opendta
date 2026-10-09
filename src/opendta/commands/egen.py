@@ -161,7 +161,7 @@ def cmd_egen(s: "Session", args: str) -> None:
     n = ds.nobs
     is_string = False
     auto_int = False          # tipo inteiro mínimo (seq(); observado no Stata 14)
-    default_type = s.settings.get("type", "float")
+    default_type = s.default_type()
     fn_l = fn.lower()
 
     if fn_l in ("count", "mean", "sd", "total", "sum", "min", "max", "median", "mode", "pctile",

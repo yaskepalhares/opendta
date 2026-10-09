@@ -59,29 +59,68 @@ def require_ts(ds: "Dataset") -> TSInfo:
     return info
 
 
-def shift(ds: "Dataset", values: np.ndarray, k: int) -> np.ndarray:
+class _TSIndex:
+    """Índice (painel, tempo) -> observação, vetorizado: as chaves viram
+    inteiros painel*(amplitude+1) + (t - tmin) e a busca é binária."""
+
+    def __init__(self, ds: "Dataset", info: TSInfo):
+        n = ds.nobs
+        t = ds.get(info.tvar).data.astype(np.float64)
+        pv = ds.get(info.panel).data.astype(np.float64) if info.panel else np.zeros(n)
+        self.ok = (t < SYS) & (pv < SYS)
+        self.t, self.pv = t, pv
+        self.n = n
+        tt = t[self.ok]
+        if not len(tt):
+            self.keys = np.zeros(0, dtype=np.int64)
+            self.order = np.zeros(0, dtype=np.int64)
+            return
+        self.tmin = float(tt.min())
+        span = float(tt.max()) - self.tmin
+        codes = np.zeros(n, dtype=np.int64)
+        codes[self.ok] = np.unique(pv[self.ok], return_inverse=True)[1]
+        self.codes = codes
+        npan = int(codes.max()) + 1
+        # margem para t - passo sair do intervalo sem colidir com outro painel
+        self.width = int(3 * span + 3)
+        self.vector = (npan + 1) * self.width < 2 ** 62
+        if self.vector:
+            key = codes * self.width + (t - self.tmin + span + 1)
+            key = np.where(self.ok, key, -1).astype(np.int64)
+            idx = np.nonzero(self.ok)[0]
+            self.order = idx[np.argsort(key[idx], kind="stable")]
+            self.keys = key[self.order]
+            self.span = span
+        else:
+            self.lookup = {(pv[i], t[i]): i for i in np.nonzero(self.ok)[0]}
+
+    def source(self, step: float) -> np.ndarray:
+        """Para cada observação, a linha com tempo t - step no mesmo painel (-1 se não há)."""
+        out = np.full(self.n, -1, dtype=np.int64)
+        if not self.ok.any():
+            return out
+        if not self.vector:
+            for i in np.nonzero(self.ok)[0]:
+                out[i] = self.lookup.get((self.pv[i], self.t[i] - step), -1)
+            return out
+        tq = self.t - step
+        inside = self.ok & (np.abs(tq - self.tmin) <= 2 * self.span + 1)
+        q = (self.codes * self.width + (tq - self.tmin + self.span + 1)).astype(np.int64)
+        pos = np.searchsorted(self.keys, q)
+        pos = np.clip(pos, 0, max(len(self.keys) - 1, 0))
+        hit = inside & (self.keys[pos] == q) & (np.round(tq) == tq)
+        out[hit] = self.order[pos[hit]]
+        return out
+
+
+def shift(ds: "Dataset", values: np.ndarray, k: int, index: _TSIndex | None = None) -> np.ndarray:
     """Valor de `values` k períodos antes (k > 0, lag) ou depois (k < 0, lead),
     no mesmo painel; missing quando o período não existe."""
     info = require_ts(ds)
-    t = ds.get(info.tvar).data
-    n = ds.nobs
-    if info.panel:
-        pv = ds.get(info.panel).data
-    else:
-        pv = np.zeros(n)
-    index: dict[tuple[float, float], int] = {}
-    for i in range(n):
-        if t[i] < SYS and pv[i] < SYS:
-            index[(pv[i], t[i])] = i
-    out = np.full(n, SYS)
-    step = k * info.delta
-    for i in range(n):
-        if t[i] >= SYS or pv[i] >= SYS:
-            continue
-        j = index.get((pv[i], t[i] - step))
-        if j is not None:
-            out[i] = values[j]
-    return out
+    index = index or _TSIndex(ds, info)
+    src = index.source(k * info.delta)
+    vals = np.asarray(values, dtype=np.float64)
+    return np.where(src >= 0, vals[np.clip(src, 0, None)], SYS) if len(vals) else vals.copy()
 
 
 def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> np.ndarray:
@@ -89,6 +128,7 @@ def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> 
     deslocamento líquido (LF.y = y, como no Stata, compat 0503); D e S são
     aplicados antes do deslocamento (os operadores comutam)."""
     x = np.asarray(values, dtype=np.float64)
+    index = _TSIndex(ds, require_ts(ds))
     net = sum(k for op, k in ops if op == "L") - sum(k for op, k in ops if op == "F")
     rest = [(op, k) for op, k in ops if op not in "LF"]
     if net:
@@ -96,15 +136,15 @@ def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> 
     for op, k in rest:
         for _ in range(k if op in "DS" else 1):
             if op == "L":
-                y = shift(ds, x, k)
+                y = shift(ds, x, k, index)
             elif op == "F":
-                y = shift(ds, x, -k)
+                y = shift(ds, x, -k, index)
             elif op == "D":
-                prev = shift(ds, x, 1)
+                prev = shift(ds, x, 1, index)
                 y = np.where((x < SYS) & (prev < SYS), x - prev, SYS)
             elif op == "S":
                 # S.x sazonal: x - L.x; Sk.x = x - Lk.x (aplicado uma vez)
-                prev = shift(ds, x, k)
+                prev = shift(ds, x, k, index)
                 y = np.where((x < SYS) & (prev < SYS), x - prev, SYS)
                 x = y
                 break

@@ -51,6 +51,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "dp": "period",
     "hints": "on",       # OpenDTA: explicação depois das mensagens de erro
     "superscript": "on",  # OpenDTA: 1.0000×10¹⁰ em vez de 1.00000e+10 na exibição
+    "numerics": "stata",  # OpenDTA: precise = contas mais exatas (estimation/numerics.py)
 }
 
 
@@ -167,6 +168,8 @@ class Session:
         rng.reset(int(self.settings["seed"]))
         from .core.formats import set_superscript
         set_superscript(self.settings["superscript"] == "on")
+        from .estimation.numerics import set_precise
+        set_precise(self.settings["numerics"] == "precise")
         self.by_groups = None   # Groups ativo durante um prefixo by
         self.context = EvalContext(self)
         self._mata = None
@@ -187,6 +190,14 @@ class Session:
     # -- notificações para a interface --------------------------------------
     def add_state_listener(self, fn: Callable[[], None]) -> None:
         self._state_listeners.append(fn)
+
+    def default_type(self) -> str:
+        """Tipo das variáveis novas: set type; com set numerics precise, double
+        no lugar de float."""
+        vt = self.settings.get("type", "float")
+        if vt == "float" and self.settings.get("numerics", "stata") == "precise":
+            return "double"
+        return vt
 
     def notify_state(self) -> None:
         for fn in list(self._state_listeners):

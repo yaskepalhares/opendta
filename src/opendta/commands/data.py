@@ -101,7 +101,7 @@ def cmd_generate(s: "Session", args: str) -> None:
         nmiss = int(sum(1 for x in col if x == ""))
     else:
         if vtype is None:
-            vtype = s.settings.get("type", "float")
+            vtype = s.default_type()
         col = broadcast(value, n).astype(np.float64).copy()
         col[~mask] = M.SYSMISS
         # conta só os missing da expressão e das obs excluídas por if/in; valores
@@ -495,7 +495,7 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
     for name, t in decl:
         if ds.has(name):
             continue
-        vtype = t or s.settings.get("type", "float")
+        vtype = t or s.default_type()
         if vtype == "str":
             vtype = "str1"
         if vtype.startswith("str"):
