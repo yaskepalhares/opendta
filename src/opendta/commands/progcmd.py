@@ -189,3 +189,7 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
         for k, v in mats.items():
             out.write(f"{prefix + '(' + k + ')':>22} :  ", "text")
             out.write(f"{v.rows} x {v.cols}\n", "result")
+    if prefix == "e" and "b" in store and s.data.esample is not None:
+        # VERIFICAR espaços depois de e(sample)
+        out.write("\nfunctions:\n", "text")
+        out.write(f"{'e(sample)':>22}\n", "text")

@@ -78,6 +78,10 @@ class EvalContext:
         s = self.s
         if s.data.has(name):
             return self.resolve_subscript(name, 1.0)
+        if "." in name:
+            from .lang.vexpr import ts_value
+            v = ts_value(s, name)
+            return float(v[0]) if len(v) else M.SYSMISS
         if name in s.scalars:
             return s.scalars[name]
         if name == "_pi":
@@ -94,7 +98,7 @@ class EvalContext:
 
     def resolve_subscript(self, name: str, index: Any) -> Value:
         if name in ("_b", "_se", "_coef"):
-            raise StataError(111, f"[{index}] not found")
+            return self._coef(name, index)
         var = self._variable(name)
         if var is None:
             raise StataError(111, f"{name} not found")
@@ -105,7 +109,27 @@ class EvalContext:
             return var.value(k - 1)
         return "" if var.is_string else M.SYSMISS
 
+    def _coef(self, name: str, index: Any) -> Value:
+        """_b[x], _se[x], _b[eq:x], [eq]_b[x] da última estimação."""
+        from .estimation.postest import _coef_index
+        from .estimation.results import current
+        import numpy as _np
+        est = current(self.s)
+        text = str(index).strip()
+        eq = ""
+        if ":" in text:
+            eq, text = text.split(":", 1)
+        i = _coef_index(est, self.s, text, eq.strip())
+        if name == "_se":
+            v = float(est.V[i, i])
+            return float(_np.sqrt(v)) if v > 0 else 0.0
+        return float(est.b[i])
+
     def resolve_result(self, kind: str, raw: str) -> Value:
+        if kind == "e" and raw.strip() == "sample":
+            from .estimation.postest import esample
+            m = esample(self.s)
+            return 1.0 if len(m) and m[0] else 0.0
         s = self.s
         if kind == "c":
             return s.creturn(raw)
