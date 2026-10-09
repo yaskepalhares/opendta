@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0501_regress.log
   log type:  text
- opened on:   9 Oct 2026, 11:17:26
+ opened on:   9 Oct 2026, 12:10:02
 
 . * Fase 5a: regress (tabela ANOVA, coeficientes, vce, pesos, opções).
 . clear
@@ -399,5 +399,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0501_regress.log
   log type:  text
- closed on:   9 Oct 2026, 11:17:26
+ closed on:   9 Oct 2026, 12:10:02
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

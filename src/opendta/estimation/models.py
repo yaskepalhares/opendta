@@ -171,8 +171,11 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         b0[-1] = c0
     if not smp.constant:
         ll0 = SYS
-    maxiter = int(o["iterate"]) if o.get("iterate") else 300
-    # VERIFICAR: valores iniciais do poisson no Stata (o log de iterações pode diferir)
+    maxiter = int(o["iterate"]) if o.get("iterate") else 16000
+    if cmd == "poisson":
+        # o poisson do Stata já começa perto do máximo (compat 0507: iteração 0
+        # igual à final): valores iniciais obtidos antes, sem log
+        b0 = maximize(fun, b0, maxiter=maxiter).b
     res = maximize(fun, b0, maxiter=maxiter,
                    tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
                    ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
@@ -209,7 +212,16 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         Vb = (Vb + Vb.T) / 2
     slopes = list(range(len(est_cols)))
     df_m = len(slopes)
-    if robust:
+    rank_def = False
+    if smp.vce == "cluster" and k:
+        rk = np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300))
+        if rk < k:
+            # poucos clusters: como no regress, Wald chi2(posto-1) missing (compat 0506)
+            rank_def = True
+            df_m = rk - (1 if smp.constant else 0)
+    if rank_def:
+        chi2type, chi2 = "Wald", SYS
+    elif robust:
         chi2type = "Wald"
         try:
             chi2 = float(res.b[slopes] @ np.linalg.solve(Vb[np.ix_(slopes, slopes)], res.b[slopes])) \
@@ -238,7 +250,11 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         bmap["_cons"], semap["_cons"] = b_full[-1], np.sqrt(max(V_full[-1, -1], 0))
     base_cmd = "logit" if cmd == "logistic" else cmd
     est = Estimates(base_cmd, smp.depname, names, b_full, V_full, smp.n, "z", None)
+    est.eqnames = [smp.depname] * len(names)
     est.rows = rows_from_columns(smp.cols, bmap, semap, ds, constant=smp.constant)
+    if off_name:
+        kind = "exposure" if o.get("exposure") else "offset"
+        est.rows.append(CoefRow("fixed", off_name, eq=f"({kind})"))
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = "Robust" if robust else ""
@@ -254,6 +270,9 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     est.predict = predict_ml
     est.eform_default = {"logistic": "Odds Ratio"}.get(cmd, "")
     est.ml_cmd = cmd
+    from ..commands.matrix import Matrix
+    from .ml import ilog
+    # e(): nomes e ordem observados no Stata 14 (compat 0506, 0507)
     scalars = [("rank", float(k)), ("N", N), ("ic", float(res.iterations)), ("k", float(kk)),
                ("k_eq", 1.0), ("k_dv", 1.0), ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0),
                ("ll", res.ll)]
@@ -261,22 +280,36 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         scalars.append(("N_clust", float(n_clust)))
     scalars += [("k_eq_model", 1.0), ("ll_0", ll0), ("df_m", float(df_m)), ("chi2", chi2), ("p", pval)]
     if cmd != "poisson":
-        scalars.append(("r2_p", r2_p))
-    else:
-        scalars.append(("r2_p", r2_p))
-    macros = [("cmdline", cmdline(cmd, args)), ("cmd", base_cmd if cmd != "logistic" else "logistic"),
-              ("title", _TITLES[cmd]), ("chi2type", chi2type), ("vce", smp.vce if robust else "oim")]
+        scalars += [("N_cdf", 0.0), ("N_cds", 0.0)]
+    scalars.append(("r2_p", r2_p))
+    vce_m = [("vce", smp.vce if robust else "oim")]
     if robust:
-        macros.append(("vcetype", "Robust"))
+        vce_m.append(("vcetype", "Robust"))
     if smp.clustvar:
-        macros.append(("clustvar", smp.clustvar))
-    macros += wexp_macros(smp)
-    macros += [("depvar", smp.depname), ("opt", "moptimize"), ("which", "max"),
-               ("ml_method", "d2"), ("technique", "nr"), ("properties", "b V"),
-               ("predict", f"{base_cmd}_p"), ("estat_cmd", f"{base_cmd}_estat")]
-    if off_name:
-        macros.append((est.offset_kind, off_name))
-    post(s, est, scalars, macros, smp.mask)
+        vce_m.append(("clustvar", smp.clustvar))
+    if cmd == "poisson":
+        macros = [("cmdline", cmdline(cmd, args)), ("cmd", "poisson"), ("predict", "poisso_p"),
+                  ("estat_cmd", "poisson_estat"), ("chi2type", chi2type), ("opt", "moptimize")] + vce_m + \
+                 [("title", _TITLES[cmd]), ("user", "poiss_lf"), ("ml_method", "e2"), ("technique", "nr"),
+                  ("which", "max")]
+        if off_name:
+            macros.append((est.offset_kind, off_name))
+        macros += wexp_macros(smp) + [("depvar", smp.depname), ("properties", "b V")]
+        mats = [("ilog", Matrix(ilog(res))), ("gradient", Matrix(res.g.reshape(1, -1), ["r1"], list(names)))]
+    else:
+        macros = [("cmdline", cmdline(cmd, args)), ("cmd", "logistic" if cmd == "logistic" else base_cmd),
+                  ("estat_cmd", f"{base_cmd}_estat"), ("predict", f"{base_cmd}_p"),
+                  ("marginsnotok", "stdp DBeta DEviance DX2 DDeviance Hat Number Residuals RStandard SCore"),
+                  ("title", _TITLES[cmd]), ("chi2type", chi2type), ("opt", "moptimize")] + vce_m + \
+                 [("user", f"mopt__{base_cmd}_d2()"), ("ml_method", "d2"), ("technique", "nr"),
+                  ("which", "max")] + wexp_macros(smp) + [("depvar", smp.depname), ("properties", "b V")]
+        mns = np.average(X, axis=0, weights=w).reshape(1, -1) if k else np.zeros((1, 0))
+        mats = [("mns", Matrix(mns, ["r1"], [n for n, c in zip(names, list(smp.cols) + [None])
+                                             if c is None or c.values is not None])),
+                ("rules", Matrix(np.zeros((1, 4)))), ("ilog", Matrix(ilog(res))),
+                ("gradient", Matrix(res.g.reshape(1, -1), ["r1"], [n for n, c in zip(names, list(smp.cols) + [None])
+                                                                    if c is None or c.values is not None]))]
+    post(s, est, scalars, macros, smp.mask, extra_mats=mats)
     eform = ""
     if cmd == "logistic" and not o.get("coef"):
         eform = "Odds Ratio"
@@ -285,8 +318,6 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     elif o.get("irr") and cmd == "poisson":
         eform = "IRR"
     display_ml(s, est, eform=eform, header=not o.get("noheader"))
-    if not res.converged:
-        out.write("convergence not achieved\n", "error")   # VERIFICAR
 
 
 def display_ml(s: "Session", est: Estimates, *, eform: str | None = None, header: bool = True,
@@ -302,7 +333,7 @@ def display_ml(s: "Session", est: Estimates, *, eform: str | None = None, header
         right = [("Number of obs", comma(x["N"])), (chi_lab, g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f")), ("Pseudo R2", g(x["r2_p"], "%10.4f"))]
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
-        left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g')}"]
+        left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         for lft, (rl, rv) in zip(left, right):
             out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")

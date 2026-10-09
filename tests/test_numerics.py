@@ -64,14 +64,15 @@ def test_lags_vectorized_match_panels(run):
 
 def test_precise_ml_reaches_exact_maximum(run):
     run("clear\nset seed 611\nset obs 80\ngen x1 = round(runiform()*10, .1)\n"
-        "gen c = floor(-ln(runiform())*exp(.1 + .1*x1))")
+        "gen y = runiform() < invlogit(-1 + .3*x1)")
     ds = run.session.data
     X = np.column_stack([ds.get("x1").data, np.ones(80)])
-    c = ds.get("c").data
+    y = ds.get("y").data
     grads = {}
     for mode in ("stata", "precise"):
-        out = run(f"quietly set numerics {mode}\npoisson c x1")
+        out = run(f"quietly set numerics {mode}\nlogit y x1")
         b = run.session.e["b"].data.ravel()
-        grads[mode] = np.abs(X.T @ (c - np.exp(X @ b))).max()
+        p = 1 / (1 + np.exp(-X @ b))
+        grads[mode] = np.abs(X.T @ (y - p)).max()
         assert "Iteration 0:" in out
     assert grads["precise"] < 1e-10 < grads["stata"]

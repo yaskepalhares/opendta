@@ -1,0 +1,321 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0508_ordinais_multinomial.log
+  log type:  text
+ opened on:   9 Oct 2026, 12:10:02
+
+. * Fase 5b: ologit, oprobit e mlogit.
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 811
+
+. set obs 120
+number of observations (_N) was 0, now 120
+
+. gen x1 = round(runiform()*10, .1)
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen u = runiform()
+
+. gen r = 1 + (u < invlogit(-2+.3*x1)) + (u < invlogit(-4+.3*x1)) + (runiform()<.2)
+
+. label define rl 1 "baixo" 2 "medio" 3 "alto" 4 "muito alto"
+
+. label values r rl
+
+. ologit r x1 x2
+
+Iteration 0:   log likelihood = -130.12225  
+Iteration 1:   log likelihood = -122.40958  
+Iteration 2:   log likelihood = -122.34088  
+Iteration 3:   log likelihood = -122.34078  
+Iteration 4:   log likelihood = -122.34078  
+
+Ordered logistic regression                     Number of obs     =        120
+                                                LR chi2(2)        =      15.56
+                                                Prob > chi2       =     0.0004
+Log likelihood = -122.34078                     Pseudo R2         =     0.0598
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .251465   .0682589     3.68   0.000       .11768      .38525
+          x2 |   .0090296   .1324928     0.07   0.946    -.2506515    .2687108
+-------------+----------------------------------------------------------------
+       /cut1 |   1.073251   .5434976                       .008015    2.138486
+       /cut2 |   3.055196   .6056986                      1.868048    4.242343
+       /cut3 |   5.118833   .8165407                      3.518443    6.719224
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  5
+                  e(N) =  120
+                 e(ic) =  4
+                  e(k) =  5
+               e(k_eq) =  4
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -122.3407826995524
+         e(k_eq_model) =  1
+               e(ll_0) =  -130.122245991172
+               e(df_m) =  2
+               e(chi2) =  15.56292658323929
+                  e(p) =  .0004174009482093
+               e(N_cd) =  0
+              e(k_cat) =  4
+              e(k_aux) =  3
+               e(r2_p) =  .0598011756740471
+
+macros:
+            e(cmdline) : "ologit r x1 x2"
+                e(cmd) : "ologit"
+            e(predict) : "ologit_p"
+     e(marginsdefault) : "predict(pr outcome(1)) predict(pr outcome(2)) predict(pr outcome(3)) predict(pr outcome(4))"
+              e(title) : "Ordered logistic regression"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "mopt__ologit_d2()"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "r"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 5
+                  e(V) :  5 x 5
+                e(cat) :  1 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 5
+
+functions:
+             e(sample)   
+
+. ologit r x1 x2, vce(robust)
+
+Iteration 0:   log pseudolikelihood = -130.12225  
+Iteration 1:   log pseudolikelihood = -122.40958  
+Iteration 2:   log pseudolikelihood = -122.34088  
+Iteration 3:   log pseudolikelihood = -122.34078  
+Iteration 4:   log pseudolikelihood = -122.34078  
+
+Ordered logistic regression                     Number of obs     =        120
+                                                Wald chi2(2)      =      15.98
+                                                Prob > chi2       =     0.0003
+Log pseudolikelihood = -122.34078               Pseudo R2         =     0.0598
+
+------------------------------------------------------------------------------
+             |               Robust
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .251465   .0694619     3.62   0.000     .1153221    .3876078
+          x2 |   .0090296    .141643     0.06   0.949    -.2685855    .2866447
+-------------+----------------------------------------------------------------
+       /cut1 |   1.073251   .5848211                     -.0729775    2.219479
+       /cut2 |   3.055196   .6360576                      1.808546    4.301846
+       /cut3 |   5.118833   .7744997                      3.600842    6.636825
+------------------------------------------------------------------------------
+
+. oprobit r x1 x2
+
+Iteration 0:   log likelihood = -130.12225  
+Iteration 1:   log likelihood = -121.54672  
+Iteration 2:   log likelihood = -121.52678  
+Iteration 3:   log likelihood = -121.52678  
+
+Ordered probit regression                       Number of obs     =        120
+                                                LR chi2(2)        =      17.19
+                                                Prob > chi2       =     0.0002
+Log likelihood = -121.52678                     Pseudo R2         =     0.0661
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1574202   .0395262     3.98   0.000     .0799503    .2348901
+          x2 |  -.0011974   .0768768    -0.02   0.988    -.1518731    .1494783
+-------------+----------------------------------------------------------------
+       /cut1 |    .662782   .3155961                       .044225    1.281339
+       /cut2 |    1.85643   .3418787                       1.18636      2.5265
+       /cut3 |   2.922451   .4237825                      2.091853     3.75305
+------------------------------------------------------------------------------
+
+. mlogit r x1 x2
+
+Iteration 0:   log likelihood = -130.12225  
+Iteration 1:   log likelihood =  -121.7762  
+Iteration 2:   log likelihood = -120.52026  
+Iteration 3:   log likelihood = -120.34122  
+Iteration 4:   log likelihood = -120.33506  
+Iteration 5:   log likelihood = -120.33504  
+Iteration 6:   log likelihood = -120.33504  
+
+Multinomial logistic regression                 Number of obs     =        120
+                                                LR chi2(6)        =      19.57
+                                                Prob > chi2       =     0.0033
+Log likelihood = -120.33504                     Pseudo R2         =     0.0752
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+baixo        |  (base outcome)
+-------------+----------------------------------------------------------------
+medio        |
+          x1 |   .1704207    .076806     2.22   0.026     .0198838    .3209576
+          x2 |  -.0340684   .1512116    -0.23   0.822    -.3304377    .2623008
+       _cons |  -.9133659   .5869588    -1.56   0.120    -2.063784    .2370522
+-------------+----------------------------------------------------------------
+alto         |
+          x1 |   .3621849   .1251073     2.89   0.004     .1169791    .6073906
+          x2 |  -.0557068   .2245909    -0.25   0.804    -.4958968    .3844832
+       _cons |  -3.022918    1.02638    -2.95   0.003    -5.034586    -1.01125
+-------------+----------------------------------------------------------------
+muito_alto   |
+          x1 |   1.124821   .5594546     2.01   0.044     .0283102    2.221332
+          x2 |   .2871455    .491181     0.58   0.559    -.6755516    1.249843
+       _cons |  -11.26435   5.101659    -2.21   0.027    -21.26341   -1.265278
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  9
+                  e(N) =  120
+                 e(ic) =  6
+                  e(k) =  9
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -120.3350385563034
+               e(ll_0) =  -130.122245991172
+               e(df_m) =  6
+               e(chi2) =  19.57441486973721
+                  e(p) =  .0032959009263453
+               e(N_cd) =  0
+           e(ibaseout) =  1
+            e(baseout) =  1
+              e(k_out) =  4
+               e(r2_p) =  .0752154818748871
+               e(k_eq) =  4
+         e(k_eq_model) =  4
+          e(k_eq_base) =  1
+
+macros:
+            e(cmdline) : "mlogit r x1 x2"
+                e(cmd) : "mlogit"
+     e(marginsdefault) : "predict(pr outcome(1)) predict(pr outcome(2)) predict(pr outcome(3)) predict(pr outcome(4))"
+       e(marginsnotok) : "stdp stddp SCores"
+            e(predict) : "mlogit_p"
+              e(title) : "Multinomial logistic regression"
+            e(eqnames) : "baixo medio alto muito_alto"
+            e(baselab) : "baixo"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "mopt__mlogit_d2()"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "r"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 12
+                  e(V) :  12 x 12
+                e(out) :  1 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 9
+
+functions:
+             e(sample)   
+
+. mlogit r x1, baseoutcome(1)
+
+Iteration 0:   log likelihood = -130.12225  
+Iteration 1:   log likelihood = -121.89646  
+Iteration 2:   log likelihood = -120.73334  
+Iteration 3:   log likelihood = -120.59989  
+Iteration 4:   log likelihood = -120.59705  
+Iteration 5:   log likelihood = -120.59705  
+
+Multinomial logistic regression                 Number of obs     =        120
+                                                LR chi2(3)        =      19.05
+                                                Prob > chi2       =     0.0003
+Log likelihood = -120.59705                     Pseudo R2         =     0.0732
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+baixo        |  (base outcome)
+-------------+----------------------------------------------------------------
+medio        |
+          x1 |   .1733979   .0756182     2.29   0.022     .0251889    .3216068
+       _cons |  -1.009121   .4056782    -2.49   0.013    -1.804235   -.2140059
+-------------+----------------------------------------------------------------
+alto         |
+          x1 |   .3685085   .1227512     3.00   0.003     .1279206    .6090964
+       _cons |   -3.18668    .793887    -4.01   0.000     -4.74267    -1.63069
+-------------+----------------------------------------------------------------
+muito_alto   |
+          x1 |   1.017507   .5017785     2.03   0.043     .0340397    2.000975
+       _cons |  -9.781818   4.150261    -2.36   0.018    -17.91618   -1.647457
+------------------------------------------------------------------------------
+
+. mlogit r x1, rrr
+
+Iteration 0:   log likelihood = -130.12225  
+Iteration 1:   log likelihood = -121.89646  
+Iteration 2:   log likelihood = -120.73334  
+Iteration 3:   log likelihood = -120.59989  
+Iteration 4:   log likelihood = -120.59705  
+Iteration 5:   log likelihood = -120.59705  
+
+Multinomial logistic regression                 Number of obs     =        120
+                                                LR chi2(3)        =      19.05
+                                                Prob > chi2       =     0.0003
+Log likelihood = -120.59705                     Pseudo R2         =     0.0732
+
+------------------------------------------------------------------------------
+           r |        RRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+baixo        |  (base outcome)
+-------------+----------------------------------------------------------------
+medio        |
+          x1 |   1.189339   .0899357     2.29   0.022     1.025509    1.379342
+       _cons |   .3645394   .1478857    -2.49   0.013     .1646003    .8073436
+-------------+----------------------------------------------------------------
+alto         |
+          x1 |   1.445577   .1774463     3.00   0.003     1.136463    1.838769
+       _cons |   .0413088   .0327945    -4.01   0.000     .0087153    .1957944
+-------------+----------------------------------------------------------------
+muito_alto   |
+          x1 |   2.766291   1.388065     2.03   0.043     1.034626    7.396266
+       _cons |   .0000565   .0002344    -2.36   0.018     1.66e-08     .192539
+------------------------------------------------------------------------------
+
+. test x1
+
+ ( 1)  [baixo]o.x1 = 0
+ ( 2)  [medio]x1 = 0
+ ( 3)  [alto]x1 = 0
+ ( 4)  [muito_alto]x1 = 0
+       Constraint 1 dropped
+
+           chi2(  3) =   13.76
+         Prob > chi2 =    0.0032
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0508_ordinais_multinomial.log
+  log type:  text
+ closed on:   9 Oct 2026, 12:10:02
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

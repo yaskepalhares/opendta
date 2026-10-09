@@ -362,9 +362,9 @@ def _ctext(est: Estimates, coef: dict, r: float) -> str:
         v = coef[k]
         if v == 0:
             continue
-        nm = _strip_marks(est.names[k])
-        if est.eqnames and len(set(est.eqnames)) > 1:
-            nm = f"[{est.eqnames[k]}]{nm}"
+        nm = _strip_marks(est.names[k]) if not est.names[k].startswith("o.") else est.names[k]
+        if est.eqnames and any(e not in ("", "_") for e in est.eqnames):
+            nm = f"[{est.eqnames[k]}]{nm}"   # modelos ml: [y]x1 (compat 0506)
         a = abs(v)
         term = nm if a == 1 else f"{format_value(a, '%9.0g', pad=False).strip()}*{nm}"
         if not parts:
@@ -478,8 +478,8 @@ def cmd_test(s: "Session", args: str) -> None:
         cons = []
         for e in exprs:
             for i, (nm, eq) in enumerate(zip(est.names, est.eqnames)):
-                if _same(nm, e) and est.V[i, i] > 0:
-                    cons.append(({i: 1.0}, 0.0))
+                if _same(nm, e):
+                    cons.append(({i: 1.0}, 0.0))   # a da base sai como "dropped"
         if not cons:
             raise StataError(111, f"{exprs[0]} not found")
     else:

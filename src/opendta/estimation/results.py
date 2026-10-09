@@ -164,6 +164,10 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         if r.kind == "empty":
             out.write("          0  (empty)\n", "result")
             continue
+        if r.kind == "fixed":
+            # exposure()/offset(): coeficiente fixo em 1 (compat 0507)
+            out.write(f"          1  {r.eq}\n", "result")
+            continue
         b, se = r.b, r.se
         if r.kind == "aux":
             # parâmetros auxiliares (/cut1, /sigma, alpha): sem z e P>|z|; o

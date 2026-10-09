@@ -48,7 +48,11 @@ def _xb(s: "Session", est, b: np.ndarray, rows: np.ndarray, overrides: dict) -> 
             else:
                 x = fvars.comp_values(ds, comp)[rows]
             if comp.factor:
-                y = y * (x == c.cell[k])
+                if isinstance(x, dict):
+                    # atmeans: indicador do nível na média (proporção na amostra)
+                    y = y * x.get(c.cell[k], 0.0)
+                else:
+                    y = y * (x == c.cell[k])
                 k += 1
             else:
                 y = y * x
@@ -83,11 +87,14 @@ def _jacobian(f, b: np.ndarray) -> np.ndarray:
     f0 = np.atleast_1d(f(b))
     J = np.zeros((f0.size, k))
     for i in range(k):
-        h = 1e-6 * (abs(b[i]) + 1e-3)
-        a, c = b.copy(), b.copy()
-        a[i] += h
-        c[i] -= h
-        J[:, i] = (np.atleast_1d(f(a)) - np.atleast_1d(f(c))) / (2 * h)
+        h = 1e-4 * (abs(b[i]) + 1e-3)
+
+        def D(hh, i=i):
+            a, c = b.copy(), b.copy()
+            a[i] += hh
+            c[i] -= hh
+            return (np.atleast_1d(f(a)) - np.atleast_1d(f(c))) / (2 * hh)
+        J[:, i] = (4 * D(h / 2) - D(h)) / 3     # Richardson: erro O(h⁴)
     return J
 
 
@@ -177,8 +184,14 @@ def cmd_margins(s: "Session", args: str) -> None:
     if atmeans:
         for c in est.terms:
             for comp in c.comps:
+                vals = fvars.comp_values(ds, comp)[rows]
+                # o Stata guarda as médias do atmeans em float (compat 0511:
+                # muda o 7º algarismo da margem)
                 if not comp.factor:
-                    means[comp.var] = float(np.mean(fvars.comp_values(ds, comp)[rows]))
+                    means[comp.var] = float(np.float32(np.mean(vals)))
+                elif comp.var not in means:
+                    lv = sorted(set(vals.tolist()))
+                    means[comp.var] = {v: float(np.float32(np.mean(vals == v))) for v in lv}
     dydx_vars = []
     dydx_kind = ""
     for key in ("dydx", "eyex", "dyex", "eydx"):
@@ -194,7 +207,7 @@ def cmd_margins(s: "Session", args: str) -> None:
     def base_overrides(at: dict) -> dict:
         ov = {}
         for var, val in means.items():
-            ov[var] = np.full(len(rows), val)
+            ov[var] = dict(val) if isinstance(val, dict) else np.full(len(rows), val)
         for var, val in at.items():
             if val == "mean":
                 ov[var] = np.full(len(rows), float(np.mean(ds.get(var).data[rows])))
@@ -230,12 +243,14 @@ def cmd_margins(s: "Session", args: str) -> None:
                         results.append((var, f"{int(level)}", fn, at_lab))
                     continue
                 x = ov0.get(var, ds.get(var).data[rows].astype(float))
-                h = 1e-5 * (np.abs(x).mean() + 1e-3)
+                h = 1e-3 * (np.abs(x).mean() + 1e-3)
 
                 def fn(bb, var=var, x=x, h=h):
-                    up = dict(ov0, **{var: x + h})
-                    dn = dict(ov0, **{var: x - h})
-                    d = (f(_xb(s, est, bb, rows, up)) - f(_xb(s, est, bb, rows, dn))) / (2 * h)
+                    def D(hh):
+                        up = dict(ov0, **{var: x + hh})
+                        dn = dict(ov0, **{var: x - hh})
+                        return (f(_xb(s, est, bb, rows, up)) - f(_xb(s, est, bb, rows, dn))) / (2 * hh)
+                    d = (4 * D(h / 2) - D(h)) / 3
                     if dydx_kind == "eyex":
                         d = d * x / f(_xb(s, est, bb, rows, ov0))
                     elif dydx_kind == "dyex":
@@ -283,7 +298,12 @@ def cmd_margins(s: "Session", args: str) -> None:
     out.write(f"Expression   : {expr}\n", "text")
     if dydx_vars:
         lab = {"dydx": "dy/dx", "eyex": "ey/ex", "dyex": "dy/ex", "eydx": "ey/dx"}[dydx_kind]
-        out.write(f"{lab} w.r.t. : {' '.join(dydx_vars)}\n", "text")
+        shown = []
+        for h_, l_, *_ in results:
+            nm = f"{l_}.{h_}" if h_ else l_
+            if nm not in shown:
+                shown.append(nm)
+        out.write(f"{lab} w.r.t. : {' '.join(shown)}\n", "text")
     if atmeans or o.get("at"):
         _at_legend(s, est, ats, means, rows, atmeans)
     out.write("\n", "text")
@@ -312,12 +332,76 @@ def cmd_margins(s: "Session", args: str) -> None:
     _margins_table(s, rws, stat, est.df_r, lev, col)
     if dydx_vars and any(h for h, *_ in results):
         out.write("Note: dy/dx for factor levels is the discrete change from the base level.\n", "text")
-    s.r = {}
     from ..commands.matrix import Matrix
-    names = [f"{h}:{lab}" if h else lab for h, lab, *_ in results]
-    s.r["b"] = Matrix(vals.reshape(1, -1), ["r1"], [n.replace(":", ".") for n in names])
-    s.r["V"] = Matrix(Vm, list(s.r["b"].colnames), list(s.r["b"].colnames))
-    s.r["N"] = float(len(rows))
+    names = [f"{lab}.{h}" if h else lab for h, lab, *_ in results]
+    km = len(results)
+    c = crit(stat, lev, est.df_r)
+    tvals = np.where(se > 0, vals / np.where(se > 0, se, 1), SYS)
+    pvals = [pvalue(stat, tv, est.df_r) if s_ > 0 else SYS for tv, s_ in zip(tvals, se)]
+    table = np.vstack([vals, se, tvals, pvals, vals - c * se, vals + c * se,
+                       np.full(km, est.df_r if (est.df_r and stat == "t") else SYS), np.full(km, c), np.zeros(km)])
+    model_cols = [nm for nm in est.names if nm != "_cons"]
+    at_vals = []
+    stats_at = []
+    for nm in model_cols:
+        base = nm.split("#")[0]
+        var = base.split(".")[-1]
+        lvl = base.split(".")[0].rstrip("bno") if "." in base else None
+        if atmeans and var in means:
+            mv_ = means[var]
+            at_vals.append(mv_.get(float(lvl), 0.0) if isinstance(mv_, dict) and lvl is not None else
+                           (mv_ if not isinstance(mv_, dict) else SYS))
+            stats_at.append("mean")
+        elif ats and var in ats[0]:
+            at_vals.append(float(ats[0][var]) if ats[0][var] != "mean" else SYS)
+            stats_at.append("value")
+        else:
+            at_vals.append(SYS)
+            stats_at.append("asobserved")
+    # r(): nomes e ordem observados no Stata 14 (compat 0511); a lista sai invertida
+    r = {}
+    r["_N"] = Matrix(np.full((1, km), float(len(rows))), ["r1"], names)
+    r["b"] = Matrix(vals.reshape(1, -1), ["y1"], names)
+    r["error"] = Matrix(np.zeros((1, km)), ["r1"], names)
+    r["Jacobian"] = Matrix(J, names, list(est.names))
+    r["V"] = Matrix(Vm, names, names)
+    r["at"] = Matrix(np.array(at_vals, dtype=float).reshape(1, -1) if at_vals else np.zeros((1, 1)), ["r1"],
+                     model_cols if model_cols else ["c1"])
+    r["chainrule"] = Matrix(np.zeros((1, km)), ["r1"], names)
+    r["table"] = Matrix(table, ["b", "se", "z" if stat == "z" else "t", "pvalue", "ll", "ul", "df", "crit",
+                                "eform"], names)
+    r["title"] = title
+    r["model_vce"] = {"regress": "ols"}.get(est.cmd, "robust" if est.vcetype else "oim")
+    r["vce"] = "delta"
+    r["vcetype"] = "Delta-method"
+    if terms:
+        specs = []
+        for tm in terms:
+            comps = tm.comps
+            if len(comps) == 1:
+                lv = sorted(set(ds.get(comps[0].var).data[rows].tolist()))
+                lvtxt = " ".join(f"{int(v)}" for v in lv)
+                specs.append(f"i({lvtxt})b{int(lv[0])}.{comps[0].var}")
+            else:
+                specs.append("#".join(f"i.{c_.var}" for c_ in comps))
+        r["margins"] = " ".join(specs)
+    r["predict1_label"] = expr.split(",")[0] if not expr.startswith("Linear") else "Linear prediction"
+    r["expression"] = "predict()"
+    if atmeans or o.get("at"):
+        r["atstats1"] = " ".join(stats_at)
+    r["emptycells"] = "strict"
+    r["est_cmd"] = est.cmd if est.cmd != "logit" or getattr(est, "ml_cmd", "") != "logistic" else "logistic"
+    r["est_cmdline"] = str(s.e.get("cmdline", ""))
+    r["cmdline"] = ("margins " + args.strip()).strip()
+    r["cmd"] = "margins"
+    r["mcmethod"] = "noadjust"
+    r["N"] = float(len(rows))
+    r["k_margins"] = float(len(terms))
+    r["k_predict"] = 1.0
+    r["k_by"] = 1.0
+    r["k_at"] = float(len(ats) if (o.get("at") or atmeans) else 0)
+    r["level"] = float(lev)
+    s.r = r
     if o.get("post"):
         from .results import Estimates, post
         e2 = Estimates("margins", est.depvar, list(s.r["b"].colnames), vals, Vm, len(rows), stat, est.df_r)
@@ -334,20 +418,32 @@ def _all_fixed(est, ats) -> bool:
 
 
 def _at_legend(s, est, ats, means, rows, atmeans):
+    """Legenda do at() no formato do Stata 14 (compat 0511):
+    1._at        : x1              =           2
+    at           : x1              =        4.77 (mean)"""
     out = s.output
     ds = s.data
+
+    def fmt(v):
+        return format_value(float(v), "%9.0g", pad=False).strip()
     for i, at in enumerate(ats):
         lead = f"{i + 1}._at" if len(ats) > 1 else "at"
         items = []
         if atmeans:
             for var, val in means.items():
-                items.append((var, "(mean)", val))
+                if isinstance(val, dict):
+                    for lv, pr in val.items():
+                        items.append((f"{int(lv)}.{var}", pr, True))
+                else:
+                    items.append((var, val, True))
         for var, val in at.items():
-            v = float(np.mean(ds.get(var).data[rows])) if val == "mean" else float(val)
-            items.append((var, "(mean)" if val == "mean" else "", v))
-        for j, (var, tag, val) in enumerate(items):
+            if val == "mean":
+                items.append((var, float(np.mean(ds.get(var).data[rows])), True))
+            else:
+                items.append((var, float(val), False))
+        for j, (var, val, is_mean) in enumerate(items):
             first = f"{lead:<13}: " if j == 0 else " " * 15
-            out.write(f"{first}{var:<16}{tag:<8}= {format_value(val, '%10.0g', pad=False).strip():>10}\n", "text")
+            out.write(f"{first}{var:<16}= {fmt(val):>11}" + (" (mean)" if is_mean else "") + "\n", "text")
         if len(ats) > 1 and i < len(ats) - 1:
             out.write("\n", "text")
 
@@ -436,16 +532,16 @@ def cmd_nlcom(s: "Session", args: str) -> None:
     out.write("\n", "text")
     lev = float(o["level"]) if o.get("level") else getattr(est, "level", 95.0)
     rws = [CoefRow("coef", name, vals[i], se[i]) for i, (name, _) in enumerate(items)]
-    stat = "t" if est.df_r else "z"
-    coef_table(s, est.depvar, rws, stat=stat, df=est.df_r, level=lev)
+    stat = "z"     # nlcom usa a normal mesmo depois do regress (compat 0511)
+    coef_table(s, est.depvar, rws, stat=stat, df=None, level=lev)
     from ..commands.matrix import Matrix
     names = [n for n, _ in items]
     s.r = {"b": Matrix(vals.reshape(1, -1), ["r1"], names), "V": Matrix(Vm, names, names)}
     s.r = dict(reversed(list(s.r.items())))
     if o.get("post"):
         from .results import Estimates, post
-        e2 = Estimates("nlcom", est.depvar, names, vals, Vm, est.N, stat, est.df_r)
+        e2 = Estimates("nlcom", est.depvar, names, vals, Vm, est.N, stat, None)
         e2.rows = rws
         e2.level = lev
-        e2.display = lambda ss, ee, **kw: coef_table(ss, ee.depvar, ee.rows, stat=stat, df=est.df_r, level=lev)
+        e2.display = lambda ss, ee, **kw: coef_table(ss, ee.depvar, ee.rows, stat=stat, df=None, level=lev)
         post(s, e2, [("N", float(est.N))], [("cmd", "nlcom"), ("properties", "b V")], s.data.esample)

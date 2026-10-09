@@ -32,9 +32,9 @@ def _g10(x: float) -> str:
     return format_value(x, "%10.0g", pad=False).strip()
 
 
-def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter: int = 300,
+def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter: int = 16000,
              tol: float = 1e-6, ltol: float = 1e-7, nrtol: float = 1e-5, start_iter: int = 0,
-             first_ll: float | None = None) -> MLResult:
+             first_ll: float | None = None, stop_at_zero: bool = False) -> MLResult:
     """fun(b, todo) -> (ll, g, H) com todo 0 (só ll) ou 2 (ll, g e H).
     Devolve as iterações para o log ("Iteration k:   log likelihood = ...")."""
     b = np.asarray(b0, dtype=np.float64).copy()
@@ -45,6 +45,11 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
     it = start_iter
     converged = False
     k = b.size
+    # já no máximo (ex.: glm gaussiano a partir do IRLS): o Stata para na
+    # iteração 0 (compat 0509)
+    if stop_at_zero and k and np.all(np.abs(g) <= 1e-9 * (1 + abs(ll))):
+        log.append((it, ll, ""))
+        return MLResult(b, ll, g, H, it, True, log)
     while True:
         concave = True
         try:
@@ -118,4 +123,15 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
 
 def print_log(out, res: MLResult, label: str = "log likelihood") -> None:
     for it, ll, note in res.log:
-        out.write(f"Iteration {it}:   {label} = {_g10(ll):>10}{note}  \n", "text")
+        lead = f"Iteration {it}:"
+        out.write(f"{lead:<14} {label} = {_g10(ll):>10}{note}  \n", "text")
+    if not res.converged and res.log:
+        out.write("convergence not achieved\n", "error")
+
+
+def ilog(res: MLResult) -> np.ndarray:
+    """e(ilog): log-verossimilhança das 20 primeiras iterações (zeros depois)."""
+    v = np.zeros((1, 20))
+    vals = [ll for _, ll, _ in res.log][:20]
+    v[0, :len(vals)] = vals
+    return v

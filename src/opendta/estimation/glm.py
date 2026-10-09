@@ -185,11 +185,12 @@ def cmd_glm(s: "Session", args: str) -> None:
             return ll, None, None
         return ll, grad(b), num_hess(grad, b)
 
-    # início: IRLS com μ = (y + ȳ)/2 (VERIFICAR: valores iniciais do Stata)
+    # início: um passo de IRLS a partir de μ0 = m(y+.5)/(m+1) (binomial) ou
+    # (y + ȳ)/2 (demais): reproduz a iteração 0 do Stata (compat 0509)
     ybar = float(np.sum(w * y) / np.sum(w))
-    mu0 = (y + ybar) / 2 if fam != "binomial" else (y + 0.5 * m_trials) / 2
+    mu0 = m_trials * (y + 0.5) / (m_trials + 1) if fam == "binomial" else (y + ybar) / 2
     eta0 = gfun(mu0)
-    z = eta0 - off
+    z = eta0 + (y - mu0) / dmu(eta0) - off
     sw = w * dmu(eta0) ** 2 / var(mu0)
     b0 = np.linalg.lstsq(X * np.sqrt(sw)[:, None], z * np.sqrt(sw), rcond=None)[0]
     res = pr.maximize(fun, b0)
@@ -232,22 +233,60 @@ def cmd_glm(s: "Session", args: str) -> None:
                 "poisson": ("V(u) = u", "Poisson"), "gamma": ("V(u) = u^2", "Gamma"),
                 "igaussian": ("V(u) = u^3", "Inverse Gaussian"),
                 "nbinomial": (f"V(u) = u+({nb_k:g})u^2", "Neg. Binomial")}[fam]
+    slopes = [i for i in range(k - (1 if pr.constant else 0))]
+    try:
+        chi2 = float(res.b[slopes] @ np.linalg.solve(V[np.ix_(slopes, slopes)], res.b[slopes])) if slopes else SYS
+    except np.linalg.LinAlgError:
+        chi2 = SYS
+    pchi = float(st.chi2.sf(chi2, len(slopes))) if chi2 < SYS else SYS
+    fam_code = {"gaussian": 1, "binomial": 2, "poisson": 3, "gamma": 4, "igaussian": 5, "nbinomial": 6}[fam]
+    link_code = {"Identity": 1, "Logit": 2, "Log": 3, "Probit": 8, "Complementary log-log": 7,
+                 "Log-log": 6, "Log-complement": 5}.get(link_name, 9)   # VERIFICAR códigos
+    linkf = link_text.split("= ", 1)[1] if "= " in link_text else link_text
+    varf = fam_text[0].split("= ", 1)[1]
+    # e(): nomes e ordem observados no Stata 14 (compat 0509, glm binomial logit)
+    sv = [("N", N), ("ic", float(res.iterations)), ("k", float(k)), ("k_eq", 1.0), ("k_dv", 1.0),
+          ("converged", 1.0 if res.converged else 0.0), ("ll", ll_rep), ("chi2", chi2), ("p", pchi), ("rc", 0.0),
+          ("aic", aic), ("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0),
+          ("power", float(lpow) if (lname in ("power", "pow") and lpow is not None) else 0.0),
+          ("df_m", float(len(slopes))), ("df", df), ("vf", 1.0), ("phi", phi), ("k_eq_model", 0.0),
+          ("nbml", 0.0), ("bic", bic), ("dispers_ps", pearson / df / phi), ("deviance_ps", pearson / phi),
+          ("dispers_p", pearson / df), ("deviance_p", pearson), ("dispers_s", dev / df / phi),
+          ("deviance_s", dev / phi), ("dispers", dev / df), ("deviance", dev)]
+    if n_clust is not None:
+        sv.insert(6, ("N_clust", float(n_clust)))
+    mv = [("cmdline", f"glm {args.strip()}"), ("cmd", "glm"), ("predict", "glim_p"),
+          ("marginsnotok", "stdp Anscombe Cooksd Deviance Hat Likelihood Pearson Response Score Working "
+                           "ADJusted STAndardized STUdentized MODified"),
+          ("marginsok", "default"), ("hac_lag", f"{int(N) - 2}"), ("vcetype", "Robust" if pr.robust else "OIM"),
+          ("vce", pr.smp.vce if pr.robust else "oim")]
+    if pr.smp.clustvar:
+        mv.append(("clustvar", pr.smp.clustvar))
+    mv += [("linkt", link_name), ("linkf", linkf), ("varfunct", fam_text[1]), ("varfuncf", varf),
+           ("opt1", "ML"), ("m", "1" if np.all(m_trials == 1) else str(fam_words[1]) if len(fam_words) > 1 else "1"),
+           ("varfunc", f"glim_v{fam_code}"), ("link", f"glim_l{link_code:02d}"), ("chi2type", "Wald"),
+           ("opt", "moptimize"), ("title", "Generalized linear models"), ("user", "glim_lf"),
+           ("ml_method", "e2"), ("technique", "nr"), ("which", "max")]
+    from .regress import wexp_macros
+    mv += wexp_macros(pr.smp)
+    if o.get("offset") or o.get("exposure"):
+        mv.append(("offset", f"ln({str(o['exposure']).strip()})" if o.get("exposure") else str(o["offset"]).strip()))
+    mv += [("depvar", pr.smp.depname), ("properties", "b V")]
     est = _finish(s, pr, "glm", args, title="Generalized linear models", names=names,
                   eqnames=[pr.smp.depname] * len(names), b=b_full, V=V_full, rows=rows, res=res, ll0=SYS,
-                  df_m=k - (1 if pr.constant else 0), chi2kind="Wald", chi2=SYS, p=SYS, r2p=None,
-                  display=display_glm, n_clust=n_clust,
-                  extra_scalars=[("phi", phi), ("aic", aic), ("bic", bic), ("deviance", dev),
-                                 ("deviance_p", pearson), ("dispers", dev / df), ("dispers_p", pearson / df),
-                                 ("df", df)],
-                  extra_macros=[("varfunc", fam_text[0]), ("varfunct", fam_text[1]),
-                                ("link", link_text), ("linkt", link_name)])
+                  df_m=len(slopes), chi2kind="Wald", chi2=chi2, p=pchi, r2p=None,
+                  display=display_glm, n_clust=n_clust, extra_scalars=sv, extra_macros=mv,
+                  order=([k_ for k_, _ in sv], [k_ for k_, _ in mv], ["ilog", "gradient"]))
     s.e["ll"] = ll_rep
     est.extra.update({"ll": ll_rep, "dev": dev, "pearson": pearson, "df": df, "phi": phi, "aic": aic,
                       "bic": bic, "fam_text": fam_text, "link_text": link_text, "link_name": link_name})
     est.glm_ginv, est.glm_fam = ginv, fam
     est.predict = _predict_glm
     if o.get("eform"):
-        est.coef_title, est.eform_on = "exp(b)", True   # VERIFICAR título por família/ligação
+        # títulos observados: binomial/log -> Risk Ratio (compat 0509); os demais VERIFICAR
+        title_ef = {("binomial", "Logit"): "Odds Ratio", ("binomial", "Log"): "Risk Ratio",
+                    ("poisson", "Log"): "IRR", ("nbinomial", "Log"): "IRR"}.get((fam, link_name), "exp(b)")
+        est.coef_title, est.eform_on = title_ef, True
     display_glm(s, est)
     est.coef_title, est.eform_on = "Coef.", False
 
@@ -262,9 +301,9 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         rows = [
             (f"{est.title}", ("No. of obs", g(x["N"], "%10.0fc") if False else f"{int(x['N']):,}")),
             ("Optimization     : ML", ("Residual df", f"{int(x['df']):,}")),
-            ("", ("Scale parameter", g(x["phi"], "%10.0g"))),
-            (f"Deviance         = {g(x['dev'], '%12.0g'):>12}", ("(1/df) Deviance", g(x["dev"] / x["df"], "%10.0g"))),
-            (f"Pearson          = {g(x['pearson'], '%12.0g'):>12}", ("(1/df) Pearson", g(x["pearson"] / x["df"], "%10.0g"))),
+            ("", ("Scale parameter", g(x["phi"], "%9.0g"))),
+            (f"Deviance         = {g(x['dev'], '%12.0g'):>12}", ("(1/df) Deviance", g(x["dev"] / x["df"], "%9.0g"))),
+            (f"Pearson          = {g(x['pearson'], '%12.0g'):>12}", ("(1/df) Pearson", g(x["pearson"] / x["df"], "%9.0g"))),
         ]
         for lft, (rl, rv) in rows:
             out.write(f"{lft:<{L}}{rl:<16}= ", "text")
@@ -275,11 +314,11 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write(f"{'Link function    : ' + x['link_text']:<{L}}[{x['link_name']}]\n", "text")
         out.write("\n", "text")
         out.write(f"{'':<{L}}{'AIC':<16}= ", "text")
-        out.write(f"{g(x['aic'], '%10.0g'):>10}\n", "result")
+        out.write(f"{g(x['aic'], '%9.0g'):>10}\n", "result")
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
         out.write(f"{(lab + '   = ' + g(x['ll'], '%12.0g')) if not est.robust else (lab + ' = ' + g(x['ll'], '%12.0g')):<{L}}"
                   f"{'BIC':<16}= ", "text")
-        out.write(f"{g(x['bic'], '%10.0g'):>10}\n", "result")
+        out.write(f"{g(x['bic'], '%9.0g'):>10}\n", "result")
         out.write("\n", "text")
     if table:
         _cluster_note(s, est)

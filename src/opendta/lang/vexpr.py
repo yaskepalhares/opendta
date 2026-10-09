@@ -197,6 +197,24 @@ class VectorContext:
         if any(is_str(a) for a in args):
             raise type_mismatch()
         mask = getattr(self.s, "_rng_mask", None)
+        block = getattr(self.s, "_rng_block", None)
+        if block is not None:
+            U, j = block
+            block[1] = j + 1
+            u = U[:, j] if j < U.shape[1] else rng.RNG.uniform(U.shape[0])
+            fn = rng.DISTRIBUTIONS[name][2]
+            if mask is None or len(mask) != self.n:
+                arrs = [np.broadcast_to(np.asarray(broadcast(a, self.n) if is_vec(a) else a, dtype=np.float64),
+                                        (self.n,)) for a in args]
+                with np.errstate(all="ignore"):
+                    return fn(u, *arrs)
+            idx = np.flatnonzero(mask)
+            out = np.full(self.n, SYS)
+            arrs = [np.broadcast_to(np.asarray(broadcast(a, self.n)[idx] if is_vec(a) else a, dtype=np.float64),
+                                    (len(idx),)) for a in args]
+            with np.errstate(all="ignore"):
+                out[idx] = fn(u, *arrs)
+            return out
         if mask is None or len(mask) != self.n:
             return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
         # só as observações da amostra sorteiam (generate/replace com if/in)

@@ -211,20 +211,27 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
                      sigma_e=sigma_e, rho=rho, F_f=F_f, p_f=p_f, pvar=pvar)
     est.display = display_xtreg
     est.predict = _predict_xt
-    scalars = [("N", float(N)), ("N_g", float(G)), ("df_m", float(k)), ("sigma", sigma_e), ("sigma_u", sigma_u),
-               ("sigma_e", sigma_e), ("r2_w", r2_w), ("r2_o", r2_o), ("r2_b", r2_b), ("corr", corr),
-               ("rho", rho), ("F", F), ("F_f", F_f), ("df_a", float(G - 1)), ("df_b", float(k)),
-               ("df_r", float(df_r)), ("Tbar", N / G), ("Tcon", 1.0 if counts.min() == counts.max() else 0.0),
-               ("rss", rss), ("g_min", float(counts.min())), ("g_avg", N / G), ("g_max", float(counts.max())),
-               ("rank", float(k + 1))]
+    # e(): nomes e ordem observados no Stata 14 (compat 0510)
+    tss_w = float(yw @ yw)
+    ll = -0.5 * N * (np.log(2 * np.pi) + np.log(rss / N) + 1)
+    ll_0 = -0.5 * N * (np.log(2 * np.pi) + np.log(tss_w / N) + 1)
+    tss = float(np.sum((y - ybar) ** 2))
+    r2_a = 1 - (1 - r2_w) * (N - 1) / (N - G - k)
+    scalars = [("r2_w", r2_w), ("F_f", F_f), ("rank", float(k + 1)), ("Tbar", N / G),
+               ("Tcon", 1.0 if counts.min() == counts.max() else 0.0), ("g_min", float(counts.min())),
+               ("g_avg", N / G), ("g_max", float(counts.max())), ("N_g", float(G)), ("sigma_u", sigma_u),
+               ("corr", corr), ("r2_o", r2_o), ("r2_b", r2_b), ("sigma_e", sigma_e),
+               ("sigma", float(np.sqrt(sigma_u ** 2 + sigma_e ** 2))), ("rho", rho), ("df_m", float(k + G - 1)),
+               ("df_b", float(k)), ("ll_0", ll_0), ("ll", ll), ("tss", tss), ("df_a", float(G - 1)),
+               ("r2_a", r2_a), ("rss", rss), ("mss", tss_w - rss), ("rmse", sigma_e), ("r2", r2_w), ("F", F),
+               ("df_r", float(df_r)), ("N", float(N))]
     if n_clust is not None:
-        scalars.append(("N_clust", float(n_clust)))
-    macros = [("cmdline", cmdline("xtreg", args)), ("cmd", "xtreg"), ("depvar", smp.depname),
-              ("ivar", pvar), ("model", "fe"), ("title", "Fixed-effects (within) regression"),
-              ("vce", smp.vce if vcetype else "conventional"), ("properties", "b V"),
-              ("predict", "xtrefe_p"), ("marginsok", "XB XBU U")]
+        scalars.insert(scalars.index(("N", float(N))), ("N_clust", float(n_clust)))   # VERIFICAR posição
+    macros = [("cmdline", cmdline("xtreg", args)), ("cmd", "xtreg"), ("marginsnotok", "E U UE SCore STDP XBU"),
+              ("predict", "xtrefe_p"), ("model", "fe"), ("vce", smp.vce if vcetype else "conventional")]
     if vcetype:
         macros += [("vcetype", vcetype), ("clustvar", est.clustvar)]
+    macros += [("ivar", pvar), ("depvar", smp.depname), ("properties", "b V"), ("absvar", pvar)]
     post(s, est, scalars, macros, smp.mask)
     display_xtreg(s, est)
 
@@ -251,7 +258,7 @@ def _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
     A = np.linalg.inv(Xstar.T @ Xstar)
     b = A @ (Xstar.T @ ys)
     e = ys - Xstar @ b
-    V = sig_e2 * A
+    V = (float(e @ e) / (N - (k + 1))) * A   # VERIFICAR: s² da regressão transformada
     vcetype = ""
     n_clust = None
     if smp.vce in ("robust", "cluster"):
@@ -311,7 +318,7 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
         for nm, val, gl, gv in stats:
             out.write(f"     {nm:<7} = ", "text")
             out.write(f"{val:.4f}", "result")
-            out.write(" " * (48 - 5 - 7 - 3 - 6) + f"{gl:>18}{'':<0} = ", "text")
+            out.write(" " * (62 - 21) + f"{gl} = ", "text")      # compat 0510
             out.write(f"{gv:>10}\n", "result")
         out.write("\n", "text")
         if est.model == "fe":
@@ -336,9 +343,9 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
                vcetype=est.vcetype, footer=False)
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     for nm, val in (("sigma_u", x["sigma_u"]), ("sigma_e", x["sigma_e"]), ("rho", x["rho"])):
-        out.write(f"{nm:>12} |  ", "text")
-        txt = format_value(val, "%9.0g", pad=False).strip() if val == val else "."
-        out.write(f"{txt:>9}", "result")
+        out.write(f"{nm:>12} | ", "text")
+        txt = format_value(val, "%10.0g", pad=False).strip() if val == val else "."
+        out.write(f"{txt:>10}", "result")
         if nm == "rho":
             out.write("   (fraction of variance due to u_i)", "text")
         out.write("\n", "text")
@@ -450,7 +457,7 @@ def display_areg(s, est, *, header=True, table=True, level=None, **_kw):
         out.write("\n", "text")
         right = [("Number of obs", comma(x["N"])), (f"F({int(x['df_m']):>4},{int(x['df_r']):>7})", g(x["F"], "%10.2f")),
                  ("Prob > F", g(x["pF"], "%10.4f")), ("R-squared", g(x["r2"], "%10.4f")),
-                 ("Adj R-squared", g(x["r2_a"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))]
+                 ("Adj R-squared", g(x["r2_a"], "%10.4f")), ("Root MSE", g(x["rmse"], "%10.4f"))]
         for i, (rl, rv) in enumerate(right):
             lft = "Linear regression, absorbing indicators" if i == 0 else ""
             out.write(f"{lft:<48}{rl:<18}= ", "text")
@@ -462,9 +469,9 @@ def display_areg(s, est, *, header=True, table=True, level=None, **_kw):
                footer=False)
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     out.write(f"{x['avar']:>12} |", "text")
-    out.write(f"   F({int(x['G'] - 1)}, {int(x['N'] - x['G'] - x['df_m'])}) = {x['F_abs']:9.3f}   {x['p_abs']:.3f}"
-              f"          ({int(x['G'])} categories)\n", "result")   # VERIFICAR layout
-    out.write("-" * 78 + "\n", "text")
+    # compat 0510: sem linha de fechamento depois do teste dos indicadores
+    out.write(f"{'':10}F({int(x['G'] - 1)}, {int(x['N'] - x['G'] - x['df_m'])}) = {x['F_abs']:10.3f}"
+              f"{x['p_abs']:8.3f}{'':10}({int(x['G'])} categories)\n", "result")
 
 
 # ---------------------------------------------------------------------------
@@ -557,13 +564,31 @@ def cmd_ivregress(s: "Session", args: str) -> None:
                      insts=" ".join([c.name for c in ex_cols] + [c.name for c in Zc]))
     est.display = display_iv
     est.predict = _predict_xt
-    scalars = [("N", float(N)), ("mss", tss - rss), ("df_m", float(len(slopes))), ("rss", rss), ("r2", r2),
-               ("rmse", rmse), ("rank", float(k))]
-    scalars += [("F", W / len(slopes)), ("df_r", float(N - k))] if small else [("chi2", W)]
-    macros = [("cmdline", cmdline("ivregress", args)), ("cmd", "ivregress"), ("estimator", "2sls"),
-              ("depvar", smp.depname), ("instd", est.extra["instd"]), ("insts", est.extra["insts"]),
-              ("title", "Instrumental variables (2SLS) regression"), ("vce", smp.vce if vcetype else "unadjusted"),
-              ("properties", "b V"), ("predict", "ivreg_p")]
+    r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
+    est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
+    # e(): ordem observada no Stata 14 com small (compat 0510); sem small, VERIFICAR
+    scalars = [("kappa", 1.0), ("rss", rss), ("N", float(N)), ("df_m", float(len(slopes)))]
+    scalars += [("df_r", float(N - k))] if small else []
+    scalars += [("rmse", rmse), ("mss", tss - rss), ("r2", r2), ("r2_a", r2_a)]
+    scalars += [("F", W / len(slopes))] if small else [("chi2", W)]
+    if n_clust is not None:
+        scalars.append(("N_clust", float(n_clust)))
+    scalars += [("iterations", 0.0), ("rank", float(k))]
+    exogr = " ".join(c.name for c in ex_cols)
+    macros = [("cmdline", cmdline("ivregress", args)), ("cmd", "ivregress"), ("estat_cmd", "ivregress_estat"),
+              ("vce", smp.vce if vcetype else "unadjusted")]
+    if vcetype:
+        macros.append(("vcetype", vcetype))
+    if smp.clustvar:
+        macros.append(("clustvar", smp.clustvar))
+    macros += [("estimator", "2sls"), ("footnote", "ivreg_footnote"), ("marginsnotok", "Residuals SCores"),
+               ("marginsok", "XB default"), ("predict", "ivregress_p"), ("depvar", smp.depname)]
+    if exogr:
+        macros.append(("exogr", exogr))
+    macros += [("insts", est.extra["insts"]), ("instd", est.extra["instd"])]
+    if small:
+        macros.append(("small", "small"))
+    macros += [("title", "Instrumental variables (2SLS) regression"), ("properties", "b V")]
     post(s, est, scalars, macros, mask)
     display_iv(s, est)
 
@@ -579,7 +604,24 @@ def _retarget(est, Xn, ex_cols, endog_terms, ex_terms):
 def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
     out = s.output
     x = est.extra
-    if header:
+    if header and x["small"] and not est.vcetype:
+        # com small, tabela ANOVA no layout antigo do regress (compat 0510)
+        out.write("\n\nInstrumental variables (2SLS) regression\n\n", "text")
+        df_m, df_r, N = int(x["df_m"]), int(est.df_r), x["N"]
+        right = [("Number of obs", comma(N)), (f"F({df_m:>3},{df_r:>6})", g(x["F"], "%10.2f")),
+                 ("Prob > F", g(st.f.sf(x["F"], df_m, df_r), "%10.4f")), ("R-squared", g(x["r2"], "%10.4f")),
+                 ("Adj R-squared", g(x["r2_a"], "%10.4f")), ("Root MSE", g(x["rmse"], "%10.4f"))]
+
+        def row(nm, ss, df, ms):
+            return f"{nm:>12} | {g(ss, '%11.0g'):>11}{int(df):>6}{g(ms, '%11.0g'):>12}"
+        left = [f"{'Source':>12} |       SS       df       MS", "-" * 13 + "+" + "-" * 30,
+                row("Model", x["mss"], df_m, x["mss"] / df_m), row("Residual", x["rss"], df_r, x["rss"] / df_r),
+                "-" * 13 + "+" + "-" * 30, row("Total", x["tss"], N - 1, x["tss"] / (N - 1))]
+        for lft, (rl, rv) in zip(left, right):
+            out.write(f"{lft:<50}{rl:<16}= ", "text")
+            out.write(f"{rv:>10}\n", "result")
+        out.write("\n", "text")
+    elif header:
         out.write("\n", "text")
         if x["small"]:
             right = [("Number of obs", comma(x["N"])), (f"F({int(x['df_m'])}, {int(est.df_r)})", g(x["F"], "%10.2f")),

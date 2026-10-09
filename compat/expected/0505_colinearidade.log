@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0505_colinearidade.log
   log type:  text
- opened on:   9 Oct 2026, 11:17:26
+ opened on:   9 Oct 2026, 12:10:01
 
 . * Fase 5a: qual variável o regress omite por colinearidade, pesos e opções.
 . clear
@@ -340,5 +340,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0505_colinearidade.log
   log type:  text
- closed on:   9 Oct 2026, 11:17:26
+ closed on:   9 Oct 2026, 12:10:01
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-* Fase 5b: tobit, xtreg, areg e ivregress.
+* Fase 5b: xtreg, areg e ivregress.
 clear
 estimates clear
 ereturn clear
@@ -11,9 +11,6 @@ gen x1 = round(runiform()*10, .1) + a
 gen x2 = round(runiform()*5, .01)
 gen z = x1 + round(runiform()*2, .01)
 gen y = 1 + .5*x1 - x2 + 2*a + round(runiform()*2, .01)
-gen ys = max(0, y - 5)
-tobit ys x1 x2, ll(0)
-tobit ys x1 x2, ll(0) ul(4)
 xtset id t
 xtreg y x1 x2, fe
 ereturn list

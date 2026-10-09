@@ -12,7 +12,7 @@ Para cada compat/do/NOME.do:
 Antes de comparar, cabeçalho e rodapé do log, linhas `. do ...`/`. log close`
 e espaços no fim das linhas são descartados; linhas em branco são ignoradas.
 
-Números com 15 ou mais algarismos significativos (return list, ereturn list)
+Números escritos com 15 ou mais caracteres (return list, ereturn list)
 podem diferir no último algarismo: a ordem das somas em ponto flutuante não é
 a mesma do Stata. Essas linhas contam como iguais quando o resto do texto é
 idêntico e a diferença relativa é menor que 1e-12.
@@ -71,7 +71,8 @@ def _close_line(a: str, b: str) -> bool:
     for x, y in zip(na, nb):
         if x == y:
             continue
-        if min(_digits(x), _digits(y)) < 15:
+        # números longos (%18.0g): 15+ caracteres, como .0032959009263453
+        if min(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
             return False
         fx, fy = float(x), float(y)
         if abs(fx - fy) > 1e-12 * max(abs(fx), abs(fy)):

@@ -30,15 +30,19 @@ def g(x: float, fmt: str) -> str:
 
 
 def num_hess(grad: Callable[[np.ndarray], np.ndarray], b: np.ndarray) -> np.ndarray:
-    """Hessiana por diferenças centrais do gradiente analítico."""
+    """Hessiana por diferenças centrais do gradiente analítico, com extrapolação
+    de Richardson (erro de truncamento O(h⁴))."""
     k = b.size
     H = np.zeros((k, k))
     for i in range(k):
-        h = 1e-6 * (abs(b[i]) + 1)
-        a, c = b.copy(), b.copy()
-        a[i] += h
-        c[i] -= h
-        H[:, i] = (grad(a) - grad(c)) / (2 * h)
+        h = 1e-4 * (abs(b[i]) + 1)
+
+        def D(hh, i=i):
+            a, c = b.copy(), b.copy()
+            a[i] += hh
+            c[i] -= hh
+            return (grad(a) - grad(c)) / (2 * hh)
+        H[:, i] = (4 * D(h / 2) - D(h)) / 3
     return (H + H.T) / 2
 
 
@@ -177,15 +181,47 @@ def _expand(pr: _Prep, b_est: np.ndarray, V_est: np.ndarray, layout: list[tuple[
     return b, V
 
 
+# ordem de e() observada no Stata 14 (compat 0508, 0509); para os comandos sem
+# log de referência, a ordem segue o padrão dos parecidos (VERIFICAR)
+_E_ORDER = {
+    "ologit": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
+                "ll_0", "df_m", "chi2", "p", "N_cd", "k_cat", "k_aux", "r2_p"],
+               ["cmdline", "cmd", "predict", "marginsdefault", "title", "chi2type", "opt", "vce", "vcetype",
+                "clustvar", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar", "properties"],
+               ["cat", "ilog", "gradient"]),
+    "mlogit": (["rank", "N", "ic", "k", "k_dv", "converged", "rc", "ll", "N_clust", "ll_0", "df_m", "chi2", "p",
+                "N_cd", "ibaseout", "baseout", "k_out", "r2_p", "k_eq", "k_eq_model", "k_eq_base"],
+               ["cmdline", "cmd", "marginsdefault", "marginsnotok", "predict", "title", "eqnames", "baselab",
+                "chi2type", "opt", "vce", "vcetype", "clustvar", "user", "ml_method", "technique", "which",
+                "wtype", "wexp", "depvar", "properties"],
+               ["out", "ilog", "gradient"]),
+    "nbreg": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
+               "ll_0", "df_m", "chi2", "p", "k_aux", "alpha", "ll_c", "chi2_c", "p_c", "r2_p"],
+              ["cmdline", "cmd", "predict", "dispers", "diparm1", "title", "chi2type", "chi2_ct", "opt", "vce",
+               "vcetype", "clustvar", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar",
+               "properties"],
+              ["ilog", "gradient"]),
+    "tobit": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
+               "ll_0", "df_m", "chi2", "p", "df_r", "N_unc", "N_lc", "N_rc", "llopt", "ulopt", "k_aux", "r2_p"],
+              ["cmdline", "cmd", "predict", "title", "chi2type", "opt", "vce", "vcetype", "clustvar", "user",
+               "ml_method", "technique", "which", "wtype", "wexp", "depvar", "properties"],
+              ["ilog", "gradient"]),
+}
+_E_ORDER["oprobit"] = _E_ORDER["ologit"]
+
+
 def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: list[str], eqnames,
             b: np.ndarray, V: np.ndarray, rows: list[CoefRow], res, ll0: float, df_m: int, chi2kind,
             chi2, p, r2p, display, n_clust, extra_scalars=(), extra_macros=(), k_eq=1, k_aux=0,
-            depvar_name: str | None = None) -> Estimates:
+            depvar_name: str | None = None, constant: bool = False, mats=(), k_free=None,
+            order: tuple | None = None) -> Estimates:
+    from ..commands.matrix import Matrix
+    from .ml import ilog
     smp = pr.smp
     est = Estimates(cmd, depvar_name or smp.depname, names, b, V, smp.n, "z", None)
     est.rows = rows
     est.eqnames = list(eqnames)
-    est.cols, est.constant, est.terms, est.depcomp = smp.cols, False, smp.terms, smp.depcomp
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, constant, smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = "Robust" if pr.robust else ""
     est.clustvar = smp.clustvar
@@ -196,28 +232,38 @@ def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: 
                  "r2_p": r2p, "chi2type": chi2kind}
     est.display = display
     est.ml_cmd = cmd
-    scalars = [("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0), ("N", pr.N),
-               ("ic", float(res.iterations)), ("k", float(len(names))), ("k_eq", float(k_eq)),
-               ("k_dv", 1.0), ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0), ("ll", res.ll)]
+    sv = {"rank": float(np.linalg.matrix_rank(V)) if V.size else 0.0, "N": pr.N, "ic": float(res.iterations),
+          "k": float(k_free if k_free is not None else len(names)), "k_eq": float(k_eq), "k_dv": 1.0,
+          "converged": 1.0 if res.converged else 0.0, "rc": 0.0, "ll": res.ll, "k_eq_model": 1.0,
+          "ll_0": ll0, "df_m": float(df_m), "chi2": chi2, "p": p}
     if n_clust is not None:
-        scalars.append(("N_clust", float(n_clust)))
-    scalars += [("k_eq_model", 1.0), ("ll_0", ll0), ("df_m", float(df_m)), ("chi2", chi2), ("p", p)]
+        sv["N_clust"] = float(n_clust)
     if r2p is not None:
-        scalars.append(("r2_p", r2p))
+        sv["r2_p"] = r2p
     if k_aux:
-        scalars.append(("k_aux", float(k_aux)))
-    scalars += list(extra_scalars)
-    macros = [("cmdline", cmdline(cmd, args)), ("cmd", cmd), ("title", title), ("chi2type", chi2kind),
-              ("vce", smp.vce if pr.robust else "oim")]
+        sv["k_aux"] = float(k_aux)
+    sv.update(dict(extra_scalars))
+    mv = {"cmdline": cmdline(cmd, args), "cmd": cmd, "title": title, "chi2type": chi2kind,
+          "vce": smp.vce if pr.robust else "oim", "depvar": smp.depname, "opt": "moptimize", "which": "max",
+          "ml_method": "d2", "technique": "nr", "properties": "b V", "predict": f"{cmd}_p",
+          "user": f"mopt__{cmd}_d2()"}
     if pr.robust:
-        macros.append(("vcetype", "Robust"))
+        mv["vcetype"] = "Robust"
     if smp.clustvar:
-        macros.append(("clustvar", smp.clustvar))
-    macros += wexp_macros(smp)
-    macros += [("depvar", smp.depname), ("opt", "moptimize"), ("which", "max"), ("ml_method", "d2"),
-               ("technique", "nr"), ("properties", "b V"), ("predict", f"{cmd}_p")]
-    macros += list(extra_macros)
-    post(s, est, scalars, macros, smp.mask)
+        mv["clustvar"] = smp.clustvar
+    mv.update(dict(wexp_macros(smp)))
+    mv.update(dict(extra_macros))
+    md = {"ilog": Matrix(ilog(res)), "gradient": Matrix(res.g.reshape(1, -1))}
+    md.update(dict(mats))
+    so, mo, xo = order or _E_ORDER.get(cmd, (list(sv), list(mv), list(md)))
+    scalars = [(k_, sv[k_]) for k_ in so if k_ in sv]
+    macros = [(k_, mv[k_]) for k_ in mo if k_ in mv]
+    if order is None:
+        # sem ordem explícita, o que não está na lista vai para o fim
+        scalars += [(k_, v) for k_, v in sv.items() if k_ not in so]
+        macros += [(k_, v) for k_, v in mv.items() if k_ not in mo]
+    mlist = [(k_, md[k_]) for k_ in xo if k_ in md]
+    post(s, est, scalars, macros, smp.mask, extra_mats=mlist)
     return est
 
 
@@ -325,12 +371,23 @@ def _ordered(s: "Session", cmd: str, args: str) -> None:
     est = _finish(s, pr, cmd, args, title=title, names=names + ["_cons"] * (J - 1), eqnames=eqs,
                   b=b_full, V=V_full, rows=rows, res=res, ll0=ll0, df_m=k, chi2kind=kind, chi2=chi2, p=pv,
                   r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=J, k_aux=J - 1,
-                  extra_scalars=[("k_cat", float(J))])
+                  extra_scalars=[("k_cat", float(J)), ("N_cd", 0.0)],
+                  extra_macros=[("marginsdefault", " ".join(f"predict(pr outcome({_lv(v)}))" for v in levels))],
+                  mats=[("cat", _mat_row(levels))])
     est.cat = levels
     est.predict = _predict_ordered
     est.kslopes = k
     est.Fcdf = F
     _display_std(s, est)
+
+
+def _lv(v: float) -> str:
+    return f"{int(v)}" if v == int(v) else f"{v:g}"
+
+
+def _mat_row(vals):
+    from ..commands.matrix import Matrix
+    return Matrix(np.array(vals, dtype=float).reshape(1, -1))
 
 
 def smp_name(pr):
@@ -342,10 +399,9 @@ def _display_std(s: "Session", est: Estimates, *, header: bool = True, table: bo
     x = est.extra
     if header:
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
-        left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g')}"]
+        left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         if getattr(est, "dispersion", ""):
             left[2] = f"Dispersion     = {est.dispersion}"
-            left[3] = f"{lab} = {g(x['ll'], '%10.0g')}"
         r2p = x.get("r2_p")
         _header(s, left, _std_right(x["N"], x["chi2type"], int(x["df_m"]), x["chi2"], x["p"],
                                     r2p if r2p is not None else None))
@@ -460,8 +516,9 @@ def cmd_mlogit(s: "Session", args: str) -> None:
     vlab = ds.value_labels.get(depv.value_label, {}) if depv.value_label else {}
 
     def eqname(j):
+        # rótulos com espaços viram nomes de equação com _ (compat 0508)
         lv = levels[j]
-        return vlab.get(int(lv), f"{int(lv)}" if lv == int(lv) else f"{lv:g}")
+        return vlab.get(int(lv), f"{int(lv)}" if lv == int(lv) else f"{lv:g}").replace(" ", "_")
     # e(b) com todas as equações, inclusive a base (zeros); linhas da tabela
     names_all, eqs_all, free = [], [], []
     rows: list[CoefRow] = []
@@ -478,6 +535,8 @@ def cmd_mlogit(s: "Session", args: str) -> None:
         bmap, semap = {}, {}
         for c in pr.smp.cols:
             nm = c.name if not c.omitted else fvars.omitted_name(c.name)
+            if m is None and not c.omitted and not c.base:
+                nm = fvars.omitted_name(c.name)       # equação de base: o.x1
             names_all.append(nm)
             eqs_all.append(eqname(j))
             if c.values is not None and m is not None:
@@ -490,7 +549,7 @@ def cmd_mlogit(s: "Session", args: str) -> None:
                 free.append(False)
                 bmap[c.name], semap[c.name] = 0.0, 0.0
         if pr.constant:
-            names_all.append("_cons")
+            names_all.append("_cons" if m is not None else "o._cons")
             eqs_all.append(eqname(j))
             if m is not None:
                 Vidx.append(m * kx + kx - 1)
@@ -514,8 +573,15 @@ def cmd_mlogit(s: "Session", args: str) -> None:
     est = _finish(s, pr, "mlogit", args, title="Multinomial logistic regression", names=names_all,
                   eqnames=eqs_all, b=b_full, V=V_full, rows=rows, res=res, ll0=ll0,
                   df_m=len(slope_idx), chi2kind=kind, chi2=chi2, p=pv, r2p=r2p, display=_display_std,
-                  n_clust=n_clust, k_eq=J, extra_scalars=[("k_out", float(J)), ("ibaseout", float(base + 1)),
-                                                           ("baseout", float(levels[base]))])
+                  n_clust=n_clust, k_eq=J, k_free=len(res.b),
+                  extra_scalars=[("k_out", float(J)), ("ibaseout", float(base + 1)),
+                                 ("baseout", float(levels[base])), ("N_cd", 0.0), ("k_eq_model", float(J)),
+                                 ("k_eq_base", float(base + 1))],
+                  extra_macros=[("marginsdefault", " ".join(f"predict(pr outcome({_lv(v)}))" for v in levels)),
+                                ("marginsnotok", "stdp stddp SCores"),
+                                ("eqnames", " ".join(eqname(j) for j in range(J))),
+                                ("baselab", eqname(base))],
+                  mats=[("out", _mat_row(levels))])
     est.rows = rows
     if pr.o.get("rrr"):
         est.coef_title, est.eform_on = "RRR", True
@@ -631,7 +697,8 @@ def cmd_nbreg(s: "Session", args: str) -> None:
                   chi2kind=kind, chi2=chi2, p=pv, r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=2,
                   k_aux=1, extra_scalars=[("alpha", alpha), ("chi2_c", chibar), ("p_c", p_chibar),
                                           ("ll_c", ll_pois)],
-                  extra_macros=[("dispers", "mean")])
+                  extra_macros=[("dispers", "mean"), ("chi2_ct", "LR"),
+                                ("diparm1", 'lnalpha, exp label("alpha")')], constant=pr.constant)
     est.dispersion = "mean"
     est.chibar = (chibar, p_chibar)
     est.footer = _nbreg_footer
@@ -671,9 +738,8 @@ def _semap(pr, V, kx):
 
 def _nbreg_footer(s: "Session", est: Estimates) -> None:
     chibar, p = est.chibar
-    # VERIFICAR alinhamento
-    s.output.write(f"LR test of alpha=0: chibar2(01) = {chibar:.2f}".ljust(55)
-                   + f"Prob >= chibar2 = {p:.3f}\n", "text")
+    s.output.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p:5.3f}\n",
+                   "text")
 
 
 # ---------------------------------------------------------------------------
@@ -756,7 +822,7 @@ def cmd_tobit(s: "Session", args: str) -> None:
     res0 = pr.maximize(fun0, np.array([np.average(y, weights=w), np.log(np.std(y) or 1.0)]))
     fun, scores = make(X)
     res = pr.maximize(fun, np.concatenate([beta, [np.log(sig0)]]))
-    _log(s, pr, res)
+    # o tobit do Stata 14 não mostra o log de iterações (compat 0510)
     Vl, n_clust = pr.vce(res.H, scores(res.b) if pr.robust else None)
     # e(b) do Stata 14 guarda sigma (não ln sigma): delta-método
     sg = float(np.exp(res.b[-1]))
@@ -787,11 +853,13 @@ def cmd_tobit(s: "Session", args: str) -> None:
                   chi2=chi2, p=pv, r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=2, k_aux=1,
                   extra_scalars=[("N_unc", float(w[unc].sum())), ("N_lc", float(w[left].sum())),
                                  ("N_rc", float(w[right].sum())), ("sigma", sg)]
-                  + ([("llopt", lo)] if lo is not None else []) + ([("ulopt", hi)] if hi is not None else []))
+                  + ([("llopt", lo)] if lo is not None else []) + ([("ulopt", hi)] if hi is not None else []),
+                  constant=pr.constant)
     est.cens = (float(w[left].sum()), float(w[unc].sum()), float(w[right].sum()), lo, hi)
     # o tobit do Stata 14 usa t com N - k graus de liberdade (VERIFICAR)
-    est.stat, est.df_r = "t", pr.N - kx
-    s.e["df_r"] = float(pr.N - kx)
+    # graus de liberdade N - df_m (compat 0510: 60 obs, 2 inclinações -> 58)
+    est.stat, est.df_r = "t", pr.N - len(slope)
+    s.e["df_r"] = float(pr.N - len(slope))
     est.footer = _tobit_footer
     _display_std(s, est)
 
@@ -800,10 +868,8 @@ def _tobit_footer(s: "Session", est: Estimates) -> None:
     nl, nu, nr, lo, hi = est.cens
     out = s.output
     dep = est.depvar
-    # VERIFICAR textos e alinhamento (Stata 14)
-    lines = [f"{int(nl):>10}  left-censored observations" + (f" at {dep} <= {g(lo, '%9.0g')}" if lo is not None and nl else ""),
-             f"{int(nu):>10}     uncensored observations",
-             f"{int(nr):>10} right-censored observations" + (f" at {dep} >= {g(hi, '%9.0g')}" if hi is not None and nr else "")]
-    out.write(f"  Obs. summary:{lines[0]}\n", "text")
-    for ln in lines[1:]:
-        out.write(" " * 15 + ln + "\n", "text")
+    out.write(f"{int(nl):>14}  left-censored observations"
+              + (f" at {dep} <= {g(lo, '%9.0g')}" if lo is not None and nl else "") + "\n", "text")
+    out.write(f"{int(nu):>14}     uncensored observations\n", "text")
+    out.write(f"{int(nr):>14} right-censored observations"
+              + (f" at {dep} >= {g(hi, '%9.0g')}" if hi is not None and nr else "") + "\n", "text")
