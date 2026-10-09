@@ -69,6 +69,8 @@ input k b
 3 30
 end
 joinby k using odta_j
+* dentro de cada k a ordem do joinby também varia de uma execução para outra
+sort k b a
 list
 clear
 input k b
