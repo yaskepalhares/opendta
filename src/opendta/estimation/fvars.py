@@ -278,6 +278,11 @@ def comp_values(ds: "Dataset", c: Component) -> np.ndarray:
     x = v.data.astype(np.float64)
     if c.ts:
         x = tsops.apply_ops(ds, c.ts, x)
+        if v.vtype != "double" and any(op in "DS" for op, _ in c.ts):
+            # o Stata guarda D.x e S.x numa variável temporária float quando
+            # x não é double (compat 0503: LD.x muda o 9º algarismo do RSS)
+            ok = x < SYS
+            x = np.where(ok, np.where(ok, x, 0).astype(np.float32).astype(np.float64), SYS)
     return x
 
 

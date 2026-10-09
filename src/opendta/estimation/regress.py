@@ -142,7 +142,7 @@ class Sample:
             return w, float(w.sum())
         if self.wtype in ("aweight", "pweight"):
             return w * n / w.sum(), float(n)
-        return w, float(n)          # iweight
+        return w, float(w.sum())    # iweight: N = soma dos pesos (compat 0505)
 
 
 def cmdline(name: str, args: str) -> str:
