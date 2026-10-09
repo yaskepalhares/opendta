@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0302_tabulate.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:09
 
 . * Fase 3a: tabulate (uma e duas vias), tab1, tab2, table.
 . clear
@@ -253,5 +253,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0302_tabulate.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:06
+ closed on:   9 Oct 2026, 10:27:09
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

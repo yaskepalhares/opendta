@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:08
 
 . * Fase 4: erros no Mata. O bloco "mata" (sem dois-pontos) continua depois
 . * de um erro? E o "mata:"?
@@ -28,17 +28,9 @@ r(3000);
 r(3301);
 
 : real scalar f()
-f() already exists
-r(3000);
-
-: {
+> {
 >     return((1, 2) * (3, 4))
-'return' found where almost anything else expected
-r(3000);
-
-: }
-expression invalid
-r(3000);
+> }
 
 : f()
                        *:  3200  conformability error
@@ -90,5 +82,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:05
+ closed on:   9 Oct 2026, 10:27:08
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

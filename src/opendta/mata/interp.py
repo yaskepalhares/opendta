@@ -76,6 +76,27 @@ _DEFAULT_ORG_TYPES = {"real": "real", "complex": "complex", "string": "string", 
                       "numeric": "real", "transmorphic": "real"}
 
 
+def _names_used(node, out: set | None = None) -> set:
+    """Nomes citados em qualquer ponto de um trecho da AST (declarações não contam)."""
+    import dataclasses
+    if out is None:
+        out = set()
+    if isinstance(node, Name):
+        out.add(node.name)
+    elif isinstance(node, Call):
+        out.add(node.func)
+        _names_used(node.args, out)
+    elif isinstance(node, Decl):
+        pass
+    elif isinstance(node, (list, tuple)):
+        for x in node:
+            _names_used(x, out)
+    elif dataclasses.is_dataclass(node):
+        for fld in dataclasses.fields(node):
+            _names_used(getattr(node, fld.name), out)
+    return out
+
+
 class MataEngine:
     def __init__(self, session: "Session"):
         self.s = session
@@ -203,6 +224,12 @@ class MataEngine:
                 if st.name in self.funcs:
                     raise MataError(3000, f"{st.name}() already exists")   # VERIFICAR
                 self.funcs[st.name] = st
+                # o compilador avisa os argumentos que o corpo não usa
+                # (observado no Stata 14, compat 0406)
+                used = _names_used(st.body)
+                for prm in st.params:
+                    if prm.name not in used:
+                        self.s.output.write(f"note: argument {prm.name} unused\n", "text")
                 return
             if isinstance(st, StructDef):
                 self.structs[st.name] = st

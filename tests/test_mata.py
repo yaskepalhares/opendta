@@ -368,3 +368,38 @@ end""")
     ref = so.minimize(nll, np.zeros(2), method="BFGS", options={"gtol": 1e-10}).x
     assert np.allclose(g["b"].a.ravel(), ref, atol=1e-5)
     assert g["V"].a[0, 0] > 0
+
+
+def test_unused_argument_notes(run):
+    out = run("mata:\nvoid q(todo, p, v, g, H)\n{\n    v = -p[1]^2\n}\nend")
+    assert [l for l in out.splitlines() if l.startswith("note:")] == [
+        "note: argument todo unused", "note: argument g unused", "note: argument H unused"]
+
+
+def test_optimize_forward_steps_like_stata(run):
+    """Logit d1 do compat 0406: passos de 1.375 e 1.125 do passo de Newton e
+    erros-padrão iguais aos do Stata até o último dígito."""
+    out = run(r"""mata:
+void lg(todo, b, y, X, v, g, H)
+{
+    real colvector pr
+    pr = invlogit(X * b')
+    v = sum(y :* ln(pr) + (1 :- y) :* ln(1 :- pr))
+    if (todo >= 1) g = ((y - pr)' * X)
+}
+y = (0 \ 0 \ 1 \ 1 \ 0 \ 1 \ 1 \ 1)
+X = ((1 \ 2 \ 3 \ 4 \ 5 \ 6 \ 7 \ 8), J(8, 1, 1))
+T = optimize_init()
+optimize_init_evaluator(T, &lg())
+optimize_init_evaluatortype(T, "d1")
+optimize_init_argument(T, 1, y)
+optimize_init_argument(T, 2, X)
+optimize_init_params(T, (0, 0))
+b = optimize(T)
+sqrt(diagonal(optimize_result_V(T)))'
+optimize_result_iterations(T)
+end""")
+    log = [l.split("=")[1].strip() for l in out.splitlines() if l.startswith("Iteration")]
+    assert log == ["-5.5451774", "-3.5092587", "-3.4893142", "-3.4893", "-3.4893"]
+    assert ".5496009006   2.245395572" in out
+    assert out.rstrip().endswith("5")

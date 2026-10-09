@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0403_mata_biblioteca.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:08
 
 . * Fase 4: funções da biblioteca do Mata.
 . mata
@@ -280,5 +280,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0403_mata_biblioteca.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:05
+ closed on:   9 Oct 2026, 10:27:09
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

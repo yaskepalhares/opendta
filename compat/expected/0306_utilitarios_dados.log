@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0306_utilitarios_dados.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:08
 
 . * Fase 3c: duplicates, isid, levelsof, encode/decode, destring/tostring, split,
 . * mvencode/mvdecode e recode.
@@ -169,5 +169,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0306_utilitarios_dados.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:05
+ closed on:   9 Oct 2026, 10:27:08
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

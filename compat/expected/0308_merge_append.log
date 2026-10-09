@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:09
 
 . * Fase 3b: append, merge, joinby, cross. Cria e apaga arquivos na pasta atual.
 . clear
@@ -74,7 +74,7 @@ file odta_u.dta saved
 
 Contains data from odta_m.dta
   obs:             5                          
- vars:             5                          9 Oct 2026 09:46
+ vars:             5                          9 Oct 2026 10:27
  size:            75                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -213,7 +213,7 @@ merge:  after merge, not all observations matched
 
 Contains data from odta_m.dta
   obs:             7                          
- vars:             5                          9 Oct 2026 09:46
+ vars:             5                          9 Oct 2026 10:27
  size:           105                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -382,5 +382,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:05
+ closed on:   9 Oct 2026, 10:27:09
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

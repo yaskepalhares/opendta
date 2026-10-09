@@ -204,37 +204,91 @@ def _evaluate(eng, S: OptState, p: np.ndarray, todo: int):
     return val, g, H
 
 
-def _num_grad(fun, p: np.ndarray) -> np.ndarray:
+def _deltas(fun, p: np.ndarray, f0: float, second: bool = False) -> np.ndarray:
+    """Passos das derivadas numéricas, como descrito em [M-5] deriv(): d = h*scale,
+    h = (|p| + 1e-3)*1e-3, e a escala é procurada até |f(p) - f(p - d)| ficar
+    entre v0 = (|f|+1e-8)*1e-8 e v1 = (|f|+1e-7)*1e-7.
+    A escala anda em potências de 10 a partir de 1: com escala 0.1 o OpenDTA
+    reproduz os erros-padrão do logit d1 do compat 0406 até o último dígito.
+    VERIFICAR: quando um salto de 10 atravessa o intervalo, o Stata interpola
+    (não documentado); aqui, bisseção em escala log entre os dois lados.
+    `second`: passos da Hessiana de um avaliador d0, procurados pela segunda
+    diferença |f(p+d) - 2f(p) + f(p-d)|; com isso o caminho das iterações do
+    compat 0406 (d0) coincide com o do Stata. VERIFICAR o critério."""
+    v0 = (abs(f0) + 1e-8) * 1e-8
+    v1 = (abs(f0) + 1e-7) * 1e-7
+    out = np.empty_like(p)
+
+    def diff_at(i, scale, h):
+        q = p.copy()
+        q[i] -= h * scale
+        if second:
+            a = p.copy()
+            a[i] += h * scale
+            v = abs(fun(a) - 2 * f0 + fun(q))
+        else:
+            v = abs(f0 - fun(q))
+        return v if np.isfinite(v) else np.inf
+
+    for i in range(p.size):
+        h = (abs(p[i]) + 1e-3) * 1e-3
+        scale = 1.0
+        d = diff_at(i, scale, h)
+        lo = hi = None                 # escalas com diferença < v0 e > v1
+        for _ in range(40):
+            if v0 <= d <= v1:
+                break
+            if d < v0:
+                lo = scale
+            else:
+                hi = scale
+            scale = (lo * hi) ** 0.5 if lo is not None and hi is not None else \
+                (scale * 10 if d < v0 else scale / 10)
+            d = diff_at(i, scale, h)
+        out[i] = h * scale
+    return out
+
+
+def _num_grad(fun, p: np.ndarray, f0: float | None = None) -> np.ndarray:
+    f0 = fun(p) if f0 is None else f0
+    d = _deltas(fun, p, f0)
     g = np.zeros_like(p)
     for i in range(p.size):
-        h = 1e-5 * (abs(p[i]) + 1)
         a, b = p.copy(), p.copy()
-        a[i] += h
-        b[i] -= h
-        g[i] = (fun(a) - fun(b)) / (2 * h)
+        a[i] += d[i]
+        b[i] -= d[i]
+        g[i] = (fun(a) - fun(b)) / (2 * d[i])
     return g
 
 
-def _num_hess(fun, grad, p: np.ndarray) -> np.ndarray:
-    """Hessiana por segundas diferenças centrais da própria função."""
+def _num_hess(fun, grad, p: np.ndarray, analytic_grad: bool = False) -> np.ndarray:
+    """Hessiana numérica: diferenças centrais do gradiente (avaliador d1) ou
+    segundas diferenças da função (d0), com os passos de _deltas()."""
     k = p.size
     H = np.zeros((k, k))
-    hs = 1e-4 * (np.abs(p) + 1)
     f0 = fun(p)
+    d = _deltas(fun, p, f0, second=not analytic_grad)
+    if analytic_grad:
+        for i in range(k):
+            a, b = p.copy(), p.copy()
+            a[i] += d[i]
+            b[i] -= d[i]
+            H[:, i] = (grad(a) - grad(b)) / (2 * d[i])
+        return (H + H.T) / 2
     for i in range(k):
         for j in range(i, k):
             if i == j:
                 a, b = p.copy(), p.copy()
-                a[i] += hs[i]
-                b[i] -= hs[i]
-                H[i, i] = (fun(a) - 2 * f0 + fun(b)) / hs[i] ** 2
+                a[i] += d[i]
+                b[i] -= d[i]
+                H[i, i] = (fun(a) - 2 * f0 + fun(b)) / d[i] ** 2
             else:
                 pp, pm, mp, mm = (p.copy() for _ in range(4))
-                pp[i] += hs[i]; pp[j] += hs[j]          # noqa: E702
-                pm[i] += hs[i]; pm[j] -= hs[j]          # noqa: E702
-                mp[i] -= hs[i]; mp[j] += hs[j]          # noqa: E702
-                mm[i] -= hs[i]; mm[j] -= hs[j]          # noqa: E702
-                H[i, j] = H[j, i] = (fun(pp) - fun(pm) - fun(mp) + fun(mm)) / (4 * hs[i] * hs[j])
+                pp[i] += d[i]; pp[j] += d[j]          # noqa: E702
+                pm[i] += d[i]; pm[j] -= d[j]          # noqa: E702
+                mp[i] -= d[i]; mp[j] += d[j]          # noqa: E702
+                mm[i] -= d[i]; mm[j] -= d[j]          # noqa: E702
+                H[i, j] = H[j, i] = (fun(pp) - fun(pm) - fun(mp) + fun(mm)) / (4 * d[i] * d[j])
     return H
 
 
@@ -261,7 +315,7 @@ def _optimize(eng, v, r):
             _, _, H = _evaluate(eng, S, p, 2)
             if H is not None:
                 return sign * H
-        return _num_hess(fval, grad, p)
+        return _num_hess(fval, grad, p, analytic_grad=order >= 1)
 
     out = eng.s.output
     p = S.params.astype(np.float64).copy()
@@ -294,7 +348,10 @@ def _optimize(eng, v, r):
                       "text")
         if it >= S.maxiter:
             break
-        # passo com recuo (step halving)
+        # passo com recuo (step halving); se o passo inteiro melhora, avança
+        # em incrementos de 1/8, 1/4, 1/2... do passo enquanto melhorar.
+        # VERIFICAR: regra deduzida do log do Stata (compat 0406: passos de
+        # 1.375 e 1.125 no logit); o manual só diz "forward"/"backward"
         t = 1.0
         for _ in range(60):
             pn = p + t * step
@@ -304,6 +361,15 @@ def _optimize(eng, v, r):
             t /= 2
         else:
             break
+        if t == 1.0 and fn > f:
+            inc = 0.125
+            for _ in range(60):
+                pt = p + (t + inc) * step
+                ft = fval(pt)
+                if not (ft < SYS and np.isfinite(ft) and ft > fn):
+                    break
+                t, pn, fn = t + inc, pt, ft
+                inc *= 2
         gn = grad(pn)
         if S.technique == "bfgs":
             s_ = pn - p
@@ -331,11 +397,13 @@ def _optimize(eng, v, r):
     H = hess(p)
     try:
         V = np.linalg.inv(-H)
+        V = (V + V.T) / 2              # simétrica, como a do Stata
     except np.linalg.LinAlgError:
         V = np.full(H.shape, SYS)
     S.params = p
     S.result = {"params": p, "value": sign * f, "gradient": sign * g, "H": sign * H, "V": V,
-                "iterations": it, "converged": converged}
+                # o Stata conta a iteração 0 (compat 0406: log 0..2 e 3 iterações)
+                "iterations": it + 1, "converged": converged}   # VERIFICAR
     return real(p.reshape(1, -1))
 
 

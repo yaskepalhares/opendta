@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
   log type:  text
- opened on:   9 Oct 2026, 09:46:05
+ opened on:   9 Oct 2026, 10:27:09
 
 . * Mensagens de erro e códigos de retorno.
 . capture noisily foo
@@ -87,5 +87,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
   log type:  text
- closed on:   9 Oct 2026, 09:46:05
+ closed on:   9 Oct 2026, 10:27:09
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
