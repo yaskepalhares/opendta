@@ -20,6 +20,11 @@ set dp period
 local arquivos : dir "do" files "*.do"
 foreach f of local arquivos {
     local nome = subinstr("`f'", ".do", "", .)
+    * apaga restos (odta_*) de um caso interrompido antes de rodar o próximo
+    local restos : dir . files "odta_*"
+    foreach r of local restos {
+        capture erase "`r'"
+    }
     log using "expected/`nome'.log", text replace
     capture noisily do "do/`f'"
     log close

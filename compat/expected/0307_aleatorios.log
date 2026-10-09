@@ -1,0 +1,74 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0307_aleatorios.log
+  log type:  text
+ opened on:   8 Oct 2026, 20:55:23
+
+. * Fase 3d: gerador de números aleatórios (mt64) e funções r*().
+. * As sequências do OpenDTA só coincidem com as do Stata se a semente for
+. * convertida em estado do mesmo jeito (VERIFICAR em core/rng.py).
+. clear
+
+. set seed 123
+
+. display %20.17f runiform()
+ 0.31320017867847072
+
+. display %20.17f runiform()
+ 0.55597911939485856
+
+. display %20.17f rnormal()
+-0.63595106024601022
+
+. set seed 0
+
+. display %20.17f runiform()
+ 0.15979336337046079
+
+. set seed 2147483647
+
+. display %20.17f runiform()
+ 0.16803268731662413
+
+. set obs 5
+number of observations (_N) was 0, now 5
+
+. set seed 42
+
+. gen double u = runiform()
+
+. gen double n = rnormal(10, 2)
+
+. gen k = runiformint(1, 6)
+
+. gen b = rbinomial(10, .5)
+
+. gen p = rpoisson(3)
+
+. list
+
+     +-----------------------------------+
+     |         u           n   k   b   p |
+     |-----------------------------------|
+  1. | .75515553   10.054983   6   3   1 |
+  2. | .63903139   15.793657   2   5   4 |
+  3. |  .7521452   9.6134466   4   5   1 |
+  4. | .13627268     9.81184   1   6   1 |
+  5. | .90326897   10.275975   2   3   3 |
+     +-----------------------------------+
+
+. display c(rng)
+default
+
+. display c(rng_current)
+mt64
+
+. capture noisily set seed -1
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0307_aleatorios.log
+  log type:  text
+ closed on:   8 Oct 2026, 20:55:23
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -31,7 +31,7 @@ _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log usi
 
 
 # carimbo de data do .dta (describe): muda a cada execução
-_STAMP = re.compile(r"\b\d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+_STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
 
 
 def normalize(text: str) -> list[str]:
@@ -43,6 +43,10 @@ def normalize(text: str) -> list[str]:
         if line in (".",):
             continue
         out.append(line)
+    # o modo batch termina um do-file interrompido com "end of do-file" e r(#);
+    # no Stata as referências rodam sob capture noisily, sem o r(#) final
+    if len(out) >= 2 and out[-2] == "end of do-file" and re.fullmatch(r"r\(\d+\);", out[-1]):
+        out.pop()
     return out
 
 
@@ -55,6 +59,11 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     target = outdir / dofile.name
     pre = "quietly set hints off\n" + (f"quietly {setup}\n" if setup else "")
     target.write_text(pre + dofile.read_text(encoding="utf-8"), encoding="utf-8")
+    # restos de um caso interrompido (odta_*) não podem afetar o seguinte;
+    # gerar_esperados.do faz a mesma limpeza no Stata
+    for leftover in outdir.glob("odta_*"):
+        if leftover.is_file():
+            leftover.unlink()
     cwd = os.getcwd()
     os.chdir(outdir)
     try:

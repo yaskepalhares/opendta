@@ -193,10 +193,25 @@ class Interpreter:
         out = self.s.output
         if echo:
             self._echo(lines[i], echo)
-            # cabeçalho: 3 espaços e cada nome alinhado à direita em 11 colunas
-            names = [n for n in spec.split()
-                     if not re.match(r"^(byte|int|long|float|double|str\d*|strL)$", n)]
-            out.write("\n   " + "".join(f"{n:>11}" for n in names) + "\n", "text")
+            # cabeçalho: 3 espaços e cada nome alinhado à direita numa coluna
+            # com a largura do formato do tipo + 2 (float %9.0g → 11,
+            # double %10.0g → 12, str20 %20s → 22; observado no Stata 14)
+            from ..core.dataset import default_format
+            cells = []
+            pending_type = None
+            for n in spec.split():
+                if re.match(r"^(byte|int|long|float|double|str\d*|strL)$", n):
+                    pending_type = n
+                    continue
+                if self.s.data.has(n):
+                    fmt = self.s.data.get(n).fmt
+                else:
+                    fmt = default_format(pending_type or self.s.settings.get("type", "float"))
+                pending_type = None
+                m = re.match(r"^%-?(\d+)", fmt)
+                width = (int(m.group(1)) if m else 9) + 2
+                cells.append(f"{n:>{width}}")
+            out.write("\n   " + "".join(cells) + "\n", "text")
             for k, ln in enumerate(lines[i + 1:j + 1], start=1):
                 out.write(f"{k:>3}. {ln.echo_lines[0].strip()}\n", "command")
         run_input(self.s, spec, rows)

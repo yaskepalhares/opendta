@@ -1,0 +1,143 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
+  log type:  text
+ opened on:   8 Oct 2026, 20:55:23
+
+. * Fase 2: program, syntax, args, gettoken, return/ereturn, temporários, preserve.
+. capture program drop _all
+
+. clear
+
+. set obs 5
+number of observations (_N) was 0, now 5
+
+. gen idade = _n * 10
+
+. gen renda = _n
+
+. replace renda = . in 2
+(1 real change made, 1 to missing)
+
+. program define media, rclass
+  1.     syntax varname [if] [in] [, Detail]
+  2.     marksample touse
+  3.     quietly count if `touse'
+  4.     local n = r(N)
+  5.     tempvar soma
+  6.     gen double `soma' = sum(`varlist') if `touse'
+  7.     local total = `soma'[_N]
+  8.     return scalar N = `n'
+  9.     return scalar mean = `total' / `n'
+ 10.     return local var "`varlist'"
+ 11.     if "`detail'" != "" {
+ 12.         display "n = `n', total = `total'"
+ 13.     }
+ 14. end
+
+. media idade
+
+. return list
+
+scalars:
+               r(mean) =  30
+                  r(N) =  5
+
+macros:
+                r(var) : "idade"
+
+. media renda, d
+(1 missing value generated)
+n = 4, total = 13
+
+. display r(mean)
+3.25
+
+. capture noisily media
+varlist required
+
+. capture noisily media idade renda
+too many variables specified
+
+. capture noisily media idade, xyz
+option xyz not allowed
+
+. program define dois
+  1.     args a b
+  2.     display "a=`a' b=`b'"
+  3. end
+
+. dois um "dois tres"
+a=um b=dois tres
+
+. local lista `"um "dois tres" (quatro) cinco"'
+
+. gettoken p lista : lista
+
+. gettoken q lista : lista
+
+. display "`p'|`q'|`lista'"
+um|dois tres| (quatro) cinco
+
+. program define e1, eclass
+  1.     ereturn clear
+  2.     ereturn scalar N = 42
+  3.     ereturn local cmd "e1"
+  4. end
+
+. e1
+
+. ereturn list
+
+scalars:
+                  e(N) =  42
+
+macros:
+                e(cmd) : "e1"
+
+. preserve
+
+. drop in 1/3
+(3 observations deleted)
+
+. count
+  2
+
+. restore
+
+. count
+  5
+
+. capture noisily restore
+nothing to restore
+
+. program define pr
+  1.     preserve
+  2.     keep in 1
+  3.     error 459
+  4. end
+
+. capture noisily pr
+invalid syntax
+
+. count
+  5
+
+. describe, short
+
+Contains data
+  obs:             5                          
+ vars:             2                          
+ size:            40                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. program drop media dois e1 pr
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
+  log type:  text
+ closed on:   8 Oct 2026, 20:55:23
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

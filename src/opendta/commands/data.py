@@ -438,7 +438,7 @@ def cmd_recast(s: "Session", args: str) -> None:
         if var.vtype == newt:
             continue
         if var.is_string != is_string_type(newt):
-            raise StataError(109, f"{n}: {var.vtype} cannot be recast to {newt}")   # VERIFICAR
+            raise StataError(109, f"{n}:  {newt} invalid")   # VERIFICAR código de retorno
         if var.is_string:
             if newt == "strL":
                 new = var.data
@@ -458,15 +458,15 @@ def cmd_recast(s: "Session", args: str) -> None:
             continue
         if changed:
             _note(s, f"{n}:  {plural(changed, 'value')} changed")
-        if var.fmt == default_format(var.vtype):
-            var.fmt = default_format(newt)
+        # recast mantém o formato e a ordenação (observado no Stata 14:
+        # double %10.0g vira int %10.0g; "Sorted by" continua)
         var.vtype = newt
+        sortlist = list(ds.sortlist)
         if var.is_string:
             var.data = new
-            if changed:
-                ds._unsort_from(n)   # VERIFICAR: recast com mudança desfaz a ordenação
         else:
             ds.set_numeric(var, new, promote=False)
+        ds.sortlist = sortlist
         ds.changed = True
     s.notify_state()
 

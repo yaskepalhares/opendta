@@ -51,8 +51,9 @@ def parse_format(text: str) -> Format:
         return Format("s", int(w), left=(just == "-"), text=t)
     m = _DATEFMT.match(t)
     if m:
-        left, sub, _rest = m.groups()
-        return Format("t", 9, left=bool(left), sub=sub, text=t)
+        left, sub, rest = m.groups()
+        width = _DATE_WIDTH.get(sub, 9) if not rest else 0
+        return Format("t", width, left=bool(left), sub=sub, text=t)
     raise StataError(120, f"invalid %format")
 
 
@@ -188,15 +189,135 @@ def general(x: float, width: int) -> str:
     return "-" + out if neg else out
 
 
+# Formatos de data e hora ([D] datetime display formats). Sem códigos, cada
+# tipo usa o padrão abaixo; com códigos (%tdnn/dd/CCYY), segue os códigos.
+_DATE_DEFAULT = {"d": "DDmonCCYY", "c": "DDmonCCYY_HH:MM:SS", "C": "DDmonCCYY_HH:MM:SS",
+                 "w": "CCYY!www", "m": "CCYY!mnn", "q": "CCYY!qq", "h": "CCYY!hh", "y": "CCYY"}
+_DATE_WIDTH = {"d": 9, "c": 18, "C": 18, "w": 7, "m": 7, "q": 6, "h": 6, "y": 4}
+_DATE_CODES = sorted([
+    "DAYNAME", "Dayname", "dayname", "Month", "month", "Mon", "mon", "Day", "day", "Da", "da",
+    "JJJ", "jjj", "CC", "cc", "YY", "yy", "NN", "nn", "DD", "dd", "WW", "ww",
+    "HH", "Hh", "hH", "hh", "MM", "mm", "SS", "ss", ".sss", ".ss", ".s",
+    "a.m.", "A.M.", "am", "AM", "h", "q"], key=len, reverse=True)
+_DAYNAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def _date_parts(x: float, sub: str):
+    """(datetime, semana, trimestre, semestre) do valor x no tipo `sub`."""
+    week = None
+    if sub == "d":
+        d = _dt.datetime.combine(STATA_EPOCH, _dt.time()) + _dt.timedelta(days=int(x // 1))
+    elif sub in ("c", "C"):
+        d = _dt.datetime(1960, 1, 1) + _dt.timedelta(milliseconds=int(x // 1))
+    elif sub == "w":
+        k = int(x // 1)
+        year, w = 1960 + k // 52, k % 52
+        d = _dt.datetime(year, 1, 1) + _dt.timedelta(days=7 * w)
+        week = w + 1
+    elif sub == "m":
+        k = int(x // 1)
+        d = _dt.datetime(1960 + k // 12, k % 12 + 1, 1)
+    elif sub == "q":
+        k = int(x // 1)
+        d = _dt.datetime(1960 + k // 4, 3 * (k % 4) + 1, 1)
+    elif sub == "h":
+        k = int(x // 1)
+        d = _dt.datetime(1960 + k // 2, 6 * (k % 2) + 1, 1)
+    else:   # y
+        d = _dt.datetime(int(x // 1), 1, 1)
+    if week is None:
+        week = min((d.timetuple().tm_yday - 1) // 7 + 1, 52)
+    return d, week
+
+
+def _date_code(code: str, d: _dt.datetime, week: int, ms: int) -> str:
+    y = d.year
+    if code == "CC":
+        return f"{y // 100:02d}"
+    if code == "cc":
+        return str(y // 100)
+    if code == "YY":
+        return f"{y % 100:02d}"
+    if code == "yy":
+        return str(y % 100)
+    if code in ("JJJ", "jjj"):
+        j = d.timetuple().tm_yday
+        return f"{j:03d}" if code == "JJJ" else str(j)
+    if code in ("Month", "month", "Mon", "mon"):
+        full = _dt.date(2000, d.month, 1).strftime("%B")
+        name = full if code.lower() == "month" else full[:3]
+        return name if code[0].isupper() else name.lower()
+    if code == "NN":
+        return f"{d.month:02d}"
+    if code == "nn":
+        return str(d.month)
+    if code == "DD":
+        return f"{d.day:02d}"
+    if code == "dd":
+        return str(d.day)
+    if code in ("DAYNAME", "Dayname", "dayname", "Day", "day", "Da", "da"):
+        full = _DAYNAMES[d.weekday()]
+        name = full if code.lower() == "dayname" else full[:3] if code.lower() == "day" else full[:2]
+        return name.upper() if code == "DAYNAME" else name.lower() if code[0].islower() else name
+    if code == "WW":
+        return f"{week:02d}"
+    if code == "ww":
+        return str(week)
+    if code == "h":
+        return str(1 if d.month <= 6 else 2)
+    if code == "q":
+        return str((d.month - 1) // 3 + 1)
+    h12 = d.hour % 12 or 12
+    if code == "HH":
+        return f"{d.hour:02d}"
+    if code == "hH":
+        return str(d.hour)
+    if code == "Hh":
+        return f"{h12:02d}"
+    if code == "hh":
+        return str(h12)
+    if code == "MM":
+        return f"{d.minute:02d}"
+    if code == "mm":
+        return str(d.minute)
+    if code == "SS":
+        return f"{d.second:02d}"
+    if code == "ss":
+        return str(d.second)
+    if code.startswith("."):
+        digits = len(code) - 1
+        return "." + f"{ms:03d}"[:digits]
+    pm = d.hour >= 12
+    return {"am": "pm" if pm else "am", "AM": "PM" if pm else "AM",
+            "a.m.": "p.m." if pm else "a.m.", "A.M.": "P.M." if pm else "A.M."}[code]
+
+
 def _date(x: float, fmt: Format) -> str:
-    if fmt.sub != "d":
-        # outros formatos %t chegam na fase 1
-        return general(x, DEFAULT_NUMERIC.width)
+    sub = fmt.sub
+    m = _DATEFMT.match(fmt.text) if fmt.text else None
+    codes = (m.group(3) if m else "") or _DATE_DEFAULT.get(sub, "")
     try:
-        d = STATA_EPOCH + _dt.timedelta(days=int(x // 1))
-    except OverflowError:
+        d, week = _date_parts(x, sub)
+    except (OverflowError, ValueError):
         return "."
-    return f"{d.day:02d}{_MONTHS[d.month - 1]}{d.year}"
+    ms = int(x // 1) % 1000 if sub in ("c", "C") else 0
+    out: list[str] = []
+    i = 0
+    while i < len(codes):
+        if codes[i] == "!" and i + 1 < len(codes):
+            out.append(codes[i + 1])
+            i += 2
+            continue
+        for c in _DATE_CODES:
+            if codes.startswith(c, i):
+                out.append(_date_code(c, d, week, ms))
+                i += len(c)
+                break
+        else:
+            ch = codes[i]
+            out.append(" " if ch == "_" else ch)
+            i += 1
+    return "".join(out)
 
 
 def number_to_macro(x: float) -> str:

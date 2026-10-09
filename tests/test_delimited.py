@@ -46,7 +46,8 @@ def test_number_text():
 def test_import_export_commands(run, here):
     (here / "p.csv").write_text(CSV)
     assert run("import delimited p.csv, clear") == "(4 vars, 3 obs)\n"
-    assert run("export delimited out, replace") == ""
+    assert run("export delimited out, replace") == \
+        "(note: file out.csv not found)\nfile out.csv saved\n"
     assert (here / "out.csv").read_text() == (
         'nome,idade,renda_mensal,uf\nAna,30,1500.5,SP\n"Bia, a ""grande""",,2000,RJ\nCaio,41,,MG\n')
     out = run("export delimited out")

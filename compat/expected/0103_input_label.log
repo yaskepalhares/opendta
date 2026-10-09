@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
   log type:  text
- opened on:   8 Oct 2026, 15:15:04
+ opened on:   8 Oct 2026, 20:55:23
 
 . * Fase 1a: input, label, rename, order, format, drop/keep, compress.
 . clear
@@ -132,5 +132,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
   log type:  text
- closed on:   8 Oct 2026, 15:15:04
+ closed on:   8 Oct 2026, 20:55:23
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

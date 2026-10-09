@@ -77,7 +77,7 @@ def _fixed(text: str, size: int) -> bytes:
 
 def _timestamp(now: _dt.datetime | None = None) -> str:
     now = now or _dt.datetime.now()
-    return f"{now.day:02d} {_MONTHS[now.month - 1]} {now.year} {now.hour:02d}:{now.minute:02d}"
+    return f"{now.day:2d} {_MONTHS[now.month - 1]} {now.year} {now.hour:02d}:{now.minute:02d}"
 
 
 CHUNK_BYTES = 32 * 2**20      # dados gravados e lidos em blocos de ~32 MB

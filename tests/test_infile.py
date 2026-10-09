@@ -25,10 +25,16 @@ def test_infile_free(run, here):
     assert [v.vtype for v in d.vars] == ["str10", "float", "float"]
     assert list(d.get("nome").data) == ["Ana", "Bia Lima", "Caio", "Davi"]
     assert M.is_missing(d.get("renda").data[2]) and M.is_missing(d.get("renda").data[3])
-    run("infile str10 nome int(idade renda) using f.raw if idade < 40, clear automatic")
+    # automatic sem :rótulo não cria rótulos; o aviso numera pela posição nos
+    # dados já filtrados pelo if (Caio seria a 2ª obs.; observado no Stata 14)
+    out = run("infile str10 nome int(idade renda) using f.raw if idade < 40, clear automatic")
+    assert "'abc' cannot be read as a number for renda[2]" in out
     d = run.session.data
     assert d.nobs == 2 and d.get("idade").vtype == "int"
-    assert d.value_labels == {"renda": {1: "abc"}} and d.get("renda").value_label == "renda"
+    assert d.value_labels == {}
+    run("infile str10 nome idade renda:rl using f.raw, clear automatic")
+    d = run.session.data
+    assert d.value_labels == {"rl": {1: "abc"}} and d.get("renda").value_label == "rl"
     out = run("infile a using f.raw")
     assert run.rc == 4
 

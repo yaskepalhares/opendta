@@ -38,6 +38,9 @@ class ReadOptions:
     encoding: str | None = None
     bindquote: str = "loose"            # loose | strict | nobind
     stripquotes: str = "default"        # default | yes | no
+    # insheet: se a 1ª linha tem menos campos que os dados, ela não é cabeçalho
+    header_must_cover: bool = False
+    trim_cells: bool = False            # insheet: tira espaços das pontas dos campos
 
 
 def _sniff(first_line: str) -> str:
@@ -185,6 +188,9 @@ def _open_rows(path: Path, opts: ReadOptions, encoding: str):
         rows = (line.rstrip("\r\n").split(delim) for line in f)
     else:
         rows = csv.reader(f, delimiter=delim, quotechar='"', doublequote=True, strict=False)
+    if opts.trim_cells:
+        # insheet tira os espaços das pontas de cada campo (observado no Stata 14)
+        rows = ([c.strip() for c in r] for r in rows)
     return f, rows
 
 
@@ -277,6 +283,9 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
         flush()
 
     header = header_box[0] if header_box else None
+    if header is not None and opts.header_must_cover and len(header) < len(cols):
+        from dataclasses import replace
+        return _read(path, replace(opts, varnames=0, header_must_cover=False), encoding)
     if header is not None:
         while len(cols) < len(header):
             j = len(cols)
@@ -348,6 +357,7 @@ class WriteOptions:
     datafmt: bool = False
     quote: bool = False          # aspas em todas as strings
     leading_zero: bool = False   # VERIFICAR: o Stata grava .5 em vez de 0.5
+    never_quote: bool = False    # outsheet, noquote: texto cru, mesmo com o delimitador
 
 
 def number_text(x: float, vtype: str, fmt: str | None = None, *, leading_zero: bool = False) -> str:
@@ -396,6 +406,8 @@ def write_delimited(ds: Dataset, path: str | Path, names: list[str], rows: np.nd
     special = (d, '"', "\n", "\r")
 
     def q(s: str) -> str:
+        if opts.never_quote:
+            return s
         if opts.quote or any(ch in s for ch in special):
             return '"' + s.replace('"', '""') + '"'
         return s

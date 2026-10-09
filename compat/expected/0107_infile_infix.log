@@ -1,0 +1,82 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0107_infile_infix.log
+  log type:  text
+ opened on:   8 Oct 2026, 20:55:23
+
+. * Fase 1c: file write, infile (livre e com dicionário) e infix.
+. * Cria e apaga arquivos temporários na pasta atual.
+. capture file close _all
+
+. file open h using odta_f.raw, write replace
+(note: file odta_f.raw not found)
+
+. file write h "Ana 30 1.5" _n `""Bia Lima" . 2"' _n "Caio, 41, abc" _n "Davi 7" _n
+
+. file close h
+
+. type odta_f.raw
+Ana 30 1.5
+"Bia Lima" . 2
+Caio, 41, abc
+Davi 7
+
+. clear
+
+. infile str10 nome idade renda using odta_f.raw
+'abc' cannot be read as a number for renda[3]
+(eof not at end of obs)
+(4 observations read)
+
+. describe
+
+Contains data
+  obs:             4                          
+ vars:             3                          
+ size:            72                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+nome            str10   %10s                  
+idade           float   %9.0g                 
+renda           float   %9.0g                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. list
+
+     +--------------------------+
+     |     nome   idade   renda |
+     |--------------------------|
+  1. |      Ana      30     1.5 |
+  2. | Bia Lima       .       2 |
+  3. |     Caio      41       . |
+  4. |     Davi       7       . |
+     +--------------------------+
+
+. infile str10 nome idade renda using odta_f.raw if idade < 40, clear automatic
+'abc' cannot be read as a number for renda[2]
+(eof not at end of obs)
+(2 observations read)
+
+. list
+
+     +----------------------+
+     | nome   idade   renda |
+     |----------------------|
+  1. |  Ana      30     1.5 |
+  2. | Davi       7       . |
+     +----------------------+
+
+. label list renda
+value label renda not found
+r(111);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0107_infile_infix.log
+  log type:  text
+ closed on:   8 Oct 2026, 20:55:23
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
