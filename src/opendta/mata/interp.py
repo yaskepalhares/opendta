@@ -115,6 +115,16 @@ class MataEngine:
                 self._guard(lambda t=text: self.subcommand(t.split(None, 1)[1]), stop_on_error, echo)
                 k += 1
                 continue
+            dup = self._redefinition(text)
+            if dup:
+                # o Stata acusa logo depois do cabeçalho; o corpo vira
+                # instruções soltas (observado no Stata 14)
+                if echo:
+                    self._echo(raw, first=True)
+                self._guard(lambda d=dup: (_ for _ in ()).throw(StataError(3000, f"{d}() already exists")),
+                            stop_on_error, echo, self._remaining(chunks, k))
+                k += 1
+                continue
             buf, echo_lines = text, list(raw)
             j = k
             while True:
@@ -134,24 +144,49 @@ class MataEngine:
                     out.write((": " if idx == 0 else "> ") + ln + "\n", "command")
             if isinstance(stmts, MataSyntaxError):
                 self._guard(lambda e=stmts: (_ for _ in ()).throw(StataError(3000, str(e))),
-                            stop_on_error, echo)
+                            stop_on_error, echo, self._remaining(chunks, j))
             else:
                 def run(sts=stmts):
                     for st in sts:
                         self._top(st)
-                self._guard(run, stop_on_error, echo)
+                self._guard(run, stop_on_error, echo, self._remaining(chunks, j))
             k = j + 1
+
+    @staticmethod
+    def _remaining(chunks, j: int) -> int:
+        return sum(1 for text, _ in chunks[j + 1:] if text.strip())
+
+    _HEADER = None
+
+    def _redefinition(self, text: str) -> str | None:
+        """Nome da função (ou struct) que a linha redefine, se já existe."""
+        import re
+        if MataEngine._HEADER is None:
+            types = r"(?:real|string|complex|pointer|transmorphic|numeric|void|struct\s+\w+|class\s+\w+)"
+            orgs = r"(?:scalar|vector|rowvector|colvector|matrix)"
+            MataEngine._HEADER = re.compile(
+                rf"^\s*(?:function\s+(\w+)\s*\(|{types}\s+(?:{orgs}\s+)?(\w+)\s*\(|"
+                rf"{orgs}\s+(\w+)\s*\(|struct\s+(\w+)\s*\{{?\s*$)")
+        m = MataEngine._HEADER.match(text)
+        if not m:
+            return None
+        name = next(g for g in m.groups() if g)
+        return name if (name in self.funcs or name in self.structs) else None
 
     def _echo(self, raw, first: bool) -> None:
         for idx, ln in enumerate(raw):
             self.s.output.write((": " if idx == 0 and first else "> ") + ln + "\n", "command")
 
-    def _guard(self, action, stop_on_error: bool, echo: bool) -> None:
+    def _guard(self, action, stop_on_error: bool, echo: bool, remaining: int = 0) -> None:
         out = self.s.output
         try:
             action()
         except StataError as e:
             if stop_on_error:
+                # mata: para no erro e conta as linhas que não rodaram (Stata 14)
+                if remaining:
+                    e.message = (e.message + "\n" if e.message else "") + \
+                        f"({remaining} line{'s' if remaining != 1 else ''} skipped)"
                 raise
             self.s.report_error(e)
             self.s.set_rc(e.rc)
@@ -376,17 +411,13 @@ class MataEngine:
             try:
                 return ops.binary(node.op, a, b)
             except MataError as e:
-                # erros de operador aparecem com o operador como "função" (*:  3200 ...)
-                if not e.where:
+                # o produto de matrizes aparece como "função" (*:  3200 ...); os
+                # demais operadores dão o erro em <istmt> (observado no Stata 14)
+                if not e.where and node.op == "*":
                     e.where.append(node.op)
                 raise
         if isinstance(node, Unary):
-            try:
-                return ops.unary(node.op, self._value(node.operand, fr))
-            except MataError as e:
-                if not e.where:
-                    e.where.append(node.op)
-                raise
+            return ops.unary(node.op, self._value(node.operand, fr))
         if isinstance(node, Transpose):
             return ops.transpose(self._value(node.operand, fr))
         if isinstance(node, Ternary):
@@ -448,6 +479,11 @@ class MataEngine:
         return v
 
     def _member(self, node: Member, fr: Frame) -> MV:
+        if fr is self.globals and isinstance(node.base, Name) and not node.arrow:
+            v = fr.vars.get(node.base.name)
+            if v is None or v.t != "struct":
+                # erro de compilação no Stata 14
+                raise MataError(3000, "type mismatch:  exp.exp:  transmorphic found where struct expected")
         base = self._value(node.base, fr)
         if node.arrow:
             base = self._deref(base)
@@ -526,6 +562,10 @@ class MataEngine:
             ptr.set(value.copy())
             return
         if isinstance(target, Member):
+            if fr is self.globals and isinstance(target.base, Name) and not target.arrow:
+                v = fr.vars.get(target.base.name)
+                if v is None or v.t != "struct":
+                    raise MataError(3000, "type mismatch:  exp.exp:  transmorphic found where struct expected")
             base = self._value(target.base, fr)
             if target.arrow:
                 base = self._deref(base)

@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0309_aleatorios_2.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 09:46:05
 
 . * Fase 3d: dados para reproduzir rnormal() e as outras distribuições do
 . * Stata. Os runiform() da mesma semente mostram os uniformes disponíveis;
@@ -112,5 +112,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0309_aleatorios_2.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 09:46:05
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

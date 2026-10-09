@@ -9,7 +9,9 @@ sobre cada coluna, caixa com +---+ e o número de cada linha:
       2 |  3   4  |
         +---------+
 
-Cada coluna tem a largura do seu maior elemento; os números usam %9.0g.
+Todas as colunas têm a largura do maior elemento da matriz, com o número
+da coluna alinhado à direita sobre ela; os números usam %12.0g
+(observado no Stata 14, compat 0401 e 0403).
 Matrizes simétricas aparecem como [symmetric], só com o triângulo de
 baixo. Detalhes marcados VERIFICAR têm casos em compat/do/04*.do.
 """
@@ -22,7 +24,7 @@ from ..core import missing as M
 from ..core.formats import format_value
 from .values import MV, Pointer
 
-REAL_FORMAT = "%9.0g"      # VERIFICAR: formato dos números na exibição do Mata
+REAL_FORMAT = "%12.0g"     # observado no Stata 14: 1/3 → .3333333333, 1e10 → 1.00000e+10
 
 
 def cell(x, t: str) -> str:
@@ -61,8 +63,8 @@ def render(v: MV) -> list[str]:
         return ["  " + cell(v.a[0, 0], v.t)]
     sym = _symmetric(v)
     texts = [[cell(v.a[i, j], v.t) if (not sym or j <= i) else "" for j in range(c)] for i in range(r)]
-    widths = [max(len(texts[i][j]) for i in range(r)) for j in range(c)]
-    widths = [max(w, 1) for w in widths]
+    w_all = max(1, max(len(texts[i][j]) for i in range(r) for j in range(c)))
+    widths = [w_all] * c
     lab_w = max(3, len(str(r)))
     lead = lab_w + 4                 # "  1 |" + 2 espaços antes da 1ª coluna
     lines: list[str] = []
@@ -72,9 +74,7 @@ def render(v: MV) -> list[str]:
     pos = lead
     for j, w in enumerate(widths):
         lab = str(j + 1)
-        start = pos + max(0, (w - len(lab)) // 2)
-        if w < len(lab):
-            start = pos + w - len(lab)
+        start = pos + w - len(lab)
         for k, ch in enumerate(lab):
             if 0 <= start + k < len(head):
                 head[start + k] = ch
@@ -84,7 +84,6 @@ def render(v: MV) -> list[str]:
     bar = " " * (lab_w + 1) + "+" + "-" * inner + "+"
     lines.append(bar)
     for i in range(r):
-        # VERIFICAR: strings alinhadas à direita como os números
         body = "   ".join(texts[i][j].rjust(widths[j]) for j in range(c))
         lines.append(f"{i + 1:>{lab_w}} |  {body}  |")
     lines.append(bar)

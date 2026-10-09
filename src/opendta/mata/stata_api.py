@@ -48,10 +48,22 @@ def _obs_rows(eng, iv: MV | None, sel: MV | None) -> np.ndarray:
         a = iv.a
         if iv.t != "real":
             raise MataError(3253, "nonreal found where real required")
+        if a.shape[1] == 2 and a.shape[0] >= 1 and a.shape != (2, 1):
+            # cada linha (i1, i2) é um intervalo de observações: st_data((1,3), .)
+            # lê da 1ª à 3ª (observado no Stata 14)
+            a = np.where(a >= SYS, np.array([[1.0, float(n)]]), a)
+            if np.any(a < 1) or np.any(a > n) or np.any(a[:, 0] > a[:, 1]):
+                raise MataError(3301, "subscript invalid")
+            rows = np.concatenate([np.arange(int(x) - 1, int(y)) for x, y in a])
+            return _select_rows(eng, rows, sel)
         flat = a.ravel()
         if np.any(flat >= SYS) or np.any(flat < 1) or np.any(flat > n):
             raise MataError(3301, "subscript invalid")
         rows = flat.astype(np.int64) - 1
+    return _select_rows(eng, rows, sel)
+
+
+def _select_rows(eng, rows: np.ndarray, sel: MV | None) -> np.ndarray:
     if sel is not None and not (sel.t == "string" and sel.str_scalar() == "") \
             and not (sel.t == "real" and sel.is_scalar and sel.a[0, 0] >= SYS):
         if sel.t == "string":

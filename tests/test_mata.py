@@ -47,7 +47,7 @@ def test_scalar_and_matrix_display(run):
 
 
 def test_arithmetic_and_missing(run):
-    mata(run, "a = (1,2\\3,4)\nb = a * a\nc = a :* a\nd = a + 1\ne = (1, .) :+ 1\n"
+    mata(run, "a = (1,2\\3,4)\nb = a * a\nc = a :* a\nd = a :+ 1\ne = (1, .) :+ 1\n"
               "f = a'\ng = 2^3\nh = (1,2) # (1\\1)\ni = 1/0")
     assert val(run, "b").a.tolist() == [[7, 10], [15, 22]]
     assert val(run, "c").a.tolist() == [[1, 4], [9, 16]]
@@ -267,3 +267,41 @@ def test_block_echo_in_do_file(run, tmp_path):
     assert "------------------------------------------------- mata (type end to exit) ------\n" in out
     assert ": x = 1\n\n: x\n  1\n\n" in out
     assert ": real scalar f(real scalar a)\n> {\n>     return(a)\n> }\n\n: end\n" in out
+
+
+def test_display_format_and_uniform_columns(run):
+    # observado no Stata 14: %12.0g e colunas de largura única
+    out = mata(run, "1/3\n1e10\n123456789\n(3, 4.333333333333)\n(\"a\", \"bb\", \"ccc\")")
+    assert "  .3333333333\n" in out and "  1.00000e+10\n" in out and "  123456789\n" in out
+    assert ("                 1             2\n    +-----------------------------+\n"
+            "  1 |            3   4.333333333  |\n") in out
+    assert "         1     2     3\n" in out and "  1 |    a    bb   ccc  |" in out
+
+
+def test_plain_plus_needs_same_size_and_literal_types(run):
+    out = mata(run, "A = (1,2\\3,4)\nA + 10\n\"a\" + 1")
+    assert "                 <istmt>:  3200  conformability error\nr(3200);" in out
+    assert "type mismatch:  string + real not allowed\nr(3000);" in out
+
+
+def test_redefinition_and_top_level_rules(run):
+    # como no Stata: "já existe" logo após o cabeçalho e o corpo vira instruções soltas
+    mata(run, "real scalar f()\n{\n    return(1)\n}")
+    out = mata(run, "real scalar f()\n{\n    return(2)\n}\nreal scalar x, y")
+    assert out.startswith("f() already exists\nr(3000);\n")
+    assert "'return' found where almost anything else expected\nr(3000);" in out
+    assert "expression invalid\nr(3000);" in out
+    assert "',' found where '(' expected" in out
+
+
+def test_mata_colon_block_counts_skipped_lines(run):
+    out = run("mata:\ny = 1\nnada\ny = 2\nz = 3\nend")
+    assert run.rc == 3499
+    assert out.endswith("<istmt>:  3499  nada not found\n(2 lines skipped)\nr(3499);\n")
+
+
+def test_st_data_row_range(run):
+    run("set obs 4\ngen x = _n")
+    mata(run, "a = st_data((1, 3), 1)\nb = st_data((1 \\ 3), 1)")
+    assert val(run, "a").a.ravel().tolist() == [1, 2, 3]
+    assert val(run, "b").a.ravel().tolist() == [1, 3]

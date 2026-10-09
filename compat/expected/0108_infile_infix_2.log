@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0108_infile_infix_2.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 09:46:05
 
 . * Fase 1c (continuação de 0107, que parava no label list): infile com
 . * :rótulo e automatic, x1-x2, infix, dicionário e file read.
@@ -209,5 +209,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0108_infile_infix_2.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 09:46:05
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

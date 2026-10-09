@@ -231,6 +231,7 @@ class Parser:
         self.toks: list[Token] = tokenize(text)
         self.i = 0
         self.no_comma = 0
+        self.in_function = False
 
     # utilidades -----------------------------------------------------------
     @property
@@ -279,6 +280,8 @@ class Parser:
             raise MataSyntaxError("statement expected", incomplete=True)
         if self.at("{"):
             return self.block()
+        if self.at("}"):
+            raise MataSyntaxError("expression invalid")
         if self.at(";"):
             self.take()
             return Empty()
@@ -335,6 +338,9 @@ class Parser:
                 self.take()
                 return Continue()
             if kw == "return":
+                if not self.in_function:
+                    # fora de função (observado no Stata 14)
+                    raise MataSyntaxError("'return' found where almost anything else expected")
                 self.take()
                 if self.at("("):
                     self.take()
@@ -354,8 +360,20 @@ class Parser:
                 return self.struct_def()
             if self._looks_like_function(top):
                 return self.func_def()
+            save = self.i
             decl = self._try_decl()
             if decl is not None:
+                if not self.in_function:
+                    # fora de função não há declarações (observado no Stata 14):
+                    # no nível de cima o Mata espera o "(" de uma função
+                    if not top:
+                        raise MataSyntaxError(f"'{kw}' found where almost anything else expected")
+                    self.i = save
+                    self._type_spec()
+                    self.take()
+                    if self.tok.kind == "eof":
+                        raise MataSyntaxError("'(' expected", incomplete=True)
+                    raise MataSyntaxError(f"'{self.tok.value}' found where '(' expected")
                 return decl
         return ExprStmt(self.expression())
 
@@ -471,7 +489,11 @@ class Parser:
         self.skip_semis()
         if self.tok.kind == "eof":
             raise MataSyntaxError("{ expected", incomplete=True)
-        body = self.block()
+        self.in_function = True
+        try:
+            body = self.block()
+        finally:
+            self.in_function = False
         src = self.text[start:self.toks[self.i - 1].pos + 1]
         return FuncDef(name, rt, ro, params, body, src)
 
@@ -523,7 +545,9 @@ class Parser:
             op = self.take().value
             if self.tok.kind == "eof":
                 raise MataSyntaxError("invalid expression", incomplete=True)
-            left = Binary(op, left, sub())
+            right = sub()
+            _literal_types(op, left, right)
+            left = Binary(op, left, right)
         return left
 
     def oror(self):
@@ -684,6 +708,24 @@ class Parser:
         if t.kind == "eof":
             raise MataSyntaxError("invalid expression", incomplete=True)
         raise MataSyntaxError("invalid expression")
+
+
+_ARITH = {"+", "-", "*", "/", "^", ":+", ":-", ":*", ":/", ":^", "#"}
+
+
+def _literal_types(op: str, a, b) -> None:
+    """Constantes de tipos diferentes já dão erro na compilação:
+    "a" + 1 → type mismatch:  string + real not allowed (Stata 14)."""
+    if op not in _ARITH:
+        return
+    kinds = []
+    for x in (a, b):
+        kinds.append("string" if isinstance(x, Str) else "real" if isinstance(x, Num) else None)
+    if None in kinds or kinds[0] == kinds[1]:
+        return
+    if op in ("*", ":*") and "real" in kinds:      # "ab" * 3 é repetição
+        return
+    raise MataSyntaxError(f"type mismatch:  {kinds[0]} {op} {kinds[1]} not allowed")
 
 
 def parse(text: str) -> list:

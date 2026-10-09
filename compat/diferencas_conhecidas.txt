@@ -5,3 +5,5 @@
 0302_tabulate         tabulate, exact em tabela 2x3: o OpenDTA não imprime o progresso do algoritmo de rede
 0307_aleatorios       rnormal(), runiformint() e rpoisson() ainda não reproduzem o Stata (runiform, rbinomial, rchi2(2) e rexponential já reproduzem)
 0309_aleatorios_2     mesmo motivo do 0307 (rnormal usa três uniformes por sorteio, algoritmo não documentado)
+0402_mata_funcoes     a referência foi gerada com funções de uma rodada anterior ainda no Mata ("already exists"); o OpenDTA reproduz essa rodada exatamente (tests/test_mata.py), falta referência nova com o gerar_esperados.do atualizado
+0405_mata_erros       mesmo motivo do 0402

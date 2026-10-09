@@ -195,8 +195,9 @@ class Interpreter:
         width = int(float(self.s.settings.get("linesize", 80)))
         if echo:
             self._echo(lines[i], echo)
+            # 49 traços, o título e traços até a largura da tela (Stata 14)
             title = " mata (type end to exit) "
-            out.write("-" * max(4, width - len(title) - 6) + title + "-" * 6 + "\n", "text")
+            out.write("-" * 49 + title + "-" * max(0, width - 49 - len(title)) + "\n", "text")
         def code(ln: LogicalLine) -> str:
             # no Mata, "*" no começo da linha não é comentário (*p = 1)
             if ln.kind == "comment" and ln.echo_lines and ln.echo_lines[0].lstrip().startswith("*"):

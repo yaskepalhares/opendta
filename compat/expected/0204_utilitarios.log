@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0204_utilitarios.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 09:46:05
 
 . * Fase 2: assert, log com nome, set trace, creturn de valores fixos.
 . clear
@@ -29,7 +29,7 @@ assertion is false
       name:  teste
        log:  /Users/yaskepalhares/opendta/compat/odta_log.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 09:46:05
 
 . display "dentro do log"
 dentro do log
@@ -38,7 +38,7 @@ dentro do log
       name:  teste
        log:  /Users/yaskepalhares/opendta/compat/odta_log.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 09:46:05
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 . type odta_log.log
@@ -46,7 +46,7 @@ dentro do log
       name:  teste
        log:  /Users/yaskepalhares/opendta/compat/odta_log.log
   log type:  text
- opened on:   9 Oct 2026, 00:51:08
+ opened on:   9 Oct 2026, 09:46:05
 
 . display "dentro do log"
 dentro do log
@@ -55,7 +55,7 @@ dentro do log
       name:  teste
        log:  /Users/yaskepalhares/opendta/compat/odta_log.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 09:46:05
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 . erase odta_log.log
@@ -93,5 +93,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0204_utilitarios.log
   log type:  text
- closed on:   9 Oct 2026, 00:51:08
+ closed on:   9 Oct 2026, 09:46:05
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

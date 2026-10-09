@@ -40,6 +40,12 @@ def _c_conformable(a: MV, b: MV) -> None:
 
 
 def _plain_conformable(a: MV, b: MV) -> None:
+    """+ e - exigem o mesmo tamanho (A + 10 é erro; use :+). Observado no Stata 14."""
+    if a.a.shape != b.a.shape:
+        raise conformability()
+
+
+def _scalar_or_same(a: MV, b: MV) -> None:
     if a.a.shape != b.a.shape and not a.is_scalar and not b.is_scalar:
         raise conformability()
 
@@ -111,7 +117,7 @@ def binary(op: str, a: MV, b: MV) -> MV:
             and a.a.shape == b.a.shape and bool(np.all(a.a == b.a))
         return bool_mv(eq if op == "==" else not eq)
     if op in (">", ">=", "<", "<="):
-        _plain_conformable(a, b)
+        _scalar_or_same(a, b)
         _same_type(a, b)
         r = _compare(op, a.a, b.a)
         return bool_mv(bool(np.all(r)))
@@ -148,7 +154,7 @@ def _repeat(a: MV, b: MV) -> MV:
     s, n = (a, b) if a.t == "string" else (b, a)
     if n.t != "real":
         raise type_mismatch()
-    _plain_conformable(s, n)
+    _scalar_or_same(s, n)
     k = np.broadcast_to(n.a, np.broadcast(s.a, n.a).shape)
     ss = np.broadcast_to(s.a, k.shape)
     out = np.empty(k.shape, dtype=object)

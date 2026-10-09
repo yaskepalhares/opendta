@@ -1,0 +1,152 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0402_mata_funcoes.log
+  log type:  text
+ opened on:   9 Oct 2026, 09:46:05
+
+. * Fase 4: funções do usuário, referências, structs e ponteiros no Mata.
+. mata
+------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+: real scalar dobro(real scalar x)
+> {
+>     return(2 * x)
+> }
+
+: dobro(21)
+  42
+
+: void soma1(real scalar x)
+soma1() already exists
+r(3000);
+
+: {
+>     x = x + 1
+> }
+
+: y = 5
+
+: soma1(y)
+
+: y
+  6
+
+: real scalar fat(real scalar n)
+fat() already exists
+r(3000);
+
+: {
+>     if (n <= 1) return(1)
+'return' found where almost anything else expected
+r(3000);
+
+:     return(n * fat(n - 1))
+'return' found where almost anything else expected
+r(3000);
+
+: }
+expression invalid
+r(3000);
+
+: fat(6)
+  720
+
+: function opc(a, | b)
+opc() already exists
+r(3000);
+
+: {
+>     if (args() == 1) return(a)
+'return' found where almost anything else expected
+r(3000);
+
+:     return(a + b)
+'return' found where almost anything else expected
+r(3000);
+
+: }
+expression invalid
+r(3000);
+
+: opc(1)
+  1
+
+: opc(1, 2)
+  3
+
+: string scalar saud(string scalar nome)
+saud() already exists
+r(3000);
+
+: {
+>     return("Olá, " + nome)
+'return' found where almost anything else expected
+r(3000);
+
+: }
+expression invalid
+r(3000);
+
+: saud("Ana")
+  Olá, Ana
+
+: struct ponto {
+ponto() already exists
+r(3000);
+
+:     real scalar x, y
+',' found where '(' expected
+r(3000);
+
+: }
+expression invalid
+r(3000);
+
+: real scalar norma()
+norma() already exists
+r(3000);
+
+: {
+>     struct ponto scalar p
+'struct' found where almost anything else expected
+r(3000);
+
+:     p.x = 3
+type mismatch:  exp.exp:  transmorphic found where struct expected
+r(3000);
+
+:     p.y = 4
+type mismatch:  exp.exp:  transmorphic found where struct expected
+r(3000);
+
+:     return(sqrt(p.x^2 + p.y^2))
+'return' found where almost anything else expected
+r(3000);
+
+: }
+expression invalid
+r(3000);
+
+: norma()
+  5
+
+: a = 1
+
+: p = &a
+
+: *p = 7
+
+: a
+  7
+
+: mata drop dobro()
+
+: end
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0402_mata_funcoes.log
+  log type:  text
+ closed on:   9 Oct 2026, 09:46:05
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
