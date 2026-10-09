@@ -2,8 +2,6 @@
 # marca com "~~" e não falha por eles. Tire a linha quando o caso voltar a
 # bater (por exemplo, depois de gerar a referência de novo no Stata).
 # formato: nome-do-caso  motivo
-0301_summarize        ganhou "sort grupo x" antes do list (o sort do Stata desempata ao acaso); falta referência nova
 0302_tabulate         tabulate, exact em tabela 2x3: o OpenDTA não imprime o progresso do algoritmo de rede
-0304_collapse         ganhou "sort g h x" antes do list; falta referência nova
-0307_aleatorios       rnormal() e demais distribuições ainda não reproduzem o Stata (runiform já reproduz)
-0308_merge_append     ganhou "sort" depois do joinby e do cross (ordem varia no Stata); falta referência nova
+0307_aleatorios       rnormal(), runiformint() e rpoisson() ainda não reproduzem o Stata (runiform, rbinomial, rchi2(2) e rexponential já reproduzem)
+0309_aleatorios_2     mesmo motivo do 0307 (rnormal usa três uniformes por sorteio, algoritmo não documentado)

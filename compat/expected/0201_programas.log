@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
   log type:  text
- opened on:   8 Oct 2026, 20:55:23
+ opened on:   9 Oct 2026, 00:51:08
 
 . * Fase 2: program, syntax, args, gettoken, return/ereturn, temporários, preserve.
 . capture program drop _all
@@ -139,5 +139,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
   log type:  text
- closed on:   8 Oct 2026, 20:55:23
+ closed on:   9 Oct 2026, 00:51:08
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

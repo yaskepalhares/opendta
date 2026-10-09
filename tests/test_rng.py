@@ -127,3 +127,12 @@ def test_draws_only_in_sample(run):
     a, b = col(run, "a"), col(run, "b")
     assert a[0] == b[0] and a[2] == b[1]
     assert a[1] >= MISS and b[3] >= MISS
+
+
+def test_exponential_chi2_binomial_match_stata14(run):
+    # valores de compat/expected/0309_aleatorios_2.log (Stata/SE 14.0)
+    run("set obs 2\nset seed 123\ngen double e = rexponential(1)\nset seed 123\n"
+        "gen double c = rchi2(2)\nset seed 123\ngen double b = rbinomial(10, .5)")
+    assert [float(f"{x:.17f}") for x in col(run, "e")] == [1.16091274437245029, 0.58702454048198149]
+    assert [float(f"{x:.17f}") for x in col(run, "c")] == [2.32182548874490058, 1.17404908096396299]
+    assert list(col(run, "b")) == [4, 5]

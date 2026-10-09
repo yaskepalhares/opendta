@@ -10,9 +10,12 @@ documentados ficam marcados VERIFICAR (caso compat/do/0307_aleatorios.do):
   genrand64_real3). Com isso runiform() reproduz exatamente a sequência do
   Stata 14 (conferido em compat/expected/0307_aleatorios.log com as
   sementes 0, 42, 123 e 2147483647).
-* rnormal() e as demais distribuições usam inversão da função de
-  distribuição, um uniforme por sorteio; o Stata usa outros algoritmos
-  (não documentados), então essas sequências ainda diferem (VERIFICAR).
+* rbinomial() (inversão com um uniforme), rexponential(), rchi2(2) e
+  rgamma(1, b) (-b·ln u) também reproduzem o Stata (compat 0309).
+* rnormal() consome três uniformes por sorteio no Stata (observado em
+  compat 0309), com algoritmo não documentado; aqui usa inversão, então a
+  sequência difere. O mesmo vale para runiformint(), rpoisson(), rt() e
+  as formas gerais de rgamma/rchi2 (VERIFICAR).
 """
 
 from __future__ import annotations
@@ -155,12 +158,21 @@ def _gamma(u, a, b=1.0):
     bad = (np.asarray(a) >= M.SYSMISS) | (np.asarray(b) >= M.SYSMISS) | (a <= 0) | (b <= 0)
     with np.errstate(all="ignore"):
         v = st.gamma.ppf(u, np.where(bad, 1, a), scale=np.where(bad, 1, b))
+        # forma 1 = exponencial: -b·ln(u), como o Stata 14 (rchi2(2), compat 0309);
+        # VERIFICAR as demais formas
+        v = np.where(np.asarray(a) == 1, -np.asarray(b) * np.log(u), v)
     return _clean(v, bad)
 
 
+def _chi2(u, df):
+    """rchi2(df) = 2·rgamma(df/2): com df = 2 dá -2·ln(u), igual ao Stata 14."""
+    return _gamma(u, np.asarray(df, dtype=np.float64) / 2, 2.0)
+
+
 def _exponential(u, b):
+    # -b·ln(u): reproduz o rexponential() do Stata 14 (compat 0309)
     bad = (np.asarray(b) >= M.SYSMISS) | (b <= 0)
-    return _clean(-b * np.log1p(-u), bad)
+    return _clean(-b * np.log(u), bad)
 
 
 def _logistic(u, m=0.0, s=1.0):
@@ -197,7 +209,7 @@ DISTRIBUTIONS = {
     "rnormal": (0, 2, _normal),
     "rbinomial": (2, 2, _ppf("binom", lambda n, p: (n >= 1) & (n == np.trunc(n)) & (p >= 0) & (p <= 1))),
     "rpoisson": (1, 1, _ppf("poisson", lambda m: m > 0)),
-    "rchi2": (1, 1, _ppf("chi2", lambda df: df > 0)),
+    "rchi2": (1, 1, _chi2),
     "rt": (1, 1, _ppf("t", lambda df: df > 0)),
     "rbeta": (2, 2, _ppf("beta", lambda a, b: (a > 0) & (b > 0))),
     "rgamma": (2, 2, _gamma),

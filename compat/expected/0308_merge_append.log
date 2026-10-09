@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- opened on:   8 Oct 2026, 20:55:23
+ opened on:   9 Oct 2026, 00:51:08
 
 . * Fase 3b: append, merge, joinby, cross. Cria e apaga arquivos na pasta atual.
 . clear
@@ -74,7 +74,7 @@ file odta_u.dta saved
 
 Contains data from odta_m.dta
   obs:             5                          
- vars:             5                          8 Oct 2026 20:55
+ vars:             5                          9 Oct 2026 00:51
  size:            75                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -213,7 +213,7 @@ merge:  after merge, not all observations matched
 
 Contains data from odta_m.dta
   obs:             7                          
- vars:             5                          8 Oct 2026 20:55
+ vars:             5                          9 Oct 2026 00:51
  size:           105                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -293,6 +293,9 @@ file odta_j.dta saved
 
 . joinby k using odta_j
 
+. * dentro de cada k a ordem do joinby também varia de uma execução para outra
+. sort k b a
+
 . list
 
      +------------+
@@ -337,15 +340,18 @@ file odta_j.dta saved
 
 . cross using odta_j
 
+. * a ordem do cross no Stata depende do desempate do sort: ordena antes de listar
+. sort c k a
+
 . list
 
      +-----------+
      | c   k   a |
      |-----------|
   1. | 1   1   x |
-  2. | 2   1   x |
-  3. | 1   1   y |
-  4. | 1   2   z |
+  2. | 1   1   y |
+  3. | 1   2   z |
+  4. | 2   1   x |
   5. | 2   1   y |
      |-----------|
   6. | 2   2   z |
@@ -376,5 +382,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- closed on:   8 Oct 2026, 20:55:23
+ closed on:   9 Oct 2026, 00:51:08
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

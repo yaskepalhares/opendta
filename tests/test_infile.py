@@ -36,7 +36,7 @@ def test_infile_free(run, here):
     d = run.session.data
     assert d.value_labels == {"rl": {1: "abc"}} and d.get("renda").value_label == "rl"
     out = run("infile a using f.raw")
-    assert run.rc == 4
+    assert run.rc == 18 and "you must start with an empty dataset" in out    # Stata 14
 
 
 def test_infix(run, here):

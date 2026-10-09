@@ -37,11 +37,24 @@ def _path(text: str, ext: str) -> Path:
     return p
 
 
+def _echo_dictionary(s: "Session", text: str) -> None:
+    """O infile com dicionário mostra o dicionário, da linha `dictionary`
+    até a chave que fecha (observado no Stata 14, compat 0108)."""
+    lines = text.splitlines()
+    start = next((k for k, ln in enumerate(lines) if re.search(r"\bdictionary\b", ln)), None)
+    if start is None:
+        return
+    for ln in lines[start:]:
+        s.output.write(ln.rstrip() + "\n", "text")
+        if ln.strip().startswith("}") or ln.rstrip().endswith("}"):
+            break
+
+
 def _check_empty(s: "Session", clear: bool) -> None:
     ds = s.data
     if ds.nvars and not clear:
-        # VERIFICAR: o infile exige dados vazios ou a opção clear
-        raise StataError(4, "no; data in memory would be lost")
+        # observado no Stata 14 (infile; VERIFICAR o infix)
+        raise StataError(18, "you must start with an empty dataset")
 
 
 def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None,
@@ -124,7 +137,9 @@ def cmd_infile(s: "Session", args: str) -> None:
     if not p.varlist.strip():
         # dicionário
         dpath = _path(p.using, ".dct")
-        d = parse_dictionary(read_text(dpath), "infile")
+        dtext = read_text(dpath)
+        d = parse_dictionary(dtext, "infile")
+        _echo_dictionary(s, dtext)
         if o.get("using"):
             data = read_text(_path(str(o["using"]), ".raw"))
         elif d.datafile:
