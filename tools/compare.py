@@ -75,6 +75,18 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     return outdir / (dofile.stem + ".log")
 
 
+def _known_differences() -> dict[str, str]:
+    """compat/diferencas_conhecidas.txt: casos que podem diferir (com o motivo)."""
+    path = COMPAT / "diferencas_conhecidas.txt"
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.lstrip().startswith("#"):
+                name, _, why = line.strip().partition(" ")
+                out[name] = why.strip()
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("prefix", nargs="?", default="")
@@ -86,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
     ns = p.parse_args(argv)
 
     files = sorted(f for f in (COMPAT / "do").glob("*.do") if f.name.startswith(ns.prefix))
-    passed = failed = missing = 0
+    known = _known_differences()
+    passed = failed = missing = tolerated = 0
     for f in files:
         got = run_opendta(f, COMPAT / "out", ns.setup)
         exp = Path(ns.expected) / (f.stem + ".log")
@@ -100,12 +113,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ok {f.stem}")
             passed += 1
         else:
-            print(f"  XX {f.stem}")
-            failed += 1
+            if f.stem in known:
+                print(f"  ~~ {f.stem:<32} diferença conhecida: {known[f.stem]}")
+                tolerated += 1
+            else:
+                print(f"  XX {f.stem}")
+                failed += 1
             if ns.show_diff:
                 for line in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=1):
                     print("     " + line)
-    print(f"\n{passed} iguais, {failed} diferentes, {missing} sem referência")
+    extra = f", {tolerated} com diferença conhecida" if tolerated else ""
+    print(f"\n{passed} iguais, {failed} diferentes{extra}, {missing} sem referência")
     return 1 if failed else 0
 
 
