@@ -139,6 +139,7 @@ class Session:
         rng.reset(int(self.settings["seed"]))
         self.by_groups = None   # Groups ativo durante um prefixo by
         self.context = EvalContext(self)
+        self._mata = None
         self._state_listeners: list[Callable[[], None]] = []
         self.do_depth = 0
         self.current_dofile = ""
@@ -268,6 +269,15 @@ class Session:
         if name not in values:
             return M.SYSMISS
         return values[name]
+
+    # -- Mata ---------------------------------------------------------------
+    @property
+    def mata(self):
+        """Espaço de trabalho do Mata (criado no primeiro uso)."""
+        if self._mata is None:
+            from .mata.interp import MataEngine
+            self._mata = MataEngine(self)
+        return self._mata
 
     # -- by -----------------------------------------------------------------
     def run_by(self, bp, command_text: str) -> None:

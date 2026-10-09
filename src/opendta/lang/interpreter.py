@@ -98,6 +98,10 @@ class Interpreter:
             return self._run_block(lines, i, j, end, echo=echo)
         if word == "input":
             return self._run_input(lines, i, end, echo=echo)
+        if word == "mata" or raw.startswith("mata:"):
+            rest = raw[4:].strip()
+            if rest in ("", ":"):
+                return self._run_mata_block(lines, i, end, echo=echo, colon=rest == ":")
         if word == "if":
             return self._run_if_chain(lines, i, end, echo=echo)
         if word == "else":
@@ -178,6 +182,38 @@ class Interpreter:
                 label = f" end {prog.name} ---"
                 self.s.output.write(pad + "-" * max(4, width - len(pad) - len(label)) + label + "\n",
                                     "text", force=True)
+
+    def _run_mata_block(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None,
+                        colon: bool) -> int:
+        """mata[:] ... end. O eco segue o Stata: cabeçalho de traços com
+        "mata (type end to exit)", cada instrução com ': ' e, no fim, ': end'
+        e uma linha de traços."""
+        j = i + 1
+        while j < end and not (lines[j].kind == "cmd" and lines[j].text.strip() == "end"):
+            j += 1
+        out = self.s.output
+        width = int(float(self.s.settings.get("linesize", 80)))
+        if echo:
+            self._echo(lines[i], echo)
+            title = " mata (type end to exit) "
+            out.write("-" * max(4, width - len(title) - 6) + title + "-" * 6 + "\n", "text")
+        def code(ln: LogicalLine) -> str:
+            # no Mata, "*" no começo da linha não é comentário (*p = 1)
+            if ln.kind == "comment" and ln.echo_lines and ln.echo_lines[0].lstrip().startswith("*"):
+                return "\n".join(ln.echo_lines)
+            return ln.text if ln.kind == "cmd" else ""
+        chunks = [(code(ln), ln.echo_lines) for ln in lines[i + 1:j]]
+        from ..mata.interp import MataLeave
+        try:
+            self.s.mata.run_block(chunks, echo=bool(echo), stop_on_error=colon)
+        except MataLeave:
+            pass
+        if echo:
+            if j < end:
+                out.write(": end\n", "command")
+            out.write("-" * width + "\n", "text")
+        self._after(echo)
+        return j + 1
 
     def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
         """input var1 var2 ... seguido de linhas de dados até `end`."""
