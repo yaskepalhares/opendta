@@ -177,15 +177,21 @@ class VectorContext:
         return np.array(results, dtype=np.float64)
 
     def _random(self, name: str, args: list[Any]) -> np.ndarray:
-        """Um sorteio por observação. VERIFICAR: o Stata só sorteia para as
-        observações dentro do if/in; aqui sorteia para todas."""
+        """Um sorteio por observação (só as da amostra em generate/replace)."""
         from ..core import rng
         lo, hi, _ = rng.DISTRIBUTIONS[name]
         if not (lo <= len(args) <= hi):
             raise StataError(198, "invalid syntax")
         if any(is_str(a) for a in args):
             raise type_mismatch()
-        return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
+        mask = getattr(self.s, "_rng_mask", None)
+        if mask is None or len(mask) != self.n:
+            return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
+        # só as observações da amostra sorteiam (generate/replace com if/in)
+        idx = np.flatnonzero(mask)
+        out = np.full(self.n, SYS)
+        out[idx] = rng.draw(name, [broadcast(a, self.n)[idx] if is_vec(a) else a for a in args], len(idx))
+        return out
 
     def _running_sum(self, x: Any) -> np.ndarray:
         if is_str(x):

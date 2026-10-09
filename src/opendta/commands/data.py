@@ -24,7 +24,7 @@ from ..core.varlist import expand, resolve_name, unique
 from ..lang.expr import evaluate, parse
 from ..lang.syntax import match_options, parse_standard
 from ..lang.vexpr import broadcast, is_str
-from ._util import (ObsContext, check_kind, eval_vector, groups, plural,
+from ._util import (ObsContext, check_kind, eval_sample, groups, plural,
                     references_subscript, touse)
 from .registry import command
 
@@ -82,7 +82,7 @@ def cmd_generate(s: "Session", args: str) -> None:
     opts = match_options(p.options, {"before": 3, "after": 2})
 
     mask = touse(s, p)
-    value = eval_vector(s, p.exp)
+    value = eval_sample(s, p.exp, mask)
     n = ds.nobs
     want_string = vtype is not None and vtype.startswith("str")
     if vtype is not None:
@@ -145,7 +145,7 @@ def cmd_replace(s: "Session", args: str) -> None:
     if references_subscript(node, var.name):
         new_values = _replace_sequential(s, var, node, rows)
     else:
-        value = eval_vector(s, p.exp)
+        value = eval_sample(s, p.exp, mask)
         check_kind(value, var.is_string)
         new_values = broadcast(value, ds.nobs)[rows]
 

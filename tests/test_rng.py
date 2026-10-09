@@ -118,3 +118,12 @@ def test_runiform_matches_stata14():
     for seed, want in cases.items():
         got = MT64(seed).uniform(len(want))
         assert [float(f"{x:.17f}") for x in got] == want
+
+
+def test_draws_only_in_sample(run):
+    # como no Stata, o if/in decide quais observações consomem a sequência
+    run("set obs 4\nset seed 1\ngen double a = runiform() if mod(_n, 2)\n"
+        "set seed 1\ngen double b = runiform() in 1/2")
+    a, b = col(run, "a"), col(run, "b")
+    assert a[0] == b[0] and a[2] == b[1]
+    assert a[1] >= MISS and b[3] >= MISS
