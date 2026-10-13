@@ -90,32 +90,42 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`; no `optimize()` d0, só o ruído das derivadas numéricas difere)
 - `moptimize()` passou para a fase 5, junto com o `ml`; classes do Mata, para a fase 8
 
-## Fase 5: estimação
+## Fase 5: estimação (PR em revisão)
 
-- [ ] Variáveis fatoriais (`i.`, `c.`, `#`, `##`) e operadores de séries temporais (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
-- [ ] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
-- [ ] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `xtlogit`, `areg`
-- [ ] Erros-padrão robustos, por cluster e bootstrap; motor `ml` (máxima verossimilhança) e `moptimize()` do Mata
+- [x] Variáveis fatoriais (`i.`, `c.`, `#`, `##`) e operadores de séries temporais (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
+- [x] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
+- [x] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `areg`
+- [x] Erros-padrão robustos, por cluster e bootstrap (`vce(bootstrap)` e prefixo `bootstrap`); motor `ml` (máxima verossimilhança)
+- [ ] `xtlogit` e `moptimize()` do Mata
+- Conferência com os logs do Stata: casos `0501`–`0513` (0509, 0510, 0512 e 0513 aguardam a próxima rodada)
 
-## Fase 6: amostras complexas
+## Fase 6: amostras complexas (em andamento)
 
-- [ ] `svyset` (estratos, UPAs, pesos, FPC, múltiplos estágios), `svydescribe`
-- [ ] Prefixo `svy:` com `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`
-- [ ] Linearização de Taylor, BRR, jackknife, bootstrap e SDR; `subpop()`, `over()`, `estat effects`
+- [x] `svyset` (estratos, UPAs, pesos, FPC), `svydescribe`
+- [x] Prefixo `svy:` com `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` e `over()`
+- [x] Linearização de Taylor; correção de Rao–Scott no `svy: tabulate` de duas vias
+- [ ] Vários estágios, BRR, jackknife, bootstrap e SDR; `estat effects`
+- Conferência com os logs do Stata: caso `0601` (aguarda a próxima rodada)
 
-## Fase 7: gráficos
+## Fase 7: gráficos (em andamento)
 
-- [ ] Motor de gráficos com sistema de *schemes* (`s2color`, `s1mono`…) e janela Graph
-- [ ] `twoway` (`scatter`, `line`, `connected`, `lfit`, `qfit`, `lowess`, `area`, `bar`, `rcap`, `function`…), `graph bar`, `graph box`, `graph pie`, `graph dot`, `histogram`, `kdensity`, `graph matrix`
-- [ ] Opções de título, eixos, legendas e marcadores; `by()`
-- [ ] `graph combine`, `graph export` (PNG, PDF, SVG), `graph save`/`use` (formato próprio)
-- [ ] Graph Editor (subconjunto)
+- [x] Motor de gráficos com esquemas próprios (`s2color`, `s1mono`… são aceitos e mapeados para eles) e janela Graph
+- [x] `twoway` (`scatter`, `line`, `connected`, `lfit`, `qfit`, `lfitci`, `qfitci`, `area`, `bar`, `spike`, `dropline`, `rcap`, `rarea`, `rbar`, `rline`, `function`, `histogram`, `kdensity`, `scatteri`), `tsline`, `graph bar`/`hbar`, `graph box`/`hbox`, `graph pie`, `histogram`, `kdensity`, `graph matrix`
+- [x] Opções de título, eixos, legendas e marcadores; `by()`
+- [x] `graph combine`, `graph export` (PNG, PDF, SVG, EPS, PS, TIFF, JPEG), `graph save`/`use` (formato próprio), `graph dir`/`drop`/`rename`/`copy`/`display`/`describe`
+- [ ] `lowess`, `graph dot` próprio, `marginsplot`, gráficos de diagnóstico (`rvfplot`, `qnorm`…); Graph Editor (subconjunto)
+- Conferência com os logs do Stata: caso `0701` (só as mensagens de texto; o desenho é próprio)
 
-## Fase 8: restante do Stata 14 e ferramentas da interface
+## Fase 8: restante do Stata 14 e ferramentas da interface (em andamento)
 
+- [x] Do-file Editor com abas, realce de sintaxe, localizar/substituir e execução de seleção (`doedit`); menus Data, Graphics e Statistics; impressão
+- [x] Testes não paramétricos e de normalidade (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) e comandos imediatos (`cii`, `ttesti`, `prtesti`, `tabi`)
+- [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
+- [x] `codebook`, `misstable`
 - [ ] Classes do Mata (`class`, herança, métodos virtuais)
 - [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
-- [ ] Do-file Editor com realce de sintaxe e execução de seleção; diálogos dos menus; impressão
+- [ ] Diálogos dos menus
+- Conferência com os logs do Stata: casos `0801`–`0803` (aguardam a próxima rodada)
 
 ## Fase 9 (última): idioma da interface
 

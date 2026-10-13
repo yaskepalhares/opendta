@@ -8,7 +8,7 @@ It is a personal study project under active development. It will be released as 
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fase 4 (Mata)
+## Estado atual: fases 5 a 8 (estimação, amostras complexas, gráficos e interface)
 
 Já funciona:
 
@@ -41,7 +41,15 @@ Já funciona:
 
 - Mata: blocos `mata ... end`, funções do usuário, structs e ponteiros, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
 
-Ainda não há estimação (`regress`, `logit`…), que vem na fase 5.
+- estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `areg`, `ivregress`, `anova` e `oneway`, com variáveis fatoriais, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
+- pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
+- amostras complexas: `svyset`, `svydescribe` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic` e `poisson` (linearização de Taylor);
+- testes: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` e os comandos imediatos `cii`, `ttesti`, `prtesti` e `tabi`;
+- descrição dos dados: `codebook` e `misstable`;
+- gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…) e janela Graph;
+- Do-file Editor com abas, realce de sintaxe e execução da seleção (Ctrl+D) ou do arquivo.
+
+Algumas saídas novas ainda aguardam a conferência com os logs do Stata (casos `0509` em diante em `compat/do`).
 
 ## Instalação (macOS)
 
