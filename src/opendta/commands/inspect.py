@@ -121,7 +121,10 @@ def cmd_list(s: "Session", args: str) -> None:
 # describe
 # ---------------------------------------------------------------------------
 
-_LINE = "-" * 79
+def _hline(s: "Session") -> str:
+    """Linha cheia de describe: ocupa c(linesize) (255 tracos com set linesize
+    255, conferido no compat; VERIFICAR com o padrao 80)."""
+    return "-" * int(s.settings.get("linesize", 80))
 
 
 @command("describe", "d")
@@ -131,6 +134,7 @@ def cmd_describe(s: "Session", args: str) -> None:
     opts = match_options(p.options, {"short": 2, "simple": 2, "fullnames": 1, "numbers": 1})
     names = unique(expand(ds, p.varlist)) if p.varlist else ds.names
     out = s.output
+    _LINE = _hline(s)
     s.r = {"N": float(ds.nobs), "k": float(ds.nvars), "width": float(ds.width()),
            "changed": float(ds.changed)}
 
@@ -168,9 +172,11 @@ def cmd_describe(s: "Session", args: str) -> None:
     if only_vars:
         # VERIFICAR: rodapé de notas com varlist
         return
-    out.write(_LINE + "\n", "text")
-    if any(ds.chars.get(n, {}).get("note0") for n in names):
-        out.write(" " * 44 + "* indicated variables have notes\n", "text")
+    # a nota das variáveis com notes vem logo abaixo da tabela; describe, short
+    # não tem linha antes de "Sorted by:" (compat 0104 e 0201)
+    if not opts.get("short"):
+        if any(ds.chars.get(n, {}).get("note0") for n in names):
+            out.write(" " * 44 + "* indicated variables have notes\n", "text")
         out.write(_LINE + "\n", "text")
     out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 espaços (Stata 14)
     if ds.changed and ds.nvars:

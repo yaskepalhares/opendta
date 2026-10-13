@@ -662,7 +662,7 @@ def cmd_estimates(s: "Session", args: str) -> None:
                     if n not in st_:
                         raise StataError(111, f"estimation result {n} not found")
                     _restore(s, st_[n])
-                    w = 78
+                    w = int(s.settings.get("linesize", 80))   # VERIFICAR com o padrao 80
                     lab = f"Model {n}"
                     out.write("\n" + "-" * w + "\n", "text")
                     out.write(lab + "\n", "result")

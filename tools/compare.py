@@ -41,10 +41,17 @@ _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
 
 def normalize(text: str) -> list[str]:
     out: list[str] = []
-    for raw in text.splitlines():
+    lines = text.splitlines()
+    for k, raw in enumerate(lines):
         line = _STAMP.sub("<data>", raw.rstrip())
-        if not line or set(line) <= {"-"} or _HEADER.match(line) or _SKIP.match(line):
+        if not line or _HEADER.match(line) or _SKIP.match(line):
             continue
+        if set(line) <= {"-"}:
+            # só as linhas tracejadas do cabeçalho e do rodapé do log são
+            # descartadas; as das tabelas fazem parte da saída
+            near = lines[max(0, k - 1):k] + lines[k + 1:k + 2]
+            if any(_HEADER.match(n) for n in near) or k == 0 or k == len(lines) - 1:
+                continue
         if line in (".",):
             continue
         out.append(line)
