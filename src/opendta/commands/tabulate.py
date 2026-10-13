@@ -426,7 +426,9 @@ def _opts(text: str) -> dict:
 _OPTS = {"missing": 1, "nolabel": 5, "sort": 4, "generate": 3, "matcell": 7, "matrow": 6,
          "matcol": 7, "chi2": 2, "lrchi2": 3, "v": 1, "gamma": 1, "taub": 2, "exact": 2,
          "row": 1, "column": 3, "cell": 4, "expected": 5, "nofreq": 5, "nokey": 5, "all": 3,
-         "plot": 4, "subpop": 3, "wrap": 4, "nolog": 5, "firstonly": 5}
+         "plot": 4, "subpop": 3, "wrap": 4, "nolog": 5, "firstonly": 5,
+         "summarize": 2, "means": 2, "standard": 2, "freq": 2, "obs": 2, "nomeans": 3,
+         "nostandard": 4, "noobs": 4}
 
 
 @command("tabulate", "ta", byable=True)
@@ -444,7 +446,12 @@ def cmd_tabulate(s: "Session", args: str) -> None:
         if first is not None:
             _by_header(s, first)
         mask = base & group
-        if len(vs) == 1:
+        if isinstance(o.get("summarize"), str):
+            if len(vs) != 1:
+                raise StataError(198, "two-way tabulate, summarize() not implemented")   # VERIFICAR
+            from ..estimation.anova import tab_summarize
+            tab_summarize(s, vs[0], s.expand_varlist(o["summarize"])[0], mask, w, o)
+        elif len(vs) == 1:
             _oneway(s, vs[0], mask, w, wtype, o)
         else:
             _twoway(s, vs[0], vs[1], mask, w, wtype, o)

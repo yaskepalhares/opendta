@@ -189,3 +189,21 @@ def cmd_ratio(s: "Session", args: str) -> None:
 def cmd_svy(s: "Session", args: str) -> None:
     from ..estimation.svy import cmd_svy as run
     run(s, args)
+
+
+@command("estat", "estat")
+def cmd_estat(s: "Session", args: str) -> None:
+    from ..estimation.estat import cmd_estat as run
+    run(s, args)
+
+
+@command("oneway", "onew")
+def cmd_oneway(s: "Session", args: str) -> None:
+    from ..estimation.anova import cmd_oneway as run
+    run(s, args)
+
+
+@command("anova", "anova")
+def cmd_anova(s: "Session", args: str) -> None:
+    from ..estimation.anova import cmd_anova as run
+    run(s, args)
