@@ -36,6 +36,8 @@ from ..session import Session
 from .data_browser import DataBrowser
 from .variables_manager import VariablesManager
 from .viewer import Viewer
+from .graph_window import GraphWindow
+from .dofile_editor import DoFileEditor
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .icons import set_theme as set_icon_theme
 from .preferences import PreferencesDialog
@@ -221,6 +223,62 @@ def _titled(title: str, widget: QWidget) -> QWidget:
 # Janela principal
 # ---------------------------------------------------------------------------
 
+DATA_TEMPLATES = [
+    ("Create or change data", [("Create new variable", "generate "), ("Change contents of variable", "replace "),
+                               ("Create new variable (extended)", "egen "), ("Recode", "recode "),
+                               ("Encode string", "encode , generate()"), ("Destring", "destring , replace")]),
+    ("Variables", [("Rename", "rename "), ("Label variable", "label variable "),
+                   ("Define value label", "label define "), ("Keep variables", "keep "),
+                   ("Drop variables", "drop "), ("Order", "order ")]),
+    ("Sort", [("Sort", "sort "), ("Sort (ascending/descending)", "gsort ")]),
+    ("Data utilities", [("Duplicates report", "duplicates report "), ("Codebook", "codebook "),
+                        ("Missing values", "misstable summarize "), ("Compress", "compress"),
+                        ("Count", "count if ")]),
+    ("Combine datasets", [("Merge", "merge 1:1  using "), ("Append", "append using "),
+                          ("Reshape", "reshape long , i() j()"), ("Collapse", "collapse (mean) , by()")]),
+]
+
+GRAPHICS_TEMPLATES = [
+    ("Twoway graph (scatter, line, etc.)", "twoway scatter "),
+    ("Line plot", "twoway line "),
+    ("Bar chart", "graph bar (mean) "),
+    ("Dot chart", "graph dot (mean) "),
+    ("Pie chart", "graph pie "),
+    ("Histogram", "histogram "),
+    ("Box plot", "graph box "),
+    ("Kernel density", "kdensity "),
+    ("Scatterplot matrix", "graph matrix "),
+    (None, None),
+    ("Combine graphs", "graph combine "),
+    ("Export graph", "graph export "),
+    ("Manage graphs", "graph dir"),
+]
+
+STATISTICS_TEMPLATES = [
+    ("Summaries, tables, and tests", [
+        ("Summary statistics", "summarize "), ("One-way table", "tabulate "),
+        ("Two-way table with chi2", "tabulate  , chi2"), ("Table of statistics", "tabstat , statistics(mean sd n)"),
+        ("Correlations", "correlate "), ("t test", "ttest "), ("Proportion test", "prtest "),
+        ("Confidence intervals", "ci means "), ("Centiles", "centile ")]),
+    ("Linear models and related", [
+        ("Linear regression", "regress "), ("Instrumental variables", "ivregress 2sls "),
+        ("Absorbed indicators", "areg , absorb()"), ("Tobit", "tobit ")]),
+    ("Binary outcomes", [("Logistic (odds ratios)", "logistic "), ("Logit", "logit "), ("Probit", "probit ")]),
+    ("Ordinal outcomes", [("Ordered logit", "ologit "), ("Ordered probit", "oprobit ")]),
+    ("Categorical outcomes", [("Multinomial logit", "mlogit ")]),
+    ("Count outcomes", [("Poisson", "poisson "), ("Negative binomial", "nbreg ")]),
+    ("Generalized linear models", [("GLM", "glm , family() link()")]),
+    ("Longitudinal/panel data", [("Declare panel", "xtset "), ("Fixed effects", "xtreg , fe"),
+                                 ("Random effects", "xtreg , re")]),
+    ("Time series", [("Declare time variable", "tsset "), ("Line plot", "tsline ")]),
+    ("Survey data analysis", [("Declare design", "svyset "), ("Describe design", "svydescribe"),
+                              ("Means", "svy: mean "), ("Proportions", "svy: proportion "),
+                              ("Linear regression", "svy: regress "), ("Tables", "svy: tabulate ")]),
+    ("Postestimation", [("Predictions", "predict "), ("Marginal effects", "margins "),
+                        ("Wald tests", "test "), ("Linear combinations", "lincom "),
+                        ("Nonlinear combinations", "nlcom "), ("Compare estimates", "estimates table ")]),
+]
+
 _PENDING = {
     1: "Disponível na fase 1 (dados em memória)",
     2: "Disponível na fase 2 (programação)",
@@ -229,6 +287,8 @@ _PENDING = {
     6: "Disponível na fase 6 (amostras complexas)",
     7: "Disponível na fase 7 (gráficos)",
     8: "Disponível na fase 8 (ferramentas da interface)",
+    "more": "Sem efeito: o OpenDTA roda sempre com set more off",
+    "break": "Ainda não disponível: os comandos rodam na linha de execução da interface",
 }
 
 
@@ -265,6 +325,11 @@ class MainWindow(QMainWindow):
         self.viewer: Viewer | None = None
         self.session.ui_hooks["help"] = self.show_viewer
         self.session.ui_hooks["view"] = self.show_viewer
+        self.graph_window: GraphWindow | None = None
+        self.session.ui_hooks["graph"] = self.show_graph
+        self.session.ui_hooks["graph_close"] = self.close_graph
+        self.dofile_editor: DoFileEditor | None = None
+        self.session.ui_hooks["doedit"] = self.show_dofile_editor
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -386,14 +451,14 @@ class MainWindow(QMainWindow):
         self._action(log, "Suspend", lambda: self.run_command("log off"))
         self._action(log, "Resume", lambda: self.run_command("log on"))
         self._action(log, "View...", self.view_file)
-        self._action(m, "Print...", phase=8)
+        self._action(m, "Print...", self.print_results, shortcut="Ctrl+P")
         m.addSeparator()
         self._action(m, "Exit", self.close)
 
         m = mb.addMenu("&Edit")
         self._action(m, "Copy", self.results.copy, shortcut="Ctrl+C")
-        self._action(m, "Copy table", phase=3)
-        self._action(m, "Find...", phase=8)
+        self._action(m, "Copy table", self.copy_table, shortcut="Ctrl+Shift+C")
+        self._action(m, "Find...", self.find_results, shortcut="Ctrl+F")
         m.addSeparator()
         self._action(m, "Clear Results", self.results.clear)
         self._action(m, "Preferences...", self.show_preferences, shortcut="Ctrl+,")
@@ -401,24 +466,30 @@ class MainWindow(QMainWindow):
         m = mb.addMenu("&Data")
         self._action(m, "Describe data", lambda: self.run_command("describe"))
         self._action(m, "Data Editor", lambda: self.run_command("browse"))
-        self._action(m, "Create or change data", phase=1)
-        self._action(m, "Variables Manager", lambda: self.run_command("varmanage"))
-        self._action(m, "Data utilities", phase=3)
-        self._action(m, "Sort", phase=1)
-        self._action(m, "Combine datasets", phase=3)
+        for group, items in DATA_TEMPLATES:
+            sub = m.addMenu(group)
+            sub.setToolTipsVisible(True)
+            for item, cmd in items:
+                act = self._action(sub, item, lambda _=False, c=cmd: self.insert_command(c))
+                act.setToolTip(f"Write \"{cmd.strip()}\" in the Command window")
 
+        # sem caixas de diálogo: os itens escrevem o comando na janela Command,
+        # pronto para completar com as variáveis
         m = mb.addMenu("&Graphics")
-        for item in ("Twoway graph (scatter, line, etc.)", "Bar chart", "Dot chart", "Pie chart",
-                     "Histogram", "Box plot", "Scatterplot matrix", "Graph Editor"):
-            self._action(m, item, phase=7)
+        for item, cmd in GRAPHICS_TEMPLATES:
+            if item is None:
+                m.addSeparator()
+                continue
+            act = self._action(m, item, lambda _=False, c=cmd: self.insert_command(c))
+            act.setToolTip(f"Write \"{cmd.strip()}\" in the Command window")
 
         m = mb.addMenu("&Statistics")
-        for item, phase in (("Summaries, tables, and tests", 3), ("Linear models and related", 5),
-                            ("Binary outcomes", 5), ("Ordinal outcomes", 5),
-                            ("Count outcomes", 5), ("Generalized linear models", 5),
-                            ("Longitudinal/panel data", 5), ("Survival analysis", 8),
-                            ("Survey data analysis", 6), ("Postestimation", 5)):
-            self._action(m, item, phase=phase)
+        for group, items in STATISTICS_TEMPLATES:
+            sub = m.addMenu(group)
+            for item, cmd in items:
+                act = self._action(sub, item, lambda _=False, c=cmd: self.insert_command(c))
+                act.setToolTip(f"Write \"{cmd.strip()}\" in the Command window")
+            sub.setToolTipsVisible(True)
 
         mb.addMenu("&User")
 
@@ -428,10 +499,10 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._action(m, "Command", lambda: self.command.setFocus())
         self._action(m, "Results", lambda: self.results.setFocus())
-        self._action(m, "Graph", phase=7)
+        self._action(m, "Graph", self.show_graph_window)
         self._action(m, "Viewer", lambda: self.run_command("help"))
         self._action(m, "Data Editor", lambda: self.run_command("browse"))
-        self._action(m, "Do-file Editor", phase=8)
+        self._action(m, "Do-file Editor", lambda: self.show_dofile_editor(""), shortcut="Ctrl+9")
 
         m = mb.addMenu("&Help")
         self._action(m, "Search...", self.search_help)
@@ -466,14 +537,14 @@ class MainWindow(QMainWindow):
         # mesma disposição da barra do Stata 14; desenho próprio (gui/icons/)
         groups = [
             [("open", "Open", self.open_dataset, 1), ("save", "Save", self.save_dataset, 1),
-             ("print", "Print", None, 8)],
+             ("print", "Print", self.print_results, 8)],
             [("log", "Log (begin or close)", self.toggle_log, 2),
-             ("viewer", "Viewer", lambda: self.run_command("help"), 2), ("graph", "Graph", None, 7),
-             ("dofile", "Do-file Editor", None, 8)],
+             ("viewer", "Viewer", lambda: self.run_command("help"), 2), ("graph", "Graph", self.show_graph_window, 7),
+             ("dofile", "Do-file Editor", lambda: self.show_dofile_editor(""), 8)],
             [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit"), 1),
              ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse"), 1),
              ("variables", "Variables Manager", lambda: self.run_command("varmanage"), 1)],
-            [("more", "Clear --more-- condition", None, 8), ("break", "Break", None, 8)],
+            [("more", "Clear --more-- condition", None, "more"), ("break", "Break", None, "break")],
         ]
         self.toolbar_actions: dict[str, QAction] = {}
         for gi, group in enumerate(groups):
@@ -637,6 +708,83 @@ class MainWindow(QMainWindow):
         self.viewer.raise_()
         self.viewer.activateWindow()
 
+    # -- gráficos e Do-file Editor ------------------------------------------------
+    def show_graph(self, g) -> None:
+        if self.graph_window is None:
+            self.graph_window = GraphWindow(self.session, self, run=self._run_from_editor)
+            self.graph_window.setWindowFlag(Qt.WindowType.Window, True)
+        self.graph_window.show_graph(g)
+
+    def close_graph(self, name: str) -> None:
+        if self.graph_window is not None:
+            self.graph_window.close_graph(name)
+
+    def show_graph_window(self) -> None:
+        from ..graphics.store import store
+        st = store(self.session)
+        if self.graph_window is None or not self.graph_window.canvases:
+            if st.current:
+                self.show_graph(st.get())
+            return
+        self.graph_window.show()
+        self.graph_window.raise_()
+        self.graph_window.activateWindow()
+
+    def show_dofile_editor(self, path: str = "") -> None:
+        if self.dofile_editor is None:
+            self.dofile_editor = DoFileEditor(self.session, self, run=self.run_command,
+                                              font=monospace_font(self.prefs), theme=self.prefs.theme)
+            self.dofile_editor.setWindowFlag(Qt.WindowType.Window, True)
+        if path:
+            self.dofile_editor.open_path(path)
+        self.dofile_editor.show()
+        self.dofile_editor.raise_()
+        self.dofile_editor.activateWindow()
+
+    def insert_command(self, text: str) -> None:
+        self.command.setPlainText(text)
+        cur = self.command.textCursor()
+        cur.movePosition(cur.MoveOperation.End)
+        self.command.setTextCursor(cur)
+        self.command.setFocus()
+
+    def copy_table(self) -> None:
+        """Copia a seleção de Results com colunas separadas por tabulação
+        (para colar numa planilha), como Copy table do Stata."""
+        import re as _re
+        text = self.results.textCursor().selectedText().replace("\u2029", "\n")
+        if not text:
+            return
+        rows = []
+        for line in text.splitlines():
+            line = line.replace("|", " ").strip()
+            if not line or set(line) <= set("-+= "):
+                continue
+            rows.append("\t".join(_re.split(r"\s{2,}", line)))
+        QApplication.clipboard().setText("\n".join(rows))
+
+    def print_results(self) -> None:
+        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+        printer = QPrinter()
+        dlg = QPrintDialog(printer, self)
+        if dlg.exec():
+            self.results.print_(printer)
+
+    def find_results(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(self, "Find", "Find in Results:", text=self._last_find)
+        if not ok or not text:
+            return
+        self._last_find = text
+        if not self.results.find(text):
+            cur = self.results.textCursor()
+            cur.movePosition(cur.MoveOperation.Start)
+            self.results.setTextCursor(cur)
+            if not self.results.find(text):
+                self.statusBar().showMessage(f'"{text}" not found', 3000)
+
+    _last_find = ""
+
     def search_help(self) -> None:
         self.run_command("help")
         if self.viewer is not None:
@@ -702,6 +850,8 @@ class MainWindow(QMainWindow):
             w.setFont(font)
         if getattr(self, "browser", None) is not None:
             self.browser.table.setFont(font)
+        if getattr(self, "dofile_editor", None) is not None:
+            self.dofile_editor.set_theme(self.prefs.theme)
         ico = app_icon(self.prefs.app_icon)
         self.setWindowIcon(ico)
         app = QApplication.instance()
@@ -719,6 +869,11 @@ class MainWindow(QMainWindow):
             self.splitter.restoreState(split)
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self.dofile_editor is not None:
+            if not self.dofile_editor.close():
+                event.ignore()
+                return
+            self.dofile_editor.cleanup()
         self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
         super().closeEvent(event)
 
