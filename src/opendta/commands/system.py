@@ -30,7 +30,7 @@ def cmd_set(s: "Session", args: str) -> None:
     if name in ("seed", "rng"):
         _set_rng(s, name, value)
         return
-    if name in ("more", "rmsg", "varabbrev", "trace", "hints", "superscript") and value.split(",")[0].strip() not in ("on", "off"):
+    if name in ("more", "rmsg", "varabbrev", "trace", "hints", "superscript", "graphics") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
     if name == "dp":
         v = value.split(",")[0].strip()
@@ -114,6 +114,9 @@ def cmd_clear(s: "Session", args: str) -> None:
             s.scalars.clear()
         if t in ("", "all", "*"):
             s.data.clear()
+        if t in ("all", "*"):
+            from ..graphics.store import store
+            store(s).clear()
         s.notify_state()
         return
     raise StataError(198, "invalid syntax")

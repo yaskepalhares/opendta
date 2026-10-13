@@ -42,6 +42,16 @@ ALIASES = {
     "split": "recode", "mvencode": "recode", "mvdecode": "recode", "isid": "duplicates",
     "levelsof": "duplicates", "seed": "set_seed", "rng": "set_seed", "set_rng": "set_seed",
     "runiform": "set_seed", "rnormal": "set_seed",
+    "gr": "graph", "graph_export": "graph", "graph_save": "graph", "graph_use": "graph",
+    "graph_dir": "graph", "graph_drop": "graph", "graph_rename": "graph", "graph_combine": "graph",
+    "graph_display": "graph", "graph_copy": "graph", "set_scheme": "graph", "scheme": "graph",
+    "set_graphics": "graph", "graph_twoway": "twoway", "tw": "twoway", "scatter": "twoway",
+    "sc": "twoway", "line": "twoway", "connected": "twoway", "tsline": "twoway", "lfit": "twoway",
+    "qfit": "twoway", "lfitci": "twoway", "qfitci": "twoway", "twoway_function": "twoway",
+    "function": "twoway", "rcap": "twoway", "rarea": "twoway", "hist": "histogram",
+    "kdensity": "histogram", "graph_hbar": "graph_bar", "graph_box": "graph_bar",
+    "graph_hbox": "graph_bar", "graph_pie": "graph_bar", "graph_matrix": "graph_bar",
+    "graph_dot": "graph_bar", "doedit": "doedit",
 }
 
 

@@ -52,6 +52,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "hints": "on",       # OpenDTA: explicação depois das mensagens de erro
     "superscript": "on",  # OpenDTA: 1.0000×10¹⁰ em vez de 1.00000e+10 na exibição
     "numerics": "stata",  # OpenDTA: precise = contas mais exatas (estimation/numerics.py)
+    "graphics": "on",
+    "scheme": "s2color",
 }
 
 
@@ -298,6 +300,8 @@ class Session:
             "dp": self.settings.get("dp", "period"),
             "linesize": float(self.settings["linesize"]),
             "type": self.settings["type"],
+            "graphics": self.settings.get("graphics", "on"),
+            "scheme": self.settings.get("scheme", "s2color"),
             "seed": _rng_state(),
             "rngstate": _rng_state(),
             "rng": self.settings.get("rng", "default"),
