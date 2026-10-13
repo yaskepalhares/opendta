@@ -207,3 +207,21 @@ def cmd_oneway(s: "Session", args: str) -> None:
 def cmd_anova(s: "Session", args: str) -> None:
     from ..estimation.anova import cmd_anova as run
     run(s, args)
+
+
+@command("bootstrap", "bootstrap", prefix=True)
+def cmd_bootstrap(s: "Session", args: str) -> None:
+    from ..estimation.bootstrap import cmd_bootstrap as run
+    run(s, args)
+
+
+def _install_vce_bootstrap() -> None:
+    from ..estimation.bootstrap import wrap_vce_bootstrap
+    from .registry import REGISTRY
+    for name in ("regress", "logit", "logistic", "probit", "poisson", "nbreg", "ologit", "oprobit",
+                 "mlogit", "tobit", "glm", "areg"):
+        if name in REGISTRY:
+            wrap_vce_bootstrap(name)
+
+
+_install_vce_bootstrap()

@@ -126,12 +126,16 @@ def level_text(level: float) -> str:
 
 def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df: float | None,
                level: float, vcetype: str = "", coef_title: str = "Coef.",
-               footer: bool = True, eq_headers: bool = False, eform: bool = False) -> None:
+               footer: bool = True, eq_headers: bool = False, eform: bool = False,
+               top_line: str | None = None) -> None:
     out = s.output
     lv = level_text(level)
     ci = f"[{lv}% Conf. Interval]"
     out.write(LINE + "\n", "text")
-    if vcetype:
+    if top_line is not None:
+        # bootstrap: "Observed   Bootstrap ... Normal-based" (VERIFICAR alinhamento)
+        out.write(top_line + "\n", "text")
+    elif vcetype:
         # VERIFICAR alinhamento do rótulo (Robust, Bootstrap...)
         lab = vcetype
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."

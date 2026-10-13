@@ -33,7 +33,10 @@ def replay(s: "Session", cmd: str, args: str) -> None:
 
 
 def _display(s: "Session", est: Estimates, **kw) -> None:
-    if est.cmd == "regress":
+    if getattr(est, "boot", None) is not None:
+        from .bootstrap import display
+        display(s, est, **kw)
+    elif est.cmd == "regress":
         from .regress import display_regress
         display_regress(s, est, **kw)
     else:

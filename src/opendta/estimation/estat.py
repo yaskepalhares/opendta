@@ -40,12 +40,12 @@ def cmd_estat(s: "Session", args: str) -> None:
         rest = words[0][words[0].index(","):] + " " + rest
     est = current(s)
     table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3),
-             ("classification", 5), ("gof", 3), ("esample", 7)]
+             ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
         raise StataError(321, f"invalid subcommand {sub}")   # VERIFICAR
     fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
-          "classification": _classification, "gof": _gof}.get(full)
+          "classification": _classification, "gof": _gof, "bootstrap": _bootstrap}.get(full)
     if fn is None:
         raise StataError(321, f"invalid subcommand {sub}")
     fn(s, est, rest)
@@ -413,3 +413,8 @@ def _gof(s: "Session", est, rest: str) -> None:
     out.write(f"{'Pearson chi2(' + str(df) + ')':>29} = {chi:>12.2f}\n", "text")
     out.write(f"{'Prob > chi2':>29} = {pv:>13.4f}\n", "text")
     s.r = {"p": pv, "chi2": chi, "df": float(df), "m": float(J), "N": float(N)}
+
+
+def _bootstrap(s: "Session", est, rest: str) -> None:
+    from .bootstrap import estat_bootstrap
+    estat_bootstrap(s, est, rest)
