@@ -113,6 +113,52 @@ def cmd_kdensity(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# diagnósticos e pós-estimação
+# ---------------------------------------------------------------------------
+
+def _post(fn, s: "Session", args: str) -> None:
+    g, graw = fn(s, args)
+    if g is not None:
+        finish(s, g, graw)
+
+
+@command("lowess", "lowess")
+def cmd_lowess(s: "Session", args: str) -> None:
+    from ..graphics.postplots import lowess
+    _post(lowess, s, args)
+
+
+@command("qnorm", "qnorm")
+def cmd_qnorm(s: "Session", args: str) -> None:
+    from ..graphics.postplots import qnorm
+    _post(qnorm, s, args)
+
+
+@command("pnorm", "pnorm")
+def cmd_pnorm(s: "Session", args: str) -> None:
+    from ..graphics.postplots import pnorm
+    _post(pnorm, s, args)
+
+
+@command("rvfplot", "rvfplot")
+def cmd_rvfplot(s: "Session", args: str) -> None:
+    from ..graphics.postplots import rvfplot
+    _post(rvfplot, s, args)
+
+
+@command("rvpplot", "rvpplot")
+def cmd_rvpplot(s: "Session", args: str) -> None:
+    from ..graphics.postplots import rvpplot
+    _post(rvpplot, s, args)
+
+
+@command("marginsplot", "marginsplot")
+def cmd_marginsplot(s: "Session", args: str) -> None:
+    from ..graphics.postplots import marginsplot
+    _post(marginsplot, s, args)
+
+
+# ---------------------------------------------------------------------------
 # graph
 # ---------------------------------------------------------------------------
 
@@ -146,7 +192,7 @@ def cmd_graph(s: "Session", args: str) -> None:
         g, graw = FAM.bar(s, rest, sub)
         finish(s, g, graw)
     elif sub == "dot":
-        g, graw = FAM.bar(s, rest, "hbar")      # VERIFICAR: graph dot desenhado como hbar
+        g, graw = FAM.bar(s, rest, "dot")
         finish(s, g, graw)
     elif sub in ("box", "hbox"):
         g, graw = FAM.box(s, rest, sub)

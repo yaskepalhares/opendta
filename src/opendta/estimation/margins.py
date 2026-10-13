@@ -330,6 +330,13 @@ def cmd_margins(s: "Session", args: str) -> None:
     col = "Margin" if not dydx_vars else {"dydx": "dy/dx", "eyex": "ey/ex", "dyex": "dy/ex",
                                           "eydx": "ey/dx"}[dydx_kind]
     _margins_table(s, rws, stat, est.df_r, lev, col)
+    # para o marginsplot: linhas, valores dos at() e intervalos
+    cc = crit(stat, lev, est.df_r)
+    s._margins_plot = {"results": [(h_, l_, a_) for h_, l_, _f, a_ in results], "vals": vals.tolist(),
+                       "lo": (vals - cc * se).tolist(), "hi": (vals + cc * se).tolist(),
+                       "ats": [{k_: (float(v_) if v_ != "mean" else None) for k_, v_ in a.items()} for a in ats],
+                       "title": title, "level": lev, "dydx": dydx_kind if dydx_vars else "",
+                       "expr": expr, "depvar": est.depvar}
     if dydx_vars and any(h for h, *_ in results):
         out.write("Note: dy/dx for factor levels is the discrete change from the base level.\n", "text")
     from ..commands.matrix import Matrix

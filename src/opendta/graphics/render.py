@@ -97,7 +97,7 @@ def draw_layer(ax, ly: Layer, i: int, sch: dict) -> list:
     """Desenha uma camada; devolve os artistas que vão para a legenda."""
     st = ly.style
     pal = sch["colors"]
-    base_color = pal[i % len(pal)]
+    base_color = pal[int(st.get("_pal", i)) % len(pal)]
     col = _color(st, ("color", "mcolor", "lcolor"), base_color)
     lcol = _color(st, ("lcolor", "color"), base_color)
     fcol = _color(st, ("fcolor", "bcolor", "color"), base_color)
@@ -322,6 +322,25 @@ def _orientation_kw(horizontal: bool) -> dict:
     return {"vert": not horizontal}
 
 
+def _draw_dots(ax, ly: Layer, sch: dict) -> list:
+    """graph dot: uma linha pontilhada por categoria e um marcador por série."""
+    cats = ly.extra.get("cats", [])
+    series = ly.extra.get("series", [])
+    pos = np.arange(len(cats), dtype=float)
+    for p_ in pos:
+        ax.axhline(p_, color=sch["grid"], linestyle=":", linewidth=0.9, zorder=0)
+    handles = []
+    for j, ser in enumerate(series):
+        vals = _arr(ser["values"])
+        c = sch["colors"][j % len(sch["colors"])]
+        h = ax.scatter(vals, pos, s=30, color=c, marker=sch["markers"][j % len(sch["markers"])], zorder=3)
+        handles.append((h, ser.get("label", "")))
+    ax.set_yticks(pos)
+    ax.set_yticklabels(cats)
+    ax.invert_yaxis()
+    return handles if len(series) > 1 else []
+
+
 def _draw_boxes(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
     cats = ly.extra.get("cats", [])
     series = ly.extra.get("series", [])
@@ -460,7 +479,7 @@ def draw(container, g: Graph, sch: dict) -> None:
         rows = cols = 1
         axes = [[container.add_subplot(1, 1, 1)]]
     handles: list = []
-    horizontal = g.family in ("hbar", "hbox")
+    horizontal = g.family in ("hbar", "hbox", "dot")
     for k in range(rows * cols):
         ax = axes[k // cols][k % cols]
         if k >= n:
@@ -476,7 +495,9 @@ def draw(container, g: Graph, sch: dict) -> None:
             pass
         hs: list = []
         for ly in p.layers:
-            if ly.kind == "bars":
+            if ly.kind == "bars" and g.family == "dot":
+                hs += _draw_dots(ax, ly, sch)
+            elif ly.kind == "bars":
                 hs += _draw_bars(ax, ly, sch, horizontal)
             elif ly.kind == "boxes":
                 hs += _draw_boxes(ax, ly, sch, horizontal)
@@ -488,7 +509,7 @@ def draw(container, g: Graph, sch: dict) -> None:
             _apply_axis(ax, "x", o, sch, {int(a): b for a, b in vl.items()} if vl else None)
             vl = o.get("_yvaluelabels")
             _apply_axis(ax, "y", o, sch, {int(a): b for a, b in vl.items()} if vl else None)
-        elif g.family in ("bar", "hbar", "box", "hbox"):
+        elif g.family in ("bar", "hbar", "box", "hbox", "dot"):
             vax = "x" if horizontal else "y"
             _apply_axis(ax, vax, {**o, vax + "label": {**o.get("ylabel", {}), "grid": True}}, sch, None)
         if not handles:

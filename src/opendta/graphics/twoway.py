@@ -27,7 +27,7 @@ PLOTTYPES = {
     "scatter": 2, "line": 4, "connected": 4, "lfit": 4, "qfit": 4, "lfitci": 6, "qfitci": 6,
     "area": 4, "bar": 3, "spike": 5, "dropline": 8, "rcap": 4, "rcapsym": 7, "rarea": 5, "rbar": 4,
     "rspike": 6, "rline": 5, "rconnected": 5, "rscatter": 4, "function": 4, "histogram": 4,
-    "kdensity": 4, "scatteri": 8, "tsline": 6,
+    "kdensity": 4, "scatteri": 8, "tsline": 6, "lowess": 3,
 }
 RANGE_PLOTS = ("rcap", "rcapsym", "rarea", "rbar", "rspike", "rline", "rconnected", "rscatter")
 
@@ -182,7 +182,7 @@ class Builder:
         need = {"histogram": 1, "kdensity": 1}.get(pt, 3 if pt in RANGE_PLOTS else 2)
         if len(names) < need:
             raise StataError(102, "too few variables specified")
-        if pt in ("histogram", "kdensity", "lfit", "qfit", "lfitci", "qfitci") or pt in RANGE_PLOTS:
+        if pt in ("histogram", "kdensity", "lfit", "qfit", "lfitci", "qfitci", "lowess") or pt in RANGE_PLOTS:
             maxv = {"histogram": 1, "kdensity": 1}.get(pt, 3 if pt in RANGE_PLOTS else 2)
             if len(names) > maxv:
                 raise StataError(103, "too many variables specified")
@@ -273,6 +273,17 @@ class Builder:
             out.append(Layer(pt, x[mm][order].tolist(), y1[mm][order].tolist(),
                              {"y2": y2[mm][order].tolist()}, style, f"{names[0]}/{names[1]}"))
             self.ytitles.append("")
+            return out
+        if pt == "lowess":
+            from .postplots import lowess_fit
+            y = D.numeric(s, names[0])
+            mm = m & D.valid(x) & D.valid(y)
+            bw = float(style.pop("bwidth")) if isinstance(style.get("bwidth"), str) else 0.8
+            fit = lowess_fit(x[mm], y[mm], bw, bool(style.pop("mean", False)))
+            o = np.argsort(x[mm], kind="stable")
+            out.append(Layer("line", x[mm][o].tolist(), fit[o].tolist(), {}, style,
+                             f"lowess {names[0]} {names[1]}"))
+            self.ytitles.append(D.var_title(s, names[0]))
             return out
         if pt in ("lfit", "qfit", "lfitci", "qfitci"):
             y = D.numeric(s, names[0])
@@ -367,7 +378,7 @@ def hist_ytitle(style: dict) -> str:
     return "Density"
 
 
-HIST_LAYER = {"bin": 3, "width": 1, "start": 5, "discrete": 4, "density": 4, "fraction": 4,
+HIST_LAYER = {"mean": 4, "bin": 3, "width": 1, "start": 5, "discrete": 4, "density": 4, "fraction": 4,
               "frequency": 4, "percent": 4, "kernel": 1, "bwidth": 2, "gap": 3}
 
 

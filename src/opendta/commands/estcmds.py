@@ -215,6 +215,48 @@ def cmd_bootstrap(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("lrtest", "lrtest")
+def cmd_lrtest(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_lrtest as run
+    run(s, args)
+
+
+@command("hausman", "hausman")
+def cmd_hausman(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_hausman as run
+    run(s, args)
+
+
+@command("xtsum", "xtsum")
+def cmd_xtsum(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_xtsum as run
+    run(s, args)
+
+
+@command("xtdescribe", "xtdes")
+def cmd_xtdescribe(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_xtdescribe as run
+    run(s, args)
+
+
+@command("qreg", "qreg")
+def cmd_qreg(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_qreg as run
+    run(s, args)
+
+
+@command("xtpoisson", "xtpoisson")
+def cmd_xtpoisson(s: "Session", args: str) -> None:
+    from ..estimation.panel2 import cmd_xtpoisson as run
+    run(s, args)
+
+
+@command("xtlogit", "xtlogit")
+def cmd_xtlogit(s: "Session", args: str) -> None:
+    from ..estimation.panel2 import cmd_xtlogit as run
+    run(s, args)
+
+
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY
