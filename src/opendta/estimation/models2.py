@@ -56,6 +56,7 @@ class _Prep:
         full.update({"nolog": 4, "log": 3, "iterate": 4, "tolerance": 3, "ltolerance": 4,
                      "nrtolerance": 4, "difficult": 4, "technique": 4, "noheader": 6})
         smp = Sample(s, args, opts_spec=full, weights=weights)
+        self.s = s
         self.smp = smp
         self.o = smp.o
         w = smp.w[smp.mask].astype(np.float64) if smp.w is not None else np.ones(smp.n)
@@ -87,6 +88,19 @@ class _Prep:
         except np.linalg.LinAlgError:
             V = np.linalg.pinv(-H)
         V = (V + V.T) / 2
+        ctx = getattr(self.s, "_svy_ctx", None)
+        if ctx is not None and scores is not None:
+            # svy: escores linearizados u = w s V levados às observações do
+            # desenho (zero fora da amostra/subpop), V = variância do desenho
+            sc = scores * self.w[:, None]
+            Z = sc @ V
+            dd = ctx["dd"]
+            pos = ctx["pos"][np.flatnonzero(self.smp.mask)]
+            Zf = np.zeros((dd.n, Z.shape[1]))
+            Zf[pos] = Z
+            ctx["Z"] = Zf
+            Vs = dd.variance(Zf)
+            return (Vs + Vs.T) / 2, None
         if not self.robust or scores is None:
             return V, None
         smp = self.smp

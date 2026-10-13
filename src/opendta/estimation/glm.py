@@ -316,6 +316,7 @@ def cmd_glm(s: "Session", args: str) -> None:
         title_ef = {("binomial", "Logit"): "Odds Ratio", ("binomial", "Log"): "Risk Ratio",
                     ("poisson", "Log"): "IRR", ("nbinomial", "Log"): "IRR"}.get((fam, link_name), "exp(b)")
         est.coef_title, est.eform_on = title_ef, True
+        est.eform_title_opt = title_ef
     display_glm(s, est)
     est.coef_title, est.eform_on = "Coef.", False
 

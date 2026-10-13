@@ -14,7 +14,7 @@ A declaração fica nas características de _dta (_svy_*), como no Stata.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -47,21 +47,49 @@ class Design:
     vce: str = "linearized"
     poststrata: str = ""
     postweight: str = ""
+    # estágios 2, 3...: [{"su": ..., "strata": ..., "fpc": ...}]
+    stages: list = field(default_factory=list)
+    # pesos replicados e opções dos métodos de replicação
+    brrweight: str = ""
+    fay: float = 0.0
+    bsrweight: str = ""
+    bsn: float = 1.0
+    jkrweight: str = ""
+    sdrweight: str = ""
+    mse: bool = False
+    dof: float | None = None
 
     @property
     def is_set(self) -> bool:
         return True
+
+    @property
+    def repweights(self) -> list[str]:
+        txt = {"brr": self.brrweight, "bootstrap": self.bsrweight, "jackknife": self.jkrweight,
+               "sdr": self.sdrweight}.get(self.vce, "")
+        return txt.split() if txt else []
 
 
 def get_design(ds) -> Design | None:
     ch = ds.chars.get("_dta", {})
     if ch.get("_svy_version", "") == "":
         return None
+    stages = []
+    k = 2
+    while f"_svy_su{k}" in ch:
+        stages.append({"su": ch.get(f"_svy_su{k}", ""), "strata": ch.get(f"_svy_strata{k}", ""),
+                       "fpc": ch.get(f"_svy_fpc{k}", "")})
+        k += 1
+    dof = ch.get("_svy_dof", "")
     return Design(psu=ch.get("_svy_su1", ""), weight=ch.get("_svy_wvar", ""), wtype=ch.get("_svy_wtype", ""),
                   strata=ch.get("_svy_strata1", ""), fpc=ch.get("_svy_fpc1", ""),
                   singleunit=ch.get("_svy_singleunit", "missing") or "missing",
                   vce=ch.get("_svy_vce", "linearized") or "linearized",
-                  poststrata=ch.get("_svy_poststrata", ""), postweight=ch.get("_svy_postweight", ""))
+                  poststrata=ch.get("_svy_poststrata", ""), postweight=ch.get("_svy_postweight", ""),
+                  stages=stages, brrweight=ch.get("_svy_brrweight", ""), fay=float(ch.get("_svy_fay", "0") or 0),
+                  bsrweight=ch.get("_svy_bsrweight", ""), bsn=float(ch.get("_svy_bsn", "1") or 1),
+                  jkrweight=ch.get("_svy_jkrweight", ""), sdrweight=ch.get("_svy_sdrweight", ""),
+                  mse=ch.get("_svy_mse", "") == "mse", dof=float(dof) if dof else None)
 
 
 def _show_design(s: "Session", d: Design) -> None:
@@ -71,14 +99,52 @@ def _show_design(s: "Session", d: Design) -> None:
         rows.append((d.wtype, d.weight))
     else:
         rows.append(("pweight", "<none>"))
-    rows += [("VCE", d.vce), ("Single unit", d.singleunit), ("Strata 1", d.strata or "<one>"),
+    rows += [("VCE", d.vce)]
+    if d.mse:
+        rows.append(("MSE", "on"))   # VERIFICAR
+    for lab, val in (("brrweight", d.brrweight), ("bsrweight", d.bsrweight), ("jkrweight", d.jkrweight),
+                     ("sdrweight", d.sdrweight)):
+        if val:
+            rows.append((lab, val))
+    if d.vce == "brr" and d.fay:
+        rows.append(("Fay", f"{d.fay:g}"))
+    if d.vce == "bootstrap" and d.bsn != 1:
+        rows.append(("bsn", f"{d.bsn:g}"))
+    rows += [("Single unit", d.singleunit), ("Strata 1", d.strata or "<one>"),
              ("SU 1", d.psu or "<observations>"), ("FPC 1", d.fpc or "<zero>")]
+    for k, st_ in enumerate(d.stages, start=2):
+        rows += [(f"Strata {k}", st_["strata"] or "<one>"), (f"SU {k}", st_["su"] or "<observations>"),
+                 (f"FPC {k}", st_["fpc"] or "<zero>")]
     if d.poststrata:
         rows[1:1] = [("Poststrata", d.poststrata), ("Postweight", d.postweight)]
     out.write("\n", "text")
     for lab, val in rows:
         out.write(f"{lab:>13}: ", "text")
         out.write(val + "\n", "result")
+
+
+_SVYSET_OPTS = {"strata": 3, "fpc": 3, "singleunit": 6, "vce": 3, "poststrata": 5, "postweight": 5,
+                "clear": 5, "brrweight": 3, "fay": 3, "bsrweight": 3, "bsn": 3, "jkrweight": 3,
+                "sdrweight": 3, "mse": 3, "dof": 3, "noclear": 7}
+
+
+def _split_stages(text: str) -> list[str]:
+    parts, depth, cur, i = [], 0, "", 0
+    while i < len(text):
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        if depth == 0 and text.startswith("||", i):
+            parts.append(cur)
+            cur = ""
+            i += 2
+            continue
+        cur += c
+        i += 1
+    parts.append(cur)
+    return parts
 
 
 def cmd_svyset(s: "Session", args: str) -> None:
@@ -96,15 +162,31 @@ def cmd_svyset(s: "Session", args: str) -> None:
             if k.startswith("_svy_"):
                 del ds.chars["_dta"][k]
         return
-    p = parse_standard(t)
-    o = match_options(p.options, {"strata": 3, "fpc": 3, "singleunit": 6, "vce": 3, "poststrata": 5,
-                                  "postweight": 5, "clear": 5}) if p.options.strip() else {}
     from ..core.varlist import resolve_name
+    pieces = _split_stages(t)
+    # as opções gerais (pesos replicados, vce...) podem vir depois do último estágio
+    last = pieces[-1]
+    p = parse_standard(pieces[0])
+    o = match_options(p.options, _SVYSET_OPTS) if p.options.strip() else {}
+    stages = []
+    for piece in pieces[1:]:
+        ps = parse_standard(piece)
+        so = match_options(ps.options, _SVYSET_OPTS) if ps.options.strip() else {}
+        su = ps.varlist.strip()
+        stage = {"su": "" if su in ("_n", "") else resolve_name(ds, su),
+                 "strata": resolve_name(ds, str(so["strata"]).strip()) if so.get("strata") else "",
+                 "fpc": resolve_name(ds, str(so["fpc"]).strip()) if so.get("fpc") else ""}
+        stages.append(stage)
+        for k_ in ("vce", "brrweight", "fay", "bsrweight", "bsn", "jkrweight", "sdrweight", "mse", "dof",
+                   "singleunit"):
+            if k_ in so:
+                o[k_] = so[k_]
+    del last
     words = p.varlist.split()
     psu = ""
     if words:
         psu = "_n" if words[0] == "_n" else resolve_name(ds, words[0])
-    d = Design(psu=psu if psu != "_n" else "")
+    d = Design(psu=psu if psu != "_n" else "", stages=stages)
     if p.weight:
         wtype, wexp = p.weight
         if wtype not in ("pweight", "iweight", "weight"):
@@ -120,8 +202,38 @@ def cmd_svyset(s: "Session", args: str) -> None:
         if su not in ("missing", "certainty", "scaled", "centered"):
             raise StataError(198, "invalid singleunit() option")   # VERIFICAR
         d.singleunit = su
+    for key in ("brrweight", "bsrweight", "jkrweight", "sdrweight"):
+        if o.get(key):
+            main = str(o[key]).split(",")[0]
+            setattr(d, key, " ".join(s.expand_varlist(main)))
+    if o.get("fay"):
+        d.fay = float(o["fay"])
+        if not 0 <= d.fay < 2 or d.fay == 1:
+            raise StataError(198, "fay() must be in [0, 2) and not 1")   # VERIFICAR
+    if o.get("bsn"):
+        d.bsn = float(o["bsn"])
+    d.mse = bool(o.get("mse"))
+    if o.get("dof"):
+        d.dof = float(o["dof"])
     if o.get("vce"):
-        d.vce = str(o["vce"]).strip()
+        v = str(o["vce"]).strip().lower()
+        v = {"linear": "linearized", "jack": "jackknife", "jackknife": "jackknife", "bs": "bootstrap",
+             "boot": "bootstrap"}.get(v, v)
+        d.vce = v
+    elif d.brrweight:
+        d.vce = "brr"
+    elif d.bsrweight:
+        d.vce = "bootstrap"
+    elif d.jkrweight:
+        d.vce = "jackknife"
+    elif d.sdrweight:
+        d.vce = "sdr"
+    if d.vce not in ("linearized", "jackknife", "brr", "bootstrap", "sdr"):
+        raise StataError(198, f"vce({d.vce}) not allowed")   # VERIFICAR
+    if d.vce == "bootstrap" and not d.bsrweight:
+        raise StataError(198, "bsrweight() required for vce(bootstrap)")   # VERIFICAR
+    if d.vce == "sdr" and not d.sdrweight:
+        raise StataError(198, "sdrweight() required for vce(sdr)")   # VERIFICAR
     if o.get("poststrata"):
         d.poststrata = resolve_name(ds, str(o["poststrata"]).strip())
         d.postweight = resolve_name(ds, str(o.get("postweight", "")).strip())
@@ -131,14 +243,26 @@ def cmd_svyset(s: "Session", args: str) -> None:
             del ch[k]
     ch.update({"_svy_version": "2", "_svy_su1": d.psu, "_svy_wvar": d.weight, "_svy_wtype": d.wtype,
                "_svy_strata1": d.strata, "_svy_fpc1": d.fpc, "_svy_singleunit": d.singleunit,
-               "_svy_vce": d.vce, "_svy_poststrata": d.poststrata, "_svy_postweight": d.postweight})
+               "_svy_vce": d.vce, "_svy_poststrata": d.poststrata, "_svy_postweight": d.postweight,
+               "_svy_brrweight": d.brrweight, "_svy_fay": f"{d.fay:g}", "_svy_bsrweight": d.bsrweight,
+               "_svy_bsn": f"{d.bsn:g}", "_svy_jkrweight": d.jkrweight, "_svy_sdrweight": d.sdrweight,
+               "_svy_mse": "mse" if d.mse else "", "_svy_dof": f"{d.dof:g}" if d.dof else ""})
+    for k, st_ in enumerate(stages, start=2):
+        ch[f"_svy_su{k}"] = st_["su"]
+        ch[f"_svy_strata{k}"] = st_["strata"]
+        ch[f"_svy_fpc{k}"] = st_["fpc"]
     _show_design(s, d)
-    s.r = {"settings": t, "singleunit": d.singleunit, "vce": d.vce}
+    r = [("settings", t), ("singleunit", d.singleunit), ("vce", d.vce)]
     if d.strata:
-        s.r["strata1"] = d.strata
-    s.r["su1"] = d.psu or "_n"
+        r.append(("strata1", d.strata))
+    r.append(("su1", d.psu or "_n"))
+    for k, st_ in enumerate(stages, start=2):
+        if st_["strata"]:
+            r.append((f"strata{k}", st_["strata"]))
+        r.append((f"su{k}", st_["su"] or "_n"))
     if d.weight:
-        s.r["wvar"], s.r["wtype"] = d.weight, d.wtype
+        r += [("wvar", d.weight), ("wtype", d.wtype)]
+    s.r = dict(r)
     s.r = dict(reversed(list(s.r.items())))
 
 
@@ -153,24 +277,50 @@ def require_design(s: "Session") -> Design:
 # estrutura do desenho na amostra
 # ---------------------------------------------------------------------------
 
+def _hadamard(r: int) -> np.ndarray:
+    """Matriz de Hadamard de ordem r (potência de 2, construção de Sylvester).
+    VERIFICAR: o Stata também usa ordens 12, 20, 24...; aqui, a menor
+    potência de 2 que cobre os estratos."""
+    H = np.array([[1.0]])
+    while H.shape[0] < r:
+        H = np.block([[H, H], [H, -H]])
+    return H
+
+
 class DesignData:
     """Pesos, estratos e UPAs das observações em `mask` (amostra do desenho)."""
 
-    def __init__(self, s: "Session", d: Design, mask: np.ndarray):
+    def __init__(self, s: "Session", d: Design, mask: np.ndarray, vce: str | None = None, mse: bool | None = None):
         ds = s.data
         self.d = d
+        self.s = s
         n_all = ds.nobs
         w = ds.get(d.weight).data.astype(float) if d.weight else np.ones(n_all)
         mask = mask & (w < SYS)
         strata = ds.get(d.strata).data if d.strata else np.zeros(n_all)
         psu = ds.get(d.psu).data if d.psu else np.arange(n_all, dtype=float)
         mask = mask & (strata < SYS) & (psu < SYS)
+        self.vce = (vce or d.vce or "linearized")
+        self.mse = d.mse if mse is None else mse
+        self.rep_vars = d.repweights if self.vce == d.vce else []
+        R = None
+        if self.rep_vars:
+            R = np.column_stack([ds.get(v).data.astype(float) for v in self.rep_vars])
+            mask = mask & np.all(R < SYS, axis=1)
         self.mask = mask
         self.w = w[mask]
+        self.rep = R[mask] if R is not None else None
         self.strata = strata[mask]
         self.psu = psu[mask]
         self.fpc = ds.get(d.fpc).data[mask].astype(float) if d.fpc else None
         self.n = int(mask.sum())
+        # estágios seguintes (UPA dentro de estrato dentro da unidade anterior)
+        self.stage_cols = []
+        for st_ in d.stages:
+            su = ds.get(st_["su"]).data[mask] if st_["su"] else np.arange(n_all, dtype=float)[mask]
+            sh = ds.get(st_["strata"]).data[mask] if st_["strata"] else np.zeros(self.n)
+            fp = ds.get(st_["fpc"]).data[mask].astype(float) if st_["fpc"] else None
+            self.stage_cols.append((sh, su, fp))
         # identificadores de UPA dentro de estrato
         self.h_ids, self.h_inv = np.unique(self.strata, return_inverse=True)
         pairs = np.column_stack([self.h_inv, self.psu])
@@ -178,8 +328,14 @@ class DesignData:
         self.u_inv = self.u_inv.ravel()
         self.n_strata = len(self.h_ids)
         self.n_psu = int(self.u_inv.max()) + 1 if self.n else 0
-        self.df = self.n_psu - self.n_strata
+        if self.rep is not None and not d.psu and not d.strata:
+            self.df = self.rep.shape[1] - 1     # VERIFICAR: gl com pesos replicados
+        else:
+            self.df = self.n_psu - self.n_strata
+        if d.dof:
+            self.df = int(d.dof)
 
+    # -- linearização ------------------------------------------------------
     def variance(self, z: np.ndarray) -> np.ndarray:
         """V a partir dos escores z (n x k) das observações da amostra."""
         z = np.atleast_2d(z.T).T if z.ndim == 1 else z
@@ -210,9 +366,137 @@ class DesignData:
                 continue
             dev = U[idx] - U[idx].mean(axis=0)
             V += (1 - f) * nh / (nh - 1) * dev.T @ dev
+            # estágios seguintes: só contam se o 1º estágio for sem reposição
+            # (f_h > 0), multiplicados por f_h ([SVY] variance estimation)
+            if f > 0 and self.stage_cols:
+                for u in idx:
+                    rows = np.nonzero(self.u_inv == u)[0]
+                    V += f * self._stage_var(z, rows, 0)
         if single:
             return np.full((k, k), np.nan)
         return V
+
+    def _stage_var(self, z: np.ndarray, rows: np.ndarray, level: int) -> np.ndarray:
+        k = z.shape[1]
+        sh, su, fp = self.stage_cols[level]
+        V = np.zeros((k, k))
+        for h in np.unique(sh[rows]):
+            rh = rows[sh[rows] == h]
+            units = np.unique(su[rh])
+            nh = len(units)
+            if nh < 2:
+                continue
+            U = np.array([z[rh[su[rh] == u]].sum(axis=0) for u in units])
+            f = 0.0
+            if fp is not None:
+                fv = fp[rh][0]
+                f = fv if fv <= 1 else nh / fv
+            dev = U - U.mean(axis=0)
+            V += (1 - f) * nh / (nh - 1) * dev.T @ dev
+            if f > 0 and level + 1 < len(self.stage_cols):
+                for u in units:
+                    V += f * self._stage_var(z, rh[su[rh] == u], level + 1)
+        return V
+
+    # -- replicação ----------------------------------------------------------
+    @property
+    def replicated(self) -> bool:
+        return self.vce in ("jackknife", "brr", "bootstrap", "sdr")
+
+    @property
+    def vcetype(self) -> str:
+        return {"linearized": "Linearized", "jackknife": "Jackknife", "brr": "BRR", "bootstrap": "Bootstrap",
+                "sdr": "SDR"}[self.vce]
+
+    def replicates(self):
+        """Gera (pesos do réplica, estrato, multiplicador) para o método."""
+        w = self.w
+        if self.rep is not None:
+            for r in range(self.rep.shape[1]):
+                yield self.rep[:, r], 0, None
+            return
+        psu_h = np.zeros(self.n_psu, dtype=int)
+        psu_h[self.u_inv] = self.h_inv
+        if self.vce == "jackknife":
+            for h in range(self.n_strata):
+                units = np.nonzero(psu_h == h)[0]
+                nh = len(units)
+                if nh < 2:
+                    continue
+                in_h = self.h_inv == h
+                for u in units:
+                    ww = w.copy()
+                    ww[in_h] *= nh / (nh - 1)
+                    ww[self.u_inv == u] = 0.0
+                    yield ww, h, (nh - 1) / nh
+            return
+        if self.vce == "brr":
+            counts = np.bincount(psu_h, minlength=self.n_strata)
+            if np.any(counts != 2):
+                raise StataError(459, "BRR requires 2 PSUs per stratum")   # VERIFICAR
+            R = 4
+            while R < self.n_strata:
+                R *= 2
+            H = _hadamard(R)
+            fay = self.d.fay
+            for r in range(R):
+                ww = w.copy()
+                for h in range(self.n_strata):
+                    units = np.nonzero(psu_h == h)[0]
+                    first, second = units[0], units[1]
+                    a, b = (2 - fay, fay) if H[r, h] > 0 else (fay, 2 - fay)
+                    ww[self.u_inv == first] *= a
+                    ww[self.u_inv == second] *= b
+                yield ww, 0, None
+            return
+        raise StataError(198, f"vce({self.vce}) requires replicate weights")   # VERIFICAR
+
+    def rep_variance(self, estimator, theta0: np.ndarray) -> tuple[np.ndarray, int]:
+        """V por replicação; `estimator(w)` devolve o vetor de estimativas."""
+        thetas, strata, mults = [], [], []
+        for ww, h, m in self.replicates():
+            try:
+                th = np.asarray(estimator(ww), dtype=float)
+            except StataError:
+                th = np.full(len(theta0), np.nan)
+            thetas.append(th)
+            strata.append(h)
+            mults.append(m)
+        T = np.array(thetas)
+        R = len(T)
+        k = len(theta0)
+        ok = ~np.isnan(T).any(axis=1)
+        if self.vce == "jackknife":
+            V = np.zeros((k, k))
+            hs = np.array(strata)
+            for h in np.unique(hs):
+                sel = (hs == h) & ok
+                if not sel.any():
+                    continue
+                Th = T[sel]
+                c = theta0 if self.mse else Th.mean(axis=0)
+                m = mults[int(np.nonzero(hs == h)[0][0])]
+                if m is None:
+                    m = (R - 1) / R
+                f = 0.0
+                if self.fpc is not None and self.rep is None:
+                    fv = self.fpc[self.h_inv == h][0]
+                    nh = int(sel.sum())
+                    f = fv if fv <= 1 else nh / fv
+                D = Th - c
+                V += (1 - f) * m * D.T @ D
+            return V, R
+        Tg = T[ok]
+        c = theta0 if self.mse else Tg.mean(axis=0)
+        D = Tg - c
+        S = D.T @ D
+        if self.vce == "brr":
+            return S / (len(Tg) * (1 - self.d.fay) ** 2), R
+        if self.vce == "bootstrap":
+            return self.d.bsn / len(Tg) * S, R
+        if self.vce == "sdr":
+            return 4 / len(Tg) * S, R
+        raise StataError(198, "invalid vce")
 
 
 # ---------------------------------------------------------------------------
@@ -359,8 +643,9 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     d = require_design(s) if svy else None
     subpop = None
     if svy:
-        so = match_options(svyopts, {"subpop": 3, "vce": 3}) if svyopts.strip() else {}
-        dd = DesignData(s, d, np.ones(ds.nobs, bool) if not p.if_ and not p.in_ else touse(s, p))
+        so = parse_svy_opts(svyopts)
+        dd = DesignData(s, d, np.ones(ds.nobs, bool) if not p.if_ and not p.in_ else touse(s, p),
+                        vce=so.get("vce"), mse=so.get("mse"))
         if so.get("subpop"):
             subpop = _subpop_mask(s, str(so["subpop"]))
         est_mask = mask & dd.mask
@@ -389,24 +674,31 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         Y = [np.where(y < SYS, y, 0.0) for y in Y]
     X = [np.where(ds.get(n).data[full] < SYS, ds.get(n).data[full], 0.0) for n in den] if stat == "ratio" else None
     groups = _over_groups(s, over, full) if over else [("", np.ones(len(w), bool), "")]
-    if stat == "proportion":
-        vals, Z, labels = [], [], []
-        for i, y in enumerate(Y):
-            for gname, sel, _ in groups:
-                v_, Z_, _l = _estimate("proportion", [y], w, [(gname, sel, None)], [names_eff[i]])
-                vals.extend(v_.tolist())
-                Z.append(Z_)
-                labels.append((labs_p[i][0], f"{labs_p[i][1]}" + (f" {gname}" if over else "")))
-        vals = np.array(vals)
-        Z = np.column_stack(Z) if Z else np.zeros((len(w), 0))
-    else:
-        vals, Z, labels = _estimate(stat, Y, w, groups, names, X)
+    def compute(wv):
+        if stat == "proportion":
+            vals_, Z_all, labels_ = [], [], []
+            for i, y in enumerate(Y):
+                for gname, sel, _ in groups:
+                    v_, Z_, _l = _estimate("proportion", [y], wv, [(gname, sel, None)], [names_eff[i]])
+                    vals_.extend(v_.tolist())
+                    Z_all.append(Z_)
+                    labels_.append((labs_p[i][0], f"{labs_p[i][1]}" + (f" {gname}" if over else "")))
+            return np.array(vals_), (np.column_stack(Z_all) if Z_all else np.zeros((len(wv), 0))), labels_
+        return _estimate(stat, Y, wv, groups, names, X)
+
+    vals, Z, labels = compute(w)
     # grupo de over() de cada coluna (para a variância "analytic" sem svy)
     colsel = [sel for _y in Y for _g, sel, _k in groups]
     if svy:
-        V = dd.variance(Z)
+        n_rep = None
+        if dd.replicated:
+            V, n_rep = dd.rep_variance(lambda ww: compute(ww * inside)[0], vals)
+        else:
+            V = dd.variance(Z)
         df = dd.df
-        vcetype = "Linearized"
+        vcetype = dd.vcetype
+        # variâncias sob AAS para o estat effects ([SVY] estat, Methods and formulas)
+        _srs = _srs_variances(Z, w, dd, int(est_mask[full].sum()))
     else:
         # V = N/(N-1) Σ z z' (com fweight, cada escore conta w vezes)
         robust = str(o.get("vce", "")).startswith("r")
@@ -444,6 +736,8 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             right = [("Number of obs", f"{int(est_mask[full].sum()):,}"), ("Population size", _num(pop))]
             if subpop is not None:
                 right += [("Subpop. no. obs", f"{n_obs:,}"), ("Subpop. size", _num(float(w.sum())))]
+            if n_rep:
+                right.append(("Replications", f"{n_rep:,}"))   # VERIFICAR posição
             right.append(("Design df", f"{df:,}"))
             left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
             for i, (rl, rv) in enumerate(right):
@@ -483,6 +777,9 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     est.level = level
     est.display = lambda ss, ee, **kw: _summary_table(ss, stat_title, labels, vals, se, df, level, vcetype, over)
     if svy:
+        est.svy_effects = dict(V=V, srs=_srs, labels=labels, vals=vals, title=stat_title, vcetype=vcetype,
+                               over=over, level=level)
+    if svy:
         # e() do svy no Stata 14, na ordem do ereturn list (compat 0601)
         k = len(vals)
         n_over = len(groups) if over else 1
@@ -499,7 +796,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         command = cmdtxt if "," in cmdtxt else cmdtxt + ","
         macros = [("cmdline", f"svy{', ' + svyopts.strip() if svyopts.strip() else ' '}: {cmdtxt}"),
                   ("cmd", stat), ("prefix", "svy"), ("cmdname", stat), ("command", command),
-                  ("title", f"Survey: {_TITLES[stat]}"), ("vcetype", "Linearized"), ("vce", "linearized"),
+                  ("title", f"Survey: {_TITLES[stat]}"), ("vcetype", vcetype), ("vce", dd.vce),
                   ("estat_cmd", "svy_estat"), ("varlist", " ".join(allv))]
         if over:
             macros += [("over", over), ("over_labels", " ".join(g[0] for g in groups)),
@@ -536,6 +833,39 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
 
 def _num(x: float) -> str:
     return f"{x:,.0f}" if abs(x - round(x)) < 1e-6 else format_value(x, "%11.0g", pad=False).strip()
+
+
+def parse_svy_opts(text: str) -> dict:
+    """Opções do prefixo svy: subpop(), vce(), mse, dof()."""
+    so = match_options(text, {"subpop": 3, "vce": 3, "mse": 3, "dof": 3, "nodots": 5, "dots": 4,
+                              "level": 1}) if text.strip() else {}
+    out = {}
+    if so.get("subpop"):
+        out["subpop"] = str(so["subpop"])
+    if so.get("vce"):
+        v = str(so["vce"]).strip().lower()
+        out["vce"] = {"linear": "linearized", "jack": "jackknife", "bs": "bootstrap",
+                      "boot": "bootstrap"}.get(v, v)
+    if so.get("mse"):
+        out["mse"] = True
+    return out
+
+
+def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
+    """V_srswor e V_srswr de [SVY] estat (fórmula do total com os escores
+    u = z/w): V = (1 - f) M̂/(m - 1) Σ w (u - ū)(u - ū)'."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        U = np.where(w[:, None] > 0, Z / np.where(w > 0, w, 1)[:, None], 0.0)
+    Mhat = float(dd.w.sum())
+    ubar = (w @ U) / Mhat if Mhat else np.zeros(Z.shape[1])
+    D = U - ubar
+    S = (D * w[:, None]).T @ D
+    Vwr = Mhat / max(m - 1, 1) * S
+    f = 0.0
+    if dd.fpc is not None:
+        fv = float(dd.fpc[0])
+        f = fv if fv <= 1 else m / fv   # VERIFICAR: f = m/M̂ com fpc no 1º estágio
+    return (1 - f) * Vwr, Vwr
 
 
 def _subpop_mask(s: "Session", text: str) -> np.ndarray:
@@ -610,6 +940,10 @@ def cmd_svy(s: "Session", args: str) -> None:
         from .svyreg import svy_model
         svy_model(s, name, rest, opts)
         return
+    if name in ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit"):
+        from .svyreg import svy_generic
+        svy_generic(s, name, rest, opts)
+        return
     if name in ("tabulate",):
         from .svyreg import svy_tabulate
         svy_tabulate(s, rest, opts)
@@ -631,3 +965,49 @@ def cmd_total(s, args):
 
 def cmd_ratio(s, args):
     summary_stat(s, "ratio", args)
+
+
+# ---------------------------------------------------------------------------
+# estat effects
+# ---------------------------------------------------------------------------
+
+def estat_effects(s: "Session", est, rest: str) -> None:
+    """DEFF = V/V_srswor e DEFT = sqrt(V/V_srswr) ([SVY] estat). Layout
+    VERIFICAR (compat 0602)."""
+    info = getattr(est, "svy_effects", None)
+    if info is None:
+        raise StataError(321, "estat effects not allowed after this command")   # VERIFICAR
+    o = match_options(rest.lstrip(", "), {"deff": 4, "deft": 4, "srssubpop": 3, "meff": 4, "meft": 4}) \
+        if rest.strip(" ,") else {}
+    V = np.asarray(info["V"], dtype=float)
+    Vwor, Vwr = info["srs"]
+    out = s.output
+    width = 58
+    out.write("\n" + "-" * width + "\n", "text")
+    vt = info["vcetype"]
+    start = 28 + (9 - len(vt)) // 2
+    out.write(f"{'':>12} |" + " " * (start - 14) + vt + "\n", "text")
+    head = "Over" if info.get("over") else ""
+    out.write(f"{head:>12} | {info['title']:>10}   Std. Err.        DEFF      DEFT\n", "text")
+    out.write("-" * 13 + "+" + "-" * 44 + "\n", "text")
+    last = None
+    deffs, defts = [], []
+    for j, ((var, grp), b) in enumerate(zip(info["labels"], info["vals"])):
+        v = V[j, j]
+        deff = v / Vwor[j, j] if Vwor[j, j] > 0 else SYS
+        deft = float(np.sqrt(v / Vwr[j, j])) if Vwr[j, j] > 0 else SYS
+        deffs.append(deff)
+        defts.append(deft)
+        if grp:
+            if var != last:
+                out.write(f"{var[:12]:<12} |\n", "text")
+                last = var
+            lab = grp
+        else:
+            lab = var
+        out.write(f"{lab[:12]:>12} |", "text")
+        out.write(f"  {g9(b):>9}  {g9(float(np.sqrt(v))):>9}{g9(deff):>12}{g9(deft):>10}\n", "result")
+    out.write("-" * width + "\n", "text")
+    from ..commands.matrix import Matrix
+    cn = [f"{a}:{b}" if b else a for a, b in info["labels"]]
+    s.r = {"deft": Matrix(np.array([defts]), ["r1"], cn), "deff": Matrix(np.array([deffs]), ["r1"], cn)}

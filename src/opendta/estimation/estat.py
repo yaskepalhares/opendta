@@ -42,12 +42,12 @@ def cmd_estat(s: "Session", args: str) -> None:
         rest = words[0][words[0].index(","):] + " " + rest
     est = current(s)
     table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3),
-             ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4)]
+             ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
         raise StataError(321, f"invalid subcommand {sub}")   # VERIFICAR
     fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
-          "classification": _classification, "gof": _gof, "bootstrap": _bootstrap}.get(full)
+          "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
     if fn is None:
         raise StataError(321, f"invalid subcommand {sub}")
     fn(s, est, rest)
@@ -429,3 +429,8 @@ def _gof(s: "Session", est, rest: str) -> None:
 def _bootstrap(s: "Session", est, rest: str) -> None:
     from .bootstrap import estat_bootstrap
     estat_bootstrap(s, est, rest)
+
+
+def _effects(s: "Session", est, rest: str) -> None:
+    from .svy import estat_effects
+    estat_effects(s, est, rest)
