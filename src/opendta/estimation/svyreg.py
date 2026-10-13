@@ -102,11 +102,8 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
             b0 = np.zeros(k)
             if smp.constant:
                 b0[-1] = np.log(float(w @ y) / w.sum())
+        # o svy: não mostra o log de iterações (compat 0601)
         res = maximize(fun, b0)
-        if not smp.o.get("nolog"):
-            out.write("\n", "text")
-            from .ml import print_log
-            print_log(out, res, "log pseudolikelihood")
         b = res.b
         A = np.linalg.inv(-res.H)
         Z = (X * (w * scores(b) * inside)[:, None]) @ A
@@ -186,7 +183,7 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
         left = [f"Number of strata   = {x['strata']:>9,}", f"Number of PSUs     = {x['psu']:>9,}"]
         for i, (rl, rv) in enumerate(right):
             lft = left[i] if i < len(left) else ""
-            out.write(f"{lft:<46}{rl:<18}= ", "text")
+            out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")
         out.write("\n", "text")
     if table:
@@ -234,12 +231,12 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         t = ds.value_labels.get(v.value_label, {}).get(int(lv)) if v.value_label else None
         return t if t else (f"{int(lv)}" if lv == int(lv) else f"{lv:g}")
     N = int(inside.sum())
-    out.write("\n", "text")
+    out.write("\n(running tabulate on estimation sample)\n\n", "text")
     right = [("Number of obs", f"{N:,}"), ("Population size", _num(W)), ("Design df", f"{dd.df:,}")]
     left = [f"Number of strata   = {dd.n_strata:>9,}", f"Number of PSUs     = {dd.n_psu:>9,}"]
     for i, (rl, rv) in enumerate(right):
         lft = left[i] if i < len(left) else ""
-        out.write(f"{lft:<46}{rl:<18}= ", "text")
+        out.write(f"{lft:<48}{rl:<18}= ", "text")
         out.write(f"{rv:>10}\n", "result")
     out.write("\n", "text")
     stat_name = "percentage" if pct else "proportion"
@@ -249,19 +246,21 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         Z = np.column_stack([w * ((data[0] == lv) - p_) / W for lv, p_ in cells])
         V = dd.variance(Z)
         se = np.sqrt(np.maximum(np.diag(V), 0))
+        # layout do Stata 14 (compat 0601): nome da variável à direita em 9
+        # colunas, coluna de 10 a 11 caracteres
         wl = max(9, max(len(lab(v0, lv)) for lv, _ in cells), len(names[0]))
         colw = max(len(stat_name), 10)
         extra_se = bool(o.get("se"))
-        line = "-" * (wl + 1) + "-" + "-" * (colw + 2) + ("-" * (colw + 2) if extra_se else "")
+        line = "-" * (wl + 1) + "-" + "-" * (colw + 1) + ("-" * (colw + 1) if extra_se else "")
         out.write(line + "\n", "text")
-        out.write(f"{names[0]:<{wl}} | {stat_name:>{colw}}" + (f" {'se':>{colw}}" if extra_se else "") + "\n", "text")
-        out.write("-" * wl + "-+-" + "-" * colw + ("-" * (colw + 1) if extra_se else "") + "\n", "text")
+        out.write(f"{names[0]:>{wl}} | {stat_name:>{colw}}" + (f" {'se':>{colw}}" if extra_se else "") + "\n", "text")
+        out.write("-" * wl + "-+-" + "-" * (colw - 1) + ("-" * (colw + 1) if extra_se else "") + "-\n", "text")
         for i, (lv, p_) in enumerate(cells):
             out.write(f"{lab(v0, lv):>{wl}} | ", "text")
             out.write(f"{_sig(p_ * mult):>{colw}}"
                       + (f" {_sig(se[i] * mult):>{colw}}" if extra_se else "")
                       + "\n", "result")
-        out.write(f"{'':>{wl}} |\n", "text")
+        out.write(f"{'':>{wl}} | \n", "text")
         out.write(f"{'Total':>{wl}} | ", "text")
         out.write(f"{_sig(mult):>{colw}}\n", "result")
         out.write(line + "\n", "text")
@@ -277,33 +276,40 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
     P = np.array([float(w @ i_) / W for i_ in ind]).reshape(R, C)
     Z = np.column_stack([w * (i_ - P.ravel()[j]) / W for j, i_ in enumerate(ind)])
     V = dd.variance(Z)
-    wl = max(9, max(len(lab(v0, a)) for a in levels[0]))
-    cw = max(7, max(len(lab(v1, b)) for b in levels[1]))
-    head = f"{names[0]:<{wl}} | " + "".join(f"{lab(v1, b):>{cw}} " for b in levels[1]) + f"{'Total':>{cw}}"
-    out.write("-" * len(head) + "\n", "text")
-    out.write(f"{'':<{wl}} | {names[1]:<{(cw + 1) * C}}\n", "text")
-    out.write(head + "\n", "text")
-    out.write("-" * wl + "-+-" + "-" * (len(head) - wl - 3) + "\n", "text")
+    # layout (compat 0601): colunas com a largura do maior rótulo ou valor,
+    # separadas por dois espaços; nome da coluna centrado sobre elas
+    wl = max(9, max(len(lab(v0, a)) for a in levels[0]), len(names[0]))
+    texts = [[_sig(P[i, j] * mult) for j in range(C)] + [_sig(P[i].sum() * mult)] for i in range(R)]
+    tot = [_sig(P[:, j].sum() * mult) for j in range(C)] + [_sig(mult)]
+    heads = [lab(v1, b) for b in levels[1]] + ["Total"]
+    cw = max([len(h) for h in heads] + [len(x) for row in texts for x in row] + [len(x) for x in tot])
+    body = len(heads) * cw + 2 * (len(heads) - 1) + 1
+    out.write("-" * (wl + 2 + body) + "\n", "text")
+    out.write(f"{'':>{wl}} |" + names[1].center(body) + "\n", "text")
+    out.write(f"{names[0]:>{wl}} | " + "  ".join(f"{h:>{cw}}" for h in heads) + "\n", "text")
+    out.write("-" * wl + "-+" + "-" * body + "\n", "text")
     for i, a in enumerate(levels[0]):
         out.write(f"{lab(v0, a):>{wl}} | ", "text")
-        out.write("".join(f"{_sig(P[i, j] * mult):>{cw}} " for j in range(C))
-                  + f"{_sig(P[i].sum() * mult):>{cw}}\n", "result")
-    out.write(f"{'':>{wl}} |\n", "text")
+        out.write("  ".join(f"{x:>{cw}}" for x in texts[i]) + "\n", "result")
+    out.write(f"{'':>{wl}} | \n", "text")
     out.write(f"{'Total':>{wl}} | ", "text")
-    out.write("".join(f"{_sig(P[:, j].sum() * mult):>{cw}} " for j in range(C))
-              + f"{_sig(mult):>{cw}}\n", "result")
-    out.write("-" * len(head) + "\n", "text")
-    out.write(f"  Key:  {stat_name}s in cells\n", "text")   # VERIFICAR
+    out.write("  ".join(f"{x:>{cw}}" for x in tot) + "\n", "result")
+    out.write("-" * (wl + 2 + body) + "\n", "text")
+    out.write(f"  Key:  cell {stat_name}\n", "text")
     # Pearson: X² = n Σ (p - pr pc)² / (pr pc); Rao-Scott de 2ª ordem
     pr, pc = P.sum(1), P.sum(0)
     E = np.outer(pr, pc)
     X2 = N * float(np.sum((P - E) ** 2 / np.where(E > 0, E, 1)))
     df0 = (R - 1) * (C - 1)
     # contrastes de interação (efeito de desenho generalizado, Rao & Scott 1984)
+    # [SVY] svy: tabulate twoway: Δ = (C'D⁻¹V_srs D⁻¹C)⁻¹ (C'D⁻¹ V D⁻¹C), com
+    # D = diag(p̂) e V_srs das proporções observadas (compat 0601: F = 4.9245)
     Cm = _interaction_contrasts(R, C)
-    Vsrs = (np.diag(E.ravel()) - np.outer(E.ravel(), E.ravel())) / N
+    pv_ = P.ravel()
+    Vsrs = (np.diag(pv_) - np.outer(pv_, pv_)) / N
+    Di = np.diag(np.where(pv_ > 0, 1 / np.where(pv_ > 0, pv_, 1), 0.0))
     try:
-        A = np.linalg.solve(Cm.T @ Vsrs @ Cm, Cm.T @ V @ Cm)
+        A = np.linalg.solve(Cm.T @ Di @ Vsrs @ Di @ Cm, Cm.T @ Di @ V @ Di @ Cm)
         tr, tr2 = float(np.trace(A)), float(np.trace(A @ A))
         dnum = tr ** 2 / tr2
         dden = dnum * dd.df
@@ -312,8 +318,11 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
     except np.linalg.LinAlgError:
         Fv, dnum, dden, pv = SYS, SYS, SYS, SYS
     out.write("\n  Pearson:\n", "text")
-    out.write(f"    Uncorrected   chi2({df0})         = {X2:>9.4f}\n", "result")
-    out.write(f"    Design-based  F({dnum:.2f}, {dden:.2f}) = {Fv:>9.4f}     P = {pv:.4f}\n", "result")
+    def _dfmt(x):
+        return f"{x:.0f}" if abs(x - round(x)) < 1e-9 else f"{x:.2f}"   # VERIFICAR formato não inteiro
+    ftxt = f"F({_dfmt(dnum)}, {_dfmt(dden)})"
+    out.write(f"    Uncorrected   {'chi2(' + str(df0) + ')':<16}= {X2:>9.4f}\n", "result")
+    out.write(f"    Design-based  {ftxt:<16}= {Fv:>9.4f}     P = {pv:.4f}\n", "result")
     s.r = {"N": float(N), "r": float(R), "c": float(C), "cun_Pear": X2, "F_Pear": Fv, "df1_Pear": dnum,
            "df2_Pear": dden, "p_Pear": pv}
 

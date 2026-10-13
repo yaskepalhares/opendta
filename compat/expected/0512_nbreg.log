@@ -1,0 +1,179 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0512_nbreg.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:32:57
+
+. * Fase 5b: nbreg (Poisson, modelo só com a constante, modelo completo).
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 909
+
+. set obs 120
+number of observations (_N) was 0, now 120
+
+. gen x1 = round(runiform()*10, .1)
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen c = floor(-ln(runiform())*exp(.1 + .1*x1) * (0.5 + runiform()))
+
+. nbreg c x1 x2
+
+Fitting Poisson model:
+
+Iteration 0:   log likelihood = -245.31049  
+Iteration 1:   log likelihood = -245.31047  
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -211.22929  
+Iteration 1:   log likelihood = -210.14289  
+Iteration 2:   log likelihood = -210.13123  
+Iteration 3:   log likelihood = -210.13123  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -204.80571  
+Iteration 1:   log likelihood = -204.17461  
+Iteration 2:   log likelihood = -204.16609  
+Iteration 3:   log likelihood = -204.16609  
+
+Negative binomial regression                    Number of obs     =        120
+                                                LR chi2(2)        =      11.93
+Dispersion     = mean                           Prob > chi2       =     0.0026
+Log likelihood = -204.16609                     Pseudo R2         =     0.0284
+
+------------------------------------------------------------------------------
+           c |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1671924   .0477641     3.50   0.000     .0735765    .2608083
+          x2 |  -.0441318   .0896953    -0.49   0.623    -.2199313    .1316677
+       _cons |  -.3317186   .3501929    -0.95   0.344    -1.018084    .3546469
+-------------+----------------------------------------------------------------
+    /lnalpha |   .1322184   .2358801                     -.3300982    .5945349
+-------------+----------------------------------------------------------------
+       alpha |   1.141358   .2692235                      .7188532    1.812188
+------------------------------------------------------------------------------
+Likelihood-ratio test of alpha=0:  chibar2(01) =   82.29 Prob>=chibar2 = 0.000
+
+. ereturn list
+
+scalars:
+               e(rank) =  4
+                  e(N) =  120
+                 e(ic) =  3
+                  e(k) =  4
+               e(k_eq) =  2
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -204.1660883140286
+         e(k_eq_model) =  1
+               e(ll_0) =  -210.1312263790232
+              e(rank0) =  2
+               e(df_m) =  2
+               e(chi2) =  11.93027612998918
+                  e(p) =  .0025666902128511
+               e(ll_c) =  -245.3104747893506
+             e(chi2_c) =  82.28877295064399
+               e(r2_p) =  .028387680250031
+              e(k_aux) =  1
+              e(alpha) =  1.141357530420883
+
+macros:
+            e(cmdline) : "nbreg c x1 x2"
+                e(cmd) : "nbreg"
+            e(predict) : "nbreg_p"
+            e(dispers) : "mean"
+            e(chi2_ct) : "LR"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Negative binomial regression"
+               e(user) : "nbreg_lf"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "c"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 4
+
+functions:
+             e(sample)   
+
+. nbreg c x1 x2, irr
+
+Fitting Poisson model:
+
+Iteration 0:   log likelihood = -245.31049  
+Iteration 1:   log likelihood = -245.31047  
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -211.22929  
+Iteration 1:   log likelihood = -210.14289  
+Iteration 2:   log likelihood = -210.13123  
+Iteration 3:   log likelihood = -210.13123  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -204.80571  
+Iteration 1:   log likelihood = -204.17461  
+Iteration 2:   log likelihood = -204.16609  
+Iteration 3:   log likelihood = -204.16609  
+
+Negative binomial regression                    Number of obs     =        120
+                                                LR chi2(2)        =      11.93
+Dispersion     = mean                           Prob > chi2       =     0.0026
+Log likelihood = -204.16609                     Pseudo R2         =     0.0284
+
+------------------------------------------------------------------------------
+           c |        IRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.181982   .0564563     3.50   0.000     1.076351    1.297979
+          x2 |   .9568279   .0858229    -0.49   0.623     .8025739    1.140729
+       _cons |   .7176893   .2513297    -0.95   0.344     .3612865    1.425677
+-------------+----------------------------------------------------------------
+    /lnalpha |   .1322184   .2358801                     -.3300982    .5945349
+-------------+----------------------------------------------------------------
+       alpha |   1.141358   .2692235                      .7188532    1.812188
+------------------------------------------------------------------------------
+Likelihood-ratio test of alpha=0:  chibar2(01) =   82.29 Prob>=chibar2 = 0.000
+
+. nbreg c x1 x2, vce(robust) nolog
+
+Negative binomial regression                    Number of obs     =        120
+                                                Wald chi2(2)      =      14.08
+Dispersion           = mean                     Prob > chi2       =     0.0009
+Log pseudolikelihood = -204.16609               Pseudo R2         =     0.0284
+
+------------------------------------------------------------------------------
+             |               Robust
+           c |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1671924   .0448282     3.73   0.000     .0793307     .255054
+          x2 |  -.0441318   .0913043    -0.48   0.629     -.223085    .1348214
+       _cons |  -.3317186   .3605284    -0.92   0.358    -1.038341    .3749042
+-------------+----------------------------------------------------------------
+    /lnalpha |   .1322184   .2175931                     -.2942562     .558693
+-------------+----------------------------------------------------------------
+       alpha |   1.141358   .2483515                      .7450855    1.748386
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0512_nbreg.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:32:57
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

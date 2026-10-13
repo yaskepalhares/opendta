@@ -289,8 +289,11 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
     for (var, grp), b, e in zip(labels, vals, se):
         if grp:
             if var != last:
-                # VERIFICAR: alinhamento do nome da variável (à esquerda com over, à direita sem)
-                out.write((f"{var[:12]:<12} |" if over_names else f"{var[:12]:>12} |") + "\n", "text")
+                # cabeçalho da variável à esquerda; entre blocos de over(), uma
+                # linha separadora (compat 0601)
+                if last is not None and over_names:
+                    out.write("-" * 13 + "+" + "-" * 48 + "\n", "text")
+                out.write(f"{var[:12]:<12} |" + "\n", "text")
                 last = var
             lab = grp
         else:
@@ -337,7 +340,8 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         pairs = re.findall(r"(?:\(?\s*(\w+)\s*:)?\s*(\w+)\s*/\s*(\w+)\s*\)?", p.varlist)
         if not pairs:
             raise StataError(198, "invalid syntax")
-        names = [f"{a}/{b}" for _, a, b in pairs]
+        rnames = [nm or f"_ratio_{k + 1}" for k, (nm, _a, _b) in enumerate(pairs)]
+        names = list(rnames)
         num = [expand(ds, a)[0] for _, a, _b in pairs]
         den = [expand(ds, b)[0] for _, _a, b in pairs]
         allv = num + den
@@ -397,6 +401,8 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         Z = np.column_stack(Z) if Z else np.zeros((len(w), 0))
     else:
         vals, Z, labels = _estimate(stat, Y, w, groups, names, X)
+    # grupo de over() de cada coluna (para a variância "analytic" sem svy)
+    colsel = [sel for _y in Y for _g, sel, _k in groups]
     if svy:
         V = dd.variance(Z)
         df = dd.df
@@ -404,14 +410,28 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     else:
         # V = N/(N-1) Σ z z' (com fweight, cada escore conta w vezes)
         robust = str(o.get("vce", "")).startswith("r")
+        pw = bool(p.weight and p.weight[0] == "pweight")
+        # com pweight o erro-padrão é linearizado, mas o Stata não mostra rótulo
         vcetype = "Robust" if robust else ""
-        if p.weight and p.weight[0] == "fweight":
-            nn = float(w.sum())
-            V = nn / (nn - 1) * (Z / np.where(w > 0, w, 1)[:, None]).T @ Z
+        fw = bool(p.weight and p.weight[0] == "fweight")
+        cnt = w if fw else np.ones(len(w))
+        nn = float(cnt.sum())
+        Zr = Z / np.where(w > 0, w, 1)[:, None] if fw else Z
+        if stat == "total" or stat == "ratio" or robust or pw:
+            # linearização: escores centrados, V = n/(n-1) Σ (z - z̄)(z - z̄)'
+            zbar = (cnt @ Zr) / nn if stat == "total" else np.zeros(Z.shape[1])
+            Zc = Zr - zbar
+            V = nn / (nn - 1) * (Zc * cnt[:, None]).T @ Zc
         else:
-            nn = float(len(w))
-            V = nn / (nn - 1) * Z.T @ Z
+            # mean/proportion "analytic": s²/n em cada grupo de over(), sem
+            # covariância entre grupos (compat 0601: .1209974 = sd/sqrt(n_g))
+            V = (Zr * cnt[:, None]).T @ Zr
+            Wg = np.array([float(cnt @ sel) for sel in colsel])
+            c = np.sqrt(np.where(Wg > 1, Wg / (Wg - 1), np.nan))
+            V = V * np.outer(c, c)
         df = int(nn) - 1
+        if stat == "ratio":
+            vcetype = "Linearized"
     se = np.sqrt(np.maximum(np.diag(V), 0)) if V.size else np.zeros(0)
     if np.isnan(V).any():
         se = np.full(len(vals), np.nan)
@@ -428,14 +448,28 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
             for i, (rl, rv) in enumerate(right):
                 lft = left[i] if i < len(left) else ""
-                out.write(f"{lft:<33}{rl:<18}= ", "text")
-                out.write(f"{rv:>11}\n", "result")
+                out.write(f"{lft:<34}{rl:<16}= ", "text")
+                out.write(f"{rv:>10}\n", "result")
         else:
             out.write("\n", "text")
             out.write(f"{_TITLES[stat]:<34}{'Number of obs':<16}= ", "text")
             out.write(f"{n_obs:>10,}\n", "result")
         if over:
-            out.write("\n" + f"Over: {over}\n", "text")   # VERIFICAR legenda dos grupos
+            # legenda dos grupos: "         masc: sexo = masc" (compat 0601)
+            out.write("\n", "text")
+            ovars = over.split()
+            seen = []
+            for gname, _sel, key in groups:
+                if gname in seen:
+                    continue
+                seen.append(gname)
+                desc = ", ".join(f"{v} = {lab}" for v, lab in zip(ovars, gname.split(" "))) \
+                    if len(ovars) > 1 else f"{ovars[0]} = {gname}"
+                out.write(f"{gname[:13]:>13}: {desc}\n", "text")
+        if stat == "ratio":
+            out.write("\n", "text")
+            for rn, (num_, den_) in zip(rnames, zip(num, den)):
+                out.write(f"{rn[:13]:>13}: {num_}/{den_}\n", "text")
         out.write("\n", "text")
     stat_title = {"mean": "Mean", "proportion": "Proportion", "total": "Total", "ratio": "Ratio"}[stat]
     _summary_table(s, stat_title, labels, vals, se, df, level, vcetype, over)
@@ -448,19 +482,55 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     est.rows = []
     est.level = level
     est.display = lambda ss, ee, **kw: _summary_table(ss, stat_title, labels, vals, se, df, level, vcetype, over)
-    scalars = [("N", float(n_obs))]
     if svy:
-        scalars += [("N_strata", float(dd.n_strata)), ("N_psu", float(dd.n_psu)), ("N_pop", float(dd.w[est_mask[full]].sum())),
-                    ("df_r", float(df))]
+        # e() do svy no Stata 14, na ordem do ereturn list (compat 0601)
+        k = len(vals)
+        n_over = len(groups) if over else 1
+        scalars = [("df_r", float(df))]
         if subpop is not None:
-            scalars += [("N_sub", float(n_obs)), ("N_subpop", float(w.sum()))]
-    else:
-        scalars += [("df_r", float(df))]
+            scalars += [("N_subpop", float(w.sum())), ("N_sub", float(n_obs))]
+        scalars += [("N_strata_omit", 0.0), ("singleton", 0.0), ("census", 0.0),
+                    ("N_pop", float(dd.w[est_mask[full]].sum())), ("N_psu", float(dd.n_psu)),
+                    ("N_strata", float(dd.n_strata)), ("N_over", float(n_over)),
+                    ("N", float(int(est_mask[full].sum()))), ("stages", 1.0), ("k_eq", 1.0),
+                    ("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0)]
+        wvar = d.weight
+        cmdtxt = f"{stat} {args.strip()}".strip()
+        command = cmdtxt if "," in cmdtxt else cmdtxt + ","
+        macros = [("cmdline", f"svy{', ' + svyopts.strip() if svyopts.strip() else ' '}: {cmdtxt}"),
+                  ("cmd", stat), ("prefix", "svy"), ("cmdname", stat), ("command", command),
+                  ("title", f"Survey: {_TITLES[stat]}"), ("vcetype", "Linearized"), ("vce", "linearized"),
+                  ("estat_cmd", "svy_estat"), ("varlist", " ".join(allv))]
+        if over:
+            macros += [("over", over), ("over_labels", " ".join(g[0] for g in groups)),
+                       ("over_namelist", " ".join(g[0] for g in groups))]   # VERIFICAR
+        if subpop is not None:
+            macros.append(("subpop", str(so["subpop"]).strip()))
+        macros += [("marginsnotok", "_ALL")]
+        if wvar:
+            macros += [("wtype", d.wtype or "pweight"), ("wvar", wvar), ("wexp", f"= {wvar}")]
+        macros.append(("singleunit", d.singleunit))
+        if d.psu and d.psu != "_n":
+            macros.append(("su1", d.psu))
+        if d.strata:
+            macros.append(("strata1", d.strata))
+        if d.fpc:
+            macros.append(("fpc1", d.fpc))
+        macros += [("properties", "b V"), ("depvar", stat_title)]
+        Nk = np.array([[float(np.count_nonzero(Z[:, j]) or n_obs) for j in range(k)]])
+        Wk = np.array([[float(np.sum(w * (np.abs(Z[:, j]) > 0))) or float(w.sum()) for j in range(k)]])
+        nn_ = max(n_obs, 2)
+        Vsrs = nn_ / (nn_ - 1) * Z.T @ Z
+        mats = [("_N_subp", Matrix(Wk, ["r1"], list(cn))), ("V_srs", Matrix(Vsrs, list(cn), list(cn))),
+                ("_N", Matrix(Nk, ["r1"], list(cn))),
+                ("_N_strata_certain", Matrix(np.zeros((1, 1)))), ("_N_strata_single", Matrix(np.zeros((1, 1)))),
+                ("_N_strata", Matrix(np.array([[float(dd.n_strata)]]))),
+                ("error", Matrix(np.zeros((1, k)), ["r1"], list(cn)))]
+        post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx), extra_mats=mats)
+        return
+    scalars = [("N", float(n_obs)), ("df_r", float(df))]
     macros = [("cmd", stat), ("cmdline", f"{stat} {args.strip()}".strip()), ("properties", "b V"),
               ("varlist", " ".join(allv))]
-    if svy:
-        macros = [("prefix", "svy"), ("cmdname", stat)] + macros
-        macros.append(("vcetype", "Linearized"))
     post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx))
 
 
@@ -501,9 +571,9 @@ def cmd_svydescribe(s: "Session", args: str) -> None:
     out = s.output
     out.write("\nSurvey: Describing stage 1 sampling units\n", "text")
     _show_design(s, d)
-    out.write("\n" + " " * 36 + "#Obs per Unit\n", "text")
+    out.write("\n" + " " * 38 + "#Obs per Unit\n", "text")
     out.write(" " * 30 + "-" * 28 + "\n", "text")
-    out.write("Stratum   #Units     #Obs       min      mean       max\n", "text")
+    out.write("Stratum    #Units     #Obs      min       mean      max   \n", "text")
     out.write("  ".join(["-" * 8] * 6) + "\n", "text")
     psu_h = np.zeros(dd.n_psu, dtype=int)
     psu_h[dd.u_inv] = dd.h_inv

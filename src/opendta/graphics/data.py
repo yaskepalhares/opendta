@@ -138,9 +138,9 @@ def hist_bins(x: np.ndarray, w: np.ndarray | None, opts: dict) -> dict:
             raise StataError(198, "start() must be less than or equal to the minimum")   # VERIFICAR
         if "width" in opts:
             width = float(opts["width"])
+            # o máximo entra na última barra (compat 0701: width(2) start(0)
+            # com máximo 10 dá 5 barras)
             k = max(1, int(math.ceil((xmax - start) / width - 1e-9)))
-            if start + k * width <= xmax:
-                k += 1
         else:
             if "bin" in opts:
                 k = int(opts["bin"])
@@ -236,8 +236,9 @@ def kdensity(x: np.ndarray, w: np.ndarray | None, *, kernel: str = "epanechnikov
     h = bw if bw is not None else default_bandwidth(x, w)
     if at is None:
         npts = n if n is not None else min(N, 50)
-        # VERIFICAR: grade igualmente espaçada entre o mínimo e o máximo
-        grid = np.linspace(float(x.min()), float(x.max()), npts) if npts > 1 else np.array([float(x.min())])
+        # grade de mínimo - h a máximo + h (compat 0701)
+        lo, hi = float(x.min()) - h, float(x.max()) + h
+        grid = np.linspace(lo, hi, npts) if npts > 1 else np.array([lo])
     else:
         grid = at
     K = _kernel(kernel)

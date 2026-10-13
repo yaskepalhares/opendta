@@ -222,6 +222,20 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
         interaction = "#" in c.name
         grouped = bool(c.group) and (len(shown) > 1 or (c.group[0] == "t" and interaction)
                                      or (c.group[0] == "v" and c.rowlab != "--."))
+        if (not grouped and c.group and c.group[0] == "t" and not interaction and len(shown) == 1
+                and _has_value_label(ds, shown[0])):
+            # fator com um nível só e rótulo de valor: cabeçalho e o rótulo,
+            # sem linha em branco depois (compat 0601: "sexo |" / "fem  |")
+            blank_before()
+            g = shown[0]
+            rows.append(CoefRow("header", c.labels[0]))
+            lab = _cell_label(ds, g) + " "
+            if g.omitted:
+                rows.append(CoefRow("omitted", lab, name=g.name))
+            else:
+                rows.append(CoefRow("coef", lab, b[g.name], se[g.name], name=g.name))
+            i = j
+            continue
         if not grouped:
             # uma linha só: "x", "1.h" (fator com um nível), "c.x#c.x"; as
             # interações ficam entre linhas em branco (compat 0502)
@@ -259,6 +273,18 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
     elif rows and rows[-1].kind == "blank":
         rows.pop()
     return rows
+
+
+def _has_value_label(ds, col) -> bool:
+    """O nível do fator tem rótulo de valor?"""
+    try:
+        var = col.name.split(".", 1)[1]
+        v = ds.get(var)
+        lv = col.cell[0] if col.cell else None
+        return bool(v.value_label and lv is not None
+                    and ds.value_labels.get(v.value_label, {}).get(int(lv)))
+    except Exception:   # noqa: BLE001
+        return False
 
 
 def _head_label(head: str) -> str:

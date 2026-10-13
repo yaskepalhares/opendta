@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import stats as st
 
+from ..core.stats import chi2_tail as _chi2_tail
+
 from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
@@ -222,8 +224,11 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
     sample = np.ones(base.nobs, dtype=bool)
     if eclass and base.esample is not None and len(base.esample) == base.nobs:
         sample = base.esample.copy()
-        if eclass:
+        if not o.get("_from_vce"):
+            # com vce(bootstrap) o Stata não mostra esta linha (compat 0803)
             out.write(f"(running {cmdname} on estimation sample)\n", "text")
+    if not eclass:
+        _warn_rclass(s, cmdname)
     est0 = getattr(s, "_estimates", None) if eclass else None
     e0 = dict(s.e)
     r0 = dict(s.r)
@@ -281,6 +286,42 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
                     cluster=o.get("cluster", "") if isinstance(o.get("cluster"), str) else "")
     _post(s, info, V, est0, e0, cmdname, sample)
     display(s, s._estimates, header=not o.get("noheader"), table=not o.get("notable"))
+
+
+def _wrap(text: str, width: int, first: str, rest: str) -> list[str]:
+    """Quebra preservando os dois espaços depois de ponto, com recuo."""
+    parts = re.split(r"( +)", text)
+    lines, cur = [], first
+    started = False
+    for k in range(0, len(parts), 2):
+        word = parts[k]
+        sep = parts[k - 1] if k > 0 else ""
+        if started and len(cur) + len(sep) + len(word) > width:
+            lines.append(cur)
+            cur = rest + word
+        else:
+            cur = cur + (sep if started else "") + word
+        started = True
+    lines.append(cur)
+    return lines
+
+
+def _warn_rclass(s: "Session", cmdname: str) -> None:
+    """Aviso do bootstrap com comando que não grava e(sample) (compat 0803)."""
+    width = int(s.settings.get("linesize", 80)) - 1
+    out = s.output
+    p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), bootstrap has no "
+          "way to determine which observations are used in calculating the statistics and so assumes "
+          "that all observations are used.  This means that no observations will be excluded from the "
+          "resampling because of missing values or other reasons.")
+    p2 = ("If the assumption is not true, press Break, save the data, and drop the observations that "
+          "are to be excluded.  Be sure that the dataset in memory contains only the relevant data.")
+    out.write("\n", "text")
+    for ln in _wrap(p1, width, "Warning:  ", " " * 10):
+        out.write(ln + "\n", "text")
+    out.write("\n", "text")
+    for ln in _wrap(p2, width, " " * 10, " " * 10):
+        out.write(ln + "\n", "text")
 
 
 def _quiet(s: "Session", command: str, noisy: bool) -> None:
@@ -409,7 +450,7 @@ def display(s: "Session", est, *, header: bool = True, table: bool = True, level
             if "chi2" in info.extra:
                 df = info.extra["df"]
                 items.append((f"Wald chi2({df})", f"{info.extra['chi2']:.2f}"))
-                items.append(("Prob > chi2", f"{st.chi2.sf(info.extra['chi2'], df):.4f}"))
+                items.append(("Prob > chi2", f"{_chi2_tail(info.extra['chi2'], df):.4f}"))
             for key, lab, fmt in (("r2", "R-squared", "%9.4f"), ("r2_a", "Adj R-squared", "%9.4f"),
                                   ("r2_p", "Pseudo R2", "%9.4f"), ("rmse", "Root MSE", "%9.4f")):
                 v = s.e.get(key)
@@ -481,14 +522,15 @@ def estat_bootstrap(s: "Session", est, rest: str) -> None:
         first = True
         for k in kinds:
             lo, hi = ex[k][0][j], ex[k][1][j]
+            # colunas (compat 0803): 12, 11, 12, 12, 11 e o rótulo em 6
             if first:
                 out.write(f"{abbrev(n.split(':')[-1]):>12} |", "text")
-                out.write(f"  {g9(info.observed[j], '%10.0g'):>10} {g9(ex['bias'][j]):>10}  {g9(ex['se'][j]):>10}"
-                          f"  {g9(lo):>9}  {g9(hi):>9}   {tags[k]}\n", "result")
+                out.write(f"{g9(info.observed[j], '%10.0g'):>12}{g9(ex['bias'][j]):>11}"
+                          f"{g9(ex['se'][j], '%10.0g'):>12}{g9(lo):>12}{g9(hi):>11}{tags[k]:>6}\n", "result")
                 first = False
             else:
-                out.write(f"{'':>12} |" + " " * 37, "text")
-                out.write(f"{g9(lo):>9}  {g9(hi):>9}   {tags[k]}\n", "result")
+                out.write(f"{'':>12} |" + " " * 35, "text")
+                out.write(f"{g9(lo):>12}{g9(hi):>11}{tags[k]:>6}\n", "result")
     out.write(LINE + "\n", "text")
     legend = {"normal": "(N)    normal confidence interval",
               "percentile": "(P)    percentile confidence interval",
@@ -545,6 +587,7 @@ def wrap_vce_bootstrap(name: str) -> None:
             return
         new_args, bopts = sp
         o = match_options(bopts, _OPTS) if bopts else {}
+        o["_from_vce"] = True
         run(s, f"{_name} {new_args}", [], o)
 
     REGISTRY[name] = CommandSpec(spec.name, spec.min_abbrev, fn, spec.prefix, spec.byable)

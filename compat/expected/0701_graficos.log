@@ -1,0 +1,184 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0701_graficos.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:32:58
+
+. * Gráficos: mensagens de histogram, kdensity com generate(), memória de
+. * gráficos (graph dir/drop/rename), graph export/save/use e erros
+. graph drop _all
+
+. clear
+
+. set obs 74
+number of observations (_N) was 0, now 74
+
+. gen x = mod(_n*37, 101)/10
+
+. gen g = mod(_n, 3)
+
+. label variable x "Variável x"
+
+. 
+. histogram x
+(bin=8, start=.1, width=1.2375)
+
+. histogram x, bin(5)
+(bin=5, start=.1, width=1.98)
+
+. histogram x, width(2)
+(bin=5, start=.1, width=2)
+
+. histogram x, width(2) start(0)
+(bin=5, start=0, width=2)
+
+. histogram g, discrete
+(start=0, width=1)
+
+. histogram g, discrete percent
+(start=0, width=1)
+
+. histogram x, frequency by(g)
+
+. 
+. kdensity x, generate(kx kd) n(10) nograph
+
+. display r(bwidth)
+1.1146058
+
+. display r(n)
+10
+
+. display "`r(kernel)'"
+epanechnikov
+
+. list kx kd in 1/10
+
+     +------------------------+
+     |         kx          kd |
+     |------------------------|
+  1. | -1.0146058   .02175518 |
+  2. |  .33308438   .06113707 |
+  3. |  1.6807746   .09374217 |
+  4. |  3.0284647   .10023736 |
+  5. |  4.3761549   .09868145 |
+     |------------------------|
+  6. |  5.7238451   .09847605 |
+  7. |  7.0715353   .09887197 |
+  8. |  8.4192254   .09148072 |
+  9. |  9.7669156   .05692254 |
+ 10. |  11.114606   .01963944 |
+     +------------------------+
+
+. kdensity x, kernel(gaussian) bwidth(1) at(x) generate(kg) nograph
+
+. summarize kg
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          kg |         74     .091553    .0129397   .0507603   .1006457
+
+. kdensity x, kernel(epan2) nograph
+
+. display r(bwidth)
+1.1146058
+
+. kdensity x, kernel(triangle) bwidth(.5) n(5) generate(tx td) nograph
+
+. list tx td in 1/5
+
+     +-------------------+
+     |    tx          td |
+     |-------------------|
+  1. |   -.4           0 |
+  2. | 2.325   .09054055 |
+  3. |  5.05   .08918918 |
+  4. | 7.775   .10000001 |
+  5. |  10.5           0 |
+     +-------------------+
+
+. 
+. graph drop _all
+
+. scatter x g, name(a)
+
+. line x g, sort name(b)
+
+. graph dir, memory
+    a  b
+
+. capture noisily scatter x g, name(a)
+graph a already exists
+
+. scatter x g, name(a, replace)
+
+. graph rename b c
+
+. graph dir, memory
+    a  c
+
+. graph export odta_a.png, name(a)
+(file odta_a.png written in PNG format)
+
+. capture noisily graph export odta_a.png, name(a)
+file odta_a.png already exists
+
+. graph export odta_a.png, name(a) replace
+(file odta_a.png written in PNG format)
+
+. graph export odta_a.pdf, name(a)
+(file /Users/yaskepalhares/opendta/compat/odta_a.pdf written in PDF format)
+
+. graph save a odta_a, replace
+(note: file odta_a.gph not found)
+(file odta_a.gph saved)
+
+. graph drop _all
+
+. graph use odta_a
+
+. graph dir, memory
+    odta_a
+
+. capture noisily graph display nada
+graph nada not found
+
+. capture noisily graph drop nada
+graph nada not found
+no graphs dropped
+
+. capture noisily scatter x, name(z)
+too few variables specified
+
+. capture noisily twoway foo x g
+foo is not a twoway plot type
+
+. capture noisily histogram x g
+too many variables specified
+
+. twoway (scatter x g) (lfit x g), name(d)
+
+. graph bar (mean) x, over(g) name(e)
+
+. graph box x, over(g) name(f)
+
+. graph pie, over(g) name(p)
+
+. graph dir, memory
+    d       e       f       odta_a  p
+
+. erase odta_a.png
+
+. erase odta_a.pdf
+
+. erase odta_a.gph
+
+. graph drop _all
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0701_graficos.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:33:03
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

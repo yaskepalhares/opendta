@@ -28,13 +28,15 @@ sdtest mpg, by(foreign)
 return list
 sdtest mpg == 8
 sdtest mpg == price
-cii means 166 19509 4379
+* sintaxe do Stata 14.0 (cii means/proportions só existe a partir do 14.1)
+cii 166 19509 4379
 return list
-cii proportions 100 30
-cii proportions 100 30, wilson
-cii proportions 100 30, agresti
-cii proportions 100 30, jeffreys
-cii proportions 100 30, wald
+cii 100 30
+cii 100 30, wilson
+cii 100 30, agresti
+cii 100 30, jeffreys
+cii 100 30, wald
+cii 50 7, poisson
 ttesti 24 62.6 15.8 75
 ttesti 20 20 5 32 15 4
 ttesti 20 20 5 32 15 4, unequal

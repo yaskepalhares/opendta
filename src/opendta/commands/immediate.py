@@ -8,6 +8,7 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy import stats as st
 
 from ..core import missing as M
 from ..core import stats as S
@@ -78,6 +79,24 @@ def cmd_cii(s: "Session", args: str) -> None:
         out.write(" " * 12 + " |", "text")
         out.write(f" {n:>10,.0f}   {g9(mean)}   {g9(se)}    {g9(lo).rjust(12)}   {g9(hi).rjust(9)}\n", "result")
         s.r = {"ub": hi, "lb": lo, "se": se, "mean": mean, "N": n, "level": level}
+        return
+    if kind == "proportions" and o.get("poisson"):
+        # cii #exposure #events, poisson (sintaxe do Stata 14.0): IC exato de
+        # Poisson pela qui-quadrado ([R] ci, Methods and formulas)
+        if len(vals) != 2:
+            raise StataError(198, "invalid syntax")
+        E, k = vals
+        rate = k / E
+        se = math.sqrt(k) / E
+        a = (100 - level) / 200
+        lo = float(st.chi2.ppf(a, 2 * k)) / 2 / E if k > 0 else 0.0
+        hi = float(st.chi2.ppf(1 - a, 2 * (k + 1))) / 2 / E
+        out.write("\n" + " " * 48 + "-- Poisson  Exact --".rjust(30) + "\n", "text")   # VERIFICAR título
+        out.write(f"    Variable |   Exposure        Mean    Std. Err.       [{level:g}% Conf. Interval]\n", "text")
+        out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
+        out.write(" " * 12 + " |", "text")
+        out.write(f" {E:>10,.0f}   {g9(rate)}   {g9(se)}    {g9(lo).rjust(12)}   {g9(hi).rjust(9)}\n", "result")
+        s.r = {"ub": hi, "lb": lo, "se": se, "mean": rate, "N": E, "level": level}
         return
     if kind == "proportions":
         if len(vals) != 2:

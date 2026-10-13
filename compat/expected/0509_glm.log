@@ -1,0 +1,350 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0509_glm.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:33:03
+
+. * Fase 5b: glm (famílias binomial, poisson e gaussian; eform).
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 909
+
+. set obs 120
+number of observations (_N) was 0, now 120
+
+. gen x1 = round(runiform()*10, .1)
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen c = floor(-ln(runiform())*exp(.1 + .1*x1) * (0.5 + runiform()))
+
+. gen y = runiform() < invlogit(-2 + .3*x1 - .2*x2)
+
+. gen yr = runiform() < .04*exp(.15*x1)
+
+. gen yc = 2 + x1 - x2 + round(runiform()*3, .01)
+
+. glm y x1 x2, family(binomial)
+
+Iteration 0:   log likelihood = -54.118307  
+Iteration 1:   log likelihood = -53.005611  
+Iteration 2:   log likelihood = -52.994355  
+Iteration 3:   log likelihood = -52.994348  
+Iteration 4:   log likelihood = -52.994348  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =          1
+Deviance         =  105.9886965                   (1/df) Deviance =   .9058863
+Pearson          =  114.7426084                   (1/df) Pearson  =   .9807061
+
+Variance function: V(u) = u*(1-u)                 [Bernoulli]
+Link function    : g(u) = ln(u/(1-u))             [Logit]
+
+                                                  AIC             =   .9332391
+Log likelihood   = -52.99434823                   BIC             =  -454.1478
+
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .494671   .1160443     4.26   0.000     .2672284    .7221137
+          x2 |   .1570038   .1761299     0.89   0.373    -.1882046    .5022121
+       _cons |  -4.442944   .9232151    -4.81   0.000    -6.252412   -2.633476
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  120
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(ll) =  -52.99434823071573
+               e(chi2) =  18.65761330808116
+                  e(p) =  .0000888281766179
+                 e(rc) =  0
+                e(aic) =  .9332391371785955
+               e(rank) =  3
+              e(power) =  0
+               e(df_m) =  2
+                 e(df) =  117
+                 e(vf) =  1
+                e(phi) =  1
+         e(k_eq_model) =  0
+               e(nbml) =  0
+                e(bic) =  -454.1478374440679
+         e(dispers_ps) =  .9807060548975051
+        e(deviance_ps) =  114.7426084230081
+          e(dispers_p) =  .9807060548975051
+         e(deviance_p) =  114.7426084230081
+          e(dispers_s) =  .9058862945421491
+         e(deviance_s) =  105.9886964614314
+            e(dispers) =  .9058862945421491
+           e(deviance) =  105.9886964614314
+
+macros:
+            e(cmdline) : "glm y x1 x2, family(binomial)"
+                e(cmd) : "glm"
+            e(predict) : "glim_p"
+       e(marginsnotok) : "stdp Anscombe Cooksd Deviance Hat Likelihood Pearson Response Score Working ADJusted STAndardized STUdentized MODified"
+          e(marginsok) : "default"
+            e(hac_lag) : "118"
+            e(vcetype) : "OIM"
+                e(vce) : "oim"
+              e(linkt) : "Logit"
+              e(linkf) : "ln(u/(1-u))"
+           e(varfunct) : "Bernoulli"
+           e(varfuncf) : "u*(1-u)"
+               e(opt1) : "ML"
+                  e(m) : "1"
+            e(varfunc) : "glim_v2"
+               e(link) : "glim_l02"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+              e(title) : "Generalized linear models"
+               e(user) : "glim_lf"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. glm yr x1 x2, family(binomial) link(log) eform
+
+Iteration 0:   log likelihood = -66.464295  
+Iteration 1:   log likelihood = -48.119057  
+Iteration 2:   log likelihood = -47.530466  
+Iteration 3:   log likelihood = -47.463506  
+Iteration 4:   log likelihood = -47.463401  
+Iteration 5:   log likelihood = -47.463401  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =          1
+Deviance         =   94.9268011                   (1/df) Deviance =   .8113402
+Pearson          =  116.8508593                   (1/df) Pearson  =   .9987253
+
+Variance function: V(u) = u*(1-u)                 [Bernoulli]
+Link function    : g(u) = ln(u)                   [Log]
+
+                                                  AIC             =   .8410567
+Log likelihood   = -47.46340055                   BIC             =  -465.2097
+
+------------------------------------------------------------------------------
+             |                 OIM
+          yr | Risk Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.142163   .0987933     1.54   0.124     .9640555    1.353176
+          x2 |   .8884504   .1437536    -0.73   0.465     .6470033        1.22
+       _cons |   .0888881   .0602121    -3.57   0.000     .0235639    .3353053
+------------------------------------------------------------------------------
+
+. glm c x1 x2, family(poisson)
+
+Iteration 0:   log likelihood = -250.83337  
+Iteration 1:   log likelihood = -245.31425  
+Iteration 2:   log likelihood = -245.31047  
+Iteration 3:   log likelihood = -245.31047  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =          1
+Deviance         =  302.2312895                   (1/df) Deviance =   2.583173
+Pearson          =   320.774722                   (1/df) Pearson  =   2.741664
+
+Variance function: V(u) = u                       [Poisson]
+Link function    : g(u) = ln(u)                   [Log]
+
+                                                  AIC             =   4.138508
+Log likelihood   = -245.3104748                   BIC             =  -257.9052
+
+------------------------------------------------------------------------------
+             |                 OIM
+           c |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1642729   .0285778     5.75   0.000     .1082614    .2202844
+          x2 |  -.0292152   .0511049    -0.57   0.568     -.129379    .0709486
+       _cons |  -.3511833   .2220662    -1.58   0.114    -.7864251    .0840584
+------------------------------------------------------------------------------
+
+. glm c x1 x2, family(poisson) vce(robust)
+
+Iteration 0:   log pseudolikelihood = -250.83337  
+Iteration 1:   log pseudolikelihood = -245.31425  
+Iteration 2:   log pseudolikelihood = -245.31047  
+Iteration 3:   log pseudolikelihood = -245.31047  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =          1
+Deviance         =  302.2312895                   (1/df) Deviance =   2.583173
+Pearson          =   320.774722                   (1/df) Pearson  =   2.741664
+
+Variance function: V(u) = u                       [Poisson]
+Link function    : g(u) = ln(u)                   [Log]
+
+                                                  AIC             =   4.138508
+Log pseudolikelihood = -245.3104748               BIC             =  -257.9052
+
+------------------------------------------------------------------------------
+             |               Robust
+           c |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1642729   .0480743     3.42   0.001     .0700489    .2584969
+          x2 |  -.0292152   .0923311    -0.32   0.752    -.2101808    .1517504
+       _cons |  -.3511833    .399829    -0.88   0.380    -1.134834    .4324671
+------------------------------------------------------------------------------
+
+. glm c x1 x2, family(poisson) eform
+
+Iteration 0:   log likelihood = -250.83337  
+Iteration 1:   log likelihood = -245.31425  
+Iteration 2:   log likelihood = -245.31047  
+Iteration 3:   log likelihood = -245.31047  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =          1
+Deviance         =  302.2312895                   (1/df) Deviance =   2.583173
+Pearson          =   320.774722                   (1/df) Pearson  =   2.741664
+
+Variance function: V(u) = u                       [Poisson]
+Link function    : g(u) = ln(u)                   [Log]
+
+                                                  AIC             =   4.138508
+Log likelihood   = -245.3104748                   BIC             =  -257.9052
+
+------------------------------------------------------------------------------
+             |                 OIM
+           c |        IRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.178536     .03368     5.75   0.000     1.114339    1.246431
+          x2 |   .9712074   .0496335    -0.57   0.568     .8786409    1.073526
+       _cons |   .7038547   .1563023    -1.58   0.114     .4554702    1.087692
+------------------------------------------------------------------------------
+
+. glm yc x1 x2
+
+Iteration 0:   log likelihood = -149.29764  
+
+Generalized linear models                         No. of obs      =        120
+Optimization     : ML                             Residual df     =        117
+                                                  Scale parameter =   .7230584
+Deviance         =  84.59783557                   (1/df) Deviance =   .7230584
+Pearson          =  84.59783557                   (1/df) Pearson  =   .7230584
+
+Variance function: V(u) = 1                       [Gaussian]
+Link function    : g(u) = u                       [Identity]
+
+                                                  AIC             =   2.538294
+Log likelihood   = -149.2976403                   BIC             =  -475.5387
+
+------------------------------------------------------------------------------
+             |                 OIM
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .9977813   .0289841    34.43   0.000     .9409736    1.054589
+          x2 |  -1.003283   .0565156   -17.75   0.000    -1.114051   -.8925143
+       _cons |   3.484539   .2142675    16.26   0.000     3.064582    3.904496
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  120
+                 e(ic) =  0
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(ll) =  -149.2976403353401
+               e(chi2) =  1486.414506820586
+                  e(p) =  1.4821969375e-323
+                 e(rc) =  0
+                e(aic) =  2.538294005589001
+               e(rank) =  3
+              e(power) =  1
+               e(df_m) =  2
+                 e(df) =  117
+                 e(vf) =  1
+                e(phi) =  .7230584236432305
+         e(k_eq_model) =  0
+               e(nbml) =  0
+                e(bic) =  -475.5386983392414
+         e(dispers_ps) =  1
+        e(deviance_ps) =  117
+          e(dispers_p) =  .7230584236432305
+         e(deviance_p) =  84.59783556625797
+          e(dispers_s) =  1
+         e(deviance_s) =  117
+            e(dispers) =  .7230584236432305
+           e(deviance) =  84.59783556625797
+
+macros:
+            e(cmdline) : "glm yc x1 x2"
+                e(cmd) : "glm"
+            e(predict) : "glim_p"
+       e(marginsnotok) : "stdp Anscombe Cooksd Deviance Hat Likelihood Pearson Response Score Working ADJusted STAndardized STUdentized MODified"
+          e(marginsok) : "default"
+            e(hac_lag) : "118"
+            e(vcetype) : "OIM"
+                e(vce) : "oim"
+              e(linkt) : "Identity"
+              e(linkf) : "u"
+           e(varfunct) : "Gaussian"
+           e(varfuncf) : "1"
+               e(opt1) : "ML"
+                  e(m) : "1"
+            e(varfunc) : "glim_v1"
+               e(link) : "glim_l01"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+              e(title) : "Generalized linear models"
+               e(user) : "glim_lf"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "yc"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. predict mu
+(option mu assumed; predicted mean yc)
+
+. summarize mu
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          mu |        120    6.121333    3.005268  -.2615568   12.74274
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0509_glm.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:33:03
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

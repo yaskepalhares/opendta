@@ -1,0 +1,123 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0513_tobit.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:33:04
+
+. * Fase 5b: tobit (censura à esquerda e nos dois lados).
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 1010
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen id = ceil(_n/6)
+
+. gen a = id/3
+
+. gen x1 = round(runiform()*10, .1) + a
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen y = 1 + .5*x1 - x2 + 2*a + round(runiform()*2, .01)
+
+. gen ys = max(0, y - 5)
+
+. tobit ys x1 x2, ll(0)
+
+Tobit regression                                Number of obs     =         60
+                                                LR chi2(2)        =      35.26
+                                                Prob > chi2       =     0.0000
+Log likelihood = -101.67264                     Pseudo R2         =     0.1478
+
+------------------------------------------------------------------------------
+          ys |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5888873   .1092473     5.39   0.000     .3702051    .8075694
+          x2 |  -.7629288   .1961134    -3.89   0.000    -1.155492   -.3703653
+       _cons |  -.3845581   .8458137    -0.45   0.651    -2.077638    1.308522
+-------------+----------------------------------------------------------------
+      /sigma |   2.060231   .2343325                      1.591164    2.529299
+------------------------------------------------------------------------------
+            18  left-censored observations at ys <= 0
+            42     uncensored observations
+             0 right-censored observations
+
+. ereturn list
+
+scalars:
+                  e(N) =  60
+               e(ll_0) =  -119.302476766861
+                 e(ll) =  -101.6726398965218
+               e(r2_p) =  .1477742738299648
+              e(llopt) =  0
+              e(k_aux) =  1
+               e(N_lc) =  18
+               e(N_rc) =  0
+              e(N_unc) =  42
+               e(chi2) =  35.25967374067824
+          e(converged) =  1
+               e(rank) =  4
+               e(df_m) =  2
+               e(df_r) =  58
+
+macros:
+            e(cmdline) : "tobit ys x1 x2, ll(0)"
+           e(chi2type) : "LR"
+           e(footnote) : "censobs_table e(N_unc) e(N_lc) e(N_rc) "" e(llopt) e(ulopt)"
+              e(title) : "Tobit regression"
+                e(vce) : "oim"
+          e(marginsok) : "default XB Pr(passthru) E(passthru) YStar(passthru)"
+             e(depvar) : "ys"
+                e(cmd) : "tobit"
+            e(predict) : "tobit_p"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+
+functions:
+             e(sample)   
+
+. tobit ys x1 x2, ll(0) ul(4)
+
+Tobit regression                                Number of obs     =         60
+                                                LR chi2(2)        =      32.02
+                                                Prob > chi2       =     0.0000
+Log likelihood = -87.381235                     Pseudo R2         =     0.1549
+
+------------------------------------------------------------------------------
+          ys |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .575712    .123685     4.65   0.000     .3281296    .8232944
+          x2 |  -.7305256   .2185316    -3.34   0.001    -1.167964   -.2930871
+       _cons |  -.3738151   .8843182    -0.42   0.674     -2.14397     1.39634
+-------------+----------------------------------------------------------------
+      /sigma |   2.090241   .2987635                        1.4922    2.688281
+------------------------------------------------------------------------------
+            18  left-censored observations at ys <= 0
+            31     uncensored observations
+            11 right-censored observations at ys >= 4
+
+. predict xb
+(option xb assumed; fitted values)
+
+. summarize xb
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          xb |         60    1.550412    1.953859  -3.222414   6.004816
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0513_tobit.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:33:04
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

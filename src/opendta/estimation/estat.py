@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import stats as st
 
+from ..core.stats import chi2_tail as _chi2_tail
+
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
@@ -113,14 +115,19 @@ def _vce(s: "Session", est, rest: str) -> None:
     k = len(names)
     from ..lang.functions import _abbrev
     eqs = est.eqnames or [""] * k
-    per = 5
+    # largura da coluna = largura do formato + 1 (compat 0802: %10.0g -> 11,
+    # %8.4f -> 9), mais um espaço entre colunas
+    import re as _re
+    mw = _re.match(r"%-?(\d+)", fmt)
+    cw = (int(mw.group(1)) if mw else 10) + 1
+    per = max(1, 66 // (cw + 1))
     for start in range(0, k, per):
         cols = list(range(start, min(k, start + per)))
         out.write("\n", "text")
         head = "e(V)"
-        out.write(f"{head:>12} |" + "".join(f"{_abbrev(_short(names[j]), 10):>11} " for j in cols) + "\n",
+        out.write(f"{head:>12} |" + "".join(f"{_abbrev(_short(names[j]), cw - 1):>{cw}} " for j in cols) + "\n",
                   "text")
-        out.write("-" * 13 + "+" + "-" * (12 * len(cols)) + "\n", "text")
+        out.write("-" * 13 + "+" + "-" * ((cw + 1) * len(cols)) + "\n", "text")
         last_eq = None
         for i in range(start, k):
             if eqs[i] and eqs[i] != "_" and eqs[i] != last_eq and len(set(eqs)) > 1:
@@ -130,11 +137,11 @@ def _vce(s: "Session", est, rest: str) -> None:
             cells = []
             for j in cols:
                 if j > i:
-                    cells.append(" " * 12)
+                    cells.append(" " * (cw + 1))
                 else:
                     v = M_[i, j]
                     t = format_value(float(v), fmt, pad=False).strip() if np.isfinite(v) else "."
-                    cells.append(f"{t:>11} ")
+                    cells.append(f"{t:>{cw}} ")
             out.write("".join(cells).rstrip() + "\n", "result")
     from ..commands.matrix import Matrix
     s.r = {"V": Matrix(M_.copy(), list(names), list(names))}
@@ -163,10 +170,11 @@ def _summarize(s: "Session", est, rest: str) -> None:
         names = s.expand_varlist(body)
     out = s.output
     N = int(mask.sum())
-    out.write(f"\n  Estimation sample {est.cmd}".ljust(43) + f"Number of obs = {N:>10,}\n", "text")
-    out.write("\n  " + "-" * 61 + "\n", "text")
-    out.write(f"  {'Variable':>12} |{'Mean':>13}{'Std. Dev.':>14}{'Min':>12}{'Max':>13}\n", "text")
-    out.write("  " + "-" * 13 + "+" + "-" * 47 + "\n", "text")
+    # layout do Stata 14 (compat 0802): valores em %9.0g, 67 traços
+    out.write(f"\n  Estimation sample {est.cmd}".ljust(44) + f"Number of obs = {N:>10,}\n", "text")
+    out.write("\n  " + "-" * 67 + "\n", "text")
+    out.write(f"  {'Variable':>12} |{'Mean':>13}{'Std. Dev.':>15}{'Min':>12}{'Max':>13}\n", "text")
+    out.write("  " + "-" * 13 + "+" + "-" * 53 + "\n", "text")
     from ..lang.functions import _abbrev
     stats = []
     for n in names:
@@ -176,9 +184,8 @@ def _summarize(s: "Session", est, rest: str) -> None:
         mn, mx = float(x.min()), float(x.max())
         stats.append([mean, sd, mn, mx])
         out.write(f"  {_abbrev(n, 12):>12} |", "text")
-        out.write(f"{_g(mean, '%10.0g'):>13}{_g(sd, '%10.0g'):>14}{_g(mn, '%10.0g'):>12}{_g(mx, '%10.0g'):>13}\n",
-                  "result")
-    out.write("  " + "-" * 61 + "\n", "text")
+        out.write(f"{_g(mean):>13}{_g(sd):>14}{_g(mn):>13}{_g(mx):>13}\n", "result")
+    out.write("  " + "-" * 67 + "\n", "text")
     from ..commands.matrix import Matrix
     s.r = {"stats": Matrix(np.array(stats), names, ["mean", "sd", "min", "max"])}
 
@@ -235,21 +242,22 @@ def _hettest(s: "Session", est, rest: str) -> None:
     else:
         sig2 = (e @ e) / N
         u = e * e / sig2
-        beta, r = _ols(Zc, u)
-        fit = Zc @ beta
-        stat = ((fit - u.mean()) @ (fit - u.mean())) / 2
+        # ESS com regressores centrados, sem a subtração de somas grandes
+        # (compat 0802: chi2 perto de zero)
+        uc = u - u.mean()
+        Zm = Z - Z.mean(axis=0)
+        beta = np.linalg.lstsq(Zm, uc, rcond=None)[0]
+        stat = float(uc @ (Zm @ beta)) / 2
         kind = "normal"
-    p = float(st.chi2.sf(stat, df))
+    p = float(_chi2_tail(stat, df))
     out = s.output
     out.write("\nBreusch-Pagan / Cook-Weisberg test for heteroskedasticity \n", "text")
     out.write("         Ho: Constant variance\n", "text")
     out.write(f"         Variables: {desc}\n", "text")
-    if kind == "iid":
-        out.write("\n         Assumption: i.i.d. error terms\n", "text")   # VERIFICAR
     out.write("\n", "text")
     out.write(f"         chi2({df})      =  {stat:>7.2f}\n", "text")
     out.write(f"         Prob > chi2  =   {p:.4f}\n", "text")
-    s.r = {"p": p, "df": float(df), "chi2": stat}
+    s.r = dict(reversed([("p", p), ("df", float(df)), ("chi2", stat)]))
 
 
 def _ovtest(s: "Session", est, rest: str) -> None:
@@ -263,8 +271,11 @@ def _ovtest(s: "Session", est, rest: str) -> None:
         extra = np.column_stack([X[:, j] ** p for j in base for p in (2, 3, 4)])
         desc = "powers of the independent variables"   # VERIFICAR
     else:
-        z = (yhat - yhat.mean()) / yhat.std()
-        extra = np.column_stack([z ** 2, z ** 3, z ** 4])
+        # escala [0, 1] e potências guardadas em float, como o Stata (compat
+        # 0802: F = .2525909782551101)
+        z = (yhat - yhat.min()) / (yhat.max() - yhat.min())
+        f32 = lambda a: a.astype(np.float32).astype(float)   # noqa: E731
+        extra = np.column_stack([f32(z ** 2), f32(z ** 3), f32(z ** 4)])
         desc = "powers of the fitted values of " + est.depvar
     _, e0 = _ols(X, y)
     Xa = np.column_stack([X, extra])
@@ -278,8 +289,8 @@ def _ovtest(s: "Session", est, rest: str) -> None:
     out.write(f"\nRamsey RESET test using {desc}\n", "text")
     out.write("       Ho:  model has no omitted variables\n", "text")
     out.write(f"{'F(' + str(q) + ', ' + str(df_r) + ')':>26} = {F:>9.2f}\n", "text")
-    out.write(f"{'Prob > F':>26} = {p:>10.4f}\n", "text")
-    s.r = {"p": p, "df_r": float(df_r), "df": float(q), "F": F}
+    out.write(f"{'Prob > F':>26} = {p:>11.4f}\n", "text")
+    s.r = dict(reversed([("p", p), ("F", F), ("df", float(q)), ("df_r", float(df_r))]))
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +354,7 @@ def _classification(s: "Session", est, rest: str) -> None:
              ("False - rate for classified -", "Pr( D| -)", pct(c, c + d))]
     for rows in (rows1, rows2):
         for lab, pr, v in rows:
-            val = "." if v >= SYS else f"{v:.2f}%"
+            val = ".%" if v >= SYS else f"{v:.2f}%"
             out.write(f"{lab:<32}{pr}", "text")
             out.write(f"{val:>9}\n", "result")
         out.write("-" * 50 + "\n", "text")
@@ -353,9 +364,9 @@ def _classification(s: "Session", est, rest: str) -> None:
     out.write("-" * 50 + "\n", "text")
     # r(P_xy): Pr(x|y) com p/n = classificado +/-, 1/0 = verdadeiro D/~D
     # (VERIFICAR a ordem do return list)
-    s.r = {"P_corr": cc, "P_1n": pct(c, c + d), "P_0p": pct(b, a + b), "P_0n": pct(d, c + d),
-           "P_1p": pct(a, a + b), "P_n1": pct(c, a + c), "P_p0": pct(b, b + d), "P_n0": pct(d, b + d),
-           "P_p1": pct(a, a + c)}
+    s.r = dict(reversed([("P_1n", pct(c, c + d)), ("P_0p", pct(b, a + b)), ("P_0n", pct(d, c + d)),
+                         ("P_1p", pct(a, a + b)), ("P_n1", pct(c, a + c)), ("P_p0", pct(b, b + d)),
+                         ("P_n0", pct(d, b + d)), ("P_p1", pct(a, a + c)), ("P_corr", cc)]))
 
 
 def _gof(s: "Session", est, rest: str) -> None:
@@ -383,13 +394,13 @@ def _gof(s: "Session", est, rest: str) -> None:
             if exp1 > 0 and n_g - exp1 > 0:
                 chi += (obs1 - exp1) ** 2 / (exp1 * (1 - exp1 / n_g))
         df = ng - 2
-        pv = float(st.chi2.sf(chi, df))
+        pv = float(_chi2_tail(chi, df))
         out.write("  (Table collapsed on quantiles of estimated probabilities)\n\n", "text")
         out.write(f"{'number of observations':>29} = {N:>9}\n", "text")
         out.write(f"{'number of groups':>29} = {ng:>9}\n", "text")
         out.write(f"{'Hosmer-Lemeshow chi2(' + str(df) + ')':>29} = {chi:>12.2f}\n", "text")
-        out.write(f"{'Prob > chi2':>29} = {pv:>13.4f}\n", "text")
-        s.r = {"p": pv, "chi2": chi, "df": float(df), "m": float(ng), "N": float(N)}   # VERIFICAR
+        out.write(f"{'Prob > chi2':>29} = {pv:>14.4f}\n", "text")
+        s.r = dict(reversed([("df", float(df)), ("chi2", chi), ("m", float(ng)), ("N", float(N))]))   # VERIFICAR
         return
     # padrões de covariáveis: linhas iguais de X
     from .postest import design_all
@@ -407,12 +418,12 @@ def _gof(s: "Session", est, rest: str) -> None:
         chi += (yj - m * pj) ** 2 / (m * pj * (1 - pj))
     k = int(np.count_nonzero(np.abs(np.diag(est.V)) > 0))
     df = J - k
-    pv = float(st.chi2.sf(chi, df))
+    pv = float(_chi2_tail(chi, df))
     out.write(f"{'number of observations':>29} = {N:>9}\n", "text")
     out.write(f"{'number of covariate patterns':>29} = {J:>9}\n", "text")
     out.write(f"{'Pearson chi2(' + str(df) + ')':>29} = {chi:>12.2f}\n", "text")
-    out.write(f"{'Prob > chi2':>29} = {pv:>13.4f}\n", "text")
-    s.r = {"p": pv, "chi2": chi, "df": float(df), "m": float(J), "N": float(N)}
+    out.write(f"{'Prob > chi2':>29} = {pv:>14.4f}\n", "text")
+    s.r = dict(reversed([("df", float(df)), ("chi2", chi), ("m", float(J)), ("N", float(N))]))
 
 
 def _bootstrap(s: "Session", est, rest: str) -> None:

@@ -1,0 +1,433 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:32:58
+
+. * Fase 8: oneway, anova, tabulate summarize() e estat
+. clear
+
+. set obs 74
+number of observations (_N) was 0, now 74
+
+. gen mpg = 12 + mod(_n*7, 30) + (mod(_n, 4) == 0)*mod(_n, 9)
+
+. gen price = 3000 + mod(_n*131, 9000) + mod(_n, 7)^3
+
+. gen foreign = _n > 52
+
+. label define orig 0 "Domestic" 1 "Foreign"
+
+. label values foreign orig
+
+. gen rep = mod(_n, 5) + 1
+
+. gen peso = 2000 + 20*mpg + mod(_n*17, 300)
+
+. label variable peso "Peso do carro"
+
+. 
+. oneway mpg rep
+
+                        Analysis of Variance
+    Source              SS         df      MS            F     Prob > F
+------------------------------------------------------------------------
+Between groups      229.667696      4   57.4169241      0.69     0.5994
+ Within groups      5717.48095     69   82.8620428
+------------------------------------------------------------------------
+    Total           5947.14865     73   81.4677897
+
+Bartlett's test for equal variances:  chi2(4) =   2.0055  Prob>chi2 = 0.735
+
+. return list
+
+scalars:
+                  r(N) =  74
+                r(mss) =  229.6676962676956
+               r(df_m) =  4
+                r(rss) =  5717.480952380953
+               r(df_r) =  69
+                  r(F) =  .6929218992794258
+           r(chi2bart) =  2.005459827761085
+            r(df_bart) =  4
+
+. oneway mpg rep, tabulate
+
+            |           Summary of mpg
+        rep |        Mean   Std. Dev.       Freq.
+------------+------------------------------------
+          1 |   24.642857   8.1013498          14
+          2 |        26.6   8.6668498          15
+          3 |          30   7.7367398          15
+          4 |   27.133333   10.649391          15
+          5 |   28.266667   9.9532239          15
+------------+------------------------------------
+      Total |   27.364865   9.0259509          74
+
+                        Analysis of Variance
+    Source              SS         df      MS            F     Prob > F
+------------------------------------------------------------------------
+Between groups      229.667696      4   57.4169241      0.69     0.5994
+ Within groups      5717.48095     69   82.8620428
+------------------------------------------------------------------------
+    Total           5947.14865     73   81.4677897
+
+Bartlett's test for equal variances:  chi2(4) =   2.0055  Prob>chi2 = 0.735
+
+. oneway price foreign, tabulate means
+
+            | Summary of
+            |    price
+    foreign |        Mean
+------------+------------
+   Domestic |   6531.5577
+    Foreign |        8927
+------------+------------
+      Total |   7243.7162
+
+                        Analysis of Variance
+    Source              SS         df      MS            F     Prob > F
+------------------------------------------------------------------------
+Between groups      88708602.2      1   88708602.2     13.96     0.0004
+ Within groups       457520379     72   6354449.71
+------------------------------------------------------------------------
+    Total            546228981     73   7482588.78
+
+Bartlett's test for equal variances:  chi2(1) =  10.4090  Prob>chi2 = 0.001
+
+. tabulate foreign, summarize(mpg)
+
+            |           Summary of mpg
+    foreign |        Mean   Std. Dev.       Freq.
+------------+------------------------------------
+   Domestic |   27.846154   9.1980062          52
+    Foreign |   26.227273   8.7064936          22
+------------+------------------------------------
+      Total |   27.364865   9.0259509          74
+
+. tabulate rep, summarize(price) means
+
+            | Summary of
+            |    price
+        rep |        Mean
+------------+------------
+          1 |   7332.6429
+          2 |   7174.8667
+          3 |   7306.3333
+          4 |      7438.6
+          5 |   6972.0667
+------------+------------
+      Total |   7243.7162
+
+. anova mpg rep foreign
+
+                         Number of obs =         74    R-squared     =  0.0454
+                         Root MSE      =      9.137    Adj R-squared = -0.0248
+
+                  Source | Partial SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |  270.18446          5   54.036891      0.65  0.6645
+                         |
+                     rep |  229.66868          4   57.417169      0.69  0.6029
+                 foreign |  40.516761          1   40.516761      0.49  0.4884
+                         |
+                Residual |  5676.9642         68   83.484768  
+              -----------+----------------------------------------------------
+                   Total |  5947.1486         73    81.46779  
+
+. ereturn list
+
+scalars:
+                  e(N) =  74
+               e(df_m) =  5
+               e(df_r) =  68
+                  e(F) =  .6472664780721038
+                 e(r2) =  .0454309238244619
+               e(rmse) =  9.136999919058209
+                e(mss) =  270.1844572295086
+                e(rss) =  5676.964191419142
+               e(r2_a) =  -.0247579788355043
+                 e(ll) =  -265.5854031417846
+               e(ll_0) =  -267.3057281122291
+               e(rank) =  6
+               e(ss_1) =  229.668675713726
+               e(df_1) =  4
+                e(F_1) =  .6877562294711814
+               e(ss_2) =  40.51676096181033
+               e(df_2) =  1
+                e(F_2) =  .4853192045085572
+
+macros:
+            e(cmdline) : "anova mpg rep foreign"
+             e(depvar) : "mpg"
+                e(cmd) : "anova"
+           e(varnames) : "rep foreign"
+          e(estat_cmd) : "anova_estat"
+             e(term_2) : "foreign"
+             e(term_1) : "rep"
+             e(sstype) : "partial"
+         e(properties) : "b V"
+            e(predict) : "regres_p"
+              e(model) : "ols"
+
+matrices:
+                  e(b) :  1 x 8
+                  e(V) :  8 x 8
+
+functions:
+             e(sample)   
+
+. anova mpg rep##foreign
+
+                         Number of obs =         74    R-squared     =  0.0623
+                         Root MSE      =    9.33475    Adj R-squared = -0.0696
+
+                  Source | Partial SS         df         MS        F    Prob>F
+             ------------+----------------------------------------------------
+                   Model |  370.33956          9    41.14884      0.47  0.8880
+                         |
+                     rep |  221.15312          4    55.28828      0.63  0.6397
+                 foreign |  46.577918          1   46.577918      0.53  0.4674
+             rep#foreign |   100.1551          4   25.038775      0.29  0.8852
+                         |
+                Residual |  5576.8091         64   87.137642  
+             ------------+----------------------------------------------------
+                   Total |  5947.1486         73    81.46779  
+
+. anova price rep c.peso
+
+                         Number of obs =         74    R-squared     =  0.0242
+                         Root MSE      =    2799.68    Adj R-squared = -0.0475
+
+                  Source | Partial SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |   13230893          5   2646178.6      0.34  0.8884
+                         |
+                     rep |  2577827.6          4    644456.9      0.08  0.9876
+                    peso |   11313667          1    11313667      1.44  0.2338
+                         |
+                Residual |  5.330e+08         68   7838207.2  
+              -----------+----------------------------------------------------
+                   Total |  5.462e+08         73   7482588.8  
+
+. regress price mpg peso
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(2, 71)        =      1.12
+       Model |  16669005.5         2  8334502.75   Prob > F        =    0.3328
+    Residual |   529559976        71   7458591.2   R-squared       =    0.0305
+-------------+----------------------------------   Adj R-squared   =    0.0032
+       Total |   546228981        73  7482588.78   Root MSE        =      2731
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   -75.1963   83.72846    -0.90   0.372    -242.1461    91.75351
+        peso |   4.794225   3.633928     1.32   0.191    -2.451622    12.04007
+       _cons |  -3595.983   7767.058    -0.46   0.645    -19083.06    11891.09
+------------------------------------------------------------------------------
+
+. estat ic
+
+Akaike's information criterion and Bayesian information criterion
+
+-----------------------------------------------------------------------------
+       Model |        Obs  ll(null)  ll(model)      df         AIC        BIC
+-------------+---------------------------------------------------------------
+           . |         74 -690.1373  -688.9907       3    1383.981   1390.893
+-----------------------------------------------------------------------------
+               Note: N=Obs used in calculating BIC; see [R] BIC note.
+
+. return list
+
+matrices:
+                  r(S) :  1 x 6
+
+. estat vce
+
+Covariance matrix of coefficients of regress model
+
+        e(V) |        mpg        peso       _cons 
+-------------+------------------------------------
+         mpg |  7010.4549                         
+        peso | -275.70737   13.205432             
+       _cons |  549868.55  -27980.595    60327186 
+
+. estat vce, correlation
+
+Correlation matrix of coefficients of regress model
+
+        e(V) |      mpg      peso     _cons 
+-------------+------------------------------
+         mpg |   1.0000                     
+        peso |  -0.9061    1.0000           
+       _cons |   0.8455   -0.9913    1.0000 
+
+. estat summarize
+
+  Estimation sample regress                Number of obs =         74
+
+  -------------------------------------------------------------------
+      Variable |         Mean      Std. Dev.         Min          Max
+  -------------+-----------------------------------------------------
+         price |     7243.716      2735.432         3132        12033
+           mpg |     27.36486      9.025951           12           46
+          peso |     2690.203      207.9648         2301         3116
+  -------------------------------------------------------------------
+
+. estat hettest
+
+Breusch-Pagan / Cook-Weisberg test for heteroskedasticity 
+         Ho: Constant variance
+         Variables: fitted values of price
+
+         chi2(1)      =     0.00
+         Prob > chi2  =   0.9924
+
+. return list
+
+scalars:
+                  r(p) =  .9923821496639255
+                 r(df) =  1
+               r(chi2) =  .0000911586627375
+
+. estat hettest, rhs
+
+Breusch-Pagan / Cook-Weisberg test for heteroskedasticity 
+         Ho: Constant variance
+         Variables: mpg peso
+
+         chi2(2)      =     0.00
+         Prob > chi2  =   0.9998
+
+. estat hettest, iid
+
+Breusch-Pagan / Cook-Weisberg test for heteroskedasticity 
+         Ho: Constant variance
+         Variables: fitted values of price
+
+         chi2(1)      =     0.00
+         Prob > chi2  =   0.9872
+
+. estat ovtest
+
+Ramsey RESET test using powers of the fitted values of price
+       Ho:  model has no omitted variables
+                  F(3, 68) =      0.25
+                  Prob > F =      0.8592
+
+. return list
+
+scalars:
+                  r(p) =  .8592264226373587
+                  r(F) =  .2525909782551101
+                 r(df) =  3
+               r(df_r) =  68
+
+. logit foreign mpg peso
+
+Iteration 0:   log likelihood =  -45.03321  
+Iteration 1:   log likelihood = -44.181348  
+Iteration 2:   log likelihood = -44.176822  
+Iteration 3:   log likelihood = -44.176821  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(2)        =       1.71
+                                                Prob > chi2       =     0.4247
+Log likelihood = -44.176821                     Pseudo R2         =     0.0190
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .0467821   .0680565     0.69   0.492    -.0866062    .1801705
+        peso |  -.0032469   .0029885    -1.09   0.277    -.0091044    .0026105
+       _cons |   6.571001   6.379926     1.03   0.303    -5.933425    19.07543
+------------------------------------------------------------------------------
+
+. estat classification
+
+Logistic model for foreign
+
+              -------- True --------
+Classified |         D            ~D  |      Total
+-----------+--------------------------+-----------
+     +     |         0             0  |          0
+     -     |        22            52  |         74
+-----------+--------------------------+-----------
+   Total   |        22            52  |         74
+
+Classified + if predicted Pr(D) >= .5
+True D defined as foreign != 0
+--------------------------------------------------
+Sensitivity                     Pr( +| D)    0.00%
+Specificity                     Pr( -|~D)  100.00%
+Positive predictive value       Pr( D| +)       .%
+Negative predictive value       Pr(~D| -)   70.27%
+--------------------------------------------------
+False + rate for true ~D        Pr( +|~D)    0.00%
+False - rate for true D         Pr( -| D)  100.00%
+False + rate for classified +   Pr(~D| +)       .%
+False - rate for classified -   Pr( D| -)   29.73%
+--------------------------------------------------
+Correctly classified                        70.27%
+--------------------------------------------------
+
+. return list
+
+scalars:
+               r(P_1n) =  29.72972972972973
+               r(P_0p) =  .
+               r(P_0n) =  70.27027027027027
+               r(P_1p) =  .
+               r(P_n1) =  100
+               r(P_p0) =  0
+               r(P_n0) =  100
+               r(P_p1) =  0
+             r(P_corr) =  70.27027027027027
+
+. estat gof
+
+Logistic model for foreign, goodness-of-fit test
+
+       number of observations =        74
+ number of covariate patterns =        74
+             Pearson chi2(71) =        74.17
+                  Prob > chi2 =         0.3753
+
+. return list
+
+scalars:
+                 r(df) =  71
+               r(chi2) =  74.16965618843901
+                  r(m) =  74
+                  r(N) =  74
+
+. estat gof, group(5)
+
+Logistic model for foreign, goodness-of-fit test
+
+  (Table collapsed on quantiles of estimated probabilities)
+
+       number of observations =        74
+             number of groups =         5
+      Hosmer-Lemeshow chi2(3) =         1.55
+                  Prob > chi2 =         0.6715
+
+. estat ic
+
+Akaike's information criterion and Bayesian information criterion
+
+-----------------------------------------------------------------------------
+       Model |        Obs  ll(null)  ll(model)      df         AIC        BIC
+-------------+---------------------------------------------------------------
+           . |         74 -45.03321  -44.17682       3    94.35364   101.2658
+-----------------------------------------------------------------------------
+               Note: N=Obs used in calculating BIC; see [R] BIC note.
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:32:58
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

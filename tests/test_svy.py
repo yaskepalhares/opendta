@@ -39,7 +39,7 @@ def test_svy_mean_matches_manual_linearization(run):
     V = run.session.e["V"].data[0, 0]
     assert b == pytest.approx(m, rel=1e-12)
     assert np.sqrt(V) == pytest.approx(se, rel=1e-10)
-    assert "Linearized" in out and "Design df         =          16" in out
+    assert "Linearized" in out and "Design df       =         16" in out
 
 
 def test_subpop_keeps_design(run):

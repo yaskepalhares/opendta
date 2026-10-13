@@ -42,7 +42,7 @@ def finish(s: "Session", g: Graph, graw: dict) -> None:
     if "saving" in graw and isinstance(graw["saving"], str):
         fname, rep = saving_opt(graw["saving"])
         path = gph_path(fname)
-        save_gph(g, path, replace=rep)
+        save_gph(g, path, replace=rep, out=s.output)
         s.output.write(f"(file {_shown(fname, path)} saved)\n", "text")
     if not graw.get("nodraw"):
         show(s, g)
@@ -99,7 +99,9 @@ def cmd_tsline(s: "Session", args: str) -> None:
 @command("histogram", "hist")
 def cmd_histogram(s: "Session", args: str) -> None:
     g, graw, msg = FAM.histogram(s, args)
-    s.output.write(msg + "\n", "text")
+    # com by() o Stata não mostra a mensagem das barras (compat 0701)
+    if "by" not in graw:
+        s.output.write(msg + "\n", "text")
     finish(s, g, graw)
 
 
@@ -219,7 +221,9 @@ def _export(s: "Session", text: str) -> None:
         R.export(g, path, fmt, width=width, height=height)
     except OSError:
         raise StataError(603, f"file {fname} could not be opened")
-    s.output.write(f"(file {fname} written in {label} format)\n", "text")
+    # no Mac, o Stata 14 mostra o caminho completo só no PDF (compat 0701)
+    shown = str(path.resolve()) if label == "PDF" else fname
+    s.output.write(f"(file {shown} written in {label} format)\n", "text")
 
 
 def _save(s: "Session", text: str) -> None:
@@ -236,7 +240,7 @@ def _save(s: "Session", text: str) -> None:
     else:
         raise StataError(198, "invalid syntax")
     path = gph_path(fname)
-    save_gph(g, path, replace=bool(o.get("replace")))
+    save_gph(g, path, replace=bool(o.get("replace")), out=s.output)
     s.output.write(f"(file {_shown(fname, path)} saved)\n", "text")
 
 
@@ -275,8 +279,14 @@ def _dir(s: "Session", text: str) -> None:
     items = names + files
     if not items:
         return
-    # VERIFICAR: disposição em colunas como `dir`; aqui, uma linha com dois espaços
-    s.output.write("  " + "  ".join(items) + "\n", "result")
+    # em ordem alfabética, colunas da largura do maior nome + 2, recuo de 4
+    # (compat 0701: "    d       e       f       odta_a  p")
+    items = sorted(items)
+    L = max(len(x) for x in items) + 2
+    per = max(1, (int(s.settings.get("linesize", 80)) - 4) // L)
+    for k in range(0, len(items), per):
+        line = "".join(f"{x:<{L}}" for x in items[k:k + per]).rstrip()
+        s.output.write("    " + line + "\n", "result")
     s.r = {"list": " ".join(names)}
 
 
@@ -295,6 +305,8 @@ def _drop(s: "Session", text: str) -> None:
     for w in words:
         hits = [n for n in st.graphs if fnmatch.fnmatchcase(n, w)] if any(c in w for c in "*?") else [w]
         for n in hits:
+            if n not in st.graphs:
+                raise StataError(111, f"graph {n} not found\nno graphs dropped")
             st.drop(n)
             hook = s.ui_hooks.get("graph_close")
             if hook is not None:

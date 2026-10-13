@@ -24,7 +24,9 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-WIDTH = 79   # VERIFICAR: o codebook do Stata 14 acompanha c(linesize)?
+def _width(s: "Session") -> int:
+    """O codebook ocupa a linha toda: c(linesize) (compat 0803)."""
+    return int(s.settings.get("linesize", 80))
 
 
 def _g(x: float) -> str:
@@ -62,12 +64,13 @@ def _units(vals: np.ndarray, tol: float = 1e-9) -> str:
 
 def _header(s: "Session", v: "Variable") -> None:
     out = s.output
-    out.write("-" * WIDTH + "\n", "text")
+    W = _width(s)
+    out.write("-" * W + "\n", "text")
     lab = v.label or "(unlabeled)"
-    space = WIDTH - len(v.name) - len(lab)
+    space = W - len(v.name) - len(lab)
     out.write(v.name, "result")
     out.write(" " * max(space, 1) + lab + "\n", "text")
-    out.write("-" * WIDTH + "\n", "text")
+    out.write("-" * W + "\n", "text")
     out.write("\n", "text")
 
 
@@ -89,7 +92,10 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
     N = int(mask.sum())
     if v.is_string:
         col = np.asarray(v.raw)[mask]
-        _line(s, "type", f"string ({v.vtype})")
+        longest = max((len(x) for x in col), default=0)
+        decl = int(v.vtype[3:]) if v.vtype.startswith("str") and v.vtype[3:].isdigit() else 0
+        extra = f", but longest is str{max(longest, 1)}" if decl and longest < decl else ""
+        _line(s, "type", f"string ({v.vtype}){extra}")
         out.write("\n", "text")
         nonmiss = col[col != ""]
         uniq = sorted(set(nonmiss.tolist()))
@@ -104,7 +110,9 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
         elif len(uniq) > 0:
             srt = sorted(nonmiss.tolist())
             n = len(srt)
-            picks = [srt[min(n - 1, int(n * q))] for q in (0.125, 0.375, 0.625, 0.875)]   # VERIFICAR
+            # exemplos: posições floor(n·k/5), k = 1..4, na lista ordenada
+            # (compat 0803)
+            picks = [srt[min(n - 1, n * k // 5)] for k in (1, 2, 3, 4)]
             for k, ex in enumerate(picks):
                 lab = "examples:" if k == 0 else ""
                 out.write(f"{lab:>23}  ", "text")
@@ -158,40 +166,51 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
         pass
     mean = float(valid.mean())
     sd = float(valid.std(ddof=1)) if len(valid) > 1 else SYS
-    _line(s, "mean", f"{_g(mean):>9}")
-    _line(s, "std. dev", f"{_g(sd):>9}")
+    _line(s, "mean", f"{_g(mean):>8}")
+    _line(s, "std. dev", f"{_g(sd):>8}")
     out.write("\n", "text")
     srt = np.sort(valid)
     ps = [S.percentile(srt, q) for q in (10, 25, 50, 75, 90)]
+    # primeira coluna com 9 caracteres, as demais com 10 (compat 0803)
     out.write(f"{'percentiles:':>23}  ", "text")
-    out.write("".join(f"{str(q) + '%':>10}" for q in (10, 25, 50, 75, 90)) + "\n", "text")
+    out.write("".join(f"{str(q) + '%':>{9 if i == 0 else 10}}" for i, q in enumerate((10, 25, 50, 75, 90)))
+              + "\n", "text")
     out.write(" " * 25, "text")
-    out.write("".join(f"{_num(p):>10}" for p in ps) + "\n", "result")
+    out.write("".join(f"{_num(p):>{9 if i == 0 else 10}}" for i, p in enumerate(ps)) + "\n", "result")
     out.write("\n", "text")
 
 
 def _compact(s: "Session", names: list[str], mask: np.ndarray) -> None:
+    """Uma linha por variável. Larguras pelo conteúdo, como no Stata 14
+    (compat 0803: "Variable   Obs Unique      Mean   Min    Max  Label")."""
     ds = s.data
     out = s.output
-    out.write("\n" + "Variable     Obs Unique      Mean       Min       Max  Label\n", "text")   # VERIFICAR
-    out.write("-" * WIDTH + "\n", "text")
+    rows = []
     for n in names:
         v = ds.get(n)
         if v.is_string:
             col = np.asarray(v.raw)[mask]
             nonmiss = col[col != ""]
-            out.write(f"{_abbrev(n, 12):<12}{len(nonmiss):>4}{len(set(nonmiss.tolist())):>7}", "result")
-            out.write(f"{'.':>10}{'.':>10}{'.':>10}  {v.label}\n".rstrip() + "\n", "result")
+            rows.append((n, len(nonmiss), len(set(nonmiss.tolist())), ".", ".", ".", v.label))
             continue
         x = v.data[mask]
         valid = x[x < SYS]
         if len(valid):
-            stats = f"{_g(float(valid.mean())):>10}{_num(valid.min()):>10}{_num(valid.max()):>10}"
+            rows.append((n, len(valid), len(np.unique(valid)), _num(float(valid.mean())),
+                         _num(valid.min()), _num(valid.max()), v.label))
         else:
-            stats = f"{'.':>10}{'.':>10}{'.':>10}"
-        out.write(f"{_abbrev(n, 12):<12}{len(valid):>4}{len(np.unique(valid)):>7}" + stats, "result")
-        out.write(f"  {v.label}".rstrip() + "\n", "text")
-    out.write("-" * WIDTH + "\n", "text")
+            rows.append((n, 0, 0, ".", ".", ".", v.label))
+    wn = max([8] + [len(r[0]) for r in rows])
+    wm = max([4] + [len(r[3]) for r in rows]) + 2
+    wmin = max([3] + [len(r[4]) for r in rows]) + 2
+    wmax = max([3] + [len(r[5]) for r in rows]) + 2
+    out.write("\n" + f"{'Variable':<{wn}}{'Obs':>6}{'Unique':>7}{'Mean':>{wm}}{'Min':>{wmin}}{'Max':>{wmax}}  Label\n",
+              "text")
+    out.write("-" * _width(s) + "\n", "text")
+    for n, obs, uq, mean, mn, mx, lab in rows:
+        out.write(f"{n:<{wn}}{obs:>6}{uq:>7}{mean:>{wm}}{mn:>{wmin}}{mx:>{wmax}}", "result")
+        out.write(f"  {lab}".rstrip() + "\n", "text")
+    out.write("-" * _width(s) + "\n", "text")
 
 
 @command("codebook", "codebook")
@@ -225,38 +244,54 @@ def cmd_codebook(s: "Session", args: str) -> None:
 
 
 def _problems(s: "Session", names: list[str], mask: np.ndarray) -> None:
+    """codebook, problems (compat 0803)."""
     ds = s.data
     out = s.output
-    constant, allmiss, blanks = [], [], []
+    probs: dict[str, list[str]] = {}
+
+    def add(kind, n):
+        probs.setdefault(kind, []).append(n)
+
     for n in names:
         v = ds.get(n)
         if v.is_string:
             col = np.asarray(v.raw)[mask]
-            if np.all(col == ""):
-                allmiss.append(n)
-            elif len(set(col.tolist())) == 1:
-                constant.append(n)
-            if any(" " in x for x in set(col.tolist())):
-                blanks.append(n)
+            vals = set(col.tolist())
+            if len(vals) <= 1:
+                add("constant (or all missing) vars", n)
+            longest = max((len(x) for x in col), default=0)
+            decl = int(v.vtype[3:]) if v.vtype[3:].isdigit() else 0
+            if decl and longest < decl:
+                add("str# vars that may be compressed", n)
+            if any(x != x.lstrip() for x in vals if x):
+                add("string vars with leading blanks", n)
+            if any(x != x.rstrip() for x in vals if x):
+                add("string vars with trailing blanks", n)
+            if any(" " in x.strip() for x in vals):
+                add("string vars with embedded blanks", n)
         else:
             x = v.data[mask]
             valid = x[x < SYS]
-            if len(valid) == 0:
-                allmiss.append(n)
-            elif np.all(valid == valid[0]) and len(valid) == len(x):
-                constant.append(n)
+            if len(valid) == 0 or (np.all(valid == valid[0]) and len(valid) == len(x)):
+                add("constant (or all missing) vars", n)
+            if v.value_label and v.value_label not in ds.value_labels:
+                add("vars with nonexistent labels", n)
     out.write("\n", "text")
-    if not (constant or allmiss or blanks):
+    if not probs:
         out.write("no potential problems in dataset\n", "text")   # VERIFICAR
         return
-    out.write(f"{'Potential problem':>26}   variables\n", "text")
-    out.write("-" * WIDTH + "\n", "text")
-    for lab, lst in (("constant (or all missing) vars", constant + allmiss),
-                     ("vars with embedded blanks", blanks)):
-        if lst:
-            out.write(f"{lab:>32}  ", "text")
-            out.write(" ".join(lst) + "\n", "result")
-    out.write("-" * WIDTH + "\n", "text")
+    fname = ds.filename or "[unnamed]"
+    out.write(f"   Potential problems in dataset   {fname}\n\n", "text")
+    out.write(f"{'potential problem':>32}   variables\n", "text")
+    out.write("-" * 50 + "\n", "text")
+    order = ["constant (or all missing) vars", "vars with nonexistent labels", "incompletely labeled vars",
+             "str# vars that may be compressed", "string vars with leading blanks",
+             "string vars with trailing blanks", "string vars with embedded blanks"]
+    for kind in order:
+        if kind in probs:
+            out.write(f"{kind:>34}   ", "text")
+            out.write(" ".join(probs[kind]) + "\n", "result")
+    out.write("-" * 50 + "\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +316,8 @@ def cmd_misstable(s: "Session", args: str) -> None:
                                   "asis": 4, "bypatterns": 3, "replace": 7, "clear": 5})
     ds = s.data
     names = s.expand_varlist(p.varlist) if p.varlist.strip() else list(ds.names)
-    names = [n for n in names if not ds.get(n).is_string]
+    if full != "summarize":
+        names = [n for n in names if not ds.get(n).is_string]
     mask = touse(s, p)
     if full == "summarize":
         _miss_summarize(s, names, mask, o)
@@ -296,6 +332,10 @@ def _miss_summarize(s: "Session", names: list[str], mask: np.ndarray, o: dict) -
     out = s.output
     rows = []
     for n in names:
+        if ds.get(n).is_string:
+            if o.get("all"):
+                rows.append((n, None, None, None, None, None, None))
+            continue
         x = ds.get(n).data[mask]
         eq = int((x == SYS).sum())
         gt = int((x > SYS).sum())
@@ -314,12 +354,19 @@ def _miss_summarize(s: "Session", names: list[str], mask: np.ndarray, o: dict) -
     out.write("  " + "-" * 13 + "+" + "-" * 32 + "+" + "-" * 30 + "\n", "text")
     for n, eq, gt, lt, uq, mn, mx in rows:
         out.write(f"{_abbrev(n, 12):>14} |", "text")
-        uq_t = f"{uq:>6}" if uq <= 500 else "  >500"
+        if eq is None:
+            out.write(f"{' (string variable)':<32}|\n", "text")
+            continue
+        uq_t = f"{uq:>7}" if uq <= 500 else "   >500"
         out.write(f"{eq if eq or o.get('showzeros') else '':>10}{gt if gt or o.get('showzeros') else '':>10}{lt:>10}"
                   f"  |{uq_t}  {_num(mn):>9}   {_num(mx):>9}\n", "result")
     out.write("  " + "-" * 77 + "\n", "text")
-    s.r = {"N_eq_dot": float(rows[-1][1]), "N_gt_dot": float(rows[-1][2]), "N_lt_dot": float(rows[-1][3]),
-           "K_uniq": float(rows[-1][4]), "min": float(rows[-1][5]), "max": float(rows[-1][6])}   # VERIFICAR
+    num = [r for r in rows if r[1] is not None]
+    if num:
+        n_, eq, gt, lt, uq, mn, mx = num[-1]
+        # ordem do return list (compat 0803); valores da última variável numérica
+        s.r = {"vartype": "numeric", "N_lt_dot": float(lt), "min": float(mn), "max": float(mx),
+               "N_eq_dot": float(eq), "N_gt_dot": float(gt), "K_uniq": float(uq)}
 
 
 def _miss_patterns(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:
@@ -338,23 +385,28 @@ def _miss_patterns(s: "Session", names: list[str], mask: np.ndarray, o: dict) ->
     N = int(mask.sum())
     freq = bool(o.get("frequency"))
     k = len(cols)
-    out.write("\n" + " " * 4 + "Missing-value patterns\n", "text")
-    out.write(" " * 6 + "(1 means complete)\n\n", "text")
+    # layout do Stata 14 (compat 0803)
+    out.write("\n" + " " * 3 + "Missing-value patterns\n", "text")
+    out.write(" " * 5 + "(1 means complete)\n\n", "text")
     out.write(f"{'':>14}|   Pattern\n", "text")
-    head = "Frequency" if freq else "Percent"
-    out.write(f"{head:>12}  |  " + "  ".join(str(j + 1) for j in range(k)) + "\n", "text")
-    out.write("  " + "-" * 12 + "+" + "-" * (3 * k + 3) + "\n", "text")
+    head = "    Frequency " if freq else "    Percent   "
+    out.write(head + "|  " + "  ".join(str(j + 1) for j in range(k)) + "\n", "text")
+    dash = max(13, 3 * k + 7)   # VERIFICAR com mais variáveis
+    out.write("  " + "-" * 12 + "+" + "-" * dash + "\n", "text")
     first = True
     for idx in order:
         c = int(counts[idx])
-        val = f"{c:,}" if freq else (f"{100 * c / N:.0f}%" if first else f"{100 * c / N:.0f}")
-        out.write(f"{val:>12}  |", "text")
+        if freq:
+            val = f"{c:>13,} "
+        else:
+            val = f"{100 * c / N:>9.0f}" + ("%    " if first else "     ")
+        out.write(f"{val}|", "text")
         out.write("  " + "  ".join(str(x) for x in pats[idx]) + "\n", "result")
         if first:
             out.write(f"{'':>14}|\n", "text")
             first = False
-    out.write("  " + "-" * 12 + "+" + "-" * (3 * k + 3) + "\n", "text")
-    out.write(f"{(f'{N:,}' if freq else '100%'):>12}  |\n\n", "text")
+    out.write("  " + "-" * 12 + "+" + "-" * dash + "\n", "text")
+    out.write((f"{N:>13,} " if freq else f"{'100':>9}%    ") + "|\n\n", "text")
     out.write("  Variables are  " + "  ".join(f"({j + 1}) {n}" for j, n in enumerate(cols)) + "\n", "text")
     s.r = {"N_complete": float(int((M_.sum(axis=1) == k).sum())), "N_incomplete": float(int((M_.sum(axis=1) < k).sum())),
            "K": float(len(pats))}   # VERIFICAR nomes

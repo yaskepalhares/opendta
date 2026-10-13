@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import stats as st
 
+from ..core.stats import chi2_tail as _chi2_tail
+
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
@@ -267,7 +269,7 @@ def _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
         vcetype = "Robust"
     V = (V + V.T) / 2
     chi2 = float(b[:k] @ np.linalg.solve(V[:k, :k], b[:k])) if k else 0.0
-    p = float(st.chi2.sf(chi2, k)) if k else SYS
+    p = float(_chi2_tail(chi2, k)) if k else SYS
     xb_all = Xs @ b[:k]
     r2_w = float(np.corrcoef(_demean(xb_all, ids, inv, counts), yw)[0, 1] ** 2) if k else 0.0
     r2_b = float(np.corrcoef(_group_means(xb_all, inv, counts), yb)[0, 1] ** 2) if k else 0.0
@@ -628,7 +630,7 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
                      ("Prob > F", g(st.f.sf(x["F"], x["df_m"], est.df_r), "%10.4f"))]
         else:
             right = [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["W"], "%10.2f")),
-                     ("Prob > chi2", g(st.chi2.sf(x["W"], x["df_m"]), "%10.4f"))]
+                     ("Prob > chi2", g(_chi2_tail(x["W"], x["df_m"]), "%10.4f"))]
         right += [("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))]
         for i, (rl, rv) in enumerate(right):
             lft = "Instrumental variables (2SLS) regression" if i == 0 else ""

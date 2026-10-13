@@ -224,7 +224,7 @@ def _generate(s: "Session", spec: str, kd: dict, at_rows) -> None:
         dname = names[0]
         vals = np.full(ds.nobs, M.SYSMISS)
         vals[at_rows] = kd["d"]
-        ds.add(Variable(dname, s.default_type(), vals))
+        ds.add(Variable(dname, "double", vals, fmt="%10.0g"))
         return
     if len(names) != 2:
         raise StataError(198, "generate() requires two new variable names")   # VERIFICAR
@@ -238,8 +238,9 @@ def _generate(s: "Session", spec: str, kd: dict, at_rows) -> None:
     ys = np.full(ds.nobs, M.SYSMISS)
     xs[:n] = kd["x"]
     ys[:n] = kd["d"]
-    ds.add(Variable(names[0], s.default_type(), xs))
-    ds.add(Variable(names[1], s.default_type(), ys))
+    # double com formato %10.0g (compat 0701: list mostra -1.0146058)
+    ds.add(Variable(names[0], "double", xs, fmt="%10.0g"))
+    ds.add(Variable(names[1], "double", ys, fmt="%10.0g"))
 
 
 # ---------------------------------------------------------------------------

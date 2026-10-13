@@ -49,7 +49,9 @@ def test_kdensity_bandwidth_and_generate(run):
     assert h == pytest.approx(0.9 * min(sd, (q3 - q1) / 1.349) / 300 ** 0.2, rel=0.02)
     kd = run.session.data.get("kd").data[:40]
     kx = run.session.data.get("kx").data[:40]
-    assert kx[0] == pytest.approx(x.min(), rel=1e-6)
+    # a grade vai de mínimo - h a máximo + h (compat 0701)
+    assert kx[0] == pytest.approx(x.min() - h, rel=1e-12)
+    assert kx[-1] == pytest.approx(x.max() + h, rel=1e-12)
     assert np.trapezoid(kd, kx) == pytest.approx(1.0, abs=0.05)
     assert run.session.r["n"] == 40
 

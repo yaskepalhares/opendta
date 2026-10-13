@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import stats as st
 
+from ..core.stats import chi2_tail as _chi2_tail
+
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
@@ -97,12 +99,12 @@ def cmd_oneway(s: "Session", args: str) -> None:
         out.write("    Source              SS         df      MS            F     Prob > F\n", "text")
         out.write("-" * 72 + "\n", "text")
         out.write(f"{'Between groups':<14}", "text")
-        out.write(f"{_g(ssb):>16}{dfb:>7.0f}{_g(msb):>13}{F:>10.2f}{pF:>11.4f}\n", "result")
+        out.write(f"{_g(ssb, '%11.0g'):>16}{dfb:>7.0f}{_g(msb, '%11.0g'):>13}{F:>10.2f}{pF:>11.4f}\n", "result")
         out.write(f"{' Within groups':<14}", "text")
-        out.write(f"{_g(ssw):>16}{dfw:>7.0f}{_g(msw):>13}\n", "result")
+        out.write(f"{_g(ssw, '%11.0g'):>16}{dfw:>7.0f}{_g(msw, '%11.0g'):>13}\n", "result")
         out.write("-" * 72 + "\n", "text")
         out.write(f"{'    Total':<14}", "text")
-        out.write(f"{_g(tss):>16}{N - 1:>7.0f}{_g(tss / (N - 1)):>13}\n", "result")
+        out.write(f"{_g(tss, '%11.0g'):>16}{N - 1:>7.0f}{_g(tss / (N - 1), '%11.0g'):>13}\n", "result")
     # Bartlett: só com todos os grupos com 2 ou mais observações
     chi_b = SYS
     if all(n_g > 1 for n_g in ns) and all(v > 0 for v in sds):
@@ -110,12 +112,13 @@ def cmd_oneway(s: "Session", args: str) -> None:
         num = dfw * math.log(sp2) - sum((n_g - 1) * math.log(v) for n_g, v in zip(ns, sds))
         den = 1 + (sum(1 / (n_g - 1) for n_g in ns) - 1 / dfw) / (3 * (k - 1))
         chi_b = num / den
-        pb = float(st.chi2.sf(chi_b, k - 1))
+        pb = float(_chi2_tail(chi_b, k - 1))
         if not o.get("noanova"):
             out.write(f"\nBartlett's test for equal variances:  chi2({k - 1}) = {chi_b:>8.4f}  Prob>chi2 = {pb:.3f}\n",
                       "text")
-    s.r = {"N": N, "df_r": dfw, "F": F, "df_m": float(dfb), "rss": ssw, "mss": ssb,
-           "chi2bart": chi_b, "df_bart": float(k - 1)}   # VERIFICAR ordem
+    # ordem do return list do Stata 14 (compat 0802)
+    s.r = dict(reversed([("N", N), ("mss", ssb), ("df_m", float(dfb)), ("rss", ssw), ("df_r", dfw),
+                         ("F", F), ("chi2bart", chi_b), ("df_bart", float(k - 1))]))
 
 
 def _summary_table(s: "Session", gv, yname: str, groups, mask, y, w, o) -> None:
@@ -149,11 +152,16 @@ def _summary_table(s: "Session", gv, yname: str, groups, mask, y, w, o) -> None:
     lines = [ln[:11] for ln in lines] or [""]
     head_lines = [""] * max(0, 2 - len(lines)) + lines
     out.write("\n", "text")
+    tlines = _wrap(title, width)
+    nhead = max(len(tlines) + 1, 2, len(lines))
+    head_lines = [""] * (nhead - len(lines)) + lines
     for k, ln in enumerate(head_lines):
         right = ""
-        if k == len(head_lines) - 2:
-            right = title.center(width).rstrip()
-        elif k == len(head_lines) - 1:
+        ti = k - (nhead - 1 - len(tlines))
+        if 0 <= ti < len(tlines):
+            pad = width - len(tlines[ti])
+            right = (" " * ((pad + 1) // 2) + tlines[ti]).rstrip()
+        elif k == nhead - 1:
             right = "".join(f"{heads[c]:>12}" for c in show)
         out.write(f"{ln:>11} |{right}\n", "text")
     out.write("-" * 12 + "+" + "-" * width + "\n", "text")
@@ -173,6 +181,23 @@ def _summary_table(s: "Session", gv, yname: str, groups, mask, y, w, o) -> None:
     out.write("-" * 12 + "+" + "-" * width + "\n", "text")
     out.write(f"{'Total':>11} |", "text")
     out.write(cells(mask) + "\n", "result")
+
+
+def _wrap(text: str, width: int) -> list[str]:
+    """Quebra o título em linhas de até `width` caracteres (compat 0802:
+    "Summary of" / "price" sobre uma coluna só)."""
+    if len(text) <= width:
+        return [text]
+    lines, cur = [], ""
+    for w in text.split():
+        if cur and len(cur) + 1 + len(w) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = (cur + " " + w).strip()
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 def tab_summarize(s: "Session", gv, yname: str, mask: np.ndarray, w, o: dict) -> None:
@@ -342,11 +367,13 @@ def cmd_anova(s: "Session", args: str) -> None:
     out.write("    R-squared     = ", "text")
     out.write(f"{r2:>7.4f}\n", "result")
     out.write(" " * 25 + "Root MSE      = ", "text")
-    out.write(f"{_g(rmse, '%10.0g'):>10}", "result")
+    out.write(f"{_g(rmse, '%8.0g'):>10}", "result")
     out.write("    Adj R-squared = ", "text")
     out.write(f"{r2a:>7.4f}\n", "result")
     out.write("\n" + f"{'Source':>24} | Partial SS         df         MS        F    Prob>F\n", "text")
-    sep = " " * 14 + "-" * 11 + "+" + "-" * 52 + "\n"
+    longest = max([len(r[0]) for r in rows] + [10])
+    dash = max(11, longest + 1)
+    sep = " " * (25 - dash) + "-" * dash + "+" + "-" * 52 + "\n"
     out.write(sep, "text")
 
     def line(label, ss, df, ms, F=None, pv=None):
@@ -365,15 +392,31 @@ def cmd_anova(s: "Session", args: str) -> None:
     out.write(sep, "text")
     line("Total", tss, N - 1, tss / (N - 1))
 
-    e = dict(s.e)
-    e["cmd"] = "anova"
-    e["varnames"] = " ".join(allvars)
-    e["depvar"] = dep
+    # e() do anova no Stata 14, na ordem do ereturn list (compat 0802)
+    e0 = dict(s.e)
+    seen: list[str] = []
+    for t_ in terms:
+        for n_, _c in t_:
+            if n_ not in seen:
+                seen.append(n_)
+    scalars = [("N", N), ("df_m", float(df_m)), ("df_r", float(df_r)), ("F", F_m), ("r2", r2),
+               ("rmse", rmse), ("mss", mss), ("rss", rss), ("r2_a", r2a), ("ll", e0.get("ll", SYS)),
+               ("ll_0", e0.get("ll_0", SYS)), ("rank", e0.get("rank", SYS))]
     for k, (name, ss, df, ms, F, pv) in enumerate(rows, start=1):
-        e[f"term_{k}"] = name
-        e[f"ss_{k}"] = ss
-        e[f"df_{k}"] = float(df)
-        e[f"F_{k}"] = F
-    e.update({"N": N, "mss": mss, "rss": rss, "df_m": float(df_m), "df_r": float(df_r), "F": F_m,
-              "r2": r2, "r2_a": r2a, "rmse": rmse})
+        scalars += [(f"ss_{k}", ss), (f"df_{k}", float(df)), (f"F_{k}", F)]
+    macros = [("cmdline", f"anova {args.strip()}"), ("depvar", dep), ("cmd", "anova"),
+              ("varnames", " ".join(seen)), ("estat_cmd", "anova_estat")]
+    macros += [(f"term_{k}", rows[k - 1][0]) for k in range(len(rows), 0, -1)]
+    macros += [("sstype", "partial"), ("properties", "b V"), ("predict", "regres_p"), ("model", "ols")]
+    e: dict = {}
+    for k_, v in reversed(macros):
+        e[k_] = v
+    for k_, v in reversed(scalars):
+        e[k_] = float(v)
+    for k_ in ("V", "b"):
+        if k_ in e0:
+            e[k_] = e0[k_]
     s.e = e
+    est = getattr(s, "_estimates", None)
+    if est is not None:
+        est.cmd = "anova"

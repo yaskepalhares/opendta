@@ -72,9 +72,12 @@ def gph_path(text: str) -> Path:
     return p
 
 
-def save_gph(g: Graph, path: Path, *, replace: bool) -> None:
+def save_gph(g: Graph, path: Path, *, replace: bool, out=None) -> None:
     if path.exists() and not replace:
         raise StataError(602, f"file {path} already exists")
+    if replace and not path.exists() and out is not None:
+        # como o save, replace: aviso quando o arquivo ainda não existe (compat 0701)
+        out.write(f"(note: file {path} not found)\n", "text")
     payload = {"format": MAGIC, "version": VERSION, "graph": g.to_json()}
     try:
         path.write_text(json.dumps(payload), encoding="utf-8")

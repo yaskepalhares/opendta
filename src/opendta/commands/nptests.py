@@ -69,6 +69,8 @@ def _variance_lines(s: "Session", lines: list[tuple[str, float]], total: float) 
     out = s.output
     out.write("\n", "text")
     for label, v in lines:
+        if abs(v) < 0.005:
+            v = 0.0     # evita "-0.00" (compat 0801)
         out.write(f"{label:<21}", "text")
         out.write(f"{v:>10.2f}\n", "result")
     out.write(" " * 21 + "-" * 10 + "\n", "text")
@@ -128,9 +130,11 @@ def cmd_ranksum(s: "Session", args: str) -> None:
     if o.get("porder"):
         out.write(f"\nP{{{v.name}({g.name}=={groups[0][1]}) > {v.name}({g.name}=={groups[1][1]})}} = ", "text")
         out.write(f"{porder:.3f}\n", "result")
-    s.r = {"porder": porder, "sum_exp": e1, "sum_obs": r1, "group1": float(groups[0][0])
-           if not isinstance(groups[0][0], str) else groups[0][0], "Var_a": var_a, "z": z,
-           "N_2": float(n2), "N_1": float(n1)}   # VERIFICAR ordem do return list
+    g1 = float(groups[0][0]) if not isinstance(groups[0][0], str) else groups[0][0]
+    # ordem do return list do Stata 14 (compat 0801); porder só com a opção
+    _set_r(s, ([("porder", porder)] if o.get("porder") else [])
+           + [("N_2", float(n2)), ("N_1", float(n1)), ("Var_a", var_a), ("z", z), ("sum_exp", e1),
+              ("sum_obs", r1), ("group1", g1)])
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +189,8 @@ def cmd_signrank(s: "Session", args: str) -> None:
     _variance_lines(s, [("unadjusted variance", var_u), ("adjustment for ties", ties),
                         ("adjustment for zeros", zeros)], var_a)
     _z_lines(s, f"Ho: {v.name} = {rhs_name}", z, pv)
-    s.r = {"Var_a": var_a, "z": z, "sum_neg": sn, "sum_pos": sp, "N_tie": float(n0),
-           "N_pos": float(pos.sum()), "N_neg": float(neg.sum())}
+    _set_r(s, [("N_tie", float(n0)), ("N_neg", float(neg.sum())), ("N_pos", float(pos.sum())),
+               ("Var_a", var_a), ("z", z), ("sum_neg", sn), ("sum_pos", sp)])
 
 
 def _is_num(t: str) -> bool:
@@ -242,7 +246,7 @@ def cmd_kwallis(s: "Session", args: str) -> None:
     out.write(f"probability = {st.chi2.sf(H, df):>10.4f}\n", "text")
     out.write(f"\nchi-squared with ties = {Ht:>9.3f} with {df} d.f.\n", "text")
     out.write(f"probability = {st.chi2.sf(Ht, df):>10.4f}\n", "text")
-    s.r = {"chi2_adj": Ht, "chi2": H, "df": float(df)}
+    _set_r(s, [("chi2_adj", Ht), ("df", float(df)), ("chi2", H)])
 
 
 # ---------------------------------------------------------------------------
@@ -277,14 +281,15 @@ def cmd_spearman(s: "Session", args: str) -> None:
         r = float(rho[0, 1])
         pv = pval(r)
         out.write("\n", "text")
-        out.write(f"{' Number of obs':>15} = ", "text")
+        # compat 0801: rótulos em 14 colunas, valores em %8.0f e %12.4f
+        out.write(f"{'Number of obs':>14} = ", "text")
         out.write(f"{n:>7}\n", "result")
         out.write("Spearman's rho = ", "text")
-        out.write(f"{r:>11.4f}\n", "result")
+        out.write(f"{r:>12.4f}\n", "result")
         out.write(f"\nTest of Ho: {vars_[0].name} and {vars_[1].name} are independent\n", "text")
         out.write(f"{'Prob > |t|':>14} = ", "text")
-        out.write(f"{pv:>11.4f}\n", "result")
-        s.r = {"p": pv, "rho": r, "N": float(n)}
+        out.write(f"{pv:>12.4f}\n", "result")
+        _set_r(s, [("N", float(n)), ("rho", r), ("p", pv)])
         return
     out.write(f"(obs={n:,})\n", "text")
     names = [v.name for v in vars_]
@@ -342,7 +347,7 @@ def cmd_swilk(s: "Session", args: str) -> None:
         W, V, z, pz = _swilk_stats(x)
         out.write(f"{name12(v.name):>12} |", "text")
         out.write(f"{n:>11}{W:>11.5f}{V:>11.3f}{z:>10.3f}{pz:>11.5f}\n", "result")
-        s.r = {"V": V, "W": W, "z": z, "p": pz, "N": float(n)}
+        _set_r(s, [("p", pz), ("z", z), ("V", V), ("W", W), ("N", float(n))])
 
 
 def _sk_z(x: np.ndarray) -> tuple[float, float]:
@@ -389,11 +394,13 @@ def cmd_sktest(s: "Session", args: str) -> None:
         z1, z2 = _sk_z(x)
         ps, pk = 2 * float(st.norm.sf(abs(z1))), 2 * float(st.norm.sf(abs(z2)))
         K2 = z1 * z1 + z2 * z2
-        # VERIFICAR: o Stata aplica a correção de Royston (1991) ao K²; aqui, sem
-        # a correção (igual a noadjust) até conferir a fórmula
-        pj = float(st.chi2.sf(K2, 2))
+        if o.get("noadjust"):
+            pj = float(st.chi2.sf(K2, 2))
+        else:
+            K2, pj = _royston_adjust(K2, n)
         out.write(f"{name12(v.name):>12} |", "text")
-        out.write(f"{n:>11}{ps:>11.4f}{pk:>14.4f}{K2:>13.2f}{pj:>14.4f}\n", "result")
+        k2t = "." if not math.isfinite(K2) else f"{K2:.2f}"
+        out.write(f"{n:>11}{ps:>11.4f}{pk:>14.4f}{k2t:>12}{pj:>15.4f}\n", "result")
         s.r = {"P_chi2": pj, "chi2": K2, "P_kurt": pk, "P_skew": ps, "N": float(n)}
 
 
@@ -401,18 +408,40 @@ def cmd_sktest(s: "Session", args: str) -> None:
 # sdtest
 # ---------------------------------------------------------------------------
 
+def _set_r(s: "Session", pairs: list) -> None:
+    """r() na ordem em que o Stata lista (return list mostra na ordem
+    inversa da gravação)."""
+    s.r = dict(reversed(pairs))
+
+
+def _royston_adjust(K2: float, n: int) -> tuple[float, float]:
+    """Correção de Royston (1991c) do K² de D'Agostino ([R] sktest, Methods
+    and formulas). Devolve (adj chi2, P)."""
+    Zc = -float(st.norm.ppf(math.exp(-0.5 * K2)))
+    ln = math.log(n)
+    Zt = 0.55 * n ** 0.2 - 0.21
+    a1 = (-5 + 3.46 * ln) * math.exp(-1.37 * ln)
+    b1 = 1 + (0.854 - 0.148 * ln) * math.exp(-0.55 * ln)
+    a2 = a1 - (2.13 / (1 - 2.37 * ln)) * Zt
+    b2 = 2.13 / (1 - 2.37 * ln) + b1
+    Z = Zc if Zc < -1 else (a1 + b1 * Zc if Zc < Zt else a2 + b2 * Zc)
+    P = float(st.norm.sf(Z))
+    return (-2 * math.log(P) if P > 0 else math.inf), P
+
+
 def _ha3(s: "Session", has: list[str], probs: list[str]) -> None:
-    starts = [1, 28, 60]
-    line_p = [" "] * 82
-    line_h = [" "] * 82
-    for st_, pr, ha in zip(starts, probs, has):
+    """Linhas Ha/Pr do sdtest (compat 0801): Pr nas colunas 2, 29 e 60; cada
+    Ha centrado em 10,5, 39,5 e 69,5 (arredondado para baixo)."""
+    starts = [2, 29, 60]
+    centers = [10.5, 39.5, 69.5]
+    line_p = [" "] * 90
+    line_h = [" "] * 90
+    for st_, c, pr, ha in zip(starts, centers, probs, has):
         for k, ch in enumerate(pr):
-            if st_ + k < len(line_p):
-                line_p[st_ + k] = ch
-        hs = max(0, st_ + (len(pr) - len(ha) + 1) // 2)
+            line_p[st_ + k] = ch
+        hs = int(math.floor(c - len(ha) / 2))
         for k, ch in enumerate(ha):
-            if hs + k < len(line_h):
-                line_h[hs + k] = ch
+            line_h[hs + k] = ch
     s.output.write("\n" + "".join(line_h).rstrip() + "\n", "text")
     s.output.write("".join(line_p).rstrip() + "\n", "result")
 
@@ -462,8 +491,9 @@ def cmd_sdtest(s: "Session", args: str) -> None:
         mid = f"2*Pr(F < f) = {two:.4f}" if lo < up else f"2*Pr(F > f) = {two:.4f}"
         _ha3(s, ["Ha: ratio < 1", "Ha: ratio != 1", "Ha: ratio > 1"],
              [f"Pr(F < f) = {lo:.4f}", mid, f"Pr(F > f) = {up:.4f}"])
-        s.r = {"p": two, "p_u": up, "p_l": lo, "F": f, "df_2": float(df2), "df_1": float(df1),
-               "sd": S.moments(allx).sd, "sd_2": sd2, "sd_1": sd1, "N_2": float(len(x2)), "N_1": float(len(x1))}
+        _set_r(s, [("sd", S.moments(allx).sd), ("p", two), ("p_l", lo), ("p_u", up), ("sd_2", sd2),
+                   ("sd_1", sd1), ("F", f), ("df_2", float(df2)), ("df_1", float(df1)),
+                   ("N", float(len(allx)))])
         return
     if p.exp is None:
         raise StataError(198, "option by() required")   # VERIFICAR
@@ -495,7 +525,7 @@ def cmd_sdtest(s: "Session", args: str) -> None:
     sd = S.moments(x).sd
     c = (n - 1) * sd ** 2 / sd0 ** 2
     num = format(sd0, "g")
-    out.write(f"    sd = sd({v.name})".ljust(54) + f"c = chi2 = {c:>8.4f}\n", "text")
+    out.write(f"    sd = sd({v.name})".ljust(59) + f"c = chi2 = {c:>8.4f}\n", "text")
     out.write(f"Ho: sd = {num}".ljust(49) + f"degrees of freedom = {n - 1:>8}\n", "text")
     lo, up = float(st.chi2.cdf(c, n - 1)), float(st.chi2.sf(c, n - 1))
     two = 2 * min(lo, up)

@@ -15,7 +15,8 @@ e espaços no fim das linhas são descartados; linhas em branco são ignoradas.
 Números escritos com 15 ou mais caracteres (return list, ereturn list)
 podem diferir no último algarismo: a ordem das somas em ponto flutuante não é
 a mesma do Stata. Essas linhas contam como iguais quando o resto do texto é
-idêntico e a diferença relativa é menor que 1e-12.
+idêntico e a diferença relativa é menor que 1e-11 (estatísticas de Wald e
+contas com hessianas numéricas acumulam erro nos dois últimos algarismos).
 """
 
 from __future__ import annotations
@@ -37,13 +38,16 @@ _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log usi
 
 # carimbo de data do .dta (describe): muda a cada execução
 _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+# caminho absoluto de arquivos temporários do caso (graph export em PDF mostra
+# o caminho completo, que muda de máquina para máquina)
+_ABSPATH = re.compile(r"(?<=\(file )/\S*/(odta_\S+)")
 
 
 def normalize(text: str) -> list[str]:
     out: list[str] = []
     lines = text.splitlines()
     for k, raw in enumerate(lines):
-        line = _STAMP.sub("<data>", raw.rstrip())
+        line = _ABSPATH.sub(r"<pasta>/\1", _STAMP.sub("<data>", raw.rstrip()))
         if not line or _HEADER.match(line) or _SKIP.match(line):
             continue
         if set(line) <= {"-"}:
@@ -82,7 +86,7 @@ def _close_line(a: str, b: str) -> bool:
         if min(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
             return False
         fx, fy = float(x), float(y)
-        if abs(fx - fy) > 1e-12 * max(abs(fx), abs(fy)):
+        if abs(fx - fy) > 1e-11 * max(abs(fx), abs(fy)):
             return False
     return True
 

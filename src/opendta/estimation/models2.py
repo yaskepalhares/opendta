@@ -10,6 +10,7 @@ import numpy as np
 from scipy import special, stats as st
 
 from ..core import missing as M
+from ..core.stats import chi2_tail as _chi2_tail
 from ..core.errors import StataError
 from ..core.formats import format_value
 from . import fvars
@@ -142,7 +143,7 @@ def _model_test(pr: _Prep, b: np.ndarray, V: np.ndarray, idx: list[int], ll: flo
     else:
         chi2 = 2 * (ll - ll0) if ll0 < SYS else SYS
         kind = "LR"
-    p = float(st.chi2.sf(chi2, len(idx))) if chi2 < SYS and idx else SYS
+    p = float(_chi2_tail(chi2, len(idx))) if chi2 < SYS and idx else SYS
     return kind, chi2, p
 
 
@@ -195,10 +196,11 @@ _E_ORDER = {
                 "chi2type", "opt", "vce", "vcetype", "clustvar", "user", "ml_method", "technique", "which",
                 "wtype", "wexp", "depvar", "properties"],
                ["out", "ilog", "gradient"]),
+    # compat 0512: ordem do ereturn list do Stata 14 (sem p_c e diparm1)
     "nbreg": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
-               "ll_0", "df_m", "chi2", "p", "k_aux", "alpha", "ll_c", "chi2_c", "p_c", "r2_p"],
-              ["cmdline", "cmd", "predict", "dispers", "diparm1", "title", "chi2type", "chi2_ct", "opt", "vce",
-               "vcetype", "clustvar", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar",
+               "ll_0", "rank0", "df_m", "chi2", "p", "ll_c", "chi2_c", "r2_p", "k_aux", "alpha"],
+              ["cmdline", "cmd", "predict", "dispers", "chi2_ct", "chi2type", "opt", "vce", "vcetype",
+               "clustvar", "title", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar",
                "properties"],
               ["ilog", "gradient"]),
     "tobit": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
@@ -401,7 +403,8 @@ def _display_std(s: "Session", est: Estimates, *, header: bool = True, table: bo
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
         left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         if getattr(est, "dispersion", ""):
-            left[2] = f"Dispersion     = {est.dispersion}"
+            # o rótulo acompanha a largura de "Log (pseudo)likelihood" (compat 0512)
+            left[2] = f"{'Dispersion':<{len(lab) + 1}}= {est.dispersion}"
         r2p = x.get("r2_p")
         _header(s, left, _std_right(x["N"], x["chi2type"], int(x["df_m"]), x["chi2"], x["p"],
                                     r2p if r2p is not None else None))
@@ -646,9 +649,17 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     from .models import _poisson
     pfun, _ = _poisson(y, X, w, off)
     ybar = float(np.sum(w * y) / np.sum(w))
+    # início do Poisson: três passos de IRLS a partir de μ0 = (y + ȳ)/2, sem
+    # log. Chega perto do que o Stata mostra (compat 0512: iteração 0 =
+    # -245.31049, aqui -245.3105); a regra exata não é documentada (VERIFICAR)
+    mu0 = (y + ybar) / 2
     b0p = np.zeros(kx)
-    if pr.constant:
-        b0p[-1] = np.log(np.sum(w * y) / np.sum(w * np.exp(off)))
+    for _ in range(3):
+        eta0 = np.log(mu0)
+        z = eta0 + (y - mu0) / mu0 - off
+        sw = w * mu0
+        b0p = np.linalg.lstsq(X * np.sqrt(sw)[:, None], z * np.sqrt(sw), rcond=None)[0]
+        mu0 = np.exp(np.clip(X @ b0p + off, -700, 700))
     resp = pr.maximize(pfun, b0p)
     if not pr.o.get("nolog"):
         out.write("\nFitting Poisson model:\n", "text")
@@ -691,17 +702,20 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     b_full, V_full = _expand(pr, res.b, V, layout)
     eqs = [pr.smp.depname] * len(names) + ["lnalpha"]
     chibar = max(2 * (res.ll - ll_pois), 0.0)
-    p_chibar = 0.5 * float(st.chi2.sf(chibar, 1)) if chibar > 0 else 0.5
+    p_chibar = 0.5 * float(_chi2_tail(chibar, 1)) if chibar > 0 else 0.5
     est = _finish(s, pr, "nbreg", args, title="Negative binomial regression", names=names + ["_cons"],
                   eqnames=eqs, b=b_full, V=V_full, rows=rows, res=res, ll0=res0.ll, df_m=len(slope),
                   chi2kind=kind, chi2=chi2, p=pv, r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=2,
-                  k_aux=1, extra_scalars=[("alpha", alpha), ("chi2_c", chibar), ("p_c", p_chibar),
-                                          ("ll_c", ll_pois)],
-                  extra_macros=[("dispers", "mean"), ("chi2_ct", "LR"),
-                                ("diparm1", 'lnalpha, exp label("alpha")')], constant=pr.constant)
+                  k_aux=1, extra_scalars=[("alpha", alpha), ("rank0", 2.0)]
+                  + ([] if pr.robust else [("chi2_c", chibar), ("ll_c", ll_pois)]),
+                  extra_macros=[("dispers", "mean"), ("chi2_ct", "LR"), ("user", "nbreg_lf"),
+                                ("ml_method", "e2")], constant=pr.constant,
+                  order=_E_ORDER["nbreg"])
     est.dispersion = "mean"
     est.chibar = (chibar, p_chibar)
-    est.footer = _nbreg_footer
+    if not pr.robust:
+        # com vce(robust) o Stata não mostra o teste LR de alpha (compat 0512)
+        est.footer = _nbreg_footer
     if pr.o.get("irr"):
         est.coef_title, est.eform_on = "IRR", True
     _display_std(s, est)
@@ -853,13 +867,20 @@ def cmd_tobit(s: "Session", args: str) -> None:
                   chi2=chi2, p=pv, r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=2, k_aux=1,
                   extra_scalars=[("N_unc", float(w[unc].sum())), ("N_lc", float(w[left].sum())),
                                  ("N_rc", float(w[right].sum())), ("sigma", sg)]
-                  + ([("llopt", lo)] if lo is not None else []) + ([("ulopt", hi)] if hi is not None else []),
-                  constant=pr.constant)
+                  + ([("llopt", lo)] if lo is not None else []) + ([("ulopt", hi)] if hi is not None else [])
+                  + [("df_r", float(pr.N - len(slope)))],
+                  extra_macros=[("footnote", 'censobs_table e(N_unc) e(N_lc) e(N_rc) "" e(llopt) e(ulopt)'),
+                                ("marginsok", "default XB Pr(passthru) E(passthru) YStar(passthru)")],
+                  constant=pr.constant,
+                  # o tobit do Stata 14 não usa o moptimize: e() próprio, sem ilog
+                  # e gradient (compat 0513)
+                  order=(["N", "N_clust", "ll_0", "ll", "r2_p", "llopt", "ulopt", "k_aux", "N_lc", "N_rc",
+                          "N_unc", "chi2", "converged", "rank", "df_m", "df_r"],
+                         ["cmdline", "chi2type", "footnote", "title", "vce", "vcetype", "clustvar",
+                          "marginsok", "wtype", "wexp", "depvar", "cmd", "predict", "properties"], []))
     est.cens = (float(w[left].sum()), float(w[unc].sum()), float(w[right].sum()), lo, hi)
-    # o tobit do Stata 14 usa t com N - k graus de liberdade (VERIFICAR)
-    # graus de liberdade N - df_m (compat 0510: 60 obs, 2 inclinações -> 58)
+    # graus de liberdade N - df_m (compat 0513: 60 obs, 2 inclinações -> 58)
     est.stat, est.df_r = "t", pr.N - len(slope)
-    s.e["df_r"] = float(pr.N - len(slope))
     est.footer = _tobit_footer
     _display_std(s, est)
 

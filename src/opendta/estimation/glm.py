@@ -11,6 +11,7 @@ import numpy as np
 from scipy import special, stats as st
 
 from ..core import missing as M
+from ..core.stats import chi2_tail as _chi2_tail
 from ..core.errors import StataError
 from ..core.formats import format_value
 from .models2 import _Prep, _bmap, _cluster_note, _expand, _finish, _log, _semap, num_hess
@@ -171,6 +172,26 @@ def cmd_glm(s: "Session", args: str) -> None:
         mu = ginv(eta)
         return X.T @ (w * (y - mu) / var(mu) * dmu(eta))
 
+    # hessiana analítica (OIM): -X'diag(w dμ²/V)X + X'diag(w (y-μ) h)X, com
+    # h = d/dη (dμ/dη / V); nas ligações canônicas h = 0. A hessiana numérica
+    # deixava a estatística de Wald com erro no 12º algarismo (compat 0509).
+    lnorm = link_name.lower()
+    canonical = (fam, lnorm) in (("binomial", "logit"), ("poisson", "log"), ("gaussian", "identity"))
+
+    def hess(b):
+        eta = X @ b + off
+        mu = ginv(eta)
+        d = dmu(eta)
+        wt = w * d * d / var(mu)
+        H = -(X * wt[:, None]).T @ X
+        if not canonical:
+            step = 1e-4 * (1 + np.abs(eta))
+            hp = dmu(eta + step) / var(ginv(eta + step))
+            hm = dmu(eta - step) / var(ginv(eta - step))
+            h = (hp - hm) / (2 * step)
+            H = H + (X * (w * (y - mu) * h)[:, None]).T @ X
+        return H
+
     def fun(b, todo):
         mu = mu_of(b)
         if fam == "binomial" and (np.any(mu <= 0) or np.any(mu >= m_trials)):
@@ -183,7 +204,7 @@ def cmd_glm(s: "Session", args: str) -> None:
             ll = float(-0.5 * w @ deviance_i(mu))
         if todo == 0:
             return ll, None, None
-        return ll, grad(b), num_hess(grad, b)
+        return ll, grad(b), hess(b)
 
     # início: um passo de IRLS a partir de μ0 = m(y+.5)/(m+1) (binomial) ou
     # (y + ȳ)/2 (demais): reproduz a iteração 0 do Stata (compat 0509)
@@ -208,7 +229,13 @@ def cmd_glm(s: "Session", args: str) -> None:
     # verossimilhança. VERIFICAR o log do Stata para gaussian, gamma e igaussian
     if fam in ("binomial", "poisson", "nbinomial"):
         _log(s, pr, res)
-    H = num_hess(grad, res.b)
+    elif fam == "gaussian" and link_name.lower() == "identity":
+        # o passo de IRLS inicial já é a solução de MQO: o Stata mostra só a
+        # iteração 0, com a verossimilhança final, e e(ic) = 0 (compat 0509)
+        res.log = [(0, ll_rep, "")]
+        res.iterations = 0
+        _log(s, pr, res)
+    H = hess(res.b)
     V, n_clust = pr.vce(H, None)
     V = V * phi
     if pr.robust:
@@ -238,7 +265,7 @@ def cmd_glm(s: "Session", args: str) -> None:
         chi2 = float(res.b[slopes] @ np.linalg.solve(V[np.ix_(slopes, slopes)], res.b[slopes])) if slopes else SYS
     except np.linalg.LinAlgError:
         chi2 = SYS
-    pchi = float(st.chi2.sf(chi2, len(slopes))) if chi2 < SYS else SYS
+    pchi = float(_chi2_tail(chi2, len(slopes))) if chi2 < SYS else SYS
     fam_code = {"gaussian": 1, "binomial": 2, "poisson": 3, "gamma": 4, "igaussian": 5, "nbinomial": 6}[fam]
     link_code = {"Identity": 1, "Logit": 2, "Log": 3, "Probit": 8, "Complementary log-log": 7,
                  "Log-log": 6, "Log-complement": 5}.get(link_name, 9)   # VERIFICAR códigos
@@ -248,7 +275,8 @@ def cmd_glm(s: "Session", args: str) -> None:
     sv = [("N", N), ("ic", float(res.iterations)), ("k", float(k)), ("k_eq", 1.0), ("k_dv", 1.0),
           ("converged", 1.0 if res.converged else 0.0), ("ll", ll_rep), ("chi2", chi2), ("p", pchi), ("rc", 0.0),
           ("aic", aic), ("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0),
-          ("power", float(lpow) if (lname in ("power", "pow") and lpow is not None) else 0.0),
+          ("power", float(lpow) if (lname in ("power", "pow") and lpow is not None)
+           else (1.0 if link_name.lower() == "identity" else 0.0)),
           ("df_m", float(len(slopes))), ("df", df), ("vf", 1.0), ("phi", phi), ("k_eq_model", 0.0),
           ("nbml", 0.0), ("bic", bic), ("dispers_ps", pearson / df / phi), ("deviance_ps", pearson / phi),
           ("dispers_p", pearson / df), ("deviance_p", pearson), ("dispers_s", dev / df / phi),
@@ -276,7 +304,8 @@ def cmd_glm(s: "Session", args: str) -> None:
                   eqnames=[pr.smp.depname] * len(names), b=b_full, V=V_full, rows=rows, res=res, ll0=SYS,
                   df_m=len(slopes), chi2kind="Wald", chi2=chi2, p=pchi, r2p=None,
                   display=display_glm, n_clust=n_clust, extra_scalars=sv, extra_macros=mv,
-                  order=([k_ for k_, _ in sv], [k_ for k_, _ in mv], ["ilog", "gradient"]))
+                  order=([k_ for k_, _ in sv], [k_ for k_, _ in mv], ["ilog", "gradient"]),
+                  constant=pr.constant)
     s.e["ll"] = ll_rep
     est.extra.update({"ll": ll_rep, "dev": dev, "pearson": pearson, "df": df, "phi": phi, "aic": aic,
                       "bic": bic, "fam_text": fam_text, "link_text": link_text, "link_name": link_name})

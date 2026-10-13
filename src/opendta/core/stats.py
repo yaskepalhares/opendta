@@ -120,3 +120,26 @@ def t_ci(mean: float, se: float, df: float, level: float) -> tuple[float, float]
 def z_crit(level: float) -> float:
     from scipy import stats as st
     return float(st.norm.ppf(1 - (1 - level / 100) / 2))
+
+
+def chi2_tail(x: float, df: float) -> float:
+    """P(χ²(df) > x). Como o chi2tail() do Stata, devolve números
+    subnormais (até ~5e-324) em vez de zero quando a cauda é minúscula
+    (compat 0509: e(p) = 1.4821969375e-323)."""
+    from scipy import stats as _st
+    p = float(_st.chi2.sf(x, df))
+    if p > 0 or not math.isfinite(x) or x <= 0:
+        return p
+    # série assintótica de Q(a, z) = Γ(a, z)/Γ(a), z = x/2, a = df/2
+    a, z = df / 2.0, x / 2.0
+    term, total = 1.0, 1.0
+    for k in range(1, 60):
+        term *= (a - k) / z
+        if abs(term) < 1e-17:
+            break
+        total += term
+    logq = (a - 1) * math.log(z) - z - math.lgamma(a) + math.log(total)
+    try:
+        return math.exp(logq)
+    except OverflowError:
+        return 0.0
