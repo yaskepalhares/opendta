@@ -4,11 +4,22 @@
 
 OpenDTA runs analysis scripts (do-files), reads and writes `.dta` datasets and comes with a desktop interface: Results, Command, Review, Variables and Properties windows, plus a data browser. The goal is a free and transparent tool for reproducible statistical work, from data management to estimation, complex survey analysis and graphics, able to run existing scripts without changes.
 
-It is a personal study project under active development. It will be released as open source; the license is still to be defined. The full plan is in the [ROADMAP](ROADMAP.md).
+It is a personal study project under active development, released under the [MIT License](LICENSE). The full plan is in the [ROADMAP](ROADMAP.md).
+
+## Download
+
+[![Download for macOS (Apple Silicon)](https://img.shields.io/badge/Download-macOS%20Apple%20Silicon-1f6feb?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg)
+[![Download for macOS (Intel)](https://img.shields.io/badge/Download-macOS%20Intel-57606a?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg)
+
+macOS 12 or later. Apple Silicon = M1, M2, M3, M4…; check  → About This Mac. The app is not notarized by Apple: on first launch, open **System Settings → Privacy & Security** and click **Open Anyway**. All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page. A Windows version is planned.
 
 *A documentação abaixo está em português.*
 
-## Estado atual: fases 5 a 8 (estimação, amostras complexas, gráficos e interface)
+## Baixar (macOS)
+
+Use os botões acima: **Apple Silicon** para Macs com chip M1, M2, M3 ou M4, e **Intel** para os demais (veja em  → Sobre Este Mac). Abra o `.dmg` e arraste o OpenDTA para Aplicativos. Como o app não tem a assinatura paga da Apple, na primeira abertura vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim** (só uma vez). A versão para Windows está planejada.
+
+## Estado atual: fases 5 a 9 (estimação, amostras complexas, gráficos, interface e idioma)
 
 Já funciona:
 
@@ -53,7 +64,7 @@ Já funciona:
 
 As saídas novas dos casos `0602` (svy ampliado) e `0804` (comandos da fase 8e) ainda aguardam a conferência com os logs do Stata; os demais casos de `compat/do` já foram conferidos.
 
-## Instalação (macOS)
+## Instalação a partir do código
 
 Requer Python 3.11 ou mais recente. No Terminal:
 
@@ -118,6 +129,21 @@ tools/
   compare.py      roda compat/do no OpenDTA e compara com compat/expected
   build_macos.sh  gera OpenDTA.app e o .dmg
 ```
+
+## Licença
+
+O OpenDTA é distribuído sob a [licença MIT](LICENSE): pode ser usado, copiado, modificado e redistribuído livremente, desde que o aviso de copyright e a licença acompanhem as cópias. O aplicativo empacotado inclui componentes de terceiros com licenças próprias (Qt/PySide6 sob LGPL-3.0, NumPy, SciPy, Matplotlib e outros), listados em [packaging/THIRD_PARTY_NOTICES.md](packaging/THIRD_PARTY_NOTICES.md).
+
+## Publicar uma nova versão
+
+O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) gera os `.dmg` para Apple Silicon e Intel e cria a Release quando uma tag `v*` é enviada:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+Os botões de download apontam sempre para a Release mais recente. Lembre de atualizar a versão em `src/opendta/__init__.py` e `pyproject.toml` antes da tag.
 
 ## Aviso
 

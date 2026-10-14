@@ -1,0 +1,67 @@
+name: versão para download
+
+# Gera os instaladores do macOS (Apple Silicon e Intel) e publica uma Release
+# no GitHub. Roda ao enviar uma tag v* (ex.: git tag v0.1.0 && git push origin
+# v0.1.0); pela aba Actions ("Run workflow") só gera os arquivos, sem publicar.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15            # Apple Silicon (M1 em diante)
+            name: OpenDTA-macos-apple-silicon
+          - runner: macos-15-intel      # Intel (suportado pelo GitHub até o fim de 2027)
+            name: OpenDTA-macos-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Gerar OpenDTA.app e o .dmg
+        env:
+          PYTHON: python
+          DMG_NAME: ${{ matrix.name }}
+        run: tools/build_macos.sh
+      - name: Testar o executável empacotado (modo batch)
+        run: |
+          cd "$RUNNER_TEMP"
+          printf 'set obs 10\ngen t = _n\ngen x = t^2\nsummarize x\nregress x t\nhistogram x\ngraph export h.png, replace\n' > teste.do
+          "$GITHUB_WORKSPACE/dist/OpenDTA.app/Contents/MacOS/OpenDTA" -b do teste.do
+          cat teste.log
+          grep -q "end of do-file" teste.log
+          test -f h.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.dmg
+          if-no-files-found: error
+
+  release:
+    needs: macos
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publicar a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/*.dmg \
+            --title "OpenDTA ${TAG#v}" \
+            --notes-file .github/release-notes.md

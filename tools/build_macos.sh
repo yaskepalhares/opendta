@@ -43,12 +43,22 @@ echo
 echo "Aplicativo: $ROOT/dist/OpenDTA.app"
 
 if [[ "${1:-}" != "--no-dmg" ]]; then
-    DMG="dist/OpenDTA-$VERSION.dmg"
+    # DMG_NAME permite nomes fixos no GitHub (ex.: OpenDTA-macos-apple-silicon)
+    DMG="dist/${DMG_NAME:-OpenDTA-$VERSION}.dmg"
     STAGE="$(mktemp -d)"
     cp -R dist/OpenDTA.app "$STAGE/"
     ln -s /Applications "$STAGE/Applications"
+    cp LICENSE "$STAGE/LICENSE.txt"
     rm -f "$DMG"
-    hdiutil create -volname "OpenDTA $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+    # o hdiutil às vezes falha com "Resource busy" nas máquinas do GitHub
+    for tentativa in 1 2 3 4 5; do
+        if hdiutil create -volname "OpenDTA $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null; then
+            break
+        fi
+        echo "hdiutil falhou (tentativa $tentativa); tentando de novo..." >&2
+        sleep 5
+    done
     rm -rf "$STAGE"
+    [[ -f "$DMG" ]] || { echo "Não foi possível criar o .dmg" >&2; exit 1; }
     echo "Imagem de disco: $ROOT/$DMG"
 fi

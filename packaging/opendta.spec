@@ -10,7 +10,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -18,6 +18,17 @@ from opendta import __version__  # noqa: E402
 
 datas = collect_data_files("opendta", includes=["help/*.sthlp", "gui/icons/*.svg", "gui/appicon/*.png"])
 hidden = collect_submodules("opendta")
+
+# licenças: a do OpenDTA, o aviso de terceiros e os metadados (com o texto das
+# licenças) dos pacotes levados no app
+datas += [(str(ROOT / "LICENSE"), "."), (str(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md"), ".")]
+for pkg in ("PySide6", "shiboken6", "numpy", "scipy", "matplotlib", "openpyxl", "pillow",
+            "pyreadstat", "pandas", "fonttools", "kiwisolver", "contourpy", "cycler", "pyparsing",
+            "python-dateutil", "packaging", "et-xmlfile"):
+    try:
+        datas += copy_metadata(pkg)
+    except Exception:  # noqa: BLE001 - pacote opcional ausente no ambiente de build
+        pass
 
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
@@ -55,9 +66,9 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": __version__,
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
-            "LSMinimumSystemVersion": "11.0",
-            "NSHumanReadableCopyright": "OpenDTA — projeto pessoal de estudo. "
-                                        "Não afiliado à StataCorp.",
+            "LSMinimumSystemVersion": "12.0",      # mínimo do Qt 6.8
+            "NSHumanReadableCopyright": "© 2026 Yaske Palhares. MIT License. "
+                                        "Not affiliated with StataCorp.",
             # "Abrir com" para do-files e bases .dta; o OpenDTA não se torna o
             # aplicativo padrão desses arquivos (LSHandlerRank = Alternate)
             "CFBundleDocumentTypes": [
