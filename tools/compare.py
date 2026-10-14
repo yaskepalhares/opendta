@@ -167,6 +167,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"  XX {f.stem}")
                 failed += 1
+                if os.environ.get("GITHUB_ACTIONS"):
+                    # anotação no GitHub com as primeiras linhas diferentes, para ler
+                    # a divergência sem abrir o log inteiro do CI
+                    diff = [ln for ln in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=0)
+                            if ln[:1] in "+-" and not ln.startswith(("---", "+++"))][:12]
+                    body = "%0A".join(ln.replace("%", "%25") for ln in diff)
+                    print(f"::error title=compat {f.stem}::{body}")
             if ns.show_diff:
                 for line in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=1):
                     print("     " + line)
