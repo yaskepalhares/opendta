@@ -10,8 +10,8 @@ explicando o problema no contexto do comando e sugerindo uma correção:
         Hint: create observations with "set obs 2" or load data with "use".
     r(198);
 
-As explicações ficam em inglês, como o resto da interface, e podem ser
-desligadas com `set hints off` (o compare.py faz isso para comparar com os
+As explicações saem no idioma da interface (inglês por padrão; português
+com o idioma pt, ver i18n.py) e podem ser desligadas com `set hints off` (o compare.py faz isso para comparar com os
 logs do Stata). Só há explicação quando ela acrescenta algo; para erros
 sem regra conhecida, nada é mostrado.
 """
@@ -23,6 +23,8 @@ import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from ..i18n import L
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -37,12 +39,13 @@ def _did_you_mean(word: str, candidates) -> str:
     near = _close(word, candidates)
     if not near:
         return ""
-    return "did you mean " + ", ".join(f'"{x}"' for x in near) + "?"
+    return L("did you mean ", "você quis dizer ") + ", ".join(f'"{x}"' for x in near) + "?"
 
 
 def _join(items: list[str], limit: int = 8) -> str:
     shown = items[:limit]
-    more = f" (and {len(items) - limit} more)" if len(items) > limit else ""
+    more = (L(f" (and {len(items) - limit} more)", f" (e mais {len(items) - limit})")
+            if len(items) > limit else "")
     return ", ".join(shown) + more
 
 
@@ -72,115 +75,167 @@ def explain(err: "StataError", s: "Session") -> list[str]:
     rc = err.rc
 
     def two(what: str, hint: str = "") -> list[str]:
-        return [what] + ([f"Hint: {hint}"] if hint else [])
+        return [what] + ([L("Hint: ", "Dica: ") + hint] if hint else [])
 
     # -- observações e faixas ------------------------------------------------------------
     if msg == "Obs. nos. out of range":
         q = _in_qualifier(text)
         n = ds.nobs
-        what = (f'"in {q}" asks for observations that do not exist; the dataset has '
-                f"{n:,} observation{'s' if n != 1 else ''}." if q else
-                f"The observation numbers are outside 1 to {n:,}.")
+        plural = n != 1
+        what = (L(f'"in {q}" asks for observations that do not exist; the dataset has '
+                  f"{n:,} observation{'s' if plural else ''}.",
+                  f'"in {q}" pede observações que não existem; a base tem '
+                  f"{n:,} observaç{'ões' if plural else 'ão'}.") if q else
+                L(f"The observation numbers are outside 1 to {n:,}.",
+                  f"Os números de observação estão fora de 1 a {n:,}."))
         if n == 0:
-            return two(what, 'there is no data in memory: create observations with "set obs #" '
-                       'or load a dataset with "use".')
-        return two(what, f'valid numbers go from 1 to {n:,} ("in f/l" means all of them); '
-                   'add observations with "set obs #".')
+            return two(what, L('there is no data in memory: create observations with "set obs #" '
+                               'or load a dataset with "use".',
+                               'não há dados na memória: crie observações com "set obs #" '
+                               'ou abra uma base com "use".'))
+        return two(what, L(f'valid numbers go from 1 to {n:,} ("in f/l" means all of them); '
+                           'add observations with "set obs #".',
+                           f'os números válidos vão de 1 a {n:,} ("in f/l" quer dizer todas); '
+                           'acrescente observações com "set obs #".'))
 
     # -- variáveis ---------------------------------------------------------------------------
     m = re.fullmatch(r"variable (\S+) not found", msg)
     if m:
         name = m.group(1)
         if not names:
-            return two(f'There is no variable "{name}": the dataset in memory has no variables.',
-                       'load data with "use" or create variables with "generate".')
-        return two(f'No variable is named "{name}" (or starts with "{name}").',
-                   _did_you_mean(name, names) or 'type "describe" to list the variables.')
+            return two(L(f'There is no variable "{name}": the dataset in memory has no variables.',
+                         f'Não existe a variável "{name}": a base na memória não tem variáveis.'),
+                       L('load data with "use" or create variables with "generate".',
+                         'abra uma base com "use" ou crie variáveis com "generate".'))
+        return two(L(f'No variable is named "{name}" (or starts with "{name}").',
+                     f'Nenhuma variável se chama "{name}" (nem começa com "{name}").'),
+                   _did_you_mean(name, names) or L('type "describe" to list the variables.',
+                                                   'digite "describe" para listar as variáveis.'))
     m = re.fullmatch(r"(\S+) ambiguous abbreviation", msg)
     if m:
         ab = m.group(1)
         matches = [n for n in names if n.startswith(ab.rstrip("*~"))]
-        return two(f'"{ab}" is the beginning of more than one variable: {_join(matches)}.',
-                   "type more letters so that only one variable matches.")
+        return two(L(f'"{ab}" is the beginning of more than one variable: {_join(matches)}.',
+                     f'"{ab}" é o começo de mais de uma variável: {_join(matches)}.'),
+                   L("type more letters so that only one variable matches.",
+                     "digite mais letras, até sobrar só uma variável."))
     m = re.fullmatch(r"variable (\S+) already defined", msg)
     if m:
         name = m.group(1)
-        return two(f'A variable named "{name}" already exists.',
-                   f'to change its values use "replace {name} = ..."; to start over, '
-                   f'"drop {name}" first.')
+        return two(L(f'A variable named "{name}" already exists.',
+                     f'Já existe uma variável chamada "{name}".'),
+                   L(f'to change its values use "replace {name} = ..."; to start over, '
+                     f'"drop {name}" first.',
+                     f'para mudar os valores use "replace {name} = ..."; para recomeçar, '
+                     f'"drop {name}" antes.'))
     m = re.fullmatch(r"(\S+) not found", msg)
     if m and rc == 111:
         name = m.group(1)
         hint = _did_you_mean(name, names + list(s.scalars))
-        return two(f'"{name}" is not a variable, scalar or known name.',
-                   hint or "text values must be in double quotes, e.g. \"abc\".")
+        return two(L(f'"{name}" is not a variable, scalar or known name.',
+                     f'"{name}" não é variável, escalar nem nome conhecido.'),
+                   hint or L("text values must be in double quotes, e.g. \"abc\".",
+                             "textos vão entre aspas duplas, por exemplo \"abc\"."))
     if msg == "type mismatch":
-        what = "The command mixed text (string) and numbers."
+        what = L("The command mixed text (string) and numbers.",
+                 "O comando misturou texto (string) e números.")
         if command in ("replace", "generate", "gen", "egen"):
-            return two(what, "a numeric variable only takes numbers and a string variable only "
-                       'text in quotes; convert with real("12") or string(12).')
-        return two(what, 'text must be in double quotes and compared with text; convert '
-                   'with real() or string().')
+            return two(what, L("a numeric variable only takes numbers and a string variable only "
+                               'text in quotes; convert with real("12") or string(12).',
+                               "variável numérica só recebe números e variável string só texto "
+                               'entre aspas; converta com real("12") ou string(12).'))
+        return two(what, L('text must be in double quotes and compared with text; convert '
+                           'with real() or string().',
+                           'texto vai entre aspas duplas e se compara com texto; converta '
+                           'com real() ou string().'))
 
     # -- comandos e sintaxe ------------------------------------------------------------------
     m = re.fullmatch(r"command (\S+) is unrecognized", msg)
     if m:
         from ..commands.registry import REGISTRY
         word = m.group(1)
-        return two(f'"{word}" is not a command known to OpenDTA.',
-                   _did_you_mean(word, REGISTRY) or "check the spelling; some commands "
-                   "are not implemented in OpenDTA yet (see the ROADMAP).")
+        return two(L(f'"{word}" is not a command known to OpenDTA.',
+                     f'"{word}" não é um comando conhecido pelo OpenDTA.'),
+                   _did_you_mean(word, REGISTRY) or L(
+                       "check the spelling; some commands are not implemented in OpenDTA "
+                       "yet (see the ROADMAP).",
+                       "confira a grafia; alguns comandos ainda não existem no OpenDTA "
+                       "(veja o ROADMAP)."))
     m = re.fullmatch(r"option (\S+) not allowed", msg)
     if m:
-        return two(f'"{m.group(1)}" is not an option of {command or "this command"}.',
-                   "check the spelling of the options after the comma.")
+        return two(L(f'"{m.group(1)}" is not an option of {command or "this command"}.',
+                     f'"{m.group(1)}" não é opção de {command or "este comando"}.'),
+                   L("check the spelling of the options after the comma.",
+                     "confira a grafia das opções depois da vírgula."))
     m = re.fullmatch(r"unknown function (\S+)\(\)", msg)
     if m:
         from ..lang.functions import FUNCTIONS
         name = m.group(1)
-        return two(f'"{name}()" is not a function known to OpenDTA.',
-                   _did_you_mean(name, FUNCTIONS) or "check the spelling of the function.")
+        return two(L(f'"{name}()" is not a function known to OpenDTA.',
+                     f'"{name}()" não é uma função conhecida pelo OpenDTA.'),
+                   _did_you_mean(name, FUNCTIONS) or L("check the spelling of the function.",
+                                                       "confira a grafia da função."))
     if msg == "varlist required":
-        return two(f"{command or 'This command'} needs one or more variable names.",
-                   f'for example "{command or "command"} x y"; "_all" means every variable.')
+        return two(L(f"{command or 'This command'} needs one or more variable names.",
+                     f"{command or 'Este comando'} precisa de um ou mais nomes de variáveis."),
+                   L(f'for example "{command or "command"} x y"; "_all" means every variable.',
+                     f'por exemplo "{command or "comando"} x y"; "_all" quer dizer todas as variáveis.'))
     if msg == "varlist not allowed":
-        return two(f"{command or 'This command'} does not take variable names here.")
+        return two(L(f"{command or 'This command'} does not take variable names here.",
+                     f"{command or 'Este comando'} não aceita nomes de variáveis aqui."))
     if msg in ("invalid syntax", "unmatched quote") or msg.startswith("too many '('"):
         problems = []
         if text.count('"') % 2:
-            problems.append("a double quote is not closed")
+            problems.append(L("a double quote is not closed", "há aspas duplas sem fechar"))
         if text.count("(") != text.count(")"):
-            problems.append("parentheses are unbalanced")
+            problems.append(L("parentheses are unbalanced", "os parênteses não fecham"))
         if text.count("[") != text.count("]"):
-            problems.append("brackets are unbalanced")
+            problems.append(L("brackets are unbalanced", "os colchetes não fecham"))
         if text.count(",") > 1 and re.search(r",[^,]*,", text.split('"')[0] if '"' in text else text):
-            problems.append("there is more than one comma (options come after a single comma)")
+            problems.append(L("there is more than one comma (options come after a single comma)",
+                              "há mais de uma vírgula (as opções vêm depois de uma vírgula só)"))
         if problems:
-            return two("OpenDTA could not read this command: " + "; ".join(problems) + ".")
+            return two(L("OpenDTA could not read this command: ",
+                         "O OpenDTA não conseguiu ler este comando: ") + "; ".join(problems) + ".")
         if command in _FREE_SYNTAX:
-            return two(f"OpenDTA could not read this {command} command.",
-                       "check quotes, parentheses and the order of its parts.")
+            return two(L(f"OpenDTA could not read this {command} command.",
+                         f"O OpenDTA não conseguiu ler este comando {command}."),
+                       L("check quotes, parentheses and the order of its parts.",
+                         "confira aspas, parênteses e a ordem das partes."))
         if command:
-            return two(f"OpenDTA could not read this {command} command.",
-                       f'check the order of the parts: {command} [varlist] [= exp] '
-                       '[if] [in] [using file] [, options].')
+            return two(L(f"OpenDTA could not read this {command} command.",
+                         f"O OpenDTA não conseguiu ler este comando {command}."),
+                       L(f'check the order of the parts: {command} [varlist] [= exp] '
+                         '[if] [in] [using file] [, options].',
+                         f'confira a ordem das partes: {command} [varlist] [= exp] '
+                         '[if] [in] [using arquivo] [, opções].'))
         return []
     if re.fullmatch(r"= ?exp(ression)? required", msg):
-        return two(f"{command or 'This command'} needs an expression after an equals sign.",
-                   f'for example "{command or "generate"} y = x * 2".')
+        return two(L(f"{command or 'This command'} needs an expression after an equals sign.",
+                     f"{command or 'Este comando'} precisa de uma expressão depois do sinal de igual."),
+                   L(f'for example "{command or "generate"} y = x * 2".',
+                     f'por exemplo "{command or "generate"} y = x * 2".'))
 
     # -- dados em memória ----------------------------------------------------------------------
     if msg == "no; data in memory would be lost":
-        return two("The data in memory have changes that were not saved.",
-                   'save them first ("save filename") or add the clear option to discard '
-                   'them, e.g. "use file, clear".')
+        return two(L("The data in memory have changes that were not saved.",
+                     "Os dados na memória têm alterações que não foram salvas."),
+                   L('save them first ("save filename") or add the clear option to discard '
+                     'them, e.g. "use file, clear".',
+                     'salve antes ("save arquivo") ou acrescente a opção clear para descartá-las, '
+                     'por exemplo "use arquivo, clear".'))
     if msg in ("no observations", "no variables defined"):
-        return two("There is no data for this command to work with.",
-                   'load a dataset with "use" or "import", or create data with "input" or '
-                   '"set obs".')
+        return two(L("There is no data for this command to work with.",
+                     "Não há dados para este comando trabalhar."),
+                   L('load a dataset with "use" or "import", or create data with "input" or '
+                     '"set obs".',
+                     'abra uma base com "use" ou "import", ou crie dados com "input" ou '
+                     '"set obs".'))
     if msg.startswith("observations must be at least"):
-        return two("set obs can only add observations, never remove them.",
-                   'to remove observations use "drop in" or "keep in".')
+        return two(L("set obs can only add observations, never remove them.",
+                     "set obs só acrescenta observações, nunca remove."),
+                   L('to remove observations use "drop in" or "keep in".',
+                     'para remover observações use "drop in" ou "keep in".'))
 
     # -- arquivos ------------------------------------------------------------------------------
     m = re.fullmatch(r"file (.+) not found", msg)
@@ -193,23 +248,37 @@ def explain(err: "StataError", s: "Session") -> list[str]:
         except OSError:
             siblings = []
         near = _close(target.name, siblings)
-        what = f'OpenDTA looked for "{target.name}" in {where.resolve() if where.exists() else where}.'
+        place = where.resolve() if where.exists() else where
+        what = L(f'OpenDTA looked for "{target.name}" in {place}.',
+                 f'O OpenDTA procurou "{target.name}" em {place}.')
         if near:
-            return two(what, "files with similar names there: " + ", ".join(near) + ".")
-        return two(what, 'check the name and the folder; "pwd" shows the working directory and '
-                   '"cd" changes it.')
+            return two(what, L("files with similar names there: ",
+                               "arquivos com nomes parecidos lá: ") + ", ".join(near) + ".")
+        return two(what, L('check the name and the folder; "pwd" shows the working directory and '
+                           '"cd" changes it.',
+                           'confira o nome e a pasta; "pwd" mostra a pasta de trabalho e '
+                           '"cd" muda.'))
     m = re.fullmatch(r"file (.+) already exists", msg)
     if m:
-        return two(f'A file named "{m.group(1)}" already exists and was left untouched.',
-                   'add the replace option to overwrite it, e.g. "save file, replace".')
+        return two(L(f'A file named "{m.group(1)}" already exists and was left untouched.',
+                     f'Já existe um arquivo chamado "{m.group(1)}", e ele não foi alterado.'),
+                   L('add the replace option to overwrite it, e.g. "save file, replace".',
+                     'acrescente a opção replace para substituí-lo, por exemplo "save arquivo, replace".'))
     if msg.startswith("file") and "could not be opened" in msg:
-        return two("The operating system did not allow the file to be written or read.",
-                   "check that the folder exists, that you can write to it and that the file "
-                   "is not open in another program.")
+        return two(L("The operating system did not allow the file to be written or read.",
+                     "O sistema operacional não deixou gravar ou ler o arquivo."),
+                   L("check that the folder exists, that you can write to it and that the file "
+                     "is not open in another program.",
+                     "confira se a pasta existe, se você pode gravar nela e se o arquivo "
+                     "não está aberto em outro programa."))
     if msg.startswith("file not Stata format"):
-        return two("The file is not a .dta dataset, or it is damaged.",
-                   'for text files use "import delimited"; for spreadsheets, "import excel".')
+        return two(L("The file is not a .dta dataset, or it is damaged.",
+                     "O arquivo não é uma base .dta, ou está danificado."),
+                   L('for text files use "import delimited"; for spreadsheets, "import excel".',
+                     'para arquivos de texto use "import delimited"; para planilhas, "import excel".'))
     if msg == "assertion is false":
-        return two("The condition given to assert is not true for every observation.",
-                   'use "list if !(condition)" to see the observations that break it.')
+        return two(L("The condition given to assert is not true for every observation.",
+                     "A condição do assert não vale para todas as observações."),
+                   L('use "list if !(condition)" to see the observations that break it.',
+                     'use "list if !(condição)" para ver as observações que a violam.'))
     return []

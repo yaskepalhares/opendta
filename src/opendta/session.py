@@ -368,7 +368,8 @@ class Session:
                 lines = explain(e, self)
             except Exception:  # noqa: BLE001 - uma explicação nunca derruba o erro original
                 lines = []
-        self.output.error(e.message, e.rc, show_rc=show_rc, hints=lines)
+        from .i18n import translate_error
+        self.output.error(translate_error(e.message), e.rc, show_rc=show_rc, hints=lines)
 
     def run_command(self, line: str) -> int:
         """Comando digitado na janela Command: eco '. linha' e execução."""

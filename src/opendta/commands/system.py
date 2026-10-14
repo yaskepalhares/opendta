@@ -47,6 +47,23 @@ def cmd_set(s: "Session", args: str) -> None:
             raise StataError(198, "invalid syntax")
         from ..estimation.numerics import set_precise
         set_precise(v == "precise")
+    if name in ("language", "messages"):
+        # extensão do OpenDTA (não existe no Stata): idioma da interface e das
+        # explicações de erro, e tradução opcional das mensagens do Stata
+        from .. import i18n
+        v = value.split(",")[0].strip().lower()
+        if name == "language":
+            if v not in ("en", "pt", "english", "portuguese", "portugues", "português"):
+                raise StataError(198, "invalid syntax")
+            i18n.set_language(v)
+            value = i18n.language() + value[len(value.split(",")[0]):]
+        else:
+            if v not in ("stata", "translated"):
+                raise StataError(198, "invalid syntax")
+            i18n.set_messages(v)
+        hook = s.ui_hooks.get("language")
+        if hook is not None:
+            hook()
     s.settings[name] = value.split(",")[0].strip()
     opts = value.partition(",")[2].strip()
     if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:

@@ -1,7 +1,8 @@
 """Janela Graph: uma aba por gráfico com nome (name()), como no Stata 14.
 
 O desenho vem de graphics/render.py; a janela só hospeda a Figure do
-matplotlib e oferece gravar (.gph), exportar (PNG, PDF, SVG...) e copiar."""
+matplotlib e oferece gravar (.gph), exportar (PNG, PDF, SVG...), copiar e
+um Graph Editor simples (gui/graph_editor.py) num painel lateral."""
 
 from __future__ import annotations
 
@@ -10,10 +11,13 @@ from typing import TYPE_CHECKING, Callable
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QTabWidget, QToolBar
+from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QMainWindow, QTabWidget,
+                               QToolBar)
 
 from ..graphics import render as R
 from ..graphics.model import Graph
+from ..i18n import tr
+from . import graph_editor as GE
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -24,7 +28,7 @@ class GraphWindow(QMainWindow):
         super().__init__(parent)
         self.session = session
         self.run = run
-        self.setWindowTitle("Graph")
+        self.setWindowTitle(tr("Graph"))
         self.resize(720, 560)
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -36,18 +40,42 @@ class GraphWindow(QMainWindow):
 
         tb = QToolBar("Graph")
         tb.setMovable(False)
+        self._tb_actions: list[tuple[QAction, str]] = []
         for text, slot, key in (("Save...", self.save_graph, "Ctrl+S"), ("Export...", self.export_graph, None),
                                 ("Copy", self.copy_graph, "Ctrl+C")):
-            act = QAction(text, self)
+            act = QAction(tr(text), self)
             act.triggered.connect(slot)
             if key:
                 act.setShortcut(QKeySequence(key))
             tb.addAction(act)
+            self._tb_actions.append((act, text))
+        tb.addSeparator()
+        self.act_edit = QAction(tr("Edit graph"), self, checkable=True)
+        self.act_edit.setShortcut(QKeySequence("Ctrl+E"))
+        self.act_edit.toggled.connect(self._toggle_editor)
+        tb.addAction(self.act_edit)
+        self._tb_actions.append((self.act_edit, "Edit graph"))
         self.addToolBar(tb)
+
+        # Graph Editor (painel lateral, escondido até ser pedido)
+        self.editor = GE.make_editor(self, self._apply_edits)
+        self.editor.btn_revert.clicked.connect(self._revert_edits)
+        self.editor_dock = QDockWidget(tr("Graph Editor"), self)
+        self.editor_dock.setObjectName("GraphEditor")
+        self.editor_dock.setWidget(self.editor)
+        self.editor_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable
+                                     | QDockWidget.DockWidgetFeature.DockWidgetMovable)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.editor_dock)
+        self.editor_dock.hide()
+        self.editor_dock.visibilityChanged.connect(
+            lambda vis: self.act_edit.setChecked(vis) if not vis and self.act_edit.isChecked() else None)
+        self._originals: dict[str, dict] = {}
         QShortcut(QKeySequence.StandardKey.Close, self, self.close)
 
     # -- exibição ------------------------------------------------------------------
-    def show_graph(self, g: Graph) -> None:
+    def show_graph(self, g: Graph, *, edited: bool = False) -> None:
+        if not edited:
+            self._originals.pop(g.name, None)     # gráfico novo: edições anteriores não valem
         fig = R.figure(g)
         canvas = FigureCanvasQTAgg(fig)
         old = self.canvases.get(g.name)
@@ -61,8 +89,10 @@ class GraphWindow(QMainWindow):
         self.canvases[g.name] = canvas
         self.tabs.setCurrentWidget(canvas)
         self.tabs.tabBar().setVisible(self.tabs.count() > 1)
-        self.setWindowTitle(f"Graph - {g.name}")
+        self.setWindowTitle(f"{tr('Graph')} - {g.name}")
         canvas.draw_idle()
+        if not edited and self.editor_dock.isVisible():
+            self._load_editor()
         self.show()
         self.raise_()
 
@@ -85,7 +115,9 @@ class GraphWindow(QMainWindow):
     def _tab_changed(self, idx: int) -> None:
         name = self.current_name()
         if name:
-            self.setWindowTitle(f"Graph - {name}")
+            self.setWindowTitle(f"{tr('Graph')} - {name}")
+            if self.editor_dock.isVisible():
+                self._load_editor()
             from ..graphics.store import store
             st = store(self.session)
             if name in st.graphs:
@@ -109,7 +141,8 @@ class GraphWindow(QMainWindow):
         name = self.current_name()
         if not name:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save graph", f"{name}.gph", "OpenDTA graph (*.gph)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save graph"), f"{name}.gph",
+                                              tr("OpenDTA graph (*.gph)"))
         if path:
             self._cmd(f'graph save {name} "{path}", replace')
 
@@ -118,7 +151,7 @@ class GraphWindow(QMainWindow):
         if not name:
             return
         filters = "PNG (*.png);;PDF (*.pdf);;SVG (*.svg);;EPS (*.eps);;TIFF (*.tif)"
-        path, _ = QFileDialog.getSaveFileName(self, "Export graph", f"{name}.png", filters)
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export graph"), f"{name}.png", filters)
         if path:
             self._cmd(f'graph export "{path}", name({name}) replace')
 
@@ -127,3 +160,45 @@ class GraphWindow(QMainWindow):
         if w is None:
             return
         QApplication.clipboard().setPixmap(w.grab())
+
+    # -- Graph Editor ------------------------------------------------------------------
+    def _graph(self) -> Graph | None:
+        from ..graphics.store import store
+        return store(self.session).graphs.get(self.current_name())
+
+    def _toggle_editor(self, on: bool) -> None:
+        if on:
+            self._load_editor()
+            self.editor_dock.show()
+        else:
+            self.editor_dock.hide()
+
+    def _load_editor(self) -> None:
+        g = self._graph()
+        if g is None:
+            return
+        self._originals.setdefault(g.name, GE.snapshot(g))
+        self.editor.load(GE.current_values(g))
+
+    def _apply_edits(self, values: dict) -> None:
+        g = self._graph()
+        if g is None:
+            return
+        self._originals.setdefault(g.name, GE.snapshot(g))
+        GE.apply_edits(g, values)
+        self.show_graph(g, edited=True)
+
+    def _revert_edits(self) -> None:
+        g = self._graph()
+        if g is None or g.name not in self._originals:
+            return
+        g.opts = self._originals.pop(g.name)
+        self.show_graph(g, edited=True)
+        self._load_editor()
+
+    def retranslate(self) -> None:
+        for act, key in self._tb_actions:
+            act.setText(tr(key))
+        self.editor_dock.setWindowTitle(tr("Graph Editor"))
+        name = self.current_name()
+        self.setWindowTitle(f"{tr('Graph')} - {name}" if name else tr("Graph"))

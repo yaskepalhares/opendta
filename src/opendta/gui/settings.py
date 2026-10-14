@@ -17,8 +17,8 @@ from .theme import default_monospace
 ORG, APP = "OpenDTA", "OpenDTA"
 
 APP_ICON_VARIANTS = {
-    "light": "Tabela — claro (padrão)",
-    "dark": "Tabela — escuro",
+    "light": "Table — light (default)",
+    "dark": "Table — dark",
 }
 
 
@@ -81,6 +81,26 @@ class Preferences:
     @numerics.setter
     def numerics(self, value: str) -> None:
         self._s.setValue("behavior/numerics", value if value in ("stata", "precise") else "stata")
+
+    # idioma da interface (fase 9)
+    @property
+    def language(self) -> str:
+        v = str(self._s.value("behavior/language", "en"))
+        return v if v in ("en", "pt") else "en"
+
+    @language.setter
+    def language(self, value: str) -> None:
+        self._s.setValue("behavior/language", value if value in ("en", "pt") else "en")
+
+    @property
+    def messages(self) -> str:
+        """stata (mensagens de erro em inglês, como no Stata) ou translated."""
+        v = str(self._s.value("behavior/messages", "stata"))
+        return v if v in ("stata", "translated") else "stata"
+
+    @messages.setter
+    def messages(self, value: str) -> None:
+        self._s.setValue("behavior/messages", value if value in ("stata", "translated") else "stata")
 
     @property
     def font_family(self) -> str:

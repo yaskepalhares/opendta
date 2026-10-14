@@ -6,6 +6,8 @@ Como no Stata, a execução grava o texto num arquivo temporário e chama
 
 from __future__ import annotations
 
+from ..i18n import tr
+
 import os
 import re
 import tempfile
@@ -224,18 +226,18 @@ class _FindBar(QWidget):
         self.owner = owner
         lay = QHBoxLayout(self)
         lay.setContentsMargins(6, 2, 6, 2)
-        lay.addWidget(QLabel("Find:"))
+        lay.addWidget(QLabel(tr("Find:")))
         self.find = QLineEdit()
         self.find.returnPressed.connect(lambda: owner.find_next(self.find.text()))
         lay.addWidget(self.find)
-        lay.addWidget(QLabel("Replace:"))
+        lay.addWidget(QLabel(tr("Replace:")))
         self.repl = QLineEdit()
         lay.addWidget(self.repl)
         for text, slot in (("Next", lambda: owner.find_next(self.find.text())),
                            ("Replace", lambda: owner.replace_one(self.find.text(), self.repl.text())),
                            ("Replace all", lambda: owner.replace_all(self.find.text(), self.repl.text())),
                            ("✕", self.hide)):
-            b = QPushButton(text)
+            b = QPushButton(tr(text))
             b.clicked.connect(slot)
             lay.addWidget(b)
 
@@ -288,16 +290,18 @@ class DoFileEditor(QMainWindow):
             if text is None:
                 tb.addSeparator()
                 continue
-            act = QAction(text, self)
+            act = QAction(tr(text), self)
+            act.setProperty("key", text)
             act.triggered.connect(slot)
             if key is not None:
                 act.setShortcut(QKeySequence(key))
             tip = {"Do": "Execute the selection, or the whole file (do)",
                    "Run": "Execute the selection, or the whole file, without showing commands (run)"}.get(text)
             if tip:
-                act.setToolTip(tip + f"  [{QKeySequence(key).toString(QKeySequence.SequenceFormat.NativeText)}]")
+                act.setToolTip(tr(tip) + f"  [{QKeySequence(key).toString(QKeySequence.SequenceFormat.NativeText)}]")
             tb.addAction(act)
         self.addToolBar(tb)
+        self.toolbar = tb
         QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.do_selection)
         QShortcut(QKeySequence("Escape"), self, self.findbar.hide)
         self.new_file()
@@ -327,9 +331,9 @@ class DoFileEditor(QMainWindow):
     def _update_title(self) -> None:
         ed = self.current()
         if ed is None:
-            self.setWindowTitle("Do-file Editor")
+            self.setWindowTitle(tr("Do-file Editor"))
             return
-        self.setWindowTitle(f"Do-file Editor - {self._tab_title(ed)}")
+        self.setWindowTitle(f"{tr('Do-file Editor')} - {self._tab_title(ed)}")
 
     def new_file(self) -> None:
         self.untitled += 1
@@ -358,8 +362,8 @@ class DoFileEditor(QMainWindow):
         self._add(ed, self._tab_title(ed))
 
     def open_dialog(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "Open", os.getcwd(),
-                                                "Do-files (*.do *.ado);;All files (*)")
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("Open"), os.getcwd(),
+                                                tr("Do-files (*.do *.ado);;All files (*)"))
         for p in paths:
             self.open_path(p)
 
@@ -378,7 +382,7 @@ class DoFileEditor(QMainWindow):
         if ed is None:
             return False
         start = str(ed.path) if ed.path else os.path.join(os.getcwd(), ed.property("untitled"))
-        path, _ = QFileDialog.getSaveFileName(self, "Save as", start, "Do-files (*.do);;Ado-files (*.ado)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save as"), start, "Do-files (*.do);;Ado-files (*.ado)")
         if not path:
             return False
         ed.path = Path(path)
@@ -388,7 +392,8 @@ class DoFileEditor(QMainWindow):
         ed = self.tabs.widget(idx)
         if isinstance(ed, CodeEditor) and ed.document().isModified():
             self.tabs.setCurrentIndex(idx)
-            ans = QMessageBox.question(self, "Do-file Editor", f"Save changes to {self._tab_title(ed).rstrip('*')}?",
+            ans = QMessageBox.question(self, tr("Do-file Editor"),
+                                       tr("Save changes to {name}?").format(name=self._tab_title(ed).rstrip('*')),
                                        QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
                                        | QMessageBox.StandardButton.Cancel)
             if ans == QMessageBox.StandardButton.Cancel:
@@ -486,3 +491,10 @@ class DoFileEditor(QMainWindow):
             except OSError:
                 pass
         self.tmpfiles.clear()
+
+    def retranslate(self) -> None:
+        for act in self.toolbar.actions():
+            key = act.property("key")
+            if key:
+                act.setText(tr(key))
+        self._update_title()

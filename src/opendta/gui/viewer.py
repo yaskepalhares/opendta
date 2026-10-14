@@ -8,6 +8,8 @@ arquivo, como a caixa de comando do Viewer do Stata.
 
 from __future__ import annotations
 
+from ..i18n import tr
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -36,15 +38,15 @@ class Viewer(QMainWindow):
         tb = QToolBar("Viewer")
         tb.setMovable(False)
         self.act_back = QAction("◀", self)
-        self.act_back.setToolTip("Back")
+        self.act_back.setToolTip(tr("Back"))
         self.act_back.triggered.connect(lambda: self.go(-1))
         self.act_fwd = QAction("▶", self)
-        self.act_fwd.setToolTip("Forward")
+        self.act_fwd.setToolTip(tr("Forward"))
         self.act_fwd.triggered.connect(lambda: self.go(1))
         tb.addAction(self.act_back)
         tb.addAction(self.act_fwd)
         self.field = QLineEdit()
-        self.field.setPlaceholderText("help topic, or a file to view")
+        self.field.setPlaceholderText(tr("help topic, or a file to view"))
         self.field.returnPressed.connect(self._from_field)
         tb.addWidget(self.field)
         self.addToolBar(tb)
@@ -69,7 +71,7 @@ class Viewer(QMainWindow):
             self.browser.setHtml(html)
         else:
             self.browser.setPlainText(text)
-        self.setWindowTitle(f"Viewer — {title}")
+        self.setWindowTitle(f"{tr('Viewer')} — {title}")
         self.field.setText(title if path.suffix == ".sthlp" else str(path))
         if record:
             self.history = self.history[: self.pos + 1] + [(path, title)]
