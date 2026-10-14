@@ -11,6 +11,11 @@ Para cada compat/do/NOME.do:
 
 Antes de comparar, cabeçalho e rodapé do log, linhas `. do ...`/`. log close`
 e espaços no fim das linhas são descartados; linhas em branco são ignoradas.
+
+Números escritos com 15 ou mais caracteres (return list, ereturn list)
+podem diferir no último algarismo: a ordem das somas em ponto flutuante não é
+a mesma do Stata. Essas linhas contam como iguais quando o resto do texto é
+idêntico e a diferença relativa é menor que 1e-12.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 COMPAT = ROOT / "compat"
 _HEADER = re.compile(r"^\s*(name|log|log type|opened on|closed on):")
-_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints|linesize|superscript))\b")
+_SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log using|set linesize|quietly set (dp|hints|linesize|superscript|numerics))\b")
 
 
 # carimbo de data do .dta (describe): muda a cada execução
@@ -50,6 +55,35 @@ def normalize(text: str) -> list[str]:
     return out
 
 
+_NUM = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:e[-+]\d+)?")
+
+
+def _digits(tok: str) -> int:
+    mant = tok.lstrip("-").split("e")[0].replace(".", "").lstrip("0")
+    return len(mant)
+
+
+def _close_line(a: str, b: str) -> bool:
+    """Mesma linha a menos de ruído no 16º algarismo de números longos."""
+    if _NUM.sub("#", a) != _NUM.sub("#", b):
+        return False
+    na, nb = _NUM.findall(a), _NUM.findall(b)
+    for x, y in zip(na, nb):
+        if x == y:
+            continue
+        # números longos (%18.0g): 15+ caracteres, como .0032959009263453
+        if min(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
+            return False
+        fx, fy = float(x), float(y)
+        if abs(fx - fy) > 1e-12 * max(abs(fx), abs(fy)):
+            return False
+    return True
+
+
+def same_logs(a: list[str], b: list[str]) -> bool:
+    return len(a) == len(b) and all(x == y or _close_line(x, y) for x, y in zip(a, b))
+
+
 def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     from opendta.cli import run_batch
 
@@ -59,7 +93,8 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     # `setup` (ex.: set dp comma) roda antes, sem aparecer no log comparado
     target = outdir / dofile.name
     # gerar_esperados.do roda os casos com set linesize 255
-    pre = ("quietly set hints off\nquietly set superscript off\nquietly set linesize 255\n"
+    pre = ("quietly set hints off\nquietly set superscript off\nquietly set numerics stata\n"
+           "quietly set linesize 255\n"
            + (f"quietly {setup}\n" if setup else ""))
     target.write_text(pre + dofile.read_text(encoding="utf-8"), encoding="utf-8")
     # restos de um caso interrompido (odta_*) não podem afetar o seguinte;
@@ -110,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         a = normalize(exp.read_text(encoding="utf-8", errors="replace"))
         b = normalize(got.read_text(encoding="utf-8", errors="replace"))
-        if a == b:
+        if same_logs(a, b):
             print(f"  ok {f.stem}")
             passed += 1
         else:

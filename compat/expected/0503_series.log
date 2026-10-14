@@ -1,0 +1,333 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
+  log type:  text
+ opened on:   9 Oct 2026, 11:17:26
+
+. * Fase 5a: tsset, xtset e operadores de séries temporais.
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set obs 15
+number of observations (_N) was 0, now 15
+
+. gen t = _n
+
+. gen y = 10 + 2*t + mod(t*7, 5)
+
+. gen x = mod(t*3, 7) + t/10
+
+. capture noisily gen ly = L.y
+time variable not set
+
+. tsset t
+        time variable:  t, 1 to 15
+                delta:  1 unit
+
+. tsset
+        time variable:  t, 1 to 15
+                delta:  1 unit
+
+. return list
+
+scalars:
+             r(tdelta) =  1
+               r(tmax) =  15
+               r(tmin) =  1
+
+macros:
+            r(timevar) : "t"
+              r(unit1) : "."
+              r(tsfmt) : "%9.0g"
+            r(tdeltas) : "1 unit"
+              r(tmaxs) : "15"
+              r(tmins) : "1"
+
+. gen ly = L.y
+(1 missing value generated)
+
+. gen l2y = L2.y
+(2 missing values generated)
+
+. gen fy = F.y
+(1 missing value generated)
+
+. gen dy = D.y
+(1 missing value generated)
+
+. gen d2y = D2.y
+(2 missing values generated)
+
+. gen sy = S.y
+(1 missing value generated)
+
+. gen lfy = LF.y
+
+. list t y ly l2y fy dy d2y sy lfy in 1/5
+
+     +----------------------------------------------+
+     | t    y   ly   l2y   fy   dy   d2y   sy   lfy |
+     |----------------------------------------------|
+  1. | 1   14    .     .   18    .     .    .    14 |
+  2. | 2   18   14     .   17    4     .    4    18 |
+  3. | 3   17   18    14   21   -1    -5   -1    17 |
+  4. | 4   21   17    18   20    4     5    4    21 |
+  5. | 5   20   21    17   24   -1    -5   -1    20 |
+     +----------------------------------------------+
+
+. regress y L.y x
+
+      Source |       SS           df       MS      Number of obs   =        14
+-------------+----------------------------------   F(2, 11)        =     56.82
+       Model |   802.33229         2  401.166145   Prob > F        =    0.0000
+    Residual |  77.6677095        11  7.06070086   R-squared       =    0.9117
+-------------+----------------------------------   Adj R-squared   =    0.8957
+       Total |         880        13  67.6923077   Root MSE        =    2.6572
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .9296565   .0872767    10.65   0.000     .7375618    1.121751
+             |
+           x |   .2275769   .3678474     0.62   0.549    -.5820498    1.037204
+       _cons |   2.890294   2.961699     0.98   0.350    -3.628362    9.408951
+------------------------------------------------------------------------------
+
+. regress y L(0/2).x
+
+      Source |       SS           df       MS      Number of obs   =        13
+-------------+----------------------------------   F(3, 9)         =      0.04
+       Model |  8.71165569         3  2.90388523   Prob > F        =    0.9905
+    Residual |  740.980652         9  82.3311836   R-squared       =    0.0116
+-------------+----------------------------------   Adj R-squared   =   -0.3178
+       Total |  749.692308        12   62.474359   Root MSE        =    9.0737
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |
+         --. |   .3639172   1.711659     0.21   0.836    -3.508124    4.235958
+         L1. |  -.0899629   1.735022    -0.05   0.960    -4.014856     3.83493
+         L2. |   .0067746   1.711659     0.00   0.997    -3.865267    3.878816
+             |
+       _cons |   28.82609   13.66974     2.11   0.064    -2.097003    59.74918
+------------------------------------------------------------------------------
+
+. regress D.y L.x
+
+      Source |       SS           df       MS      Number of obs   =        14
+-------------+----------------------------------   F(1, 12)        =      0.01
+       Model |  .042714785         1  .042714785   Prob > F        =    0.9396
+    Residual |  85.6715709        12  7.13929758   R-squared       =    0.0005
+-------------+----------------------------------   Adj R-squared   =   -0.0828
+       Total |  85.7142857        13  6.59340659   Root MSE        =    2.6719
+
+------------------------------------------------------------------------------
+         D.y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |
+         L1. |  -.0284765   .3681506    -0.08   0.940    -.8306077    .7736547
+             |
+       _cons |    1.96393   1.554319     1.26   0.230    -1.422641    5.350501
+------------------------------------------------------------------------------
+
+. regress y L.y L.x LD.x
+
+      Source |       SS           df       MS      Number of obs   =        13
+-------------+----------------------------------   F(3, 9)         =     26.33
+       Model |  672.998872         3  224.332957   Prob > F        =    0.0001
+    Residual |  76.6934354         9  8.52149282   R-squared       =    0.8977
+-------------+----------------------------------   Adj R-squared   =    0.8636
+       Total |  749.692308        12   62.474359   Root MSE        =    2.9192
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .9494832   .1072393     8.85   0.000     .7068911    1.192075
+             |
+           x |
+         L1. |  -.4104762   .9306149    -0.44   0.670    -2.515673    1.694721
+         LD. |   .2520385   .5356598     0.47   0.649    -.9597083    1.463785
+             |
+       _cons |   4.707317   4.693153     1.00   0.342    -5.909333    15.32397
+------------------------------------------------------------------------------
+
+. tsset, clear
+
+. clear
+
+. set obs 16
+number of observations (_N) was 0, now 16
+
+. gen t = _n
+
+. replace t = t + 2 if _n > 8
+(8 real changes made)
+
+. gen y = mod(t*5, 9)
+
+. tsset t
+        time variable:  t, 1 to 18, but with a gap
+                delta:  1 unit
+
+. gen ly = L.y
+(2 missing values generated)
+
+. list t y ly in 6/11
+
+     +-------------+
+     |  t   y   ly |
+     |-------------|
+  6. |  6   3    7 |
+  7. |  7   8    3 |
+  8. |  8   4    8 |
+  9. | 11   1    . |
+ 10. | 12   6    1 |
+     |-------------|
+ 11. | 13   2    6 |
+     +-------------+
+
+. clear
+
+. set obs 12
+number of observations (_N) was 0, now 12
+
+. gen id = ceil(_n/4)
+
+. gen t = mod(_n-1,4)+1
+
+. gen y = id*3 + t + mod(_n,3)
+
+. xtset id t
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 4
+                delta:  1 unit
+
+. xtset
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 4
+                delta:  1 unit
+
+. return list
+
+scalars:
+             r(tdelta) =  1
+               r(tmax) =  4
+               r(tmin) =  1
+               r(imax) =  3
+               r(imin) =  1
+
+macros:
+           r(panelvar) : "id"
+            r(timevar) : "t"
+              r(unit1) : "."
+              r(tsfmt) : "%9.0g"
+            r(tdeltas) : "1 unit"
+              r(tmaxs) : "4"
+              r(tmins) : "1"
+           r(balanced) : "strongly balanced"
+
+. gen ly = L.y
+(3 missing values generated)
+
+. list in 1/6
+
+     +-----------------+
+     | id   t   y   ly |
+     |-----------------|
+  1. |  1   1   5    . |
+  2. |  1   2   7    5 |
+  3. |  1   3   6    7 |
+  4. |  1   4   8    6 |
+  5. |  2   1   9    . |
+     |-----------------|
+  6. |  2   2   8    9 |
+     +-----------------+
+
+. regress y L.y i.id
+
+      Source |       SS           df       MS      Number of obs   =         9
+-------------+----------------------------------   F(3, 5)         =      8.11
+       Model |       54.75         3       18.25   Prob > F        =    0.0229
+    Residual |       11.25         5        2.25   R-squared       =    0.8295
+-------------+----------------------------------   Adj R-squared   =    0.7273
+       Total |          66         8        8.25   Root MSE        =       1.5
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |        .25   .4330127     0.58   0.589    -.8630946    1.363095
+             |
+          id |
+          2  |       2.25   1.785357     1.26   0.263    -2.339407    6.839407
+          3  |        4.5   2.872281     1.57   0.178    -2.883434    11.88343
+             |
+       _cons |        5.5   2.738613     2.01   0.101    -1.539828    12.53983
+------------------------------------------------------------------------------
+
+. drop in 5
+(1 observation deleted)
+
+. xtset id t
+       panel variable:  id (unbalanced)
+        time variable:  t, 1 to 4
+                delta:  1 unit
+
+. clear
+
+. set obs 6
+number of observations (_N) was 0, now 6
+
+. gen d = mdy(1, 1, 2000) + _n - 1
+
+. format d %td
+
+. gen y = _n^2
+
+. tsset d
+        time variable:  d, 01jan2000 to 06jan2000
+                delta:  1 day
+
+. gen dy = D.y
+(1 missing value generated)
+
+. list
+
+     +---------------------+
+     |         d    y   dy |
+     |---------------------|
+  1. | 01jan2000    1    . |
+  2. | 02jan2000    4    3 |
+  3. | 03jan2000    9    5 |
+  4. | 04jan2000   16    7 |
+  5. | 05jan2000   25    9 |
+     |---------------------|
+  6. | 06jan2000   36   11 |
+     +---------------------+
+
+. clear
+
+. set obs 4
+number of observations (_N) was 0, now 4
+
+. gen t = _n
+
+. replace t = 2 in 3
+(1 real change made)
+
+. capture noisily tsset t
+repeated time values in sample
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
+  log type:  text
+ closed on:   9 Oct 2026, 11:17:26
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

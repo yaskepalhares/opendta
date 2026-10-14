@@ -73,6 +73,16 @@ class Preferences:
         self._s.setValue("behavior/superscript", "on" if on else "off")
 
     @property
+    def numerics(self) -> str:
+        """set numerics stata|precise ao abrir o programa."""
+        v = str(self._s.value("behavior/numerics", "stata"))
+        return v if v in ("stata", "precise") else "stata"
+
+    @numerics.setter
+    def numerics(self, value: str) -> None:
+        self._s.setValue("behavior/numerics", value if value in ("stata", "precise") else "stata")
+
+    @property
     def font_family(self) -> str:
         return str(self._s.value("fonts/family", default_monospace()[0]))
 

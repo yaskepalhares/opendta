@@ -22,8 +22,37 @@ def groups(s: "Session") -> Groups:
     return s.by_groups if s.by_groups is not None else Groups.single(s.data.nobs)
 
 
+def _count_random(node) -> int:
+    from ..core.rng import DISTRIBUTIONS
+    if isinstance(node, Call):
+        own = 1 if node.name in DISTRIBUTIONS else 0
+        return own + sum(_count_random(a) for a in node.args)
+    if isinstance(node, Unary):
+        return _count_random(node.operand)
+    if isinstance(node, Binary):
+        return _count_random(node.left) + _count_random(node.right)
+    if isinstance(node, Subscript):
+        return 0 if isinstance(node.index, str) else _count_random(node.index)
+    return 0
+
+
 def eval_vector(s: "Session", text: str) -> Any:
-    return evaluate_vec(parse(text), VectorContext(s, groups(s)))
+    node = parse(text)
+    k = _count_random(node)
+    if k >= 2:
+        # o Stata avalia a expressão observação por observação: com várias
+        # funções aleatórias, os sorteios se intercalam (obs 1: 1ª e 2ª
+        # chamada; obs 2: 1ª e 2ª...). Sorteia o bloco antes e distribui.
+        from ..core import rng
+        mask = getattr(s, "_rng_mask", None)
+        n = s.data.nobs
+        m = int(mask.sum()) if mask is not None and len(mask) == n else n
+        s._rng_block = [rng.RNG.uniform(m * k).reshape(m, k), 0]
+        try:
+            return evaluate_vec(node, VectorContext(s, groups(s)))
+        finally:
+            s._rng_block = None
+    return evaluate_vec(node, VectorContext(s, groups(s)))
 
 
 def eval_sample(s: "Session", text: str, mask: np.ndarray) -> Any:

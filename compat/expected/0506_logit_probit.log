@@ -1,0 +1,419 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0506_logit_probit.log
+  log type:  text
+ opened on:   9 Oct 2026, 12:14:27
+
+. * Fase 5b: logit, logistic e probit (log de iterações, tabelas, pós-estimação).
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 611
+
+. set obs 80
+number of observations (_N) was 0, now 80
+
+. gen x1 = round(runiform()*10, .1)
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen g = 1 + mod(_n, 3)
+
+. gen u = runiform()
+
+. gen y = u < invlogit(-2 + .3*x1 - .2*x2 + .5*(g==2))
+
+. gen w = 1 + mod(_n, 2)
+
+. logit y x1 x2
+
+Iteration 0:   log likelihood = -47.991842  
+Iteration 1:   log likelihood = -41.969102  
+Iteration 2:   log likelihood =  -41.75568  
+Iteration 3:   log likelihood = -41.755355  
+Iteration 4:   log likelihood = -41.755355  
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3080687   .1110502     2.77   0.006     .0904144    .5257231
+          x2 |  -.2724331   .1856158    -1.47   0.142    -.6362334    .0913673
+       _cons |  -1.830716   .8205743    -2.23   0.026    -3.439012     -.22242
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  80
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -41.75535473154078
+         e(k_eq_model) =  1
+               e(ll_0) =  -47.99184154097073
+               e(df_m) =  2
+               e(chi2) =  12.4729736188599
+                  e(p) =  .0019567177840385
+              e(N_cdf) =  0
+              e(N_cds) =  0
+               e(r2_p) =  .1299488956702327
+
+macros:
+            e(cmdline) : "logit y x1 x2"
+                e(cmd) : "logit"
+          e(estat_cmd) : "logit_estat"
+            e(predict) : "logit_p"
+       e(marginsnotok) : "stdp DBeta DEviance DX2 DDeviance Hat Number Residuals RStandard SCore"
+              e(title) : "Logistic regression"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "mopt__logit_d2()"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+                e(mns) :  1 x 3
+              e(rules) :  1 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. logit
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3080687   .1110502     2.77   0.006     .0904144    .5257231
+          x2 |  -.2724331   .1856158    -1.47   0.142    -.6362334    .0913673
+       _cons |  -1.830716   .8205743    -2.23   0.026    -3.439012     -.22242
+------------------------------------------------------------------------------
+
+. logit y x1 x2 i.g
+
+Iteration 0:   log likelihood = -47.991842  
+Iteration 1:   log likelihood = -41.330647  
+Iteration 2:   log likelihood = -41.089358  
+Iteration 3:   log likelihood = -41.088733  
+Iteration 4:   log likelihood = -41.088733  
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(4)        =      13.81
+                                                Prob > chi2       =     0.0079
+Log likelihood = -41.088733                     Pseudo R2         =     0.1438
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .338001   .1168535     2.89   0.004     .1089723    .5670296
+          x2 |   -.284719   .1883019    -1.51   0.131    -.6537841     .084346
+             |
+           g |
+          2  |   -.329637   .6722446    -0.49   0.624    -1.647212    .9879381
+          3  |  -.7878738   .6963453    -1.13   0.258    -2.152686    .5769378
+             |
+       _cons |  -1.581994   .9049961    -1.75   0.080    -3.355754    .1917657
+------------------------------------------------------------------------------
+
+. logit y x1 x2, or
+
+Iteration 0:   log likelihood = -47.991842  
+Iteration 1:   log likelihood = -41.969102  
+Iteration 2:   log likelihood =  -41.75568  
+Iteration 3:   log likelihood = -41.755355  
+Iteration 4:   log likelihood = -41.755355  
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y | Odds Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.360795   .1511165     2.77   0.006     1.094628    1.691682
+          x2 |   .7615244    .141351    -1.47   0.142     .5292823    1.095671
+       _cons |   .1602987    .131537    -2.23   0.026     .0320964    .8005791
+------------------------------------------------------------------------------
+
+. logit y x1 x2, nolog level(90)
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [90% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3080687   .1110502     2.77   0.006     .1254075      .49073
+          x2 |  -.2724331   .1856158    -1.47   0.142    -.5777439    .0328778
+       _cons |  -1.830716   .8205743    -2.23   0.026    -3.180441   -.4809915
+------------------------------------------------------------------------------
+
+. logit y x1 x2, vce(robust)
+
+Iteration 0:   log pseudolikelihood = -47.991842  
+Iteration 1:   log pseudolikelihood = -41.969102  
+Iteration 2:   log pseudolikelihood =  -41.75568  
+Iteration 3:   log pseudolikelihood = -41.755355  
+Iteration 4:   log pseudolikelihood = -41.755355  
+
+Logistic regression                             Number of obs     =         80
+                                                Wald chi2(2)      =      11.23
+                                                Prob > chi2       =     0.0036
+Log pseudolikelihood = -41.755355               Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3080687   .1123603     2.74   0.006     .0878465    .5282909
+          x2 |  -.2724331   .1984021    -1.37   0.170     -.661294    .1164279
+       _cons |  -1.830716   .8949895    -2.05   0.041    -3.584863   -.0765689
+------------------------------------------------------------------------------
+
+. logit y x1 x2, vce(cluster g)
+
+Iteration 0:   log pseudolikelihood = -47.991842  
+Iteration 1:   log pseudolikelihood = -41.969102  
+Iteration 2:   log pseudolikelihood =  -41.75568  
+Iteration 3:   log pseudolikelihood = -41.755355  
+Iteration 4:   log pseudolikelihood = -41.755355  
+
+Logistic regression                             Number of obs     =         80
+                                                Wald chi2(1)      =          .
+                                                Prob > chi2       =          .
+Log pseudolikelihood = -41.755355               Pseudo R2         =     0.1299
+
+                                      (Std. Err. adjusted for 3 clusters in g)
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3080687   .1119039     2.75   0.006      .088741    .5273964
+          x2 |  -.2724331   .0867526    -3.14   0.002     -.442465   -.1024011
+       _cons |  -1.830716   .9745686    -1.88   0.060    -3.740835    .0794034
+------------------------------------------------------------------------------
+
+. logit y x1 x2 [fweight=w]
+
+Iteration 0:   log likelihood = -70.580253  
+Iteration 1:   log likelihood = -59.674758  
+Iteration 2:   log likelihood = -59.142412  
+Iteration 3:   log likelihood = -59.139852  
+Iteration 4:   log likelihood = -59.139852  
+
+Logistic regression                             Number of obs     =        120
+                                                LR chi2(2)        =      22.88
+                                                Prob > chi2       =     0.0000
+Log likelihood = -59.139852                     Pseudo R2         =     0.1621
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3253383   .0918967     3.54   0.000      .145224    .5054526
+          x2 |  -.3496111   .1627373    -2.15   0.032    -.6685704   -.0306518
+       _cons |  -1.869472   .6914791    -2.70   0.007    -3.224746   -.5141981
+------------------------------------------------------------------------------
+
+. logit y x1 x2 [pweight=w]
+
+Iteration 0:   log pseudolikelihood = -70.580253  
+Iteration 1:   log pseudolikelihood = -59.674758  
+Iteration 2:   log pseudolikelihood = -59.142412  
+Iteration 3:   log pseudolikelihood = -59.139852  
+Iteration 4:   log pseudolikelihood = -59.139852  
+
+Logistic regression                             Number of obs     =         80
+                                                Wald chi2(2)      =      11.31
+                                                Prob > chi2       =     0.0035
+Log pseudolikelihood = -59.139852               Pseudo R2         =     0.1621
+
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3253383   .1234281     2.64   0.008     .0834238    .5672529
+          x2 |  -.3496111   .1979174    -1.77   0.077     -.737522    .0382998
+       _cons |  -1.869472   .9431261    -1.98   0.047    -3.717965    -.020979
+------------------------------------------------------------------------------
+
+. predict p
+(option pr assumed; Pr(y))
+
+. predict xb, xb
+
+. predict sp, stdp
+
+. summarize p xb sp
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+           p |         80    .2672508    .1867177   .0321112   .7445665
+          xb |         80   -1.243816    1.075966  -3.405913    1.06984
+          sp |         80    .5082217    .1347149   .2810563   .8495432
+
+. test x1 x2
+
+ ( 1)  [y]x1 = 0
+ ( 2)  [y]x2 = 0
+
+           chi2(  2) =   11.31
+         Prob > chi2 =    0.0035
+
+. lincom x1 - x2
+
+ ( 1)  [y]x1 - [y]x2 = 0
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .6749494    .220678     3.06   0.002     .2424285     1.10747
+------------------------------------------------------------------------------
+
+. logistic y x1 x2
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y | Odds Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.360795   .1511165     2.77   0.006     1.094628    1.691682
+          x2 |   .7615244    .141351    -1.47   0.142     .5292823    1.095671
+       _cons |   .1602987    .131537    -2.23   0.026     .0320964    .8005791
+------------------------------------------------------------------------------
+
+. logistic
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(2)        =      12.47
+                                                Prob > chi2       =     0.0020
+Log likelihood = -41.755355                     Pseudo R2         =     0.1299
+
+------------------------------------------------------------------------------
+           y | Odds Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.360795   .1511165     2.77   0.006     1.094628    1.691682
+          x2 |   .7615244    .141351    -1.47   0.142     .5292823    1.095671
+       _cons |   .1602987    .131537    -2.23   0.026     .0320964    .8005791
+------------------------------------------------------------------------------
+
+. logistic y x1 i.g, coef
+
+Logistic regression                             Number of obs     =         80
+                                                LR chi2(3)        =      11.46
+                                                Prob > chi2       =     0.0095
+Log likelihood = -42.262884                     Pseudo R2         =     0.1194
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .3550761     .11568     3.07   0.002     .1283475    .5818047
+             |
+           g |
+          2  |  -.1687193   .6510843    -0.26   0.796    -1.444821    1.107382
+          3  |  -.6994285   .6784461    -1.03   0.303    -2.029158    .6303015
+             |
+       _cons |  -2.468592   .7362559    -3.35   0.001    -3.911627   -1.025557
+------------------------------------------------------------------------------
+
+. probit y x1 x2
+
+Iteration 0:   log likelihood = -47.991842  
+Iteration 1:   log likelihood = -41.701087  
+Iteration 2:   log likelihood = -41.654546  
+Iteration 3:   log likelihood = -41.654538  
+Iteration 4:   log likelihood = -41.654538  
+
+Probit regression                               Number of obs     =         80
+                                                LR chi2(2)        =      12.67
+                                                Prob > chi2       =     0.0018
+Log likelihood = -41.654538                     Pseudo R2         =     0.1320
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .1847862   .0640563     2.88   0.004     .0592381    .3103342
+          x2 |  -.1660595   .1065811    -1.56   0.119    -.3749546    .0428356
+       _cons |  -1.094095   .4656548    -2.35   0.019    -2.006761    -.181428
+------------------------------------------------------------------------------
+
+. probit y x1 x2 i.g, vce(robust)
+
+Iteration 0:   log pseudolikelihood = -47.991842  
+Iteration 1:   log pseudolikelihood = -41.039591  
+Iteration 2:   log pseudolikelihood = -40.970379  
+Iteration 3:   log pseudolikelihood = -40.970351  
+Iteration 4:   log pseudolikelihood = -40.970351  
+
+Probit regression                               Number of obs     =         80
+                                                Wald chi2(4)      =      12.84
+                                                Prob > chi2       =     0.0121
+Log pseudolikelihood = -40.970351               Pseudo R2         =     0.1463
+
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .2025284   .0674755     3.00   0.003     .0702788     .334778
+          x2 |  -.1692788   .1153068    -1.47   0.142    -.3952759    .0567184
+             |
+           g |
+          2  |  -.1750307   .4075912    -0.43   0.668    -.9738947    .6238334
+          3  |  -.4659845   .4134939    -1.13   0.260    -1.276418    .3444487
+             |
+       _cons |  -.9674521   .5666754    -1.71   0.088    -2.078115    .1432112
+------------------------------------------------------------------------------
+
+. predict pp
+(option pr assumed; Pr(y))
+
+. summarize pp
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          pp |         80    .2853559    .1879296   .0206872   .8102342
+
+. gen y0 = 0
+
+. capture noisily logit y0 x1
+
+outcome does not vary; remember:
+                                  0 = negative outcome,
+        all other nonmissing values = positive outcome
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0506_logit_probit.log
+  log type:  text
+ closed on:   9 Oct 2026, 12:14:27
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -185,7 +185,7 @@ def general(x: float, width: int, sup: bool = False) -> str:
       A = w - 1 caracteres, e o '-' ocupa a posição reservada;
     * no máximo P = w - 2 dígitos significativos;
     * notação exponencial quando o expoente (após arredondar para P dígitos)
-      é < -4 ou >= P, como o %g da linguagem C; senão, notação fixa sem zeros
+      é < -5 ou >= P (o %g do C usa -4); senão, notação fixa sem zeros
       à direita e sem o zero antes do ponto (.5);
     * na exponencial, a mantissa ocupa todo o espaço: 1.235e+09 em %10.0g.
 
@@ -201,7 +201,7 @@ def general(x: float, width: int, sup: bool = False) -> str:
 
     X = int(_fmt_e(ax, P - 1).split("e")[1])
     out = None
-    if -4 <= X < P:
+    if -5 <= X < P:   # o Stata usa notação fixa até 1e-5 (compat 0508, 0509)
         decimals = max(0, P - 1 - X)
         while decimals >= 0:
             s = _fmt_f(ax, decimals)

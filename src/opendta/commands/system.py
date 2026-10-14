@@ -41,6 +41,12 @@ def cmd_set(s: "Session", args: str) -> None:
     if name == "superscript":
         from ..core.formats import set_superscript
         set_superscript(value.split(",")[0].strip() == "on")
+    if name == "numerics":
+        v = value.split(",")[0].strip()
+        if v not in ("stata", "precise"):
+            raise StataError(198, "invalid syntax")
+        from ..estimation.numerics import set_precise
+        set_precise(v == "precise")
     s.settings[name] = value.split(",")[0].strip()
     opts = value.partition(",")[2].strip()
     if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:

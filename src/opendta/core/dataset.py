@@ -220,6 +220,9 @@ class Dataset:
         self.timestamp = ""            # data de gravação ("13 Apr 2014 17:45")
         self.chars: dict[str, dict[str, str]] = {}   # características (_dta e variáveis)
         self.changed = False
+        # e(sample): marca das observações usadas na última estimação; acompanha
+        # sort, keep/drop e set obs (como a variável oculta do Stata)
+        self.esample: np.ndarray | None = None
 
     def copy(self) -> "Dataset":
         """Cópia independente (preserve)."""
@@ -238,6 +241,7 @@ class Dataset:
         new.filename, new.fullpath, new.timestamp = self.filename, self.fullpath, self.timestamp
         new.chars = _copy.deepcopy(self.chars)
         new.changed = self.changed
+        new.esample = None if self.esample is None else self.esample.copy()
         return new
 
     # -- consulta --------------------------------------------------------
@@ -298,6 +302,8 @@ class Dataset:
             else:
                 pad = np.full(extra, storage.missing_raw(v.vtype), dtype=v.raw.dtype)
             v.raw = np.concatenate([v.raw, pad])
+        if self.esample is not None and len(self.esample) == self.nobs:
+            self.esample = np.concatenate([self.esample, np.zeros(extra, dtype=bool)])
         self.nobs = n
         self._touch()
 
@@ -330,6 +336,8 @@ class Dataset:
         if removed:
             for v in self.vars:
                 v.raw = v.raw[mask]
+            if self.esample is not None and len(self.esample) == len(mask):
+                self.esample = self.esample[mask]
             self.nobs = int(mask.sum())
             self._touch()
         return removed
@@ -337,6 +345,8 @@ class Dataset:
     def reorder_obs(self, order: np.ndarray) -> None:
         for v in self.vars:
             v.raw = v.raw[order]
+        if self.esample is not None and len(self.esample) == len(order):
+            self.esample = self.esample[order]
         self._touch()
 
     def rename(self, old: str, new: str) -> None:

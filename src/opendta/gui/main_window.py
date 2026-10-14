@@ -248,6 +248,8 @@ class MainWindow(QMainWindow):
         self.session.settings["hints"] = "on" if self.prefs.hints else "off"
         if not self.prefs.superscript:
             self.session.run("quietly set superscript off")
+        if self.prefs.numerics == "precise":
+            self.session.run("quietly set numerics precise")
         self.session.ui_hooks["set_permanently"] = self._set_permanently
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
@@ -741,11 +743,13 @@ class MainWindow(QMainWindow):
             self.browser.set_dark(theme == "dark")
 
     def _set_permanently(self, name: str, value: str) -> None:
-        """set ..., permanently: lembrado na próxima abertura (hints e superscript)."""
+        """set ..., permanently: lembrado na próxima abertura (hints, superscript, numerics)."""
         if name == "hints":
             self.prefs.hints = value == "on"
         elif name == "superscript":
             self.prefs.superscript = value == "on"
+        elif name == "numerics":
+            self.prefs.numerics = value
 
     def _toggle_superscript(self, on: bool) -> None:
         self.run_command(f"set superscript {'on' if on else 'off'}, permanently")

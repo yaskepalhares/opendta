@@ -7,7 +7,7 @@ def test_format_value_superscript():
     set_superscript(True)
     try:
         assert format_value(1e10, "%12.0g").strip() == "1.0000×10¹⁰"
-        assert format_value(2.5e-5, "%9.0g").strip() == "2.5×10⁻⁵"
+        assert format_value(2.5e-6, "%9.0g").strip() == "2.5×10⁻⁶"
         assert format_value(1234.5, "%10.3e").strip() == "1.235×10³"
         assert format_value(-1e-10, "%10.0g").strip() == "-1.0×10⁻¹⁰"
         # números em notação fixa não mudam; a largura do formato é mantida

@@ -108,6 +108,16 @@ def truth(v: Any) -> Any:
 # Contexto
 # ---------------------------------------------------------------------------
 
+def ts_value(s, name: str):
+    """L.y, D.y...: o vetor da variável com os operadores de séries temporais."""
+    from ..estimation import fvars
+    from ..estimation.fvars import _component_alts
+    comps = _component_alts(s.data, name, False)
+    if not comps or len(comps) != 1:
+        raise StataError(198, "invalid syntax")
+    return fvars.comp_values(s.data, comps[0])
+
+
 class VectorContext:
     def __init__(self, session: "Session", groups: Groups | None = None):
         self.s = session
@@ -119,6 +129,8 @@ class VectorContext:
         ds = self.ds
         if ds.has(name):
             return ds.get(name).data
+        if "." in name:
+            return ts_value(self.s, name)
         if name in self.s.scalars:
             return self.s.scalars[name]
         if name == "_n":
@@ -185,6 +197,24 @@ class VectorContext:
         if any(is_str(a) for a in args):
             raise type_mismatch()
         mask = getattr(self.s, "_rng_mask", None)
+        block = getattr(self.s, "_rng_block", None)
+        if block is not None:
+            U, j = block
+            block[1] = j + 1
+            u = U[:, j] if j < U.shape[1] else rng.RNG.uniform(U.shape[0])
+            fn = rng.DISTRIBUTIONS[name][2]
+            if mask is None or len(mask) != self.n:
+                arrs = [np.broadcast_to(np.asarray(broadcast(a, self.n) if is_vec(a) else a, dtype=np.float64),
+                                        (self.n,)) for a in args]
+                with np.errstate(all="ignore"):
+                    return fn(u, *arrs)
+            idx = np.flatnonzero(mask)
+            out = np.full(self.n, SYS)
+            arrs = [np.broadcast_to(np.asarray(broadcast(a, self.n)[idx] if is_vec(a) else a, dtype=np.float64),
+                                    (len(idx),)) for a in args]
+            with np.errstate(all="ignore"):
+                out[idx] = fn(u, *arrs)
+            return out
         if mask is None or len(mask) != self.n:
             return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
         # só as observações da amostra sorteiam (generate/replace com if/in)
@@ -216,6 +246,9 @@ def evaluate_vec(node: Node, ctx: VectorContext) -> Any:
         return ctx.name(node.name)
     if isinstance(node, Call):
         if node.name in _RAW_ARG_FUNCS:
+            if node.name == "e" and node.raw.strip() == "sample":
+                from ..estimation.postest import esample
+                return esample(ctx.s).astype(np.float64)
             return ctx.s.context.resolve_result(node.name, node.raw)
         if node.name in MATRIX_FUNCS:
             from ..commands.matrix import matrix_scalar

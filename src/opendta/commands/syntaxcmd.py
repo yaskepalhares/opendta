@@ -230,7 +230,7 @@ def _main(s: "Session", spec: Spec, text: str, locs: dict[str, str]) -> None:
         return
     if kind in ("newvarlist", "newvarname"):
         types, names = [], []
-        vtype = s.settings.get("type", "float")
+        vtype = s.default_type()
         pending = None
         for w in text.split():
             if w in ("byte", "int", "long", "float", "double") or re.fullmatch(r"str\d+|strL", w):

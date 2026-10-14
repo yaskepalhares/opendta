@@ -249,8 +249,68 @@ def _deltas(fun, p: np.ndarray, f0: float, second: bool = False) -> np.ndarray:
     return out
 
 
+def _richardson(D, h: float) -> float:
+    """Extrapolação de Richardson de uma diferença central: (4 D(h/2) - D(h)) / 3
+    elimina o termo de ordem h² do erro (set numerics precise)."""
+    return (4 * D(h / 2) - D(h)) / 3
+
+
+def _num_grad_precise(fun, p: np.ndarray, f0: float) -> np.ndarray:
+    g = np.zeros_like(p)
+    for i in range(p.size):
+        h = 1e-3 * (abs(p[i]) + 1)
+
+        def D(hh, i=i):
+            a, b = p.copy(), p.copy()
+            a[i] += hh
+            b[i] -= hh
+            return (fun(a) - fun(b)) / (2 * hh)
+        g[i] = _richardson(D, h)
+    return g
+
+
+def _num_hess_precise(fun, grad, p: np.ndarray, analytic_grad: bool) -> np.ndarray:
+    k = p.size
+    H = np.zeros((k, k))
+    hs = 1e-3 * (np.abs(p) + 1)
+    if analytic_grad:
+        for i in range(k):
+            def D(hh, i=i):
+                a, b = p.copy(), p.copy()
+                a[i] += hh
+                b[i] -= hh
+                return (grad(a) - grad(b)) / (2 * hh)
+            H[:, i] = _richardson(D, hs[i])
+        return (H + H.T) / 2
+    f0 = fun(p)
+    for i in range(k):
+        for j in range(i, k):
+            if i == j:
+                def D(hh, i=i):
+                    a, b = p.copy(), p.copy()
+                    a[i] += hh
+                    b[i] -= hh
+                    return (fun(a) - 2 * f0 + fun(b)) / hh ** 2
+                H[i, i] = _richardson(D, hs[i])
+            else:
+                def D(hh, i=i, j=j):
+                    r = hh / hs[i]
+                    hi, hj = hs[i] * r, hs[j] * r
+                    pp, pm, mp, mm = (p.copy() for _ in range(4))
+                    pp[i] += hi; pp[j] += hj          # noqa: E702
+                    pm[i] += hi; pm[j] -= hj          # noqa: E702
+                    mp[i] -= hi; mp[j] += hj          # noqa: E702
+                    mm[i] -= hi; mm[j] -= hj          # noqa: E702
+                    return (fun(pp) - fun(pm) - fun(mp) + fun(mm)) / (4 * hi * hj)
+                H[i, j] = H[j, i] = _richardson(D, hs[i])
+    return H
+
+
 def _num_grad(fun, p: np.ndarray, f0: float | None = None) -> np.ndarray:
     f0 = fun(p) if f0 is None else f0
+    from ..estimation.numerics import precise
+    if precise():
+        return _num_grad_precise(fun, p, f0)
     d = _deltas(fun, p, f0)
     g = np.zeros_like(p)
     for i in range(p.size):
@@ -264,6 +324,9 @@ def _num_grad(fun, p: np.ndarray, f0: float | None = None) -> np.ndarray:
 def _num_hess(fun, grad, p: np.ndarray, analytic_grad: bool = False) -> np.ndarray:
     """Hessiana numérica: diferenças centrais do gradiente (avaliador d1) ou
     segundas diferenças da função (d0), com os passos de _deltas()."""
+    from ..estimation.numerics import precise
+    if precise():
+        return _num_hess_precise(fun, grad, p, analytic_grad)
     k = p.size
     H = np.zeros((k, k))
     f0 = fun(p)
@@ -394,6 +457,20 @@ def _optimize(eng, v, r):
                 out.write(f"Iteration {it}:   f(p) = {format_value(sign * f, '%10.0g', pad=False).strip():>10}\n",
                           "text")
             break
+    from ..estimation.numerics import precise
+    if converged and precise() and S.technique != "bfgs":
+        # passos de Newton extras, fora do log, enquanto o gradiente diminuir
+        for _ in range(5):
+            try:
+                pn = p - np.linalg.solve(hess(p), g)
+            except np.linalg.LinAlgError:
+                break
+            fn = fval(pn)
+            gn = grad(pn)
+            if not np.isfinite(fn) or fn < f - 1e-12 * max(1.0, abs(f)) or \
+                    np.linalg.norm(gn) >= np.linalg.norm(g):
+                break
+            p, f, g = pn, fn, gn
     H = hess(p)
     try:
         V = np.linalg.inv(-H)
