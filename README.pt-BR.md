@@ -56,6 +56,7 @@ Já funciona:
 - estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `areg`, `ivregress`, `anova` e `oneway`, com variáveis fatoriais, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
 - pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
 - amostras complexas: `svyset` (vários estágios, pesos replicados), `svydescribe`, `estat effects` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` e `tobit` (linearização de Taylor, BRR, jackknife, bootstrap e SDR);
+- análise de sobrevivência: `stset` (registros simples e múltiplos, entrada atrasada, origem e escala), `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, testes log-rank e de Wilcoxon), `stcox` (empates de Breslow e Efron, estratos, variância robusta), `estat phtest` e `streg` (exponencial, Weibull, Gompertz, lognormal e loglogística);
 - testes: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` e os comandos imediatos `cii`, `ttesti`, `prtesti` e `tabi`;
 - descrição dos dados: `codebook` e `misstable`; resultados para o Excel com `putexcel`;
 - gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` e janela Graph com um Graph Editor simples;
@@ -63,7 +64,7 @@ Já funciona:
 - caixas de diálogo nos menus Statistics e Graphics, que mostram o comando antes de rodar;
 - interface em inglês ou português (**Edit → Preferences** ou `set language pt`); as saídas e as mensagens de erro no formato do Stata continuam em inglês, a menos que se peça a tradução (`set messages translated`).
 
-As saídas do caso `0603` (réplicas do svy) ainda aguardam a conferência com o log do Stata; os demais casos de `compat/do` já foram conferidos.
+As saídas dos casos `0603` (réplicas do svy), `0901` e `0902` (análise de sobrevivência) ainda aguardam a conferência com o log do Stata; os demais casos de `compat/do` já foram conferidos. As estimativas de sobrevivência foram conferidas com o statsmodels (Cox, Kaplan-Meier, log-rank e Wilcoxon) e com a maximização direta das verossimilhanças (`streg`).
 
 ## Instalação a partir do código
 

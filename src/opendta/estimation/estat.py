@@ -41,6 +41,10 @@ def cmd_estat(s: "Session", args: str) -> None:
     if "," in words[0]:
         rest = words[0][words[0].index(","):] + " " + rest
     est = current(s)
+    for name, (minimum, fn) in (getattr(est, "estat", None) or {}).items():
+        if len(sub) >= minimum and name.startswith(sub):
+            fn(s, est, rest)
+            return
     table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3),
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)

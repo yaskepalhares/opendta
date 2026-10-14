@@ -98,6 +98,13 @@ def explain(err: "StataError", s: "Session") -> list[str]:
                            f'os números válidos vão de 1 a {n:,} ("in f/l" quer dizer todas); '
                            'acrescente observações com "set obs #".'))
 
+    # -- survival-time data ------------------------------------------------------------------
+    if msg == "data not st":
+        return two(L("The st commands need the data declared as survival-time data first.",
+                     "Os comandos st precisam que os dados sejam declarados como de sobrevivência antes."),
+                   L('run "stset timevar, failure(failvar)" (add id() if subjects have several records).',
+                     'rode "stset tempo, failure(evento)" (com id() se cada sujeito tiver vários registros).'))
+
     # -- variables ---------------------------------------------------------------------------
     m = re.fullmatch(r"variable (\S+) not found", msg)
     if m:

@@ -54,6 +54,7 @@ What already works:
 - estimation: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `xtlogit`, `xtpoisson`, `areg`, `ivregress`, `qreg`, `anova` and `oneway`, with factor variables, time-series operators, weights and robust, cluster and bootstrap standard errors;
 - postestimation: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `lrtest`, `hausman`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
 - complex surveys: `svyset` (several stages, replicate weights), `svydescribe`, `estat effects` and the `svy:` prefix with `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` and `tobit` (Taylor linearization, BRR, jackknife, bootstrap and SDR);
+- survival analysis: `stset` (single and multiple records, delayed entry, origin and scale), `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank and Wilcoxon tests), `stcox` (Breslow and Efron ties, strata, robust variance), `estat phtest` and `streg` (exponential, Weibull, Gompertz, lognormal and loglogistic);
 - tests: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` and the immediate commands `cii`, `ttesti`, `prtesti` and `tabi`;
 - describing data: `codebook` and `misstable`; results to Excel with `putexcel`;
 - graphics with OpenDTA's own look: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` and a Graph window with a simple Graph Editor;
@@ -61,7 +62,7 @@ What already works:
 - dialog boxes in the Statistics and Graphics menus, which show the command before running it;
 - interface in English or Portuguese (**Edit → Preferences** or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
 
-The output of case `0603` (survey replicates) still awaits checking against the Stata log; all other cases in `compat/do` have been checked.
+The outputs of cases `0603` (survey replicates), `0901` and `0902` (survival analysis) still await checking against the Stata log; all other cases in `compat/do` have been checked. The survival estimates were checked against statsmodels (Cox, Kaplan-Meier, log-rank and Wilcoxon) and against direct maximization of the likelihoods (`streg`).
 
 ## Installing from source
 

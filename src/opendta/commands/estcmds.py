@@ -257,6 +257,54 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("stset", "stset")
+def cmd_stset(s: "Session", args: str) -> None:
+    from ..estimation.st import cmd_stset as run
+    run(s, args)
+
+
+@command("st", "st")
+def cmd_st(s: "Session", args: str) -> None:
+    from ..estimation.st import cmd_st as run
+    run(s, args)
+
+
+@command("streset", "streset")
+def cmd_streset(s: "Session", args: str) -> None:
+    from ..estimation.st import cmd_streset as run
+    run(s, args)
+
+
+@command("stdescribe", "stdes")
+def cmd_stdescribe(s: "Session", args: str) -> None:
+    from ..estimation.st import cmd_stdescribe as run
+    run(s, args)
+
+
+@command("stsum", "stsum")
+def cmd_stsum(s: "Session", args: str) -> None:
+    from ..estimation.st import cmd_stsum as run
+    run(s, args)
+
+
+@command("sts", "sts")
+def cmd_sts(s: "Session", args: str) -> None:
+    from ..estimation.km import cmd_sts as run
+    run(s, args)
+
+
+@command("stcox", "stcox")
+def cmd_stcox(s: "Session", args: str) -> None:
+    from ..estimation.stmodels import cmd_stcox as run
+    run(s, args)
+
+
+@command("streg", "streg")
+def cmd_streg(s: "Session", args: str) -> None:
+    from ..estimation.stmodels import cmd_streg as run
+    run(s, args)
+
+
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY
