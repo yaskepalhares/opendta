@@ -691,7 +691,21 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     if not pr.o.get("nolog"):
         out.write("\nFitting full model:\n", "text")
     _log(s, pr, res)
+    # alpha na fronteira (ln alpha muito negativo): a verossimilhança fica plana
+    # em ln alpha e o Stata termina com os coeficientes do Poisson e erro-padrão
+    # missing para /lnalpha e alpha (compat 0602, svy: nbreg). Limite VERIFICAR
+    boundary = float(res.b[-1]) < -20
+    if boundary:
+        res.b[:kx] = resp.b
+        H = np.array(fun(res.b, 2)[2], dtype=float)     # Hessiana no novo ponto
+        H[-1, :] = 0
+        H[:, -1] = 0
+        H[-1, -1] = -1.0
+        res.H = H
     V, n_clust = pr.vce(res.H, scores(res.b) if pr.robust else None)
+    if boundary:
+        V[-1, :] = 0
+        V[:, -1] = 0
     slope = list(range(kx - (1 if pr.constant else 0)))
     kind, chi2, pv = _model_test(pr, res.b, V, slope, res.ll, res0.ll)
     r2p = 1 - res.ll / res0.ll
@@ -703,11 +717,16 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     rows.append(CoefRow("sep"))
     lna, se_lna = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     c = crit("z", pr.smp.level, None)
-    rows.append(CoefRow("aux", "/lnalpha", lna, se_lna, name="_cons"))
-    rows.append(CoefRow("sep"))
     alpha = np.exp(lna)
-    rows.append(CoefRow("aux", "alpha", alpha, alpha * se_lna,
-                        eq=f"{float(np.exp(lna - c * se_lna))!r} {float(np.exp(lna + c * se_lna))!r}"))
+    if boundary:
+        rows.append(CoefRow("aux", "/lnalpha", lna, SYS, name="_cons"))
+        rows.append(CoefRow("sep"))
+        rows.append(CoefRow("aux", "alpha", alpha, SYS))
+    else:
+        rows.append(CoefRow("aux", "/lnalpha", lna, se_lna, name="_cons"))
+        rows.append(CoefRow("sep"))
+        rows.append(CoefRow("aux", "alpha", alpha, alpha * se_lna,
+                            eq=f"{float(np.exp(lna - c * se_lna))!r} {float(np.exp(lna + c * se_lna))!r}"))
     layout = [(nm, cc.values is not None) for nm, cc in zip(names, pr.smp.cols)]
     if pr.constant:
         layout.append(("_cons", True))

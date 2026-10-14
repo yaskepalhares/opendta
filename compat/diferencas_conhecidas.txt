@@ -12,3 +12,4 @@
 0801_testes           swilk com valores empatados (o Stata usa coeficientes com postos médios, regra não documentada; sem empates bate) e o chi2 do kwallis no 7º algarismo (fórmula interna não documentada; chi2 ajustado, gl e p exibidos batem)
 0802_anova_estat      o chi2 do estat hettest está perto de zero (9e-5) e o Stata o calcula com cancelamento numérico: difere a partir do 11º algarismo
 0803_codebook_bootstrap  as réplicas do bootstrap usam a reamostragem do OpenDTA (a ordem dos sorteios do bsample do Stata não é documentada): erros-padrão e intervalos diferem; layout, estimativas observadas, codebook e misstable batem
+0602_svy_ampliado     no svy: nbreg o alpha vai para a fronteira (ln alpha ≈ -37) e o valor exibido de /lnalpha depende do caminho do otimizador (coeficientes e erros-padrão batem, como os do Poisson); dois números diferem no 7º algarismo (/cut2 do svy: ologit e _cons do svy: glm), ruído do critério de convergência

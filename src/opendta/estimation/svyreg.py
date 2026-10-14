@@ -14,6 +14,7 @@ import numpy as np
 from scipy import special, stats as st
 
 from ..core import missing as M
+from ..core.dataset import is_string_type
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options
@@ -57,7 +58,8 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     smp = Sample(s, args, opts_spec={"or": 2, "irr": 3, "nolog": 4, "coef": 4, "noheader": 6},
                  weights=("pweight",))
     out = s.output
-    dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"))
+    dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"),
+                    hadamard=so.get("hadamard"))
     subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
     inside_all = smp.mask & dd.mask & (subpop if subpop is not None else True)
     full = dd.mask
@@ -149,7 +151,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                      sub=(int(inside.sum()), float(w.sum())) if subpop is not None else None, **extra)
     est.display = _display
     est.svy_effects = dict(V=Vf, srs=(Swor, Swr), labels=[(nm, "") for nm in names], vals=bf, title="Coef.",
-                           vcetype=dd.vcetype, over="", level=smp.level)
+                           vcetype=dd.vcetype, over="", level=smp.level, depvar=smp.depname)
     eform = ""
     if cmd == "logistic" and not smp.o.get("coef"):
         eform = "Odds Ratio"
@@ -389,7 +391,8 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
         raise StataError(101, "weights not allowed with the svy prefix")   # VERIFICAR
     if "vce(" in p.options.replace(" ", ""):
         raise StataError(198, "option vce() not allowed")   # VERIFICAR
-    dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"))
+    dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"),
+                    hadamard=so.get("hadamard"))
     subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
     full = dd.mask
     inside_all = full & (subpop if subpop is not None else True)
@@ -453,6 +456,18 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     F, df1, df2 = _adjusted_F(b, V, slopes, df)
     N = int(np.count_nonzero(ds.esample)) if ds.esample is not None else int(inside_all.sum())
     pop = float(dd.w[(ds.esample if ds.esample is not None else inside_all)[full]].sum())
+    if subpop is not None:
+        # com subpop(), Number of obs e Population size contam a amostra inteira
+        # do desenho (casos completos nas variáveis do modelo); compat 0602
+        import re as _re
+        ok = full.copy()
+        for tok in set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]*", _re.sub(r"\b[A-Za-z]+\.", " ", p.varlist))):
+            if ds.has(tok):
+                v = ds.get(tok)
+                if not is_string_type(v.vtype):
+                    ok &= ~(v.data.astype(float) >= M.MISSING_THRESHOLD)
+        N = int(ok.sum())
+        pop = float(dd.w[ok[full]].sum())
     est.vcetype = dd.vcetype
     est.stat = "t"
     est.df_r = df
@@ -462,12 +477,18 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                           if subpop is not None else None))
     est.svytitle = _GENERIC_TITLES.get(cmd, cmd)
     est.display = _display_generic
+    est.extra["no_F"] = cmd == "glm"            # o svy: glm não mostra o teste F (compat 0602)
+    est.extra["dispersion"] = getattr(est, "dispersion", "") if cmd == "nbreg" else ""
+    # no svy os pontos de corte ganham t e P>|t| (compat 0602)
+    for r in est.rows:
+        if r.kind == "aux" and r.label.startswith("/cut") and not r.eq:
+            r.kind = "coe"
     # forma exponenciada pedida nas opções do comando
     from ..lang.syntax import parse_options
     words = {n.lower() for n, _ in parse_options(p.options)} if p.options.strip() else set()
     title_ef = ""
     if "eform" in words or "ef" in words:
-        title_ef = getattr(est, "eform_title_opt", "exp(b)")
+        title_ef = "exp(b)" if cmd == "glm" else getattr(est, "eform_title_opt", "exp(b)")
     elif "or" in words:
         title_ef = "Odds Ratio"
     elif "irr" in words:
@@ -482,7 +503,8 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
         labs = [("/" + eq if (eq.startswith("cut") or eq in aux_eq) and nm == "_cons" else nm, "")
                 for nm, eq in zip(names, eqs)]
         est.svy_effects = dict(V=V, srs=srs, labels=labs, vals=b, title="Coef.",
-                               vcetype=dd.vcetype, over="", level=est.level)
+                               vcetype=dd.vcetype, over="", level=est.level,
+                               depvar=getattr(est, "depvar", ""))
     e = s.e
     e.update({"N_strata": float(dd.n_strata), "N_psu": float(dd.n_psu), "N_pop": pop, "df_r": float(df),
               "F": F, "df_m": float(df1)})
@@ -510,7 +532,7 @@ def _refresh_rows(est) -> None:
                 r.se = float(se[k])
             k += 1
         elif r.kind == "aux" and not r.eq:
-            if k < len(se):
+            if k < len(se) and r.se < SYS:     # erro-padrão missing continua missing
                 r.se = float(se[k])
             k += 1
 
@@ -526,9 +548,14 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
             right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", _num(x["sub"][1]))]
         if x.get("n_rep"):
             right.append(("Replications", f"{x['n_rep']:,}"))
-        right += [("Design df", f"{x['df']:,}"), (f"F({x['df1']:>4},{x['df2']:>7})", g(x["F"], "%10.2f")),
-                  ("Prob > F", g(st.f.sf(x["F"], x["df1"], x["df2"]) if x["F"] < SYS else SYS, "%10.4f"))]
+        right += [("Design df", f"{x['df']:,}")]
+        if not x.get("no_F"):
+            right += [(f"F({x['df1']:>4},{x['df2']:>7})", g(x["F"], "%10.2f")),
+                      ("Prob > F", g(st.f.sf(x["F"], x["df1"], x["df2"]) if x["F"] < SYS else SYS, "%10.4f"))]
         left = [f"Number of strata   = {x['strata']:>9,}", f"Number of PSUs     = {x['psu']:>9,}"]
+        if x.get("dispersion"):
+            # "Dispersion         = mean" na linha do Prob > F (compat 0602)
+            left += [""] * (len(right) - 1 - len(left)) + [f"{'Dispersion':<19}= {x['dispersion']}"]
         for i, (rl, rv) in enumerate(right):
             lft = left[i] if i < len(left) else ""
             out.write(f"{lft:<48}{rl:<18}= ", "text")

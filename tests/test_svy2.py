@@ -44,7 +44,7 @@ def test_jackknife_mean_matches_manual(run):
             ww[h == hh] *= nh / (nh - 1)
             ww[(h == hh) & (u == uu)] = 0
             reps.append(_wmean(y, ww))
-        reps = np.array(reps)
+        reps = np.array(reps).astype(np.float32).astype(float)   # réplicas em float, como no Stata
         V += (nh - 1) / nh * ((reps - reps.mean()) ** 2).sum()
     e = run.session.e
     assert e["b"].data[0, 0] == pytest.approx(theta, rel=1e-12)
@@ -55,7 +55,10 @@ def test_jackknife_mean_matches_manual(run):
 def test_brr_mean_with_hadamard(run):
     run(DATA)
     run("svyset upa2 [pweight=peso], strata(estrato) vce(brr)")
-    out = run("svy: mean imc")
+    out = run("capture noisily svy: mean imc")
+    assert "option hadamard() required when brrweights are not svyset" in out
+    run("matrix h4 = (1, 1, 1, 1 \\ 1, -1, 1, -1 \\ 1, 1, -1, -1 \\ 1, -1, -1, 1)")
+    out = run("svy, hadamard(h4): mean imc")
     assert "BRR" in out
     d = _data(run)
     y, w, h, u = d["imc"], d["peso"], d["estrato"], d["upa2"]
@@ -70,7 +73,7 @@ def test_brr_mean_with_hadamard(run):
             ww[first] *= a
             ww[second] *= b
         reps.append(_wmean(y, ww))
-    reps = np.array(reps)
+    reps = np.array(reps).astype(np.float32).astype(float)   # réplicas em float, como no Stata
     V = ((reps - reps.mean()) ** 2).sum() / 4
     assert run.session.e["V"].data[0, 0] == pytest.approx(V, rel=1e-10)
 
@@ -82,7 +85,7 @@ def test_bootstrap_and_sdr_replicate_weights(run):
     run("svy: mean imc")
     ds = run.session.data
     y, w = ds.get("imc").data.astype(float), ds.get("peso").data.astype(float)
-    reps = np.array([_wmean(y, ds.get(f"bw{r}").data.astype(float)) for r in range(1, 9)])
+    reps = np.array([_wmean(y, ds.get(f"bw{r}").data.astype(float)) for r in range(1, 9)]).astype(np.float32).astype(float)
     V = 2 / 8 * ((reps - reps.mean()) ** 2).sum()
     assert run.session.e["V"].data[0, 0] == pytest.approx(V, rel=1e-10)
     run("svyset [pweight=peso], sdrweight(bw*) vce(sdr) mse")

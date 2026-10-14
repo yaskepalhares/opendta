@@ -32,7 +32,8 @@ SYS = M.SYSMISS
 
 _OPTS = {"reps": 1, "seed": 4, "strata": 3, "cluster": 2, "idcluster": 3, "size": 4, "nodots": 5,
          "dots": 4, "saving": 3, "level": 1, "notable": 5, "noheader": 6, "nolegend": 6, "force": 5,
-         "reject": 3, "bca": 3, "mse": 3, "noisily": 1, "trace": 5, "title": 5, "nowarn": 6}
+         "reject": 3, "bca": 3, "mse": 3, "noisily": 1, "trace": 5, "title": 5, "nowarn": 6,
+         "double": 6}
 
 
 @dataclass
@@ -259,8 +260,11 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
                 nm, vals = _evaluate(s, items)
                 if len(vals) != len(names):
                     ok = False
-                else:
+                elif o.get("double"):
                     R[r] = vals
+                else:
+                    # réplicas guardadas em float, como no Stata sem a opção double
+                    R[r] = np.asarray(vals, dtype=np.float32)
             except StataError:
                 ok = False
             if not ok:

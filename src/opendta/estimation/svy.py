@@ -100,8 +100,9 @@ def _show_design(s: "Session", d: Design) -> None:
     else:
         rows.append(("pweight", "<none>"))
     rows += [("VCE", d.vce)]
-    if d.mse:
-        rows.append(("MSE", "on"))   # VERIFICAR
+    if d.vce != "linearized":
+        # métodos de replicação mostram o MSE: off/on (compat 0602)
+        rows.append(("MSE", "on" if d.mse else "off"))
     for lab, val in (("brrweight", d.brrweight), ("bsrweight", d.bsrweight), ("jkrweight", d.jkrweight),
                      ("sdrweight", d.sdrweight)):
         if val:
@@ -290,7 +291,8 @@ def _hadamard(r: int) -> np.ndarray:
 class DesignData:
     """Pesos, estratos e UPAs das observações em `mask` (amostra do desenho)."""
 
-    def __init__(self, s: "Session", d: Design, mask: np.ndarray, vce: str | None = None, mse: bool | None = None):
+    def __init__(self, s: "Session", d: Design, mask: np.ndarray, vce: str | None = None, mse: bool | None = None,
+                 hadamard=False):
         ds = s.data
         self.d = d
         self.s = s
@@ -303,6 +305,11 @@ class DesignData:
         self.vce = (vce or d.vce or "linearized")
         self.mse = d.mse if mse is None else mse
         self.rep_vars = d.repweights if self.vce == d.vce else []
+        self.hadamard = hadamard or None
+        if hadamard is not False and self.vce == "brr" and not self.rep_vars and not hadamard:
+            # BRR calculado pelo OpenDTA precisa da matriz de Hadamard, como no
+            # Stata (compat 0602): svy brr, hadamard(matriz) ...
+            raise StataError(198, "option hadamard() required when brrweights are not svyset")
         R = None
         if self.rep_vars:
             R = np.column_stack([ds.get(v).data.astype(float) for v in self.rep_vars])
@@ -405,6 +412,11 @@ class DesignData:
 
     @property
     def vcetype(self) -> str:
+        if self.mse and self.vce != "linearized":
+            # com mse o Stata abrevia e marca com *: "Jknife *" (compat 0602);
+            # os demais nomes com * são VERIFICAR
+            return {"jackknife": "Jknife *", "brr": "BRR *", "bootstrap": "Bootstrap *",
+                    "sdr": "SDR *"}[self.vce]
         return {"linearized": "Linearized", "jackknife": "Jackknife", "brr": "BRR", "bootstrap": "Bootstrap",
                 "sdr": "SDR"}[self.vce]
 
@@ -434,10 +446,11 @@ class DesignData:
             counts = np.bincount(psu_h, minlength=self.n_strata)
             if np.any(counts != 2):
                 raise StataError(459, "BRR requires 2 PSUs per stratum")   # VERIFICAR
-            R = 4
-            while R < self.n_strata:
-                R *= 2
-            H = _hadamard(R)
+            from ..commands.matrix import get_matrix
+            H = np.asarray(get_matrix(self.s, str(self.hadamard).strip()).data, dtype=float)
+            if H.shape[1] < self.n_strata:
+                raise StataError(198, "Hadamard matrix has too few columns")   # VERIFICAR
+            R = H.shape[0]
             fay = self.d.fay
             for r in range(R):
                 ww = w.copy()
@@ -454,7 +467,15 @@ class DesignData:
     def rep_variance(self, estimator, theta0: np.ndarray) -> tuple[np.ndarray, int]:
         """V por replicação; `estimator(w)` devolve o vetor de estimativas."""
         thetas, strata, mults = [], [], []
-        for ww, h, m in self.replicates():
+        reps = list(self.replicates())
+        out = self.s.output
+        name = {"jackknife": "Jackknife", "brr": "BRR", "bootstrap": "Bootstrap",
+                "sdr": "SDR"}.get(self.vce, self.vce)
+        # linha de pontos das réplicas, como no prefixo jackknife; VERIFICAR para
+        # brr, bootstrap e sdr (no 0602 só o jackknife chegou a rodar no Stata)
+        out.write(f"\n{name} replications ({len(reps)})\n"
+                  "----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 \n", "text")
+        for k, (ww, h, m) in enumerate(reps):
             try:
                 th = np.asarray(estimator(ww), dtype=float)
             except StataError:
@@ -462,7 +483,15 @@ class DesignData:
             thetas.append(th)
             strata.append(h)
             mults.append(m)
-        T = np.array(thetas)
+            out.write("x" if np.isnan(th).any() else ".", "text")
+            if (k + 1) % 50 == 0:
+                out.write(f"{k + 1:>6}\n", "text")
+        if len(reps) % 50:
+            out.write("\n", "text")
+        # as estimativas de cada réplica são guardadas em float, como no Stata
+        # (svy jackknife/brr/bootstrap/sdr só usam double com a opção double;
+        # [SVY] svy jackknife e [R] jackknife) — compat 0602
+        T = np.array(thetas).astype(np.float32).astype(float)
         R = len(T)
         k = len(theta0)
         ok = ~np.isnan(T).any(axis=1)
@@ -645,7 +674,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     if svy:
         so = parse_svy_opts(svyopts)
         dd = DesignData(s, d, np.ones(ds.nobs, bool) if not p.if_ and not p.in_ else touse(s, p),
-                        vce=so.get("vce"), mse=so.get("mse"))
+                        vce=so.get("vce"), mse=so.get("mse"), hadamard=so.get("hadamard"))
         if so.get("subpop"):
             subpop = _subpop_mask(s, str(so["subpop"]))
         est_mask = mask & dd.mask
@@ -674,6 +703,17 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         Y = [np.where(y < SYS, y, 0.0) for y in Y]
     X = [np.where(ds.get(n).data[full] < SYS, ds.get(n).data[full], 0.0) for n in den] if stat == "ratio" else None
     groups = _over_groups(s, over, full) if over else [("", np.ones(len(w), bool), "")]
+    legend: list[str] = []
+    if over:
+        ovars = over.split()
+        seen = []
+        for gname, _sel, key in groups:
+            if gname in seen:
+                continue
+            seen.append(gname)
+            desc = ", ".join(f"{v} = {lab}" for v, lab in zip(ovars, gname.split(" "))) \
+                if len(ovars) > 1 else f"{ovars[0]} = {gname}"
+            legend.append(f"{gname[:13]:>13}: {desc}")
     def compute(wv):
         if stat == "proportion":
             vals_, Z_all, labels_ = [], [], []
@@ -751,15 +791,8 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         if over:
             # legenda dos grupos: "         masc: sexo = masc" (compat 0601)
             out.write("\n", "text")
-            ovars = over.split()
-            seen = []
-            for gname, _sel, key in groups:
-                if gname in seen:
-                    continue
-                seen.append(gname)
-                desc = ", ".join(f"{v} = {lab}" for v, lab in zip(ovars, gname.split(" "))) \
-                    if len(ovars) > 1 else f"{ovars[0]} = {gname}"
-                out.write(f"{gname[:13]:>13}: {desc}\n", "text")
+            for ln in legend:
+                out.write(ln + "\n", "text")
         if stat == "ratio":
             out.write("\n", "text")
             for rn, (num_, den_) in zip(rnames, zip(num, den)):
@@ -778,7 +811,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     est.display = lambda ss, ee, **kw: _summary_table(ss, stat_title, labels, vals, se, df, level, vcetype, over)
     if svy:
         est.svy_effects = dict(V=V, srs=_srs, labels=labels, vals=vals, title=stat_title, vcetype=vcetype,
-                               over=over, level=level)
+                               over=over, level=level, legend=legend)
     if svy:
         # e() do svy no Stata 14, na ordem do ereturn list (compat 0601)
         k = len(vals)
@@ -838,7 +871,7 @@ def _num(x: float) -> str:
 def parse_svy_opts(text: str) -> dict:
     """Opções do prefixo svy: subpop(), vce(), mse, dof()."""
     so = match_options(text, {"subpop": 3, "vce": 3, "mse": 3, "dof": 3, "nodots": 5, "dots": 4,
-                              "level": 1}) if text.strip() else {}
+                              "level": 1, "hadamard": 3, "fay": 3}) if text.strip() else {}
     out = {}
     if so.get("subpop"):
         out["subpop"] = str(so["subpop"])
@@ -848,6 +881,7 @@ def parse_svy_opts(text: str) -> dict:
                       "boot": "bootstrap"}.get(v, v)
     if so.get("mse"):
         out["mse"] = True
+    out["hadamard"] = str(so["hadamard"]) if so.get("hadamard") else None
     return out
 
 
@@ -971,9 +1005,22 @@ def cmd_ratio(s, args):
 # estat effects
 # ---------------------------------------------------------------------------
 
+def _g6(x: float) -> str:
+    """DEFF e DEFT com seis algarismos significativos, sem o zero à esquerda
+    (.64512, 1.05667, .803194; compat 0602)."""
+    if x is None or x >= SYS or not np.isfinite(x):
+        return "."
+    t = f"{x:.6g}"
+    if t.startswith("0."):
+        t = t[1:]
+    elif t.startswith("-0."):
+        t = "-" + t[2:]
+    return t
+
+
 def estat_effects(s: "Session", est, rest: str) -> None:
     """DEFF = V/V_srswor e DEFT = sqrt(V/V_srswr) ([SVY] estat). Layout
-    VERIFICAR (compat 0602)."""
+    conferido no compat 0602."""
     info = getattr(est, "svy_effects", None)
     if info is None:
         raise StataError(321, "estat effects not allowed after this command")   # VERIFICAR
@@ -983,12 +1030,15 @@ def estat_effects(s: "Session", est, rest: str) -> None:
     Vwor, Vwr = info["srs"]
     out = s.output
     width = 58
+    if info.get("legend"):
+        # mesma legenda dos grupos do comando (compat 0602)
+        out.write("\n" + "\n".join(info["legend"]) + "\n", "text")
     out.write("\n" + "-" * width + "\n", "text")
     vt = info["vcetype"]
     start = 28 + (9 - len(vt)) // 2
     out.write(f"{'':>12} |" + " " * (start - 14) + vt + "\n", "text")
-    head = "Over" if info.get("over") else ""
-    out.write(f"{head:>12} | {info['title']:>10}   Std. Err.        DEFF      DEFT\n", "text")
+    head = "Over" if info.get("over") else info.get("depvar", "")
+    out.write(f"{head[:12]:>12} | {info['title']:>10}   Std. Err.       DEFF      DEFT\n", "text")
     out.write("-" * 13 + "+" + "-" * 44 + "\n", "text")
     last = None
     deffs, defts = [], []
@@ -1000,13 +1050,15 @@ def estat_effects(s: "Session", est, rest: str) -> None:
         defts.append(deft)
         if grp:
             if var != last:
+                if last is not None:
+                    out.write("-" * 13 + "+" + "-" * 44 + "\n", "text")
                 out.write(f"{var[:12]:<12} |\n", "text")
                 last = var
             lab = grp
         else:
             lab = var
         out.write(f"{lab[:12]:>12} |", "text")
-        out.write(f"  {g9(b):>9}  {g9(float(np.sqrt(v))):>9}{g9(deff):>12}{g9(deft):>10}\n", "result")
+        out.write(f"  {g9(b):>9}  {g9(float(np.sqrt(v))):>9}{_g6(deff):>12}{_g6(deft):>10}\n", "result")
     out.write("-" * width + "\n", "text")
     from ..commands.matrix import Matrix
     cn = [f"{a}:{b}" if b else a for a, b in info["labels"]]

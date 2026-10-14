@@ -176,6 +176,10 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         if r.kind == "aux":
             # parâmetros auxiliares (/cut1, /sigma, alpha): sem z e P>|z|; o
             # intervalo pode vir pronto (transformado) em r.eq = "lo hi"
+            if not (np.isfinite(se) and abs(se) < SYS):
+                # erro-padrão missing (alpha na fronteira, compat 0602)
+                out.write(f"  {g9(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
+                continue
             if r.eq:
                 lo, hi = (float(v) for v in r.eq.split())
             else:
