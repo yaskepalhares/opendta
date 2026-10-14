@@ -136,6 +136,12 @@ def _known_differences() -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # o console do Windows (cp1252) não imprime "≈", "·" etc. das descrições
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     p = argparse.ArgumentParser()
     p.add_argument("prefix", nargs="?", default="")
     p.add_argument("--show-diff", action="store_true")
