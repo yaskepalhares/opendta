@@ -180,3 +180,14 @@ def test_gui_dialog_and_graph_editor():
     gw._revert_edits()
     assert "title" not in g.opts
     w.close()
+
+
+def test_every_command_has_help():
+    from opendta.commands.helpcmd import _read, find_help
+    from opendta.commands.registry import REGISTRY
+    from opendta.core.smcl import render_text
+    s = Session()
+    names = sorted({c.name for c in REGISTRY.values()})
+    assert [n for n in names if find_help(s, n) is None] == []
+    for n in names:
+        assert render_text(_read(find_help(s, n)), 79).strip()
