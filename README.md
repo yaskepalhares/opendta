@@ -43,13 +43,15 @@ Já funciona:
 
 - estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `areg`, `ivregress`, `anova` e `oneway`, com variáveis fatoriais, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
 - pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
-- amostras complexas: `svyset`, `svydescribe` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic` e `poisson` (linearização de Taylor);
+- amostras complexas: `svyset` (vários estágios, pesos replicados), `svydescribe`, `estat effects` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` e `tobit` (linearização de Taylor, BRR, jackknife, bootstrap e SDR);
 - testes: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` e os comandos imediatos `cii`, `ttesti`, `prtesti` e `tabi`;
-- descrição dos dados: `codebook` e `misstable`;
-- gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…) e janela Graph;
-- Do-file Editor com abas, realce de sintaxe e execução da seleção (Ctrl+D) ou do arquivo.
+- descrição dos dados: `codebook` e `misstable`; resultados para o Excel com `putexcel`;
+- gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` e janela Graph com um Graph Editor simples;
+- Do-file Editor com abas, realce de sintaxe e execução da seleção (Ctrl+D) ou do arquivo;
+- caixas de diálogo nos menus Statistics e Graphics, que mostram o comando antes de rodar;
+- interface em inglês ou português (**Edit → Preferences** ou `set language pt`); as saídas e as mensagens de erro no formato do Stata continuam em inglês, a menos que se peça a tradução (`set messages translated`).
 
-Algumas saídas novas ainda aguardam a conferência com os logs do Stata (casos `0509` em diante em `compat/do`).
+As saídas novas dos casos `0602` (svy ampliado) e `0804` (comandos da fase 8e) ainda aguardam a conferência com os logs do Stata; os demais casos de `compat/do` já foram conferidos.
 
 ## Instalação (macOS)
 
@@ -64,6 +66,16 @@ pip install -e ".[dev]"
 ```
 
 No Linux os comandos são os mesmos. No Windows, o ambiente é ativado com `.venv\Scripts\activate`.
+
+### Aplicativo para o macOS
+
+Para ter o OpenDTA na pasta Aplicativos, com ícone no Dock e "Abrir com" para arquivos `.do` e `.dta`, gere o pacote no Terminal (dentro da pasta `opendta`):
+
+```bash
+tools/build_macos.sh
+```
+
+O script cria `dist/OpenDTA.app` e `dist/OpenDTA-<versão>.dmg`. Abra o `.dmg` e arraste o OpenDTA para Aplicativos. A assinatura é local (ad hoc): na primeira abertura, o macOS pode pedir confirmação em **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**. Em outros sistemas, `pyinstaller packaging/opendta.spec` gera a pasta `dist/OpenDTA` com o executável.
 
 ## Uso
 
@@ -89,14 +101,22 @@ src/opendta/
   core/       missing values, formatos de exibição, erros r(#), saída
   lang/       lexer de do-files, macros, expressões, funções, interpretador
   commands/   comandos (um módulo por grupo)
-  gui/        interface gráfica (PySide6)
+  io/         leitura e gravação de .dta, texto e planilhas
+  estimation/ modelos, pós-estimação, svy e bootstrap
+  graphics/   gráficos (matplotlib, esquemas próprios)
+  mata/       a linguagem Mata
+  gui/        interface gráfica (PySide6), diálogos e Graph Editor
+  help/       páginas de ajuda (.sthlp)
+  i18n.py     idioma da interface (inglês ou português)
   session.py  estado de uma sessão (macros, scalars, r(), e(), c())
   cli.py      linha de comando: interface, console e batch
 compat/
   do/         do-files de verificação
   expected/   logs de referência gerados no Stata 14
+packaging/    especificação do PyInstaller (aplicativo empacotado)
 tools/
-  compare.py  roda compat/do no OpenDTA e compara com compat/expected
+  compare.py      roda compat/do no OpenDTA e compara com compat/expected
+  build_macos.sh  gera OpenDTA.app e o .dmg
 ```
 
 ## Aviso

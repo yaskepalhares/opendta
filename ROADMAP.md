@@ -96,24 +96,26 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
 - [x] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `areg`
 - [x] Erros-padrão robustos, por cluster e bootstrap (`vce(bootstrap)` e prefixo `bootstrap`); motor `ml` (máxima verossimilhança)
-- [ ] `xtlogit` e `moptimize()` do Mata
+- [x] `xtlogit` e `xtpoisson` (fe e re), `qreg`, `lrtest`, `hausman`, `xtsum`, `xtdescribe`
+- [ ] `moptimize()` do Mata
 - Conferência com os logs do Stata: casos `0501`–`0513` (0509, 0510, 0512 e 0513 aguardam a próxima rodada)
 
-## Fase 6: amostras complexas (em andamento)
+## Fase 6: amostras complexas ✅
 
 - [x] `svyset` (estratos, UPAs, pesos, FPC), `svydescribe`
 - [x] Prefixo `svy:` com `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` e `over()`
 - [x] Linearização de Taylor; correção de Rao–Scott no `svy: tabulate` de duas vias
-- [ ] Vários estágios, BRR, jackknife, bootstrap e SDR; `estat effects`
-- Conferência com os logs do Stata: caso `0601` (aguarda a próxima rodada)
+- [x] Vários estágios, BRR, jackknife, bootstrap e SDR; `estat effects`; `svy:` também com `ologit`, `oprobit`, `mlogit`, `nbreg`, `glm` e `tobit`
+- Conferência com os logs do Stata: caso `0601` conferido; `0602` aguarda a próxima rodada
 
-## Fase 7: gráficos (em andamento)
+## Fase 7: gráficos ✅
 
 - [x] Motor de gráficos com esquemas próprios (`s2color`, `s1mono`… são aceitos e mapeados para eles) e janela Graph
 - [x] `twoway` (`scatter`, `line`, `connected`, `lfit`, `qfit`, `lfitci`, `qfitci`, `area`, `bar`, `spike`, `dropline`, `rcap`, `rarea`, `rbar`, `rline`, `function`, `histogram`, `kdensity`, `scatteri`), `tsline`, `graph bar`/`hbar`, `graph box`/`hbox`, `graph pie`, `histogram`, `kdensity`, `graph matrix`
 - [x] Opções de título, eixos, legendas e marcadores; `by()`
 - [x] `graph combine`, `graph export` (PNG, PDF, SVG, EPS, PS, TIFF, JPEG), `graph save`/`use` (formato próprio), `graph dir`/`drop`/`rename`/`copy`/`display`/`describe`
-- [ ] `lowess`, `graph dot` próprio, `marginsplot`, gráficos de diagnóstico (`rvfplot`, `qnorm`…); Graph Editor (subconjunto)
+- [x] `lowess`, `graph dot`, `marginsplot`, gráficos de diagnóstico (`rvfplot`, `rvpplot`, `qnorm`, `pnorm`)
+- [x] Graph Editor simples (títulos, legenda, esquema, tamanho, grade, escalas logarítmicas), com desfazer
 - Conferência com os logs do Stata: caso `0701` (só as mensagens de texto; o desenho é próprio)
 
 ## Fase 8: restante do Stata 14 e ferramentas da interface (em andamento)
@@ -121,16 +123,18 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Do-file Editor com abas, realce de sintaxe, localizar/substituir e execução de seleção (`doedit`); menus Data, Graphics e Statistics; impressão
 - [x] Testes não paramétricos e de normalidade (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) e comandos imediatos (`cii`, `ttesti`, `prtesti`, `tabi`)
 - [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
-- [x] `codebook`, `misstable`
+- [x] `codebook`, `misstable`, `putexcel`
 - [ ] Classes do Mata (`class`, herança, métodos virtuais)
 - [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
-- [ ] Diálogos dos menus
-- Conferência com os logs do Stata: casos `0801`–`0803` (aguardam a próxima rodada)
+- [x] Diálogos dos menus (33 comandos de Statistics e Graphics), com prévia do comando e OK, Submit e Copy
+- [x] Páginas de ajuda para todos os comandos
+- [x] Pacote para macOS (`tools/build_macos.sh`: `OpenDTA.app` e `.dmg`; "Abrir com" para `.do` e `.dta`)
+- Conferência com os logs do Stata: casos `0801`–`0803` conferidos; `0804` aguarda a próxima rodada
 
-## Fase 9 (última): idioma da interface
+## Fase 9 (última): idioma da interface ✅
 
-- [ ] Seletor de idioma em Preferences: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
-- [ ] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário
+- [x] Seletor de idioma em Preferences: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
+- [x] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário (`set language`, `set messages`)
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 
