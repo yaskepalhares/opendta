@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Yaske Palhares
+Copyright (c) 2026 OpenDTA contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,5 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Stata is a registered trademark of StataCorp LLC. OpenDTA is not affiliated
-with, endorsed by or sponsored by StataCorp LLC.
+Trademark Notice
+
+Stata is a registered trademark of StataCorp LLC. OpenDTA is an independent
+project and is not affiliated with, endorsed by, or sponsored by StataCorp LLC.
