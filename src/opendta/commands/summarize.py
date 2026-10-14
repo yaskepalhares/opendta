@@ -269,7 +269,7 @@ def _clopper(k: float, n: float, level: float) -> tuple[float, float]:
 
 def _ttest_table(s: "Session", rows: list[tuple[str, float, float, float, float, float, float]],
                  level: float, *, title: str, foot_rows: list | None = None,
-                 head: str = "Variable") -> None:
+                 head: str = "Variable", close: bool = True) -> None:
     out = s.output
     out.write(f"\n{title}\n", "text")
     out.write("-" * 78 + "\n", "text")
@@ -287,7 +287,8 @@ def _ttest_table(s: "Session", rows: list[tuple[str, float, float, float, float,
         out.write("-" * 9 + "+" + "-" * 68 + "\n", "text")
         for r in foot_rows:
             line(*r)
-    out.write("-" * 78 + "\n", "text")
+    if close:
+        out.write("-" * 78 + "\n", "text")
 
 
 def _pvals(t: float, df: float | None) -> tuple[float, float, float]:
@@ -356,18 +357,22 @@ def cmd_ttest(s: "Session", args: str) -> None:
         return
     mu = float(s.eval(rhs))
     x = v.data[mask & S.valid(v.data)]
-    n = len(x)
     m = S.moments(x)
-    se = m.sd / math.sqrt(n) if n > 1 else M.SYSMISS
-    lo, hi = S.t_ci(m.mean, se, n - 1, level)
-    _ttest_table(s, [(v.name, n, m.mean, se, m.sd, lo, hi)], level, title="One-sample t test")
-    t = (m.mean - mu) / se if se and se < M.SYSMISS else M.SYSMISS
+    _ttest_one(s, v.name, len(x), m.mean, m.sd, mu, level)
+
+
+def _ttest_one(s: "Session", name: str, n: int, mean: float, sd: float, mu: float, level: float) -> None:
+    """Teste t de uma amostra a partir das estatísticas (ttest e ttesti)."""
+    se = sd / math.sqrt(n) if n > 1 else M.SYSMISS
+    lo, hi = S.t_ci(mean, se, n - 1, level)
+    _ttest_table(s, [(name, n, mean, se, sd, lo, hi)], level, title="One-sample t test")
+    t = (mean - mu) / se if se and se < M.SYSMISS else M.SYSMISS
     out = s.output
-    out.write(f"    mean = mean({v.name})".ljust(66) + f"t = {t:>8.4f}\n", "text")
+    out.write(f"    mean = mean({name})".ljust(66) + f"t = {t:>8.4f}\n", "text")
     out.write(f"Ho: mean = {_num(mu)}".ljust(49) + f"degrees of freedom = {n - 1:>8}\n", "text")
     _ha_lines(s, "mean", _num(mu), "t", t, n - 1)
     lo_p, two, up = _pvals(t, n - 1)
-    s.r = {"N_1": float(n), "mu_1": m.mean, "sd_1": m.sd, "se": se, "t": t, "df_t": float(n - 1),
+    s.r = {"N_1": float(n), "mu_1": mean, "sd_1": sd, "se": se, "t": t, "df_t": float(n - 1),
            "p_l": lo_p, "p": two, "p_u": up, "level": level}
 
 
@@ -457,7 +462,8 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
     foot = [("combined", len(allx), ma.mean, sea, ma.sd, *S.t_ci(ma.mean, sea, len(allx) - 1, level))]
     title = "Two-sample t test with unequal variances" if (unequal or welch) else \
         "Two-sample t test with equal variances"
-    _ttest_table(s, rows, level, title=title, foot_rows=foot, head="Group")
+    # a linha "diff" vem logo depois de "combined", sem a linha cheia entre elas
+    _ttest_table(s, rows, level, title=title, foot_rows=foot, head="Group", close=False)
     lo, hi = S.t_ci(diff, sed, df, level)
     out = s.output
     out.write("-" * 9 + "+" + "-" * 68 + "\n", "text")
@@ -499,21 +505,26 @@ def cmd_prtest(s: "Session", args: str) -> None:
     p0 = float(s.eval(p.exp))
     n = len(x)
     ph = float(x.mean()) if n else M.SYSMISS
+    _prtest_one(s, v.name, n, ph, p0, level)
+
+
+def _prtest_one(s: "Session", name: str, n: int, ph: float, p0: float, level: float) -> None:
+    """Teste de uma proporção a partir das estatísticas (prtest e prtesti)."""
     se = math.sqrt(ph * (1 - ph) / n)
     z = (ph - p0) / math.sqrt(p0 * (1 - p0) / n)
     zc = S.z_crit(level)
     out = s.output
     title = "One-sample test of proportion"
-    out.write("\n" + title + f"{v.name}: Number of obs = {n:>8,}".rjust(78 - len(title)) + "\n", "text")
+    out.write("\n" + title + f"{name}: Number of obs = {n:>8,}".rjust(78 - len(title)) + "\n", "text")
     out.write("-" * 78 + "\n", "text")
     out.write(f"    Variable |       Mean   Std. Err.                     [{level:g}% Conf. Interval]\n",
               "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
-    out.write(f"{name12(v.name):>12} |", "text")
+    out.write(f"{name12(name):>12} |", "text")
     out.write("  " + g9(ph) + "  " + g9(se) + " " * 21 + g9(ph - zc * se) + "   " + g9(ph + zc * se) + "\n",
               "result")
     out.write("-" * 78 + "\n", "text")
-    out.write(f"    p = proportion({v.name})".ljust(66) + f"z = {z:>8.4f}\n", "text")
+    out.write(f"    p = proportion({name})".ljust(66) + f"z = {z:>8.4f}\n", "text")
     # o valor da hipótese aparece com zero à esquerda ("Ho: p = 0.5"; Stata 14)
     out.write(f"Ho: p = {p0:g}\n", "text")
     _ha_lines(s, "p", f"{p0:g}", "z", z, None)

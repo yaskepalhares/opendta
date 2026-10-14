@@ -12,6 +12,8 @@ e a coluna vazias depois dos dados criam observações e variáveis novas.
 
 from __future__ import annotations
 
+from ..i18n import tr
+
 from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
@@ -256,8 +258,8 @@ class DataBrowser(QMainWindow):
         tb = QToolBar("Mode")
         tb.setMovable(False)
         group = QActionGroup(self)
-        self.act_edit = QAction("Edit", self, checkable=True)
-        self.act_browse = QAction("Browse", self, checkable=True)
+        self.act_edit = QAction(tr("Edit"), self, checkable=True)
+        self.act_browse = QAction(tr("Browse"), self, checkable=True)
         for act in (self.act_edit, self.act_browse):
             group.addAction(act)
             tb.addAction(act)
@@ -284,11 +286,11 @@ class DataBrowser(QMainWindow):
         self.table.setEditTriggers(triggers)
         self.act_edit.setChecked(self.model.editable)
         self.act_browse.setChecked(not self.model.editable)
-        self.setWindowTitle("Data Editor (Edit)" if self.model.editable else "Data Editor (Browse)")
+        self.setWindowTitle(tr("Data Editor (Edit)") if self.model.editable else tr("Data Editor (Browse)"))
         self.refresh()
 
     def _error(self, message: str) -> None:
-        QMessageBox.warning(self, "Data Editor", message)
+        QMessageBox.warning(self, tr("Data Editor"), message)
 
     def set_dark(self, dark: bool) -> None:
         self.model.dark = dark

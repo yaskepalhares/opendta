@@ -262,7 +262,8 @@ def _by_header(s: "Session", first_obs: int) -> None:
             if float(v) == int(float(v)) and int(float(v)) in lab:
                 shown = lab[int(float(v))]
         parts.append(f"{k} = {shown}")
-    width = 79
+    # a linha ocupa c(linesize) (255 tracos no compat; VERIFICAR com o padrao 80)
+    width = int(s.settings.get("linesize", 80))
     s.output.write("\n" + "-" * width + "\n", "text")
     s.output.write("-> " + ", ".join(parts) + "\n", "text")
 

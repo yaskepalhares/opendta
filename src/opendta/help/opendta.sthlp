@@ -41,10 +41,77 @@ a command name, or click a topic below.
 {p2col :{help set_seed:set seed}}random numbers{p_end}
 {p2colreset}{...}
 
+{title:More data management}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help datamgmt:drop}}{cmd:drop}, {cmd:keep}, {cmd:sort}, {cmd:gsort}, {cmd:rename}, {cmd:order}, {cmd:count}{p_end}
+{p2col :{help label}}labels, {cmd:notes} and {cmd:char}{p_end}
+{p2col :{help format}}display formats, {cmd:recast}, {cmd:compress}{p_end}
+{p2col :{help codebook}}{cmd:codebook} and {cmd:misstable}{p_end}
+{p2col :{help putexcel}}write results to Excel{p_end}
+{p2colreset}{...}
+
+{title:Estimation}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help regress}}linear regression ({cmd:areg}, {cmd:ivregress}){p_end}
+{p2col :{help anova}}{cmd:anova} and {help oneway}{p_end}
+{p2col :{help logit}}binary outcomes ({cmd:logistic}, {cmd:probit}){p_end}
+{p2col :{help ologit}}ordered and multinomial outcomes ({cmd:oprobit}, {cmd:mlogit}){p_end}
+{p2col :{help poisson}}count outcomes ({cmd:nbreg}){p_end}
+{p2col :{help glm}}generalized linear models{p_end}
+{p2col :{help tobit}}censored outcomes{p_end}
+{p2col :{help qreg}}quantile regression{p_end}
+{p2col :{help xtreg}}panel data ({cmd:xtset}, {help xtsum}, {help xtlogit}, {help xtpoisson}){p_end}
+{p2col :{help mean}}{cmd:mean}, {cmd:proportion}, {cmd:ratio}, {cmd:total}{p_end}
+{p2col :{help nptests:ranksum}}nonparametric and normality tests{p_end}
+{p2col :{help immediate:cii}}immediate commands ({cmd:cii}, {cmd:tabi}, {cmd:ttesti}){p_end}
+{p2col :{help bootstrap}}bootstrap standard errors{p_end}
+{p2colreset}{...}
+
+{title:After estimation}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help predict}}predictions and residuals{p_end}
+{p2col :{help margins}}margins and marginal effects; {help marginsplot}{p_end}
+{p2col :{help test}}{cmd:test}, {cmd:testparm}, {cmd:lincom}, {cmd:nlcom}{p_end}
+{p2col :{help estat}}{cmd:estat ic}, {cmd:vce}, {cmd:hettest}, {cmd:gof}, {cmd:classification}...{p_end}
+{p2col :{help estimates}}store and compare results; {help lrtest}, {help hausman}{p_end}
+{p2colreset}{...}
+
+{title:Survey data}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help svy}}{cmd:svyset}, {cmd:svydescribe} and the {cmd:svy:} prefix{p_end}
+{p2colreset}{...}
+
+{title:Graphics}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help graph}}managing graphs (save, export, combine, schemes){p_end}
+{p2col :{help twoway}}scatter, line, fits and other twoway plots{p_end}
+{p2col :{help graph_bar:graph bar}}bar, box, dot, pie and matrix graphs{p_end}
+{p2col :{help histogram}}histograms and {cmd:kdensity}{p_end}
+{p2col :{help rvfplot}}residual plots; {help qnorm}, {help pnorm}, {help lowess}{p_end}
+{p2colreset}{...}
+
+{title:Interface and files}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help interface:browse}}Data Editor, Viewer, dialogs and Graph Editor{p_end}
+{p2col :{help doedit}}the Do-file Editor{p_end}
+{p2col :{help do}}run do-files; {cmd:capture}, {cmd:confirm}, {cmd:timer}{p_end}
+{p2col :{help files:cd}}working directory and files{p_end}
+{p2col :{help display}}display text and results{p_end}
+{p2col :{help set}}settings{p_end}
+{p2colreset}{...}
+
 {title:Programming}
 
 {p2colset 5 24 26 2}{...}
 {p2col :{help program}}define programs; {cmd:return}, {cmd:ereturn}{p_end}
+{p2col :{help macro:local}}macros, scalars and {cmd:tokenize}{p_end}
+{p2col :{help filecmd:file}}read and write files{p_end}
 {p2col :{help syntax}}parse a program's arguments{p_end}
 {p2col :{help matrix}}matrices and matrix expressions{p_end}
 {p2col :{help log}}record the session in a file{p_end}
@@ -57,4 +124,5 @@ a command name, or click a topic below.
 {p2col :{help hints}}error explanations ({cmd:set hints}){p_end}
 {p2col :{help superscript}}superscript exponents, 1.0×10¹⁰ ({cmd:set superscript}){p_end}
 {p2col :{help numerics}}Stata arithmetic or more precise arithmetic ({cmd:set numerics}){p_end}
+{p2col :{help language}}interface in English or Portuguese ({cmd:set language}){p_end}
 {p2colreset}{...}

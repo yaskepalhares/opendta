@@ -9,6 +9,7 @@ import numpy as np
 from scipy import special, stats as st
 
 from ..core import missing as M
+from ..core.stats import chi2_tail as _chi2_tail
 from ..core.errors import StataError
 from ..core.formats import format_value
 from . import fvars
@@ -231,7 +232,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     else:
         chi2type = "LR"
         chi2 = 2 * (res.ll - ll0) if ll0 < SYS else SYS
-    pval = float(st.chi2.sf(chi2, df_m)) if chi2 < SYS and df_m > 0 else SYS
+    pval = float(_chi2_tail(chi2, df_m)) if chi2 < SYS and df_m > 0 else SYS
     r2_p = 1 - res.ll / ll0 if ll0 < SYS and ll0 != 0 else SYS
     names = [c.name if not c.omitted else fvars.omitted_name(c.name) for c in smp.cols]
     if smp.constant:

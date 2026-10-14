@@ -43,10 +43,14 @@ def lookup(word: str) -> CommandSpec | None:
     spec = REGISTRY.get(word)
     if spec is not None:
         return spec
+    # com mais de um candidato (sca: scalar ou scatter), vale o de abreviação
+    # mínima mais longa: é o que o manual reserva para aquela forma
+    best = None
     for spec in REGISTRY.values():
         if len(word) >= spec.min_abbrev and spec.name.startswith(word):
-            return spec
-    return None
+            if best is None or spec.min_abbrev > best.min_abbrev:
+                best = spec
+    return best
 
 
 def all_commands() -> list[str]:

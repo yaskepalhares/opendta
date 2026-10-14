@@ -126,12 +126,16 @@ def level_text(level: float) -> str:
 
 def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df: float | None,
                level: float, vcetype: str = "", coef_title: str = "Coef.",
-               footer: bool = True, eq_headers: bool = False, eform: bool = False) -> None:
+               footer: bool = True, eq_headers: bool = False, eform: bool = False,
+               top_line: str | None = None) -> None:
     out = s.output
     lv = level_text(level)
     ci = f"[{lv}% Conf. Interval]"
     out.write(LINE + "\n", "text")
-    if vcetype:
+    if top_line is not None:
+        # bootstrap: "Observed   Bootstrap ... Normal-based" (VERIFICAR alinhamento)
+        out.write(top_line + "\n", "text")
+    elif vcetype:
         # VERIFICAR alinhamento do rótulo (Robust, Bootstrap...)
         lab = vcetype
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."
@@ -172,6 +176,10 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         if r.kind == "aux":
             # parâmetros auxiliares (/cut1, /sigma, alpha): sem z e P>|z|; o
             # intervalo pode vir pronto (transformado) em r.eq = "lo hi"
+            if not (np.isfinite(se) and abs(se) < SYS):
+                # erro-padrão missing (alpha na fronteira, compat 0602)
+                out.write(f"  {g9(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
+                continue
             if r.eq:
                 lo, hi = (float(v) for v in r.eq.split())
             else:
@@ -218,6 +226,20 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
         interaction = "#" in c.name
         grouped = bool(c.group) and (len(shown) > 1 or (c.group[0] == "t" and interaction)
                                      or (c.group[0] == "v" and c.rowlab != "--."))
+        if (not grouped and c.group and c.group[0] == "t" and not interaction and len(shown) == 1
+                and _has_value_label(ds, shown[0])):
+            # fator com um nível só e rótulo de valor: cabeçalho e o rótulo,
+            # sem linha em branco depois (compat 0601: "sexo |" / "fem  |")
+            blank_before()
+            g = shown[0]
+            rows.append(CoefRow("header", c.labels[0]))
+            lab = _cell_label(ds, g) + " "
+            if g.omitted:
+                rows.append(CoefRow("omitted", lab, name=g.name))
+            else:
+                rows.append(CoefRow("coef", lab, b[g.name], se[g.name], name=g.name))
+            i = j
+            continue
         if not grouped:
             # uma linha só: "x", "1.h" (fator com um nível), "c.x#c.x"; as
             # interações ficam entre linhas em branco (compat 0502)
@@ -255,6 +277,18 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
     elif rows and rows[-1].kind == "blank":
         rows.pop()
     return rows
+
+
+def _has_value_label(ds, col) -> bool:
+    """O nível do fator tem rótulo de valor?"""
+    try:
+        var = col.name.split(".", 1)[1]
+        v = ds.get(var)
+        lv = col.cell[0] if col.cell else None
+        return bool(v.value_label and lv is not None
+                    and ds.value_labels.get(v.value_label, {}).get(int(lv)))
+    except Exception:   # noqa: BLE001
+        return False
 
 
 def _head_label(head: str) -> str:

@@ -1,0 +1,500 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:32:57
+
+. * Fase 6: svyset, svydescribe, mean/proportion/total/ratio e svy:.
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 600
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen estrato = ceil(_n/50)
+
+. gen upa = ceil(_n/10)
+
+. gen peso = 50 + mod(_n, 7)*10
+
+. gen sexo = mod(_n, 2)
+
+. label define sexol 0 "masc" 1 "fem"
+
+. label values sexo sexol
+
+. gen idade = 18 + floor(runiform()*60)
+
+. gen ativo = runiform() < invlogit(-1 + .02*idade - .5*sexo)
+
+. gen imc = 22 + .05*idade + 2*sexo + round(runiform()*4, .01)
+
+. mean imc
+
+Mean estimation                   Number of obs   =        200
+
+--------------------------------------------------------------
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |     27.285   .1244698      27.03955    27.53045
+--------------------------------------------------------------
+
+. mean imc idade, over(sexo)
+
+Mean estimation                   Number of obs   =        200
+
+         masc: sexo = masc
+          fem: sexo = fem
+
+--------------------------------------------------------------
+        Over |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+imc          |
+        masc |    26.1565   .1209974       25.9179     26.3951
+         fem |    28.4135   .1480407      28.12157    28.70543
+-------------+------------------------------------------------
+idade        |
+        masc |      46.21   1.702007      42.85372    49.56628
+         fem |      49.73   1.795834      46.18869    53.27131
+--------------------------------------------------------------
+
+. mean imc [pweight=peso]
+
+Mean estimation                   Number of obs   =        200
+
+--------------------------------------------------------------
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647    .130524      27.04908    27.56386
+--------------------------------------------------------------
+
+. proportion ativo
+
+Proportion estimation             Number of obs   =        200
+
+--------------------------------------------------------------
+             | Proportion   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+ativo        |
+           0 |        .57    .035095      .4998734    .6374258
+           1 |        .43    .035095      .3625742    .5001266
+--------------------------------------------------------------
+
+. total ativo
+
+Total estimation                  Number of obs   =        200
+
+--------------------------------------------------------------
+             |      Total   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       ativo |         86   7.018998      72.15884    99.84116
+--------------------------------------------------------------
+
+. ratio imc/idade
+
+Ratio estimation                  Number of obs   =        200
+
+     _ratio_1: imc/idade
+
+--------------------------------------------------------------
+             |             Linearized
+             |      Ratio   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+    _ratio_1 |    .568793   .0136024      .5419696    .5956163
+--------------------------------------------------------------
+
+. capture noisily svy: mean imc
+data not set up for svy, use svyset
+
+. svyset upa [pweight=peso], strata(estrato)
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: <zero>
+
+. svyset
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: <zero>
+
+. svydescribe
+
+Survey: Describing stage 1 sampling units
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: <zero>
+
+                                      #Obs per Unit
+                              ----------------------------
+Stratum    #Units     #Obs      min       mean      max   
+--------  --------  --------  --------  --------  --------
+       1         5        50        10      10.0        10
+       2         5        50        10      10.0        10
+       3         5        50        10      10.0        10
+       4         5        50        10      10.0        10
+--------  --------  --------  --------  --------  --------
+       4        20       200        10      10.0        10
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .1009408      27.09249    27.52046
+--------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(df_r) =  16
+      e(N_strata_omit) =  0
+          e(singleton) =  0
+             e(census) =  0
+              e(N_pop) =  15980
+              e(N_psu) =  20
+           e(N_strata) =  4
+             e(N_over) =  1
+                  e(N) =  200
+             e(stages) =  1
+               e(k_eq) =  1
+               e(rank) =  1
+
+macros:
+            e(cmdline) : "svy : mean imc"
+                e(cmd) : "mean"
+             e(prefix) : "svy"
+            e(cmdname) : "mean"
+            e(command) : "mean imc,"
+              e(title) : "Survey: Mean estimation"
+            e(vcetype) : "Linearized"
+                e(vce) : "linearized"
+          e(estat_cmd) : "svy_estat"
+            e(varlist) : "imc"
+       e(marginsnotok) : "_ALL"
+              e(wtype) : "pweight"
+               e(wvar) : "peso"
+               e(wexp) : "= peso"
+         e(singleunit) : "missing"
+                e(su1) : "upa"
+            e(strata1) : "estrato"
+         e(properties) : "b V"
+             e(depvar) : "Mean"
+
+matrices:
+                  e(b) :  1 x 1
+                  e(V) :  1 x 1
+            e(_N_subp) :  1 x 1
+              e(V_srs) :  1 x 1
+                 e(_N) :  1 x 1
+  e(_N_strata_certain) :  1 x 1
+   e(_N_strata_single) :  1 x 1
+          e(_N_strata) :  1 x 1
+              e(error) :  1 x 1
+
+functions:
+             e(sample)   
+
+. svy: mean imc, over(sexo)
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+         masc: sexo = masc
+          fem: sexo = fem
+
+--------------------------------------------------------------
+             |             Linearized
+        Over |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+imc          |
+        masc |   26.13546   .1210408      25.87887    26.39206
+         fem |   28.48041   .1518887      28.15842     28.8024
+--------------------------------------------------------------
+
+. svy: proportion ativo
+(running proportion on estimation sample)
+
+Survey: Proportion estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             | Proportion   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+ativo        |
+           0 |   .5757196   .0329826      .5047453    .6437026
+           1 |   .4242804   .0329826      .3562974    .4952547
+--------------------------------------------------------------
+
+. svy: total ativo
+(running total on estimation sample)
+
+Survey: Total estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |      Total   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       ativo |       6780    531.225      5653.853    7906.147
+--------------------------------------------------------------
+
+. svy: ratio imc/idade
+(running ratio on estimation sample)
+
+Survey: Ratio estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+     _ratio_1: imc/idade
+
+--------------------------------------------------------------
+             |             Linearized
+             |      Ratio   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+    _ratio_1 |   .5683587     .01371      .5392947    .5974227
+--------------------------------------------------------------
+
+. svy, subpop(sexo): mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Subpop. no. obs =        100
+                                  Subpop. size    =      7,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   28.48041   .1518887      28.15842     28.8024
+--------------------------------------------------------------
+
+. svy: regress imc idade i.sexo
+(running regress on estimation sample)
+
+Survey: Linear regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   2,     15)   =     133.43
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.6169
+
+------------------------------------------------------------------------------
+             |             Linearized
+         imc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0443096   .0041388    10.71   0.000     .0355358    .0530835
+             |
+        sexo |
+        fem  |   2.131716   .1321168    16.14   0.000     1.851641    2.411791
+       _cons |   24.11312   .2453564    98.28   0.000     23.59298    24.63325
+------------------------------------------------------------------------------
+
+. svy: logistic ativo idade i.sexo
+(running logistic on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   2,     15)   =       3.93
+                                                Prob > F          =     0.0423
+
+------------------------------------------------------------------------------
+             |             Linearized
+       ativo | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   1.012511   .0081709     1.54   0.143     .9953368    1.029981
+             |
+        sexo |
+        fem  |   .5053195   .1395973    -2.47   0.025     .2813375    .9076206
+       _cons |   .5641301   .2347387    -1.38   0.188     .2334987    1.362932
+------------------------------------------------------------------------------
+
+. svy: logit ativo idade
+(running logit on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   1,     16)   =       1.10
+                                                Prob > F          =     0.3093
+
+------------------------------------------------------------------------------
+             |             Linearized
+       ativo |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0092948   .0088527     1.05   0.309     -.009472    .0280616
+       _cons |   -.753739   .4280167    -1.76   0.097    -1.661094    .1536157
+------------------------------------------------------------------------------
+
+. svy: tabulate ativo
+(running tabulate on estimation sample)
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+
+----------------------
+    ativo | proportion
+----------+-----------
+        0 |      .5757
+        1 |      .4243
+          | 
+    Total |          1
+----------------------
+  Key:  proportion  =  cell proportion
+
+. svy: tabulate ativo sexo
+(running tabulate on estimation sample)
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+
+-------------------------------
+          |        sexo        
+    ativo |  masc    fem  Total
+----------+--------------------
+        0 | .2509  .3248  .5757
+        1 | .2497  .1746  .4243
+          | 
+    Total | .5006  .4994      1
+-------------------------------
+  Key:  cell proportion
+
+  Pearson:
+    Uncorrected   chi2(1)         =    4.5521
+    Design-based  F(1, 16)        =    4.9245     P = 0.0413
+
+. svyset _n [pweight=peso]
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: <observations>
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       1        Number of obs   =        200
+Number of PSUs   =     200        Population size =     15,980
+                                  Design df       =        199
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647    .130524      27.04908    27.56386
+--------------------------------------------------------------
+
+. gen npop = 20
+
+. svyset upa [pweight=peso], strata(estrato) fpc(npop)
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: npop
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0874173      27.12115    27.49179
+--------------------------------------------------------------
+
+. gen tx = .25
+
+. svyset upa [pweight=peso], strata(estrato) fpc(tx)
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: tx
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0874173      27.12115    27.49179
+--------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:32:58
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

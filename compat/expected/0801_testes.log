@@ -1,0 +1,452 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0801_testes.log
+  log type:  text
+ opened on:  14 Oct 2026, 11:45:49
+
+. * Fase 8: testes não paramétricos, normalidade, sdtest e comandos imediatos
+. clear
+
+. set obs 74
+number of observations (_N) was 0, now 74
+
+. gen mpg = 12 + mod(_n*7, 30) + (mod(_n, 4) == 0)*mod(_n, 9)
+
+. gen price = 3000 + mod(_n*131, 9000) + mod(_n, 7)^3
+
+. gen foreign = _n > 52
+
+. label define orig 0 "Domestic" 1 "Foreign"
+
+. label values foreign orig
+
+. gen rep = mod(_n, 5) + 1
+
+. gen peso = 2000 + 20*mpg + mod(_n*17, 300)
+
+. 
+. ranksum mpg, by(foreign)
+
+Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+
+     foreign |      obs    rank sum    expected
+-------------+---------------------------------
+    Domestic |       52        2009        1950
+     Foreign |       22         766         825
+-------------+---------------------------------
+    combined |       74        2775        2775
+
+unadjusted variance     7150.00
+adjustment for ties       -8.89
+                     ----------
+adjusted variance       7141.11
+
+Ho: mpg(foreign==Domestic) = mpg(foreign==Foreign)
+             z =   0.698
+    Prob > |z| =   0.4851
+
+. return list
+
+scalars:
+                r(N_2) =  22
+                r(N_1) =  52
+              r(Var_a) =  7141.10551647538
+                  r(z) =  .698183026561298
+            r(sum_exp) =  1950
+            r(sum_obs) =  2009
+             r(group1) =  0
+
+. ranksum price, by(foreign) porder
+
+Two-sample Wilcoxon rank-sum (Mann-Whitney) test
+
+     foreign |      obs    rank sum    expected
+-------------+---------------------------------
+    Domestic |       52        1675        1950
+     Foreign |       22        1100         825
+-------------+---------------------------------
+    combined |       74        2775        2775
+
+unadjusted variance     7150.00
+adjustment for ties        0.00
+                     ----------
+adjusted variance       7150.00
+
+Ho: price(foreign==Domestic) = price(foreign==Foreign)
+             z =  -3.252
+    Prob > |z| =   0.0011
+
+P{price(foreign==Domestic) > price(foreign==Foreign)} = 0.260
+
+. signrank mpg = 25
+
+Wilcoxon signed-rank test
+
+        sign |      obs   sum ranks    expected
+-------------+---------------------------------
+    positive |       41        1755        1386
+    negative |       31        1017        1386
+        zero |        2           3           3
+-------------+---------------------------------
+         all |       74        2775        2775
+
+unadjusted variance    34456.25
+adjustment for ties      -36.88
+adjustment for zeros      -1.25
+                     ----------
+adjusted variance      34418.12
+
+Ho: mpg = 25
+             z =   1.989
+    Prob > |z| =   0.0467
+
+. return list
+
+scalars:
+              r(N_tie) =  2
+              r(N_neg) =  31
+              r(N_pos) =  41
+              r(Var_a) =  34418.125
+                  r(z) =  1.988990745402002
+            r(sum_neg) =  1017
+            r(sum_pos) =  1755
+
+. signrank mpg = peso
+
+Wilcoxon signed-rank test
+
+        sign |      obs   sum ranks    expected
+-------------+---------------------------------
+    positive |        0           0      1387.5
+    negative |       74        2775      1387.5
+        zero |        0           0           0
+-------------+---------------------------------
+         all |       74        2775        2775
+
+unadjusted variance    34456.25
+adjustment for ties       -9.75
+adjustment for zeros       0.00
+                     ----------
+adjusted variance      34446.50
+
+Ho: mpg = peso
+             z =  -7.476
+    Prob > |z| =   0.0000
+
+. kwallis mpg, by(rep)
+
+Kruskal-Wallis equality-of-populations rank test
+
+  +----------------------+
+  | rep | Obs | Rank Sum |
+  |-----+-----+----------|
+  |   1 |  14 |   438.00 |
+  |   2 |  15 |   537.00 |
+  |   3 |  15 |   662.50 |
+  |   4 |  15 |   546.50 |
+  |   5 |  15 |   591.00 |
+  +----------------------+
+
+chi-squared =     2.858 with 4 d.f.
+probability =     0.5818
+
+chi-squared with ties =     2.862 with 4 d.f.
+probability =     0.5812
+
+. return list
+
+scalars:
+           r(chi2_adj) =  2.861667976453483
+                 r(df) =  4
+               r(chi2) =  2.858108108108098
+
+. spearman mpg price
+
+ Number of obs =      74
+Spearman's rho =       0.0955
+
+Test of Ho: mpg and price are independent
+    Prob > |t| =       0.4181
+
+. return list
+
+scalars:
+                  r(N) =  74
+                r(rho) =  .0955351903240976
+                  r(p) =  .4181196260812711
+
+. spearman mpg price peso
+(obs=74)
+
+             |      mpg    price     peso
+-------------+---------------------------
+         mpg |   1.0000 
+       price |   0.0955   1.0000 
+        peso |   0.9102   0.1436   1.0000 
+
+. swilk mpg price peso
+
+                   Shapiro-Wilk W test for normal data
+
+    Variable |        Obs       W           V         z       Prob>z
+-------------+------------------------------------------------------
+         mpg |         74    0.96822      2.046     1.562    0.05913
+       price |         74    0.94234      3.713     2.862    0.00211
+        peso |         74    0.97449      1.643     1.083    0.13946
+
+. return list
+
+scalars:
+                  r(p) =  .1394597739692218
+                  r(z) =  1.082749676248988
+                  r(V) =  1.642689340096406
+                  r(W) =  .9744919259328209
+                  r(N) =  74
+
+. sktest mpg price peso
+
+                    Skewness/Kurtosis tests for Normality
+                                                          ------ joint ------
+    Variable |        Obs  Pr(Skewness)  Pr(Kurtosis) adj chi2(2)   Prob>chi2
+-------------+---------------------------------------------------------------
+         mpg |         74     0.6432        0.0009        9.66         0.0080
+       price |         74     0.7648        0.0000       21.55         0.0000
+        peso |         74     0.3667        0.0836        3.96         0.1380
+
+. sktest mpg, noadjust
+
+                    Skewness/Kurtosis tests for Normality
+                                                          ------ joint ------
+    Variable |        Obs  Pr(Skewness)  Pr(Kurtosis)     chi2(2)   Prob>chi2
+-------------+---------------------------------------------------------------
+         mpg |         74     0.6432        0.0009       11.32         0.0035
+
+. sdtest mpg, by(foreign)
+
+Variance ratio test
+------------------------------------------------------------------------------
+   Group |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+Domestic |      52    27.84615    1.275534    9.198006    25.28541     30.4069
+ Foreign |      22    26.22727    1.856231    8.706494    22.36703    30.08752
+---------+--------------------------------------------------------------------
+combined |      74    27.36486    1.049245    9.025951    25.27372    29.45601
+------------------------------------------------------------------------------
+    ratio = sd(Domestic) / sd(Foreign)                            f =   1.1161
+Ho: ratio = 1                                    degrees of freedom =   51, 21
+
+    Ha: ratio < 1               Ha: ratio != 1                 Ha: ratio > 1
+  Pr(F < f) = 0.5963         2*Pr(F > f) = 0.8074           Pr(F > f) = 0.4037
+
+. return list
+
+scalars:
+                 r(sd) =  9.02595090322985
+                  r(p) =  .8073716946013018
+                r(p_l) =  .5963141526993492
+                r(p_u) =  .4036858473006509
+               r(sd_2) =  8.706493571066961
+               r(sd_1) =  9.198006210607659
+                  r(F) =  1.116094144418326
+               r(df_2) =  21
+               r(df_1) =  51
+                  r(N) =  74
+
+. sdtest mpg == 8
+
+One-sample test of variance
+------------------------------------------------------------------------------
+Variable |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+     mpg |      74    27.36486    1.049245    9.025951    25.27372    29.45601
+------------------------------------------------------------------------------
+    sd = sd(mpg)                                           c = chi2 =  92.9242
+Ho: sd = 8                                       degrees of freedom =       73
+
+     Ha: sd < 8                   Ha: sd != 8                   Ha: sd > 8
+  Pr(C < c) = 0.9422         2*Pr(C > c) = 0.1157           Pr(C > c) = 0.0578
+
+. sdtest mpg == price
+
+Variance ratio test
+------------------------------------------------------------------------------
+Variable |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+     mpg |      74    27.36486    1.049245    9.025951    25.27372    29.45601
+   price |      74    7243.716    317.9875    2735.432    6609.968    7877.464
+---------+--------------------------------------------------------------------
+combined |     148    3635.541     337.152    4101.631    2969.249    4301.832
+------------------------------------------------------------------------------
+    ratio = sd(mpg) / sd(price)                                   f =   0.0000
+Ho: ratio = 1                                    degrees of freedom =   73, 73
+
+    Ha: ratio < 1               Ha: ratio != 1                 Ha: ratio > 1
+  Pr(F < f) = 0.0000         2*Pr(F < f) = 0.0000           Pr(F > f) = 1.0000
+
+. * sintaxe do Stata 14.0 (cii means/proportions só existe a partir do 14.1)
+. cii 166 19509 4379
+
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        166       19509    339.8763        18837.93    20180.07
+
+. return list
+
+scalars:
+                 r(ub) =  20180.06730533197
+                 r(lb) =  18837.93269466803
+                 r(se) =  339.8763152068032
+               r(mean) =  19509
+                  r(N) =  166
+
+. cii 100 30
+
+                                                         -- Binomial Exact --
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        100          .3    .0458258        .2124064    .3998147
+
+. cii 100 30, wilson
+
+                                                         ------ Wilson ------
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        100          .3    .0458258        .2189489    .3958485
+
+. cii 100 30, agresti
+
+                                                         -- Agresti-Coull ---
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        100          .3    .0458258        .2186514     .396146
+
+. cii 100 30, jeffreys
+
+                                                         ----- Jeffreys -----
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        100          .3    .0458258        .2168414    .3945465
+
+. cii 100 30, wald
+
+                                                         -- Binomial Wald ---
+    Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |        100          .3    .0458258        .2101832    .3898168
+
+. cii 50 7, poisson
+
+                                                         -- Poisson  Exact --
+    Variable |   Exposure        Mean    Std. Err.       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+             |         50         .14     .052915        .0562873    .2884535
+
+. ttesti 24 62.6 15.8 75
+
+One-sample t test
+------------------------------------------------------------------------------
+         |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+       x |      24        62.6    3.225161        15.8    55.92825    69.27175
+------------------------------------------------------------------------------
+    mean = mean(x)                                                t =  -3.8448
+Ho: mean = 75                                    degrees of freedom =       23
+
+    Ha: mean < 75               Ha: mean != 75                 Ha: mean > 75
+ Pr(T < t) = 0.0004         Pr(|T| > |t|) = 0.0008          Pr(T > t) = 0.9996
+
+. ttesti 20 20 5 32 15 4
+
+Two-sample t test with equal variances
+------------------------------------------------------------------------------
+         |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+       x |      20          20    1.118034           5    17.65993    22.34007
+       y |      32          15    .7071068           4    13.55785    16.44215
+---------+--------------------------------------------------------------------
+combined |      52    16.92308    .6943785    5.007235    15.52905     18.3171
+---------+--------------------------------------------------------------------
+    diff |                   5    1.256135                2.476979    7.523021
+------------------------------------------------------------------------------
+    diff = mean(x) - mean(y)                                      t =   3.9805
+Ho: diff = 0                                     degrees of freedom =       50
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(T < t) = 0.9999         Pr(|T| > |t|) = 0.0002          Pr(T > t) = 0.0001
+
+. ttesti 20 20 5 32 15 4, unequal
+
+Two-sample t test with unequal variances
+------------------------------------------------------------------------------
+         |     Obs        Mean    Std. Err.   Std. Dev.   [95% Conf. Interval]
+---------+--------------------------------------------------------------------
+       x |      20          20    1.118034           5    17.65993    22.34007
+       y |      32          15    .7071068           4    13.55785    16.44215
+---------+--------------------------------------------------------------------
+combined |      52    16.92308    .6943785    5.007235    15.52905     18.3171
+---------+--------------------------------------------------------------------
+    diff |                   5    1.322876                2.311343    7.688657
+------------------------------------------------------------------------------
+    diff = mean(x) - mean(y)                                      t =   3.7796
+Ho: diff = 0                     Satterthwaite's degrees of freedom =  33.9142
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(T < t) = 0.9997         Pr(|T| > |t|) = 0.0006          Pr(T > t) = 0.0003
+
+. prtesti 50 .52 .7
+
+One-sample test of proportion                      x: Number of obs =       50
+------------------------------------------------------------------------------
+    Variable |       Mean   Std. Err.                     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |        .52   .0706541                      .3815205    .6584795
+------------------------------------------------------------------------------
+    p = proportion(x)                                             z =  -2.7775
+Ho: p = 0.7
+
+     Ha: p < 0.7                 Ha: p != 0.7                   Ha: p > 0.7
+ Pr(Z < z) = 0.0027         Pr(|Z| > |z|) = 0.0055          Pr(Z > z) = 0.9973
+
+. tabi 30 18 \ 38 14, chi2 exact
+
+           |          col
+       row |         1          2 |     Total
+-----------+----------------------+----------
+         1 |        30         18 |        48 
+         2 |        38         14 |        52 
+-----------+----------------------+----------
+     Total |        68         32 |       100 
+
+          Pearson chi2(1) =   1.2832   Pr = 0.257
+           Fisher's exact =                 0.289
+   1-sided Fisher's exact =                 0.179
+
+. tabi 10 20 30 \ 5 15 25, row
+
++----------------+
+| Key            |
+|----------------|
+|   frequency    |
+| row percentage |
++----------------+
+
+           |               col
+       row |         1          2          3 |     Total
+-----------+---------------------------------+----------
+         1 |        10         20         30 |        60 
+           |     16.67      33.33      50.00 |    100.00 
+-----------+---------------------------------+----------
+         2 |         5         15         25 |        45 
+           |     11.11      33.33      55.56 |    100.00 
+-----------+---------------------------------+----------
+     Total |        15         35         55 |       105 
+           |     14.29      33.33      52.38 |    100.00 
+
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0801_testes.log
+  log type:  text
+ closed on:  14 Oct 2026, 11:45:49
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

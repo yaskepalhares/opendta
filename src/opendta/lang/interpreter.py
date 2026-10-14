@@ -209,6 +209,12 @@ class Interpreter:
             self.s.mata.run_block(chunks, echo=bool(echo), stop_on_error=colon)
         except MataLeave:
             pass
+        except StataError as e:
+            # bloco "mata:" interrompido: a linha de fechamento vem depois de
+            # "(# lines skipped)" e antes de r(#) (compat 0405)
+            if echo:
+                e.message = (e.message + "\n" if e.message else "") + "-" * width
+            raise
         if echo:
             if j < end:
                 out.write(": end\n", "command")

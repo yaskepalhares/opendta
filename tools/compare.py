@@ -15,7 +15,8 @@ e espaços no fim das linhas são descartados; linhas em branco são ignoradas.
 Números escritos com 15 ou mais caracteres (return list, ereturn list)
 podem diferir no último algarismo: a ordem das somas em ponto flutuante não é
 a mesma do Stata. Essas linhas contam como iguais quando o resto do texto é
-idêntico e a diferença relativa é menor que 1e-12.
+idêntico e a diferença relativa é menor que 1e-11 (estatísticas de Wald e
+contas com hessianas numéricas acumulam erro nos dois últimos algarismos).
 """
 
 from __future__ import annotations
@@ -37,14 +38,25 @@ _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log usi
 
 # carimbo de data do .dta (describe): muda a cada execução
 _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+# caminho absoluto de arquivos temporários do caso (graph export em PDF mostra
+# o caminho completo, que muda de máquina para máquina)
+# caminho absoluto de arquivos odta_* (macOS/Linux "/..."; Windows "C:\\...")
+_ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 
 
 def normalize(text: str) -> list[str]:
     out: list[str] = []
-    for raw in text.splitlines():
-        line = _STAMP.sub("<data>", raw.rstrip())
-        if not line or set(line) <= {"-"} or _HEADER.match(line) or _SKIP.match(line):
+    lines = text.splitlines()
+    for k, raw in enumerate(lines):
+        line = _ABSPATH.sub(r"<pasta>/\1", _STAMP.sub("<data>", raw.rstrip()))
+        if not line or _HEADER.match(line) or _SKIP.match(line):
             continue
+        if set(line) <= {"-"}:
+            # só as linhas tracejadas do cabeçalho e do rodapé do log são
+            # descartadas; as das tabelas fazem parte da saída
+            near = lines[max(0, k - 1):k] + lines[k + 1:k + 2]
+            if any(_HEADER.match(n) for n in near) or k == 0 or k == len(lines) - 1:
+                continue
         if line in (".",):
             continue
         out.append(line)
@@ -75,7 +87,7 @@ def _close_line(a: str, b: str) -> bool:
         if min(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
             return False
         fx, fy = float(x), float(y)
-        if abs(fx - fy) > 1e-12 * max(abs(fx), abs(fy)):
+        if abs(fx - fy) > 1e-11 * max(abs(fx), abs(fy)):
             return False
     return True
 
@@ -124,6 +136,12 @@ def _known_differences() -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # o console do Windows (cp1252) não imprime "≈", "·" etc. das descrições
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     p = argparse.ArgumentParser()
     p.add_argument("prefix", nargs="?", default="")
     p.add_argument("--show-diff", action="store_true")
@@ -155,6 +173,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"  XX {f.stem}")
                 failed += 1
+                if os.environ.get("GITHUB_ACTIONS"):
+                    # anotação no GitHub com as primeiras linhas diferentes, para ler
+                    # a divergência sem abrir o log inteiro do CI
+                    diff = [ln for ln in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=0)
+                            if ln[:1] in "+-" and not ln.startswith(("---", "+++"))][:12]
+                    body = "%0A".join(ln.replace("%", "%25") for ln in diff)
+                    print(f"::error title=compat {f.stem}::{body}")
             if ns.show_diff:
                 for line in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=1):
                     print("     " + line)

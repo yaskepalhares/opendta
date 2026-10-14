@@ -147,3 +147,123 @@ def cmd_margins(s: "Session", args: str) -> None:
 def cmd_nlcom(s: "Session", args: str) -> None:
     from ..estimation.margins import cmd_nlcom as run
     run(s, args)
+
+
+@command("svyset", "svyset")
+def cmd_svyset(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_svyset as run
+    run(s, args)
+
+
+@command("svydescribe", "svydescribe")
+def cmd_svydescribe(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_svydescribe as run
+    run(s, args)
+
+
+@command("mean", "mean")
+def cmd_mean(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_mean as run
+    run(s, args)
+
+
+@command("proportion", "proportion")
+def cmd_proportion(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_proportion as run
+    run(s, args)
+
+
+@command("total", "total")
+def cmd_total(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_total as run
+    run(s, args)
+
+
+@command("ratio", "ratio")
+def cmd_ratio(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_ratio as run
+    run(s, args)
+
+
+@command("svy", "svy", prefix=True)
+def cmd_svy(s: "Session", args: str) -> None:
+    from ..estimation.svy import cmd_svy as run
+    run(s, args)
+
+
+@command("estat", "estat")
+def cmd_estat(s: "Session", args: str) -> None:
+    from ..estimation.estat import cmd_estat as run
+    run(s, args)
+
+
+@command("oneway", "onew")
+def cmd_oneway(s: "Session", args: str) -> None:
+    from ..estimation.anova import cmd_oneway as run
+    run(s, args)
+
+
+@command("anova", "anova")
+def cmd_anova(s: "Session", args: str) -> None:
+    from ..estimation.anova import cmd_anova as run
+    run(s, args)
+
+
+@command("bootstrap", "bootstrap", prefix=True)
+def cmd_bootstrap(s: "Session", args: str) -> None:
+    from ..estimation.bootstrap import cmd_bootstrap as run
+    run(s, args)
+
+
+@command("lrtest", "lrtest")
+def cmd_lrtest(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_lrtest as run
+    run(s, args)
+
+
+@command("hausman", "hausman")
+def cmd_hausman(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_hausman as run
+    run(s, args)
+
+
+@command("xtsum", "xtsum")
+def cmd_xtsum(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_xtsum as run
+    run(s, args)
+
+
+@command("xtdescribe", "xtdes")
+def cmd_xtdescribe(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_xtdescribe as run
+    run(s, args)
+
+
+@command("qreg", "qreg")
+def cmd_qreg(s: "Session", args: str) -> None:
+    from ..estimation.extra import cmd_qreg as run
+    run(s, args)
+
+
+@command("xtpoisson", "xtpoisson")
+def cmd_xtpoisson(s: "Session", args: str) -> None:
+    from ..estimation.panel2 import cmd_xtpoisson as run
+    run(s, args)
+
+
+@command("xtlogit", "xtlogit")
+def cmd_xtlogit(s: "Session", args: str) -> None:
+    from ..estimation.panel2 import cmd_xtlogit as run
+    run(s, args)
+
+
+def _install_vce_bootstrap() -> None:
+    from ..estimation.bootstrap import wrap_vce_bootstrap
+    from .registry import REGISTRY
+    for name in ("regress", "logit", "logistic", "probit", "poisson", "nbreg", "ologit", "oprobit",
+                 "mlogit", "tobit", "glm", "areg"):
+        if name in REGISTRY:
+            wrap_vce_bootstrap(name)
+
+
+_install_vce_bootstrap()

@@ -1,0 +1,412 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0602_svy_ampliado.log
+  log type:  text
+ opened on:  14 Oct 2026, 11:45:48
+
+. * Fase 6b: svy com vários estágios, réplicas (jackknife, BRR, bootstrap, SDR), estat effects e mais modelos
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 600
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen estrato = ceil(_n/50)
+
+. gen upa = ceil(_n/10)
+
+. gen peso = 50 + mod(_n, 7)*10
+
+. gen sexo = mod(_n, 2)
+
+. label define sexol 0 "masc" 1 "fem"
+
+. label values sexo sexol
+
+. gen idade = 18 + floor(runiform()*60)
+
+. gen ativo = runiform() < invlogit(-1 + .02*idade - .5*sexo)
+
+. gen imc = 22 + .05*idade + 2*sexo + round(runiform()*4, .01)
+
+. mean imc
+
+Mean estimation                   Number of obs   =        200
+
+--------------------------------------------------------------
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |     27.285   .1244698      27.03955    27.53045
+--------------------------------------------------------------
+
+. gen nivel = 1 + (imc > 26) + (imc > 28)
+
+. gen cont = floor(idade/10)
+
+. gen upa2 = mod(_n, 2)
+
+. gen npop = 20
+
+. gen n2 = 10
+
+. svyset upa [pweight=peso], strata(estrato)
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .1009408      27.09249    27.52046
+--------------------------------------------------------------
+
+. estat effects
+
+----------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.       DEFF      DEFT
+-------------+--------------------------------------------
+         imc |   27.30647   .1009408      .64512   .803194
+----------------------------------------------------------
+
+. svy: mean imc idade, over(sexo)
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+         masc: sexo = masc
+          fem: sexo = fem
+
+--------------------------------------------------------------
+             |             Linearized
+        Over |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+imc          |
+        masc |   26.13546   .1210408      25.87887    26.39206
+         fem |   28.48041   .1518887      28.15842     28.8024
+-------------+------------------------------------------------
+idade        |
+        masc |   45.64125   1.838148      41.74455    49.53795
+         fem |   50.45363   2.130488       45.9372    54.97007
+--------------------------------------------------------------
+
+. estat effects
+
+         masc: sexo = masc
+          fem: sexo = fem
+
+----------------------------------------------------------
+             |             Linearized
+        Over |       Mean   Std. Err.       DEFF      DEFT
+-------------+--------------------------------------------
+imc          |
+        masc |   26.13546   .1210408     1.05667   1.02795
+         fem |   28.48041   .1518887     1.06322   1.03112
+-------------+--------------------------------------------
+idade        |
+        masc |   45.64125   1.838148     1.20699   1.09863
+         fem |   50.45363   2.130488     1.52487   1.23486
+----------------------------------------------------------
+
+. svy: logit ativo idade
+(running logit on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   1,     16)   =       1.10
+                                                Prob > F          =     0.3093
+
+------------------------------------------------------------------------------
+             |             Linearized
+       ativo |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0092948   .0088527     1.05   0.309     -.009472    .0280616
+       _cons |   -.753739   .4280167    -1.76   0.097    -1.661094    .1536157
+------------------------------------------------------------------------------
+
+. estat effects
+
+----------------------------------------------------------
+             |             Linearized
+       ativo |      Coef.   Std. Err.       DEFF      DEFT
+-------------+--------------------------------------------
+       idade |   .0092948   .0088527     1.05935   1.02925
+       _cons |   -.753739   .4280167     .935051    .96698
+----------------------------------------------------------
+
+. svy, vce(jackknife): mean imc
+(running mean on estimation sample)
+
+Jackknife replications (20)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....................
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Replications    =         20
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |              Jackknife
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .1009177      27.09253    27.52041
+--------------------------------------------------------------
+
+. svy, vce(jackknife) mse: mean imc
+(running mean on estimation sample)
+
+Jackknife replications (20)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....................
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Replications    =         20
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |              Jknife *
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .1009178      27.09253    27.52041
+--------------------------------------------------------------
+
+. svy, vce(jackknife): regress imc idade i.sexo
+(running regress on estimation sample)
+
+Jackknife replications (20)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....................
+
+Survey: Linear regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Replications      =         20
+                                                Design df         =         16
+                                                F(   2,     15)   =     131.60
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.6169
+
+------------------------------------------------------------------------------
+             |              Jackknife
+         imc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0443096    .004179    10.60   0.000     .0354505    .0531688
+             |
+        sexo |
+        fem  |   2.131716   .1332678    16.00   0.000     1.849201    2.414231
+       _cons |   24.11312   .2471497    97.56   0.000     23.58918    24.63705
+------------------------------------------------------------------------------
+
+. svy: ologit nivel idade i.sexo
+(running ologit on estimation sample)
+
+Survey: Ordered logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   2,     15)   =      59.44
+                                                Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+             |             Linearized
+       nivel |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0618487   .0119968     5.16   0.000     .0364166    .0872808
+             |
+        sexo |
+        fem  |   3.370495   .3051566    11.05   0.000     2.723592    4.017398
+-------------+----------------------------------------------------------------
+       /cut1 |   2.615002   .6313339     4.14   0.001     1.276633     3.95337
+       /cut2 |   5.931101   .7260504     8.17   0.000     4.391943    7.470259
+------------------------------------------------------------------------------
+
+. svy: oprobit nivel idade
+(running oprobit on estimation sample)
+
+Survey: Ordered probit regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   1,     16)   =      28.39
+                                                Prob > F          =     0.0001
+
+------------------------------------------------------------------------------
+             |             Linearized
+       nivel |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0321732   .0060379     5.33   0.000     .0193734    .0449731
+-------------+----------------------------------------------------------------
+       /cut1 |   .7742849   .2629901     2.94   0.010     .2167709    1.331799
+       /cut2 |   2.020829   .3079049     6.56   0.000       1.3681    2.673558
+------------------------------------------------------------------------------
+
+. svy: mlogit nivel idade
+(running mlogit on estimation sample)
+
+Survey: Multinomial logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   2,     15)   =      10.92
+                                                Prob > F          =     0.0012
+
+------------------------------------------------------------------------------
+             |             Linearized
+       nivel |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+1            |
+       idade |  -.0378138   .0110259    -3.43   0.003    -.0611877     -.01444
+       _cons |   1.100239   .4276269     2.57   0.020     .1937108    2.006768
+-------------+----------------------------------------------------------------
+2            |  (base outcome)
+-------------+----------------------------------------------------------------
+3            |
+       idade |   .0423383   .0143822     2.94   0.010     .0118494    .0728272
+       _cons |  -2.400786   .7597121    -3.16   0.006    -4.011304   -.7902684
+------------------------------------------------------------------------------
+
+. svy: mlogit nivel idade, rrr
+(running mlogit on estimation sample)
+
+Survey: Multinomial logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   2,     15)   =      10.92
+                                                Prob > F          =     0.0012
+
+------------------------------------------------------------------------------
+             |             Linearized
+       nivel |        RRR   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+1            |
+       idade |   .9628922   .0106167    -3.43   0.003     .9406467    .9856638
+       _cons |   3.004885    1.28497     2.57   0.020     1.213745    7.439235
+-------------+----------------------------------------------------------------
+2            |  (base outcome)
+-------------+----------------------------------------------------------------
+3            |
+       idade |   1.043247   .0150042     2.94   0.010      1.01192    1.075545
+       _cons |   .0906467   .0688654    -3.16   0.006     .0181098     .453723
+------------------------------------------------------------------------------
+
+. svy: nbreg cont imc
+(running nbreg on estimation sample)
+
+Survey: Negative binomial regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+                                                F(   1,     16)   =     103.25
+Dispersion         = mean                       Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+             |             Linearized
+        cont |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         imc |   .1106807   .0108926    10.16   0.000     .0875894    .1337721
+       _cons |  -1.570168   .3098569    -5.07   0.000    -2.227035   -.9133002
+-------------+----------------------------------------------------------------
+    /lnalpha |  -37.36427          .                             .           .
+-------------+----------------------------------------------------------------
+       alpha |   5.93e-17          .                             .           .
+------------------------------------------------------------------------------
+
+. svy: glm ativo idade, family(binomial) eform
+(running glm on estimation sample)
+
+Survey: Generalized linear models
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Design df         =         16
+
+------------------------------------------------------------------------------
+             |             Linearized
+       ativo |     exp(b)   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   1.009338   .0089353     1.05   0.309     .9905727    1.028459
+       _cons |   .4706037   .2014262    -1.76   0.097     .1899311    1.166043
+------------------------------------------------------------------------------
+
+. svy, subpop(sexo): ologit nivel idade
+(running ologit on estimation sample)
+
+Survey: Ordered logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =        20                  Population size   =     15,980
+                                                Subpop. no. obs   =        100
+                                                Subpop. size      =      7,980
+                                                Design df         =         16
+                                                F(   1,     16)   =      16.54
+                                                Prob > F          =     0.0009
+
+------------------------------------------------------------------------------
+             |             Linearized
+       nivel |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       idade |   .0669334   .0164572     4.07   0.001     .0320456    .1018211
+-------------+----------------------------------------------------------------
+       /cut1 |  -.2513151   .6389608    -0.39   0.699    -1.605852    1.103221
+       /cut2 |   2.766684    .825697     3.35   0.004     1.016285    4.517084
+------------------------------------------------------------------------------
+
+. svyset upa2 [pweight=peso], strata(estrato) vce(brr)
+
+      pweight: peso
+          VCE: brr
+          MSE: off
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa2
+        FPC 1: <zero>
+
+. svy: mean imc
+option hadamard() required when brrweights are not svyset
+r(198);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0602_svy_ampliado.log
+  log type:  text
+ closed on:  14 Oct 2026, 11:45:49
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

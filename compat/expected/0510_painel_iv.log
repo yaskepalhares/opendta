@@ -1,0 +1,274 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0510_painel_iv.log
+  log type:  text
+ opened on:  13 Oct 2026, 08:32:57
+
+. * Fase 5b: xtreg, areg e ivregress.
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 1010
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen id = ceil(_n/6)
+
+. gen t = mod(_n-1, 6) + 1
+
+. gen a = id/3
+
+. gen x1 = round(runiform()*10, .1) + a
+
+. gen x2 = round(runiform()*5, .01)
+
+. gen z = x1 + round(runiform()*2, .01)
+
+. gen y = 1 + .5*x1 - x2 + 2*a + round(runiform()*2, .01)
+
+. xtset id t
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 6
+                delta:  1 unit
+
+. xtreg y x1 x2, fe
+
+Fixed-effects (within) regression               Number of obs     =         60
+Group variable: id                              Number of groups  =         10
+
+R-sq:                                           Obs per group:
+     within  = 0.9295                                         min =          6
+     between = 0.3453                                         avg =        6.0
+     overall = 0.5675                                         max =          6
+
+                                                F(2,48)           =     316.59
+corr(u_i, Xb)  = 0.1096                         Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5025977   .0301855    16.65   0.000     .4419056    .5632898
+          x2 |  -1.043921   .0518022   -20.15   0.000    -1.148076   -.9397656
+       _cons |   5.736191   .2371215    24.19   0.000     5.259426    6.212955
+-------------+----------------------------------------------------------------
+     sigma_u |   2.047991
+     sigma_e |  .60430099
+         rho |  .91990702   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+F test that all u_i=0: F(9, 48) = 65.79                      Prob > F = 0.0000
+
+. ereturn list
+
+scalars:
+               e(r2_w) =  .9295350002735528
+                e(F_f) =  65.78955097088485
+               e(rank) =  3
+               e(Tbar) =  6
+               e(Tcon) =  1
+              e(g_min) =  6
+              e(g_avg) =  6
+              e(g_max) =  6
+                e(N_g) =  10
+            e(sigma_u) =  2.047991041508875
+               e(corr) =  .1095794831218828
+               e(r2_o) =  .5675080056230373
+               e(r2_b) =  .3453348838905905
+            e(sigma_e) =  .6043009899364687
+              e(sigma) =  2.135286161744791
+                e(rho) =  .9199070222691947
+               e(df_m) =  11
+               e(df_b) =  2
+               e(ll_0) =  -127.8002073117599
+                 e(ll) =  -48.22103280513676
+                e(tss) =  557.9281045145328
+               e(df_a) =  9
+               e(r2_a) =  .9133867711695753
+                e(rss) =  17.52862494903341
+                e(mss) =  231.2278501390451
+               e(rmse) =  .6043009899364687
+                 e(r2) =  .9295350002735528
+                  e(F) =  316.5946227654954
+               e(df_r) =  48
+                  e(N) =  60
+
+macros:
+            e(cmdline) : "xtreg y x1 x2, fe"
+                e(cmd) : "xtreg"
+       e(marginsnotok) : "E U UE SCore STDP XBU"
+            e(predict) : "xtrefe_p"
+              e(model) : "fe"
+                e(vce) : "conventional"
+               e(ivar) : "id"
+             e(depvar) : "y"
+         e(properties) : "b V"
+             e(absvar) : "id"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. xtreg y x1 x2, re
+
+Random-effects GLS regression                   Number of obs     =         60
+Group variable: id                              Number of groups  =         10
+
+R-sq:                                           Obs per group:
+     within  = 0.9295                                         min =          6
+     between = 0.3464                                         avg =        6.0
+     overall = 0.5681                                         max =          6
+
+                                                Wald chi2(2)      =     617.12
+corr(u_i, X)   = 0 (assumed)                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5056153    .030609    16.52   0.000     .4456228    .5656079
+          x2 |   -1.04326   .0526233   -19.83   0.000      -1.1464   -.9401203
+       _cons |   5.715085   .6406637     8.92   0.000     4.459407    6.970763
+-------------+----------------------------------------------------------------
+     sigma_u |  1.8478389
+     sigma_e |  .60430099
+         rho |  .90338365   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+
+. xtreg y x1 x2, fe vce(robust)
+
+Fixed-effects (within) regression               Number of obs     =         60
+Group variable: id                              Number of groups  =         10
+
+R-sq:                                           Obs per group:
+     within  = 0.9295                                         min =          6
+     between = 0.3453                                         avg =        6.0
+     overall = 0.5675                                         max =          6
+
+                                                F(2,9)            =     456.51
+corr(u_i, Xb)  = 0.1096                         Prob > F          =     0.0000
+
+                                    (Std. Err. adjusted for 10 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5025977   .0292482    17.18   0.000     .4364337    .5687617
+          x2 |  -1.043921   .0556928   -18.74   0.000    -1.169907   -.9179351
+       _cons |   5.736191   .2635147    21.77   0.000     5.140079    6.332302
+-------------+----------------------------------------------------------------
+     sigma_u |   2.047991
+     sigma_e |  .60430099
+         rho |  .91990702   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+
+. areg y x1 x2, absorb(id)
+
+Linear regression, absorbing indicators         Number of obs     =         60
+                                                F(   2,     48)   =     316.59
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.9686
+                                                Adj R-squared     =     0.9614
+                                                Root MSE          =     0.6043
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5025977   .0301855    16.65   0.000     .4419056    .5632898
+          x2 |  -1.043921   .0518022   -20.15   0.000    -1.148076   -.9397656
+       _cons |   5.736191   .2371215    24.19   0.000     5.259426    6.212955
+-------------+----------------------------------------------------------------
+          id |          F(9, 48) =     65.790   0.000          (10 categories)
+
+. ivregress 2sls y x2 (x1 = z)
+
+Instrumental variables (2SLS) regression          Number of obs   =         60
+                                                  Wald chi2(2)    =      83.72
+                                                  Prob > chi2     =     0.0000
+                                                  R-squared       =     0.5808
+                                                  Root MSE        =     1.9743
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .6582787   .0903917     7.28   0.000     .4811142    .8354431
+          x2 |  -1.002873    .166889    -6.01   0.000     -1.32997   -.6757768
+       _cons |   4.630266    .736016     6.29   0.000     3.187701    6.072831
+------------------------------------------------------------------------------
+Instrumented:  x1
+Instruments:   x2 z
+
+. ivregress 2sls y x2 (x1 = z), small
+
+
+Instrumental variables (2SLS) regression
+
+      Source |       SS       df       MS         Number of obs   =         60
+-------------+------------------------------      F(  2,    57)   =      39.77
+       Model |  324.059556     2  162.029778      Prob > F        =     0.0000
+    Residual |  233.868549    57    4.102957      R-squared       =     0.5808
+-------------+------------------------------      Adj R-squared   =     0.5661
+       Total |  557.928105    59  9.45640855      Root MSE        =     2.0256
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .6582787   .0927399     7.10   0.000     .4725702    .8439872
+          x2 |  -1.002873   .1712245    -5.86   0.000    -1.345744    -.660002
+       _cons |   4.630266   .7551365     6.13   0.000     3.118131    6.142401
+------------------------------------------------------------------------------
+Instrumented:  x1
+Instruments:   x2 z
+
+. ereturn list
+
+scalars:
+              e(kappa) =  1
+                e(rss) =  233.8685487452784
+                  e(N) =  60
+               e(df_m) =  2
+               e(df_r) =  57
+               e(rmse) =  2.025575719525488
+                e(mss) =  324.0595557692548
+                 e(r2) =  .5808267286539129
+               e(r2_a) =  .566118894571594
+                  e(F) =  39.76712920080257
+         e(iterations) =  0
+               e(rank) =  3
+
+macros:
+            e(cmdline) : "ivregress 2sls y x2 (x1 = z), small"
+                e(cmd) : "ivregress"
+          e(estat_cmd) : "ivregress_estat"
+                e(vce) : "unadjusted"
+          e(estimator) : "2sls"
+           e(footnote) : "ivreg_footnote"
+       e(marginsnotok) : "Residuals SCores"
+          e(marginsok) : "XB default"
+            e(predict) : "ivregress_p"
+             e(depvar) : "y"
+              e(exogr) : "x2"
+              e(insts) : "x2 z"
+              e(instd) : "x1"
+              e(small) : "small"
+              e(title) : "Instrumental variables (2SLS) regression"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0510_painel_iv.log
+  log type:  text
+ closed on:  13 Oct 2026, 08:32:57
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

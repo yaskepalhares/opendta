@@ -30,7 +30,7 @@ def cmd_set(s: "Session", args: str) -> None:
     if name in ("seed", "rng"):
         _set_rng(s, name, value)
         return
-    if name in ("more", "rmsg", "varabbrev", "trace", "hints", "superscript") and value.split(",")[0].strip() not in ("on", "off"):
+    if name in ("more", "rmsg", "varabbrev", "trace", "hints", "superscript", "graphics") and value.split(",")[0].strip() not in ("on", "off"):
         raise StataError(198, "invalid syntax")
     if name == "dp":
         v = value.split(",")[0].strip()
@@ -47,6 +47,23 @@ def cmd_set(s: "Session", args: str) -> None:
             raise StataError(198, "invalid syntax")
         from ..estimation.numerics import set_precise
         set_precise(v == "precise")
+    if name in ("language", "messages"):
+        # extensão do OpenDTA (não existe no Stata): idioma da interface e das
+        # explicações de erro, e tradução opcional das mensagens do Stata
+        from .. import i18n
+        v = value.split(",")[0].strip().lower()
+        if name == "language":
+            if v not in ("en", "pt", "english", "portuguese", "portugues", "português"):
+                raise StataError(198, "invalid syntax")
+            i18n.set_language(v)
+            value = i18n.language() + value[len(value.split(",")[0]):]
+        else:
+            if v not in ("stata", "translated"):
+                raise StataError(198, "invalid syntax")
+            i18n.set_messages(v)
+        hook = s.ui_hooks.get("language")
+        if hook is not None:
+            hook()
     s.settings[name] = value.split(",")[0].strip()
     opts = value.partition(",")[2].strip()
     if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:
@@ -114,6 +131,9 @@ def cmd_clear(s: "Session", args: str) -> None:
             s.scalars.clear()
         if t in ("", "all", "*"):
             s.data.clear()
+        if t in ("all", "*"):
+            from ..graphics.store import store
+            store(s).clear()
         s.notify_state()
         return
     raise StataError(198, "invalid syntax")

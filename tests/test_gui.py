@@ -285,3 +285,62 @@ def test_viewer_help_and_log(app, tmp_path, monkeypatch):
     w.run_command("help naoexiste")
     assert w.session.rc == 111
     w.close()
+
+
+def test_graph_window_tabs(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.run_command("set obs 30")
+    w.run_command("gen x = _n")
+    w.run_command("gen y = x^2")
+    w.run_command("scatter y x, name(a)")
+    w.run_command("histogram x")
+    gw = w.graph_window
+    assert list(gw.canvases) == ["a", "Graph"]
+    assert gw.current_name() == "Graph"
+    w.run_command("graph drop a")
+    assert list(gw.canvases) == ["Graph"]
+    w.run_command("set graphics off")
+    w.run_command("scatter y x, name(b)")
+    assert "b" not in gw.canvases
+    w.close()
+
+
+def test_dofile_editor_runs_selection(app, tmp_path):
+    from PySide6.QtGui import QTextCursor
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    f = tmp_path / "prog.do"
+    f.write_text("display 1 + 1\ndisplay 2 + 2\n")
+    w.run_command(f'doedit "{f}"')
+    ed = w.dofile_editor.current()
+    assert ed.path == f and ed.toPlainText().startswith("display 1")
+    # seleção no meio da 2ª linha: executa a linha inteira
+    cur = ed.textCursor()
+    cur.setPosition(len("display 1 + 1\ndisp"))
+    cur.setPosition(len("display 1 + 1\ndisplay 2"), QTextCursor.MoveMode.KeepAnchor)
+    ed.setTextCursor(cur)
+    w.dofile_editor.do_selection()
+    text = w.results.toPlainText()
+    assert "\n4\n" in text and "\n2\n" not in text
+    ed.moveCursor(QTextCursor.MoveOperation.End)
+    ed.insertPlainText("* x")
+    assert w.dofile_editor.tabs.tabText(w.dofile_editor.tabs.currentIndex()).endswith("*")
+    assert w.dofile_editor.save()
+    assert "x" in f.read_text()
+    assert w.dofile_editor.replace_all("display", "di") == 2
+    ed.document().setModified(False)
+    w.dofile_editor.cleanup()
+    w.close()
+
+
+def test_menu_templates_fill_command(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.insert_command("histogram ")
+    assert w.command.toPlainText() == "histogram "
+    w.close()

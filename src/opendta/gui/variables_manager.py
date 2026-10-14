@@ -7,6 +7,8 @@ Review, como no Stata.
 
 from __future__ import annotations
 
+from ..i18n import tr
+
 from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
@@ -59,7 +61,7 @@ class VariablesModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):  # noqa: N802
         if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
-            return COLUMNS[section]
+            return tr(COLUMNS[section])
         return None
 
     def _value(self, row: int, col: int) -> str:
@@ -94,7 +96,7 @@ class VariablesManager(QMainWindow):
     def __init__(self, session: "Session", font=None, parent=None,
                  run: Callable[[str], int] | None = None):
         super().__init__(parent)
-        self.setWindowTitle("Variables Manager")
+        self.setWindowTitle(tr("Variables Manager"))
         self.resize(760, 460)
         self.model = VariablesModel(session, run, self)
         self.proxy = QSortFilterProxyModel(self)
@@ -102,7 +104,7 @@ class VariablesManager(QMainWindow):
         self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.proxy.setFilterKeyColumn(-1)
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Filter variables here")
+        self.filter.setPlaceholderText(tr("Filter variables here"))
         self.filter.textChanged.connect(self.proxy.setFilterFixedString)
         self.table = QTableView()
         self.table.setModel(self.proxy)

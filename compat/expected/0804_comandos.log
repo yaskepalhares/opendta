@@ -1,0 +1,358 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0804_comandos.log
+  log type:  text
+ opened on:  14 Oct 2026, 11:45:58
+
+. * Fase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
+. * qreg e putexcel
+. clear
+
+. set seed 804
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen id = ceil(_n/10)
+
+. gen t = mod(_n-1, 10) + 1
+
+. xtset id t
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 10
+                delta:  1 unit
+
+. gen x = round(runiform()*4, .01)
+
+. gen u = (id - 10)/10
+
+. gen yc = floor(exp(.2 + .3*x + u) * runiform()*2)
+
+. gen yb = runiform() < invlogit(-1 + .6*x + u)
+
+. gen y = 1 + 2*x + u + round(runiform(), .01)
+
+. 
+. lowess y x, generate(lw) nograph
+
+. summarize lw
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          lw |        200    5.435308    2.267709   1.584825   9.528378
+
+. lowess y x, bwidth(.3) mean generate(lw2) nograph
+
+. summarize lw2
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         lw2 |        200    5.427774    2.214081   1.894974   9.122301
+
+. xtsum y x
+
+Variable         |      Mean   Std. Dev.       Min        Max |    Observations
+-----------------+--------------------------------------------+----------------
+y        overall |   5.43495   2.360266        .92      10.39 |     N =     200
+         between |             1.055609      3.408      7.385 |     n =      20
+         within  |             2.122956   .5729499   10.38695 |     T =      10
+                 |                                            |
+x        overall |   1.94565    1.12375          0       3.98 |     N =     200
+         between |             .4075519       1.11      2.613 |     n =      20
+         within  |             1.050823    -.31435    4.32565 |     T =      10
+
+. xtdescribe
+
+      id:  1, 2, ..., 20                                     n =         20
+       t:  1, 2, ..., 10                                     T =         10
+           Delta(t) = 1 unit
+           Span(t)  = 10 periods
+           (id*t uniquely identifies each observation)
+
+Distribution of T_i:   min      5%     25%       50%       75%     95%     max
+                        10      10      10        10        10      10      10
+
+     Freq.  Percent    Cum. |  Pattern
+ ---------------------------+------------
+       20    100.00  100.00 |  1111111111
+ ---------------------------+------------
+       20    100.00         |  XXXXXXXXXX
+
+. xtpoisson yc x, fe
+
+Iteration 0:   log likelihood = -339.40826  
+Iteration 1:   log likelihood = -313.62921  
+Iteration 2:   log likelihood = -313.60297  
+Iteration 3:   log likelihood = -313.60297  
+
+Conditional fixed-effects Poisson regression    Number of obs     =        200
+Group variable: id                              Number of groups  =         20
+
+                                                Obs per group:
+                                                              min =         10
+                                                              avg =       10.0
+                                                              max =         10
+
+                                                Wald chi2(1)      =      49.63
+Log likelihood  = -313.60297                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .3073226   .0436258     7.04   0.000     .2218177    .3928275
+------------------------------------------------------------------------------
+
+. xtpoisson yc x, re
+
+Fitting Poisson model:
+
+Iteration 0:   log likelihood = -464.97809  
+Iteration 1:   log likelihood = -464.97809  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -398.08513  
+Iteration 1:   log likelihood = -394.72019  
+Iteration 2:   log likelihood = -394.44353  
+Iteration 3:   log likelihood =  -394.4428  
+Iteration 4:   log likelihood =  -394.4428  
+
+Random-effects Poisson regression               Number of obs     =        200
+Group variable: id                              Number of groups  =         20
+
+Random effects u_i ~ Gamma                      Obs per group:
+                                                              min =         10
+                                                              avg =       10.0
+                                                              max =         10
+
+                                                Wald chi2(1)      =      51.20
+Log likelihood  =  -394.4428                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .3113869   .0435178     7.16   0.000     .2260936    .3966802
+       _cons |   .2283783    .178889     1.28   0.202    -.1222377    .5789942
+-------------+----------------------------------------------------------------
+    /lnalpha |  -.9303683   .3358824                     -1.588686   -.2720508
+-------------+----------------------------------------------------------------
+       alpha |   .3944084   .1324749                      .2041938    .7618155
+------------------------------------------------------------------------------
+LR test of alpha=0: chibar2(01) = 141.07               Prob >= chibar2 = 0.000
+
+. xtlogit yb x, fe
+note: multiple positive outcomes within groups encountered.
+note: 1 group (10 obs) dropped because of all positive or
+      all negative outcomes.
+
+Iteration 0:   log likelihood = -82.999176  
+Iteration 1:   log likelihood = -82.969674  
+Iteration 2:   log likelihood = -82.969669  
+
+Conditional fixed-effects logistic regression   Number of obs     =        190
+Group variable: id                              Number of groups  =         19
+
+                                                Obs per group:
+                                                              min =         10
+                                                              avg =       10.0
+                                                              max =         10
+
+                                                LR chi2(1)        =      12.26
+Log likelihood  = -82.969669                    Prob > chi2       =     0.0005
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5288668   .1585596     3.34   0.001     .2180956    .8396379
+------------------------------------------------------------------------------
+
+. xtlogit yb x, re
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -138.58943  
+Iteration 1:   log likelihood = -130.73151  
+Iteration 2:   log likelihood = -130.71364  
+Iteration 3:   log likelihood = -130.71364  
+
+Fitting full model:
+
+tau =  0.0     log likelihood = -130.71364
+tau =  0.1     log likelihood = -128.73841
+tau =  0.2     log likelihood = -127.51606
+tau =  0.3     log likelihood = -126.84762
+tau =  0.4     log likelihood = -126.64272
+tau =  0.5     log likelihood = -126.88519
+
+Iteration 0:   log likelihood = -126.64279  
+Iteration 1:   log likelihood = -126.61072  
+Iteration 2:   log likelihood = -126.61071  
+
+Random-effects logistic regression              Number of obs     =        200
+Group variable: id                              Number of groups  =         20
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =         10
+                                                              avg =       10.0
+                                                              max =         10
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      13.36
+Log likelihood  = -126.61071                    Prob > chi2       =     0.0003
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5585619   .1528364     3.65   0.000      .259008    .8581157
+       _cons |  -1.044432   .3814612    -2.74   0.006    -1.792083    -.296782
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.4010297   .6315577                      -1.63886    .8368006
+-------------+----------------------------------------------------------------
+     sigma_u |   .8183094   .2584048                      .4406828    1.519529
+         rho |     .16912   .0887455                      .0557398    .4124014
+------------------------------------------------------------------------------
+LR test of rho=0: chibar2(01) = 8.21                   Prob >= chibar2 = 0.002
+
+. quietly xtreg y x, fe
+
+. estimates store fe
+
+. quietly xtreg y x, re
+
+. estimates store re
+
+. hausman fe re
+
+                 ---- Coefficients ----
+             |      (b)          (B)            (b-B)     sqrt(diag(V_b-V_B))
+             |       fe           re         Difference          S.E.
+-------------+----------------------------------------------------------------
+           x |    2.004974     2.005508       -.0005336        .0015332
+------------------------------------------------------------------------------
+                           b = consistent under Ho and Ha; obtained from xtreg
+            B = inconsistent under Ha, efficient under Ho; obtained from xtreg
+
+    Test:  Ho:  difference in coefficients not systematic
+
+                  chi2(1) = (b-B)'[(V_b-V_B)^(-1)](b-B)
+                          =        0.12
+                Prob>chi2 =      0.7278
+
+. return list
+
+scalars:
+               r(rank) =  1
+               r(chi2) =  .1211168076360854
+                 r(df) =  1
+                  r(p) =  .7278263640834873
+
+. quietly logit yb x
+
+. estimates store small
+
+. quietly logit yb x u
+
+. estimates store big
+
+. lrtest big small
+
+Likelihood-ratio test                                 LR chi2(1)  =     15.53
+(Assumption: small nested in big)                     Prob > chi2 =    0.0001
+
+. return list
+
+scalars:
+                  r(p) =  .000081365307067
+               r(chi2) =  15.52630017834969
+                 r(df) =  1
+
+. qreg y x
+Iteration  1:  WLS sum of weighted deviations =  51.998757
+
+Iteration  1: sum of abs. weighted deviations =  51.999237
+Iteration  2: sum of abs. weighted deviations =  51.945001
+
+Median regression                                   Number of obs =        200
+  Raw sum of deviations  202.755 (about 5.3600001)
+  Min sum of deviations   51.945                    Pseudo R2     =     0.7438
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |          2   .0639086    31.29   0.000     1.873971    2.126029
+       _cons |       1.53   .1435037    10.66   0.000     1.247008    1.812992
+------------------------------------------------------------------------------
+
+. qreg y x, quantile(.25)
+Iteration  1:  WLS sum of weighted deviations =  49.464904
+
+Iteration  1: sum of abs. weighted deviations =  49.665678
+Iteration  2: sum of abs. weighted deviations =  44.567243
+Iteration  3: sum of abs. weighted deviations =  40.960165
+Iteration  4: sum of abs. weighted deviations =  40.751666
+Iteration  5: sum of abs. weighted deviations =  40.739612
+Iteration  6: sum of abs. weighted deviations =  40.701134
+
+.25 Quantile regression                             Number of obs =        200
+  Raw sum of deviations 152.4775 (about 3.4400001)
+  Min sum of deviations 40.70113                    Pseudo R2     =     0.7331
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   2.053846   .0611834    33.57   0.000     1.933191    2.174501
+       _cons |   .9887692   .1373843     7.20   0.000      .717845    1.259693
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  2
+           e(sparsity) =  2.239901974186901
+             e(bwidth) =  .1150620873284232
+               e(df_m) =  1
+               e(df_r) =  198
+                e(f_r) =  .4464481086780623
+                  e(N) =  200
+              e(sum_w) =  200
+                e(q_v) =  3.440000057220459
+                  e(q) =  .25
+           e(sum_rdev) =  152.4775010496378
+           e(sum_adev) =  40.70113399891142
+           e(convcode) =  0
+
+macros:
+                e(cmd) : "qreg"
+            e(cmdline) : "qreg y x, quantile(.25)"
+            e(predict) : "qreg_p"
+         e(properties) : "b V"
+       e(marginsnotok) : "stdp stddp residuals"
+                e(vce) : "iid"
+          e(denmethod) : "fitted"
+           e(bwmethod) : "hsheather"
+             e(depvar) : "y"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+
+functions:
+             e(sample)   
+
+. quietly regress y x
+
+. matrix b = e(b)
+
+. putexcel set odta_res.xlsx, replace
+
+. putexcel A1 = "Resultados" B2 = (e(r2)) A3 = matrix(b), names
+option names not allowed
+r(198);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0804_comandos.log
+  log type:  text
+ closed on:  14 Oct 2026, 11:45:59
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

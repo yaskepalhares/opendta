@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import stats as st
 
+from ..core.stats import chi2_tail as _chi2_tail
+
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
@@ -33,7 +35,10 @@ def replay(s: "Session", cmd: str, args: str) -> None:
 
 
 def _display(s: "Session", est: Estimates, **kw) -> None:
-    if est.cmd == "regress":
+    if getattr(est, "boot", None) is not None:
+        from .bootstrap import display
+        display(s, est, **kw)
+    elif est.cmd == "regress":
         from .regress import display_regress
         display_regress(s, est, **kw)
     else:
@@ -429,7 +434,7 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
         out.write(f"{p:>10.4f}\n", "result")
         s.r = {"drop": 0.0, "df_r": float(dfr), "F": F, "df": float(q), "p": p}
     else:
-        p = float(st.chi2.sf(W, q))
+        p = float(_chi2_tail(W, q))
         out.write(f"{'chi2(' + format(q, '>3') + ') =':>22}", "text")
         out.write(f"{W:>8.2f}\n", "result")
         out.write(f"{'Prob > chi2 =':>22}", "text")
@@ -662,7 +667,7 @@ def cmd_estimates(s: "Session", args: str) -> None:
                     if n not in st_:
                         raise StataError(111, f"estimation result {n} not found")
                     _restore(s, st_[n])
-                    w = 78
+                    w = int(s.settings.get("linesize", 80))   # VERIFICAR com o padrao 80
                     lab = f"Model {n}"
                     out.write("\n" + "-" * w + "\n", "text")
                     out.write(lab + "\n", "result")
