@@ -21,12 +21,17 @@ def _c(run, n):
     return run.session.data.get(n).data.astype(float)
 
 
-def test_lowess_full_window_without_weights_is_ols(run):
+def test_lowess_window_follows_manual(run):
+    """[R] lowess: janela de i-k a i+k, k = floor((N·bwidth - 0.5)/2), cortada
+    nas pontas; com mean e noweight, o valor é a média simples da janela."""
     run(DATA)
-    run("lowess y x, bwidth(1) noweight generate(lw) nograph")
+    run("lowess y x, bwidth(.3) mean noweight generate(lw) nograph")
     x, y, lw = _c(run, "x"), _c(run, "y"), _c(run, "lw")
-    b = np.polyfit(x, y, 1)
-    assert np.allclose(lw, np.polyval(b, x), atol=1e-4)
+    o = np.argsort(x, kind="stable")
+    ys, n = y[o], len(x)
+    k = int(np.floor((n * .3 - .5) / 2))
+    expected = np.array([ys[max(0, i - k):min(n, i + k + 1)].mean() for i in range(n)])
+    assert np.allclose(lw[o], expected, atol=1e-5)
 
 
 def test_lrtest_and_hausman(run):
@@ -107,7 +112,7 @@ def test_putexcel_writes_cells(run, tmp_path):
     run(DATA)
     f = tmp_path / "out.xlsx"
     run("quietly regress y x\nmatrix b = e(b)")
-    out = run(f'putexcel set "{f}", replace\nputexcel A1 = "Titulo" B2 = (e(N)) A3 = matrix(b), names')
+    out = run(f'putexcel set "{f}", replace\nputexcel A1 = "Titulo" B2 = (e(N)) A3 = matrix(b, names)')
     assert "saved" in out
     ws = openpyxl.load_workbook(f).active
     assert ws["A1"].value == "Titulo"

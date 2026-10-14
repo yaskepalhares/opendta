@@ -128,6 +128,11 @@ def cmd_putexcel(s: "Session", args: str) -> None:
         sheet = strip_outer_quotes(str(o.get("sheet", "")).split(",")[0]) if isinstance(o.get("sheet"), str) else ""
         fresh = "replace" in o
     else:
+        if opt.strip():
+            # na sintaxe com putexcel set, o Stata 14.0 não aceita opções no fim
+            # do comando (as de matriz vão dentro de matrix(nome, names));
+            # compat 0804: "option names not allowed"
+            raise StataError(198, f"option {next(iter(o))} not allowed")
         if not st:
             raise StataError(198, "file not set; use putexcel set")   # VERIFICAR
         cells_txt = body

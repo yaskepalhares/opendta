@@ -86,17 +86,23 @@ def _header(s, title: str, sub: str, x: dict) -> None:
         out.write(f"{'':<62}{lab} = ", "text")
         out.write(f"{val:>10}\n", "result")
     out.write("\n", "text")
+    if x.get("intpoints"):
+        # xtlogit, re: método e pontos de integração (compat 0804)
+        out.write(f"{'Integration method: mvaghermite':<48}{'Integration pts.':<18}= ", "text")
+        out.write(f"{x['intpoints']:>10}\n", "result")
+        out.write("\n", "text")
     chi = f"{x['chi2type']} chi2({x['df_m']})"
     out.write(f"{'':<48}{chi:<18}= ", "text")
     out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
     lab = "Log likelihood  = "
-    out.write(f"{lab + _g(x['ll']):<48}{'Prob > chi2':<18}= ", "text")
+    ll_txt = format(_g(x["ll"]).strip(), ">10")     # "Log likelihood  =  -394.4428" (compat 0804)
+    out.write(f"{lab + ll_txt:<48}{'Prob > chi2':<18}= ", "text")
     out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
     out.write("\n", "text")
 
 
 def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, sub, keep_groups, ll0=None,
-            chibar=None, aux_rows=(), eform=""):
+            chibar=None, aux_rows=(), eform="", lr0=None, intpoints=None):
     pr = P.pr
     smp = pr.smp
     k = pr.X.shape[1] + (0 if P.fe else (1 if pr.constant else 0))
@@ -107,6 +113,10 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         chi2 = float(bs @ np.linalg.solve(Vs, bs)) if slopes else SYS
     except np.linalg.LinAlgError:
         chi2 = SYS
+    chi2type = "Wald"
+    if lr0 is not None:
+        # xtlogit, fe: teste LR contra o modelo sem covariáveis (compat 0804)
+        chi2, chi2type = max(2 * (res.ll - lr0), 0.0), "LR"
     p = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
     names = [c.name for c in smp.cols] + ([] if P.fe or not pr.constant else ["_cons"])
     from .models2 import _bmap, _semap, _expand
@@ -144,7 +154,8 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
     inv = P.inv[keep_groups]
     tmin, tavg, tmax = _obs_per_group(np.unique(inv, return_inverse=True)[1])
     x = {"N": int(keep_groups.sum()), "G": len(np.unique(inv)), "pvar": P.pvar, "tmin": tmin, "tavg": tavg,
-         "tmax": tmax, "chi2": chi2, "p": p, "df_m": len(slopes), "ll": res.ll, "chi2type": "Wald"}
+         "tmax": tmax, "chi2": chi2, "p": p, "df_m": len(slopes), "ll": res.ll, "chi2type": chi2type,
+         "intpoints": intpoints}
     est.extra = x
     est.coef_title = eform or "Coef."
     est.eform_on = bool(eform)
@@ -157,7 +168,9 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
                        coef_title=ee.coef_title, eform=ee.eform_on)
             if chibar is not None:
                 lab, val, pv = chibar
-                ss.output.write(f"{lab}: chibar2(01) = {val:7.2f} Prob >= chibar2 = {pv:5.3f}\n", "text")
+                # "LR test of rho=0: chibar2(01) = 8.21" e o Prob na coluna 56 (compat 0804)
+                ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(55)
+                                + f"Prob >= chibar2 = {pv:5.3f}\n", "text")
     est.display = disp
     scalars = [("N", float(x["N"])), ("N_g", float(x["G"])), ("g_min", float(tmin)), ("g_avg", tavg),
                ("g_max", float(tmax)), ("df_m", float(len(slopes))), ("ll", res.ll), ("chi2", chi2), ("p", p),
@@ -165,10 +178,12 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
                ("ic", float(res.iterations))]
     if ll0 is not None:
         scalars.append(("ll_0", ll0))
+    elif lr0 is not None:
+        scalars.append(("ll_0", lr0))
     if chibar is not None:
         scalars += [("chi2_c", chibar[1]), ("p_c", chibar[2])]
     macros = [("cmdline", f"{cmd} {args.strip()}"), ("cmd", cmd), ("ivar", P.pvar), ("model", "fe" if P.fe else "re"),
-              ("depvar", smp.depname), ("chi2type", "Wald"), ("vce", "oim"), ("title", title),
+              ("depvar", smp.depname), ("chi2type", chi2type), ("vce", "oim"), ("title", title),
               ("properties", "b V"), ("predict", f"{cmd}_p")]
     sample = np.zeros(s.data.nobs, dtype=bool)
     sample[np.flatnonzero(smp.mask)[keep_groups]] = True
@@ -262,9 +277,14 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
     if pr.constant:
         b0[-1] = math.log(max(y.mean(), 1e-8))
     rp = maximize(pf, b0)
+    # o Stata mostra o Poisson já partindo do ponto ótimo (iterações 0 e 1
+    # iguais; compat 0804): o ajuste exato fica fora do log
+    rp = maximize(pf, rp.b)
     res = pr.maximize(fun, np.concatenate([rp.b, [0.0]]))
     if not pr.o.get("nolog"):
-        out.write("\n", "text")
+        out.write("\nFitting Poisson model:\n\n", "text")
+        print_log(out, rp, "log likelihood")
+        out.write("\nFitting full model:\n\n", "text")
         print_log(out, res, "log likelihood")
     V = np.linalg.inv(-res.H)
     lna, se_lna = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
@@ -320,6 +340,9 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         good = (tot > 0) & (tot < cnt)
         keep = good[inv]
         dg = int((~good).sum())
+        if np.any(tot[good] > 1):
+            # esta nota vem antes da de grupos descartados (compat 0804)
+            out.write("note: multiple positive outcomes within groups encountered.\n", "text")
         if dg:
             out.write(f"note: {dg} group{'s' if dg > 1 else ''} ({int((~keep).sum())} obs) dropped because of "
                       "all positive or\n      all negative outcomes.\n", "text")
@@ -335,13 +358,19 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
                 return ll, None, None
             g = _num_grad(ll_fe, b)
             return ll, g, num_hess(lambda q: _num_grad(ll_fe, q), b)
-        res = pr.maximize(fun, np.zeros(X.shape[1]))
+        # início: logit agrupado (com constante) nos grupos mantidos (compat 0804)
+        from .models import _logit
+        from .ml import maximize
+        Xk = np.column_stack([X[keep], np.ones(int(keep.sum()))])
+        lk, _ = _logit(y[keep], Xk, np.ones(int(keep.sum())))
+        b_start = maximize(lk, np.zeros(Xk.shape[1])).b[:-1]
+        res = pr.maximize(fun, b_start)
         if not pr.o.get("nolog"):
             out.write("\n", "text")
             print_log(out, res, "log likelihood")
         V = np.linalg.inv(-res.H)
         _finish(s, P, "xtlogit", args, res.b, V, res, [], "Conditional fixed-effects logistic regression", "",
-                keep, eform="Odds Ratio" if eform else "")
+                keep, eform="Odds Ratio" if eform else "", lr0=ll_fe(np.zeros(X.shape[1])))
         return
     Xc = np.column_stack([X, np.ones(len(y))]) if pr.constant else X
     k = Xc.shape[1]
@@ -389,8 +418,39 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         p0 = y.mean()
         b0[-1] = math.log(p0 / (1 - p0))
     rl = maximize(lf, b0)
-    res = pr.maximize(fun, np.concatenate([rl.b, [0.0]]))
+    # busca em tau = sigma2/(1 + sigma2) com os coeficientes do logit agrupado e
+    # quadratura de Gauss-Hermite simples, até a verossimilhança cair; o modelo
+    # completo parte do melhor tau (compat 0804)
+
+    def ll_grid(t):
+        if t == 0:
+            return rl.ll
+        sig = math.sqrt(t / (1 - t))
+        eta = Xc @ rl.b
+        tot = 0.0
+        for g in range(G):
+            ix = order[bounds[g]:bounds[g + 1]]
+            e, sg = eta[ix], sign[ix]
+            nodes = math.sqrt(2) * sig * _GH_X
+            vals = special.log_expit(sg[None, :] * (e[None, :] + nodes[:, None])).sum(axis=1)
+            tot += float(special.logsumexp(np.log(_GH_W) + vals)) - 0.5 * math.log(math.pi)
+        return tot
+    grid = []
+    t = 0.0
+    while t < 0.95:
+        grid.append((t, ll_grid(t)))
+        if len(grid) > 1 and grid[-1][1] < grid[-2][1]:
+            break
+        t = round(t + 0.1, 1)
+    best_t = max(grid, key=lambda tv: tv[1])[0]
+    start_l2 = math.log(best_t / (1 - best_t)) if best_t > 0 else 0.0
+    res = pr.maximize(fun, np.concatenate([rl.b, [start_l2]]))
     if not pr.o.get("nolog"):
+        out.write("\nFitting comparison model:\n\n", "text")
+        print_log(out, rl, "log likelihood")
+        out.write("\nFitting full model:\n\n", "text")
+        for tv, lv in grid:
+            out.write(f"tau = {tv:4.1f}     log likelihood = {_g(lv).strip()}\n", "text")
         out.write("\n", "text")
         print_log(out, res, "log likelihood")
     V = np.linalg.inv(-res.H)
@@ -412,4 +472,4 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
     _finish(s, P, "xtlogit", args, res.b, V, res, ["/lnsig2u"], "Random-effects logistic regression",
             "Random effects u_i ~ Gaussian", np.ones(len(y), bool), chibar=("LR test of rho=0", chib, pchib),
-            aux_rows=aux, eform="Odds Ratio" if eform else "")
+            aux_rows=aux, eform="Odds Ratio" if eform else "", intpoints=12)

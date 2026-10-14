@@ -30,24 +30,22 @@ if TYPE_CHECKING:
 
 def lowess_fit(x: np.ndarray, y: np.ndarray, bwidth: float = 0.8, mean: bool = False,
                noweight: bool = False) -> np.ndarray:
-    """Valor suavizado em cada x: regressão local (linha, ou média com
-    `mean`) nos k = floor(bwidth·n) vizinhos (VERIFICAR arredondamento),
-    com pesos tricúbicos ([R] lowess, Methods and formulas)."""
+    """Valor suavizado em cada x ([R] lowess, Methods and formulas): com os
+    dados ordenados por x, a janela de i vai de max(1, i-k) a min(i+k, N),
+    k = floor((N·bwidth - 0.5)/2), cortada nas pontas (não deslocada); pesos
+    tricúbicos com Δ = 1.0001·max(x(i+) - x(i), x(i) - x(i-)); regressão
+    local ponderada (ou média ponderada com `mean`). Conferido no compat 0804."""
     n = len(x)
     order = np.argsort(x, kind="stable")
     xs, ys = x[order], y[order]
-    k = max(2, int(math.floor(bwidth * n + 0.5)) if bwidth < 1 else n)
-    k = min(k, n)
+    half = max(int(math.floor((n * bwidth - 0.5) / 2)), 0)
     out = np.empty(n)
     for i in range(n):
         d = np.abs(xs - xs[i])
-        # meia-janela: (k-1)/2 vizinhos de cada lado, limitada às pontas
-        half = (k - 1) // 2
         lo = max(0, i - half)
-        hi = min(n, lo + k)
-        lo = max(0, hi - k)
+        hi = min(n, i + half + 1)
         sel = np.arange(lo, hi)
-        delta = 1.0001 * max(xs[i] - xs[lo], xs[hi - 1] - xs[i])
+        delta = 1.0001 * max(xs[hi - 1] - xs[i], xs[i] - xs[lo])
         if noweight or delta <= 0:
             wts = np.ones(len(sel))
         else:
@@ -95,7 +93,7 @@ def lowess(s: "Session", text: str):
     if isinstance(lopts.get("generate"), str):
         nm = lopts["generate"].split()[0]
         vals = np.full(s.data.nobs, D.SYS)
-        vals[mask] = fit
+        vals[mask] = fit.astype(np.float32).astype(float)     # variável float, como no Stata
         s.data.add(Variable(nm, "float", vals))
     if lopts.get("nograph"):
         return None, graw

@@ -83,7 +83,7 @@ def cmd_lrtest(s: "Session", args: str) -> None:
     out.write(f"{chi2:>9.2f}\n", "result")
     out.write(f"{'(Assumption: ' + r + ' nested in ' + u + ')':<54}Prob > chi2 = ", "text")
     out.write(f"{p:>9.4f}\n", "result")
-    s.r = dict(reversed([("p", p), ("df", float(df)), ("chi2", chi2)]))   # VERIFICAR ordem
+    s.r = dict(reversed([("p", p), ("chi2", chi2), ("df", float(df))]))   # ordem do compat 0804
 
 
 # ---------------------------------------------------------------------------
@@ -136,14 +136,15 @@ def cmd_hausman(s: "Session", args: str) -> None:
     na = names[0] if names[0] != "." else "."
     nb = names[1] if names[1] != "." else "."
     out.write("\n" + " " * 17 + "---- Coefficients ----\n", "text")
-    out.write(f"{'':>12} |{'(b)':>11}{'(B)':>13}{'(b-B)':>17}     sqrt(diag(V_b-V_B))\n", "text")
-    out.write(f"{'':>12} |{na[:10]:>11}{nb[:10]:>13}{'Difference':>17}{'S.E.':>14}\n", "text")
+    # larguras conferidas no compat 0804
+    out.write(f"{'':>12} |{'(b)':>9}{'(B)':>13}{'(b-B)':>17}     sqrt(diag(V_b-V_B))\n", "text")
+    out.write(f"{'':>12} |{na[:10]:>9}{nb[:10]:>13}{'Difference':>19}{'S.E.':>14}\n", "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     diag = np.diag(Vd)
     for j, c in enumerate(common):
         se = math.sqrt(diag[j]) if diag[j] > 0 else SYS
         out.write(f"{c[:12]:>12} |", "text")
-        out.write(f"{_g(b1[j]):>11}{_g(b2[j]):>13}{_g(d[j]):>17}{_g(se):>14}\n", "result")
+        out.write(f"{_g(b1[j]):>12}{_g(b2[j]):>13}{_g(d[j]):>16}{_g(se):>16}\n", "result")
     out.write("-" * 78 + "\n", "text")
     cmd_a = ea.get("cmd", "")
     cmd_b = eb.get("cmd", "")
@@ -157,7 +158,7 @@ def cmd_hausman(s: "Session", args: str) -> None:
     out.write(f"{p:>11.4f}\n", "result")
     if rank < len(common):
         out.write(f"{'(V_b-V_B is not positive definite)':>78}\n", "text")
-    s.r = dict(reversed([("rank", float(rank)), ("p", p), ("df", float(df)), ("chi2", chi2)]))   # VERIFICAR
+    s.r = dict(reversed([("rank", float(rank)), ("chi2", chi2), ("df", float(df)), ("p", p)]))   # compat 0804
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,7 @@ def cmd_xtsum(s: "Session", args: str) -> None:
     base = touse(s, p) & (ds.get(pvar).data < SYS)
     ids = ds.get(pvar).data
     out = s.output
-    out.write("\n" + f"{'Variable':<17}|{'Mean':>10}{'Std. Dev.':>12}{'Min':>11}{'Max':>11} |{'Observations':>16}\n",
+    out.write("\n" + f"{'Variable':<17}|{'Mean':>10}{'Std. Dev.':>12}{'Min':>10}{'Max':>11} |{'Observations':>16}\n",
               "text")
     out.write("-" * 17 + "+" + "-" * 44 + "+" + "-" * 16 + "\n", "text")
     for k, n in enumerate(names):
@@ -215,9 +216,9 @@ def cmd_xtsum(s: "Session", args: str) -> None:
             out.write(f"{'':<17}|{'':<44}|\n", "text")
         for lab, mn, sd, lo, hi, ol, ov in rows:
             out.write(f"{lab:<16} |", "text")
-            out.write(f"{mn:>10}{sd:>12}{lo:>11}{hi:>11}", "result")
+            out.write(f"{mn:>10}{sd:>11}{lo:>11}{hi:>11}", "result")
             out.write(f" | {ol:>5} = ", "text")
-            out.write(f"{ov}\n", "result")   # VERIFICAR layout
+            out.write(f"{ov}\n", "result")   # layout conferido no compat 0804
 
 
 def cmd_xtdescribe(s: "Session", args: str) -> None:
@@ -242,9 +243,9 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
         v = [format_value(float(x), "%9.0g", pad=False).strip() for x in vals]
         return ", ".join(v) if len(v) <= 3 else f"{v[0]}, {v[1]}, ..., {v[-1]}"
     out.write("\n", "text")
-    out.write(f"{pvar:>8}:  {lst(uniq_i):<52}n = ", "text")
+    out.write(f"{pvar:>8}:  {lst(uniq_i):<50}n = ", "text")
     out.write(f"{n:>10}\n", "result")
-    out.write(f"{tvar:>8}:  {lst(uniq_t):<52}T = ", "text")
+    out.write(f"{tvar:>8}:  {lst(uniq_t):<50}T = ", "text")
     out.write(f"{T:>10}\n", "result")
     out.write(f"{'':>11}Delta({tvar}) = {delta:g} unit\n", "text")
     out.write(f"{'':>11}Span({tvar})  = {span} periods\n", "text")
@@ -256,8 +257,8 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
     counts = np.array([np.sum(ids == i) for i in uniq_i])
     qs = [np.min(counts)] + [S_pct(counts, q) for q in (5, 25, 50, 75, 95)] + [np.max(counts)]
     out.write("\nDistribution of T_i:   min      5%     25%       50%       75%     95%     max\n", "text")
-    out.write(" " * 20 + "".join(f"{int(q):>8}" if i < 3 else f"{int(q):>10}" if i < 5 else f"{int(q):>8}"
-                                for i, q in enumerate(qs)) + "\n", "result")
+    widths = (26, 8, 8, 10, 10, 8, 8)     # compat 0804
+    out.write("".join(f"{int(q):>{wd}}" for wd, q in zip(widths, qs)) + "\n", "result")
     # padrões de presença (1 = observado, . = ausente) por período
     tindex = {t: k for k, t in enumerate(uniq_t)}
     pats: dict[str, int] = {}
@@ -276,14 +277,14 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
     for key, f in shown:
         pct = 100 * f / n
         cum += pct
-        out.write(f"{f:>10}{pct:>9.2f}{cum:>8.2f} |  {key}\n", "result")
+        out.write(f"{f:>9}{pct:>10.2f}{cum:>8.2f} |  {key}\n", "result")
     rest = sum(f for _, f in order[npat:])
     if rest:
         pct = 100 * rest / n
         cum += pct
-        out.write(f"{rest:>10}{pct:>9.2f}{100.0:>8.2f} | (other patterns)\n", "result")
+        out.write(f"{rest:>9}{pct:>10.2f}{100.0:>8.2f} | (other patterns)\n", "result")
     out.write(" " + "-" * 27 + "+" + "-" * (T + 2) + "\n", "text")
-    out.write(f"{n:>10}{100.0:>9.2f}{'':>8} |  {'X' * T}\n", "result")
+    out.write(f"{n:>9}{100.0:>10.2f}{'':>8} |  {'X' * T}\n", "result")
     s.r = dict(reversed([("n", float(n)), ("N", float(len(ids))), ("max", float(np.max(counts))),
                          ("min", float(np.min(counts)))]))   # VERIFICAR
 
@@ -339,7 +340,11 @@ def cmd_qreg(s: "Session", args: str) -> None:
     rho = lambda u, t: u * (t - (u < 0))   # noqa: E731
     min_dev = float(ww @ rho(r, q))
     # desvio do modelo só com a constante: quantil de y
-    yq = float(_qfit(np.ones((n, 1)), y, q, w)[0])
+    # o Stata usa a observação de ordem ceil(n·q) de y (com pesos, a primeira
+    # cujo peso acumulado chega a q·W): 5.36 e 3.44 no compat 0804
+    o_ = np.argsort(y, kind="stable")
+    cw = np.cumsum(ww[o_])
+    yq = float(y[o_][min(int(np.searchsorted(cw, q * cw[-1] - 1e-9 * cw[-1])), n - 1)])
     raw_dev = float(ww @ rho(y - yq, q))
     pr2 = 1 - min_dev / raw_dev if raw_dev > 0 else SYS
     # erros-padrão "iid" com densidade pelo método fitted e banda de
@@ -383,14 +388,15 @@ def cmd_qreg(s: "Session", args: str) -> None:
             return np.where(ok & (yy < SYS), yy - xb, SYS), ""
         raise StataError(198, f"option {stat} not allowed")
     est.predict = _pred
-    scalars = [("N", float(n)), ("df_m", float(k - (1 if smp.constant else 0))), ("df_r", float(df_r)),
-               ("q", q), ("q_v", yq), ("sum_adev", min_dev), ("sum_rdev", raw_dev), ("f_r", 1 / s_hat if s_hat else SYS),
-               ("sparsity", s_hat), ("bwidth", h), ("rank", float(k)), ("convcode", 0.0)]
-    macros = [("cmdline", f"qreg {args.strip()}"), ("cmd", "qreg"), ("title",
-              "Median regression" if q == 0.5 else f"{q:.2f} Quantile regression"),
-              ("vce", "iid"), ("denmethod", "fitted"), ("bwmethod", "hsheather"), ("depvar", smp.depname),
-              ("properties", "b V"), ("predict", "qreg_p")]
-    post(s, est, list(reversed(scalars)), list(reversed(macros)), smp.mask)
+    # e() na ordem do ereturn list do Stata 14 (compat 0804)
+    scalars = [("rank", float(k)), ("sparsity", s_hat), ("bwidth", h),
+               ("df_m", float(k - (1 if smp.constant else 0))), ("df_r", float(df_r)),
+               ("f_r", 1 / s_hat if s_hat else SYS), ("N", float(n)), ("sum_w", float(ww.sum())),
+               ("q_v", yq), ("q", q), ("sum_rdev", raw_dev), ("sum_adev", min_dev), ("convcode", 0.0)]
+    macros = [("cmd", "qreg"), ("cmdline", f"qreg {args.strip()}"), ("predict", "qreg_p"),
+              ("properties", "b V"), ("marginsnotok", "stdp stddp residuals"), ("vce", "iid"),
+              ("denmethod", "fitted"), ("bwmethod", "hsheather"), ("depvar", smp.depname)]
+    post(s, est, scalars, macros, smp.mask)
     _display_qreg(s, est)
 
 
@@ -399,11 +405,12 @@ def _display_qreg(s: "Session", est, *, header: bool = True, table: bool = True,
     x = est.extra
     if header:
         q = x["q"]
-        title = "Median regression" if abs(q - 0.5) < 1e-12 else f"{q:.2f} Quantile regression"
+        title = ("Median regression" if abs(q - 0.5) < 1e-12
+                 else f"{format_value(q, '%9.0g', pad=False).strip()} Quantile regression")
         out.write("\n", "text")
         out.write(f"{title:<52}Number of obs = ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
-        out.write(f"  Raw sum of deviations {_g(x['raw'], '%9.0g'):>8} (about {_g(x['yq'])})\n", "text")
+        out.write(f"  Raw sum of deviations {_g(x['raw'], '%9.0g'):>8} (about {_g(x['yq'], '%10.0g').strip()})\n", "text")
         out.write(f"  Min sum of deviations {_g(x['min'], '%9.0g'):>8}{'':<20}Pseudo R2     = ", "text")
         out.write(f"{x['r2_p']:>10.4f}\n", "result")
         out.write("\n", "text")
