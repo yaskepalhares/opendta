@@ -73,24 +73,30 @@ jobs:
           Set-Location $env:RUNNER_TEMP
           "set obs 10`ngen t = _n`ngen x = t^2`nsummarize x`nregress x t`nhistogram x`ngraph export h.png, replace`n" | Set-Content -NoNewline -Encoding utf8 teste.do
           $p = Start-Process -FilePath "$env:GITHUB_WORKSPACE\dist\OpenDTA\OpenDTA.exe" -ArgumentList "-b", "do", "teste.do" -Wait -PassThru -NoNewWindow
+          function Fail($m) { Write-Output "::error::$m"; exit 1 }
+          if (-not (Test-Path teste.log)) { Fail "portable: teste.log not written (exit code $($p.ExitCode))" }
           Get-Content teste.log
-          if (-not (Select-String -Path teste.log -Pattern "end of do-file" -Quiet)) { throw "batch run failed" }
-          if (-not (Test-Path h.png)) { throw "graph export failed" }
+          if (-not (Select-String -Path teste.log -Pattern "end of do-file" -Quiet)) { Fail "portable: batch run failed" }
+          if (-not (Test-Path h.png)) { Fail "portable: graph export failed" }
       - name: Test the installer (silent install, run, uninstall)
         shell: pwsh
         run: |
+          function Fail($m) { Write-Output "::error::$m"; exit 1 }
           $dir = "$env:RUNNER_TEMP\OpenDTA-installed"
-          $p = Start-Process -FilePath "dist\OpenDTA-windows-x64-setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=$dir" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
-          if (-not (Test-Path "$dir\OpenDTA.exe")) { throw "OpenDTA.exe not installed" }
+          $p = Start-Process -FilePath "dist\OpenDTA-windows-x64-setup.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Fail "installer exit code $($p.ExitCode)" }
+          if (-not (Test-Path "$dir\OpenDTA.exe")) { Fail "OpenDTA.exe not installed in $dir" }
           Set-Location $env:RUNNER_TEMP
           Remove-Item teste.log -ErrorAction SilentlyContinue
-          Start-Process -FilePath "$dir\OpenDTA.exe" -ArgumentList "-b", "do", "teste.do" -Wait -NoNewWindow
-          if (-not (Select-String -Path teste.log -Pattern "end of do-file" -Quiet)) { throw "installed app failed" }
-          $q = (Get-ItemProperty "HKCU:\Software\Classes\.do\OpenWithProgids" -ErrorAction Stop)
-          if (-not ($q.PSObject.Properties.Name -contains "OpenDTA.File")) { throw "Open with entry missing" }
+          $r = Start-Process -FilePath "$dir\OpenDTA.exe" -ArgumentList "-b", "do", "teste.do" -Wait -PassThru -NoNewWindow
+          if (-not (Test-Path teste.log)) { Fail "installed: teste.log not written (exit code $($r.ExitCode))" }
+          if (-not (Select-String -Path teste.log -Pattern "end of do-file" -Quiet)) { Fail "installed: batch run failed" }
+          $key = "HKCU:\Software\Classes\.do\OpenWithProgids"
+          if (-not (Test-Path $key)) { Fail "registry key $key missing" }
+          $names = (Get-Item $key).GetValueNames()
+          if (-not ($names -contains "OpenDTA.File")) { Fail "Open with entry missing (values: $($names -join ', '))" }
           $u = Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait -PassThru
-          if ($u.ExitCode -ne 0) { throw "uninstaller exit code $($u.ExitCode)" }
+          if ($u.ExitCode -ne 0) { Fail "uninstaller exit code $($u.ExitCode)" }
       - uses: actions/upload-artifact@v4
         with:
           name: OpenDTA-windows-x64

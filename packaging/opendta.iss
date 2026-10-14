@@ -60,9 +60,9 @@ Name: "{autodesktop}\OpenDTA"; Filename: "{app}\OpenDTA.exe"; Tasks: desktopicon
 Root: HKA; Subkey: "Software\Classes\OpenDTA.File"; ValueType: string; ValueName: ""; ValueData: "OpenDTA file"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\OpenDTA.File\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\OpenDTA.exe,0"
 Root: HKA; Subkey: "Software\Classes\OpenDTA.File\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\OpenDTA.exe"" ""%1"""
-Root: HKA; Subkey: "Software\Classes\.do\OpenWithProgids"; ValueType: none; ValueName: "OpenDTA.File"; Flags: uninsdeletevalue
-Root: HKA; Subkey: "Software\Classes\.ado\OpenWithProgids"; ValueType: none; ValueName: "OpenDTA.File"; Flags: uninsdeletevalue
-Root: HKA; Subkey: "Software\Classes\.dta\OpenWithProgids"; ValueType: none; ValueName: "OpenDTA.File"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.do\OpenWithProgids"; ValueType: string; ValueName: "OpenDTA.File"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.ado\OpenWithProgids"; ValueType: string; ValueName: "OpenDTA.File"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.dta\OpenWithProgids"; ValueType: string; ValueName: "OpenDTA.File"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\Applications\OpenDTA.exe"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "OpenDTA"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Applications\OpenDTA.exe\SupportedTypes"; ValueType: string; ValueName: ".do"; ValueData: ""
 Root: HKA; Subkey: "Software\Classes\Applications\OpenDTA.exe\SupportedTypes"; ValueType: string; ValueName: ".ado"; ValueData: ""
