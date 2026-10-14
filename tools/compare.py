@@ -40,7 +40,8 @@ _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log usi
 _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
 # caminho absoluto de arquivos temporários do caso (graph export em PDF mostra
 # o caminho completo, que muda de máquina para máquina)
-_ABSPATH = re.compile(r"(?<=\(file )/\S*/(odta_\S+)")
+# caminho absoluto de arquivos odta_* (macOS/Linux "/..."; Windows "C:\\...")
+_ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 
 
 def normalize(text: str) -> list[str]:
