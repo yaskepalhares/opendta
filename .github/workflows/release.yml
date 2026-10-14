@@ -2,11 +2,18 @@ name: versão para download
 
 # Gera os instaladores do macOS (Apple Silicon e Intel) e publica uma Release
 # no GitHub. Roda ao enviar uma tag v* (ex.: git tag v0.1.0 && git push origin
-# v0.1.0); pela aba Actions ("Run workflow") só gera os arquivos, sem publicar.
+# v0.1.0). Em pull requests que mexem no empacotamento, e pela aba Actions
+# ("Run workflow"), só gera e testa os arquivos, sem publicar.
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "tools/build_macos.sh"
+      - ".github/workflows/release.yml"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
