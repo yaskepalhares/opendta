@@ -1212,3 +1212,4 @@ def _pi(eng, v, r):
 
 from . import stata_api  # noqa: E402,F401  (st_* go into the same table)
 from . import advanced  # noqa: E402,F401  (asarray, optimize)
+from . import moptimize  # noqa: E402,F401  (moptimize)

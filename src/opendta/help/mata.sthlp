@@ -48,6 +48,21 @@ or {cmd:void} and {it:org} {cmd:scalar}, {cmd:vector}, {cmd:rowvector},
 {cmd:continue}, {cmd:return()}, {cmd:struct}.
 {p_end}
 
+{title:Classes}
+
+{p 8 12 2}
+{cmd:class} {it:name} [{cmd:extends} {it:parent}] {cmd:{c -(}} declarations {cmd:{c )-}}, where
+each declaration is a member variable ({it:type} {it:org} {it:names}) or a method
+({it:type} {it:org} {it:method}{cmd:()}), optionally {cmd:static}, {cmd:virtual} or
+{cmd:final}, under {cmd:public:}, {cmd:protected:} or {cmd:private:}. Methods are
+defined as {it:type} {it:org} {it:class}{cmd:::}{it:method}{cmd:(}{it:args}{cmd:)} {cmd:{c -(}} ... {cmd:{c )-}};
+inside them, members are used by name or as {cmd:this.}{it:member}, and
+{cmd:super.}{it:method}{cmd:()} calls the parent's version. {cmd:new()} is the
+constructor (parents first). Instances: {cmd:class} {it:name} {cmd:scalar} {it:x} in a
+function, or {it:x} {cmd:=} {it:name}{cmd:()}; then {it:x}{cmd:.}{it:member} and
+{it:x}{cmd:.}{it:method}{cmd:()}. Methods are dispatched on the class of the instance.
+{p_end}
+
 {title:Functions}
 
 {pstd}
@@ -69,6 +84,17 @@ Optimization: {cmd:optimize_init}, {cmd:optimize_init_evaluator},
 {cmd:_evaluatortype} (d0, d1, d2), {cmd:_params}, {cmd:_which},
 {cmd:_technique} (nr, bfgs), {cmd:_argument}, {cmd:_tracelevel},
 {cmd:_conv_*}, {cmd:optimize()} and {cmd:optimize_result_*}.
+Model optimization: {cmd:moptimize_init}, {cmd:moptimize_init_evaluator},
+{cmd:_evaluatortype} (lf, d0, d1, d2, lf0, lf1, lf2, gf0, gf1, gf2), {cmd:_depvar},
+{cmd:_eq_indepvars}, {cmd:_eq_cons}, {cmd:_eq_name}, {cmd:_eq_offset},
+{cmd:_eq_exposure}, {cmd:_eq_coefs}, {cmd:_weight}, {cmd:_weighttype},
+{cmd:_cluster}, {cmd:_vcetype} (oim, opg, robust), {cmd:_userinfo}, {cmd:_touse},
+{cmd:_which}, {cmd:_technique}, {cmd:_tracelevel}, {cmd:_conv_*};
+{cmd:moptimize()}; evaluator utilities {cmd:moptimize_util_xb}, {cmd:_depvar},
+{cmd:_sum}, {cmd:_vecsum}, {cmd:_matsum}, {cmd:_eq_indices}, {cmd:_userinfo};
+results {cmd:moptimize_result_coefs}, {cmd:_eq_coefs}, {cmd:_V}, {cmd:_value},
+{cmd:_gradient}, {cmd:_Hessian}, {cmd:_iterations}, {cmd:_converged},
+{cmd:_colstripe}, {cmd:_display} and {cmd:_post}.
 {p_end}
 
 {pstd}

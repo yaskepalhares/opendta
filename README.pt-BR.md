@@ -51,7 +51,7 @@ Já funciona:
 - manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
 - números aleatórios: Mersenne Twister de 64 bits, `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições.
 
-- Mata: blocos `mata ... end`, funções do usuário, structs e ponteiros, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
+- Mata: blocos `mata ... end`, funções do usuário, structs, classes (herança, métodos virtuais) e ponteiros, `optimize()` e `moptimize()`, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
 
 - estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `areg`, `ivregress`, `anova` e `oneway`, com variáveis fatoriais, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
 - pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);

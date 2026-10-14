@@ -16,13 +16,17 @@ from ..core.errors import StataError
 from . import ops
 from .display import render
 from .lexer import MataSyntaxError
-from .parser import (AddrOf, Assign, Binary, Block, Break, Call, Continue, Decl, Deref, DoWhile,
-                     Empty, ExprStmt, For, FuncDef, If, IncDec, Member, Name, Num, Parser, RangeSub,
+from .parser import (AddrOf, Assign, Binary, Block, Break, Call, ClassDef, Continue, Decl, Deref, DoWhile,
+                     Empty, ExprStmt, For, FuncDef, If, IncDec, Member, MethodCall, Name, Num, Parser, RangeSub,
                      Return, Str, StructDef, Subscript, Ternary, Transpose, Unary, While)
 from .values import MV, MataError, Pointer, StructVal, SYS, empty, real, string, truth
 
 if TYPE_CHECKING:
     from ..session import Session
+
+
+class ClassVal(StructVal):
+    """Instance of a Mata class: sname is the (dynamic) class name."""
 
 
 class _Break(Exception):
@@ -48,6 +52,8 @@ class Frame:
         self.vars: dict[str, MV] = {}
         self.types: dict[str, tuple[str, str]] = {}
         self.parent = parent           # only for external (global) variables
+        self.this = None               # ClassVal inside a method
+        self.cls = ""                  # class where the running method is defined (for super)
 
     def get(self, name: str) -> MV:
         if name in self.vars:
@@ -103,6 +109,9 @@ class MataEngine:
         self.globals = Frame()
         self.funcs: dict[str, FuncDef] = {}
         self.structs: dict[str, StructDef] = {}
+        self.classes: dict[str, ClassDef] = {}
+        self.methods: dict[tuple[str, str], FuncDef] = {}
+        self.statics: dict[str, dict[str, MV]] = {}
         self.depth = 0
         self.argc: list[int] = []      # number of arguments of each call (args())
         from . import library  # noqa: F401  (registers the functions)
@@ -220,6 +229,21 @@ class MataEngine:
     # ------------------------------------------------------------------
     def _top(self, st) -> None:
         try:
+            if isinstance(st, ClassDef):
+                if st.parent and st.parent not in self.classes:
+                    raise MataError(3000, f"class {st.parent} not found")   # VERIFY
+                self.classes[st.name] = st
+                self.statics[st.name] = {nm: self._initial(el, org) for el, org, nm, static in st.fields
+                                         if static}
+                return
+            if isinstance(st, FuncDef) and "::" in st.name:
+                cname, mname = st.name.split("::", 1)
+                if cname not in self.classes:
+                    raise MataError(3000, f"class {cname} not found")   # VERIFY
+                if mname not in self.classes[cname].methods and mname not in ("new", "destroy"):
+                    raise MataError(3000, f"{mname}() not declared in class {cname}")   # VERIFY
+                self.methods[(cname, mname)] = st
+                return
             if isinstance(st, FuncDef):
                 if st.name in self.funcs:
                     raise MataError(3000, f"{st.name}() already exists")   # VERIFY
@@ -384,7 +408,7 @@ class MataEngine:
                 fr.vars[nm] = self._initial(st.eltype, st.org)
         elif isinstance(st, (Empty,)):
             pass
-        elif isinstance(st, (FuncDef, StructDef)):
+        elif isinstance(st, (FuncDef, StructDef, ClassDef)):
             raise MataError(3000, "function definitions must be at the top level")
         else:
             raise MataError(3000, "invalid statement")
@@ -405,7 +429,75 @@ class MataEngine:
         r, c = (1, 0) if org == "rowvector" else (0, 1) if org == "colvector" else (0, 0)
         return empty(t, r, c)
 
+    # classes ----------------------------------------------------------------
+    def _lineage(self, cname: str) -> list[str]:
+        """The class and its ancestors, from the root to the class."""
+        out = []
+        while cname:
+            cd = self.classes.get(cname)
+            if cd is None:
+                raise MataError(3000, f"class {cname} not found")
+            out.append(cname)
+            cname = cd.parent
+        return out[::-1]
+
+    def new_instance(self, cname: str) -> "ClassVal":
+        fields: dict[str, MV] = {}
+        for c in self._lineage(cname):
+            for el, org, nm, static in self.classes[c].fields:
+                if not static:
+                    fields[nm] = self._initial(el, org)
+        obj = ClassVal(cname, fields)
+        # constructors run from the root class down ([M-2] class)
+        for c in self._lineage(cname):
+            f = self.methods.get((c, "new"))
+            if f is not None:
+                self.call_method(obj, f, c, [], self.globals)
+        return obj
+
+    def find_method(self, cname: str, mname: str) -> tuple[FuncDef, str] | None:
+        while cname:
+            f = self.methods.get((cname, mname))
+            if f is not None:
+                return f, cname
+            cname = self.classes[cname].parent if cname in self.classes else ""
+        return None
+
+    def _static_owner(self, cname: str, name: str) -> str | None:
+        while cname:
+            if name in self.statics.get(cname, {}):
+                return cname
+            cname = self.classes[cname].parent if cname in self.classes else ""
+        return None
+
+    def call_method(self, obj, f: FuncDef, defined_in: str, args: list, fr: Frame):
+        return self.call_user(f, args, fr, this=obj, cls=defined_in)
+
+    def _method_call(self, node: MethodCall, fr: Frame):
+        if isinstance(node.base, Name) and node.base.name == "super" and fr.this is not None:
+            parent = self.classes[fr.cls].parent
+            hit = self.find_method(parent, node.name) if parent else None
+            if hit is None:
+                raise MataError(3000, f"{node.name}() not found in parent class")   # VERIFY
+            return self.call_method(fr.this, hit[0], hit[1], node.args, fr)
+        base = self._value(node.base, fr)
+        if node.arrow:
+            base = self._deref(base)
+        obj = base.scalar() if base.t == "struct" else None
+        if not isinstance(obj, ClassVal):
+            if isinstance(obj, StructVal) and node.name in obj.fields:
+                v = obj.fields[node.name]
+                if v.t == "pointer" and isinstance(v.scalar().get() if v.scalar() else None, str):
+                    return self.call_user(self.funcs[v.scalar().get()], node.args, fr)
+            raise MataError(3000, "class required")   # VERIFY
+        hit = self.find_method(obj.sname, node.name)
+        if hit is None:
+            raise MataError(3000, f"{node.name}() not found in class {obj.sname}")   # VERIFY
+        return self.call_method(obj, hit[0], hit[1], node.args, fr)
+
     def new_struct(self, sname: str) -> StructVal:
+        if sname in self.classes:
+            return self.new_instance(sname)
         sd = self.structs.get(sname)
         if sd is None:
             raise MataError(3000, f"struct {sname} not found")
@@ -422,9 +514,19 @@ class MataEngine:
         if isinstance(node, Name):
             if node.name in fr.vars:
                 return fr.vars[node.name]
+            if fr.this is not None:
+                if node.name == "this":
+                    return MV(np.array([[fr.this]], dtype=object), "struct")
+                if node.name in fr.this.fields:
+                    return fr.this.fields[node.name]
+                owner = self._static_owner(fr.this.sname, node.name)
+                if owner:
+                    return self.statics[owner][node.name]
             if fr is not self.globals and node.name in self.funcs:
                 pass
             raise MataError(3499, f"{node.name} not found")
+        if isinstance(node, MethodCall):
+            return self._method_call(node, fr)
         if isinstance(node, Binary):
             if node.op in ("&&", "||"):
                 left = truth(self.eval(node.left, fr))
@@ -518,6 +620,11 @@ class MataEngine:
             raise MataError(3000, "struct required")
         sv = base.scalar()
         if node.name not in sv.fields:
+            if isinstance(sv, ClassVal):
+                owner = self._static_owner(sv.sname, node.name)
+                if owner:
+                    return self.statics[owner][node.name]
+                raise MataError(3000, f"{node.name} not found in class {sv.sname}")   # VERIFY
             raise MataError(3000, f"{node.name} not found in struct {sv.sname}")
         return sv.fields[node.name]
 
@@ -570,6 +677,15 @@ class MataEngine:
 
     # assignment -------------------------------------------------------------
     def assign(self, target, value: MV, fr: Frame) -> None:
+        if isinstance(target, Name) and fr.this is not None and target.name not in fr.vars \
+                and target.name not in fr.types:
+            if target.name in fr.this.fields:
+                fr.this.fields[target.name] = value.copy()
+                return
+            owner = self._static_owner(fr.this.sname, target.name)
+            if owner:
+                self.statics[owner][target.name] = value.copy()
+                return
         if isinstance(target, Name):
             declared = fr.types.get(target.name)
             if declared and declared[0] != "external":
@@ -598,7 +714,13 @@ class MataEngine:
                 base = self._deref(base)
             if base.t != "struct":
                 raise MataError(3000, "struct required")
-            base.scalar().fields[target.name] = value.copy()
+            sv = base.scalar()
+            if isinstance(sv, ClassVal) and target.name not in sv.fields:
+                owner = self._static_owner(sv.sname, target.name)
+                if owner:
+                    self.statics[owner][target.name] = value.copy()
+                    return
+            sv.fields[target.name] = value.copy()
             return
         if isinstance(target, (Subscript, RangeSub)):
             base = self._value(target.base, fr)
@@ -655,6 +777,14 @@ class MataEngine:
     # function calls -----------------------------------------------------
     def call(self, node: Call, fr: Frame):
         name = node.func
+        if fr.this is not None:
+            hit = self.find_method(fr.this.sname, name)
+            if hit is not None:
+                return self.call_method(fr.this, hit[0], hit[1], node.args, fr)
+        if name in self.classes and name not in self.funcs:
+            if any(a is not None for a in node.args):
+                raise MataError(3000, f"{name}() takes no arguments")   # VERIFY
+            return MV(np.array([[self.new_instance(name)]], dtype=object), "struct")
         # variable holding a pointer to a function: (*f)(x) is not accepted syntax here
         if name in self.funcs:
             return self.call_user(self.funcs[name], node.args, fr)
@@ -717,7 +847,7 @@ class MataEngine:
             self.argc.pop()
         return [local.vars.get(p.name) for p in f.params[:len(values)]]
 
-    def call_user(self, f: FuncDef, args: list, fr: Frame):
+    def call_user(self, f: FuncDef, args: list, fr: Frame, *, this=None, cls: str = ""):
         n = len(args)
         required = sum(1 for p in f.params if not p.optional)
         if not required <= n <= len(f.params):
@@ -726,6 +856,7 @@ class MataEngine:
         if self.depth > 500:
             raise MataError(3000, "stack overflow")
         local = Frame(f.name)
+        local.this, local.cls = this, cls
         back: list[tuple[str, str]] = []
         for p, a in zip(f.params, args):
             if a is None:

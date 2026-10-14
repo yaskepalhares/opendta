@@ -111,6 +111,14 @@ class Member:
 
 
 @dataclass
+class MethodCall:
+    base: object
+    name: str
+    args: list
+    arrow: bool
+
+
+@dataclass
 class AddrOf:
     operand: object
 
@@ -209,6 +217,14 @@ class FuncDef:
 class StructDef:
     name: str
     fields: list = field(default_factory=list)    # (eltype, org, name)
+
+
+@dataclass
+class ClassDef:
+    name: str
+    parent: str = ""
+    fields: list = field(default_factory=list)    # (eltype, org, name, static)
+    methods: dict = field(default_factory=dict)   # name -> {"virtual": bool, "static": bool}
 
 
 @dataclass
@@ -358,6 +374,10 @@ class Parser:
             if kw == "struct" and self.peek().kind == "id" and self.peek(2).kind == "op" \
                     and self.peek(2).value == "{" and top:
                 return self.struct_def()
+            if kw == "class" and self.peek().kind == "id" and top and (
+                    (self.peek(2).kind == "op" and self.peek(2).value == "{")
+                    or (self.peek(2).kind == "id" and self.peek(2).value == "extends")):
+                return self.class_def()
             if self._looks_like_function(top):
                 return self.func_def()
             save = self.i
@@ -434,6 +454,9 @@ class Parser:
             if self.tok.kind != "id":
                 return False
             self.take()
+            if self.at("::") and self.peek().kind == "id":       # class method: type cls::name()
+                self.take()
+                self.take()
             return self.at("(")
         finally:
             self.i = save
@@ -469,6 +492,9 @@ class Parser:
         else:
             rt, ro = self._type_spec()
         name = self.take().value
+        if self.at("::"):
+            self.take()
+            name = f"{name}::{self.take().value}"
         self.expect("(")
         params = []
         optional = False
@@ -515,6 +541,83 @@ class Parser:
             for nm in d.names:
                 fields.append((d.eltype, d.org, nm))
         return StructDef(name, fields)
+
+    def class_def(self) -> ClassDef:
+        """class name [extends parent] { [public:|protected:|private:] [static] [virtual]
+        [final] type names | type method() ... }"""
+        self.take()
+        cd = ClassDef(self.take().value)
+        if self.at_id("extends"):
+            self.take()
+            cd.parent = self.take().value
+        self.skip_semis()
+        self.expect("{")
+        while True:
+            self.skip_semis()
+            if self.tok.kind == "eof":
+                raise MataSyntaxError("} expected", incomplete=True)
+            if self.at("}"):
+                self.take()
+                break
+            if self.at_id("public", "private", "protected") and self.peek().kind == "op" \
+                    and self.peek().value == ":":
+                self.take()
+                self.take()
+                continue
+            static = virtual = False
+            while self.at_id("static", "virtual", "final", "public", "private", "protected"):
+                w = self.take().value
+                static |= w == "static"
+                virtual |= w == "virtual"
+            spec = self._type_spec()
+            if spec is None or self.tok.kind != "id":
+                raise MataSyntaxError("invalid class definition")
+            name = self.take().value
+            if self.at("("):
+                depth = 0
+                while True:            # the parameter list of a declaration is not needed
+                    if self.tok.kind == "eof":
+                        raise MataSyntaxError(") expected", incomplete=True)
+                    if self.at("("):
+                        depth += 1
+                    elif self.at(")"):
+                        depth -= 1
+                    self.take()
+                    if depth == 0:
+                        break
+                cd.methods[name] = {"virtual": virtual, "static": static, "rettype": spec[0]}
+                continue
+            names = [name]
+            while self.at(","):
+                self.take()
+                names.append(self.take().value)
+            for nm in names:
+                cd.fields.append((spec[0], spec[1], nm, static))
+        return cd
+
+    def _call_args(self) -> list:
+        self.take()
+        args = []
+        self.no_comma += 1
+        try:
+            while not self.at(")"):
+                if self.tok.kind == "eof":
+                    raise MataSyntaxError(") expected", incomplete=True)
+                if self.at(","):
+                    self.take()
+                    args.append(None)
+                    continue
+                args.append(self.expression())
+                if self.at(","):
+                    self.take()
+                    if self.at(")"):
+                        args.append(None)
+                elif not self.at(")"):
+                    raise MataSyntaxError("invalid expression")
+        finally:
+            self.no_comma -= 1
+        self.take()
+        return args
 
     # expressions ----------------------------------------------------------------
     def expression(self):
@@ -643,12 +746,13 @@ class Parser:
                 node = RangeSub(node, spec)
             elif self.at("++", "--") and isinstance(node, (Name, Subscript, Member)):
                 node = IncDec(self.take().value, node, prefix=False)
-            elif self.at("->"):
-                self.take()
-                node = Member(node, self.take().value, arrow=True)
-            elif self.at(".") and self.peek().kind == "id":
-                self.take()
-                node = Member(node, self.take().value, arrow=False)
+            elif self.at("->") or (self.at(".") and self.peek().kind == "id"):
+                arrow = self.take().value == "->"
+                name = self.take().value
+                if self.at("("):
+                    node = MethodCall(node, name, self._call_args(), arrow)
+                else:
+                    node = Member(node, name, arrow=arrow)
             else:
                 return node
 
