@@ -8,12 +8,17 @@ OpenDTA runs analysis scripts (do-files), reads and writes `.dta` datasets and c
 
 It is a personal study project under active development, released under the [MIT License](LICENSE). The full plan is in the [ROADMAP](ROADMAP.md).
 
-## Download (macOS)
+## Download
 
 [![Download for macOS (Apple Silicon)](https://img.shields.io/badge/Download-macOS%20Apple%20Silicon-1f6feb?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg)
 [![Download for macOS (Intel)](https://img.shields.io/badge/Download-macOS%20Intel-57606a?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg)
+[![Download for Windows (64-bit)](https://img.shields.io/badge/Download-Windows%2064--bit-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-setup.exe)
 
-Requires macOS 12 or later. Choose **Apple Silicon** for Macs with an M1, M2, M3 or M4 chip and **Intel** for the others (check  → About This Mac). Open the `.dmg` and drag OpenDTA to Applications. The app is not notarized by Apple, so on first launch open **System Settings → Privacy & Security** and click **Open Anyway** (only once). All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page. A Windows version is planned.
+**macOS:** requires macOS 12 or later. Choose **Apple Silicon** for Macs with an M1, M2, M3 or M4 chip and **Intel** for the others (check  → About This Mac). Open the `.dmg` and drag OpenDTA to Applications. The app is not notarized by Apple, so on first launch open **System Settings → Privacy & Security** and click **Open Anyway** (only once).
+
+**Windows:** requires 64-bit Windows 10 or 11 on an Intel or AMD processor. Run `OpenDTA-windows-x64-setup.exe`; it installs for the current user only, with no administrator rights, and adds OpenDTA to the **Open with** menu of `.do`, `.ado` and `.dta` files. The installer is not signed, so Windows SmartScreen may show "Windows protected your PC": click **More info → Run anyway**. If you prefer not to install anything, download the [portable version](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-portable.zip), unzip it and run `OpenDTA.exe`.
+
+All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page.
 
 ## Current state: phases 5 to 9 (estimation, complex surveys, graphics, interface and language)
 
@@ -120,8 +125,9 @@ compat/
   expected/   reference logs produced by Stata 14
 packaging/    PyInstaller spec (packaged application)
 tools/
-  compare.py      runs compat/do in OpenDTA and compares with compat/expected
-  build_macos.sh  builds OpenDTA.app and the .dmg
+  compare.py         runs compat/do in OpenDTA and compares with compat/expected
+  build_macos.sh     builds OpenDTA.app and the .dmg
+  build_windows.ps1  builds the Windows installer and the portable .zip
 ```
 
 ## License
@@ -130,14 +136,14 @@ OpenDTA is released under the [MIT License](LICENSE): it may be used, copied, mo
 
 ## Publishing a new version
 
-The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the `.dmg` files for Apple Silicon and Intel and creates the Release when a `v*` tag is pushed:
+The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the `.dmg` files for Apple Silicon and Intel, the Windows installer and the portable `.zip`, and creates the Release when a `v*` tag is pushed:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
-The download buttons always point to the latest Release. Remember to update the version in `src/opendta/__init__.py` and `pyproject.toml` before tagging.
+The download buttons always point to the latest Release. Remember to update the version in `src/opendta/__init__.py` and `pyproject.toml` before tagging. To build the Windows files locally, run `powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1` (needs 64-bit Python 3.11+ and [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
 ## Notice
 

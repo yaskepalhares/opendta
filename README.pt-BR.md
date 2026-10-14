@@ -8,12 +8,17 @@ O OpenDTA executa scripts de análise (do-files), lê e grava bases `.dta` e tem
 
 É um projeto pessoal de estudo em desenvolvimento ativo, distribuído sob a [licença MIT](LICENSE). O plano completo está no [ROADMAP](ROADMAP.pt-BR.md).
 
-## Baixar (macOS)
+## Download
 
 [![Baixar para macOS (Apple Silicon)](https://img.shields.io/badge/Baixar-macOS%20Apple%20Silicon-1f6feb?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg)
 [![Baixar para macOS (Intel)](https://img.shields.io/badge/Baixar-macOS%20Intel-57606a?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg)
+[![Baixar para Windows (64 bits)](https://img.shields.io/badge/Baixar-Windows%2064%20bits-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-setup.exe)
 
-Requer macOS 12 ou mais recente. Use **Apple Silicon** para Macs com chip M1, M2, M3 ou M4, e **Intel** para os demais (veja em  → Sobre Este Mac). Abra o `.dmg` e arraste o OpenDTA para Aplicativos. Como o app não tem a assinatura paga da Apple, na primeira abertura vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim** (só uma vez). Todas as versões estão na página de [Releases](https://github.com/yaskepalhares/opendta/releases). A versão para Windows está planejada.
+**macOS:** requer macOS 12 ou mais recente. Use **Apple Silicon** para Macs com chip M1, M2, M3 ou M4, e **Intel** para os demais (veja em  → Sobre Este Mac). Abra o `.dmg` e arraste o OpenDTA para Aplicativos. Como o app não tem a assinatura paga da Apple, na primeira abertura vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim** (só uma vez).
+
+**Windows:** requer Windows 10 ou 11 de 64 bits, com processador Intel ou AMD. Execute `OpenDTA-windows-x64-setup.exe`; ele instala só para o usuário atual, sem precisar de administrador, e põe o OpenDTA no menu **Abrir com** dos arquivos `.do`, `.ado` e `.dta`. Como o instalador não tem assinatura digital, o Windows SmartScreen pode mostrar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**. Se preferir não instalar nada, baixe a [versão portátil](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-portable.zip), descompacte e abra `OpenDTA.exe`.
+
+Todas as versões estão na página de [Releases](https://github.com/yaskepalhares/opendta/releases).
 
 ## Estado atual: fases 5 a 9 (estimação, amostras complexas, gráficos, interface e idioma)
 
@@ -122,8 +127,9 @@ compat/
   expected/   logs de referência gerados no Stata 14
 packaging/    especificação do PyInstaller (aplicativo empacotado)
 tools/
-  compare.py      roda compat/do no OpenDTA e compara com compat/expected
-  build_macos.sh  gera OpenDTA.app e o .dmg
+  compare.py         roda compat/do no OpenDTA e compara com compat/expected
+  build_macos.sh     gera OpenDTA.app e o .dmg
+  build_windows.ps1  gera o instalador do Windows e o .zip portátil
 ```
 
 ## Licença
@@ -132,14 +138,14 @@ O OpenDTA é distribuído sob a [licença MIT](LICENSE): pode ser usado, copiado
 
 ## Publicar uma nova versão
 
-O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) gera os `.dmg` para Apple Silicon e Intel e cria a Release quando uma tag `v*` é enviada:
+O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) gera os `.dmg` para Apple Silicon e Intel, o instalador do Windows e o `.zip` portátil, e cria a Release quando uma tag `v*` é enviada:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
-Os botões de download apontam sempre para a Release mais recente. Lembre de atualizar a versão em `src/opendta/__init__.py` e `pyproject.toml` antes da tag.
+Os botões de download apontam sempre para a Release mais recente. Lembre de atualizar a versão em `src/opendta/__init__.py` e `pyproject.toml` antes da tag. Para gerar os arquivos do Windows localmente, rode `powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1` (precisa de Python 3.11+ de 64 bits e do [Inno Setup 6](https://jrsoftware.org/isinfo.php)).
 
 ## Aviso
 

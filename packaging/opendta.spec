@@ -67,7 +67,7 @@ if sys.platform == "darwin":
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
             "LSMinimumSystemVersion": "12.0",      # minimum for Qt 6.8
-            "NSHumanReadableCopyright": "© 2026 Yaske Palhares. MIT License. "
+            "NSHumanReadableCopyright": "© 2026 OpenDTA contributors. MIT License. "
                                         "Not affiliated with StataCorp.",
             # "Open With" for do-files and .dta datasets; OpenDTA does not become the default
             # application for these files (LSHandlerRank = Alternate)
