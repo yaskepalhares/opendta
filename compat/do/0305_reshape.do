@@ -1,4 +1,4 @@
-* Fase 3b: reshape long/wide.
+* Phase 3b: reshape long/wide.
 clear
 input id sexo inc80 inc81 inc82 ue80 ue81 ue82
 1 0 5000 5500 6000 0 1 0

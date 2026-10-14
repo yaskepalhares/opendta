@@ -1,4 +1,4 @@
-* Formatos explícitos no display.
+* Explicit formats in display.
 display %9.2f _pi
 display %9.2f -_pi
 display %09.2f _pi

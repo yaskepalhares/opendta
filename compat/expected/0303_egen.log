@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 3b: egen (funções de grupo e de linha).
+. * Phase 3b: egen (group and row functions).
 . clear
 
 . input g x y str4 s

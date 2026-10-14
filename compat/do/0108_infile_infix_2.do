@@ -1,5 +1,5 @@
-* Fase 1c (continuação de 0107, que parava no label list): infile com
-* :rótulo e automatic, x1-x2, infix, dicionário e file read.
+* Phase 1c (continuation of 0107, which stopped at label list): infile with
+* :label and automatic, x1-x2, infix, dictionary and file read.
 capture file close _all
 capture erase odta_f.raw
 file open h using odta_f.raw, write replace

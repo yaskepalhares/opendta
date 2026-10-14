@@ -10,10 +10,10 @@ venv/
 .DS_Store
 Thumbs.db
 
-# logs gerados ao rodar do-files; os esperados do Stata ficam versionados
+# logs produced when running do-files; Stata's expected logs are versioned
 *.log
 !compat/expected/*.log
 compat/out/
 
-# imagens de revisão geradas pelo icon-creator (as fontes SVG ficam versionadas)
+# review images produced by icon-creator (the SVG sources are versioned)
 assets/icons/icon-work/*.png

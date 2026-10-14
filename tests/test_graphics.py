@@ -1,4 +1,4 @@
-"""Fase 7: gráficos (contas, mensagens, memória de gráficos e exportação)."""
+"""Phase 7: graphics (computations, messages, graph memory and export)."""
 
 import math
 import os
@@ -20,7 +20,7 @@ gen g = mod(_n, 2)
 
 def test_histogram_message_default_bins(run):
     run(SEQ)
-    # k = min(sqrt(10), 10*log10(10)) = 3,16 -> 3 barras de largura (10-1)/3
+    # k = min(sqrt(10), 10*log10(10)) = 3.16 -> 3 bins of width (10-1)/3
     assert run("histogram x").strip() == "(bin=3, start=1, width=3)"
 
 
@@ -35,7 +35,7 @@ def test_histogram_heights_density_integrate_to_one():
     assert h["bins"] == 3
     assert sum(h["heights"]) * h["width"] == pytest.approx(1.0)
     f = D.hist_bins(x, None, {"scale": "frequency"})
-    assert f["heights"] == [3.0, 3.0, 4.0]      # o máximo entra na última barra
+    assert f["heights"] == [3.0, 3.0, 4.0]      # the maximum goes into the last bin
 
 
 def test_kdensity_bandwidth_and_generate(run):
@@ -45,11 +45,11 @@ def test_kdensity_bandwidth_and_generate(run):
     sd = x.std(ddof=1)
     q1, q3 = np.percentile(x, [25, 75])
     h = run.session.r["bwidth"]
-    # mesma regra; os quartis do Stata podem diferir um pouco dos do numpy
+    # same rule; Stata's quartiles may differ slightly from numpy's
     assert h == pytest.approx(0.9 * min(sd, (q3 - q1) / 1.349) / 300 ** 0.2, rel=0.02)
     kd = run.session.data.get("kd").data[:40]
     kx = run.session.data.get("kx").data[:40]
-    # a grade vai de mínimo - h a máximo + h (compat 0701)
+    # the grid goes from minimum - h to maximum + h (compat 0701)
     assert kx[0] == pytest.approx(x.min() - h, rel=1e-12)
     assert kx[-1] == pytest.approx(x.max() + h, rel=1e-12)
     assert np.trapezoid(kd, kx) == pytest.approx(1.0, abs=0.05)

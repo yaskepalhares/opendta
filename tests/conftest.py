@@ -7,17 +7,17 @@ from opendta.session import Session
 class Runner:
     def __init__(self):
         self.session = Session()
-        # os testes conferem a saída no formato do Stata; as explicações de
-        # erro do OpenDTA têm testes próprios (test_hints.py)
+        # the tests check output in Stata's format; OpenDTA's error explanations have their own
+        # tests (test_hints.py)
         self.session.settings["hints"] = "off"
-        # idem para o expoente sobrescrito (test_superscript.py)
+        # likewise for the superscript exponent (test_superscript.py)
         self.session.run("quietly set superscript off")
         self.session.run("quietly set numerics stata")
         self.cap = Capture()
         self.session.output.add_listener(self.cap)
 
     def __call__(self, source: str) -> str:
-        """Executa sem eco e devolve só a saída produzida."""
+        """Runs without echo and returns only the output produced."""
         self.cap.clear()
         self.rc = self.session.run(source)
         return self.cap.text
@@ -33,8 +33,8 @@ def run():
 
 @pytest.fixture(autouse=True)
 def stata_exponents():
-    """Os testes conferem a forma do Stata (e+10); Session() liga o expoente
-    sobrescrito e o estado é global, então cada teste começa desligado."""
+    """The tests check Stata's form (e+10); Session() turns the superscript
+    exponent on and the state is global, so each test starts with it off."""
     from opendta.core.formats import set_superscript
     from opendta.estimation.numerics import set_precise
     set_superscript(False)

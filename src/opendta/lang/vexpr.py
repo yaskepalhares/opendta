@@ -1,12 +1,12 @@
-"""Avaliação vetorizada de expressões sobre as observações do conjunto de dados.
+"""Vectorized evaluation of expressions over the observations of the dataset.
 
-A árvore sintática é a mesma de lang/expr.py. Aqui cada nó devolve um
-escalar (float ou str) ou um vetor numpy com uma posição por observação:
-float64 para números (com os códigos de missing do OpenDTA) e object para
+The syntax tree is the same as in lang/expr.py. Here each node returns a
+scalar (float or str) or a numpy vector with one position per observation:
+float64 for numbers (with OpenDTA's missing codes) and object for
 strings.
 
-Grupos `by`: `_n`, `_N` e subscritos como `x[_n-1]` são relativos ao grupo
-da observação. Sem `by`, há um único grupo com todas as observações.
+`by` groups: `_n`, `_N` and subscripts such as `x[_n-1]` are relative to the group
+of the observation. Without `by`, there is a single group with all observations.
 """
 
 from __future__ import annotations
@@ -34,10 +34,10 @@ SYS = M.SYSMISS
 
 class Groups:
     def __init__(self, start: np.ndarray, size: np.ndarray):
-        self.start = start            # índice da 1ª obs do grupo, por observação
-        self.size = size              # tamanho do grupo, por observação
+        self.start = start            # index of the 1st obs of the group, per observation
+        self.size = size              # group size, per observation
         n = len(start)
-        self.pos = np.arange(n) - start   # posição 0-based no grupo
+        self.pos = np.arange(n) - start   # 0-based position in the group
 
     @classmethod
     def single(cls, nobs: int) -> "Groups":
@@ -68,7 +68,7 @@ class Groups:
 
 
 # ---------------------------------------------------------------------------
-# Utilidades de tipo
+# Type utilities
 # ---------------------------------------------------------------------------
 
 def is_str(v: Any) -> bool:
@@ -92,7 +92,7 @@ def _num_arr(v: Any) -> np.ndarray | float:
 
 
 def _clean(r: np.ndarray, miss: np.ndarray | bool) -> np.ndarray:
-    """Missing nas entradas, divisões por zero e estouros viram `.`."""
+    """Missing inputs, divisions by zero and overflows become `.`."""
     r = np.where(miss, SYS, r)
     bad = ~np.isfinite(r) | (np.abs(r) >= SYS)
     return np.where(bad, SYS, r)
@@ -109,7 +109,7 @@ def truth(v: Any) -> Any:
 # ---------------------------------------------------------------------------
 
 def ts_value(s, name: str):
-    """L.y, D.y...: o vetor da variável com os operadores de séries temporais."""
+    """L.y, D.y...: the variable's vector with the time-series operators."""
     from ..estimation import fvars
     from ..estimation.fvars import _component_alts
     comps = _component_alts(s.data, name, False)
@@ -189,7 +189,7 @@ class VectorContext:
         return np.array(results, dtype=np.float64)
 
     def _random(self, name: str, args: list[Any]) -> np.ndarray:
-        """Um sorteio por observação (só as da amostra em generate/replace)."""
+        """One draw per observation (only those in the sample in generate/replace)."""
         from ..core import rng
         lo, hi, _ = rng.DISTRIBUTIONS[name]
         if not (lo <= len(args) <= hi):
@@ -217,7 +217,7 @@ class VectorContext:
             return out
         if mask is None or len(mask) != self.n:
             return rng.draw(name, [broadcast(a, self.n) if is_vec(a) else a for a in args], self.n)
-        # só as observações da amostra sorteiam (generate/replace com if/in)
+        # only the observations in the sample draw (generate/replace with if/in)
         idx = np.flatnonzero(mask)
         out = np.full(self.n, SYS)
         out[idx] = rng.draw(name, [broadcast(a, self.n)[idx] if is_vec(a) else a for a in args], len(idx))
@@ -234,7 +234,7 @@ class VectorContext:
 
 
 # ---------------------------------------------------------------------------
-# Avaliação
+# Evaluation
 # ---------------------------------------------------------------------------
 
 def evaluate_vec(node: Node, ctx: VectorContext) -> Any:
@@ -336,7 +336,7 @@ def binary_vec(op: str, a: Any, b: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Funções vetorizadas mais comuns (as demais caem no caminho elemento a elemento)
+# Most common vectorized functions (the others fall back to the element-by-element path)
 # ---------------------------------------------------------------------------
 
 def _unary_num(fn, domain=None):

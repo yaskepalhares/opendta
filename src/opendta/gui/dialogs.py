@@ -1,13 +1,13 @@
-"""Caixas de diálogo dos menus Statistics e Graphics.
+"""Dialog boxes of the Statistics and Graphics menus.
 
-Cada diálogo é descrito por um Spec (comando, campos e como montar a linha)
-e desenhado por um único CommandDialog genérico. O diálogo mostra o comando
-que vai rodar enquanto o usuário preenche os campos e oferece quatro botões,
-como no Stata: OK (roda e fecha), Submit (roda e deixa aberto), Copy (escreve
-o comando na janela Command, sem rodar) e Cancel.
+Each dialog is described by a Spec (command, fields and how to build the line)
+and drawn by a single generic CommandDialog. The dialog shows the command
+that will run while the user fills in the fields and offers four buttons,
+as in Stata: OK (runs and closes), Submit (runs and stays open), Copy (writes
+the command to the Command window, without running it) and Cancel.
 
-O desenho e a disposição são do OpenDTA; não reproduzem os diálogos do Stata.
-O comando gerado segue a sintaxe documentada nos manuais.
+The drawing and layout are OpenDTA's own; they do not reproduce Stata's dialogs.
+The generated command follows the syntax documented in the manuals.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from ..i18n import tr
 
 
 # ---------------------------------------------------------------------------
-# descrição dos diálogos (sem Qt, para testar a montagem do comando)
+# dialog descriptions (without Qt, to test how the command is built)
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -27,11 +27,11 @@ class Field:
     key: str
     label: str
     kind: str                  # var, vars, exp, check, opt, choice, weight
-    opt: str = ""              # modelo da opção: "detail", "by({})", "level({})"
-    choices: list = field(default_factory=list)   # [(rótulo, valor)]
+    opt: str = ""              # option template: "detail", "by({})", "level({})"
+    choices: list = field(default_factory=list)   # [(label, value)]
     default: object = ""
     required: bool = False
-    group: str = "main"        # main ou options
+    group: str = "main"        # main or options
 
 
 @dataclass
@@ -40,7 +40,7 @@ class Spec:
     title: str
     cmd: str
     fields: list[Field]
-    templates: tuple[str, ...] = ()          # itens de menu substituídos
+    templates: tuple[str, ...] = ()          # menu items replaced
     ifin: bool = True
     weights: tuple[str, ...] = ()
     build: Callable[["Spec", dict], str] | None = None
@@ -113,7 +113,7 @@ def missing_required(spec: Spec, values: dict) -> list[str]:
 # -- montagens especiais -------------------------------------------------------
 
 def _build_test_by(spec: Spec, values: dict) -> str:
-    """ttest/prtest: um grupo (var == valor) ou dois grupos (by())."""
+    """ttest/prtest: one group (var == value) or two groups (by())."""
     var = str(values.get("var", "")).strip()
     by = str(values.get("by", "")).strip()
     val = str(values.get("value", "")).strip()
@@ -383,7 +383,7 @@ def _qt():
 
 def CommandDialog(sp: Spec, session, parent=None, *, run=None, to_command=None,  # noqa: N802
                   template: str = ""):
-    """Cria o diálogo (função-fábrica: o Qt só é importado quando necessário)."""
+    """Creates the dialog (factory function: Qt is only imported when needed)."""
     return _dialog_class()(sp, session, parent, run=run, to_command=to_command, template=template)
 
 
@@ -398,8 +398,8 @@ def _dialog_class():
     Qt = QtCore.Qt
 
     class _VarList(QtWidgets.QWidget):
-        """Campo de lista de variáveis: texto livre e um botão que acrescenta
-        nomes da base em memória."""
+        """Variable-list field: free text and a button that adds
+        names from the dataset in memory."""
         changed = QtCore.Signal()
 
         def __init__(self, names: list[str], single: bool):

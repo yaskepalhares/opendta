@@ -1,21 +1,21 @@
-"""Conjunto de dados em memória.
+"""Dataset in memory.
 
-Cada variável numérica fica na memória no próprio tipo (byte = 1 byte,
-int = 2, long e float = 4, double = 8), como no Stata; ver core/storage.py.
-Os cálculos usam vetores float64 com os códigos de missing do OpenDTA (ver
-core/missing.py), obtidos por `Variable.data`. O tipo define a faixa de
-valores aceitos e a precisão: uma variável float guarda valores em
-precisão simples, de modo que `gen x = 0.1` seguido de
-`count if x == 0.1` dá 0.
+Each numeric variable is kept in memory in its own type (byte = 1 byte,
+int = 2, long and float = 4, double = 8), as in Stata; see core/storage.py.
+Computations use float64 vectors with OpenDTA's missing codes (see
+core/missing.py), obtained through `Variable.data`. The type defines the range of
+accepted values and the precision: a float variable keeps values in
+single precision, so that `gen x = 0.1` followed by
+`count if x == 0.1` gives 0.
 
-Strings são vetores de objetos Python (str). O tipo str# acompanha o maior
-comprimento em bytes (UTF-8); acima de 2045 bytes a variável vira strL.
+Strings are vectors of Python objects (str). The str# type follows the longest
+length in bytes (UTF-8); above 2045 bytes the variable becomes strL.
 
-Faixas (manual [D] data types):
+Ranges (manual [D] data types):
     byte   -127 .. 100
     int    -32,767 .. 32,740
     long   -2,147,483,647 .. 2,147,483,620
-    float  ±1.70141173319e+38 (precisão de ~7 dígitos)
+    float  ±1.70141173319e+38 (precision of ~7 digits)
     double ±8.9884656743e+307
 """
 
@@ -35,7 +35,7 @@ INT_RANGES = {
     "int": (-32767, 32740),
     "long": (-2147483647, 2147483620),
 }
-FLOAT_MAX = 1.7014117331926443e38   # maior float não missing (bits 0x7effffff)
+FLOAT_MAX = 1.7014117331926443e38   # largest non-missing float (bits 0x7effffff)
 STR_MAX = 2045
 TYPE_ORDER = {"byte": 0, "int": 1, "long": 2, "float": 3, "double": 4}
 _STR_TYPE = re.compile(r"^str(\d+|L)$")
@@ -75,14 +75,14 @@ def default_format(vtype: str) -> str:
     if vtype == "strL":
         return "%9s"
     n = int(vtype[3:])
-    # VERIFICAR: formato padrão de strings criadas por generate
+    # VERIFY: default format of strings created by generate
     return f"%{max(9, n)}s"
 
 
 def fit_numeric(values: np.ndarray, vtype: str) -> tuple[np.ndarray, int]:
-    """Ajusta valores ao tipo: precisão de float, truncamento em inteiros e
-    faixa válida. Devolve (vetor ajustado, nº de valores que viraram missing
-    por estarem fora da faixa)."""
+    """Fits values to the type: float precision, truncation for integers and
+    valid range. Returns (adjusted vector, number of values that became missing
+    because they were out of range)."""
     v = np.array(values, dtype=np.float64, copy=True)
     miss = v >= M.SYSMISS
     nonmiss = ~miss
@@ -97,7 +97,7 @@ def fit_numeric(values: np.ndarray, vtype: str) -> tuple[np.ndarray, int]:
         v[ok] = v[ok].astype(np.float32).astype(np.float64)
         return v, lost
     lo, hi = INT_RANGES[vtype]
-    # VERIFICAR: não inteiros em tipos inteiros são truncados em direção a zero
+    # VERIFY: non-integers in integer types are truncated toward zero
     v[nonmiss] = np.trunc(v[nonmiss])
     over = nonmiss & ((v < lo) | (v > hi))
     lost = int(over.sum())
@@ -106,7 +106,7 @@ def fit_numeric(values: np.ndarray, vtype: str) -> tuple[np.ndarray, int]:
 
 
 def smallest_type_for(values: np.ndarray) -> str:
-    """Menor tipo que guarda os valores sem perda (usado por compress e promoção)."""
+    """Smallest type that holds the values without loss (used by compress and promotion)."""
     v = values[values < M.SYSMISS]
     if v.size == 0:
         return "byte"
@@ -123,14 +123,14 @@ def smallest_type_for(values: np.ndarray) -> str:
 
 
 class Variable:
-    """Uma variável. Numéricas ficam no tipo nativo (ver core/storage.py) em
-    `raw`; `data` devolve o vetor float64 para cálculos e aceita um float64
-    na atribuição. Strings ficam num vetor de objetos str (`raw` e `data`
-    são o mesmo vetor).
+    """A variable. Numeric variables are kept in their native type (see core/storage.py) in
+    `raw`; `data` returns the float64 vector for computations and accepts a float64
+    on assignment. Strings are kept in a vector of str objects (`raw` and `data`
+    are the same vector).
 
-    `data` é só para leitura: para mudar um valor use `set_value`, ou
-    atribua um vetor inteiro a `data`. Para um valor só, `value(i)` evita
-    decodificar a coluna inteira."""
+    `data` is read-only: to change a value use `set_value`, or
+    assign a whole vector to `data`. For a single value, `value(i)` avoids
+    decoding the whole column."""
 
     def __init__(self, name: str, vtype: str, data, fmt: str = "", label: str = "",
                  value_label: str = "", notes: list[str] | None = None) -> None:
@@ -156,7 +156,7 @@ class Variable:
         if new == self._vtype:
             return
         if is_string_type(new) != is_string_type(self._vtype):
-            raise ValueError("troca entre número e string exige uma variável nova")
+            raise ValueError("switching between numeric and string requires a new variable")
         if not is_string_type(new):
             values = self.data
             self._vtype = new
@@ -196,7 +196,7 @@ class Variable:
 
     @property
     def nbytes(self) -> int:
-        """Memória ocupada pelos valores (strings: estimativa pelo conteúdo)."""
+        """Memory taken by the values (strings: an estimate from the content)."""
         if self.is_string:
             return int(sum(len(s) for s in self.raw)) + 8 * len(self.raw)
         return int(self.raw.nbytes)
@@ -215,17 +215,17 @@ class Dataset:
         self.notes: list[str] = []
         self.value_labels: dict[str, dict[int, str]] = {}
         self.sortlist: list[str] = []
-        self.filename = ""             # como foi digitado (describe mostra assim)
-        self.fullpath = ""             # caminho absoluto, para save sem nome
-        self.timestamp = ""            # data de gravação ("13 Apr 2014 17:45")
-        self.chars: dict[str, dict[str, str]] = {}   # características (_dta e variáveis)
+        self.filename = ""             # as typed (describe shows it this way)
+        self.fullpath = ""             # absolute path, for save without a name
+        self.timestamp = ""            # save date ("13 Apr 2014 17:45")
+        self.chars: dict[str, dict[str, str]] = {}   # characteristics (_dta and variables)
         self.changed = False
-        # e(sample): marca das observações usadas na última estimação; acompanha
-        # sort, keep/drop e set obs (como a variável oculta do Stata)
+        # e(sample): marks the observations used in the last estimation; follows sort, keep/drop
+        # and set obs (like Stata's hidden variable)
         self.esample: np.ndarray | None = None
 
     def copy(self) -> "Dataset":
-        """Cópia independente (preserve)."""
+        """Independent copy (preserve)."""
         import copy as _copy
         new = Dataset()
         for v in self.vars:
@@ -273,7 +273,7 @@ class Dataset:
         return self.nvars == 0 and self.nobs == 0
 
     def width(self) -> int:
-        """Bytes por observação, como em describe (VERIFICAR para strL)."""
+        """Bytes per observation, as in describe (VERIFY for strL)."""
         size = {"byte": 1, "int": 2, "long": 4, "float": 4, "double": 8}
         total = 0
         for v in self.vars:
@@ -285,7 +285,7 @@ class Dataset:
                 total += int(v.vtype[3:])
         return total
 
-    # -- alterações --------------------------------------------------------
+    # -- changes --------------------------------------------------------
     def _touch(self) -> None:
         self.changed = True
 
@@ -312,12 +312,12 @@ class Dataset:
             raise StataError(110, f"variable {var.name} already defined")
         check_name(var.name)
         if len(var) != self.nobs:
-            raise ValueError("tamanho do vetor diferente do número de observações")
+            raise ValueError("vector length differs from the number of observations")
         if position is None:
             self.vars.append(var)
         else:
             self.vars.insert(position, var)
-        self._touch()   # criar variável não desfaz a ordenação
+        self._touch()   # creating a variable does not undo the sort order
 
     def drop_vars(self, names: list[str]) -> None:
         drop = set(names)
@@ -330,7 +330,7 @@ class Dataset:
         self._touch()
 
     def keep_obs(self, mask: np.ndarray) -> int:
-        """Mantém as observações com mask verdadeiro; devolve quantas saíram."""
+        """Keeps the observations where mask is true; returns how many were dropped."""
         mask = np.asarray(mask, dtype=bool)
         removed = int(self.nobs - mask.sum())
         if removed:
@@ -381,9 +381,9 @@ class Dataset:
     # -- tipos -------------------------------------------------------------
     def set_numeric(self, var: Variable, values: np.ndarray, rows: np.ndarray | None = None,
                     *, promote: bool = True) -> tuple[int, str | None]:
-        """Grava valores numéricos (todas as linhas ou só `rows`), promovendo o
-        tipo se necessário, como faz o replace. Devolve (nº de mudanças,
-        mensagem de promoção ou None)."""
+        """Writes numeric values (all rows or only `rows`), promoting the
+        type if needed, as replace does. Returns (number of changes,
+        promotion message or None)."""
         if rows is None:
             new_full = np.asarray(values, dtype=np.float64).copy()
         else:
@@ -395,11 +395,11 @@ class Dataset:
             subset = new_full if rows is None else new_full[rows]
             needed = smallest_type_for(subset)
             if var.vtype == "float" and needed == "double":
-                needed = "float"  # replace não promove float para double
+                needed = "float"  # replace does not promote float to double
             if TYPE_ORDER[needed] > TYPE_ORDER[var.vtype]:
                 target = needed
             if target != var.vtype:
-                # o formato de exibição não muda (b byte %8.0g vira float %8.0g)
+                # the display format does not change (b byte %8.0g becomes float %8.0g)
                 note = f"variable {var.name} was {var.vtype} now {target}"
                 var.vtype = target
         fitted, _ = fit_numeric(new_full, var.vtype)
@@ -435,6 +435,6 @@ class Dataset:
         return changed, note
 
     def _unsort_from(self, name: str) -> None:
-        """Alterar uma variável de ordenação desfaz a ordenação a partir dela."""
+        """Changing a sort variable undoes the sort order from it onward."""
         if name in self.sortlist:
             self.sortlist = self.sortlist[:self.sortlist.index(name)]

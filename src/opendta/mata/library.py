@@ -1,13 +1,13 @@
-"""Biblioteca de funções do Mata ([M-5]).
+"""Mata function library ([M-5]).
 
-Cada função recebe (engine, valores, referências) e devolve um MV ou None
-(funções void). `refs[k]` é uma referência à variável passada como k-ésimo
-argumento, usada pelas funções que gravam resultados nos argumentos
+Each function receives (engine, values, references) and returns an MV or None
+(void functions). `refs[k]` is a reference to the variable passed as the k-th
+argument, used by the functions that write results into their arguments
 (symeigensystem, svd, _sort...).
 
-Funções elementares com o mesmo nome e comportamento que as do Stata
-(sqrt, ln, normal, substr, strupper...) reaproveitam lang/functions.py,
-aplicadas elemento a elemento.
+Elementary functions with the same name and behavior as Stata's
+(sqrt, ln, normal, substr, strupper...) reuse lang/functions.py,
+applied element by element.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def _broadcast(vals: list[MV]) -> tuple[list[np.ndarray], tuple]:
 
 
 def _stata_elementwise(fname: str):
-    """Função do Stata aplicada elemento a elemento (argumentos c-conformes)."""
+    """Stata function applied element by element (c-conformable arguments)."""
     def fn(eng, vals, refs):
         arrays, shape = _broadcast(vals)
         out = np.empty(shape, dtype=object)
@@ -187,7 +187,7 @@ def _sizeof(eng, v, r):
 
 
 # ---------------------------------------------------------------------------
-# construção
+# construction
 # ---------------------------------------------------------------------------
 
 @lib("J", 3)
@@ -273,7 +273,7 @@ def _rseed(eng, v, r):
 
 
 # ---------------------------------------------------------------------------
-# somas, extremos, médias
+# sums, extremes, means
 # ---------------------------------------------------------------------------
 
 def _zero_missing(a):
@@ -412,8 +412,8 @@ def _meanvariance(eng, v, r):
 
 @lib("cross", 2, 4)
 def _cross(eng, v, r):
-    """cross(X, Z), cross(X, w, Z): X'Z (ou X'diag(w)Z); linhas com missing
-    em X ou Z ficam de fora."""
+    """cross(X, Z), cross(X, w, Z): X'Z (or X'diag(w)Z); rows with missing values
+    in X or Z are left out."""
     if len(v) == 2:
         X, Z, w = _r(v[0]), _r(v[1]), None
     elif len(v) == 3:
@@ -531,7 +531,7 @@ def _any(eng, v, r):
 
 
 # ---------------------------------------------------------------------------
-# forma e seleção
+# shape and selection
 # ---------------------------------------------------------------------------
 
 @lib("rowshape", 2)
@@ -661,7 +661,7 @@ def _jumble(eng, v, r):
 
 
 # ---------------------------------------------------------------------------
-# álgebra linear
+# linear algebra
 # ---------------------------------------------------------------------------
 
 def _square(a: np.ndarray) -> None:
@@ -709,9 +709,9 @@ def _rank(eng, v, r):
 
 @lib("invsym", 1, 2)
 def _invsym(eng, v, r):
-    """Inversa generalizada de matriz simétrica: varre as colunas em ordem e
-    zera as linhas/colunas que se mostram colineares (como o invsym() do
-    Stata: em matriz singular, as colunas redundantes viram zero)."""
+    """Generalized inverse of a symmetric matrix: sweeps the columns in order and
+    zeroes the rows/columns that turn out collinear (like Stata's invsym():
+    for a singular matrix, the redundant columns become zero)."""
     a = _r(v[0]).astype(np.float64)
     _square(a)
     if np.any(a >= SYS):
@@ -725,7 +725,7 @@ def _invsym(eng, v, r):
     for k in seq_:
         trial = keep + [k]
         sub = A[np.ix_(trial, trial)]
-        # pivô do sweep: variância residual da coluna k dado o que já entrou
+        # sweep pivot: residual variance of column k given what has already entered
         if keep:
             S = A[np.ix_(keep, keep)]
             b = A[np.ix_(keep, [k])]
@@ -921,7 +921,7 @@ def _C(eng, v, r):
 # ---------------------------------------------------------------------------
 
 def _plain(x: float, fmt: str) -> str:
-    """Número em texto que vira dado: sem expoente sobrescrito."""
+    """Number as text that becomes data: no superscript exponent."""
     from ..core.formats import plain_numbers
     with plain_numbers():
         return format_value(x, fmt, pad=False).strip()
@@ -1013,7 +1013,7 @@ def LIBRARY_OP(op, a, b):
 
 
 # ---------------------------------------------------------------------------
-# saída
+# output
 # ---------------------------------------------------------------------------
 
 _SMCL_TAGS = re.compile(r"\{(txt|text|res|result|err|error|inp|input|com|sf|it|bf|ul off|ul on)\}")
@@ -1094,7 +1094,7 @@ def _printf(eng, v, r):
 @lib("sprintf", 1, 99)
 def _sprintf(eng, v, r):
     from ..core.formats import plain_numbers
-    with plain_numbers():              # vira dado: sem expoente sobrescrito
+    with plain_numbers():              # becomes data: no superscript exponent
         return string(sprintf(v[0].str_scalar(), v[1:]))
 
 
@@ -1140,7 +1140,7 @@ def _error_(eng, v, r):
 @lib("error", 1)
 def _error(eng, v, r):
     rc = _int(v[0])
-    # VERIFICAR: o Mata imprime a mensagem do Stata para o código
+    # VERIFY: Mata prints Stata's message for the code
     return real(float(rc))
 
 
@@ -1154,7 +1154,7 @@ def _assert(eng, v, r):
 @lib("args", 0)
 def _args(eng, v, r):
     if not eng.argc:
-        raise MataError(3000, "args() used outside of a function")   # VERIFICAR
+        raise MataError(3000, "args() used outside of a function")   # VERIFY
     return real(float(eng.argc[-1]))
 
 
@@ -1210,5 +1210,5 @@ def _pi(eng, v, r):
     return real(math.pi)
 
 
-from . import stata_api  # noqa: E402,F401  (st_* entram na mesma tabela)
+from . import stata_api  # noqa: E402,F401  (st_* go into the same table)
 from . import advanced  # noqa: E402,F401  (asarray, optimize)

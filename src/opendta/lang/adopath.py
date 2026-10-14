@@ -1,21 +1,21 @@
-"""Pastas do sistema (sysdir) e caminho de busca de .ado (adopath).
+"""System folders (sysdir) and the search path for .ado files (adopath).
 
-Ao encontrar um comando que não é interno nem um programa já definido, o
-OpenDTA procura `nome.ado` nas pastas do adopath (em cada pasta e na
-subpasta com a primeira letra do nome, como plus/o/outreg2.ado), roda o
-arquivo e chama o programa que ele define. Isso permite usar pacotes de
-terceiros (SSC, pacotes de artigos) instalados nessas pastas.
+When it meets a command that is neither built in nor an already defined program,
+OpenDTA looks for `name.ado` in the adopath folders (in each folder and in the
+subfolder named after the first letter of the name, as in plus/o/outreg2.ado), runs the
+file and calls the program it defines. This allows using third-party
+packages (SSC, packages from papers) installed in these folders.
 
-Pastas padrão (podem ser mudadas com `sysdir set`):
+Default folders (can be changed with `sysdir set`):
 
-    BASE      .ado próprios do OpenDTA (src/opendta/ado)
-    SITE      <pasta do OpenDTA>/site
+    BASE      OpenDTA's own .ado files (src/opendta/ado)
+    SITE      <OpenDTA folder>/site
     PERSONAL  ~/ado/personal
     PLUS      ~/ado/plus
     OLDPLACE  ~/ado
 
-Os .ado oficiais da StataCorp nunca entram no caminho (política
-clean-room); os de terceiros, sim.
+StataCorp's official .ado files never go on the path (clean-room
+policy); third-party ones do.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def resolve_entry(s: "Session", entry: str) -> Path:
 
 def find_file(s: "Session", filename: str, *, all_: bool = False,
               path: list[str] | None = None, descend: bool = True) -> list[Path]:
-    """Procura filename nas pastas do adopath (ou em `path`)."""
+    """Looks for filename in the adopath folders (or in `path`)."""
     found: list[Path] = []
     first = filename[0].lower() if filename else "_"
     for entry in (path if path is not None else adopath(s)):

@@ -4,7 +4,7 @@
   log type:  text
  opened on:  13 Oct 2026, 08:33:03
 
-. * Fase 5b: glm (famílias binomial, poisson e gaussian; eform).
+. * Phase 5b: glm (binomial, poisson and gaussian families; eform).
 . clear
 
 . estimates clear

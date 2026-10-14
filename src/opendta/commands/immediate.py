@@ -1,6 +1,6 @@
-"""Comandos imediatos: cii, ttesti, prtesti e tabi ([R] ci, ttest, prtest,
-tabulate twoway). Recebem as estatísticas (ou a tabela) na própria linha de
-comando, sem usar os dados em memória."""
+"""Immediate commands: cii, ttesti, prtesti and tabi ([R] ci, ttest, prtest,
+tabulate twoway). They take the statistics (or the table) on the command
+line itself, without using the data in memory."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ def _nums(words: list[str]) -> list[float]:
 
 
 def _synthetic(n: int, mean: float, sd: float) -> np.ndarray:
-    """Amostra com exatamente n, média e desvio padrão dados (para reaproveitar
-    o código dos testes que recebem os dados)."""
+    """Sample with exactly the given n, mean and standard deviation (to reuse
+    the code of the tests that take the data)."""
     z = np.arange(n, dtype=float)
     z = (z - z.mean()) / z.std(ddof=1)
     return mean + sd * z
@@ -59,7 +59,7 @@ def cmd_cii(s: "Session", args: str) -> None:
         if kind is None:
             raise StataError(198, "invalid syntax")
     vals = _nums(words)
-    if kind is None:   # sintaxe antiga: 3 números = média; 2 = proporção
+    if kind is None:   # old syntax: 3 numbers = mean; 2 = proportion
         kind = "means" if len(vals) == 3 else "proportions"
     o = match_options(opt, {"level": 1, "exact": 2, "wald": 2, "wilson": 2, "agresti": 2,
                             "jeffreys": 2, "poisson": 1, "exposure": 3})
@@ -70,7 +70,7 @@ def cmd_cii(s: "Session", args: str) -> None:
             raise StataError(198, "invalid syntax")
         n, mean, sd = vals
         if n < 1 or n != int(n):
-            raise StataError(198, "n must be a positive integer")   # VERIFICAR
+            raise StataError(198, "n must be a positive integer")   # VERIFY
         se = sd / math.sqrt(n)
         lo, hi = S.t_ci(mean, se, n - 1, level) if n > 1 else (M.SYSMISS, M.SYSMISS)
         out.write("\n", "text")
@@ -81,8 +81,8 @@ def cmd_cii(s: "Session", args: str) -> None:
         s.r = {"ub": hi, "lb": lo, "se": se, "mean": mean, "N": n, "level": level}
         return
     if kind == "proportions" and o.get("poisson"):
-        # cii #exposure #events, poisson (sintaxe do Stata 14.0): IC exato de
-        # Poisson pela qui-quadrado ([R] ci, Methods and formulas)
+        # cii #exposure #events, poisson (Stata 14.0 syntax): exact Poisson CI from the chi-squared
+        # ([R] ci, Methods and formulas)
         if len(vals) != 2:
             raise StataError(198, "invalid syntax")
         E, k = vals
@@ -91,7 +91,7 @@ def cmd_cii(s: "Session", args: str) -> None:
         a = (100 - level) / 200
         lo = float(st.chi2.ppf(a, 2 * k)) / 2 / E if k > 0 else 0.0
         hi = float(st.chi2.ppf(1 - a, 2 * (k + 1))) / 2 / E
-        out.write("\n" + " " * 48 + "-- Poisson  Exact --".rjust(30) + "\n", "text")   # VERIFICAR título
+        out.write("\n" + " " * 48 + "-- Poisson  Exact --".rjust(30) + "\n", "text")   # VERIFY title
         out.write(f"    Variable |   Exposure        Mean    Std. Err.       [{level:g}% Conf. Interval]\n", "text")
         out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
         out.write(" " * 12 + " |", "text")
@@ -102,7 +102,7 @@ def cmd_cii(s: "Session", args: str) -> None:
         if len(vals) != 2:
             raise StataError(198, "invalid syntax")
         n, k = vals
-        if 0 < k < 1:          # proporção em vez de contagem (VERIFICAR)
+        if 0 < k < 1:          # proportion instead of count (VERIFY)
             k = round(k * n)
         ph = k / n
         se = math.sqrt(ph * (1 - ph) / n)
@@ -118,7 +118,7 @@ def cmd_cii(s: "Session", args: str) -> None:
         out.write(f" {n:>10,.0f}   {g9(ph)}   {g9(se)}    {g9(lo).rjust(12)}   {g9(hi).rjust(9)}\n", "result")
         s.r = {"ub": hi, "lb": lo, "se": se, "proportion": ph, "N": n, "level": level}
         return
-    raise StataError(198, "cii variances not implemented")   # VERIFICAR
+    raise StataError(198, "cii variances not implemented")   # VERIFY
 
 
 def _isnum(t: str) -> bool:
@@ -130,7 +130,7 @@ def _isnum(t: str) -> bool:
 
 
 def _prop_ci(k: float, n: float, level: float, method: str) -> tuple[float, float]:
-    """Intervalos de [R] ci para proporções."""
+    """[R] ci intervals for proportions."""
     z = S.z_crit(level)
     ph = k / n
     if method == "exact":
@@ -190,7 +190,7 @@ def cmd_prtesti(s: "Session", args: str) -> None:
             p1 = p1 / n
         _prtest_one(s, "x", int(n), p1, p0, level)
         return
-    raise StataError(198, "two-sample prtesti not implemented")   # VERIFICAR
+    raise StataError(198, "two-sample prtesti not implemented")   # VERIFY
 
 
 # ---------------------------------------------------------------------------
@@ -207,10 +207,10 @@ def cmd_tabi(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     ncol = len(rows[0])
     if any(len(r) != ncol for r in rows):
-        raise StataError(198, "rows have unequal number of columns")   # VERIFICAR
+        raise StataError(198, "rows have unequal number of columns")   # VERIFY
     vals = [_nums(r) for r in rows]
     if any(v < 0 or v != int(v) for r in vals for v in r):
-        raise StataError(198, "may not use noninteger frequency weights")   # VERIFICAR
+        raise StataError(198, "may not use noninteger frequency weights")   # VERIFY
     opts = [w for w in opt.split()]
     keep = any(w.startswith("rep") for w in opts)
     opts = [w for w in opts if not w.startswith("rep")]

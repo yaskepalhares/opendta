@@ -1,4 +1,4 @@
-"""Explicações de erro do OpenDTA (core/hints.py)."""
+"""OpenDTA error explanations (core/hints.py)."""
 
 import pytest
 
@@ -56,7 +56,7 @@ def test_commands_and_files(hrun, tmp_path, monkeypatch):
 
 def test_off_and_error_command(hrun):
     out = hrun("error 198")
-    assert out == "invalid syntax\nr(198);\n"          # erro pedido de propósito
+    assert out == "invalid syntax\nr(198);\n"          # error raised on purpose
     hrun("set hints off")
     assert hrun("foo") == "command foo is unrecognized\nr(199);\n"
     out = hrun("capture noisily foo")

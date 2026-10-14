@@ -1,9 +1,9 @@
-name: versão para download
+name: download release
 
-# Gera os instaladores do macOS (Apple Silicon e Intel) e publica uma Release
-# no GitHub. Roda ao enviar uma tag v* (ex.: git tag v0.1.0 && git push origin
-# v0.1.0). Em pull requests que mexem no empacotamento, e pela aba Actions
-# ("Run workflow"), só gera e testa os arquivos, sem publicar.
+# Builds the macOS installers (Apple Silicon and Intel) and publishes a Release
+# on GitHub. Runs when a v* tag is pushed (e.g. git tag v0.1.0 && git push origin
+# v0.1.0). In pull requests that touch the packaging, and from the Actions tab
+# ("Run workflow"), it only builds and tests the files, without publishing.
 
 on:
   push:
@@ -25,9 +25,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15            # Apple Silicon (M1 em diante)
+          - runner: macos-15            # Apple Silicon (M1 onward)
             name: OpenDTA-macos-apple-silicon
-          - runner: macos-15-intel      # Intel (suportado pelo GitHub até o fim de 2027)
+          - runner: macos-15-intel      # Intel (supported by GitHub until late 2027)
             name: OpenDTA-macos-intel
     runs-on: ${{ matrix.runner }}
     steps:
@@ -35,12 +35,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Gerar OpenDTA.app e o .dmg
+      - name: Build OpenDTA.app and the .dmg
         env:
           PYTHON: python
           DMG_NAME: ${{ matrix.name }}
         run: tools/build_macos.sh
-      - name: Testar o executável empacotado (modo batch)
+      - name: Test the packaged executable (batch mode)
         run: |
           cd "$RUNNER_TEMP"
           printf 'set obs 10\ngen t = _n\ngen x = t^2\nsummarize x\nregress x t\nhistogram x\ngraph export h.png, replace\n' > teste.do
@@ -64,7 +64,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Publicar a Release
+      - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}

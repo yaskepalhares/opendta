@@ -1,8 +1,8 @@
-"""Descrição de um gráfico, independente de como é desenhado.
+"""Description of a graph, independent of how it is drawn.
 
-Um Graph guarda as camadas (scatter, line, barras...), as opções gerais
-(títulos, eixos, legenda) e, com by(), os painéis. O desenho fica em
-render.py; a gravação em .gph (formato próprio do OpenDTA, JSON) em store.py.
+A Graph keeps the layers (scatter, line, bars...), the general options
+(titles, axes, legend) and, with by(), the panels. Drawing lives in
+render.py; saving to .gph (OpenDTA's own JSON format) in store.py.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ class Layer:
     kind: str                                   # scatter, line, connected, lfit, qfit, area, bar, ...
     x: list = field(default_factory=list)
     y: list = field(default_factory=list)
-    extra: dict = field(default_factory=dict)   # y2 (rcap), pesos, rótulos...
+    extra: dict = field(default_factory=dict)   # y2 (rcap), weights, labels...
     style: dict = field(default_factory=dict)   # mcolor, msymbol, lcolor, lpattern, lwidth...
     label: str = ""
 
@@ -33,7 +33,7 @@ class Graph:
     panels: list[Panel] = field(default_factory=list)
     opts: dict = field(default_factory=dict)    # title, subtitle, note, caption, xtitle, ytitle, ...
     name: str = "Graph"
-    data: dict = field(default_factory=dict)    # para bar/box/pie/matrix: estrutura própria
+    data: dict = field(default_factory=dict)    # for bar/box/pie/matrix: their own structure
     children: list = field(default_factory=list)   # graph combine
 
     def to_json(self) -> dict[str, Any]:

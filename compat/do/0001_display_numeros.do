@@ -1,5 +1,5 @@
-* Formato padrão de números no display (%9.0g) e casos de precisão.
-* Itens marcados VERIFICAR no código dependem deste arquivo.
+* Default number format in display (%9.0g) and precision cases.
+* Items marked VERIFY in the code depend on this file.
 display 1/3
 display 2/3
 display -1/3

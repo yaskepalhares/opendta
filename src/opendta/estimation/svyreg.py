@@ -1,9 +1,9 @@
-"""svy: regress, logit, logistic, probit, poisson e svy: tabulate
+"""svy: regress, logit, logistic, probit, poisson and svy: tabulate
 ([SVY] svy estimation, [SVY] svy: tabulate oneway/twoway).
 
-As estimativas pontuais usam os pesos amostrais; a variância vem da
-linearização (sanduíche com o "meio" calculado pelo desenho) e os testes
-usam o F de Wald ajustado: F = (d - k + 1) W / (d k), gl (k, d - k + 1).
+Point estimates use the sampling weights; the variance comes from
+linearization (a sandwich with the "meat" computed from the design) and the tests
+use the adjusted Wald F: F = (d - k + 1) W / (d k), df (k, d - k + 1).
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     inside_all = smp.mask & dd.mask & (subpop if subpop is not None else True)
     full = dd.mask
     inside = inside_all[full]
-    # colunas avaliadas em todas as observações do desenho (zeros fora da amostra)
+    # columns evaluated on all design observations (zeros outside the sample)
     est_mask = smp.mask & dd.mask
     if not est_mask.any():
         raise StataError(2000, "no observations")
@@ -83,7 +83,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     k = X.shape[1]
 
     def fit(wv):
-        """Estimativas e escores linearizados (n x k) com os pesos wv."""
+        """Estimates and linearized scores (n x k) with weights wv."""
         if cmd == "regress":
             XtWX = (X * wv[:, None]).T @ X
             A = np.linalg.inv(XtWX)
@@ -107,7 +107,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
             b0 = np.zeros(k)
             if smp.constant:
                 b0[-1] = np.log(float(wv @ y) / wv.sum())
-        # o svy: não mostra o log de iterações (compat 0601)
+        # svy: does not show the iteration log (compat 0601)
         res = maximize(fun, b0)
         A = np.linalg.inv(-res.H)
         Z_ = (X * (wv * scores(res.b) * inside)[:, None]) @ A
@@ -194,7 +194,7 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
         if x.get("sub"):
             right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", _num(x["sub"][1]))]
         if x.get("n_rep"):
-            right.append(("Replications", f"{x['n_rep']:,}"))   # VERIFICAR posição
+            right.append(("Replications", f"{x['n_rep']:,}"))   # VERIFY position
         right += [("Design df", f"{x['df']:,}"), (f"F({x['df1']:>4},{x['df2']:>7})", g(x["F"], "%10.2f")),
                   ("Prob > F", g(st.f.sf(x["F"], x["df1"], x["df2"]) if x["F"] < SYS else SYS, "%10.4f"))]
         if "r2" in x:
@@ -212,7 +212,7 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
 
 
 # ---------------------------------------------------------------------------
-# svy: tabulate (uma e duas vias)
+# svy: tabulate (one- and two-way)
 # ---------------------------------------------------------------------------
 
 def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
@@ -265,8 +265,8 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         Z = np.column_stack([w * ((data[0] == lv) - p_) / W for lv, p_ in cells])
         V = dd.variance(Z)
         se = np.sqrt(np.maximum(np.diag(V), 0))
-        # layout do Stata 14 (compat 0601): nome da variável à direita em 9
-        # colunas, coluna de 10 a 11 caracteres
+        # Stata 14 layout (compat 0601): variable name right-aligned in 9 columns, a column of 10
+        # to 11 characters
         wl = max(9, max(len(lab(v0, lv)) for lv, _ in cells), len(names[0]))
         colw = max(len(stat_name), 10)
         extra_se = bool(o.get("se"))
@@ -283,9 +283,9 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         out.write(f"{'Total':>{wl}} | ", "text")
         out.write(f"{_sig(mult):>{colw}}\n", "result")
         out.write(line + "\n", "text")
-        out.write(f"  Key:  {stat_name}  =  cell {stat_name}\n", "text")   # VERIFICAR
+        out.write(f"  Key:  {stat_name}  =  cell {stat_name}\n", "text")   # VERIFY
         return
-    # duas vias: proporções nas células e teste de Pearson com correção de Rao-Scott
+    # two-way: cell proportions and Pearson test with the Rao-Scott correction
     v0, v1 = vars_
     R, C = len(levels[0]), len(levels[1])
     ind = []
@@ -295,8 +295,8 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
     P = np.array([float(w @ i_) / W for i_ in ind]).reshape(R, C)
     Z = np.column_stack([w * (i_ - P.ravel()[j]) / W for j, i_ in enumerate(ind)])
     V = dd.variance(Z)
-    # layout (compat 0601): colunas com a largura do maior rótulo ou valor,
-    # separadas por dois espaços; nome da coluna centrado sobre elas
+    # layout (compat 0601): columns as wide as the longest label or value, separated by two spaces;
+    # column name centered over them
     wl = max(9, max(len(lab(v0, a)) for a in levels[0]), len(names[0]))
     texts = [[_sig(P[i, j] * mult) for j in range(C)] + [_sig(P[i].sum() * mult)] for i in range(R)]
     tot = [_sig(P[:, j].sum() * mult) for j in range(C)] + [_sig(mult)]
@@ -315,14 +315,14 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
     out.write("  ".join(f"{x:>{cw}}" for x in tot) + "\n", "result")
     out.write("-" * (wl + 2 + body) + "\n", "text")
     out.write(f"  Key:  cell {stat_name}\n", "text")
-    # Pearson: X² = n Σ (p - pr pc)² / (pr pc); Rao-Scott de 2ª ordem
+    # Pearson: X² = n Σ (p - pr pc)² / (pr pc); 2nd-order Rao-Scott
     pr, pc = P.sum(1), P.sum(0)
     E = np.outer(pr, pc)
     X2 = N * float(np.sum((P - E) ** 2 / np.where(E > 0, E, 1)))
     df0 = (R - 1) * (C - 1)
-    # contrastes de interação (efeito de desenho generalizado, Rao & Scott 1984)
-    # [SVY] svy: tabulate twoway: Δ = (C'D⁻¹V_srs D⁻¹C)⁻¹ (C'D⁻¹ V D⁻¹C), com
-    # D = diag(p̂) e V_srs das proporções observadas (compat 0601: F = 4.9245)
+    # interaction contrasts (generalized design effect, Rao & Scott 1984) [SVY] svy: tabulate
+    # twoway: Δ = (C'D⁻¹V_srs D⁻¹C)⁻¹ (C'D⁻¹ V D⁻¹C), with D = diag(p̂) and V_srs of the observed
+    # proportions (compat 0601: F = 4.9245)
     Cm = _interaction_contrasts(R, C)
     pv_ = P.ravel()
     Vsrs = (np.diag(pv_) - np.outer(pv_, pv_)) / N
@@ -338,7 +338,7 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         Fv, dnum, dden, pv = SYS, SYS, SYS, SYS
     out.write("\n  Pearson:\n", "text")
     def _dfmt(x):
-        return f"{x:.0f}" if abs(x - round(x)) < 1e-9 else f"{x:.2f}"   # VERIFICAR formato não inteiro
+        return f"{x:.0f}" if abs(x - round(x)) < 1e-9 else f"{x:.2f}"   # VERIFY non-integer format
     ftxt = f"F({_dfmt(dnum)}, {_dfmt(dden)})"
     out.write(f"    Uncorrected   {'chi2(' + str(df0) + ')':<16}= {X2:>9.4f}\n", "result")
     out.write(f"    Design-based  {ftxt:<16}= {Fv:>9.4f}     P = {pv:.4f}\n", "result")
@@ -347,7 +347,7 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
 
 
 def _sig(x: float, digits: int = 4) -> str:
-    """%6.4g do Stata: 4 algarismos significativos, sem o zero à esquerda."""
+    """Stata's %6.4g: 4 significant digits, without the leading zero."""
     if not np.isfinite(x):
         return "."
     t = f"{x:.{digits}g}"
@@ -357,7 +357,7 @@ def _sig(x: float, digits: int = 4) -> str:
 
 
 def _interaction_contrasts(R: int, C: int) -> np.ndarray:
-    """Matriz RC x (R-1)(C-1) de contrastes de interação (efeitos centrados)."""
+    """RC x (R-1)(C-1) matrix of interaction contrasts (centered effects)."""
     def contr(k):
         m = np.zeros((k, k - 1))
         for j in range(k - 1):
@@ -368,7 +368,7 @@ def _interaction_contrasts(R: int, C: int) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# svy: com os demais modelos (ologit, oprobit, mlogit, nbreg, glm, tobit)
+# svy: with the other models (ologit, oprobit, mlogit, nbreg, glm, tobit)
 # ---------------------------------------------------------------------------
 
 _GENERIC_TITLES = {"ologit": "Ordered logistic regression", "oprobit": "Ordered probit regression",
@@ -377,9 +377,9 @@ _GENERIC_TITLES = {"ologit": "Ordered logistic regression", "oprobit": "Ordered 
 
 
 def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
-    """Roda o comando com os pesos do desenho e troca a variância pela do
-    desenho: o _Prep.vce recebe os escores e devolve V linearizada (ou, com
-    vce de replicação, o comando roda de novo com cada peso replicado)."""
+    """Runs the command with the design weights and replaces the variance with the
+    design one: _Prep.vce receives the scores and returns the linearized V (or, with
+    a replication vce, the command runs again with each replicate weight)."""
     from ..core.dataset import Variable
     from ..lang.syntax import parse_standard
     from .svy import parse_svy_opts
@@ -388,9 +388,9 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     so = parse_svy_opts(svyopts)
     p = parse_standard(args)
     if p.weight:
-        raise StataError(101, "weights not allowed with the svy prefix")   # VERIFICAR
+        raise StataError(101, "weights not allowed with the svy prefix")   # VERIFY
     if "vce(" in p.options.replace(" ", ""):
-        raise StataError(198, "option vce() not allowed")   # VERIFICAR
+        raise StataError(198, "option vce() not allowed")   # VERIFY
     dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"),
                     hadamard=so.get("hadamard"))
     subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
@@ -457,8 +457,8 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     N = int(np.count_nonzero(ds.esample)) if ds.esample is not None else int(inside_all.sum())
     pop = float(dd.w[(ds.esample if ds.esample is not None else inside_all)[full]].sum())
     if subpop is not None:
-        # com subpop(), Number of obs e Population size contam a amostra inteira
-        # do desenho (casos completos nas variáveis do modelo); compat 0602
+        # with subpop(), Number of obs and Population size count the whole design sample (complete
+        # cases in the model variables); compat 0602
         import re as _re
         ok = full.copy()
         for tok in set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]*", _re.sub(r"\b[A-Za-z]+\.", " ", p.varlist))):
@@ -477,13 +477,13 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                           if subpop is not None else None))
     est.svytitle = _GENERIC_TITLES.get(cmd, cmd)
     est.display = _display_generic
-    est.extra["no_F"] = cmd == "glm"            # o svy: glm não mostra o teste F (compat 0602)
+    est.extra["no_F"] = cmd == "glm"            # svy: glm does not show the F test (compat 0602)
     est.extra["dispersion"] = getattr(est, "dispersion", "") if cmd == "nbreg" else ""
-    # no svy os pontos de corte ganham t e P>|t| (compat 0602)
+    # under svy the cut points get t and P>|t| (compat 0602)
     for r in est.rows:
         if r.kind == "aux" and r.label.startswith("/cut") and not r.eq:
             r.kind = "coe"
-    # forma exponenciada pedida nas opções do comando
+    # exponentiated form requested in the command's options
     from ..lang.syntax import parse_options
     words = {n.lower() for n, _ in parse_options(p.options)} if p.options.strip() else set()
     title_ef = ""
@@ -521,7 +521,7 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
 
 
 def _refresh_rows(est) -> None:
-    """Erros-padrão das linhas da tabela a partir de est.V (mesma ordem de e(b))."""
+    """Standard errors of the table rows from est.V (same order as e(b))."""
     se = np.sqrt(np.maximum(np.diag(est.V), 0))
     k = 0
     for r in est.rows:
@@ -532,7 +532,7 @@ def _refresh_rows(est) -> None:
                 r.se = float(se[k])
             k += 1
         elif r.kind == "aux" and not r.eq:
-            if k < len(se) and r.se < SYS:     # erro-padrão missing continua missing
+            if k < len(se) and r.se < SYS:     # a missing standard error stays missing
                 r.se = float(se[k])
             k += 1
 
@@ -554,7 +554,7 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
                       ("Prob > F", g(st.f.sf(x["F"], x["df1"], x["df2"]) if x["F"] < SYS else SYS, "%10.4f"))]
         left = [f"Number of strata   = {x['strata']:>9,}", f"Number of PSUs     = {x['psu']:>9,}"]
         if x.get("dispersion"):
-            # "Dispersion         = mean" na linha do Prob > F (compat 0602)
+            # "Dispersion         = mean" on the Prob > F line (compat 0602)
             left += [""] * (len(right) - 1 - len(left)) + [f"{'Dispersion':<19}= {x['dispersion']}"]
         for i, (rl, rv) in enumerate(right):
             lft = left[i] if i < len(left) else ""

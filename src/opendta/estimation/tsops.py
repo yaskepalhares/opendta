@@ -1,8 +1,8 @@
-"""Séries temporais e painéis: tsset, xtset e os operadores L. F. D. S.
+"""Time series and panels: tsset, xtset and the L. F. D. S. operators
 ([TS] tsset, [XT] xtset, [U] 11.4.4 time-series varlists).
 
-A declaração fica nas características de _dta, como no Stata (_TStvar,
-_TSpanel, _TSdelta), e por isso acompanha o arquivo salvo.
+The declaration is kept in the _dta characteristics, as in Stata (_TStvar,
+_TSpanel, _TSdelta), and so it travels with the saved file.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def ts_info(ds: "Dataset") -> TSInfo | None:
 
 
 def panel_info(ds: "Dataset") -> str:
-    """Variável de painel declarada por xtset (com ou sem tempo)."""
+    """Panel variable declared by xtset (with or without time)."""
     ch = ds.chars.get("_dta", {})
     p = ch.get("_TSpanel", "") or ch.get("iis", "")
     return p if p and ds.has(p) else ""
@@ -54,14 +54,14 @@ def panel_info(ds: "Dataset") -> str:
 def require_ts(ds: "Dataset") -> TSInfo:
     info = ts_info(ds)
     if info is None:
-        # VERIFICAR texto exato
+        # VERIFY texto exato
         raise StataError(111, "time variable not set")
     return info
 
 
 class _TSIndex:
-    """Índice (painel, tempo) -> observação, vetorizado: as chaves viram
-    inteiros painel*(amplitude+1) + (t - tmin) e a busca é binária."""
+    """Index (panel, time) -> observation, vectorized: the keys become
+    integers panel*(range+1) + (t - tmin) and the lookup is binary."""
 
     def __init__(self, ds: "Dataset", info: TSInfo):
         n = ds.nobs
@@ -81,7 +81,7 @@ class _TSIndex:
         codes[self.ok] = np.unique(pv[self.ok], return_inverse=True)[1]
         self.codes = codes
         npan = int(codes.max()) + 1
-        # margem para t - passo sair do intervalo sem colidir com outro painel
+        # margin so that t - step leaves the range without colliding with another panel
         self.width = int(3 * span + 3)
         self.vector = (npan + 1) * self.width < 2 ** 62
         if self.vector:
@@ -95,7 +95,7 @@ class _TSIndex:
             self.lookup = {(pv[i], t[i]): i for i in np.nonzero(self.ok)[0]}
 
     def source(self, step: float) -> np.ndarray:
-        """Para cada observação, a linha com tempo t - step no mesmo painel (-1 se não há)."""
+        """For each observation, the row with time t - step in the same panel (-1 if none)."""
         out = np.full(self.n, -1, dtype=np.int64)
         if not self.ok.any():
             return out
@@ -114,8 +114,8 @@ class _TSIndex:
 
 
 def shift(ds: "Dataset", values: np.ndarray, k: int, index: _TSIndex | None = None) -> np.ndarray:
-    """Valor de `values` k períodos antes (k > 0, lag) ou depois (k < 0, lead),
-    no mesmo painel; missing quando o período não existe."""
+    """Value of `values` k periods before (k > 0, lag) or after (k < 0, lead),
+    in the same panel; missing when the period does not exist."""
     info = require_ts(ds)
     index = index or _TSIndex(ds, info)
     src = index.source(k * info.delta)
@@ -124,9 +124,9 @@ def shift(ds: "Dataset", values: np.ndarray, k: int, index: _TSIndex | None = No
 
 
 def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> np.ndarray:
-    """Aplica os operadores (letra, ordem) a um vetor. L e F se somam num
-    deslocamento líquido (LF.y = y, como no Stata, compat 0503); D e S são
-    aplicados antes do deslocamento (os operadores comutam)."""
+    """Applies the operators (letter, order) to a vector. L and F add up to a
+    net shift (LF.y = y, as in Stata, compat 0503); D and S are
+    applied before the shift (the operators commute)."""
     x = np.asarray(values, dtype=np.float64)
     index = _TSIndex(ds, require_ts(ds))
     net = sum(k for op, k in ops if op == "L") - sum(k for op, k in ops if op == "F")
@@ -143,7 +143,7 @@ def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> 
                 prev = shift(ds, x, 1, index)
                 y = np.where((x < SYS) & (prev < SYS), x - prev, SYS)
             elif op == "S":
-                # S.x sazonal: x - L.x; Sk.x = x - Lk.x (aplicado uma vez)
+                # seasonal S.x: x - L.x; Sk.x = x - Lk.x (applied once)
                 prev = shift(ds, x, k, index)
                 y = np.where((x < SYS) & (prev < SYS), x - prev, SYS)
                 x = y
@@ -155,7 +155,7 @@ def apply_ops(ds: "Dataset", ops: list[tuple[str, int]], values: np.ndarray) -> 
 
 
 def ops_name(ops: list[tuple[str, int]]) -> str:
-    """Prefixo canônico: [('L', 2), ('D', 1)] -> 'L2D'. VERIFICAR a ordem."""
+    """Canonical prefix: [('L', 2), ('D', 1)] -> 'L2D'. VERIFY the order."""
     out = []
     for op, k in ops:
         out.append(op + (str(k) if k != 1 else ""))
@@ -198,7 +198,7 @@ def _declare(s: "Session", args: str, *, xt: bool) -> None:
         if xt:
             p = panel_info(ds)
             if not p:
-                raise StataError(459, "panel variable not set; use xtset varname ...")   # VERIFICAR
+                raise StataError(459, "panel variable not set; use xtset varname ...")   # VERIFY
             _report(s, p, info.tvar if info else "", info.delta if info else 1.0, xt=True)
         else:
             if info is None:
@@ -215,14 +215,14 @@ def _declare(s: "Session", args: str, *, xt: bool) -> None:
         panel, tvar = (names[0], names[1]) if len(names) == 2 else ("", names[0])
     for nm in [panel, tvar]:
         if nm and ds.get(nm).is_string:
-            raise StataError(109, f"variable {nm} must be numeric")   # VERIFICAR
+            raise StataError(109, f"variable {nm} must be numeric")   # VERIFY
     delta = 1.0
     if o.get("delta"):
         delta = float(s.eval(str(o["delta"]).split()[0]))
     if tvar:
         t = ds.get(tvar).data
         if np.any((t < SYS) & (t != np.trunc(t))):
-            raise StataError(451, "time variable must contain only integer values")   # VERIFICAR
+            raise StataError(451, "time variable must contain only integer values")   # VERIFY
         pv = ds.get(panel).data if panel else np.zeros(ds.nobs)
         seen: set = set()
         for i in range(ds.nobs):
@@ -241,7 +241,7 @@ def _declare(s: "Session", args: str, *, xt: bool) -> None:
     if tvar:
         ch["_TStvar"] = tvar
         ch["_TSdelta"] = f"{delta:g}"
-    # tsset/xtset ordena os dados pelo painel e pelo tempo
+    # tsset/xtset sorts the data by panel and time
     from ..core.sorting import sort
     keys = [k for k in (panel, tvar) if k]
     sort(ds, keys)
@@ -300,7 +300,7 @@ def _report(s: "Session", panel: str, tvar: str, delta: float, *, xt: bool) -> N
             res["balanced"] = balance
         res["tmins"], res["tmaxs"], res["tdeltas"] = tmins, tmaxs, dtext
         res["tsfmt"] = tfmt
-        res["unit1"] = code or "."     # VERIFICAR para formatos %t
+        res["unit1"] = code or "."     # VERIFY for %t formats
         if code:
             res["unit"] = {"d": "daily", "w": "weekly", "m": "monthly", "q": "quarterly",
                            "h": "halfyearly", "y": "yearly", "c": "clocktime", "C": "clocktime"}[code]
@@ -311,7 +311,7 @@ def _report(s: "Session", panel: str, tvar: str, delta: float, *, xt: bool) -> N
             res["imin"] = float(pvals.min()) if len(pvals) else SYS
             res["imax"] = float(pvals.max()) if len(pvals) else SYS
         res["tmin"], res["tmax"], res["tdelta"] = tmin, tmax, float(delta)
-        s.r = res          # o Stata lista na ordem inversa da gravação
+        s.r = res          # Stata lists in the reverse order of storage
         return
     if panel:
         s.r["panelvar"] = panel

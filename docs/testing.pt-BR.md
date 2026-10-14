@@ -1,5 +1,7 @@
 # Como testar e comparar com o Stata 14 (macOS)
 
+[English](testing.md) | **Português**
+
 As instruções valem para o macOS, com o Terminal (zsh) e o Stata 14 for Mac. O repositório fica em `~/opendta`. Se estiver em outra pasta, troque o caminho nos comandos.
 
 > **Atenção ao colar comandos no Terminal.** No zsh interativo, `#` não marca comentário: uma linha como `pytest  # roda tudo` dá erro. Os blocos abaixo não têm comentários e podem ser colados como estão.
@@ -34,7 +36,7 @@ O prompt passa a mostrar `(.venv)`. Para testar um pull request antes de ele ent
 
 ```bash
 git fetch
-git checkout fase-1b-arquivos
+git checkout nome-do-branch
 git pull
 pip install -e ".[dev]"
 ```
@@ -90,7 +92,7 @@ A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas d
    ```bash
    cd ~/opendta
    git add compat/expected
-   git commit -m "Referências do Stata 14"
+   git commit -m "Stata 14 reference logs"
    git push
    ```
 
@@ -147,4 +149,4 @@ Os do-files `compat/do/0104_arquivos.do` a `0107_infile_infix.do` criam e apagam
 
 ## Reportar uma divergência encontrada no uso
 
-Abra uma *issue* com o modelo **Divergência com o Stata**: um do-file mínimo, a saída do Stata 14 e a saída do OpenDTA. Cada divergência confirmada vira um caso em `compat/do/`, para não voltar a acontecer.
+Abra uma *issue* com o modelo **Difference from Stata**: um do-file mínimo, a saída do Stata 14 e a saída do OpenDTA. Cada divergência confirmada vira um caso em `compat/do/`, para não voltar a acontecer.

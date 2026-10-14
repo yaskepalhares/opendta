@@ -1,5 +1,5 @@
-* Fase 1b: use, save, saveold, notes, char, describe com arquivo.
-* Cria e apaga arquivos temporários na pasta atual.
+* Phase 1b: use, save, saveold, notes, char, describe with a file.
+* Creates and deletes temporary files in the current folder.
 clear
 input str6 nome idade
 "Ana" 30

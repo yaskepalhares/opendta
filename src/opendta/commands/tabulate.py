@@ -1,7 +1,7 @@
-"""tabulate (uma e duas vias), tab1, tab2 e table ([R] tabulate, [R] table).
+"""tabulate (one- and two-way), tab1, tab2 and table ([R] tabulate, [R] table).
 
-Layouts reproduzidos a partir do Stata 14; detalhes não documentados têm a
-marca VERIFICAR e casos em compat/do/0302_tabulate.do.
+Layouts reproduced from Stata 14; undocumented details have the
+VERIFY mark and cases in compat/do/0302_tabulate.do.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 def _categories(s: "Session", v: Variable, mask: np.ndarray, *, missing: bool, nolabel: bool):
-    """Valores distintos (ordenados, missing no fim) e os rótulos exibidos."""
+    """Distinct values (sorted, missing last) and the labels shown."""
     if v.is_string:
         vals = v.raw
         ok = mask if missing else mask & np.array([x != "" for x in vals], dtype=bool)
@@ -59,16 +59,16 @@ def _categories(s: "Session", v: Variable, mask: np.ndarray, *, missing: bool, n
 
 
 def _codes(v: Variable, cats: list) -> np.ndarray:
-    """Índice da categoria de cada observação (-1 fora)."""
+    """Category index of each observation (-1 outside)."""
     lookup = {c: k for k, c in enumerate(cats)}
     src = v.raw.tolist() if v.is_string else v.data.tolist()
     return np.array([lookup.get(x, -1) for x in src], dtype=np.int64)
 
 
 def _header_lines(text: str, width: int) -> list[str]:
-    """Rótulo da variável quebrado em linhas da largura da 1ª coluna."""
+    """Variable label wrapped in lines as wide as the 1st column."""
     lines = textwrap.wrap(text, width) or [""]
-    return lines[-2:] if len(lines) > 2 else lines   # VERIFICAR: no máximo duas linhas
+    return lines[-2:] if len(lines) > 2 else lines   # VERIFY: at most two lines
 
 
 def _fmt_freq(x: float) -> str:
@@ -76,7 +76,7 @@ def _fmt_freq(x: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# uma via
+# one-way
 # ---------------------------------------------------------------------------
 
 def _oneway(s: "Session", v: Variable, mask, w, wtype, o: dict) -> None:
@@ -97,8 +97,8 @@ def _oneway(s: "Session", v: Variable, mask, w, wtype, o: dict) -> None:
     if o.get("sort"):
         order.sort(key=lambda k: -freq[k])
     title = v.label or v.name
-    # a coluna cabe todos os rótulos do value label, mesmo os ausentes nos
-    # dados (_merge: 23 colunas; observado no Stata 14)
+    # the column fits all labels of the value label, even those absent from the data (_merge: 23
+    # columns; observed in Stata 14)
     all_labels = []
     if v.value_label and not o.get("nolabel"):
         all_labels = list(s.data.value_labels.get(v.value_label, {}).values())
@@ -182,7 +182,7 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
         out.write("| " + "Key".ljust(wkey) + " |\n", "text")
         out.write("|" + "-" * (wkey + 2) + "|\n", "text")
         for x in shows:
-            pad = wkey - len(x)          # sobra ímpar fica à direita (Stata 14)
+            pad = wkey - len(x)          # odd leftover goes to the right (Stata 14)
             out.write("| " + " " * (pad // 2) + x + " " * (pad - pad // 2) + " |\n", "text")
         out.write("+" + "-" * (wkey + 2) + "+\n", "text")
 
@@ -209,7 +209,7 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
     W = min(30, max([10] + [len(x) for x in rlabels]))
     rtitle = rv.label or rv.name
     ctitle = cv.label or cv.name
-    per_panel = max(1, (79 - (W + 2) - 11) // 11)   # VERIFICAR: quebra em painéis
+    per_panel = max(1, (79 - (W + 2) - 11) // 11)   # VERIFY: splitting into panels
     ncol = len(ccats)
     for start in range(0, ncol, per_panel):
         cols = list(range(start, min(ncol, start + per_panel)))
@@ -238,7 +238,7 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
                     out.write(f"{tot[line]:>10} ", "result")
                 out.write("\n", "text")
             if len(shows) > 1 and i < len(rcats) - 1:
-                out.write(sep, "text")      # grupos de linhas separados por traços
+                out.write(sep, "text")      # groups of rows separated by dashes
         out.write(sep, "text")
         cells = [values(None, j) for j in cols]
         tot = values(None, None)
@@ -298,12 +298,12 @@ def _tests(s: "Session", T: np.ndarray, E: np.ndarray, N: float, o: dict) -> Non
             out.write(value + (gap + extra if extra else "") + "\n", "result")
     if o.get("exact"):
         if np.any(T != np.trunc(T)):
-            raise StataError(198, "exact requires frequency counts")   # VERIFICAR
+            raise StataError(198, "exact requires frequency counts")   # VERIFY
         if not lines:
             out.write("\n", "text")
         if (r, c) == (2, 2):
             _, p2 = st.fisher_exact(T.astype(int))
-            # 1-sided: na direção observada (VERIFICAR)
+            # 1-sided: in the observed direction (VERIFY)
             _, pl = st.fisher_exact(T.astype(int), alternative="less")
             _, pg = st.fisher_exact(T.astype(int), alternative="greater")
             p1 = min(pl, pg)
@@ -314,18 +314,18 @@ def _tests(s: "Session", T: np.ndarray, E: np.ndarray, N: float, o: dict) -> Non
             s.r.update({"p_exact": float(p2), "p1_exact": float(p1)})
         else:
             p2 = fisher_rxc(T.astype(int))
-            # VERIFICAR: o Stata imprime antes o progresso do algoritmo de rede
-            # ("Enumerating sample-space combinations:", "stage k: enumerations = #"),
-            # que o OpenDTA não reproduz
+            # VERIFY: Stata first prints the progress of the network algorithm ("Enumerating
+            # sample-space combinations:", "stage k: enumerations = #"), which OpenDTA does not
+            # reproduce
             out.write(f"{'Fisher' + chr(39) + 's exact':>25} = ", "text")
             out.write(f"{p2:>21.3f}\n", "result")
             s.r["p_exact"] = float(p2)
 
 
 def fisher_rxc(T: np.ndarray, limit: int = 5_000_000) -> float:
-    """Teste exato de Fisher para tabelas r x c: soma as probabilidades
-    (hipergeométrica multivariada) das tabelas com as mesmas margens e
-    probabilidade menor ou igual à observada, enumerando-as uma a uma."""
+    """Fisher's exact test for r x c tables: adds the probabilities
+    (multivariate hypergeometric) of the tables with the same margins and
+    probability less than or equal to the observed one, enumerating them one by one."""
     from math import lgamma
     rows = [int(x) for x in T.sum(1)]
     cols = [int(x) for x in T.sum(0)]
@@ -375,7 +375,7 @@ def fisher_rxc(T: np.ndarray, limit: int = 5_000_000) -> float:
 def _concordance(T: np.ndarray):
     r, c = T.shape
     P = Q = 0.0
-    A = np.zeros_like(T)    # concordantes para cada célula
+    A = np.zeros_like(T)    # concordant pairs for each cell
     D = np.zeros_like(T)
     for i in range(r):
         for j in range(c):
@@ -404,7 +404,7 @@ def _taub(T: np.ndarray) -> tuple[float, float]:
         return M.SYSMISS, M.SYSMISS
     w = math.sqrt(wr * wc)
     tb = (P - Q) / w
-    # ASE (Agresti); VERIFICAR contra o Stata
+    # ASE (Agresti); VERIFY contra o Stata
     rows, cols = T.sum(1), T.sum(0)
     vij = np.zeros_like(T)
     for i in range(T.shape[0]):
@@ -419,7 +419,7 @@ def _taub(T: np.ndarray) -> tuple[float, float]:
 # ---------------------------------------------------------------------------
 
 def _opts(text: str) -> dict:
-    # a opção de Cramér é V maiúsculo
+    # Cramér's option is capital V
     return match_options(re.sub(r"\bV\b", "v", text), _OPTS) if text.strip() else {}
 
 
@@ -448,7 +448,7 @@ def cmd_tabulate(s: "Session", args: str) -> None:
         mask = base & group
         if isinstance(o.get("summarize"), str):
             if len(vs) != 1:
-                raise StataError(198, "two-way tabulate, summarize() not implemented")   # VERIFICAR
+                raise StataError(198, "two-way tabulate, summarize() not implemented")   # VERIFY
             from ..estimation.anova import tab_summarize
             tab_summarize(s, vs[0], s.expand_varlist(o["summarize"])[0], mask, w, o)
         elif len(vs) == 1:
@@ -482,7 +482,7 @@ def cmd_tab2(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# table (sintaxe do Stata 14)
+# table (Stata 14 syntax)
 # ---------------------------------------------------------------------------
 
 _STATS = {"freq", "mean", "sd", "sum", "rawsum", "count", "n", "max", "min", "median", "iqr",
@@ -530,7 +530,7 @@ def cmd_table(s: "Session", args: str) -> None:
     while k < len(contents):
         st = contents[k]
         if st not in _STATS:
-            raise StataError(198, f"{st} invalid statistic")   # VERIFICAR
+            raise StataError(198, f"{st} invalid statistic")   # VERIFY
         if st == "freq":
             specs.append(("freq", None))
             k += 1
@@ -569,7 +569,7 @@ def cmd_table(s: "Session", args: str) -> None:
 
     rows = list(range(len(rcats))) + (["Total"] if o.get("row") else [])
     cols = list(range(len(ccats))) + (["Total"] if o.get("col") and cv is not None else [])
-    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)])   # VERIFICAR largura mínima 9
+    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)])   # VERIFY minimum width 9
     title_lines = textwrap.wrap(rv.label or rv.name, W) or [rv.name]
     if cv is None:
         heads = ["Freq." if st == "freq" else f"{st}({var})" for st, var in specs]
@@ -581,8 +581,8 @@ def cmd_table(s: "Session", args: str) -> None:
             rsel = ok & (rc == r) if r != "Total" else ok
             vals = [cell(rsel & (cc == c) if c != "Total" else rsel) for c in cols]
             grid[r] = [[v[line] for v in vals] for line in range(len(specs))]
-    # colunas de largura única (o maior rótulo ou valor, no mínimo 4); a 1ª
-    # vem depois de um espaço e as demais de dois (observado no Stata 14)
+    # single-width columns (the longest label or value, at least 4); the 1st comes after one space
+    # and the others after two (observed in Stata 14)
     every = heads + [x for r in rows for line in grid[r] for x in line]
     CW = max([4] + [len(x) for x in every])
 

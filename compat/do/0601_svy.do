@@ -1,4 +1,4 @@
-* Fase 6: svyset, svydescribe, mean/proportion/total/ratio e svy:.
+* Phase 6: svyset, svydescribe, mean/proportion/total/ratio and svy:.
 clear
 estimates clear
 ereturn clear

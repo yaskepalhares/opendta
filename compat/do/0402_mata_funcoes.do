@@ -1,4 +1,4 @@
-* Fase 4: funções do usuário, referências, structs e ponteiros no Mata.
+* Phase 4: user functions, references, structs and pointers in Mata.
 mata
 real scalar dobro(real scalar x)
 {

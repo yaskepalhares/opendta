@@ -1,5 +1,5 @@
-"""Comandos de estimação e pós-estimação (fase 5). A lógica fica em
-opendta/estimation; aqui só o registro dos nomes e abreviações."""
+"""Estimation and postestimation commands (phase 5). The logic lives in
+opendta/estimation; here only the names and abbreviations are registered."""
 
 from __future__ import annotations
 

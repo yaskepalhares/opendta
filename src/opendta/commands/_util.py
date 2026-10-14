@@ -1,5 +1,5 @@
-"""Funções auxiliares dos comandos de dados: if/in, avaliação vetorizada,
-contexto por observação (para replace sequencial) e mensagens."""
+"""Helpers for the data commands: if/in, vectorized evaluation,
+per-observation context (for sequential replace) and messages."""
 
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ def eval_vector(s: "Session", text: str) -> Any:
     node = parse(text)
     k = _count_random(node)
     if k >= 2:
-        # o Stata avalia a expressão observação por observação: com várias
-        # funções aleatórias, os sorteios se intercalam (obs 1: 1ª e 2ª
-        # chamada; obs 2: 1ª e 2ª...). Sorteia o bloco antes e distribui.
+        # Stata evaluates the expression observation by observation: with several random functions,
+        # the draws interleave (obs 1: 1st and 2nd call; obs 2: 1st and 2nd...). Draw the block
+        # first and distribute it.
         from ..core import rng
         mask = getattr(s, "_rng_mask", None)
         n = s.data.nobs
@@ -56,9 +56,9 @@ def eval_vector(s: "Session", text: str) -> Any:
 
 
 def eval_sample(s: "Session", text: str, mask: np.ndarray) -> Any:
-    """Como eval_vector, mas as funções aleatórias só sorteiam para as
-    observações da amostra (if/in), na ordem delas, como o Stata: assim
-    `gen u = runiform() if x` consome a mesma sequência que no Stata."""
+    """Like eval_vector, but random functions only draw for the
+    observations in the sample (if/in), in their order, as Stata does: so
+    `gen u = runiform() if x` consumes the same sequence as in Stata."""
     s._rng_mask = mask
     try:
         return eval_vector(s, text)
@@ -86,7 +86,7 @@ def plural(n: int, word: str, plural_word: str | None = None) -> str:
 
 
 def references_subscript(node: Node, name: str) -> bool:
-    """A expressão usa name[...]? (replace então precisa ser sequencial)."""
+    """Does the expression use name[...]? (replace then has to be sequential)."""
     if isinstance(node, Subscript):
         return node.name == name or (not isinstance(node.index, str) and references_subscript(node.index, name))
     if isinstance(node, Unary):
@@ -99,7 +99,7 @@ def references_subscript(node: Node, name: str) -> bool:
 
 
 class ObsContext:
-    """Contexto escalar posicionado numa observação (replace sequencial)."""
+    """Scalar context positioned at one observation (sequential replace)."""
 
     def __init__(self, s: "Session", g: Groups):
         self.s = s

@@ -1,16 +1,16 @@
-"""append, merge, joinby e cross ([D] append, merge, joinby, cross).
+"""append, merge, joinby and cross ([D] append, merge, joinby, cross).
 
-Regras comuns ao juntar dois conjuntos de dados:
+Common rules when combining two datasets:
 
-* atributos (formato, rótulos) da base na memória (master) prevalecem;
-* variáveis numéricas com tipos diferentes são promovidas para um tipo que
-  guarde as duas (long + float vira double); strings, para o maior str#;
-* string de um lado e número do outro é erro r(106), a menos que se use
-  `force` (o lado da base usada fica missing);
-* rótulos de valores da base usada entram se não existirem na master; os
-  que já existem são mantidos, com a nota "(label x already defined)".
+* attributes (format, labels) of the dataset in memory (master) prevail;
+* numeric variables with different types are promoted to a type that
+  holds both (long + float becomes double); strings, to the larger str#;
+* string on one side and number on the other is error r(106), unless
+  `force` is used (the using side becomes missing);
+* value labels from the using dataset come in if they do not exist in the master;
+  existing ones are kept, with the note "(label x already defined)".
 
-merge imprime a tabela de resultados do Stata 11+ (colunas VERIFICAR).
+merge prints the results table of Stata 11+ (columns VERIFY).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _is_missing(v: Variable) -> np.ndarray:
 
 
 def common_type(a: str, b: str) -> str:
-    """Tipo que guarda valores dos dois tipos (mesmo gênero: número/string)."""
+    """Type that holds values of both types (same kind: number/string)."""
     if is_string_type(a):
         if a == "strL" or b == "strL":
             return "strL"
@@ -65,12 +65,12 @@ def common_type(a: str, b: str) -> str:
 
 
 def _mismatch(name: str, mv: Variable, uv: Variable, force: bool, what: str) -> bool:
-    """Erro (ou True com force) quando um lado é string e o outro número."""
+    """Error (or True with force) when one side is string and the other numeric."""
     if mv.is_string == uv.is_string:
         return False
     if force:
         return True
-    # VERIFICAR texto exato
+    # VERIFY texto exato
     filler = '""' if mv.is_string else "numeric missing value"
     raise StataError(106, f"variable {name} is {mv.vtype} in master but {uv.vtype} in using data\n"
                           f"    You could specify {what}'s force option to ignore this string/numeric "
@@ -86,7 +86,7 @@ def _promote(s: "Session", mv: Variable, utype: str, quiet: bool = False) -> Non
             mv.fmt = default_format(target)
         mv.vtype = target
         if not quiet:
-            # VERIFICAR: nota impressa pelo append/merge do Stata 14
+            # VERIFY: note printed by Stata 14's append/merge
             s.output.write(f"(note: variable {mv.name} was {old}, now {target} to accommodate "
                            f"using data's values)\n", "text")
 
@@ -98,7 +98,7 @@ def _blank(vtype: str, n: int) -> np.ndarray:
 
 
 def _raw_as(uv: Variable, vtype: str) -> np.ndarray:
-    """Valores de uv no tipo de armazenamento vtype."""
+    """Values of uv in storage type vtype."""
     if is_string_type(vtype):
         return np.array(uv.raw, dtype=object) if uv.is_string else _blank(vtype, len(uv))
     if uv.is_string:
@@ -112,13 +112,13 @@ def _merge_value_labels(s: "Session", master: Dataset, using: Dataset, names_use
         if lab not in using.value_labels:
             continue
         if lab in master.value_labels:
-            s.output.write(f"(label {lab} already defined)\n", "text")   # VERIFICAR
+            s.output.write(f"(label {lab} already defined)\n", "text")   # VERIFY
         else:
             master.value_labels[lab] = dict(using.value_labels[lab])
 
 
 def _fix_strings(v: Variable) -> None:
-    """Ajusta str# ao maior valor presente (depois de copiar valores)."""
+    """Fits str# to the longest value present (after copying values)."""
     if v.is_string and v.vtype != "strL":
         longest = max((str_len(t) for t in v.raw), default=1) or 1
         if longest > int(v.vtype[3:]):
@@ -145,14 +145,14 @@ def cmd_append(s: "Session", args: str) -> None:
     usings = [load_using(f) for f in files]
     force = bool(opts.get("force"))
     origin = [np.zeros(ds.nobs)]
-    gen_pos = ds.nvars        # a variável de generate() fica logo depois das da master
+    gen_pos = ds.nvars        # the generate() variable goes right after the master's variables
     for j, U in enumerate(usings, start=1):
         if opts.get("keep") not in (None, True):
             from ..core.varlist import expand
             keep = set(expand(U, str(opts["keep"])))
             U.drop_vars([n for n in U.names if n not in keep])
         n0, nu = ds.nobs, U.nobs
-        # tipos e mismatches primeiro (nada muda se houver erro)
+        # types and mismatches first (nothing changes if there is an error)
         bad = set()
         for uv in U.vars:
             if ds.has(uv.name) and _mismatch(uv.name, ds.get(uv.name), uv, force, "append"):
@@ -208,8 +208,8 @@ def _results(text: str) -> set[int]:
         elif wl in ("1", "2", "3", "4", "5"):
             out.add(int(wl))
         else:
-            raise StataError(198, f"invalid results specification {w}")   # VERIFICAR
-    # VERIFICAR: com update, "match" talvez inclua também 4 e 5
+            raise StataError(198, f"invalid results specification {w}")   # VERIFY
+    # VERIFY: with update, "match" may also include 4 and 5
     return out
 
 
@@ -235,7 +235,7 @@ def _key_col(v: Variable) -> np.ndarray:
 
 
 def _pairs(kind: str, gm: np.ndarray, gu: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
-    """Pares (linha master ou -1, linha using ou -1), ordenados pela chave."""
+    """Pairs (master row or -1, using row or -1), sorted by key."""
     order_m = np.argsort(gm, kind="stable")
     order_u = np.argsort(gu, kind="stable")
     bm = np.searchsorted(gm[order_m], np.arange(k + 1))
@@ -269,16 +269,16 @@ def _pairs(kind: str, gm: np.ndarray, gu: np.ndarray, k: int) -> tuple[np.ndarra
 
 
 def _master_order(pm: np.ndarray, pu: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Ordem do resultado no Stata 14: as observações da master na ordem
-    original (cada uma seguida dos seus pares da using), depois as que só
-    existem na using, na ordem delas (compat/expected/0308_merge_append.log)."""
+    """Order of the result in Stata 14: master observations in their
+    original order (each followed by its using matches), then those that
+    exist only in using, in their order (compat/expected/0308_merge_append.log)."""
     only_u = pm < 0
     order = np.lexsort((pu, np.where(only_u, pu, pm), only_u))
     return pm[order], pu[order]
 
 
 def _take(v: Variable, rows: np.ndarray, vtype: str | None = None) -> np.ndarray:
-    """Valores de v nas linhas `rows` (-1 = missing), no tipo vtype."""
+    """Values of v at rows `rows` (-1 = missing), in type vtype."""
     vtype = vtype or v.vtype
     src = _raw_as(v, vtype) if vtype != v.vtype else v.raw
     out = _blank(vtype, len(rows))
@@ -288,15 +288,15 @@ def _take(v: Variable, rows: np.ndarray, vtype: str | None = None) -> np.ndarray
 
 
 def _assert_text(allowed: set[int]) -> str:
-    """Texto do erro de assert(); "matched" observado no Stata 14, o resto
-    deduzido (VERIFICAR)."""
+    """Text of the assert() error; "matched" observed in Stata 14, the rest
+    deduced (VERIFY)."""
     parts = {1: "from master", 2: "from using", 3: "matched", 4: "matched (update)",
              5: "matched (conflict)"}
     return " or ".join(parts[k] for k in sorted(allowed))
 
 
 def _report(s: "Session", codes: np.ndarray, genname: str | None, update: bool) -> None:
-    """Tabela de resultados; com nogenerate, sem as anotações (_merge==#)."""
+    """Results table; with nogenerate, without the notes (_merge==#)."""
     def line(label: str, n: int, indent: int, code: int | None = None) -> None:
         left = " " * indent + label
         tail = f"  ({genname}=={code})" if code is not None and genname else ""
@@ -327,7 +327,7 @@ def _report(s: "Session", codes: np.ndarray, genname: str | None, update: bool) 
 def cmd_merge(s: "Session", args: str) -> None:
     m = re.match(r"^\s*(1:1|m:1|1:m|m:m)\s+(.*)$", args, re.S)
     if not m:
-        # VERIFICAR: sintaxe antiga (merge varlist using) não implementada
+        # VERIFY: old syntax (merge varlist using) not implemented
         raise StataError(198, "invalid syntax")
     kind = m.group(1)
     p = parse_standard(m.group(2))
@@ -339,14 +339,14 @@ def cmd_merge(s: "Session", args: str) -> None:
     ds = s.data
     by_n = p.varlist.strip() == "_n"
     if by_n and kind != "1:1":
-        raise StataError(198, "_n may only be used with 1:1")   # VERIFICAR
+        raise StataError(198, "_n may only be used with 1:1")   # VERIFY
     keys = [] if by_n else s.expand_varlist(p.varlist)
     if not keys and not by_n:
         raise StataError(100, "varlist required")
     U = load_using(p.using)
     for k in keys:
         if not U.has(k):
-            raise StataError(111, f"variable {k} not found")    # VERIFICAR (falta na using)
+            raise StataError(111, f"variable {k} not found")    # VERIFY (missing in using)
     if opts.get("keepusing") not in (None, True):
         from ..core.varlist import expand
         want = set(expand(U, str(opts["keepusing"]))) | set(keys)
@@ -354,7 +354,7 @@ def cmd_merge(s: "Session", args: str) -> None:
     update = bool(opts.get("update"))
     replace = bool(opts.get("replace"))
     if replace and not update:
-        raise StataError(198, "option replace requires option update")   # VERIFICAR
+        raise StataError(198, "option replace requires option update")   # VERIFY
     genname = "_merge"
     if opts.get("generate") not in (None, True):
         genname = str(opts["generate"]).strip()
@@ -362,19 +362,19 @@ def cmd_merge(s: "Session", args: str) -> None:
     if not nogen and ds.has(genname):
         raise StataError(110, f"variable {genname} already defined")
     if not nogen and U.has(genname):
-        raise StataError(110, f"variable {genname} already defined")   # VERIFICAR
+        raise StataError(110, f"variable {genname} already defined")   # VERIFY
     force = bool(opts.get("force"))
     for k in keys:
         mv, uv = ds.get(k), U.get(k)
         if mv.is_string != uv.is_string:
             raise StataError(106, f"key variable {k} is {mv.vtype} in master but {uv.vtype} "
-                                  f"in using data")   # VERIFICAR
+                                  f"in using data")   # VERIFY
     if kind in ("1:1", "1:m") and keys:
         _check_unique(ds, keys, "master")
     if kind in ("1:1", "m:1") and keys:
         _check_unique(U, keys, "using")
 
-    # pares de observações
+    # pairs of observations
     if by_n:
         n = max(ds.nobs, U.nobs)
         r = np.arange(n)
@@ -386,7 +386,7 @@ def cmd_merge(s: "Session", args: str) -> None:
         pm, pu = _pairs(kind, gm, gu, kk)
     codes = np.where(pm < 0, 2, np.where(pu < 0, 1, 3)).astype(np.int64)
 
-    # variáveis comuns (não chave)
+    # common variables (not keys)
     common = [v.name for v in U.vars if ds.has(v.name) and v.name not in keys]
     bad = {nm for nm in common if _mismatch(nm, ds.get(nm), U.get(nm), force, "merge")}
     new_vars: list[Variable] = []
@@ -454,11 +454,11 @@ def cmd_merge(s: "Session", args: str) -> None:
         used = {v.value_label for v in U.vars if v.value_label}
         _merge_value_labels(s, new, U, used)
     if not nogen:
-        # %23.0g: a largura do maior rótulo de _merge (observado no Stata 14)
+        # %23.0g: the width of the longest _merge label (observed in Stata 14)
         new.vars.append(Variable(genname, "byte", codes.astype(np.float64), fmt="%23.0g",
                                  value_label="_merge"))
         new.value_labels["_merge"] = dict(_MERGE_LABELS)
-    new.sortlist = []          # o Stata 14 não marca o resultado como ordenado
+    new.sortlist = []          # Stata 14 does not mark the result as sorted
     new.changed = True
     if opts.get("assert") not in (None, True):
         allowed = _results(str(opts["assert"]))
@@ -490,13 +490,13 @@ def cmd_joinby(s: "Session", args: str) -> None:
     U = load_using(p.using)
     keys = s.expand_varlist(p.varlist) if p.varlist.strip() else [n for n in ds.names if U.has(n)]
     if not keys:
-        raise StataError(459, "no common variables")   # VERIFICAR
+        raise StataError(459, "no common variables")   # VERIFY
     for k in keys:
         if not U.has(k):
             raise StataError(111, f"variable {k} not found")
         if ds.get(k).is_string != U.get(k).is_string:
             raise StataError(106, f"variable {k} is {ds.get(k).vtype} in master but "
-                                  f"{U.get(k).vtype} in using data")   # VERIFICAR
+                                  f"{U.get(k).vtype} in using data")   # VERIFY
     unmatched = str(opts.get("unmatched") or "none").strip().lower()
     if unmatched not in ("none", "both", "master", "using"):
         raise StataError(198, "invalid unmatched() option")
@@ -549,12 +549,12 @@ def cmd_joinby(s: "Session", args: str) -> None:
         _fix_strings(nv)
         new.vars.append(nv)
     if unmatched != "none":
-        # _merge fica entre as variáveis da master e as da using, com rótulos
-        # próprios do joinby (observado no Stata 14)
+        # _merge goes between the master and the using variables, with joinby's own labels
+        # (observed in Stata 14)
         if new.has(gname) or U.has(gname):
             raise StataError(110, f"variable {gname} already defined")
         codes = np.where(pm < 0, 2, np.where(pu < 0, 1, 3)).astype(np.float64)
-        new.vars.append(Variable(gname, "byte", codes, value_label=gname))   # VERIFICAR formato
+        new.vars.append(Variable(gname, "byte", codes, value_label=gname))   # VERIFY formato
         new.value_labels = dict(new.value_labels)
         new.value_labels[gname] = {1: "only in master data", 2: "only in using data",
                                    3: "both in master and using data"}
@@ -585,7 +585,7 @@ def cmd_cross(s: "Session", args: str) -> None:
     U = load_using(p.using)
     for uv in U.vars:
         if ds.has(uv.name):
-            raise StataError(110, f"variable {uv.name} already defined")   # VERIFICAR
+            raise StataError(110, f"variable {uv.name} already defined")   # VERIFY
     nm, nu = ds.nobs, U.nobs
     rm = np.repeat(np.arange(nm), nu)
     ru = np.tile(np.arange(nu), nm)

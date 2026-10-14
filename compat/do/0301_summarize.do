@@ -1,4 +1,4 @@
-* Fase 3a: summarize, ci, ttest, prtest, correlate, pwcorr, centile, pctile, xtile, tabstat.
+* Phase 3a: summarize, ci, ttest, prtest, correlate, pwcorr, centile, pctile, xtile, tabstat.
 clear
 input grupo x y peso
 1 10 3.2 1
@@ -36,7 +36,7 @@ centile x, centile(25 50 75)
 pctile p = x, nq(4)
 list p in 1/4
 xtile q = x, nq(3)
-* o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+* Stata's sort breaks ties at random (set sortseed): sort by x before listing
 sort grupo x
 list x q
 tabstat x y, stats(mean sd min max n) by(grupo)

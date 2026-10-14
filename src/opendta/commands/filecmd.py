@@ -1,6 +1,6 @@
-"""file open/write/read/close ([P] file), o básico para ler e gravar texto.
+"""file open/write/read/close ([P] file), the basics to read and write text.
 
-Diretivas de file write: "texto", `"texto"', (expressão), %fmt (expressão),
+file write directives: "text", `"text"', (expression), %fmt (expression),
 _newline[(#)] (_n), _tab[(#)], _skip[(#)], _char(#), _dup(#).
 """
 
@@ -40,7 +40,7 @@ def _handles(s: "Session") -> dict[str, Handle]:
 def _get(s: "Session", name: str) -> Handle:
     h = _handles(s).get(name)
     if h is None:
-        raise StataError(603, f"file handle {name} not found")   # VERIFICAR
+        raise StataError(603, f"file handle {name} not found")   # VERIFY
     return h
 
 
@@ -53,7 +53,7 @@ def _open(s: "Session", rest: str) -> None:
     o = match_options(opts_text, {"read": 1, "write": 1, "text": 1, "binary": 1,
                                   "replace": 3, "append": 3, "all": 3}) if comma else {}
     if name in _handles(s):
-        raise StataError(110, f"file handle {name} already exists")   # VERIFICAR
+        raise StataError(110, f"file handle {name} already exists")   # VERIFY
     path = Path(file).expanduser()
     if o.get("binary"):
         raise StataError(198, "binary files are not yet supported by OpenDTA")
@@ -80,7 +80,7 @@ def _write(s: "Session", rest: str) -> None:
         raise StataError(198, "invalid syntax")
     h = _get(s, m.group(1))
     if h.mode == "r":
-        raise StataError(608, f"file {h.path} is read-only")   # VERIFICAR
+        raise StataError(608, f"file {h.path} is read-only")   # VERIFY
     text = m.group(2)
     out: list[str] = []
     fmt = None
@@ -155,7 +155,7 @@ def _read(s: "Session", rest: str) -> None:
         raise StataError(198, "invalid syntax")
     h = _get(s, parts[0])
     if h.mode != "r":
-        raise StataError(608, f"file {h.path} is write-only")   # VERIFICAR
+        raise StataError(608, f"file {h.path} is write-only")   # VERIFY
     line = h.fh.readline()
     eof = line == ""
     s.macros.set_local(parts[1], line.rstrip("\r\n"))
@@ -180,7 +180,7 @@ def cmd_file(s: "Session", args: str) -> None:
         _open(s, rest)
     elif sub in ("write", "w"):
         from ..core.formats import plain_numbers
-        with plain_numbers():          # o arquivo guarda o número como o Stata
+        with plain_numbers():          # the file stores the number as Stata does
             _write(s, rest)
     elif sub in ("read", "r"):
         _read(s, rest)

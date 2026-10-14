@@ -1,6 +1,6 @@
 """import delimited, export delimited, insheet, outsheet ([D] import delimited).
 
-Mensagens e regras não documentadas estão marcadas VERIFICAR, com casos em
+Messages and undocumented rules are marked VERIFY, with cases in
 compat/do/0105_delimitado.do.
 """
 
@@ -40,7 +40,7 @@ def _delimiter(arg: str) -> str:
     if a in ("comma",):
         return ","
     if len(a) != 1:
-        # VERIFICAR: delimitadores com mais de um caractere
+        # VERIFY: delimiters with more than one character
         raise StataError(198, "delimiters() must be a single character")
     return a
 
@@ -74,7 +74,7 @@ def _load(s: "Session", path: Path, opts: ReadOptions, clear: bool, names: list[
 
 
 def _resolve_all(opts: ReadOptions, path: Path) -> None:
-    """stringcols(_all)/numericcols(_all) dependem do número de colunas."""
+    """stringcols(_all)/numericcols(_all) depend on the number of columns."""
     if -1 in opts.stringcols or -1 in opts.numericcols:
         probe = read_delimited(path, ReadOptions(delimiter=opts.delimiter, varnames=0,
                                                  encoding=opts.encoding, rowrange=(1, 1)))
@@ -86,7 +86,7 @@ def _resolve_all(opts: ReadOptions, path: Path) -> None:
 
 
 def _split_using(args: str) -> tuple[str, str, str]:
-    """[namelist] using f, opts | f, opts -> (namelist, arquivo, opções)."""
+    """[namelist] using f, opts | f, opts -> (namelist, file, options)."""
     p = parse_standard(args)
     if p.using is not None:
         return p.varlist, p.using, p.options
@@ -141,7 +141,7 @@ def _export(s: "Session", args: str, opts: WriteOptions, spec: dict[str, int], *
     o = match_options(p.options, spec)
     ds = s.data
     if ds.nvars == 0:
-        raise StataError(102, "no variables defined")   # VERIFICAR
+        raise StataError(102, "no variables defined")   # VERIFY
     names = unique(expand(ds, names_text)) if names_text.strip() else list(ds.names)
     path = text_path(file, ".out" if old and not o.get("comma") else ".csv")
     if old and o.get("comma"):
@@ -168,7 +168,7 @@ def _export(s: "Session", args: str, opts: WriteOptions, spec: dict[str, int], *
     except OSError as e:
         raise StataError(603, f"file {path} could not be opened ({e.strerror})")
     if not old:
-        s.output.write(f"file {path} saved\n", "text")   # outsheet não mostra
+        s.output.write(f"file {path} saved\n", "text")   # outsheet does not show it
 
 
 def export_delimited(s: "Session", args: str) -> None:
@@ -228,7 +228,7 @@ def cmd_insheet(s: "Session", args: str) -> None:
 
 @command("outsheet")
 def cmd_outsheet(s: "Session", args: str) -> None:
-    # outsheet: tabulação e aspas em todas as strings por padrão
+    # outsheet: tab and quotes around all strings by default
     _export(s, args, WriteOptions(delimiter="\t", quote=True), {
         "comma": 5, "delimiter": 9, "nonames": 7, "nolabel": 5, "noquote": 7,
         "replace": 7}, old=True)

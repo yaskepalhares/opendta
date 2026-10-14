@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 3b: collapse, contract, expand, fillin.
+. * Phase 3b: collapse, contract, expand, fillin.
 . clear
 
 . input g h x w
@@ -199,7 +199,7 @@ Sorted by: g  h
 
 . fillin g h
 
-. * o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+. * Stata's sort breaks ties at random (set sortseed): sort by x before listing
 . sort g h x
 
 . list

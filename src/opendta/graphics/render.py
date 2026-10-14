@@ -1,10 +1,10 @@
-"""Desenho dos gráficos com matplotlib.
+"""Drawing graphs with matplotlib.
 
-Recebe um Graph (model.py) e devolve uma Figure do matplotlib, usada tanto
-na janela Graph da interface quanto em `graph export`. O visual segue os
-esquemas próprios do OpenDTA (scheme.py); a disposição geral (títulos no
-alto, legenda e notas embaixo, painéis de by() em grade) acompanha a do
-Stata descrita em [G-3], sem copiar elementos gráficos da StataCorp."""
+Takes a Graph (model.py) and returns a matplotlib Figure, used both
+in the Graph window of the interface and in `graph export`. The look follows
+OpenDTA's own schemes (scheme.py); the general layout (titles at the
+top, legend and notes at the bottom, by() panels in a grid) follows
+Stata's as described in [G-3], without copying StataCorp graphical elements."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from matplotlib.ticker import MaxNLocator
 from . import scheme as SC
 from .model import Graph, Layer, Panel
 
-# tamanho padrão do Stata: 5,5 × 4 polegadas ([G-3] region_options)
+# Stata's default size: 5.5 × 4 inches ([G-3] region_options)
 DEFAULT_SIZE = (5.5, 4.0)
 
 _HOLLOW = {"oh", "dh", "sh", "th", "circle_hollow", "diamond_hollow", "square_hollow", "triangle_hollow", "smcircle_hollow"}
@@ -90,11 +90,11 @@ def _arr(v) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# camadas de twoway
+# twoway layers
 # ---------------------------------------------------------------------------
 
 def draw_layer(ax, ly: Layer, i: int, sch: dict) -> list:
-    """Desenha uma camada; devolve os artistas que vão para a legenda."""
+    """Draws a layer; returns the artists that go into the legend."""
     st = ly.style
     pal = sch["colors"]
     base_color = pal[int(st.get("_pal", i)) % len(pal)]
@@ -263,7 +263,7 @@ def _join(spec) -> str:
 
 
 # ---------------------------------------------------------------------------
-# famílias
+# families
 # ---------------------------------------------------------------------------
 
 def _draw_twoway_panel(ax, panel: Panel, g: Graph, sch: dict) -> list:
@@ -314,7 +314,7 @@ def _draw_bars(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
 
 
 def _orientation_kw(horizontal: bool) -> dict:
-    """matplotlib 3.10 trocou vert= por orientation= em bxp."""
+    """matplotlib 3.10 replaced vert= with orientation= in bxp."""
     import matplotlib
     major, minor = (int(p) for p in matplotlib.__version__.split(".")[:2])
     if (major, minor) >= (3, 10):
@@ -323,7 +323,7 @@ def _orientation_kw(horizontal: bool) -> dict:
 
 
 def _draw_dots(ax, ly: Layer, sch: dict) -> list:
-    """graph dot: uma linha pontilhada por categoria e um marcador por série."""
+    """graph dot: one dotted line per category and one marker per series."""
     cats = ly.extra.get("cats", [])
     series = ly.extra.get("series", [])
     pos = np.arange(len(cats), dtype=float)
@@ -436,7 +436,7 @@ def _draw_matrix(fig, ly: Layer, sch: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def draw(container, g: Graph, sch: dict) -> None:
-    """Desenha `g` numa Figure ou SubFigure."""
+    """Draws `g` in a Figure or SubFigure."""
     o = g.opts
     container.set_facecolor(sch["background"])
     tcolor = sch["text"]

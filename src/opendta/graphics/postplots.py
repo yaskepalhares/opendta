@@ -1,9 +1,9 @@
-"""Gráficos de diagnóstico e de pós-estimação: marginsplot, lowess, qnorm,
+"""Diagnostic and postestimation plots: marginsplot, lowess, qnorm,
 pnorm, rvfplot, rvpplot ([R] marginsplot, [R] lowess, [R] diagnostic
 plots, [R] regress postestimation diagnostic plots).
 
-O desenho é o do motor do OpenDTA; os títulos e eixos seguem o padrão
-descrito nos manuais (VERIFICAR detalhes de texto)."""
+The drawing is OpenDTA's engine; titles and axes follow the defaults
+described in the manuals (VERIFY text details)."""
 
 from __future__ import annotations
 
@@ -25,16 +25,16 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# lowess (Cleveland 1979, sem as iterações robustas, como o lowess do Stata)
+# lowess (Cleveland 1979, without the robustness iterations, like Stata's lowess)
 # ---------------------------------------------------------------------------
 
 def lowess_fit(x: np.ndarray, y: np.ndarray, bwidth: float = 0.8, mean: bool = False,
                noweight: bool = False) -> np.ndarray:
-    """Valor suavizado em cada x ([R] lowess, Methods and formulas): com os
-    dados ordenados por x, a janela de i vai de max(1, i-k) a min(i+k, N),
-    k = floor((N·bwidth - 0.5)/2), cortada nas pontas (não deslocada); pesos
-    tricúbicos com Δ = 1.0001·max(x(i+) - x(i), x(i) - x(i-)); regressão
-    local ponderada (ou média ponderada com `mean`). Conferido no compat 0804."""
+    """Smoothed value at each x ([R] lowess, Methods and formulas): with the
+    data sorted by x, the window of i goes from max(1, i-k) to min(i+k, N),
+    k = floor((N·bwidth - 0.5)/2), cut at the ends (not shifted); tricube
+    weights with Δ = 1.0001·max(x(i+) - x(i), x(i) - x(i-)); weighted local
+    regression (or weighted mean with `mean`). Checked in compat 0804."""
     n = len(x)
     order = np.argsort(x, kind="stable")
     xs, ys = x[order], y[order]
@@ -93,7 +93,7 @@ def lowess(s: "Session", text: str):
     if isinstance(lopts.get("generate"), str):
         nm = lopts["generate"].split()[0]
         vals = np.full(s.data.nobs, D.SYS)
-        vals[mask] = fit.astype(np.float32).astype(float)     # variável float, como no Stata
+        vals[mask] = fit.astype(np.float32).astype(float)     # float variable, as in Stata
         s.data.add(Variable(nm, "float", vals))
     if lopts.get("nograph"):
         return None, graw
@@ -129,8 +129,8 @@ def _one_var(s: "Session", text: str, extra: dict):
 
 
 def qnorm(s: "Session", text: str):
-    """Quantis de x contra os da normal com a mesma média e desvio-padrão;
-    posições (i - .5)/n (VERIFICAR: o Stata usa i/(n+1)?)."""
+    """Quantiles of x against those of the normal with the same mean and standard deviation;
+    positions (i - .5)/n (VERIFY: does Stata use i/(n+1)?)."""
     v, xs, lopts, graw = _one_var(s, text, {"grid": 4})
     n = len(xs)
     q = st.norm.ppf((np.arange(1, n + 1) - 0.5) / n) * xs.std(ddof=1) + xs.mean()
@@ -144,7 +144,7 @@ def qnorm(s: "Session", text: str):
 
 
 def pnorm(s: "Session", text: str):
-    """P_i = Φ((x_i - média)/dp) contra i/(n+1) ([R] diagnostic plots)."""
+    """P_i = Φ((x_i - mean)/sd) against i/(n+1) ([R] diagnostic plots)."""
     v, xs, lopts, graw = _one_var(s, text, {"grid": 4})
     n = len(xs)
     emp = np.arange(1, n + 1) / (n + 1)
@@ -158,7 +158,7 @@ def pnorm(s: "Session", text: str):
 
 
 # ---------------------------------------------------------------------------
-# rvfplot, rvpplot (depois do regress)
+# rvfplot, rvpplot (after regress)
 # ---------------------------------------------------------------------------
 
 def _resid_fit(s: "Session"):
@@ -166,7 +166,7 @@ def _resid_fit(s: "Session"):
     from ..estimation.results import current
     est = current(s)
     if est.cmd not in ("regress", "anova"):
-        raise StataError(301, "last estimates not found")   # VERIFICAR
+        raise StataError(301, "last estimates not found")   # VERIFY
     mask = esample(s)
     xb, ok = xb_all(s, est)
     y = s.data.get(est.depvar).data.astype(float)
@@ -206,11 +206,11 @@ def rvpplot(s: "Session", text: str):
 # ---------------------------------------------------------------------------
 
 def marginsplot(s: "Session", text: str):
-    """Margens e intervalos do último margins. Com at() variando uma
-    variável, ela vai no eixo x; senão, os níveis dos fatores."""
+    """Margins and intervals of the last margins. With at() varying one
+    variable, it goes on the x axis; otherwise, the factor levels."""
     info = getattr(s, "_margins_plot", None)
     if not info:
-        raise StataError(301, "previous command was not margins")   # VERIFICAR
+        raise StataError(301, "previous command was not margins")   # VERIFY
     p = parse_standard(text)
     lopts, graw = split_layer_graph(p.options, {**layer_spec(), "noci": 4, "recast": 6, "recastci": 7,
                                                 "xdimension": 4, "plotdimension": 4, "allxlabels": 4})

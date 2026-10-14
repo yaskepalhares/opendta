@@ -1,4 +1,4 @@
-* Fase 3b: collapse, contract, expand, fillin.
+* Phase 3b: collapse, contract, expand, fillin.
 clear
 input g h x w
 1 1 10 1
@@ -39,6 +39,6 @@ list g x novo
 restore
 drop if g == 2 & h == 1
 fillin g h
-* o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+* Stata's sort breaks ties at random (set sortseed): sort by x before listing
 sort g h x
 list

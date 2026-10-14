@@ -1,4 +1,4 @@
-"""Fase 6: svyset e linearização de Taylor."""
+"""Phase 6: svyset and Taylor linearization."""
 
 import numpy as np
 import pytest

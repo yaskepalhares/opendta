@@ -1,4 +1,4 @@
-* Fase 2: assert, log com nome, set trace, creturn de valores fixos.
+* Phase 2: assert, named log, set trace, creturn of fixed values.
 clear
 set obs 5
 gen x = _n

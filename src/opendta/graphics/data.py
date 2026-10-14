@@ -1,8 +1,8 @@
-"""Dados dos gráficos: amostra (if/in), rótulos, grupos de by() e as contas
-de histogram, kdensity, ajustes (lfit/qfit) e caixas (graph box).
+"""Graph data: sample (if/in), labels, by() groups and the computations
+of histogram, kdensity, fits (lfit/qfit) and boxes (graph box).
 
-Fórmulas tiradas dos manuais [G-2] e [R] (histogram, kdensity, graph box);
-pontos não documentados têm a marca VERIFICAR."""
+Formulas taken from manuals [G-2] and [R] (histogram, kdensity, graph box);
+undocumented points have the VERIFY mark."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def value_text(s: "Session", name: str, x) -> str:
 
 def groups(s: "Session", mask: np.ndarray, byvars: list[str], *, missing: bool = False
            ) -> Iterator[tuple[list, np.ndarray]]:
-    """Grupos de by()/over(): (valores, máscara), em ordem crescente."""
+    """by()/over() groups: (values, mask), in increasing order."""
     if not byvars:
         yield [], mask
         return
@@ -111,9 +111,9 @@ def weights(s: "Session", p: Parsed, mask: np.ndarray, allowed=("fweight", "awei
 # ---------------------------------------------------------------------------
 
 def hist_bins(x: np.ndarray, w: np.ndarray | None, opts: dict) -> dict:
-    """Barras do histograma. opts: bin, width, start, discrete, e a escala
-    (density, fraction, frequency, percent). Devolve centros, alturas,
-    largura, início e número de barras."""
+    """Histogram bins. opts: bin, width, start, discrete, and the scale
+    (density, fraction, frequency, percent). Returns centers, heights,
+    width, start and number of bins."""
     n = len(x)
     if n == 0:
         raise StataError(2000, "no observations")
@@ -125,7 +125,7 @@ def hist_bins(x: np.ndarray, w: np.ndarray | None, opts: dict) -> dict:
         if "width" in opts:
             width = float(opts["width"])
         else:
-            # VERIFICAR: largura = menor diferença entre valores distintos
+            # VERIFY: width = smallest difference between distinct values
             width = float(np.min(np.diff(vals))) if len(vals) > 1 else 1.0
         start = float(opts.get("start", xmin))
         k = int(math.floor((xmax - start) / width + 1e-9)) + 1
@@ -135,11 +135,11 @@ def hist_bins(x: np.ndarray, w: np.ndarray | None, opts: dict) -> dict:
     else:
         start = float(opts["start"]) if "start" in opts else xmin
         if start > xmin:
-            raise StataError(198, "start() must be less than or equal to the minimum")   # VERIFICAR
+            raise StataError(198, "start() must be less than or equal to the minimum")   # VERIFY
         if "width" in opts:
             width = float(opts["width"])
-            # o máximo entra na última barra (compat 0701: width(2) start(0)
-            # com máximo 10 dá 5 barras)
+            # the maximum goes into the last bin (compat 0701: width(2) start(0) with maximum 10
+            # gives 5 bins)
             k = max(1, int(math.ceil((xmax - start) / width - 1e-9)))
         else:
             if "bin" in opts:
@@ -149,7 +149,7 @@ def hist_bins(x: np.ndarray, w: np.ndarray | None, opts: dict) -> dict:
                 k = int(min(math.sqrt(W), 10 * math.log10(W)))
                 k = max(k, 1)
             width = (xmax - start) / k if xmax > start else 1.0
-        # VERIFICAR: intervalos [a, b), o último fechado em xmax
+        # VERIFY: intervals [a, b), the last one closed at xmax
         idx = np.floor((x - start) / width + 1e-12 * max(1.0, abs(xmax))).astype(int)
         idx = np.clip(idx, 0, k - 1)
         centers = start + width * (np.arange(k) + 0.5)
@@ -195,7 +195,7 @@ def _kernel(name: str):
         return lambda z: np.where(np.abs(z) < 1, 0.5, 0.0)
     if name == "triangle":
         return lambda z: np.where(np.abs(z) < 1, 1 - np.abs(z), 0.0)
-    raise StataError(198, f"kernel {name} not allowed")   # VERIFICAR mensagem
+    raise StataError(198, f"kernel {name} not allowed")   # VERIFY mensagem
 
 
 KERNELS = ("epanechnikov", "epan2", "biweight", "cosine", "gaussian", "parzen", "rectangle", "triangle")
@@ -210,7 +210,7 @@ def kernel_name(text: str | None) -> str:
     for k in KERNELS:
         if k != "epan2" and len(t) >= 2 and k.startswith(t):
             return k
-    raise StataError(198, f"kernel({text}) invalid")   # VERIFICAR
+    raise StataError(198, f"kernel({text}) invalid")   # VERIFY
 
 
 def default_bandwidth(x: np.ndarray, w: np.ndarray | None) -> float:
@@ -236,7 +236,7 @@ def kdensity(x: np.ndarray, w: np.ndarray | None, *, kernel: str = "epanechnikov
     h = bw if bw is not None else default_bandwidth(x, w)
     if at is None:
         npts = n if n is not None else min(N, 50)
-        # grade de mínimo - h a máximo + h (compat 0701)
+        # grid from minimum - h to maximum + h (compat 0701)
         lo, hi = float(x.min()) - h, float(x.max()) + h
         grid = np.linspace(lo, hi, npts) if npts > 1 else np.array([lo])
     else:
@@ -277,8 +277,8 @@ def poly_fit(x: np.ndarray, y: np.ndarray, degree: int, grid: np.ndarray, ci: bo
 # ---------------------------------------------------------------------------
 
 def box_stats(x: np.ndarray, w: np.ndarray | None = None) -> dict:
-    """[G-2] graph box: quartis pela definição de summarize; bigodes até os
-    valores adjacentes (dentro de 1,5 IQR); o resto é ponto externo."""
+    """[G-2] graph box: quartiles as defined by summarize; whiskers up to the
+    adjacent values (within 1.5 IQR); the rest are outside points."""
     order = np.argsort(x, kind="stable")
     xs = x[order]
     ws = None if w is None else w[order]
@@ -295,7 +295,7 @@ def box_stats(x: np.ndarray, w: np.ndarray | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# graph bar: estatísticas
+# graph bar: statistics
 # ---------------------------------------------------------------------------
 
 STATS = ("mean", "median", "p", "sum", "rawsum", "count", "percent", "max", "min", "sd",
@@ -340,4 +340,4 @@ def stat_value(stat: str, x: np.ndarray, w: np.ndarray | None) -> float:
         return S.percentile(xs, 75, ws) - S.percentile(xs, 25, ws)
     if stat.startswith("p") and stat[1:].isdigit():
         return S.percentile(xs, float(stat[1:]), ws)
-    raise StataError(198, f"({stat}) invalid statistic")   # VERIFICAR
+    raise StataError(198, f"({stat}) invalid statistic")   # VERIFY

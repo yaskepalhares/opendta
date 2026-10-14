@@ -1,6 +1,6 @@
 """display — manual [P] display.
 
-Diretivas suportadas: "string", `"string"', expressões, %fmt, as text|txt,
+Supported directives: "string", `"string"', expressions, %fmt, as text|txt,
 as result|res, as error|err, as input|inp, in smcl, _newline[(#)] (_n),
 _column(#) (_col), _skip(#), _dup(#), _char(#), _continue (_c).
 """
@@ -41,7 +41,7 @@ def cmd_display(s: "Session", args: str) -> None:
     text = args
     n = len(text)
 
-    # a saída é acumulada e só escrita no fim: se houver erro, nada aparece
+    # output is accumulated and written only at the end: if there is an error, nothing appears
     pending: list[tuple[str, str]] = []
     col = out.column
     last_literal: str | None = None
@@ -101,7 +101,7 @@ def cmd_display(s: "Session", args: str) -> None:
             elif name in ("continue", "c"):
                 cont = True
             elif name == "request":
-                raise StataError(198, "_request() ainda não é suportado")
+                raise StataError(198, "_request() is not supported yet")
             continue
 
         m = _FORMAT.match(rest)
@@ -110,9 +110,9 @@ def cmd_display(s: "Session", args: str) -> None:
             i += m.end()
             continue
 
-        # "texto" ou `"texto"' no início de uma diretiva é texto literal, não
-        # o começo de uma expressão: display "a" + 1 mostra a1 (observado no
-        # Stata); para concatenar strings use parênteses: display ("a" + "b")
+        # "text" or `"text"' at the start of a directive is literal text, not the start of an
+        # expression: display "a" + 1 shows a1 (observed in Stata); to concatenate strings use
+        # parentheses: display ("a" + "b")
         lit = _literal(rest)
         if lit is not None:
             text_value, consumed = lit
@@ -122,7 +122,7 @@ def cmd_display(s: "Session", args: str) -> None:
             fmt = None
             continue
 
-        # expressão
+        # expression
         p = Parser(rest, stop_on_unknown=True)
         if p.at_end():
             raise StataError(198, "invalid syntax")
@@ -131,7 +131,7 @@ def cmd_display(s: "Session", args: str) -> None:
             value = evaluate(node, s.context)
         except StataError as e:
             # display "a" + "b": o Stata responde 'a+"b" invalid name'
-            # (VERIFICAR a regra geral desta mensagem)
+            # (VERIFY a regra geral desta mensagem)
             if e.rc == 198 and last_literal is not None and rest.lstrip().startswith("+"):
                 raise StataError(198, f'{last_literal}{"".join(rest.split())} invalid name')
             raise
@@ -155,7 +155,7 @@ def cmd_display(s: "Session", args: str) -> None:
 
 
 def _literal(rest: str):
-    """Se `rest` começa com uma string entre aspas, devolve (texto, tamanho)."""
+    """If `rest` starts with a quoted string, returns (text, length)."""
     if rest.startswith('`"'):
         depth, j = 1, 2
         while j < len(rest) and depth:

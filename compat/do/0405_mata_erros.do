@@ -1,5 +1,5 @@
-* Fase 4: erros no Mata. O bloco "mata" (sem dois-pontos) continua depois
-* de um erro? E o "mata:"?
+* Phase 4: errors in Mata. Does the "mata" block (without a colon) continue after
+* an error? And "mata:"?
 mata
 nada
 (1, 2) * (3, 4)

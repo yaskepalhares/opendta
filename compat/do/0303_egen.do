@@ -1,4 +1,4 @@
-* Fase 3b: egen (funções de grupo e de linha).
+* Phase 3b: egen (group and row functions).
 clear
 input g x y str4 s
 1 2 5 "a b"

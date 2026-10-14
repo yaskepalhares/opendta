@@ -1,11 +1,11 @@
-"""Comandos de gráfico: graph (e subcomandos), twoway, scatter, line,
-connected, tsline, histogram e kdensity ([G-2], [R] histogram, [R] kdensity).
+"""Graph commands: graph (and subcommands), twoway, scatter, line,
+connected, tsline, histogram and kdensity ([G-2], [R] histogram, [R] kdensity).
 
-Os gráficos ficam guardados na sessão (graph dir/drop/rename) e aparecem
-na janela Graph da interface; sem interface (modo batch), são só
-guardados e podem ser gravados com graph export/graph save. Mensagens
-seguem as do Stata 14; o que não é documentado tem a marca VERIFICAR e
-casos em compat/do/07xx."""
+Graphs are kept in the session (graph dir/drop/rename) and appear
+in the Graph window of the interface; without the interface (batch mode),
+they are only kept and can be written with graph export/graph save.
+Messages follow Stata 14; what is undocumented has the VERIFY mark and
+cases in compat/do/07xx."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# parte comum: name(), saving(), nodraw, esquema e exibição
+# common part: name(), saving(), nodraw, scheme and display
 # ---------------------------------------------------------------------------
 
 def finish(s: "Session", g: Graph, graw: dict) -> None:
@@ -57,7 +57,7 @@ def show(s: "Session", g: Graph) -> None:
 
 
 def _shown(text: str, path: Path) -> str:
-    """Nome do arquivo como o usuário escreveu, com a extensão acrescentada."""
+    """File name as the user wrote it, with the extension added."""
     t = strip_outer_quotes(text.strip())
     return t if Path(t).suffix else t + path.suffix
 
@@ -99,7 +99,7 @@ def cmd_tsline(s: "Session", args: str) -> None:
 @command("histogram", "hist")
 def cmd_histogram(s: "Session", args: str) -> None:
     g, graw, msg = FAM.histogram(s, args)
-    # com by() o Stata não mostra a mensagem das barras (compat 0701)
+    # with by() Stata does not show the bins message (compat 0701)
     if "by" not in graw:
         s.output.write(msg + "\n", "text")
     finish(s, g, graw)
@@ -113,7 +113,7 @@ def cmd_kdensity(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# diagnósticos e pós-estimação
+# diagnostics and postestimation
 # ---------------------------------------------------------------------------
 
 def _post(fn, s: "Session", args: str) -> None:
@@ -185,7 +185,7 @@ def cmd_graph(s: "Session", args: str) -> None:
         if TW.plottype(head) is not None:
             _twoway(s, args)
             return
-        raise StataError(198, f"{head} is not a graph command")   # VERIFICAR
+        raise StataError(198, f"{head} is not a graph command")   # VERIFY
     if sub == "twoway":
         _twoway(s, rest)
     elif sub in ("bar", "hbar"):
@@ -247,16 +247,16 @@ def _export(s: "Session", text: str) -> None:
     if isinstance(o.get("as"), str):
         ext = "." + o["as"].strip().lower()
         if ext not in R.FORMATS:
-            raise StataError(198, f"as({o['as']}) invalid")   # VERIFICAR
+            raise StataError(198, f"as({o['as']}) invalid")   # VERIFY
         if path.suffix == "":
             path = path.with_suffix(ext)
             fname += ext
     else:
         ext = path.suffix.lower()
         if ext == "":
-            raise StataError(198, "you must specify a file extension or the as() option")   # VERIFICAR
+            raise StataError(198, "you must specify a file extension or the as() option")   # VERIFY
     if ext not in R.FORMATS:
-        raise StataError(198, f"{ext[1:]} is not a supported graph export format")   # VERIFICAR
+        raise StataError(198, f"{ext[1:]} is not a supported graph export format")   # VERIFY
     g = store(s).get(o["name"].strip() if isinstance(o.get("name"), str) else None)
     if path.exists() and not o.get("replace"):
         raise StataError(602, f"file {fname} already exists")
@@ -267,7 +267,7 @@ def _export(s: "Session", text: str) -> None:
         R.export(g, path, fmt, width=width, height=height)
     except OSError:
         raise StataError(603, f"file {fname} could not be opened")
-    # no Mac, o Stata 14 mostra o caminho completo só no PDF (compat 0701)
+    # on the Mac, Stata 14 shows the full path only for PDF (compat 0701)
     shown = str(path.resolve()) if label == "PDF" else fname
     s.output.write(f"(file {shown} written in {label} format)\n", "text")
 
@@ -298,7 +298,7 @@ def _use(s: "Session", text: str) -> None:
         raise StataError(198, "invalid syntax")
     path = gph_path(words[0])
     g = load_gph(path)
-    # VERIFICAR: o nome do gráfico carregado é o nome do arquivo sem extensão
+    # VERIFY: the name of the loaded graph is the file name without extension
     name, replace = (path.stem, True)
     if isinstance(o.get("name"), str):
         name, replace = name_opt(o["name"])
@@ -325,8 +325,8 @@ def _dir(s: "Session", text: str) -> None:
     items = names + files
     if not items:
         return
-    # em ordem alfabética, colunas da largura do maior nome + 2, recuo de 4
-    # (compat 0701: "    d       e       f       odta_a  p")
+    # in alphabetical order, columns as wide as the longest name + 2, indented by 4 (compat 0701: "
+    # d       e       f       odta_a  p")
     items = sorted(items)
     L = max(len(x) for x in items) + 2
     per = max(1, (int(s.settings.get("linesize", 80)) - 4) // L)
@@ -387,7 +387,7 @@ def _rename(s: "Session", text: str) -> None:
     g = st.get(old)
     name_opt(new)
     if new in st.graphs and not o.get("replace"):
-        raise StataError(110, f"graph {new} already exists")   # VERIFICAR
+        raise StataError(110, f"graph {new} already exists")   # VERIFY
     st.drop(old)
     g.name = new
     st.put(g, replace=True)
@@ -419,7 +419,7 @@ def _describe(s: "Session", text: str) -> None:
         g = st.get(t or None)
         where = "memory"
     out = s.output
-    # VERIFICAR: layout de graph describe
+    # VERIFY: layout of graph describe
     out.write(f"\n{g.name} stored in {where}\n\n", "text")
     out.write(f"{'family:':>12}  {g.family}\n", "text")
     out.write(f"{'scheme:':>12}  {g.opts.get('scheme', '')}\n", "text")

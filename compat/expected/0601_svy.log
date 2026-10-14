@@ -4,7 +4,7 @@
   log type:  text
  opened on:  13 Oct 2026, 08:32:57
 
-. * Fase 6: svyset, svydescribe, mean/proportion/total/ratio e svy:.
+. * Phase 6: svyset, svydescribe, mean/proportion/total/ratio and svy:.
 . clear
 
 . estimates clear

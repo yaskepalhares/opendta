@@ -1,4 +1,4 @@
-"""Fase 5a: regress, variáveis fatoriais, séries temporais e pós-estimação."""
+"""Phase 5a: regress, factor variables, time series and postestimation."""
 
 import numpy as np
 import pytest
@@ -64,7 +64,7 @@ def test_factor_variables_names(run):
 def test_collinearity_note(run):
     run(DATA + "gen x3 = 2*x1\n")
     out = run("regress y x1 x3 x2")
-    # como o Stata (compat 0501): com x3 = 2*x1, sai x1
+    # as in Stata (compat 0501): with x3 = 2*x1, x1 is dropped
     assert "note: x1 omitted because of collinearity" in out
     assert "x1 |          0  (omitted)" in out
 

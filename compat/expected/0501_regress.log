@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 12:10:02
 
-. * Fase 5a: regress (tabela ANOVA, coeficientes, vce, pesos, opções).
+. * Phase 5a: regress (ANOVA table, coefficients, vce, weights, options).
 . clear
 
 . estimates clear

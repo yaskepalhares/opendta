@@ -1,4 +1,4 @@
-"""Pós-estimação: replay, predict, test, testparm, lincom e estimates
+"""Postestimation: replay, predict, test, testparm, lincom and estimates
 ([R] predict, [R] test, [R] testparm, [R] lincom, [R] estimates)."""
 
 from __future__ import annotations
@@ -49,11 +49,11 @@ def _display(s: "Session", est: Estimates, **kw) -> None:
 
 
 # ---------------------------------------------------------------------------
-# matriz de delineamento para predict (todas as observações)
+# design matrix for predict (all observations)
 # ---------------------------------------------------------------------------
 
 def _columns(s: "Session", est: Estimates):
-    """Gera (índice em e(b), coluna) para todas as observações, sem montar X."""
+    """Yields (index in e(b), column) for all observations, without building X."""
     ds = s.data
     n = ds.nobs
     for j, c in enumerate(est.cols):
@@ -75,7 +75,7 @@ def _columns(s: "Session", est: Estimates):
 
 
 def design_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
-    """X para todas as observações (na ordem de e(b)) e máscara de não missing."""
+    """X for all observations (in e(b) order) and the non-missing mask."""
     ds = s.data
     n = ds.nobs
     with fvars.caching():
@@ -88,7 +88,7 @@ def design_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
 
 
 def xb_all(s: "Session", est: Estimates) -> tuple[np.ndarray, np.ndarray]:
-    """xb para todas as observações, acumulado coluna a coluna (sem guardar X)."""
+    """xb for all observations, accumulated column by column (without keeping X)."""
     ds = s.data
     with fvars.caching():
         ok = ~fvars.term_missing(ds, est.terms)
@@ -129,7 +129,7 @@ def cmd_predict(s: "Session", args: str) -> None:
     stats = [k for k in ("xb", "residuals", "stdp", "stdf", "stdr", "hat", "leverage", "rstandard",
                          "rstudent", "cooksd", "pr", "p", "n", "ir") if o.get(k)]
     if len(stats) > 1:
-        raise StataError(198, "only one statistic may be specified")   # VERIFICAR
+        raise StataError(198, "only one statistic may be specified")   # VERIFY
     out = s.output
     pred = getattr(est, "predict", None)
     if pred is not None:
@@ -171,7 +171,7 @@ def _predict_regress(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     s2 = est.s2
     if stat == "stdf":
         return np.where(ok, np.sqrt(sp ** 2 + s2), SYS), ""
-    # leverage: h = x (X'WX)^-1 x' = stdp^2 / s2 (pesos: VERIFICAR)
+    # leverage: h = x (X'WX)^-1 x' = stdp^2 / s2 (pesos: VERIFY)
     h = np.where(ok, sp ** 2 / s2, SYS)
     if stat in ("hat", "leverage"):
         return h, ""
@@ -203,11 +203,11 @@ def esample(s: "Session") -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# restrições lineares (test, lincom)
+# linear constraints (test, lincom)
 # ---------------------------------------------------------------------------
 
 def _coef_index(est: Estimates, s: "Session", name: str, eq: str = "") -> int:
-    """Índice em e(b) de um nome como 'mpg', '2.rep78', '_cons', 'L.x'."""
+    """Index in e(b) of a name such as 'mpg', '2.rep78', '_cons', 'L.x'."""
     name = name.strip()
     names = est.names
     eqs = est.eqnames or [""] * len(names)
@@ -221,7 +221,7 @@ def _coef_index(est: Estimates, s: "Session", name: str, eq: str = "") -> int:
     i = match(name)
     if i is not None:
         return i
-    # abreviação/nome de variável sem operadores
+    # variable abbreviation/name without operators
     try:
         from ..core.varlist import resolve_name
         full = resolve_name(s.data, name)
@@ -257,7 +257,7 @@ def _same(a: str, b: str) -> bool:
 
 
 class _Lin:
-    """Expressão linear nos coeficientes: {índice: coeficiente} + constante."""
+    """Linear expression in the coefficients: {index: coefficient} + constant."""
 
     def __init__(self, s: "Session", est: Estimates, text: str):
         self.s, self.est = s, est
@@ -303,7 +303,7 @@ class _Lin:
                 elif not c2:
                     coef, const = {kk: v * k2 for kk, v in coef.items()}, const * k2
                 else:
-                    raise StataError(131, "not possible with test")   # VERIFICAR
+                    raise StataError(131, "not possible with test")   # VERIFY
             else:
                 if c2:
                     raise StataError(131, "not possible with test")
@@ -347,7 +347,7 @@ class _Lin:
 
 
 def _constraint(s: "Session", est: Estimates, text: str) -> tuple[dict, float]:
-    """'a = b' ou 'a' (= 0) -> R (dict) e r, com R b = r."""
+    """'a = b' or 'a' (= 0) -> R (dict) and r, with R b = r."""
     if "=" in text:
         lhs, rhs = text.split("=", 1)
         c1, k1 = _Lin(s, est, lhs).parse()
@@ -361,7 +361,7 @@ def _constraint(s: "Session", est: Estimates, text: str) -> tuple[dict, float]:
 
 
 def _ctext(est: Estimates, coef: dict, r: float) -> str:
-    """' mpg - weight = 0' como o Stata escreve a restrição."""
+    """' mpg - weight = 0' as Stata writes the constraint."""
     parts = []
     for k in sorted(coef):
         v = coef[k]
@@ -395,7 +395,7 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
         out.write("\n", "text")
         for i, (coef, rv) in enumerate(cons):
             out.write(f" ({i + 1:>2})  {_ctext(est, coef, rv)}\n", "text")
-    # restrições dependentes/omitidas
+    # dependent/omitted constraints
     V = est.V
     d = R @ est.b - r
     RVR = R @ V @ R.T
@@ -406,7 +406,7 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
             notes.append(i + 1)
         else:
             keep.append(i)
-    # dependência linear entre as restrições
+    # linear dependence among the constraints
     sel = []
     for i in keep:
         trial = sel + [i]
@@ -417,10 +417,10 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
             notes.append(i + 1)
     q = len(sel)
     for i in sorted(notes):
-        out.write(f"       Constraint {i} dropped\n", "text")   # VERIFICAR
+        out.write(f"       Constraint {i} dropped\n", "text")   # VERIFY
     if q == 0:
         out.write("\n", "text")
-        raise StataError(111, "no restrictions")   # VERIFICAR
+        raise StataError(111, "no restrictions")   # VERIFY
     W = float(d[sel] @ np.linalg.solve(RVR[np.ix_(sel, sel)], d[sel]))
     out.write("\n", "text")
     s.r = {}
@@ -474,17 +474,17 @@ def cmd_test(s: "Session", args: str) -> None:
     elif "=" in text or re.search(r"[-+*/]|_b\[|\[", text):
         exprs = [text]
     else:
-        # test varlist: cada coeficiente = 0 (aceita fatoriais e curingas)
+        # test varlist: each coefficient = 0 (accepts factor variables and wildcards)
         exprs = _coef_names(s, est, text)
     multi = est.eqnames and len(set(est.eqnames)) > 1
     if multi and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
-        # várias equações: a variável em todas as equações em que é estimada
-        # (VERIFICAR a ordem e as equações de base do mlogit)
+        # several equations: the variable in all equations in which it is estimated (VERIFY the
+        # order and mlogit's base equations)
         cons = []
         for e in exprs:
             for i, (nm, eq) in enumerate(zip(est.names, est.eqnames)):
                 if _same(nm, e):
-                    cons.append(({i: 1.0}, 0.0))   # a da base sai como "dropped"
+                    cons.append(({i: 1.0}, 0.0))   # the base one comes out as "dropped"
         if not cons:
             raise StataError(111, f"{exprs[0]} not found")
     else:
@@ -502,7 +502,7 @@ def cmd_test(s: "Session", args: str) -> None:
 
 
 def _coef_names(s: "Session", est: Estimates, text: str) -> list[str]:
-    """Nomes de coeficientes a partir de uma varlist (com fatoriais)."""
+    """Coefficient names from a varlist (with factor variables)."""
     names = []
     for tok in text.split():
         if re.match(r"^\d+\.\w+$", tok):
@@ -533,7 +533,7 @@ def cmd_testparm(s: "Session", args: str) -> None:
         if est.terms[c.term].key() in keys and not c.base and not c.omitted:
             idx.append(i)
     if not idx:
-        raise StataError(111, "no such variables")   # VERIFICAR
+        raise StataError(111, "no such variables")   # VERIFY
     if o.get("equal"):
         cons = []
         for j in idx[1:]:
@@ -549,7 +549,7 @@ def cmd_lincom(s: "Session", args: str) -> None:
     o = match_options(opts, {"level": 1, "eform": 2, "or": 2, "hr": 2, "irr": 2, "rrr": 2}) \
         if comma and opts.strip() else {}
     coef, r = _constraint(s, est, head)
-    # lincom estima a combinação (sem o lado direito): R b - r
+    # lincom estimates the combination (without the right-hand side): R b - r
     out = s.output
     out.write("\n", "text")
     out.write(f" ( 1)  {_ctext(est, coef, r)}\n", "text")
@@ -573,7 +573,7 @@ def cmd_lincom(s: "Session", args: str) -> None:
     else:
         coef_table(s, est.depvar, [CoefRow("coef", "(1)", val, se)], stat=est.stat, df=est.df_r,
                    level=lev)
-    # r(): só estimate, se e df no Stata 14 (compat 0504); a lista sai invertida
+    # r(): only estimate, se and df in Stata 14 (compat 0504); the list comes out reversed
     s.r = {"estimate": val, "se": se}
     if est.df_r:
         s.r["df"] = float(est.df_r)
@@ -637,7 +637,7 @@ def cmd_estimates(s: "Session", args: str) -> None:
         if name not in st_:
             raise StataError(111, f"estimation result {name} not found")
         _restore(s, st_[name])
-        s.e["_estimates_name"] = name   # VERIFICAR: e(_estimates_name)
+        s.e["_estimates_name"] = name   # VERIFY: e(_estimates_name)
         s.output.write(f"(results {name} are active now)\n", "text")
         return
     if sub in ("dir",):
@@ -667,7 +667,7 @@ def cmd_estimates(s: "Session", args: str) -> None:
                     if n not in st_:
                         raise StataError(111, f"estimation result {n} not found")
                     _restore(s, st_[n])
-                    w = int(s.settings.get("linesize", 80))   # VERIFICAR com o padrao 80
+                    w = int(s.settings.get("linesize", 80))   # VERIFY with the default 80
                     lab = f"Model {n}"
                     out.write("\n" + "-" * w + "\n", "text")
                     out.write(lab + "\n", "result")
@@ -681,12 +681,12 @@ def cmd_estimates(s: "Session", args: str) -> None:
         from .esttable import estimates_table
         estimates_table(s, rest)
         return
-    raise StataError(198, f"{sub}: unknown subcommand")   # VERIFICAR
+    raise StataError(198, f"{sub}: unknown subcommand")   # VERIFY
 
 
 def _est_dir(s: "Session", st_: dict) -> None:
-    """Layout do Stata 14 (compat 0504): a coluna title é o título dado por
-    estimates title, não e(title)."""
+    """Stata 14 layout (compat 0504): the title column is the title given by
+    estimates title, not e(title)."""
     out = s.output
     out.write("\n", "text")
     out.write("-" * 55 + "\n", "text")

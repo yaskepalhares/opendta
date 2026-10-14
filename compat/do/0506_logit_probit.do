@@ -1,4 +1,4 @@
-* Fase 5b: logit, logistic e probit (log de iterações, tabelas, pós-estimação).
+* Phase 5b: logit, logistic and probit (iteration log, tables, postestimation).
 clear
 estimates clear
 ereturn clear

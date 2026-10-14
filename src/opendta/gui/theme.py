@@ -1,10 +1,10 @@
-"""Cores e fontes da interface.
+"""Interface colors and fonts.
 
-O esquema padrão segue a aparência clara do Stata 14. As cores de sintaxe
-do Do-file Editor foram medidas numa captura das preferências do Stata 14
-no macOS (cores do esquema padrão). Capturas de tela do macOS podem converter
-o perfil de cor, então os valores podem diferir em poucos pontos dos
-originais. Basta ajustar aqui.
+The default scheme follows Stata 14's light appearance. The syntax colors
+of the Do-file Editor were measured from a screenshot of Stata 14's preferences
+on macOS (colors of the default scheme). macOS screenshots may convert
+the color profile, so the values may differ by a few points from the
+originals. Just adjust them here.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class ResultsScheme:
         "error": "#cc0000",
         "input": "#000000",
         "command": "#000000",
-        "hint": "#6b5a00",      # explicação dos erros (OpenDTA)
+        "hint": "#6b5a00",      # error explanations (OpenDTA)
     })
     bold: frozenset[str] = frozenset({"result", "input"})
 
@@ -48,9 +48,8 @@ def results_scheme(theme: str) -> ResultsScheme:
     return DARK_RESULTS if theme == "dark" else STANDARD
 
 
-# Cores da interface (janelas, painéis, menus) em cada tema. A interface
-# não segue o modo claro/escuro do sistema: o tema é escolhido em
-# Preferences, com o claro como padrão.
+# Interface colors (windows, panels, menus) in each theme. The interface does not follow the
+# system's light/dark mode: the theme is chosen in Preferences, with light as the default.
 _UI = {
     "light": {
         "Window": "#ececec", "WindowText": "#1d1d1f", "Base": "#ffffff",
@@ -73,14 +72,14 @@ _DISABLED_TEXT = {"light": "#a1a1a6", "dark": "#6e6e73"}
 
 
 def apply_theme(app, theme: str) -> None:
-    """Aplica o tema claro ou escuro à aplicação inteira."""
+    """Applies the light or dark theme to the whole application."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPalette
     from PySide6.QtWidgets import QStyleFactory
 
     theme = theme if theme in THEMES else "light"
     hints = app.styleHints()
-    if hasattr(hints, "setColorScheme"):           # Qt 6.8+: inclui a barra de título
+    if hasattr(hints, "setColorScheme"):           # Qt 6.8+: includes the title bar
         hints.setColorScheme(Qt.ColorScheme.Dark if theme == "dark" else Qt.ColorScheme.Light)
     fusion = QStyleFactory.create("Fusion")
     if fusion is not None:
@@ -96,7 +95,7 @@ def apply_theme(app, theme: str) -> None:
 
 @dataclass(frozen=True)
 class SyntaxScheme:
-    """Realce de sintaxe do Do-file Editor (Preferences > Do-file Editor > Syntax)."""
+    """Do-file Editor syntax highlighting (Preferences > Do-file Editor > Syntax)."""
 
     plain: str = "#010000"
     keywords: str = "#121779"
@@ -107,7 +106,7 @@ class SyntaxScheme:
     compound_strings: str = "#72000b"
     numbers: str = "#263ff1"
     operators: str = "#010000"
-    brace_matching: str = "#fa1b1a"     # em negrito
+    brace_matching: str = "#fa1b1a"     # in bold
     # aba General
     background: str = "#ffffff"
     selection: str = "#add3fa"
@@ -116,7 +115,7 @@ class SyntaxScheme:
     current_line: str = "#fefdcc"
     page_guide: str = "#dcdcdc"
     matches: str = "#fcfb52"
-    # números de linha
+    # line numbers
     line_numbers_background: str = "#dfdfe0"
     line_numbers: str = "#747474"
 
@@ -125,11 +124,11 @@ DOFILE_SYNTAX = SyntaxScheme()
 
 
 def default_monospace() -> tuple[str, int]:
-    """Fonte monoespaçada padrão por sistema.
+    """Default monospaced font per system.
 
-    macOS: Menlo (identificada na captura das preferências do Stata);
-    Windows: Courier New; Linux: DejaVu Sans Mono (mesmo desenho da Menlo).
-    VERIFICAR: tamanhos padrão do Stata 14 em cada sistema.
+    macOS: Menlo (identified in the screenshot of Stata's preferences);
+    Windows: Courier New; Linux: DejaVu Sans Mono (same design as Menlo).
+    VERIFY: Stata 14's default sizes on each system.
     """
     if sys.platform == "darwin":
         return "Menlo", 12

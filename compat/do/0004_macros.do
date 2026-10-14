@@ -1,4 +1,4 @@
-* Macros locais e globais.
+* Local and global macros.
 local a hello
 local b "hello world"
 local c `"com "aspas" dentro"'

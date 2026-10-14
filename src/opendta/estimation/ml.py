@@ -1,9 +1,9 @@
-"""Maximização da verossimilhança no estilo do Stata ([R] maximize, [R] ml).
+"""Likelihood maximization in Stata's style ([R] maximize, [R] ml).
 
-Newton-Raphson com o passo observado no optimize() do Mata (compat 0406):
-se o passo inteiro melhora, avança em incrementos de 1/8, 1/4, 1/2...
-enquanto melhorar; se piora, divide por 2 ("backed up"). Convergência:
-(mreldif(b) < tolerance ou reldif(ll) < ltolerance) e g H⁻¹ g' < nrtolerance.
+Newton-Raphson with the step observed in Mata's optimize() (compat 0406):
+if the full step improves, it advances in increments of 1/8, 1/4, 1/2...
+while it improves; if it gets worse, it halves ("backed up"). Convergence:
+(mreldif(b) < tolerance or reldif(ll) < ltolerance) and g H⁻¹ g' < nrtolerance.
 """
 
 from __future__ import annotations
@@ -35,18 +35,18 @@ def _g10(x: float) -> str:
 def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter: int = 16000,
              tol: float = 1e-6, ltol: float = 1e-7, nrtol: float = 1e-5, start_iter: int = 0,
              first_ll: float | None = None, stop_at_zero: bool = False) -> MLResult:
-    """fun(b, todo) -> (ll, g, H) com todo 0 (só ll) ou 2 (ll, g e H).
-    Devolve as iterações para o log ("Iteration k:   log likelihood = ...")."""
+    """fun(b, todo) -> (ll, g, H) with todo 0 (ll only) or 2 (ll, g and H).
+    Returns the iterations for the log ("Iteration k:   log likelihood = ...")."""
     b = np.asarray(b0, dtype=np.float64).copy()
     ll, g, H = fun(b, 2)
     if not np.isfinite(ll):
-        raise StataError(430, "initial values not feasible")   # VERIFICAR
+        raise StataError(430, "initial values not feasible")   # VERIFY
     log: list[tuple[int, float, str]] = []
     it = start_iter
     converged = False
     k = b.size
-    # já no máximo (ex.: glm gaussiano a partir do IRLS): o Stata para na
-    # iteração 0 (compat 0509)
+    # already at the maximum (e.g. gaussian glm from IRLS): Stata stops at iteration 0 (compat
+    # 0509)
     if stop_at_zero and k and np.all(np.abs(g) <= 1e-9 * (1 + abs(ll))):
         log.append((it, ll, ""))
         return MLResult(b, ll, g, H, it, True, log)
@@ -58,8 +58,8 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
             concave = False
         Hm = H
         if not concave:
-            # Hessiana não côncava: soma um múltiplo da identidade (VERIFICAR:
-            # o Stata usa uma combinação de gradiente e Hessiana modificada)
+            # non-concave Hessian: adds a multiple of the identity (VERIFY: Stata uses a
+            # combination of gradient and modified Hessian)
             lam = max(1e-8, float(np.max(np.linalg.eigvalsh(H))) * 1.1 + 1e-6)
             Hm = H - lam * np.eye(k)
         log.append((it, ll, "  (not concave)" if not concave else ""))
@@ -106,8 +106,8 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
     if converged and k:
         from .numerics import precise
         if precise():
-            # set numerics precise: passos de Newton extras (fora do log) até o
-            # gradiente parar de diminuir, levando b ao máximo exato
+            # set numerics precise: extra Newton steps (outside the log) until the gradient stops
+            # decreasing, taking b to the exact maximum
             for _ in range(5):
                 try:
                     bn = b - np.linalg.solve(H, g)
@@ -130,7 +130,7 @@ def print_log(out, res: MLResult, label: str = "log likelihood") -> None:
 
 
 def ilog(res: MLResult) -> np.ndarray:
-    """e(ilog): log-verossimilhança das 20 primeiras iterações (zeros depois)."""
+    """e(ilog): log likelihood of the first 20 iterations (zeros afterward)."""
     v = np.zeros((1, 20))
     vals = [ll for _, ll, _ in res.log][:20]
     v[0, :len(vals)] = vals

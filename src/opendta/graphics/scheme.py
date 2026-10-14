@@ -1,7 +1,7 @@
-"""Esquemas visuais do OpenDTA. São próprios: não reproduzem os esquemas
-gráficos da StataCorp (política clean-room). `s2color`, `s1mono` etc. são
-aceitos como nomes e mapeados para o equivalente do OpenDTA mais próximo
-em espírito (colorido ou monocromático)."""
+"""OpenDTA's visual schemes. They are its own: they do not reproduce StataCorp's
+graph schemes (clean-room policy). `s2color`, `s1mono` etc. are
+accepted as names and mapped to the OpenDTA equivalent closest
+in spirit (color or monochrome)."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ SCHEMES: dict[str, dict] = {
     },
 }
 
-# nomes do Stata aceitos por compatibilidade de do-files
+# Stata names accepted for do-file compatibility
 ALIASES = {"s2color": "opendta", "s2mono": "opendta_mono", "s1color": "opendta", "s1mono": "opendta_mono",
            "s1rcolor": "opendta_dark", "s1manual": "opendta_mono", "s2manual": "opendta_mono",
            "sj": "opendta_mono", "economist": "opendta", "default": "opendta"}

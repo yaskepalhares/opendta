@@ -1,13 +1,13 @@
-"""Leitura das opções de gráfico ([G-3] options).
+"""Reading graph options ([G-3] options).
 
-As opções são separadas em dois grupos:
-  - opções da camada (cores, símbolos, padrões de linha...), que valem só
-    para o plot em que aparecem;
-  - opções do gráfico (títulos, eixos, legenda, by(), name()...), que valem
-    para o gráfico inteiro, em qualquer plot onde estejam escritas (como no
-    Stata, onde `twoway (scatter y x, title("a"))` dá título ao gráfico).
+The options are split into two groups:
+  - layer options (colors, symbols, line patterns...), which apply only
+    to the plot where they appear;
+  - graph options (titles, axes, legend, by(), name()...), which apply
+    to the whole graph, in whichever plot they are written (as in
+    Stata, where `twoway (scatter y x, title("a"))` gives the graph a title).
 
-O resultado é sempre um dicionário simples (JSON), para caber no .gph.
+The result is always a plain dictionary (JSON), so that it fits in the .gph.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from ..core.errors import StataError
 from ..lang.syntax import find_top, parse_options
 from ..lang.words import parse_numlist, split_words, strip_outer_quotes
 
-# nome completo -> abreviação mínima
+# full name -> minimal abbreviation
 LAYER_OPTS = {
     "mcolor": 3, "msymbol": 2, "msize": 3, "mfcolor": 3, "mlcolor": 3, "mlabel": 4, "mlabposition": 6,
     "mlabcolor": 6, "mlabsize": 6, "lcolor": 3, "lpattern": 3, "lwidth": 3, "lstyle": 3,
@@ -51,9 +51,9 @@ def _match(name: str, spec: dict[str, int]) -> str | None:
 
 def split_layer_graph(text: str, layer_spec: dict[str, int] | None = None,
                       extra_graph: dict[str, int] | None = None) -> tuple[dict, dict]:
-    """Separa as opções em (camada, gráfico). Devolve dicionários
-    {nome completo: argumento (str) ou True}. `no...` é aceito nas opções do
-    gráfico como valor False (por exemplo nodraw → nodraw=True)."""
+    """Splits the options into (layer, graph). Returns dictionaries
+    {full name: argument (str) or True}. `no...` is accepted in the graph
+    options as the value False (for example nodraw → nodraw=True)."""
     layer_spec = layer_spec if layer_spec is not None else LAYER_OPTS
     gspec = dict(GRAPH_OPTS)
     if extra_graph:
@@ -91,8 +91,8 @@ def split_sub(arg: str) -> tuple[str, dict]:
 
 
 def text_lines(arg) -> list[str]:
-    """Argumento de title(), note()...: várias strings entre aspas são
-    linhas; texto sem aspas é uma linha só."""
+    """Argument of title(), note()...: several quoted strings are
+    lines; unquoted text is a single line."""
     if arg is None or arg is True:
         return []
     main, _ = split_sub(arg)
@@ -115,8 +115,8 @@ def text_opt(arg) -> dict:
 
 
 def axis_label(arg) -> dict:
-    """xlabel()/ylabel(): valores (numlist), pares valor "rótulo", #k,
-    none, minmax e subopções angle(), grid/nogrid, valuelabel, format()."""
+    """xlabel()/ylabel(): values (numlist), value "label" pairs, #k,
+    none, minmax and the suboptions angle(), grid/nogrid, valuelabel, format()."""
     out: dict = {}
     if arg is None or arg is True:
         return out
@@ -232,7 +232,7 @@ def legend_opt(arg) -> dict:
         elif n.startswith("ti"):
             out["title"] = " ".join(text_lines(a))
         else:
-            pass     # VERIFICAR: subopções de aparência ignoradas (size, region...)
+            pass     # VERIFY: appearance suboptions ignored (size, region...)
     return out
 
 
@@ -284,7 +284,7 @@ def by_opt(arg) -> dict:
 
 
 def graph_options(graph: dict) -> dict:
-    """Converte as opções do gráfico (texto) para a forma guardada no Graph."""
+    """Converts the graph options (text) to the form stored in the Graph."""
     o: dict = {}
     for key in ("title", "subtitle", "note", "caption", "xtitle", "ytitle"):
         if key in graph:

@@ -1,4 +1,4 @@
-"""infile (livre e com dicionário) e infix."""
+"""infile (free format and with a dictionary) and infix."""
 
 import pytest
 
@@ -25,8 +25,8 @@ def test_infile_free(run, here):
     assert [v.vtype for v in d.vars] == ["str10", "float", "float"]
     assert list(d.get("nome").data) == ["Ana", "Bia Lima", "Caio", "Davi"]
     assert M.is_missing(d.get("renda").data[2]) and M.is_missing(d.get("renda").data[3])
-    # automatic sem :rótulo não cria rótulos; o aviso numera pela posição nos
-    # dados já filtrados pelo if (Caio seria a 2ª obs.; observado no Stata 14)
+    # automatic without :label creates no labels; the warning numbers by the position in the data
+    # already filtered by the if (Caio would be the 2nd obs.; observed in Stata 14)
     out = run("infile str10 nome int(idade renda) using f.raw if idade < 40, clear automatic")
     assert "'abc' cannot be read as a number for renda[2]" in out
     d = run.session.data
@@ -63,7 +63,7 @@ def test_dictionaries(run, here):
     d = run.session.data
     assert d.names == ["id", "nome", "idade", "renda"]
     assert d.get("id").label == "Identificador" and d.get("nome").value_label == "nm"
-    assert list(d.get("renda").data) == [15, 200]            # 1 casa decimal implícita
+    assert list(d.get("renda").data) == [15, 200]            # 1 implied decimal place
     (here / "i.dct").write_text('infile dictionary {\n str5 uf\n int pop\n}\n"MG" 200\n"SP" 450\n')
     run("infile using i.dct, clear")
     assert list(run.session.data.get("uf").data) == ["MG", "SP"]

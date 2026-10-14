@@ -1,4 +1,4 @@
-* Fase 5b: ologit, oprobit e mlogit.
+* Phase 5b: ologit, oprobit and mlogit.
 clear
 estimates clear
 ereturn clear

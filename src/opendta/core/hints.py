@@ -1,8 +1,8 @@
-"""Explicações de erro: o que deu errado e como resolver.
+"""Error explanations: what went wrong and how to fix it.
 
-Melhoria do OpenDTA em relação ao Stata: depois da mensagem de erro
-(mantida como no Stata, assim como o código r(#)), vêm uma ou duas linhas
-explicando o problema no contexto do comando e sugerindo uma correção:
+OpenDTA improvement over Stata: after the error message
+(kept as in Stata, as is the r(#) code), one or two lines
+explain the problem in the context of the command and suggest a fix:
 
     . replace nota = 9 in 2
     Obs. nos. out of range
@@ -10,10 +10,10 @@ explicando o problema no contexto do comando e sugerindo uma correção:
         Hint: create observations with "set obs 2" or load data with "use".
     r(198);
 
-As explicações saem no idioma da interface (inglês por padrão; português
-com o idioma pt, ver i18n.py) e podem ser desligadas com `set hints off` (o compare.py faz isso para comparar com os
-logs do Stata). Só há explicação quando ela acrescenta algo; para erros
-sem regra conhecida, nada é mostrado.
+The explanations come out in the interface language (English by default; Portuguese
+with language pt, see i18n.py) and can be turned off with `set hints off` (compare.py does
+this to compare with the Stata logs). There is an explanation only when it adds something; for
+errors without a known rule, nothing is shown.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _join(items: list[str], limit: int = 8) -> str:
     return ", ".join(shown) + more
 
 
-# comandos que não seguem a sintaxe padrão [varlist] [=exp] [if] [in] ...
+# commands that do not follow the standard syntax [varlist] [=exp] [if] [in] ...
 _FREE_SYNTAX = {"matrix", "display", "local", "global", "file", "program", "forvalues",
                 "foreach", "while", "if", "scalar", "set", "label", "notes", "char",
                 "syntax", "gettoken", "tokenize", "args", "import", "export", "macro",
@@ -62,8 +62,8 @@ def _in_qualifier(text: str) -> str | None:
 
 
 def explain(err: "StataError", s: "Session") -> list[str]:
-    """Linhas de explicação para o erro (vazio se não houver o que dizer).
-    A primeira é a explicação; a segunda, se houver, começa com 'Hint:'."""
+    """Explanation lines for the error (empty if there is nothing to say).
+    The first is the explanation; the second, if any, starts with 'Hint:'."""
     if getattr(err, "hint", None) is not None:
         return [ln for ln in err.hint.split("\n") if ln]
     msg = err.message or ""
@@ -77,7 +77,7 @@ def explain(err: "StataError", s: "Session") -> list[str]:
     def two(what: str, hint: str = "") -> list[str]:
         return [what] + ([L("Hint: ", "Dica: ") + hint] if hint else [])
 
-    # -- observações e faixas ------------------------------------------------------------
+    # -- observations and ranges ------------------------------------------------------------
     if msg == "Obs. nos. out of range":
         q = _in_qualifier(text)
         n = ds.nobs
@@ -98,7 +98,7 @@ def explain(err: "StataError", s: "Session") -> list[str]:
                            f'os números válidos vão de 1 a {n:,} ("in f/l" quer dizer todas); '
                            'acrescente observações com "set obs #".'))
 
-    # -- variáveis ---------------------------------------------------------------------------
+    # -- variables ---------------------------------------------------------------------------
     m = re.fullmatch(r"variable (\S+) not found", msg)
     if m:
         name = m.group(1)
@@ -216,7 +216,7 @@ def explain(err: "StataError", s: "Session") -> list[str]:
                    L(f'for example "{command or "generate"} y = x * 2".',
                      f'por exemplo "{command or "generate"} y = x * 2".'))
 
-    # -- dados em memória ----------------------------------------------------------------------
+    # -- data in memory ----------------------------------------------------------------------
     if msg == "no; data in memory would be lost":
         return two(L("The data in memory have changes that were not saved.",
                      "Os dados na memória têm alterações que não foram salvas."),

@@ -1,4 +1,4 @@
-"""Teste de fumaça da interface (roda sem tela, com QT_QPA_PLATFORM=offscreen)."""
+"""Smoke test of the interface (runs without a screen, with QT_QPA_PLATFORM=offscreen)."""
 
 import os
 
@@ -10,15 +10,15 @@ QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 
 @pytest.fixture(autouse=True)
 def isolated_prefs(tmp_path, monkeypatch):
-    """Preferências num .ini temporário: os testes não dependem das
-    preferências reais de quem roda o pytest (nem as alteram)."""
+    """Preferences in a temporary .ini: the tests depend neither on the
+    real preferences of whoever runs pytest (nor change them)."""
     monkeypatch.setenv("OPENDTA_SETTINGS", str(tmp_path / "opendta-prefs.ini"))
 
 
 @pytest.fixture(scope="module")
 def app():
     from PySide6.QtCore import QStandardPaths
-    QStandardPaths.setTestModeEnabled(True)   # não toca nas preferências reais
+    QStandardPaths.setTestModeEnabled(True)   # does not touch the real preferences
     return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
@@ -48,7 +48,7 @@ def test_preferences_icon_and_font(app, tmp_path):
 
     store = QSettings(str(tmp_path / "prefs.ini"), QSettings.Format.IniFormat)
     prefs = Preferences(store)
-    assert prefs.app_icon == "light"                      # padrão: ícone claro
+    assert prefs.app_icon == "light"                      # default: light icon
     assert prefs.font_family == default_monospace()[0]
 
     w = MainWindow()
@@ -91,7 +91,7 @@ def test_theme_switch(app):
     w.apply_theme("dark")
     assert app.palette().color(QPalette.ColorRole.Window).lightness() < 100
     assert "#1e1f22" in w.results.styleSheet()
-    assert "\n1\n" in w.results.toPlainText()          # saída redesenhada
+    assert "\n1\n" in w.results.toPlainText()          # output redrawn
     w.apply_theme("light")
     assert app.palette().color(QPalette.ColorRole.Window).lightness() > 200
     assert "#ffffff" in w.results.styleSheet()
@@ -108,7 +108,7 @@ def test_command_pane_resizable_and_multiline(app):
     w.resize(1000, 700)
     w.show()
     app.processEvents()
-    # a divisória deixa a Command crescer
+    # the splitter lets the Command window grow
     w.splitter.setSizes([300, 300])
     app.processEvents()
     assert w.command.height() > 200
@@ -124,11 +124,11 @@ def test_command_pane_resizable_and_multiline(app):
     assert ". display 1\n1\n" in text and ". display 2\n2\n" in text
     assert w.command.text() == ""
 
-    # histórico com PgUp
+    # history with PgUp
     QTest.keyClick(w.command, Qt.Key.Key_PageUp)
     assert w.command.text() == "display 1\ndisplay 2"
 
-    # um bloco colado roda inteiro, como trecho de do-file
+    # a pasted block runs whole, as a piece of a do-file
     w.command.setText('forvalues i = 1/2 {\n    display "i = `i\'"\n}')
     QTest.keyClick(w.command, Qt.Key.Key_Return)
     text = w.results.toPlainText()
@@ -153,21 +153,21 @@ def test_open_save_and_browser(app, tmp_path, monkeypatch):
     m = b.model
     assert (m.rowCount(), m.columnCount()) == (2, 2)
     assert m.headerData(0, Qt.Orientation.Horizontal) == "nome"
-    assert m.data(m.index(0, 1)) == "um"           # rótulo de valor
-    assert m.data(m.index(1, 1)) == "2"            # sem rótulo
+    assert m.data(m.index(0, 1)) == "um"           # value label
+    assert m.data(m.index(1, 1)) == "2"            # no label
     w.run_command("browse nota if nota == 2")
     assert (m.rowCount(), m.columnCount()) == (1, 1)
     assert m.headerData(0, Qt.Orientation.Vertical) == "2"
 
-    # Save (sem nome ainda) usa Save as; aqui o caminho vem direto
+    # Save (no name yet) uses Save as; here the path comes directly
     w.run_command(f'save "{tmp_path / "d.dta"}"')
     w.run_command("replace nota = 3 in 1")
-    assert w.save_dataset() is True                 # regrava pelo caminho absoluto
+    assert w.save_dataset() is True                 # saves again through the absolute path
     w.run_command("clear")
     w.open_dataset(str(tmp_path / "d.dta"))
     assert w.session.data.nobs == 2
     app.processEvents()
-    assert m.rowCount() == 2                        # o browser acompanha os dados
+    assert m.rowCount() == 2                        # the browser follows the data
     assert float(w.session.data.get("nota").data[0]) == 3
     w.close()
 
@@ -202,15 +202,15 @@ def test_data_editor_and_variables_manager(app, tmp_path, monkeypatch):
     b = w.browser
     m = b.model
     assert b.windowTitle() == "Data Editor (Edit)"
-    assert (m.rowCount(), m.columnCount()) == (3, 3)          # linha e coluna para novos
+    assert (m.rowCount(), m.columnCount()) == (3, 3)          # row and column for new data
     assert m.setData(m.index(1, 1), "9")
     app.processEvents()
     assert float(w.session.data.get("nota").data[1]) == 9
     assert ". replace nota = 9 in 2" in w.results.toPlainText()
-    assert m.setData(m.index(2, 0), "Caio")                    # nova observação
+    assert m.setData(m.index(2, 0), "Caio")                    # new observation
     app.processEvents()
     assert w.session.data.nobs == 3 and w.session.data.get("nome").data[2] == "Caio"
-    assert m.setData(m.index(0, 2), "5")                       # nova variável
+    assert m.setData(m.index(0, 2), "5")                       # new variable
     app.processEvents()
     assert w.session.data.names == ["nome", "nota", "var1"]
     review = [w.review.topLevelItem(k).text(0) for k in range(w.review.topLevelItemCount())]
@@ -235,10 +235,10 @@ def test_help_hints_toggle(app):
 
     w = MainWindow()
     assert w.act_hints.isChecked()
-    w.act_hints.trigger()                        # desliga pelo menu Help
+    w.act_hints.trigger()                        # turned off through the Help menu
     assert w.session.settings["hints"] == "off" and not w.prefs.hints
     assert ". set hints off, permanently" in w.results.toPlainText()
-    w.run_command("set hints on")                # sem permanently: não grava
+    w.run_command("set hints on")                # without permanently: not saved
     assert w.act_hints.isChecked() and not w.prefs.hints
     w.act_hints.trigger()
     w.act_hints.trigger()
@@ -254,11 +254,11 @@ def test_help_superscript_toggle(app):
     assert w.act_superscript.isChecked() and superscript()
     w.run_command("display 1e10/3")
     assert "3.333×10⁹" in w.results.toPlainText()
-    w.act_superscript.trigger()                  # desliga pelo menu Help
+    w.act_superscript.trigger()                  # turned off through the Help menu
     assert w.session.settings["superscript"] == "off" and not w.prefs.superscript
     assert not superscript()
     w.close()
-    w2 = MainWindow()                            # lembrado na próxima abertura
+    w2 = MainWindow()                            # remembered at the next startup
     assert not w2.act_superscript.isChecked() and not superscript()
     w2.act_superscript.trigger()
     assert w2.prefs.superscript and superscript()
@@ -318,7 +318,7 @@ def test_dofile_editor_runs_selection(app, tmp_path):
     w.run_command(f'doedit "{f}"')
     ed = w.dofile_editor.current()
     assert ed.path == f and ed.toPlainText().startswith("display 1")
-    # seleção no meio da 2ª linha: executa a linha inteira
+    # selection in the middle of the 2nd line: runs the whole line
     cur = ed.textCursor()
     cur.setPosition(len("display 1 + 1\ndisp"))
     cur.setPosition(len("display 1 + 1\ndisplay 2"), QTextCursor.MoveMode.KeepAnchor)

@@ -1,8 +1,8 @@
-"""Formatos de exibição (%9.0g, %9.2f, %10.3e, %-12s, %td ...).
+"""Display formats (%9.0g, %9.2f, %10.3e, %-12s, %td ...).
 
-Referência: manual [D] format. Pontos que dependem de detalhes não
-documentados (por exemplo, quando %g troca a notação fixa pela exponencial)
-estão marcados com "VERIFICAR" e têm casos na suíte compat/.
+Reference: manual [D] format. Points that depend on undocumented
+details (for example, when %g switches from fixed to exponential notation)
+are marked "VERIFY" and have cases in the compat/ suite.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class Format:
     left: bool = False
     zero_pad: bool = False
     comma: bool = False
-    sub: str = ""      # para %t: d, c, ...
+    sub: str = ""      # for %t: d, c, ...
     text: str = ""
 
     def __str__(self) -> str:
@@ -67,11 +67,11 @@ def is_format(text: str) -> bool:
 
 
 DEFAULT_NUMERIC = parse_format("%9.0g")
-DISPLAY_NUMERIC = parse_format("%10.0g")   # display sem formato explícito
+DISPLAY_NUMERIC = parse_format("%10.0g")   # display without an explicit format
 MACRO_NUMERIC = parse_format("%18.0g")     # local x = exp, `=exp'
 
-# set dp comma|period: muda o separador decimal dos formatos de exibição
-# (não afeta string() nem macros, confirmado nos logs do Stata).
+# set dp comma|period: changes the decimal separator of display formats (does not affect string()
+# or macros, confirmed in the Stata logs).
 _DP = {"comma": False}
 
 
@@ -83,11 +83,10 @@ def decimal_comma() -> bool:
     return _DP["comma"]
 
 
-# set superscript on|off (OpenDTA): na exibição, a notação científica usa
-# expoente sobrescrito (1.0000×10¹⁰ em vez de 1.00000e+10). Ligado por padrão;
-# o compare.py e os testes de formato desligam, porque o Stata usa e+XX.
-# Nunca vale para texto que pode ser lido de volta: string(), macros,
-# file write, export, sprintf() do Mata (dp=False ou plain_numbers()).
+# set superscript on|off (OpenDTA): on screen, scientific notation uses superscript exponents
+# (1.0000×10¹⁰ instead of 1.00000e+10). On by default; compare.py and the format tests turn it off,
+# because Stata uses e+XX. Never applies to text that can be read back: string(), macros, file
+# write, export, Mata's sprintf() (dp=False or plain_numbers()).
 _SUP = {"on": True}
 _SUP_DIGITS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
@@ -102,7 +101,7 @@ def superscript() -> bool:
 
 @contextmanager
 def plain_numbers():
-    """Desliga o expoente sobrescrito enquanto o bloco roda (texto que vira dado)."""
+    """Turns the superscript exponent off while the block runs (text that becomes data)."""
     saved = _SUP["on"]
     _SUP["on"] = False
     try:
@@ -123,9 +122,9 @@ def _pad(s: str, fmt: Format) -> str:
 
 def format_value(value, fmt: Format | str = DEFAULT_NUMERIC, *, pad: bool = True,
                  dp: bool = True, sign_outside_width: bool = False) -> str:
-    """Formata número ou string. `pad=False` remove o preenchimento (display
-    sem formato explícito). `dp=False` ignora `set dp comma` (string(), macros).
-    `sign_outside_width` é aceito por compatibilidade e não tem mais efeito."""
+    """Formats a number or a string. `pad=False` removes the padding (display
+    without an explicit format). `dp=False` ignores `set dp comma` (string(), macros).
+    `sign_outside_width` is accepted for compatibility and no longer has an effect."""
     if isinstance(fmt, str):
         fmt = parse_format(fmt)
     if isinstance(value, str):
@@ -154,8 +153,8 @@ def format_value(value, fmt: Format | str = DEFAULT_NUMERIC, *, pad: bool = True
 
 
 def _fmt_f(x: float, decimals: int, comma: bool = False) -> str:
-    """Notação fixa com arredondamento de meio para cima sobre o valor binário
-    exato (o Stata dá 1.235e+03 para 1234.5 em %10.3e; o Python daria 1.234)."""
+    """Fixed notation with round-half-up applied to the exact binary
+    value (Stata gives 1.235e+03 for 1234.5 in %10.3e; Python would give 1.234)."""
     q = Decimal(x).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
     return f"{q:,.{decimals}f}" if comma else f"{q:.{decimals}f}"
 
@@ -179,18 +178,18 @@ def _exp_text(e: int, sup: bool = False) -> str:
 
 
 def general(x: float, width: int, sup: bool = False) -> str:
-    """Formato %w.0g, com a regra observada nos logs do Stata 14:
+    """%w.0g format, with the rule observed in the Stata 14 logs:
 
-    * uma posição fica reservada para o sinal: o número usa no máximo
-      A = w - 1 caracteres, e o '-' ocupa a posição reservada;
-    * no máximo P = w - 2 dígitos significativos;
-    * notação exponencial quando o expoente (após arredondar para P dígitos)
-      é < -5 ou >= P (o %g do C usa -4); senão, notação fixa sem zeros
-      à direita e sem o zero antes do ponto (.5);
-    * na exponencial, a mantissa ocupa todo o espaço: 1.235e+09 em %10.0g.
+    * one position is reserved for the sign: the number uses at most
+      A = w - 1 characters, and the '-' takes the reserved position;
+    * at most P = w - 2 significant digits;
+    * exponential notation when the exponent (after rounding to P digits)
+      is < -5 or >= P (C's %g uses -4); otherwise, fixed notation without trailing
+      zeros and without the zero before the point (.5);
+    * in exponential notation, the mantissa takes all the space: 1.235e+09 in %10.0g.
 
-    Com `sup` (set superscript on), a exponencial sai como 1.2346×10⁹ e a
-    mantissa perde os dígitos necessários para caber na mesma largura.
+    With `sup` (set superscript on), the exponential form comes out as 1.2346×10⁹ and the
+    mantissa loses the digits needed to fit the same width.
     """
     if x == 0:
         return "0"
@@ -201,7 +200,7 @@ def general(x: float, width: int, sup: bool = False) -> str:
 
     X = int(_fmt_e(ax, P - 1).split("e")[1])
     out = None
-    if -5 <= X < P:   # o Stata usa notação fixa até 1e-5 (compat 0508, 0509)
+    if -5 <= X < P:   # Stata uses fixed notation down to 1e-5 (compat 0508, 0509)
         decimals = max(0, P - 1 - X)
         while decimals >= 0:
             s = _fmt_f(ax, decimals)
@@ -223,8 +222,8 @@ def general(x: float, width: int, sup: bool = False) -> str:
     return "-" + out if neg else out
 
 
-# Formatos de data e hora ([D] datetime display formats). Sem códigos, cada
-# tipo usa o padrão abaixo; com códigos (%tdnn/dd/CCYY), segue os códigos.
+# Date and time formats ([D] datetime display formats). Without codes, each type uses the default
+# below; with codes (%tdnn/dd/CCYY), it follows the codes.
 _DATE_DEFAULT = {"d": "DDmonCCYY", "c": "DDmonCCYY_HH:MM:SS", "C": "DDmonCCYY_HH:MM:SS",
                  "w": "CCYY!www", "m": "CCYY!mnn", "q": "CCYY!qq", "h": "CCYY!hh", "y": "CCYY"}
 _DATE_WIDTH = {"d": 9, "c": 18, "C": 18, "w": 7, "m": 7, "q": 6, "h": 6, "y": 4}
@@ -237,7 +236,7 @@ _DAYNAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 
 
 def _date_parts(x: float, sub: str):
-    """(datetime, semana, trimestre, semestre) do valor x no tipo `sub`."""
+    """(datetime, week, quarter, half-year) of value x in type `sub`."""
     week = None
     if sub == "d":
         d = _dt.datetime.combine(STATA_EPOCH, _dt.time()) + _dt.timedelta(days=int(x // 1))
@@ -355,8 +354,8 @@ def _date(x: float, fmt: Format) -> str:
 
 
 def number_to_macro(x: float) -> str:
-    """Como um número vira texto em `local x = exp` e `=exp': formato %18.0g
-    (16 dígitos significativos), confirmado nos logs do Stata."""
+    """How a number becomes text in `local x = exp` and `=exp': format %18.0g
+    (16 significant digits), confirmed in the Stata logs."""
     if M.is_missing(x):
         return M.missing_name(x)
     return general(x, MACRO_NUMERIC.width)

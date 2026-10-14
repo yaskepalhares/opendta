@@ -1,10 +1,10 @@
-"""Testes não paramétricos e de normalidade: ranksum, signrank, kwallis,
-spearman, swilk, sktest e sdtest ([R] ranksum, signrank, kwallis,
+"""Nonparametric and normality tests: ranksum, signrank, kwallis,
+spearman, swilk, sktest and sdtest ([R] ranksum, signrank, kwallis,
 spearman, swilk, sktest, sdtest).
 
-Fórmulas dos manuais (seção Methods and formulas). Os layouts vêm de
-saídas do Stata 14 de memória e ainda não foram conferidos com logs: as
-linhas têm a marca VERIFICAR e o caso compat/do/0801_testes.do."""
+Formulas from the manuals (Methods and formulas section). The layouts
+were checked against the Stata 14 logs in compat/do/0801_testes.do;
+what could not be checked has the VERIFY mark."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def _groups(s: "Session", gname: str, mask: np.ndarray):
-    """Valores distintos de by() na amostra, com o texto (rótulo) de cada um."""
+    """Distinct values of by() in the sample, with the text (label) of each."""
     from .inspect import cell_text
     g = s.data.get(s.expand_varlist(gname)[0])
     if g.is_string:
@@ -51,9 +51,9 @@ def _tie_sum(x: np.ndarray) -> float:
 
 
 def _rank_table(s: "Session", head: str, cols: tuple[str, str, str], rows, total) -> None:
-    """Tabela de ranksum/signrank: grupo | obs, soma dos postos, esperado."""
+    """ranksum/signrank table: group | obs, rank sum, expected."""
     out = s.output
-    # VERIFICAR: larguras (obs %9.0g, somas %12.0g)
+    # VERIFY: larguras (obs %9.0g, somas %12.0g)
     out.write(f"{name12(head):>12} |{cols[0]:>9}{cols[1]:>12}{cols[2]:>12}\n", "text")
     out.write("-" * 13 + "+" + "-" * 33 + "\n", "text")
     for name, n, sobs, sexp in rows:
@@ -104,7 +104,7 @@ def cmd_ranksum(s: "Session", args: str) -> None:
     mask = touse(s, p) & S.valid(v.data)
     g, groups = _groups(s, o["by"], mask)
     if len(groups) != 2:
-        raise StataError(420, f"{len(groups)} groups found, 2 required")   # VERIFICAR
+        raise StataError(420, f"{len(groups)} groups found, 2 required")   # VERIFY
     sel = groups[0][2] | groups[1][2]
     x = v.data[sel]
     r = st.rankdata(x)
@@ -131,7 +131,7 @@ def cmd_ranksum(s: "Session", args: str) -> None:
         out.write(f"\nP{{{v.name}({g.name}=={groups[0][1]}) > {v.name}({g.name}=={groups[1][1]})}} = ", "text")
         out.write(f"{porder:.3f}\n", "result")
     g1 = float(groups[0][0]) if not isinstance(groups[0][0], str) else groups[0][0]
-    # ordem do return list do Stata 14 (compat 0801); porder só com a opção
+    # return list order of Stata 14 (compat 0801); porder only with the option
     _set_r(s, ([("porder", porder)] if o.get("porder") else [])
            + [("N_2", float(n2)), ("N_1", float(n1)), ("Var_a", var_a), ("z", z), ("sum_exp", e1),
               ("sum_obs", r1), ("group1", g1)])
@@ -185,7 +185,7 @@ def cmd_signrank(s: "Session", args: str) -> None:
     _rank_table(s, "sign", ("obs", "sum ranks", "expected"),
                 [("positive", int(pos.sum()), sp, e), ("negative", int(neg.sum()), sn, e),
                  ("zero", n0, sz, sz)], ("all", n, tot, tot))
-    # VERIFICAR: ordem das linhas de ajuste (empates, zeros)
+    # VERIFY: order of the adjustment lines (ties, zeros)
     _variance_lines(s, [("unadjusted variance", var_u), ("adjustment for ties", ties),
                         ("adjustment for zeros", zeros)], var_a)
     _z_lines(s, f"Ho: {v.name} = {rhs_name}", z, pv)
@@ -281,7 +281,7 @@ def cmd_spearman(s: "Session", args: str) -> None:
         r = float(rho[0, 1])
         pv = pval(r)
         out.write("\n", "text")
-        # compat 0801: rótulos em 14 colunas, valores em %8.0f e %12.4f
+        # compat 0801: labels in 14 columns, values in %8.0f and %12.4f
         out.write(f"{'Number of obs':>14} = ", "text")
         out.write(f"{n:>7}\n", "result")
         out.write("Spearman's rho = ", "text")
@@ -308,7 +308,7 @@ def cmd_spearman(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _swilk_stats(x: np.ndarray) -> tuple[float, float, float, float]:
-    """W (algoritmo AS R94, o mesmo do Stata), V, z e Prob>z (Royston 1992)."""
+    """W (algorithm AS R94, the same as Stata's), V, z and Prob>z (Royston 1992)."""
     return _royston(float(st.shapiro(x).statistic), len(x))
 
 
@@ -324,7 +324,7 @@ def _royston(W: float, n: int) -> tuple[float, float, float, float]:
         mu = 0.544 - 0.39978 * n + 0.025054 * n ** 2 - 0.0006714 * n ** 3
         sigma = math.exp(1.3822 - 0.77857 * n + 0.062767 * n ** 2 - 0.0020322 * n ** 3)
         y = -math.log(gamma - math.log(1 - W)) if W < 1 else -math.inf
-        V = (1 - W) / math.exp(mu)   # VERIFICAR: V para n < 12
+        V = (1 - W) / math.exp(mu)   # VERIFY: V for n < 12
     z = (y - mu) / sigma
     return W, V, z, float(st.norm.sf(z))
 
@@ -351,8 +351,8 @@ def cmd_swilk(s: "Session", args: str) -> None:
 
 
 def _sk_z(x: np.ndarray) -> tuple[float, float]:
-    """Estatísticas z de assimetria (D'Agostino 1970) e curtose (Anscombe e
-    Glynn 1983), como em [R] sktest."""
+    """z statistics for skewness (D'Agostino 1970) and kurtosis (Anscombe and
+    Glynn 1983), as in [R] sktest."""
     n = len(x)
     d = x - x.mean()
     m2, m3, m4 = (d ** 2).mean(), (d ** 3).mean(), (d ** 4).mean()
@@ -409,14 +409,14 @@ def cmd_sktest(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _set_r(s: "Session", pairs: list) -> None:
-    """r() na ordem em que o Stata lista (return list mostra na ordem
-    inversa da gravação)."""
+    """r() in the order Stata lists it (return list shows the reverse
+    of the order in which results were stored)."""
     s.r = dict(reversed(pairs))
 
 
 def _royston_adjust(K2: float, n: int) -> tuple[float, float]:
-    """Correção de Royston (1991c) do K² de D'Agostino ([R] sktest, Methods
-    and formulas). Devolve (adj chi2, P)."""
+    """Royston (1991c) correction of D'Agostino's K² ([R] sktest, Methods
+    and formulas). Returns (adj chi2, P)."""
     Zc = -float(st.norm.ppf(math.exp(-0.5 * K2)))
     ln = math.log(n)
     Zt = 0.55 * n ** 0.2 - 0.21
@@ -430,8 +430,8 @@ def _royston_adjust(K2: float, n: int) -> tuple[float, float]:
 
 
 def _ha3(s: "Session", has: list[str], probs: list[str]) -> None:
-    """Linhas Ha/Pr do sdtest (compat 0801): Pr nas colunas 2, 29 e 60; cada
-    Ha centrado em 10,5, 39,5 e 69,5 (arredondado para baixo)."""
+    """Ha/Pr lines of sdtest (compat 0801): Pr in columns 2, 29 and 60; each
+    Ha centered at 10.5, 39.5 and 69.5 (rounded down)."""
     starts = [2, 29, 60]
     centers = [10.5, 39.5, 69.5]
     line_p = [" "] * 90
@@ -475,7 +475,7 @@ def cmd_sdtest(s: "Session", args: str) -> None:
     if isinstance(o.get("by"), str):
         g, groups = _groups(s, o["by"], mask)
         if len(groups) != 2:
-            raise StataError(420, f"{len(groups)} groups found, 2 required")   # VERIFICAR
+            raise StataError(420, f"{len(groups)} groups found, 2 required")   # VERIFY
         x1, x2 = v.data[groups[0][2]], v.data[groups[1][2]]
         allx = np.concatenate([x1, x2])
         _ttest_table(s, [row(groups[0][1], x1), row(groups[1][1], x2)], level, title="Variance ratio test",
@@ -496,7 +496,7 @@ def cmd_sdtest(s: "Session", args: str) -> None:
                    ("N", float(len(allx)))])
         return
     if p.exp is None:
-        raise StataError(198, "option by() required")   # VERIFICAR
+        raise StataError(198, "option by() required")   # VERIFY
     rhs = p.exp.strip()
     x = v.data[mask]
     if not _is_num(rhs):

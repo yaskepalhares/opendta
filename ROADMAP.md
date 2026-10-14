@@ -1,144 +1,153 @@
 # Roadmap
 
-Meta: cobrir os comandos do Stata 14, incluindo gráficos, com a interface o mais próxima possível da original.
+**English** | [Português](ROADMAP.pt-BR.md)
 
-As fases estão em ordem de dependência. Cada uma termina com algo que dá para abrir, testar e comparar com o Stata 14 (ver [docs/como-testar.md](docs/como-testar.md)). Os prazos não são estimados de antemão. Cada fase é dividida em pull requests revisáveis.
+Goal: cover the commands of Stata 14, including graphics, with an interface as close as possible to the original.
 
-## Fase 0: fundação ✅ (este PR)
+The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata 14 (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
 
-- [x] Lexer de do-files: comentários, `///`, `#delimit`
-- [x] Macros locais e globais, expansão aninhada, `=exp`, incremento, funções estendidas básicas
-- [x] Expressões: precedência, regras de missing, strings, primeira leva de funções
-- [x] `display` com formatos e diretivas
-- [x] Controle de fluxo: `forvalues`, `foreach`, `while`, `if`/`else`, `continue`
-- [x] Prefixos `quietly`, `noisily` e `capture`; `do`, `run` e `include`
-- [x] Códigos de erro `r(#)` e eco de comandos e blocos no padrão do Stata
-- [x] Interface: Results, Command, Review, Variables, Properties, menus e barra de ferramentas
-- [x] Console, modo batch e ferramenta de comparação com logs do Stata
-- [x] Testes automáticos e integração contínua
+## Phase 0: foundation ✅
 
-## Fase 1: dados em memória e arquivos (em andamento)
+- [x] Do-file lexer: comments, `///`, `#delimit`
+- [x] Local and global macros, nested expansion, `=exp`, increment, basic extended functions
+- [x] Expressions: precedence, missing-value rules, strings, a first set of functions
+- [x] `display` with formats and directives
+- [x] Control flow: `forvalues`, `foreach`, `while`, `if`/`else`, `continue`
+- [x] `quietly`, `noisily` and `capture` prefixes; `do`, `run` and `include`
+- [x] `r(#)` error codes and echo of commands and blocks as in Stata
+- [x] Interface: Results, Command, Review, Variables, Properties, menus and toolbar
+- [x] Console, batch mode and a tool to compare with Stata logs
+- [x] Automated tests and continuous integration
+
+## Phase 1: data in memory and files ✅
 
 **1a ✅**
-- [x] Conjunto de dados com tipos `byte`, `int`, `long`, `float`, `double`, `str#` e `strL`, com a precisão de `float` reproduzida
-- [x] varlists: abreviações, curingas (`*`, `?`, `~`), intervalos (`a-c`), `_all`
-- [x] Qualificadores `if` e `in` e o prefixo `by`/`bysort` (pesos são reconhecidos na sintaxe; o uso chega com os comandos estatísticos)
-- [x] `_n`, `_N`, `x[_n-1]`, `sum()` e expressões vetorizadas; `replace` sequencial com subscritos
+- [x] Dataset with the `byte`, `int`, `long`, `float`, `double`, `str#` and `strL` types, reproducing `float` precision
+- [x] varlists: abbreviations, wildcards (`*`, `?`, `~`), ranges (`a-c`), `_all`
+- [x] `if` and `in` qualifiers and the `by`/`bysort` prefix (weights are recognized by the syntax; their use arrives with the statistical commands)
+- [x] `_n`, `_N`, `x[_n-1]`, `sum()` and vectorized expressions; sequential `replace` with subscripts
 - [x] `clear`, `set obs`, `describe`, `list`, `generate`, `replace`, `drop`, `keep`, `rename`, `order`, `sort`, `gsort`, `label` (variable/define/values/list/dir/drop/data), `format`, `count`, `compress`, `input`
-- [x] Janelas Variables e Properties ligadas aos dados
+- [x] Variables and Properties windows linked to the data
 
 **1b ✅**
-- [x] Leitura e gravação próprias de `.dta` nos formatos 117 (13), 118 (14) e 119, com rótulos de valor, notas e características; verificação cruzada com a ReadStat nos testes
-- [x] Leitura de `.dta` antigos (até 115, Stata 12 e anteriores) pela ReadStat (`pip install pyreadstat`)
+- [x] OpenDTA's own `.dta` reader and writer for formats 117 (13), 118 (14) and 119, with value labels, notes and characteristics; cross-checked against ReadStat in the tests
+- [x] Reading old `.dta` files (up to 115, Stata 12 and earlier) through ReadStat (`pip install pyreadstat`)
 - [x] `use`, `save`, `saveold`, `recast`, `notes`, `char`, `type`, `erase`, `browse`/`edit`
 - [x] `insheet`, `outsheet`, `import delimited`, `export delimited`
-- [x] File > Open/Save, arrastar e soltar `.dta`, Data Browser somente leitura
+- [x] File > Open/Save, drag and drop of `.dta` files, read-only Data Browser
 
 **1c ✅**
-- [x] Formatos 113–115 (Stata 8–12): leitura própria; gravação 114/115 com `saveold, version(11|12)`
-- [x] `import excel`/`export excel` (.xlsx; .xls com o pacote xlrd)
-- [x] `infile` (formato livre e com dicionário), `infix`, `file open/write/read/close`
-- [x] Data Editor com edição de células (gera `replace`/`set obs`/`generate`) e Variables Manager
+- [x] Formats 113–115 (Stata 8–12): OpenDTA's own reader; writing 114/115 with `saveold, version(11|12)`
+- [x] `import excel`/`export excel` (.xlsx; .xls with the xlrd package)
+- [x] `infile` (free format and with a dictionary), `infix`, `file open/write/read/close`
+- [x] Data Editor with cell editing (generates `replace`/`set obs`/`generate`) and Variables Manager
 
-## Fase 2: linguagem de programação completa ✅
+## Phase 2: complete programming language ✅
 
 - [x] `program define`/`end`, `syntax`, `args`, `gettoken`, `marksample`, `markout`
 - [x] `return`, `ereturn`, `sreturn`; `tempvar`, `tempname`, `tempfile`; `preserve`/`restore`
-- [x] Funções estendidas de macro (`: variable label`, `: type`, `: format`, `: label`, `: char`, `: dir`, `: list`, `: subinstr`, `: permname`, `: r(scalars)`…)
-- [x] `matrix` (definição, operadores, funções, submatrizes, `matrix list`, nomes de linhas e colunas)
-- [x] Busca de `.ado` no adopath (permite rodar pacotes do SSC); `sysdir`, `adopath`, `which`, `findfile`, `discard`
-- [x] `log using`/`log close` (texto e SMCL), `cmdlog`; Viewer com renderizador de SMCL, `help`, `view`, `search`
+- [x] Extended macro functions (`: variable label`, `: type`, `: format`, `: label`, `: char`, `: dir`, `: list`, `: subinstr`, `: permname`, `: r(scalars)`…)
+- [x] `matrix` (definition, operators, functions, submatrices, `matrix list`, row and column names)
+- [x] Search for `.ado` files on the adopath (runs SSC packages); `sysdir`, `adopath`, `which`, `findfile`, `discard`
+- [x] `log using`/`log close` (text and SMCL), `cmdlog`; Viewer with an SMCL renderer, `help`, `view`, `search`
 - [x] `assert`, `set trace`, `creturn list`, `timer`
-- [ ] Páginas de help para todos os comandos (hoje: as principais, escritas do zero)
+- [x] Help pages for all commands, written from scratch
 
-## Fase 3: estatística descritiva e manipulação ✅
+## Phase 3: descriptive statistics and data management ✅
 
 **3a ✅**
-- [x] `summarize` (`detail`, `meanonly`, pesos), `tabstat`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `_pctile`, `xtile`
-- [x] `tabulate` (uma e duas vias, `row`/`col`/`cell`/`expected`, `chi2`, `lrchi2`, `V`, `gamma`, `taub`, `exact` por enumeração), `tab1`, `tab2`, `table`
+- [x] `summarize` (`detail`, `meanonly`, weights), `tabstat`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `_pctile`, `xtile`
+- [x] `tabulate` (one- and two-way, `row`/`col`/`cell`/`expected`, `chi2`, `lrchi2`, `V`, `gamma`, `taub`, `exact` by enumeration), `tab1`, `tab2`, `table`
 
 **3b ✅**
-- [x] `egen`: funções de grupo (`count`, `mean`, `sd`, `total`, `min`, `max`, `median`, `mode`, `pctile`, `iqr`, `skew`, `kurt`, `mad`, `mdev`, `std`, `rank`), `group`, `tag`, `seq`, `fill`, `cut`, `concat`, `ends`, `diff` e funções de linha (`row*`, `any*`)
-- [x] `collapse` (todas as estatísticas, pesos, `cw`), `contract`, `expand`, `fillin`
+- [x] `egen`: group functions (`count`, `mean`, `sd`, `total`, `min`, `max`, `median`, `mode`, `pctile`, `iqr`, `skew`, `kurt`, `mad`, `mdev`, `std`, `rank`), `group`, `tag`, `seq`, `fill`, `cut`, `concat`, `ends`, `diff` and row functions (`row*`, `any*`)
+- [x] `collapse` (all statistics, weights, `cw`), `contract`, `expand`, `fillin`
 - [x] `merge` (1:1, m:1, 1:m, m:m, `_n`, `update`/`replace`, `keep()`, `assert()`, `keepusing()`), `append`, `joinby`, `cross`
-- [x] `reshape long`/`wide` (com `@`, `string` e repetição da última especificação)
+- [x] `reshape long`/`wide` (with `@`, `string` and repetition of the last specification)
 
 **3c ✅**
 - [x] `duplicates` (report/examples/list/tag/drop), `isid`, `levelsof`
 - [x] `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`
-- O `distinct` não é comando oficial: é um pacote do SSC e roda pelo adopath (fase 2).
+- `distinct` is not an official command: it is an SSC package and runs through the adopath (phase 2).
 
 **3d ✅**
-- [x] Gerador Mersenne Twister de 64 bits (o mt64 do Stata 14), `set seed` (número ou estado), `c(seed)`, `set rng`
-- [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. A conversão da semente e os algoritmos de cada distribuição não são documentados: os resultados são estatisticamente equivalentes, mas não idênticos aos do Stata (casos em `compat/do/0307_aleatorios.do`).
+- [x] 64-bit Mersenne Twister generator (Stata 14's mt64), `set seed` (number or state), `c(seed)`, `set rng`
+- [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. The seed conversion and the algorithm of each distribution are not documented: results are statistically equivalent but not identical to Stata's (cases in `compat/do/0307_aleatorios.do`).
 
-**Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/diferencas_conhecidas.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
+**Checked against Stata 14**: the 28 cases in `compat/do/` have references produced in Stata/SE 14.0; 25 match line by line. The known differences are listed in `compat/known_differences.txt`: the progress of the network algorithm of `tabulate, exact` (tables larger than 2×2) and, for random numbers, `rnormal()`, `runiformint()`, `rpoisson()` and `rt()` (`runiform()`, `rbinomial()`, `rexponential()` and `rchi2(2)` already reproduce Stata's exact sequence).
 
-## Fase 4: Mata ✅
+## Phase 4: Mata ✅
 
 **4a–4c ✅**
-- [x] Lexer e analisador com a precedência do Mata; tipos real, string, complex, pointer e struct; escalares, vetores e matrizes
-- [x] Operadores (aritméticos, com dois-pontos, transposta, Kronecker, junções `,` e `\`, sequências `..` e `::`, relacionais, lógicos, `?:`), subscritos `[i,j]` e `[|...|]`, missing propagados como no Stata
-- [x] Controle de fluxo (`if`, `for`, `while`, `do`, `break`, `continue`, `return`), funções do usuário com tipos, argumentos opcionais e passagem por referência, `struct`, ponteiros
-- [x] Blocos `mata`/`mata:` ... `end` com o eco do Stata, `mata: instrução`, `mata clear/describe/drop`; erros no formato do Mata (`<istmt>:  3499  x not found`)
-- [x] Biblioteca: ~150 funções (matemáticas, matriciais, estatísticas, missing, strings, `printf`/`sprintf`)
-- [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
+- [x] Lexer and parser with Mata's precedence; real, string, complex, pointer and struct types; scalars, vectors and matrices
+- [x] Operators (arithmetic, colon, transpose, Kronecker, `,` and `\` joins, `..` and `::` ranges, relational, logical, `?:`), `[i,j]` and `[|...|]` subscripts, missing values propagated as in Stata
+- [x] Control flow (`if`, `for`, `while`, `do`, `break`, `continue`, `return`), typed user functions, optional arguments and pass by reference, `struct`, pointers
+- [x] `mata`/`mata:` ... `end` blocks with Stata's echo, `mata: statement`, `mata clear/describe/drop`; errors in Mata's format (`<istmt>:  3499  x not found`)
+- [x] Library: ~150 functions (mathematical, matrix, statistical, missing values, strings, `printf`/`sprintf`)
+- [x] Link to the data: `st_data`, `st_sdata`, `st_view` (copy), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
 
 **4d ✅**
-- [x] Exibição, mensagens e erros conferidos com o Stata 14 (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
-- [x] `st_view` que grava nos dados ao atribuir a elementos; arrays associativos (`asarray`); `optimize()` com avaliadores d0/d1/d2 e técnicas nr/bfgs
-- [x] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`; no `optimize()` d0, só o ruído das derivadas numéricas difere)
-- `moptimize()` passou para a fase 5, junto com o `ml`; classes do Mata, para a fase 8
+- [x] Display, messages and errors checked against Stata 14 (cases `compat/do/0401`–`0405`): numbers in `%12.0g`, single-width columns, block header, compile and run-time errors, skipped lines in `mata:`
+- [x] `st_view` that writes to the data when elements are assigned; associative arrays (`asarray`); `optimize()` with d0/d1/d2 evaluators and nr/bfgs techniques
+- [x] Check `optimize()`, `st_view` and `asarray` (cases `0406` and `0407`; in d0 `optimize()` only the noise of numerical derivatives differs)
+- `moptimize()` moved to phase 5, together with `ml`; Mata classes, to phase 8
 
-## Fase 5: estimação (PR em revisão)
+## Phase 5: estimation ✅
 
-- [x] Variáveis fatoriais (`i.`, `c.`, `#`, `##`) e operadores de séries temporais (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
+- [x] Factor variables (`i.`, `c.`, `#`, `##`) and time-series operators (`L.`, `F.`, `D.`, `S.`); `tsset`, `xtset`
 - [x] `regress`, `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates store/table/restore`
 - [x] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `areg`
-- [x] Erros-padrão robustos, por cluster e bootstrap (`vce(bootstrap)` e prefixo `bootstrap`); motor `ml` (máxima verossimilhança)
-- [x] `xtlogit` e `xtpoisson` (fe e re), `qreg`, `lrtest`, `hausman`, `xtsum`, `xtdescribe`
-- [ ] `moptimize()` do Mata
-- Conferência com os logs do Stata: casos `0501`–`0513` (0509, 0510, 0512 e 0513 aguardam a próxima rodada)
+- [x] Robust, cluster and bootstrap standard errors (`vce(bootstrap)` and the `bootstrap` prefix); `ml` engine (maximum likelihood)
+- [x] `xtlogit` and `xtpoisson` (fe and re), `qreg`, `lrtest`, `hausman`, `xtsum`, `xtdescribe`
+- [ ] Mata's `moptimize()`
+- Checked against the Stata logs: cases `0501`–`0513`
 
-## Fase 6: amostras complexas ✅
+## Phase 6: complex surveys ✅
 
-- [x] `svyset` (estratos, UPAs, pesos, FPC), `svydescribe`
-- [x] Prefixo `svy:` com `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` e `over()`
-- [x] Linearização de Taylor; correção de Rao–Scott no `svy: tabulate` de duas vias
-- [x] Vários estágios, BRR, jackknife, bootstrap e SDR; `estat effects`; `svy:` também com `ologit`, `oprobit`, `mlogit`, `nbreg`, `glm` e `tobit`
-- Conferência com os logs do Stata: caso `0601` conferido; `0602` aguarda a próxima rodada
+- [x] `svyset` (strata, PSUs, weights, FPC), `svydescribe`
+- [x] `svy:` prefix with `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` and `over()`
+- [x] Taylor linearization; Rao–Scott correction in two-way `svy: tabulate`
+- [x] Several stages, BRR, jackknife, bootstrap and SDR; `estat effects`; `svy:` also with `ologit`, `oprobit`, `mlogit`, `nbreg`, `glm` and `tobit`
+- Checked against the Stata logs: cases `0601` and `0602`; `0603` awaits the next run
 
-## Fase 7: gráficos ✅
+## Phase 7: graphics ✅
 
-- [x] Motor de gráficos com esquemas próprios (`s2color`, `s1mono`… são aceitos e mapeados para eles) e janela Graph
+- [x] Graphics engine with OpenDTA's own schemes (`s2color`, `s1mono`… are accepted and mapped to them) and Graph window
 - [x] `twoway` (`scatter`, `line`, `connected`, `lfit`, `qfit`, `lfitci`, `qfitci`, `area`, `bar`, `spike`, `dropline`, `rcap`, `rarea`, `rbar`, `rline`, `function`, `histogram`, `kdensity`, `scatteri`), `tsline`, `graph bar`/`hbar`, `graph box`/`hbox`, `graph pie`, `histogram`, `kdensity`, `graph matrix`
-- [x] Opções de título, eixos, legendas e marcadores; `by()`
-- [x] `graph combine`, `graph export` (PNG, PDF, SVG, EPS, PS, TIFF, JPEG), `graph save`/`use` (formato próprio), `graph dir`/`drop`/`rename`/`copy`/`display`/`describe`
-- [x] `lowess`, `graph dot`, `marginsplot`, gráficos de diagnóstico (`rvfplot`, `rvpplot`, `qnorm`, `pnorm`)
-- [x] Graph Editor simples (títulos, legenda, esquema, tamanho, grade, escalas logarítmicas), com desfazer
-- Conferência com os logs do Stata: caso `0701` (só as mensagens de texto; o desenho é próprio)
+- [x] Title, axis, legend and marker options; `by()`
+- [x] `graph combine`, `graph export` (PNG, PDF, SVG, EPS, PS, TIFF, JPEG), `graph save`/`use` (OpenDTA's own format), `graph dir`/`drop`/`rename`/`copy`/`display`/`describe`
+- [x] `lowess`, `graph dot`, `marginsplot`, diagnostic plots (`rvfplot`, `rvpplot`, `qnorm`, `pnorm`)
+- [x] Simple Graph Editor (titles, legend, scheme, size, grid, log scales), with undo
+- Checked against the Stata logs: case `0701` (text messages only; the drawing is OpenDTA's own)
 
-## Fase 8: restante do Stata 14 e ferramentas da interface (em andamento)
+## Phase 8: the rest of Stata 14 and interface tools (in progress)
 
-- [x] Do-file Editor com abas, realce de sintaxe, localizar/substituir e execução de seleção (`doedit`); menus Data, Graphics e Statistics; impressão
-- [x] Testes não paramétricos e de normalidade (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) e comandos imediatos (`cii`, `ttesti`, `prtesti`, `tabi`)
+- [x] Do-file Editor with tabs, syntax highlighting, find/replace and execution of the selection (`doedit`); Data, Graphics and Statistics menus; printing
+- [x] Nonparametric and normality tests (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) and immediate commands (`cii`, `ttesti`, `prtesti`, `tabi`)
 - [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
 - [x] `codebook`, `misstable`, `putexcel`
-- [ ] Classes do Mata (`class`, herança, métodos virtuais)
-- [ ] Sobrevivência (`stset`, `sts`, `stcox`, `streg`), séries temporais (`arima`, `var`), multinível (`mixed`, `melogit`), `sem`, `power`, `mi` (imputação múltipla) e demais comandos, priorizados pelo uso
-- [x] Diálogos dos menus (33 comandos de Statistics e Graphics), com prévia do comando e OK, Submit e Copy
-- [x] Páginas de ajuda para todos os comandos
-- [x] Pacote para macOS (`tools/build_macos.sh`: `OpenDTA.app` e `.dmg`; "Abrir com" para `.do` e `.dta`)
-- Conferência com os logs do Stata: casos `0801`–`0803` conferidos; `0804` aguarda a próxima rodada
+- [ ] Mata classes (`class`, inheritance, virtual methods)
+- [ ] Survival (`stset`, `sts`, `stcox`, `streg`), time series (`arima`, `var`), multilevel (`mixed`, `melogit`), `sem`, `power`, `mi` (multiple imputation) and other commands, prioritized by use
+- [x] Menu dialogs (33 Statistics and Graphics commands), with a preview of the command and OK, Submit and Copy
+- [x] Help pages for all commands
+- [x] macOS package (`tools/build_macos.sh`: `OpenDTA.app` and `.dmg`; "Open With" for `.do` and `.dta`)
+- Checked against the Stata logs: cases `0801`–`0804`
 
-## Fase 9 (última): idioma da interface ✅
+## Phase 9: interface language ✅
 
-- [x] Seletor de idioma em Preferences: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
-- [x] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário (`set language`, `set messages`)
+- [x] Language selector in Preferences: English (default) or Portuguese, for menus, windows, dialogs, error explanations and OpenDTA's own messages
+- [x] With Portuguese on, Stata-style messages can stay in English (for those who compare with Stata logs and manuals) or be translated, at the user's choice (`set language`, `set messages`)
 
-## Melhorias em relação ao Stata (ao longo das fases)
+## Distribution and documentation
 
-- [x] Explicação dos erros: depois da mensagem e antes do r(#), uma linha diz o que deu errado no contexto do comando e outra sugere como resolver (nomes parecidos, arquivos parecidos na pasta, número de observações…). Em inglês; `set hints off` desliga
-- [x] `set numerics precise`: QR no `regress`, `D.`/`S.` em double, passo final de Newton no `ml`/`optimize()`, Richardson nas derivadas numéricas e variáveis novas em double (o padrão `stata` reproduz os arredondamentos do Stata)
-- [ ] Opções estatísticas além do Stata: `vce(cr2)` com graus de liberdade de Satterthwaite, *wild cluster bootstrap*, `logit, firth`
-- [x] Expoente sobrescrito na notação científica exibida (`1.0000×10¹⁰`, `2.5×10⁻⁵`), mantendo a largura do formato; `set superscript off` (ou Help → Superscript Exponents) volta ao `e+10` do Stata. `string()`, macros, `file write`, exportação e `sprintf()`/`strofreal()` do Mata ficam sempre na forma do Stata
+- [x] MIT License and license notices for third-party components
+- [x] macOS download (Apple Silicon and Intel), with the Release built by GitHub Actions for every `v*` tag
+- [x] All documentation published on GitHub in English, with a Portuguese copy (`*.pt-BR.md`) and an **English | Português** selector at the top of each page; code comments and commit messages in English
+- [ ] Windows version (installer built by the same workflow)
+
+## Improvements over Stata (throughout the phases)
+
+- [x] Error explanations: after the message and before r(#), one line says what went wrong in the context of the command and another suggests how to fix it (similar names, similar files in the folder, number of observations…). In English or Portuguese, following the interface language; `set hints off` turns them off
+- [x] `set numerics precise`: QR in `regress`, `D.`/`S.` in double, a final Newton step in `ml`/`optimize()`, Richardson extrapolation for numerical derivatives and new variables in double (the default `stata` reproduces Stata's rounding)
+- [ ] Statistical options beyond Stata: `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap*, `logit, firth`
+- [x] Superscript exponents in displayed scientific notation (`1.0000×10¹⁰`, `2.5×10⁻⁵`), keeping the format width; `set superscript off` (or Help → Superscript Exponents) restores Stata's `e+10`. `string()`, macros, `file write`, exports and Mata's `sprintf()`/`strofreal()` always use Stata's form

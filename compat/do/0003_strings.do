@@ -1,5 +1,5 @@
-* Funções de string. Para concatenar no display é preciso usar parênteses:
-* uma string entre aspas no início de uma diretiva é texto literal.
+* String functions. To concatenate in display, parentheses are needed:
+* a quoted string at the start of a directive is literal text.
 capture noisily display "a" + "b"
 display ("a" + "b")
 display ("ab" * 3)

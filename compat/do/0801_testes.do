@@ -1,4 +1,4 @@
-* Fase 8: testes não paramétricos, normalidade, sdtest e comandos imediatos
+* Phase 8: nonparametric tests, normality, sdtest and immediate commands
 clear
 set obs 74
 gen mpg = 12 + mod(_n*7, 30) + (mod(_n, 4) == 0)*mod(_n, 9)
@@ -28,7 +28,7 @@ sdtest mpg, by(foreign)
 return list
 sdtest mpg == 8
 sdtest mpg == price
-* sintaxe do Stata 14.0 (cii means/proportions só existe a partir do 14.1)
+* Stata 14.0 syntax (cii means/proportions only exists from 14.1 on)
 cii 166 19509 4379
 return list
 cii 100 30

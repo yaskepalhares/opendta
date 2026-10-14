@@ -1,8 +1,8 @@
 """summarize, tabstat, ci, ttest, prtest, correlate/pwcorr, centile, pctile,
-xtile e _pctile ([R] summarize e afins).
+xtile and _pctile ([R] summarize and related).
 
-Layouts reproduzidos a partir do Stata 14; detalhes não documentados têm
-a marca VERIFICAR e casos em compat/do/0301_summarize.do.
+Layouts reproduced from Stata 14; undocumented details have
+the VERIFY mark and cases in compat/do/0301_summarize.do.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def name12(name: str) -> str:
 
 
 def weights(s: "Session", p: Parsed, mask: np.ndarray, allowed: tuple[str, ...]):
-    """(vetor de pesos ou None, tipo) e máscara sem pesos missing/negativos."""
+    """(weight vector or None, type) and a mask without missing/negative weights."""
     if p.weight is None:
         return None, "", mask
     wtype, wexp = p.weight
@@ -58,8 +58,8 @@ def weights(s: "Session", p: Parsed, mask: np.ndarray, allowed: tuple[str, ...])
 
 
 def by_groups(s: "Session"):
-    """Pares (máscara do grupo, índice da 1ª obs.) para o prefixo by; um só
-    par com tudo verdadeiro quando não há by."""
+    """Pairs (group mask, index of the 1st obs.) for the by prefix; a single
+    pair with everything true when there is no by."""
     n = s.data.nobs
     if s.by_groups is None or n == 0:
         yield np.ones(n, dtype=bool), None
@@ -99,7 +99,7 @@ def cmd_summarize(s: "Session", args: str) -> None:
     base = touse(s, p)
     w, wtype, base = weights(s, p, base, ("aweight", "fweight", "iweight"))
     if o.get("detail") and wtype == "iweight":
-        raise StataError(101, "iweights not allowed with detail")   # VERIFICAR
+        raise StataError(101, "iweights not allowed with detail")   # VERIFY
     out = s.output
     for group, first in by_groups(s):
         if first is not None:
@@ -129,7 +129,7 @@ def cmd_summarize(s: "Session", args: str) -> None:
 
 
 def _summ_results(s: "Session", v: Variable, mask, w, wtype, *, detail: bool):
-    """Calcula e publica r() para a variável; devolve os momentos."""
+    """Computes and publishes r() for the variable; returns the moments."""
     if v.is_string:
         s.r = {"N": 0.0, "sum_w": 0.0, "sum": 0.0}
         return None
@@ -152,7 +152,7 @@ def _detail(s: "Session", v: Variable, mask, w, wtype) -> None:
     out.write("\n" + title.center(61).rstrip() + "\n" + "-" * 61 + "\n", "text")
     m = _summ_results(s, v, mask, w, wtype, detail=True)
     if m is None or m.N == 0:
-        out.write("no observations\n", "text")   # VERIFICAR
+        out.write("no observations\n", "text")   # VERIFY
         return
     x = v.data
     sel = mask & S.valid(x)
@@ -243,7 +243,7 @@ def cmd_ci(s: "Session", args: str) -> None:
             n = m.N
             if kind == "proportions":
                 if not np.all((xs == 0) | (xs == 1)):
-                    raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFICAR
+                    raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFY
                 k = float((xs * (ws if ws is not None else 1)).sum())
                 phat = k / n if n else M.SYSMISS
                 se = math.sqrt(phat * (1 - phat) / n) if n else M.SYSMISS
@@ -301,9 +301,9 @@ def _pvals(t: float, df: float | None) -> tuple[float, float, float]:
 
 
 def _ha_lines(s: "Session", diff_name: str, hyp: str, stat: str, t: float, df: float | None) -> None:
-    """As três hipóteses alternativas: as probabilidades começam nas colunas
-    1, 28 e 60; cada "Ha:" fica centrado sobre a sua probabilidade."""
-    # VERIFICAR: posições conferidas com um único exemplo do Stata 14
+    """The three alternative hypotheses: the probabilities start at columns
+    1, 28 and 60; each "Ha:" is centered over its probability."""
+    # VERIFY: positions checked against a single Stata 14 example
     out = s.output
     lo, two, up = _pvals(t, df)
     T = stat.upper()
@@ -336,7 +336,7 @@ def cmd_ttest(s: "Session", args: str) -> None:
         p.varlist, p.exp = left.strip(), right.strip()
     if p.exp is None:
         if not o.get("by"):
-            raise StataError(198, "option by() required")   # VERIFICAR
+            raise StataError(198, "option by() required")   # VERIFY
         _ttest_by(s, p.varlist, str(o["by"]).strip(), mask, level, bool(o.get("unequal")),
                   bool(o.get("welch")))
         return
@@ -362,7 +362,7 @@ def cmd_ttest(s: "Session", args: str) -> None:
 
 
 def _ttest_one(s: "Session", name: str, n: int, mean: float, sd: float, mu: float, level: float) -> None:
-    """Teste t de uma amostra a partir das estatísticas (ttest e ttesti)."""
+    """One-sample t test from the statistics (ttest and ttesti)."""
     se = sd / math.sqrt(n) if n > 1 else M.SYSMISS
     lo, hi = S.t_ci(mean, se, n - 1, level)
     _ttest_table(s, [(name, n, mean, se, sd, lo, hi)], level, title="One-sample t test")
@@ -427,7 +427,7 @@ def _ttest_by(s, varlist, byvar, mask, level, unequal, welch):
     sel = mask & S.valid(v.data) & (S.valid(g.data) if not g.is_string else np.array([x != "" for x in g.raw]))
     groups = sorted(set(g.data[sel].tolist()))
     if len(groups) != 2:
-        raise StataError(420, "more than 2 groups found, only 2 allowed")   # VERIFICAR
+        raise StataError(420, "more than 2 groups found, only 2 allowed")   # VERIFY
     from .inspect import cell_text
     names = []
     arrays = []
@@ -462,7 +462,7 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
     foot = [("combined", len(allx), ma.mean, sea, ma.sd, *S.t_ci(ma.mean, sea, len(allx) - 1, level))]
     title = "Two-sample t test with unequal variances" if (unequal or welch) else \
         "Two-sample t test with equal variances"
-    # a linha "diff" vem logo depois de "combined", sem a linha cheia entre elas
+    # the "diff" line comes right after "combined", without a full line between them
     _ttest_table(s, rows, level, title=title, foot_rows=foot, head="Group", close=False)
     lo, hi = S.t_ci(diff, sed, df, level)
     out = s.output
@@ -475,7 +475,7 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
     dflabel = "Satterthwaite's degrees of freedom" if unequal else (
         "Welch's degrees of freedom" if welch else "degrees of freedom")
     if unequal or welch:
-        # graus de liberdade não inteiros em %8.0g ("5.58439"; Stata 14)
+        # non-integer degrees of freedom in %8.0g ("5.58439"; Stata 14)
         out.write("Ho: diff = 0".ljust(78 - len(dflabel) - 3 - 8) + f"{dflabel} = "
                   + format_value(df, "%8.0g") + "\n", "text")
     else:
@@ -499,7 +499,7 @@ def cmd_prtest(s: "Session", args: str) -> None:
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
     x = v.data[mask & S.valid(v.data)]
     if not np.all((x == 0) | (x == 1)):
-        raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFICAR
+        raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFY
     if p.exp is None:
         raise StataError(198, "invalid syntax")
     p0 = float(s.eval(p.exp))
@@ -509,7 +509,7 @@ def cmd_prtest(s: "Session", args: str) -> None:
 
 
 def _prtest_one(s: "Session", name: str, n: int, ph: float, p0: float, level: float) -> None:
-    """Teste de uma proporção a partir das estatísticas (prtest e prtesti)."""
+    """One-proportion test from the statistics (prtest and prtesti)."""
     se = math.sqrt(ph * (1 - ph) / n)
     z = (ph - p0) / math.sqrt(p0 * (1 - p0) / n)
     zc = S.z_crit(level)
@@ -525,7 +525,7 @@ def _prtest_one(s: "Session", name: str, n: int, ph: float, p0: float, level: fl
               "result")
     out.write("-" * 78 + "\n", "text")
     out.write(f"    p = proportion({name})".ljust(66) + f"z = {z:>8.4f}\n", "text")
-    # o valor da hipótese aparece com zero à esquerda ("Ho: p = 0.5"; Stata 14)
+    # the hypothesis value shows a leading zero ("Ho: p = 0.5"; Stata 14)
     out.write(f"Ho: p = {p0:g}\n", "text")
     _ha_lines(s, "p", f"{p0:g}", "z", z, None)
     lo_p, two, up = _pvals(z, None)
@@ -537,10 +537,10 @@ def _prtest_one(s: "Session", name: str, n: int, ph: float, p0: float, level: fl
 # ---------------------------------------------------------------------------
 
 def _corr_table(s: "Session", names: list[str], cells, *, extra=None, star_p=None) -> None:
-    """cells[i][j] (j <= i): texto da correlação; extra: linhas por célula (sig., obs)."""
+    """cells[i][j] (j <= i): correlation text; extra: lines per cell (sig., obs)."""
     out = s.output
     k = len(names)
-    for start in range(0, k, 7):          # VERIFICAR: até 7 colunas por bloco
+    for start in range(0, k, 7):          # VERIFY: up to 7 columns per block
         cols = list(range(start, min(k, start + 7)))
         out.write("\n" + " " * 13 + "|" + "".join(f"{_abbrev(names[j], 8):>9}" for j in cols) + "\n",
                   "text")
@@ -709,11 +709,11 @@ def cmd_centile(s: "Session", args: str) -> None:
 
 
 def _binom_limit(xs: np.ndarray, q: float, target: float) -> tuple[float, bool]:
-    """Limite de confiança binomial interpolado do centil q ([R] centile).
-    Acha k com F(k-1) < target <= F(k), F a função de distribuição da
-    Binomial(n, q), e interpola entre x_(k) e x_(k+1) pela fração
-    (target - F(k-1)) / (F(k) - F(k-1)). Fora da amostra, o limite fica
-    no mínimo ou no máximo (marcado com * na saída). Conferido com
+    """Interpolated binomial confidence limit of centile q ([R] centile).
+    Finds k with F(k-1) < target <= F(k), F the distribution function of the
+    Binomial(n, q), and interpolates between x_(k) and x_(k+1) by the fraction
+    (target - F(k-1)) / (F(k) - F(k-1)). Outside the sample, the limit stays
+    at the minimum or maximum (marked with * in the output). Checked against
     compat/expected/0301_summarize.log."""
     from scipy import stats as st
     n = len(xs)
@@ -777,7 +777,7 @@ def cmd_pctile(s: "Session", args: str) -> None:
     vals = _pct_values(xs, ws, qs)
     n = s.data.nobs
     if len(vals) > n:
-        raise StataError(198, "nquantiles() too large for the number of observations")   # VERIFICAR
+        raise StataError(198, "nquantiles() too large for the number of observations")   # VERIFY
     col = np.full(n, M.SYSMISS)
     col[: len(vals)] = vals
     s.data.add(Variable(newname, vtype, col))
@@ -808,7 +808,7 @@ def cmd_xtile(s: "Session", args: str) -> None:
         ws = w[mask][order] if w is not None else None
         cuts = np.array(_pct_values(xs, ws, [100 * k / nq for k in range(1, nq)]))
     col = np.full(s.data.nobs, M.SYSMISS)
-    # categoria = 1 + nº de pontos de corte estritamente menores que x
+    # category = 1 + number of cut points strictly less than x
     col[mask] = 1 + np.searchsorted(cuts, x[mask], side="left")
     s.data.add(Variable(newname, "byte" if len(cuts) < 100 else "int", col))
     s.notify_state()
@@ -833,7 +833,7 @@ def _ts_stats(spec: str) -> list[str]:
         elif w in _TS_LABEL or (w.startswith("p") and w[1:].isdigit()):
             out.append(w)
         else:
-            raise StataError(198, f"{w} invalid statistic")   # VERIFICAR
+            raise StataError(198, f"{w} invalid statistic")   # VERIFY
     return out
 
 
@@ -904,7 +904,7 @@ def cmd_tabstat(s: "Session", args: str) -> None:
                 out.write("".join(f"{fmtv(value(st_, v, base)):>10}" for v in vars_) + "\n", "result")
             out.write("-" * (10 + 10 * len(vars_)) + "\n", "text")
         return
-    # by(): uma linha (ou bloco) por categoria
+    # by(): one line (or block) per category
     from .tabulate import _categories, _codes
     bv = s.data.get(s.expand_varlist(str(o["by"]).strip())[0])
     cats, labels, ok = _categories(s, bv, base, missing=bool(o.get("missing")), nolabel=False)

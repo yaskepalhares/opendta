@@ -1,17 +1,17 @@
-"""Varlists com variáveis fatoriais e operadores de séries temporais
+"""Varlists with factor variables and time-series operators
 ([U] 11.4.3 factor variables, [U] 11.4.4 time-series varlists).
 
-    i.g          indicadores dos níveis de g (base: o menor nível)
-    ib3.g        base 3;  ib(first|last|freq).g;  ibn.g sem base;  ib(#2).g
-    i(1 3).g     só esses níveis;  i(1/4).g  intervalo
-    c.x          contínua (necessário dentro de interações)
-    a#b          interação;  a##b  fatorial completo (a b a#b)
-    i.(a b)      o operador vale para cada variável do grupo
-    L.x L2.x L(1/3).x F.x D.x D2.x S.x S4.x LD.x  (exigem tsset)
+    i.g          indicators of the levels of g (base: the smallest level)
+    ib3.g        base 3;  ib(first|last|freq).g;  ibn.g no base;  ib(#2).g
+    i(1 3).g     only these levels;  i(1/4).g  range
+    c.x          continuous (needed inside interactions)
+    a#b          interaction;  a##b  full factorial (a b a#b)
+    i.(a b)      the operator applies to each variable in the group
+    L.x L2.x L(1/3).x F.x D.x D2.x S.x S4.x LD.x  (require tsset)
 
-`expand_fv` devolve a lista de termos; `build_design` cria as colunas da
-amostra, com os nomes que o Stata usa em e(b) ("2.g", "1b.g",
-"2.g#c.x", "L.x") e as marcas de base (b) e de omissão (o).
+`expand_fv` returns the list of terms; `build_design` creates the columns for the
+sample, with the names Stata uses in e(b) ("2.g", "1b.g",
+"2.g#c.x", "L.x") and the base (b) and omission (o) marks.
 """
 
 from __future__ import annotations
@@ -36,13 +36,13 @@ SYS = M.SYSMISS
 
 @dataclass
 class Component:
-    """Um fator de um termo: variável com operadores."""
+    """One factor of a term: a variable with operators."""
     var: str
-    factor: bool                       # i. (ou nome puro dentro de #)
+    factor: bool                       # i. (or a plain name inside #)
     ts: list = field(default_factory=list)   # [(letra, ordem)]
-    base: str = ""                     # "", "n" (ibn), "first", "last", "freq", "#k", ou número
+    base: str = ""                     # "", "n" (ibn), "first", "last", "freq", "#k", or a number
     levels: list | None = None         # i(1 3).g
-    explicit_c: bool = False           # c. escrito pelo usuário
+    explicit_c: bool = False           # c. written by the user
 
     @property
     def tsname(self) -> str:
@@ -71,19 +71,19 @@ class Term:
 
 @dataclass
 class Column:
-    name: str                          # nome em e(b)
-    values: np.ndarray | None          # valores na amostra (None para base/omitida)
-    term: int                          # índice do termo
+    name: str                          # name in e(b)
+    values: np.ndarray | None          # values in the sample (None for base/omitted)
+    term: int                          # term index
     base: bool = False
     omitted: bool = False
-    cell: tuple = ()                   # níveis dos fatores (para a tabela)
-    labels: tuple = ()                 # (nome do termo para o cabeçalho, rótulo do nível)
-    group: tuple = ()                  # colunas consecutivas com o mesmo grupo dividem cabeçalho
-    rowlab: str = ""                   # rótulo da linha dentro do grupo ("2", "L1.")
+    cell: tuple = ()                   # factor levels (for the table)
+    labels: tuple = ()                 # (term name for the header, level label)
+    group: tuple = ()                  # consecutive columns with the same group share a header
+    rowlab: str = ""                   # row label within the group ("2", "L1.")
 
 
 # ---------------------------------------------------------------------------
-# análise do texto
+# text parsing
 # ---------------------------------------------------------------------------
 
 _OP = re.compile(r"""^(
@@ -94,7 +94,7 @@ _OP = re.compile(r"""^(
 
 
 def _split_tokens(text: str) -> list[str]:
-    """Separa por espaços, respeitando parênteses: i.(a b) L(1/2).x i(1 2).g."""
+    """Splits on spaces, respecting parentheses: i.(a b) L(1/2).x i(1 2).g."""
     out, cur, depth = [], "", 0
     for ch in text:
         if ch == "(":
@@ -113,7 +113,7 @@ def _split_tokens(text: str) -> list[str]:
 
 
 def _split_hash(tok: str) -> list[str]:
-    """'a##b#c' -> ['a', 'b', 'c'], sem cortar dentro de parênteses (ib(#2).g)."""
+    """'a##b#c' -> ['a', 'b', 'c'], without cutting inside parentheses (ib(#2).g)."""
     parts, cur, depth, i = [], "", 0, 0
     while i < len(tok):
         ch = tok[i]
@@ -144,7 +144,7 @@ def _numlist(text: str) -> list[float]:
 
 
 def _parse_ts(spec: str) -> list[list[tuple[str, int]]]:
-    """'L2D' -> [[('L',2),('D',1)]]; 'L(1/3)' -> três alternativas."""
+    """'L2D' -> [[('L',2),('D',1)]]; 'L(1/3)' -> three alternatives."""
     alts: list[list[tuple[str, int]]] = [[]]
     for m in re.finditer(r"([LFDS])(\d+|\([^)]*\))?", spec, re.I):
         op = m.group(1).upper()
@@ -162,7 +162,7 @@ def _parse_ts(spec: str) -> list[list[tuple[str, int]]]:
 
 
 def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Component] | None:
-    """Um fator escrito (ex. 'ib2.g', 'L.x', 'c.x', 'i.(a b)') -> componentes."""
+    """One written factor (e.g. 'ib2.g', 'L.x', 'c.x', 'i.(a b)') -> components."""
     factor = None
     explicit_c = False
     base = ""
@@ -189,11 +189,11 @@ def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Comp
         elif low == "bn":
             factor, base = True, "n"
         elif low == "o":
-            pass   # o.x: omitida pelo usuário — tratada como presente, VERIFICAR
+            pass   # o.x: omitted by the user — treated as present, VERIFY
         elif re.fullmatch(r"(?:[LFDS](?:\d+|\([^)]*\))?)+", op, re.I):
             ts_alts = [a + b for a in ts_alts for b in _parse_ts(op)]
         elif re.fullmatch(r"[A-Za-z\d]+", op) and re.search(r"[ic]", op, re.I):
-            # combinações como iL.x ou cL.x
+            # combinations such as iL.x or cL.x
             letters = re.sub(r"[icIC]", "", op)
             factor = "i" in op.lower()
             explicit_c = "c" in op.lower()
@@ -218,7 +218,7 @@ def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Comp
 
 
 def expand_fv(ds: "Dataset", text: str) -> list[Term]:
-    """Varlist com fv/ts -> termos, na ordem em que aparecem."""
+    """Varlist with fv/ts -> terms, in the order they appear."""
     terms: list[Term] = []
     seen: set = set()
 
@@ -236,7 +236,7 @@ def expand_fv(ds: "Dataset", text: str) -> list[Term]:
         for part in parts:
             comps = _component_alts(ds, part, inter)
             if comps is None:
-                raise StataError(198, f"{tok} invalid name")   # VERIFICAR
+                raise StataError(198, f"{tok} invalid name")   # VERIFY
             alts_per_part.append(comps)
         for combo in itertools.product(*alts_per_part):
             combo = list(combo)
@@ -274,8 +274,8 @@ _CACHE: dict | None = None
 
 
 class caching:
-    """Dentro do bloco, cada variável (com seus operadores) é calculada uma
-    vez só, mesmo que apareça em vários termos (i.g, i.g#c.x, c.x##c.x)."""
+    """Within the block, each variable (with its operators) is computed only
+    once, even if it appears in several terms (i.g, i.g#c.x, c.x##c.x)."""
 
     def __enter__(self):
         global _CACHE
@@ -316,15 +316,15 @@ def _comp_values(ds: "Dataset", c: Component) -> np.ndarray:
     if c.ts:
         x = tsops.apply_ops(ds, c.ts, x)
         if v.vtype != "double" and any(op in "DS" for op, _ in c.ts) and not _precise():
-            # o Stata guarda D.x e S.x numa variável temporária float quando
-            # x não é double (compat 0503: LD.x muda o 9º algarismo do RSS)
+            # Stata stores D.x and S.x in a temporary float variable when x is not double (compat
+            # 0503: LD.x changes the 9th digit of the RSS)
             ok = x < SYS
             x = np.where(ok, np.where(ok, x, 0).astype(np.float32).astype(np.float64), SYS)
     return x
 
 
 def term_missing(ds: "Dataset", terms: list[Term]) -> np.ndarray:
-    """Observações com algum valor missing nos termos (para markout)."""
+    """Observations with a missing value in some term (for markout)."""
     bad = np.zeros(ds.nobs, dtype=bool)
     for t in terms:
         for c in t.comps:
@@ -359,7 +359,7 @@ def _levels(ds: "Dataset", c: Component, x: np.ndarray) -> tuple[list[float], fl
     else:
         base = float(b)
         if base not in levels:
-            # VERIFICAR: o Stata aceita base ausente na amostra?
+            # VERIFY: does Stata accept a base level absent from the sample?
             levels = sorted(levels + [base])
     return levels, base
 
@@ -370,7 +370,7 @@ def _level_text(lv: float) -> str:
 
 def build_design(ds: "Dataset", terms: list[Term], mask: np.ndarray, *,
                  constant: bool = True) -> list[Column]:
-    """Colunas na amostra `mask`, na ordem do Stata, com bases marcadas."""
+    """Columns in sample `mask`, in Stata's order, with bases marked."""
     present = {t.key() for t in terms}
     cols: list[Column] = []
     for ti, t in enumerate(terms):
@@ -384,8 +384,8 @@ def build_design(ds: "Dataset", terms: list[Term], mask: np.ndarray, *,
         factor_idx = [k for k, c in enumerate(t.comps) if c.factor]
         level_lists = [info[k][0] for k in factor_idx]
         for cell in itertools.product(*level_lists) if factor_idx else [()]:
-            # base: algum subconjunto de fatores no nível-base cujo termo
-            # complementar está no modelo (vazio = constante)
+            # base: some subset of factors at the base level whose complementary term is in the
+            # model (empty = constant)
             at_base = [factor_idx[j] for j, lv in enumerate(cell) if info[factor_idx[j]][1] == lv]
             is_base = False
             for r_ in range(1, len(at_base) + 1):
@@ -423,7 +423,7 @@ def build_design(ds: "Dataset", terms: list[Term], mask: np.ndarray, *,
                     y = y * vals[k]
             name = "#".join(parts)
             if not t.is_interaction and not t.comps[0].factor:
-                name = t.comps[0].tsname   # x, L.x: sem o "c."
+                name = t.comps[0].tsname   # x, L.x: without the "c."
             if t.is_interaction:
                 head = "#".join(c.tsname if c.factor else f"c.{c.tsname}" for c in t.comps)
             else:
@@ -444,7 +444,7 @@ def build_design(ds: "Dataset", terms: list[Term], mask: np.ndarray, *,
 
 
 def ts_rowlabel(ops: list) -> str:
-    """Rótulo da linha de um operador na tabela: L1. L2. D1. LD. --. (VERIFICAR)."""
+    """Row label of an operator in the table: L1. L2. D1. LD. --. (VERIFY)."""
     if not ops:
         return "--."
     if len(ops) == 1:
@@ -455,14 +455,14 @@ def ts_rowlabel(ops: list) -> str:
 
 def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = None,
                    tol: float = 1e-13) -> list[str]:
-    """Marca como omitidas as colunas colineares; devolve os nomes para as
-    notas "omitted because of collinearity".
+    """Marks collinear columns as omitted; returns the names for the
+    "omitted because of collinearity" notes.
 
-    Varre a matriz de produtos cruzados (centrada, se há constante) como o
-    invsym() do Stata, que escolhe as colunas "para minimizar o erro de
-    arredondamento": a cada passo, o maior elemento restante da diagonal.
-    Com x3 = 2*x1, o Stata omite x1 (compat 0501). VERIFICAR a regra geral
-    e a tolerância."""
+    Sweeps the cross-products matrix (centered, if there is a constant) like
+    Stata's invsym(), which chooses the columns "to minimize roundoff
+    error": at each step, the largest remaining diagonal element.
+    With x3 = 2*x1, Stata omits x1 (compat 0501). VERIFY the general rule
+    and the tolerance."""
     notes: list[str] = []
     live = [c for c in cols if not c.base and not c.omitted and c.values is not None]
     if not live:
@@ -487,12 +487,12 @@ def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = No
         if d <= tol * max(orig[j], 1e-300) or orig[j] <= 0:
             dropped[j] = True
             continue
-        # varredura (sweep) no pivô j
+        # sweep on pivot j
         row = A[j, :].copy()
         A = A - np.outer(row, row) / d
         A[j, :] = 0
         A[:, j] = 0
-    # colunas não varridas que zeraram também são colineares
+    # unswept columns that became zero are also collinear
     for j in range(k):
         if not done[j] and A[j, j] <= tol * max(orig[j], 1e-300):
             dropped[j] = True

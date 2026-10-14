@@ -1,8 +1,8 @@
-"""Do-file Editor: abas, numeração de linhas, realce de sintaxe, abrir e
-gravar, e executar o arquivo ou a seleção (Do = do; Run = run, sem eco).
+"""Do-file Editor: tabs, line numbers, syntax highlighting, open and
+save, and running the file or the selection (Do = do; Run = run, without echo).
 
-Como no Stata, a execução grava o texto num arquivo temporário e chama
-`do` (ou `run`) sobre ele; uma seleção é estendida até linhas inteiras."""
+As in Stata, running writes the text to a temporary file and calls
+`do` (or `run`) on it; a selection is extended to whole lines."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMai
 if TYPE_CHECKING:
     from ..session import Session
 
-# cores próprias do OpenDTA (claro, escuro)
+# OpenDTA's own colors (light, dark)
 PALETTE = {
     "light": {"command": "#1f4f99", "string": "#a0522d", "comment": "#3a7d44", "macro": "#8a3fa0",
               "number": "#b5651d", "gutter": "#f2f3f5", "gutter_text": "#8a9099", "current": "#f7f9fc"},
@@ -43,7 +43,7 @@ def _keywords() -> list[str]:
 
 
 class StataHighlighter(QSyntaxHighlighter):
-    """Realce: comandos, strings, comentários (*, //, ///, /* */), macros e números."""
+    """Highlighting: commands, strings, comments (*, //, ///, /* */), macros and numbers."""
 
     def __init__(self, doc: QTextDocument, theme: str = "light"):
         super().__init__(doc)
@@ -201,7 +201,7 @@ class CodeEditor(QPlainTextEdit):
         self.gutter.update()
 
     def code_to_run(self) -> str:
-        """Seleção estendida a linhas inteiras; sem seleção, o arquivo todo."""
+        """Selection extended to whole lines; without a selection, the whole file."""
         cur = self.textCursor()
         if not cur.hasSelection():
             return self.toPlainText()
@@ -243,7 +243,7 @@ class _FindBar(QWidget):
 
 
 class DoFileEditor(QMainWindow):
-    """Janela do Do-file Editor."""
+    """Do-file Editor window."""
 
     ran = Signal()
 
@@ -356,7 +356,7 @@ class DoFileEditor(QMainWindow):
             ed.setPlainText(p.read_text(encoding="utf-8", errors="replace"))
         ed.document().setModified(False)
         cur = self.current()
-        # a aba vazia inicial é trocada pelo arquivo aberto
+        # the initial empty tab is replaced by the opened file
         if cur is not None and cur.path is None and not cur.toPlainText() and not cur.document().isModified():
             self.tabs.removeTab(self.tabs.indexOf(cur))
         self._add(ed, self._tab_title(ed))
@@ -456,7 +456,7 @@ class DoFileEditor(QMainWindow):
             cur.endEditBlock()
         return n
 
-    # -- execução ------------------------------------------------------------------------
+    # -- execution ------------------------------------------------------------------------
     def _execute(self, verb: str) -> None:
         ed = self.current()
         if ed is None:

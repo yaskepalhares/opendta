@@ -1,8 +1,8 @@
-"""log, cmdlog, assert, timer e creturn list.
+"""log, cmdlog, assert, timer and creturn list.
 
-log using grava a saída em texto (.log) ou SMCL (.smcl, o padrão do
-Stata 14). Vários logs podem ficar abertos ao mesmo tempo com name().
-cmdlog grava só os comandos digitados.
+log using writes the output as text (.log) or SMCL (.smcl, the Stata 14
+default). Several logs can be open at the same time with name().
+cmdlog writes only the typed commands.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def cmd_log(s: "Session", args: str) -> None:
                                  "name": 4}) if comma else {}
         name = str(o.get("name", "<unnamed>")).strip()
         if name in logs:
-            # VERIFICAR: texto do Stata 14
+            # VERIFY: Stata 14 text
             raise StataError(604, "log file already open")
         path = Path(strip_outer_quotes(head.strip())).expanduser()
         if path.suffix == "":
@@ -109,7 +109,7 @@ def cmd_log(s: "Session", args: str) -> None:
         log = LogFile(name, path.resolve(), kind, fh)
         if kind == "smcl" and not o.get("append"):
             fh.write("{smcl}\n")
-        # cabeçalho: na tela e no arquivo
+        # header: on screen and in the file
         if kind == "smcl":
             fh.write("{txt}{sf}{ul off}{.-}\n")
             for label, value in _info(log, "opened"):
@@ -137,7 +137,7 @@ def cmd_log(s: "Session", args: str) -> None:
             names = ["<unnamed>"] if "<unnamed>" in logs else list(logs)[:1]
         for n in names:
             if n not in logs:
-                raise StataError(111, f"log {n} not found")   # VERIFICAR
+                raise StataError(111, f"log {n} not found")   # VERIFY
             log = logs[n]
             if sub == "close":
                 s.output.remove_listener(log.listener)
@@ -174,7 +174,7 @@ def cmd_log(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def record_command(s: "Session", line: str) -> None:
-    """Chamado pela sessão para cada comando digitado (não para do-files)."""
+    """Called by the session for each typed command (not for do-files)."""
     cl = getattr(s, "cmdlog", None)
     if cl is not None and cl.get("on", True):
         cl["fh"].write(line.rstrip("\n") + "\n")
@@ -201,7 +201,7 @@ def cmd_cmdlog(s: "Session", args: str) -> None:
         s.output.write(f"(cmdlog {path.resolve()} opened)\n", "text")
         return
     if cl is None:
-        raise StataError(606, "no cmdlog file open")   # VERIFICAR
+        raise StataError(606, "no cmdlog file open")   # VERIFY
     if sub == "close":
         cl["fh"].close()
         s.output.write(f"(cmdlog {cl['path']} closed)\n", "text")
@@ -228,7 +228,7 @@ def cmd_assert(s: "Session", args: str) -> None:
     mask = touse(s, Parsed(if_=p.if_, in_=p.in_))
     n = int(mask.sum())
     if n == 0 and not o.get("null"):
-        # VERIFICAR: assert sem observações
+        # VERIFY: assert without observations
         raise StataError(2000, "no observations")
     v = eval_vector(s, expr)
     if isinstance(v, str):
@@ -271,14 +271,14 @@ def cmd_timer(s: "Session", args: str) -> None:
             raise StataError(198, "invalid syntax")
         t = ts.setdefault(nums[0], {"total": 0.0, "count": 0, "start": None})
         if t["start"] is not None:
-            raise StataError(198, f"timer {nums[0]} already on")   # VERIFICAR
+            raise StataError(198, f"timer {nums[0]} already on")   # VERIFY
         t["start"] = time.perf_counter()
     elif sub == "off":
         if len(nums) != 1:
             raise StataError(198, "invalid syntax")
         t = ts.get(nums[0])
         if t is None or t["start"] is None:
-            raise StataError(198, f"timer {nums[0]} not on")   # VERIFICAR
+            raise StataError(198, f"timer {nums[0]} not on")   # VERIFY
         t["total"] += time.perf_counter() - t["start"]
         t["count"] += 1
         t["start"] = None
@@ -297,7 +297,7 @@ def cmd_timer(s: "Session", args: str) -> None:
                 continue
             total = t["total"]
             out.write(f"{k:4d}: {total:9.2f} / {t['count']:8d} = {total / max(t['count'], 1):10.4f}\n",
-                      "text")   # VERIFICAR: layout
+                      "text")   # VERIFY: layout
             s.r[f"t{k}"] = total
             s.r[f"nt{k}"] = float(t["count"])
     else:

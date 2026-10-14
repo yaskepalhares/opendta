@@ -1,18 +1,18 @@
-"""Armazenamento nativo das variáveis numéricas.
+"""Native storage of numeric variables.
 
-Cada variável fica na memória no próprio tipo, com 1 byte por valor em byte,
-2 em int, 4 em long e float, 8 em double, como no Stata. Os missing usam a
-mesma codificação do formato .dta, o que torna ler e gravar arquivos uma
-cópia direta:
+Each variable is kept in memory in its own type, with 1 byte per value for byte,
+2 for int, 4 for long and float, 8 for double, as in Stata. Missing values use the
+same encoding as the .dta format, which makes reading and writing files a
+direct copy:
 
     byte   int8     .  = 101,         .a..z = 102..127
     int    int16    .  = 32741,       .a..z = 32742..32767
     long   int32    .  = 2147483621,  .a..z = 2147483622..2147483647
     float  float32  .  = bits 0x7f000000, .a..z = + k * 0x800
-    double float64  os mesmos códigos usados no resto do OpenDTA (missing.py)
+    double float64  the same codes used in the rest of OpenDTA (missing.py)
 
-Os cálculos continuam em float64: `decode` produz o vetor float64 com os
-códigos de missing do OpenDTA e `encode` faz o caminho inverso.
+Computations stay in float64: `decode` produces the float64 vector with
+OpenDTA's missing codes and `encode` goes the other way.
 """
 
 from __future__ import annotations
@@ -27,15 +27,15 @@ INT_MISS = {"byte": 101, "int": 32741, "long": 2147483621}
 INT_RANGES = {"byte": (-127, 100), "int": (-32767, 32740), "long": (-2147483647, 2147483620)}
 FLOAT_MISS_BITS = 0x7F000000
 FLOAT_MISS_STEP = 0x00000800
-FLOAT_MAX = 1.7014117331926443e38   # maior float não missing (bits 0x7effffff)
+FLOAT_MAX = 1.7014117331926443e38   # largest non-missing float (bits 0x7effffff)
 
 _DBL_BASE = np.uint64(0x7FE0000000000000)
-_DBL_SHIFT = np.uint64(40)                 # passo de 0x0000010000000000 entre .a, .b, ...
+_DBL_SHIFT = np.uint64(40)                 # step of 0x0000010000000000 between .a, .b, ...
 _CODES = np.array([M.SYSMISS] + [M.EXTENDED[c] for c in "abcdefghijklmnopqrstuvwxyz"])
 
 
 def _missing_index(v: np.ndarray, miss: np.ndarray) -> np.ndarray:
-    """0 para '.', 1..26 para .a..z (valores desconhecidos viram '.')."""
+    """0 for '.', 1..26 for .a..z (unknown values become '.')."""
     bits = v[miss].view(np.uint64)
     k = ((bits - _DBL_BASE) >> _DBL_SHIFT).astype(np.int64)
     known = (k >= 0) & (k <= 26) & (bits == _DBL_BASE + (k.astype(np.uint64) << _DBL_SHIFT))
@@ -43,11 +43,11 @@ def _missing_index(v: np.ndarray, miss: np.ndarray) -> np.ndarray:
 
 
 def encode(values, vtype: str) -> np.ndarray:
-    """float64 (códigos do OpenDTA) -> vetor no tipo nativo.
+    """float64 (OpenDTA codes) -> vector in the native type.
 
-    Valores fora da faixa do tipo viram '.', e não inteiros são truncados em
-    direção a zero, como em fit_numeric; normalmente os valores já chegam
-    ajustados."""
+    Values outside the type's range become '.', and non-integers are truncated
+    toward zero, as in fit_numeric; values normally arrive already
+    adjusted."""
     v = np.asarray(values, dtype=np.float64)
     if vtype == "double":
         return np.array(v, dtype=np.float64, copy=True)
@@ -76,13 +76,14 @@ def encode(values, vtype: str) -> np.ndarray:
 
 
 def decode(raw: np.ndarray, vtype: str) -> np.ndarray:
-    """Vetor no tipo nativo -> float64 com os códigos de missing do OpenDTA."""
+    """Vector in the native type -> float64 with OpenDTA's missing codes."""
     if vtype == "double":
         return np.array(raw, dtype=np.float64, copy=True)
     v = raw.astype(np.float64)
     if vtype == "float":
         bits = raw.view(np.uint32)
-        # só os positivos acima do maior float válido; com sinal (bit 31) é número
+        # only the positive values above the largest valid float; with the sign bit (bit 31) it is
+        # a number
         miss = (bits >= FLOAT_MISS_BITS) & (bits < 0x80000000)
         if miss.any():
             k = ((bits[miss] - FLOAT_MISS_BITS) // FLOAT_MISS_STEP).astype(np.int64).clip(0, 26)
@@ -96,7 +97,7 @@ def decode(raw: np.ndarray, vtype: str) -> np.ndarray:
 
 
 def decode_one(x, vtype: str) -> float:
-    """Um valor só (list, Data Browser, replace sequencial): sem criar vetores."""
+    """A single value (list, Data Browser, sequential replace): without creating vectors."""
     if vtype == "double":
         return float(x)
     if vtype == "float":
@@ -114,5 +115,5 @@ def encode_one(x: float, vtype: str):
 
 
 def missing_raw(vtype: str):
-    """Valor nativo de '.' no tipo."""
+    """Native value of '.' in the type."""
     return encode_one(M.SYSMISS, vtype)

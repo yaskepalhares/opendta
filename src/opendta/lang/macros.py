@@ -1,15 +1,15 @@
-"""Macros locais e globais e sua expansão.
+"""Local and global macros and their expansion.
 
-Expansão (manual [U] 18.3 e [P] macro):
+Expansion (manual [U] 18.3 and [P] macro):
 
-* `nome'  -> macro local (escopo do do-file/programa em execução)
-* $nome e ${nome} -> macro global
-* referências aninhadas são resolvidas de dentro para fora: ``i''
-* `=exp' avalia a expressão; `:função' chama uma função estendida
-* `++i', `i++', `--i', `i--' incrementam/decrementam a local
-* macro inexistente expande para vazio
-* o texto resultante da expansão não é expandido de novo
-* `"' abre aspas compostas e não é tratado como referência de macro
+* `name'  -> local macro (scope of the running do-file/program)
+* $name and ${name} -> global macro
+* nested references are resolved from the inside out: ``i''
+* `=exp' evaluates the expression; `:function' calls an extended function
+* `++i', `i++', `--i', `i--' increment/decrement the local
+* a nonexistent macro expands to nothing
+* the text resulting from the expansion is not expanded again
+* `"' opens compound quotes and is not treated as a macro reference
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class MacroStore:
         self.globals: dict[str, str] = {}
         self._frames: list[dict[str, str]] = [{}]
 
-    # -- escopo de locais ------------------------------------------------
+    # -- scope of locals ------------------------------------------------
     @property
     def locals(self) -> dict[str, str]:
         return self._frames[-1]
@@ -73,10 +73,10 @@ def expand(text: str, store: MacroStore, *,
            eval_inline: Resolver | None = None,
            extended: Resolver | None = None,
            results: Callable[[str, str], str] | None = None) -> str:
-    """Expande todas as referências a macros em `text`.
+    """Expands all macro references in `text`.
 
-    eval_inline recebe o texto após '=' em `=exp' e devolve a string resultante.
-    extended recebe o texto após ':' em `:função' e devolve a string resultante.
+    eval_inline receives the text after '=' in `=exp' and returns the resulting string.
+    extended receives the text after ':' in `:function' and returns the resulting string.
     """
     s = text
     stack: list[int] = []

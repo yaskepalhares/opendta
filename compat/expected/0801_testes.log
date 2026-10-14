@@ -4,7 +4,7 @@
   log type:  text
  opened on:  14 Oct 2026, 11:45:49
 
-. * Fase 8: testes não paramétricos, normalidade, sdtest e comandos imediatos
+. * Phase 8: nonparametric tests, normality, sdtest and immediate commands
 . clear
 
 . set obs 74
@@ -283,7 +283,7 @@ Ho: ratio = 1                                    degrees of freedom =   73, 73
     Ha: ratio < 1               Ha: ratio != 1                 Ha: ratio > 1
   Pr(F < f) = 0.0000         2*Pr(F < f) = 0.0000           Pr(F > f) = 1.0000
 
-. * sintaxe do Stata 14.0 (cii means/proportions só existe a partir do 14.1)
+. * Stata 14.0 syntax (cii means/proportions only exists from 14.1 on)
 . cii 166 19509 4379
 
     Variable |        Obs        Mean    Std. Err.       [95% Conf. Interval]

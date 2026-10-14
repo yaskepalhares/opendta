@@ -1,4 +1,4 @@
-* Fase 2: funções estendidas de macro.
+* Phase 2: extended macro functions.
 clear
 set obs 2
 gen byte idade = 1

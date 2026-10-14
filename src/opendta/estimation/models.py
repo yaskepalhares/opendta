@@ -1,4 +1,4 @@
-"""Modelos de máxima verossimilhança: logit, logistic, probit, poisson
+"""Maximum-likelihood models: logit, logistic, probit, poisson
 ([R] logit, [R] logistic, [R] probit, [R] poisson)."""
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ def g(x: float, fmt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# verossimilhanças: (ll, gradiente, Hessiana) e escores por observação
+# likelihoods: (ll, gradient, Hessian) and scores per observation
 # ---------------------------------------------------------------------------
 
 def _logit(y, X, w):
     def fun(b, todo):
         xb = X @ b
-        # ln F(xb) e ln(1 - F(xb)) estáveis
+        # stable ln F(xb) and ln(1 - F(xb))
         lp = -np.logaddexp(0, -xb)
         lq = -np.logaddexp(0, xb)
         ll = float(np.sum(w * np.where(y > 0, lp, lq)))
@@ -127,7 +127,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         y = yb
     elif cmd == "poisson":
         if np.any(y < 0):
-            raise StataError(459, f"{smp.depname} must be greater than or equal to zero")   # VERIFICAR
+            raise StataError(459, f"{smp.depname} must be greater than or equal to zero")   # VERIFY
     notes = fvars.drop_collinear(smp.cols, smp.constant, w)
     for nm in notes:
         out.write(f"note: {nm} omitted because of collinearity\n", "text")
@@ -145,10 +145,10 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
             off_name = str(o["exposure"]).strip()
             ev = ds.get(off_name).data[smp.mask].astype(float)
             if np.any(ev <= 0):
-                raise StataError(459, f"{off_name} <= 0 in sample")   # VERIFICAR
+                raise StataError(459, f"{off_name} <= 0 in sample")   # VERIFY
             offset = np.log(ev)
             off_name = f"ln({off_name})"
-    # modelo só com a constante (ll_0) e valores iniciais
+    # constant-only model (ll_0) and starting values
     ybar = float(np.sum(w * y) / np.sum(w))
     if cmd in ("logit", "logistic"):
         fun, scores = _logit(y, X, w)
@@ -174,8 +174,8 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         ll0 = SYS
     maxiter = int(o["iterate"]) if o.get("iterate") else 16000
     if cmd == "poisson":
-        # o poisson do Stata já começa perto do máximo (compat 0507: iteração 0
-        # igual à final): valores iniciais obtidos antes, sem log
+        # Stata's poisson already starts close to the maximum (compat 0507: iteration 0 equal to
+        # the final one): starting values obtained beforehand, without a log
         b0 = maximize(fun, b0, maxiter=maxiter).b
     res = maximize(fun, b0, maxiter=maxiter,
                    tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
@@ -217,7 +217,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     if smp.vce == "cluster" and k:
         rk = np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300))
         if rk < k:
-            # poucos clusters: como no regress, Wald chi2(posto-1) missing (compat 0506)
+            # few clusters: as in regress, Wald chi2(rank-1) missing (compat 0506)
             rank_def = True
             df_m = rk - (1 if smp.constant else 0)
     if rank_def:
@@ -273,7 +273,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     est.ml_cmd = cmd
     from ..commands.matrix import Matrix
     from .ml import ilog
-    # e(): nomes e ordem observados no Stata 14 (compat 0506, 0507)
+    # e(): names and order observed in Stata 14 (compat 0506, 0507)
     scalars = [("rank", float(k)), ("N", N), ("ic", float(res.iterations)), ("k", float(kk)),
                ("k_eq", 1.0), ("k_dv", 1.0), ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0),
                ("ll", res.ll)]

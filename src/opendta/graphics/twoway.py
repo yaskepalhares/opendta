@@ -1,6 +1,6 @@
-"""graph twoway: leitura da sintaxe e montagem das camadas ([G-2] graph twoway).
+"""graph twoway: syntax parsing and assembly of the layers ([G-2] graph twoway).
 
-Formas aceitas:
+Accepted forms:
     twoway (scatter y x) (lfit y x), title("...")
     twoway scatter y x || lfit y x ||, title("...")
     scatter y x, by(foreign)
@@ -43,12 +43,12 @@ def plottype(word: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# divisão do comando em plots
+# splitting the command into plots
 # ---------------------------------------------------------------------------
 
 def split_plots(text: str) -> tuple[list[str], str]:
-    """Divide em plots (por `||` ou parênteses) e devolve também as opções
-    globais finais (depois de `)` ou de `||` vazio)."""
+    """Splits into plots (by `||` or parentheses) and also returns the final
+    global options (after `)` or an empty `||`)."""
     pieces: list[str] = []
     glob = ""
     buf: list[str] = []
@@ -98,7 +98,7 @@ def split_plots(text: str) -> tuple[list[str], str]:
                     depth -= 1
                 j += 1
             if depth:
-                raise StataError(198, "unmatched parenthesis")   # VERIFICAR
+                raise StataError(198, "unmatched parenthesis")   # VERIFY
             pieces.append(text[i + 1:j - 1].strip())
             i = j
             continue
@@ -112,7 +112,7 @@ def split_plots(text: str) -> tuple[list[str], str]:
         buf.append(c)
         i += 1
     push()
-    # um pedaço que começa com vírgula é opção global (scatter y x ||, title())
+    # a piece that starts with a comma is a global option (scatter y x ||, title())
     out = []
     for p in pieces:
         if p.startswith(","):
@@ -127,11 +127,11 @@ def split_plots(text: str) -> tuple[list[str], str]:
 # ---------------------------------------------------------------------------
 
 class Builder:
-    """Junta as camadas de todos os plots; com by(), monta um painel por grupo."""
+    """Joins the layers of all plots; with by(), builds one panel per group."""
 
     def __init__(self, s: "Session"):
         self.s = s
-        self.specs: list[tuple[str, object, dict, np.ndarray]] = []   # (tipo, parsed, opts camada, máscara)
+        self.specs: list[tuple[str, object, dict, np.ndarray]] = []   # (type, parsed, layer opts, mask)
         self.gopts: dict = {}
         self.ytitles: list[str] = []
         self.xtitles: list[str] = []
@@ -144,7 +144,7 @@ class Builder:
             return
         pt = plottype(words[0])
         if pt is None:
-            raise StataError(198, f"{words[0]} is not a twoway plot type")   # VERIFICAR
+            raise StataError(198, f"{words[0]} is not a twoway plot type")   # VERIFY
         rest = words[1] if len(words) > 1 else ""
         self.add_typed(pt, rest)
 
@@ -172,7 +172,7 @@ class Builder:
         names = s.expand_varlist(p.varlist) if p.varlist.strip() else []
         for nm in names:
             if s.data.get(nm).is_string:
-                raise StataError(109, "type mismatch")   # VERIFICAR
+                raise StataError(109, "type mismatch")   # VERIFY
         if pt == "tsline":
             from ..estimation.tsops import ts_info
             ti = ts_info(s.data)
@@ -200,7 +200,7 @@ class Builder:
         yname, expr = (m.group(1), m.group(2)) if m else ("y", body)
         self.specs.append(("function", (yname, expr), lopts, None))
 
-    # -- cálculo das camadas para uma máscara de grupo -------------------------
+    # -- computing the layers for a group mask -------------------------
     def layers(self, group: np.ndarray | None) -> list[Layer]:
         s = self.s
         out: list[Layer] = []
@@ -257,7 +257,7 @@ class Builder:
                 kd = D.kdensity(x[mm], ww, kernel=D.kernel_name(style.get("kernel")),
                                 bw=float(style["bwidth"]) if style.get("bwidth") else None,
                                 n=int(style["n"]) if style.get("n") else None)
-                self.ytitles.append("Density")   # VERIFICAR
+                self.ytitles.append("Density")   # VERIFY
                 out.append(Layer("kdensity", kd["x"].tolist(), kd["d"].tolist(), {}, style, "kdensity " + v))
             return out
         xname = names[-1] if pt not in RANGE_PLOTS else names[2]
@@ -341,7 +341,7 @@ def D_isnum(t: str) -> bool:
 
 
 def eval_on_grid(s: "Session", expr: str, grid: np.ndarray, var: str = "x") -> np.ndarray:
-    """Avalia `expr` com `x` valendo cada ponto da grade (twoway function)."""
+    """Evaluates `expr` with `x` taking each point of the grid (twoway function)."""
     from ..commands._util import eval_vector
     from ..core.dataset import Dataset, Variable
     saved, saved_by = s.data, s.by_groups
@@ -388,8 +388,8 @@ def layer_spec() -> dict:
 
 
 def build(s: "Session", text: str, *, default_type: str | None = None) -> tuple[Graph, dict]:
-    """Monta o Graph; devolve também as opções de gráfico em texto (name,
-    saving, nodraw ficam para o comando que chamou)."""
+    """Builds the Graph; also returns the graph options as text (name,
+    saving, nodraw stay with the calling command)."""
     if default_type:
         text = default_type + " " + text
     pieces, glob = split_plots(text)
@@ -401,7 +401,7 @@ def build(s: "Session", text: str, *, default_type: str | None = None) -> tuple[
     if glob:
         lopts, g = split_layer_graph(glob, layer_spec())
         if lopts:
-            # opções de camada depois de `,` global: valem para todos os plots
+            # layer options after the global `,`: apply to all plots
             for k, spec in enumerate(b.specs):
                 b.specs[k] = (spec[0], spec[1], {**lopts, **spec[2]}, spec[3])
         b.gopts.update(g)
@@ -416,7 +416,7 @@ def finish(s: "Session", b: Builder) -> tuple[Graph, dict]:
     if byo:
         byvars = s.expand_varlist(" ".join(byo["vars"]))
         byo["vars"] = byvars
-        # grupos sem observações na amostra de nenhum plot não viram painel
+        # groups with no observations in the sample of any plot do not become a panel
         allmask = np.ones(s.data.nobs, dtype=bool)
         for key, gm in D.groups(s, allmask, byvars, missing=bool(byo.get("missing"))):
             layers = b.layers(gm)
@@ -440,7 +440,7 @@ def finish(s: "Session", b: Builder) -> tuple[Graph, dict]:
         if not any(len(ly.x) for ly in layers):
             raise StataError(2000, "no observations")
         g.panels.append(Panel("", layers))
-    # títulos automáticos dos eixos: um só y → rótulo dele; vários → em branco
+    # automatic axis titles: a single y → its label; several → blank
     yt = [t for t in dict.fromkeys(b.ytitles) if t is not None]
     xt = list(dict.fromkeys(b.xtitles))
     opts["_ytitle"] = yt[0] if len(yt) == 1 else ""
@@ -449,5 +449,5 @@ def finish(s: "Session", b: Builder) -> tuple[Graph, dict]:
         opts["_xvaluelabels"] = {str(k): v for k, v in b.xvl.items()}
     if b.yvl:
         opts["_yvaluelabels"] = {str(k): v for k, v in b.yvl.items()}
-    # com uma camada só, sem legenda (o Stata só mostra legenda com 2 ou mais)
+    # with a single layer, no legend (Stata only shows a legend with 2 or more)
     return g, graph_raw

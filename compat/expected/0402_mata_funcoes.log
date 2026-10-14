@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 4: funções do usuário, referências, structs e ponteiros no Mata.
+. * Phase 4: user functions, references, structs and pointers in Mata.
 . mata
 ------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 : real scalar dobro(real scalar x)

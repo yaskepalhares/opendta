@@ -1,12 +1,12 @@
-"""Graph Editor simples: painel lateral da janela Graph.
+"""Simple Graph Editor: side panel of the Graph window.
 
-Edita títulos, legenda, esquema, tamanho, grade e escalas logarítmicas do
-gráfico em memória e redesenha na hora. Como no Stata, as edições mudam o
-gráfico (e o que for gravado com graph save/export depois), não o comando
-que o criou. "Desfazer edições" volta ao gráfico como estava ao abrir o
-editor.
+Edits titles, legend, scheme, size, grid and log scales of the
+graph in memory and redraws it at once. As in Stata, the edits change the
+graph (and whatever is saved with graph save/export afterward), not the command
+that created it. "Revert" goes back to the graph as it was when the
+editor was opened.
 
-A edição em si (apply_edits) não depende do Qt, para poder ser testada.
+The editing itself (apply_edits) does not depend on Qt, so that it can be tested.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def _join(spec) -> str:
 
 
 def current_values(g: Graph) -> dict:
-    """Valores que o editor mostra para o gráfico."""
+    """Values the editor shows for the graph."""
     o = g.opts
     vals: dict = {}
     for k in TEXT_KEYS:
@@ -47,7 +47,7 @@ def current_values(g: Graph) -> dict:
 
 
 def apply_edits(g: Graph, new: dict) -> None:
-    """Grava no gráfico só o que mudou em relação a current_values(g)."""
+    """Writes into the graph only what changed relative to current_values(g)."""
     old = current_values(g)
     o = g.opts
     for k in TEXT_KEYS:
@@ -93,7 +93,7 @@ def scheme_names() -> list[str]:
 
 
 def make_editor(parent, on_apply):
-    """Painel do editor (QWidget). on_apply(values) recebe os valores."""
+    """Editor panel (QWidget). on_apply(values) receives the values."""
     from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
                                    QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
@@ -151,7 +151,7 @@ def make_editor(parent, on_apply):
             self.ylog.setChecked(bool(vals.get("ylog")))
             sch = vals.get("scheme", "")
             if sch and self.scheme.findData(sch) < 0:
-                self.scheme.addItem(sch, sch)         # nomes do Stata (s2color...) são apelidos
+                self.scheme.addItem(sch, sch)         # Stata names (s2color...) are aliases
             self.scheme.setCurrentIndex(max(0, self.scheme.findData(sch)))
             self.xsize.setValue(float(vals.get("xsize", DEFAULT_SIZE[0])))
             self.ysize.setValue(float(vals.get("ysize", DEFAULT_SIZE[1])))

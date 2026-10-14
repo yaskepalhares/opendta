@@ -1,9 +1,9 @@
-"""Linha de comando do OpenDTA.
+"""OpenDTA command line.
 
-    opendta                 abre a interface gráfica
-    opendta --console       console interativo (prompt ". ")
-    opendta -b do arq.do    modo batch: executa e grava arq.log, como `stata -b`
-    opendta -e do arq.do    igual a -b (aceito por compatibilidade)
+    opendta                 opens the graphical interface
+    opendta --console       interactive console (prompt ". ")
+    opendta -b do file.do   batch mode: runs and writes file.log, like `stata -b`
+    opendta -e do file.do   same as -b (accepted for compatibility)
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ def _console_listener(text: str, style: str) -> None:
 
 
 def _terminal_has_superscripts() -> bool:
-    """Terminais sem UTF-8 (ex.: cp1252 redirecionado no Windows) não têm ⁻ e
-    ⁴…⁹; nesse caso o console usa a forma do Stata (e+10)."""
+    """Terminals without UTF-8 (e.g. cp1252 redirected on Windows) lack ⁻ and
+    ⁴…⁹; in that case the console uses Stata's form (e+10)."""
     try:
         "×10⁻⁰¹²³⁴⁵⁶⁷⁸⁹".encode(sys.stdout.encoding or "ascii")
         return True
@@ -38,7 +38,7 @@ def run_console() -> int:
     if not _terminal_has_superscripts():
         s.run("quietly set superscript off")
     s.output.add_listener(_console_listener)
-    print(f"OpenDTA {__version__} — console. Digite 'exit' para sair.")
+    print(f"OpenDTA {__version__} — console. Type 'exit' to quit.")
     while True:
         try:
             line = input("\n. ")
@@ -66,7 +66,7 @@ def _log_header(path: Path) -> str:
 
 
 def run_batch(dofile: str, args: list[str]) -> int:
-    """Executa um do-file e grava <nome>.log no diretório atual."""
+    """Runs a do-file and writes <name>.log in the current directory."""
     do_path = Path(dofile)
     if do_path.suffix == "":
         do_path = do_path.with_suffix(".do")
@@ -87,7 +87,7 @@ def run_batch(dofile: str, args: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="opendta", description="OpenDTA")
-    p.add_argument("--console", action="store_true", help="console interativo, sem janela")
+    p.add_argument("--console", action="store_true", help="interactive console, no window")
     p.add_argument("-b", "-e", dest="batch", action="store_true", help="modo batch")
     p.add_argument("--version", action="version", version=f"OpenDTA {__version__}")
     p.add_argument("rest", nargs=argparse.REMAINDER)
@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         if rest and rest[0] in ("do", "run"):
             rest = rest[1:]
         if not rest:
-            p.error("informe o do-file: opendta -b do arquivo.do")
+            p.error("give the do-file: opendta -b do file.do")
         return run_batch(rest[0], rest[1:])
     if ns.console:
         return run_console()

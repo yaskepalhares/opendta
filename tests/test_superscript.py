@@ -1,4 +1,4 @@
-"""Expoente sobrescrito na notação científica exibida (set superscript)."""
+"""Superscript exponent in displayed scientific notation (set superscript)."""
 
 from opendta.core.formats import format_value, plain_numbers, set_superscript
 
@@ -10,10 +10,10 @@ def test_format_value_superscript():
         assert format_value(2.5e-6, "%9.0g").strip() == "2.5×10⁻⁶"
         assert format_value(1234.5, "%10.3e").strip() == "1.235×10³"
         assert format_value(-1e-10, "%10.0g").strip() == "-1.0×10⁻¹⁰"
-        # números em notação fixa não mudam; a largura do formato é mantida
+        # numbers in fixed notation do not change; the format width is kept
         assert format_value(123456789, "%12.0g") == "   123456789"
         assert len(format_value(1e10, "%12.0g")) == 12
-        # texto que vira dado (string(), macros) fica na forma do Stata
+        # text that becomes data (string(), macros) stays in Stata's form
         assert format_value(1e10, "%12.0g", dp=False).strip() == "1.00000e+10"
         with plain_numbers():
             assert format_value(1e10, "%12.0g").strip() == "1.00000e+10"

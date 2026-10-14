@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 4: Mata básico (exibição, operadores, subscritos, strings).
+. * Phase 4: basic Mata (display, operators, subscripts, strings).
 . mata
 ------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 : x = 2

@@ -54,7 +54,7 @@ def test_bootstrap_eclass_matches_resampling_spread(run):
     se_boot = np.sqrt(np.diag(e["V"].data))
     run("quietly regress y x")
     se_ols = np.sqrt(np.diag(run.session.e["V"].data))
-    # com erros homocedásticos, o bootstrap fica perto do erro-padrão usual
+    # with homoskedastic errors, the bootstrap stays close to the usual standard error
     assert se_boot[0] == pytest.approx(se_ols[0], rel=0.3)
 
 

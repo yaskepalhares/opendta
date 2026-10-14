@@ -1,3 +1,3 @@
-"""OpenDTA — interpretador de do-files com interface no estilo do Stata 14."""
+"""OpenDTA — do-file interpreter with a Stata 14-style interface."""
 
 __version__ = "0.1.0"

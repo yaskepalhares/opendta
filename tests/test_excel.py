@@ -40,7 +40,7 @@ def test_read_types(here):
     make_book(here / "b.xlsx")
     ds = read_excel(here / "b.xlsx", ExcelOptions(firstrow=True))
     assert ds.names == ["Nome", "Idade", "RendaR", "Nascimento", "Hora"]
-    assert ds.nobs == 3                                 # linha vazia no fim some
+    assert ds.nobs == 3                                 # empty row at the end disappears
     assert [v.vtype for v in ds.vars][:3] == ["str4", "byte", "str6"]
     assert ds.get("RendaR").label == "Renda (R$)"
     nasc = ds.get("Nascimento")
@@ -69,9 +69,9 @@ def test_commands_round_trip(run, here):
     run('export excel nome using t.xlsx, sheet("Nomes") sheetmodify')
     out = run("import excel t.xlsx, describe")
     assert "Sheet1 | A1:D3" in out and "Nomes | A1:A2" in out
-    assert run("import excel t.xlsx, clear firstrow") == ""      # o Stata não mostra nada
+    assert run("import excel t.xlsx, clear firstrow") == ""      # Stata shows nothing
     d = run.session.data
-    assert list(d.get("idade").data) == ["trinta", ""]       # rótulo exportado como texto
+    assert list(d.get("idade").data) == ["trinta", ""]       # label exported as text
     assert list(d.get("renda").data) == [1500.5, 2.25]
     assert d.get("d").fmt == "%tdnn/dd/CCYY" and d.get("d").data[0] == 21915
     run("export excel t2.xlsx, firstrow(varlabels) nolabel")

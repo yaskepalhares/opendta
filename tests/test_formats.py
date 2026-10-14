@@ -6,7 +6,7 @@ from opendta.core import missing as M
 from opendta.core.formats import format_value, number_to_macro
 
 
-# Valores observados nos logs do Stata 14 (compat/expected/0001 e 0002).
+# Values observed in the Stata 14 logs (compat/expected/0001 and 0002).
 @pytest.mark.parametrize("value, expected", [
     (1 / 3, ".33333333"),
     (-1 / 3, "-.33333333"),
@@ -57,7 +57,7 @@ def test_decimal_comma():
     (math.pi, "%-9.2f", "3.14     "),
     (math.pi, "%09.2f", "000003.14"),
     (1234567.891, "%12.2fc", "1,234,567.89"),
-    (1234.5, "%10.3e", " 1.235e+03"),      # meio para cima, como no Stata
+    (1234.5, "%10.3e", " 1.235e+03"),      # round half up, as in Stata
     ("ab", "%-5s", "ab   "),
     ("ab", "%5s", "   ab"),
     (0, "%td", "01jan1960"),

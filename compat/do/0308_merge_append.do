@@ -1,4 +1,4 @@
-* Fase 3b: append, merge, joinby, cross. Cria e apaga arquivos na pasta atual.
+* Phase 3b: append, merge, joinby, cross. Creates and deletes files in the current folder.
 clear
 input id str5 nome renda
 1 "ana" 10
@@ -69,7 +69,7 @@ input k b
 3 30
 end
 joinby k using odta_j
-* dentro de cada k a ordem do joinby também varia de uma execução para outra
+* within each k the order of joinby also varies from one run to the next
 sort k b a
 list
 clear
@@ -85,7 +85,7 @@ input c
 2
 end
 cross using odta_j
-* a ordem do cross no Stata depende do desempate do sort: ordena antes de listar
+* the order of cross in Stata depends on the sort's tie-breaking: sort before listing
 sort c k a
 list
 clear

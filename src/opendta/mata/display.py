@@ -1,7 +1,7 @@
-"""Exibição de resultados do Mata (o que aparece ao digitar uma expressão).
+"""Display of Mata results (what appears when an expression is typed).
 
-Escalar: dois espaços e o valor. Matriz: números das colunas centrados
-sobre cada coluna, caixa com +---+ e o número de cada linha:
+Scalar: two spaces and the value. Matrix: column numbers centered
+over each column, a box with +---+ and the number of each row:
 
            1   2
         +---------+
@@ -9,11 +9,11 @@ sobre cada coluna, caixa com +---+ e o número de cada linha:
       2 |  3   4  |
         +---------+
 
-Todas as colunas têm a largura do maior elemento da matriz, com o número
-da coluna alinhado à direita sobre ela; os números usam %12.0g
-(observado no Stata 14, compat 0401 e 0403).
-Matrizes simétricas aparecem como [symmetric], só com o triângulo de
-baixo. Detalhes marcados VERIFICAR têm casos em compat/do/04*.do.
+All columns are as wide as the largest element of the matrix, with the column
+number right-aligned over it; numbers use %12.0g
+(observed in Stata 14, compat 0401 and 0403).
+Symmetric matrices appear as [symmetric], with only the lower
+triangle. Details marked VERIFY have cases in compat/do/04*.do.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from ..core import missing as M
 from ..core.formats import format_value
 from .values import MV, Pointer
 
-REAL_FORMAT = "%12.0g"     # observado no Stata 14: 1/3 → .3333333333, 1e10 → 1.00000e+10
+REAL_FORMAT = "%12.0g"     # observed in Stata 14: 1/3 → .3333333333, 1e10 → 1.00000e+10
 
 
 def cell(x, t: str) -> str:
@@ -66,7 +66,7 @@ def render(v: MV) -> list[str]:
     w_all = max(1, max(len(texts[i][j]) for i in range(r) for j in range(c)))
     widths = [w_all] * c
     lab_w = max(3, len(str(r)))
-    lead = lab_w + 4                 # "  1 |" + 2 espaços antes da 1ª coluna
+    lead = lab_w + 4                 # "  1 |" + 2 spaces before the 1st column
     lines: list[str] = []
     if sym:
         lines.append("[symmetric]")

@@ -1,4 +1,4 @@
-* Fase 1a: input, label, rename, order, format, drop/keep, compress.
+* Phase 1a: input, label, rename, order, format, drop/keep, compress.
 clear
 input str8 nome idade sexo
 "Ana" 30 2

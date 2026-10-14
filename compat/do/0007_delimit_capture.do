@@ -1,4 +1,4 @@
-* #delimit, capture e do-files aninhados.
+* #delimit, capture and nested do-files.
 #delimit ;
 display "a"
     "b";

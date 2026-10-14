@@ -1,15 +1,15 @@
-"""Divide o texto de um do-file em linhas lógicas de comando.
+"""Splits the text of a do-file into logical command lines.
 
-Regras implementadas (manual [U] 16 e [P] comments, #delimit):
+Rules implemented (manual [U] 16 and [P] comments, #delimit):
 
-* linha cujo primeiro caractere não branco é `*` é comentário;
-* `//` precedido de espaço (ou no início da linha) comenta até o fim da linha;
-* `///` precedido de espaço junta a linha seguinte (continuação);
-* `/* ... */` pode atravessar linhas e pode ser aninhado;
-* `#delimit ;` passa a usar `;` como fim de comando; `#delimit cr` volta ao
-  fim de linha (a abreviação `#d` também é aceita). A diretiva continua na
-  lista como a linha "#delimit ;" ou "#delimit cr", para o eco;
-* nada disso vale dentro de strings "..." ou `"..."' (aspas compostas).
+* a line whose first non-blank character is `*` is a comment;
+* `//` preceded by a space (or at the start of the line) comments to the end of the line;
+* `///` preceded by a space joins the next line (continuation);
+* `/* ... */` may span lines and may be nested;
+* `#delimit ;` switches to `;` as the end of command; `#delimit cr` goes back to
+  end of line (the abbreviation `#d` is also accepted). The directive stays in the
+  list as the line "#delimit ;" or "#delimit cr", for the echo;
+* none of this applies inside "..." or `"..."' strings (compound quotes).
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class LogicalLine:
     text: str
-    lineno: int                  # linha (1-based) em que o comando começa
-    raw: tuple[str, ...] = ()    # linhas físicas originais, para o eco
-    kind: str = "cmd"            # "cmd", "comment" ou "delimit"
+    lineno: int                  # line (1-based) where the command starts
+    raw: tuple[str, ...] = ()    # original physical lines, for the echo
+    kind: str = "cmd"            # "cmd", "comment" or "delimit"
 
     @property
     def echo_lines(self) -> tuple[str, ...]:
@@ -30,7 +30,7 @@ class LogicalLine:
 
 
 def _is_delimit(cmd: str) -> str | None:
-    """Se `cmd` é uma diretiva #delimit, devolve 'cr' ou ';'."""
+    """If `cmd` is a #delimit directive, returns 'cr' or ';'."""
     s = cmd.strip()
     if not s.startswith("#d"):
         return None
@@ -46,8 +46,8 @@ def _is_delimit(cmd: str) -> str | None:
 
 
 def split_commands(source: str) -> list[LogicalLine]:
-    """Comentários de linha inteira (`*` e `//`) também entram na lista, com
-    kind="comment": o Stata os ecoa ao executar um do-file."""
+    """Whole-line comments (`*` and `//`) also go into the list, with
+    kind="comment": Stata echoes them when running a do-file."""
     physical = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[LogicalLine] = []
     mode = "cr"
@@ -56,9 +56,9 @@ def split_commands(source: str) -> list[LogicalLine]:
     line = 1
     i = 0
     n = len(source)
-    block = 0        # profundidade de /* */
-    in_str = False   # dentro de "..."
-    compound = 0     # profundidade de `" "'
+    block = 0        # /* */ depth
+    in_str = False   # inside "..."
+    compound = 0     # `" "' depth
 
     def at_word_start(pos: int) -> bool:
         return pos == 0 or source[pos - 1] in " \t\n\r"
@@ -109,7 +109,7 @@ def split_commands(source: str) -> list[LogicalLine]:
 
         if in_str:
             if c == "\n":
-                in_str = False  # string não fechada: o comando acusa o erro
+                in_str = False  # unclosed string: the command reports the error
                 continue
             buf.append(c)
             if c == '"':
@@ -135,7 +135,7 @@ def split_commands(source: str) -> list[LogicalLine]:
             i += 1
             continue
 
-        # fora de strings e comentários
+        # outside strings and comments
         if c == "\r":
             i += 1
             continue
@@ -155,7 +155,7 @@ def split_commands(source: str) -> list[LogicalLine]:
         if source.startswith("//", i) and at_word_start(i):
             j = source.find("\n", i)
             if not "".join(buf).strip():
-                # linha inteira de comentário: só para o eco
+                # whole comment line: only for the echo
                 out.append(LogicalLine("", line, raw_lines(line, line), "comment"))
             i = n if j == -1 else j
             continue
@@ -164,7 +164,7 @@ def split_commands(source: str) -> list[LogicalLine]:
             if mode == "cr" or _is_delimit(current) is not None:
                 flush()
             elif current.startswith("*"):
-                # comentário * em modo ; vai até o próximo ;
+                # * comment in ; mode runs until the next ;
                 buf.append(" ")
             else:
                 buf.append(" ")

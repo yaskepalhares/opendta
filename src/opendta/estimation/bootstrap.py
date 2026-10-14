@@ -1,11 +1,11 @@
-"""Prefixo bootstrap, vce(bootstrap) e estat bootstrap ([R] bootstrap,
+"""bootstrap prefix, vce(bootstrap) and estat bootstrap ([R] bootstrap,
 [R] bootstrap postestimation).
 
-O sorteio usa o gerador do OpenDTA (mt64) com reamostragem de observações,
-ou de clusters dentro dos estratos. A sequência de sorteios do bsample do
-Stata não é documentada: com a mesma semente, as réplicas (e portanto os
-erros-padrão) diferem das do Stata, embora sejam estatisticamente
-equivalentes (VERIFICAR com compat/do/0803)."""
+The draws use OpenDTA's generator (mt64) resampling observations,
+or clusters within strata. The sequence of draws of Stata's bsample is
+undocumented: with the same seed, the replicates (and therefore the
+standard errors) differ from Stata's, although they are statistically
+equivalent (VERIFY with compat/do/0803)."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ _OPTS = {"reps": 1, "seed": 4, "strata": 3, "cluster": 2, "idcluster": 3, "size"
 
 @dataclass
 class BootInfo:
-    reps: np.ndarray                     # réplicas × estatísticas (NaN = réplica perdida)
+    reps: np.ndarray                     # replicates × statistics (NaN = lost replicate)
     names: list[str]
     observed: np.ndarray
     command: str
@@ -55,7 +55,7 @@ class BootInfo:
 
 
 # ---------------------------------------------------------------------------
-# lista de expressões
+# expression list
 # ---------------------------------------------------------------------------
 
 def _tokens(text: str) -> list[str]:
@@ -91,7 +91,7 @@ def _tokens(text: str) -> list[str]:
 
 
 def parse_exp_list(text: str) -> list[tuple[str, str]]:
-    """[(nome ou "", expressão)]; `_b` e `_se` ficam como estão."""
+    """[(name or "", expression)]; `_b` and `_se` stay as they are."""
     items = []
     for tok in _tokens(text):
         t = tok
@@ -202,7 +202,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
     out = s.output
     reps = int(o["reps"]) if isinstance(o.get("reps"), str) else 50
     if reps < 2:
-        raise StataError(198, "reps() must be an integer greater than 1")   # VERIFICAR
+        raise StataError(198, "reps() must be an integer greater than 1")   # VERIFY
     level = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", 95))
     if isinstance(o.get("seed"), str):
         s.interp._execute_expanded(f"set seed {o['seed'].strip()}")
@@ -211,13 +211,13 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
     cmdname = spec.name if spec else word
     noisy = bool(o.get("noisily"))
 
-    # 1) rodada com os dados originais
+    # 1) run with the original data
     _quiet(s, command, noisy)
     eclass = "b" in s.e and getattr(s, "_estimates", None) is not None and \
         getattr(s._estimates, "cmd", "") == cmdname
     if not items:
         if not eclass:
-            raise StataError(198, "expression list required")   # VERIFICAR
+            raise StataError(198, "expression list required")   # VERIFY
         items = [("", "_b")]
     eclass_b = eclass and items == [("", "_b")]
     names, observed = _evaluate(s, items)
@@ -226,7 +226,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
     if eclass and base.esample is not None and len(base.esample) == base.nobs:
         sample = base.esample.copy()
         if not o.get("_from_vce"):
-            # com vce(bootstrap) o Stata não mostra esta linha (compat 0803)
+            # with vce(bootstrap) Stata does not show this line (compat 0803)
             out.write(f"(running {cmdname} on estimation sample)\n", "text")
     if not eclass:
         _warn_rclass(s, cmdname)
@@ -243,7 +243,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
         clusters = np.asarray(cv.raw if cv.is_string else cv.data)
     size = int(o["size"]) if isinstance(o.get("size"), str) else None
 
-    # 2) réplicas
+    # 2) replicates
     dots = not o.get("nodots")
     if dots:
         out.write(f"\nBootstrap replications ({reps})\n", "text")
@@ -263,7 +263,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
                 elif o.get("double"):
                     R[r] = vals
                 else:
-                    # réplicas guardadas em float, como no Stata sem a opção double
+                    # replicates stored as float, as Stata does without the double option
                     R[r] = np.asarray(vals, dtype=np.float32)
             except StataError:
                 ok = False
@@ -282,7 +282,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
     good = R[~np.isnan(R).any(axis=1)]
     nrep = len(good)
     if nrep < 2:
-        raise StataError(2000, "insufficient observations to compute bootstrap standard errors")   # VERIFICAR
+        raise StataError(2000, "insufficient observations to compute bootstrap standard errors")   # VERIFY
     V = np.cov(good, rowvar=False, ddof=1).reshape(len(names), len(names))
     info = BootInfo(reps=R, names=names, observed=observed, command=command, exps=[e for _, e in items],
                     n_reps=nrep, n_mis=mis, level=level, eclass_b=eclass_b, N=int(sample.sum()),
@@ -293,7 +293,7 @@ def run(s: "Session", command: str, items: list[tuple[str, str]], o: dict) -> No
 
 
 def _wrap(text: str, width: int, first: str, rest: str) -> list[str]:
-    """Quebra preservando os dois espaços depois de ponto, com recuo."""
+    """Wraps keeping the two spaces after a period, with indentation."""
     parts = re.split(r"( +)", text)
     lines, cur = [], first
     started = False
@@ -311,7 +311,7 @@ def _wrap(text: str, width: int, first: str, rest: str) -> list[str]:
 
 
 def _warn_rclass(s: "Session", cmdname: str) -> None:
-    """Aviso do bootstrap com comando que não grava e(sample) (compat 0803)."""
+    """bootstrap warning for a command that does not store e(sample) (compat 0803)."""
     width = int(s.settings.get("linesize", 80)) - 1
     out = s.output
     p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), bootstrap has no "
@@ -340,7 +340,7 @@ def _quiet(s: "Session", command: str, noisy: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# e() e exibição
+# e() and display
 # ---------------------------------------------------------------------------
 
 def _post(s: "Session", info: BootInfo, V: np.ndarray, est0, e0: dict, cmdname: str,
@@ -352,9 +352,9 @@ def _post(s: "Session", info: BootInfo, V: np.ndarray, est0, e0: dict, cmdname: 
     b_bs = good.mean(axis=0)
     z = st.norm.ppf(0.5 + info.level / 200)
     a = (100 - info.level) / 2
-    pct_lo = np.percentile(good, a, axis=0, method="linear")   # VERIFICAR definição do percentil
+    pct_lo = np.percentile(good, a, axis=0, method="linear")   # VERIFY definition of the percentile
     pct_hi = np.percentile(good, 100 - a, axis=0, method="linear")
-    # bias-corrected: z0 = Φ⁻¹(proporção de réplicas abaixo do observado)
+    # bias-corrected: z0 = Φ⁻¹(proportion of replicates below the observed value)
     with np.errstate(divide="ignore", invalid="ignore"):
         prop = np.clip((good < info.observed).mean(axis=0), 1e-12, 1 - 1e-12)
     z0 = st.norm.ppf(prop)
@@ -399,7 +399,7 @@ def _post(s: "Session", info: BootInfo, V: np.ndarray, est0, e0: dict, cmdname: 
                   and k_ not in ("vce", "vcetype", "prefix")]
         macros += [("prefix", "bootstrap"), ("vce", "bootstrap"), ("vcetype", "Bootstrap"),
                    ("command", info.command)]
-        # o Stata lista em ordem inversa da gravação; aqui as listas já vêm nessa ordem
+        # Stata lists in the reverse order of storage; here the lists already come in that order
         post(s, est, list(reversed(scalars)), list(reversed(macros)), sample, extra_mats=extra_mats)
         return
     est = Estimates(cmd="bootstrap", depvar="", names=cols, b=np.asarray(info.observed, dtype=float),
@@ -462,7 +462,7 @@ def display(s: "Session", est, *, header: bool = True, table: bool = True, level
                     items.append((lab, g9(v, fmt)))
         _hdr(s, est.title if info.eclass_b else "Bootstrap results", items)
         if info.cluster:
-            out.write(f"{'':>48}(Replications based on clusters in {info.cluster})\n", "text")   # VERIFICAR
+            out.write(f"{'':>48}(Replications based on clusters in {info.cluster})\n", "text")   # VERIFY
         if not info.eclass_b:
             out.write("\n", "text")
             out.write(f"{'command':>13}:  {info.command}\n", "text")
@@ -500,7 +500,7 @@ def display(s: "Session", est, *, header: bool = True, table: bool = True, level
 def estat_bootstrap(s: "Session", est, rest: str) -> None:
     info: BootInfo | None = getattr(est, "boot", None)
     if info is None:
-        raise StataError(321, "estat bootstrap requires bootstrap results")   # VERIFICAR
+        raise StataError(321, "estat bootstrap requires bootstrap results")   # VERIFY
     c = find_top(rest, ",")
     opt = "" if c == -1 else rest[c + 1:]
     o = match_options(opt, {"bc": 2, "bca": 3, "normal": 1, "percentile": 1, "all": 3, "noheader": 5,
@@ -526,7 +526,7 @@ def estat_bootstrap(s: "Session", est, rest: str) -> None:
         first = True
         for k in kinds:
             lo, hi = ex[k][0][j], ex[k][1][j]
-            # colunas (compat 0803): 12, 11, 12, 12, 11 e o rótulo em 6
+            # columns (compat 0803): 12, 11, 12, 12, 11 and the label in 6
             if first:
                 out.write(f"{abbrev(n.split(':')[-1]):>12} |", "text")
                 out.write(f"{g9(info.observed[j], '%10.0g'):>12}{g9(ex['bias'][j]):>11}"
@@ -544,15 +544,15 @@ def estat_bootstrap(s: "Session", est, rest: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# vce(bootstrap) nos comandos de estimação
+# vce(bootstrap) in the estimation commands
 # ---------------------------------------------------------------------------
 
 _VCE = re.compile(r"\bvce\s*\(\s*(boot(?:s|st|str|stra|strap)?)\b", re.I)
 
 
 def split_vce_bootstrap(args: str) -> tuple[str, str] | None:
-    """Se as opções têm vce(bootstrap [, opções]), devolve (args sem a opção,
-    opções do bootstrap)."""
+    """If the options have vce(bootstrap [, options]), returns (args without the option,
+    bootstrap options)."""
     c = find_top(args, ",")
     if c == -1:
         return None
@@ -579,7 +579,7 @@ def split_vce_bootstrap(args: str) -> tuple[str, str] | None:
 
 
 def wrap_vce_bootstrap(name: str) -> None:
-    """Troca o comando registrado por um que entende vce(bootstrap)."""
+    """Replaces the registered command with one that understands vce(bootstrap)."""
     from ..commands.registry import REGISTRY, CommandSpec
     spec = REGISTRY[name]
     inner = spec.fn

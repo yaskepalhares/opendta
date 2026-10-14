@@ -1,9 +1,9 @@
-"""estimates table ([R] estimates table): coeficientes de vários modelos
-lado a lado, com erros-padrão, estatísticas e estrelas opcionais.
+"""estimates table ([R] estimates table): coefficients of several models
+side by side, with standard errors, statistics and optional stars.
 
-Layout observado no Stata 14 (compat 0504): cada modelo ocupa a largura do
-formato + 3 colunas (+3 com estrelas); o nome do modelo vem centrado à
-esquerda; os fatores aparecem agrupados como na tabela de coeficientes.
+Layout observed in Stata 14 (compat 0504): each model takes the width of the
+format + 3 columns (+3 with stars); the model name is centered to the
+left; factors appear grouped as in the coefficient table.
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ def _optfmt(v, default: str) -> str:
 
 
 def _merge_rows(models) -> list:
-    """União das linhas (CoefRow) dos modelos, na ordem do primeiro em que
-    cada coeficiente aparece; cabeçalhos e brancos vêm junto."""
+    """Union of the rows (CoefRow) of the models, in the order of the first one in which
+    each coefficient appears; headers and blanks come along."""
     rows = []
     seen = set()
     for _, est, _ in models:
@@ -46,7 +46,7 @@ def _merge_rows(models) -> list:
         for r in est.rows:
             if r.kind in ("coef", "omitted", "base"):
                 if r.name in seen:
-                    # já existe: os novos que vieram antes entram antes dele
+                    # already exists: the new ones that came before it go before it
                     if pending:
                         pos = next(i for i, x in enumerate(rows) if x.name == r.name)
                         start = pos
@@ -61,10 +61,10 @@ def _merge_rows(models) -> list:
             elif r.kind in ("header", "blank"):
                 pending.append(r)
         if pending:
-            # novos no fim: antes de _cons, se houver
+            # new ones at the end: before _cons, if present
             pos = next((i for i, x in enumerate(rows) if x.name == "_cons"), len(rows))
             rows[pos:pos] = pending
-    # limpa brancos repetidos e cabeçalhos sem linhas
+    # removes repeated blanks and headers without rows
     out = []
     for r in rows:
         if r.kind == "blank" and (not out or out[-1].kind == "blank"):
@@ -100,7 +100,7 @@ def estimates_table(s: "Session", args: str) -> None:
             models.append((label, est, dict(s.e)))
     finally:
         _restore(s, saved)
-    bfmt = _optfmt(o.get("b"), "%10.0g")     # VERIFICAR: padrão observado com 8 algarismos
+    bfmt = _optfmt(o.get("b"), "%10.0g")     # VERIFY: default observed with 8 digits
     sefmt = _optfmt(o.get("se"), bfmt)
     tfmt = _optfmt(o.get("t"), bfmt)
     pfmt = _optfmt(o.get("p"), bfmt)
@@ -185,7 +185,7 @@ def estimates_table(s: "Session", args: str) -> None:
 
 
 def _stat_text(v, fmt: str) -> str:
-    """Estatísticas inteiras (N) saem sem casas decimais (compat 0504)."""
+    """Integer statistics (N) come out without decimals (compat 0504)."""
     if isinstance(v, float) and abs(v) < SYS and v == int(v):
         return f"{int(v)}"
     return _fmt(v, fmt)

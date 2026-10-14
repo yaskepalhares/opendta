@@ -1,6 +1,6 @@
 """use, save, saveold, notes, char.
 
-Mensagens seguem o Stata 14; as marcadas VERIFICAR têm casos em
+Messages follow Stata 14; those marked VERIFY have cases in
 compat/do/0104_arquivos.do.
 """
 
@@ -36,7 +36,7 @@ def dta_path(text: str) -> Path:
 
 
 def _shown(p: Path) -> str:
-    """Nome do arquivo como o Stata mostra nas mensagens (o que foi digitado)."""
+    """File name as Stata shows it in messages (what was typed)."""
     return str(p)
 
 
@@ -66,7 +66,7 @@ def cmd_use(s: "Session", args: str) -> None:
             v.value_label = ""
     keep = unique(expand(new, want_vars)) if want_vars else None
     if keep is not None:
-        # o if só enxerga as variáveis lidas (observado no Stata 14)
+        # the if only sees the variables read (observed in Stata 14)
         new.drop_vars([n for n in new.names if n not in set(keep)])
     s.data = new
     if new.label:
@@ -77,7 +77,7 @@ def cmd_use(s: "Session", args: str) -> None:
             mask = touse(s, Parsed(if_=if_, in_=in_))
             new.keep_obs(mask)
         except StataError:
-            # o Stata já trocou os dados: um erro no if deixa a memória vazia
+            # Stata has already replaced the data: an error in the if leaves memory empty
             from ..core.dataset import Dataset
             s.data = Dataset()
             s.notify_state()
@@ -102,7 +102,7 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
         shown = _shown(path)
     elif ds.fullpath or ds.filename:
         path = Path(ds.fullpath or ds.filename)
-        shown = ds.filename or _shown(path)   # VERIFICAR: nome exibido em `save, replace`
+        shown = ds.filename or _shown(path)   # VERIFY: name shown by `save, replace`
     else:
         raise StataError(198, "invalid file specification")
     if ds.nvars == 0 and not opts.get("emptyok"):
@@ -112,7 +112,7 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
         raise StataError(602, f"file {shown} already exists")
     if opts.get("version"):
         v = int(str(opts["version"]))
-        # o Stata 14 grava version(11) no formato do Stata 12 (115), que o 11 lê
+        # Stata 14 writes version(11) in Stata 12 format (115), which Stata 11 reads
         release = {11: 115, 12: 115, 13: 117, 14: 118}.get(v, 0)
         if not release:
             raise StataError(198, f"version({opts['version']}) invalid\n    Stata 14 can write .dta "
@@ -132,7 +132,7 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
             from ..io.dta import _old_vars
             _, cut = _old_vars(ds)
             for name in cut:
-                # VERIFICAR: aviso de strings cortadas em 244 caracteres
+                # VERIFY: warning about strings cut at 244 characters
                 s.output.write(f"(note: variable {name} truncated to str244)\n", "text")
     try:
         ds.timestamp = write_dta(ds, path, release=release)
@@ -153,12 +153,12 @@ def cmd_save(s: "Session", args: str) -> None:
 
 @command("saveold")
 def cmd_saveold(s: "Session", args: str) -> None:
-    # saveold do Stata 14 grava para o Stata 13 (formato 117) por padrão
+    # Stata 14's saveold writes for Stata 13 (format 117) by default
     _save(s, args, 117, {"version": 1}, old_note=True)
 
 
 # ---------------------------------------------------------------------------
-# notes (guardadas como características: note0 = quantidade, note1.. = textos)
+# notes (stored as characteristics: note0 = count, note1.. = texts)
 # ---------------------------------------------------------------------------
 
 def _notes_of(s: "Session", owner: str) -> list[str]:
@@ -171,9 +171,9 @@ def _notes_of(s: "Session", owner: str) -> list[str]:
 
 
 def _touch_char(chars: dict, key: str, value: str) -> None:
-    """Grava uma característica. O Stata lista as características da mais
-    recente para a mais antiga, e alterar uma existente a torna a mais
-    recente (observado em compat/expected/0104_arquivos.log)."""
+    """Stores a characteristic. Stata lists characteristics from the most
+    recent to the oldest, and changing an existing one makes it the most
+    recent (observed in compat/expected/0104_arquivos.log)."""
     chars.pop(key, None)
     chars[key] = value
 
@@ -192,7 +192,7 @@ def _set_notes(s: "Session", owner: str, notes: list[str]) -> None:
 
 
 def _add_note(s: "Session", owner: str, text: str) -> None:
-    """Nova nota: primeiro atualiza note0 (a contagem), depois cria note#."""
+    """New note: first updates note0 (the count), then creates note#."""
     chars = s.data.chars.setdefault(owner, {})
     n = len(_notes_of(s, owner)) + 1
     _touch_char(chars, "note0", str(n))
@@ -229,7 +229,7 @@ def cmd_notes(s: "Session", args: str) -> None:
     owners = ["_dta"] + ds.names if not words or words == ["_all"] else [
         "_dta" if w == "_dta" else resolve_name(ds, w) for w in words]
     out = s.output
-    # VERIFICAR: layout da listagem de notes
+    # VERIFY: layout of the notes listing
     for o in owners:
         notes = _notes_of(s, o)
         if not notes:
@@ -280,7 +280,7 @@ def cmd_char(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# browse / edit (abrem o Data Browser na interface gráfica)
+# browse / edit (open the Data Browser in the graphical interface)
 # ---------------------------------------------------------------------------
 
 def _browse(s: "Session", args: str, *, edit: bool = False) -> None:
@@ -293,7 +293,7 @@ def _browse(s: "Session", args: str, *, edit: bool = False) -> None:
         rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     hook = s.ui_hooks.get("browse")
     if hook is not None:
-        # sem interface (modo batch) o Stata também não mostra nada
+        # without the interface (batch mode) Stata also shows nothing
         hook(names, rows, edit=edit, nolabel=bool(o.get("nolabel")))
 
 
@@ -308,7 +308,7 @@ def cmd_edit(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# type (mostra um arquivo de texto)
+# type (shows a text file)
 # ---------------------------------------------------------------------------
 
 @command("type", "ty")
@@ -335,8 +335,8 @@ def cmd_type(s: "Session", args: str) -> None:
     out = []
     for ln in lines:
         if not o.get("starbang") and ln.startswith("*!"):
-            continue   # VERIFICAR: linhas *! só aparecem com starbang
-        # VERIFICAR: tabulações expandidas a cada 8 colunas; showtabs mostra <T>
+            continue   # VERIFY: *! lines only appear with starbang
+        # VERIFY: tabs expanded every 8 columns; showtabs shows <T>
         ln = ln.replace("\t", "<T>") if o.get("showtabs") else ln.expandtabs(8)
         out.append(ln)
     s.output.write("".join(x + "\n" for x in out), "text")

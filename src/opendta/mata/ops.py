@@ -1,7 +1,7 @@
-"""Operadores do Mata ([M-2] op_arith, op_colon, op_join, op_range...).
+"""Mata operators ([M-2] op_arith, op_colon, op_join, op_range...).
 
-Aritmética com missing: qualquer operando missing dá "."; resultados não
-finitos (divisão por zero, overflow) também viram ".".
+Arithmetic with missing values: any missing operand gives "."; non-finite
+results (division by zero, overflow) also become ".".
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _c_conformable(a: MV, b: MV) -> None:
 
 
 def _plain_conformable(a: MV, b: MV) -> None:
-    """+ e - exigem o mesmo tamanho (A + 10 é erro; use :+). Observado no Stata 14."""
+    """+ and - require the same size (A + 10 is an error; use :+). Observed in Stata 14."""
     if a.a.shape != b.a.shape:
         raise conformability()
 

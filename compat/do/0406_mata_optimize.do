@@ -1,4 +1,4 @@
-* Fase 4: optimize() do Mata (registro de iterações e resultados).
+* Phase 4: Mata's optimize() (iteration log and results).
 mata
 void q(todo, p, v, g, H)
 {

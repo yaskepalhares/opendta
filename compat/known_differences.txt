@@ -1,0 +1,16 @@
+# Cases that still differ from Stata 14 for a known reason. compare.py marks
+# them with "~~" and does not fail because of them. Remove the line when the
+# case matches again (for example, after producing the reference again in Stata).
+# format: case-name  reason
+0302_tabulate         tabulate, exact on a 2x3 table: OpenDTA does not print the progress of the network algorithm
+0307_aleatorios       rnormal(), runiformint() and rpoisson() do not reproduce Stata yet (runiform, rbinomial, rchi2(2) and rexponential already do)
+0309_aleatorios_2     same reason as 0307 (rnormal uses three uniforms per draw, an undocumented algorithm)
+0406_mata_optimize    with a d0 evaluator, the gradient at the optimum and the last digits of V are noise from the numerical derivatives (~1e-12 and ~1e-8); Stata's step search is not documented in detail. Iteration log, parameters, value and the d1 case match
+0507_poisson          with exposure(t), the upper CI limit of _cons differs in the 7th digit (.102692 vs .1026919): Stata reports a point not yet fully converged; coefficients, log and other lines match
+0512_nbreg            Stata's starting values are undocumented: iteration 0 of the Poisson comes out -245.3105 (Stata -245.31049) and iterations 0 and 1 of the full model differ; the final point differs in the 8th digit of alpha (robust /lnalpha CI in the 7th). Coefficients, standard errors, tests and e() match
+0513_tobit            Stata 14's tobit takes the standard errors from a numerical Hessian (~1e-5 relative difference) and stops before full convergence (ll in the 10th digit); coefficients, header and e() match
+0801_testes           swilk with tied values (Stata uses coefficients with average ranks, an undocumented rule; without ties it matches) and the kwallis chi2 in the 7th digit (undocumented internal formula; the adjusted chi2, df and displayed p match)
+0802_anova_estat      the estat hettest chi2 is close to zero (9e-5) and Stata computes it with numerical cancellation: it differs from the 11th digit on
+0803_codebook_bootstrap  the bootstrap replicates use OpenDTA's resampling (the draw order of Stata's bsample is undocumented): standard errors and intervals differ; layout, observed estimates, codebook and misstable match
+0602_svy_ampliado     in svy: nbreg alpha goes to the boundary (ln alpha ≈ -37) and the displayed /lnalpha depends on the optimizer's path (coefficients and standard errors match, as in the Poisson); two numbers differ in the 7th digit (/cut2 of svy: ologit and _cons of svy: glm), noise from the convergence criterion
+0804_comandos         the qreg iteration log is not reproduced (Stata's internal algorithm is undocumented; coefficients, standard errors and e() match); xtpoisson, re and xtlogit, re take their standard errors from numerical derivatives and differ in the 7th digit (iteration 1 of xtpoisson, in the 8th); lowess differs by 1 float ulp at two extremes; the hausman chi2 differs in the 11th digit

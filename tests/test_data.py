@@ -35,7 +35,7 @@ def test_parse_in():
         parse_in("5/20", 10)
 
 
-# -- tipos e precisão ---------------------------------------------------------------
+# -- types and precision ---------------------------------------------------------------
 
 def test_float_precision(run):
     make(run)
@@ -174,7 +174,7 @@ def test_list_table(run):
     run("clear\ninput x str3 nome\n1 ana\n22 bia\nend")
     out = run("list")
     lines = out.strip("\n").splitlines()
-    # layout observado no Stata: 3 espaços entre colunas; strings com %9s à direita
+    # layout observed in Stata: 3 spaces between columns; strings with %9s right-aligned
     assert lines[0] == "     +-----------+"
     assert lines[1] == "     |  x   nome |"
     assert lines[3] == "  1. |  1    ana |"

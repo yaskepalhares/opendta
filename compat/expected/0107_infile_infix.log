@@ -4,8 +4,8 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 1c: file write, infile (livre e com dicionário) e infix.
-. * Cria e apaga arquivos temporários na pasta atual.
+. * Phase 1c: file write, infile (free format and with a dictionary) and infix.
+. * Creates and deletes temporary files in the current folder.
 . capture file close _all
 
 . file open h using odta_f.raw, write replace

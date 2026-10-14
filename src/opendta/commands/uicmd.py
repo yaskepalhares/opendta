@@ -1,4 +1,4 @@
-"""Comandos que abrem janelas da interface: doedit."""
+"""Commands that open interface windows: doedit."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 @command("doedit", "doed")
 def cmd_doedit(s: "Session", args: str) -> None:
-    """Abre o Do-file Editor (sem interface, não faz nada, como o Stata em
-    modo console)."""
+    """Opens the Do-file Editor (without the interface it does nothing, as Stata in
+    console mode)."""
     hook = s.ui_hooks.get("doedit")
     if hook is not None:
         hook(strip_outer_quotes(args.strip()))

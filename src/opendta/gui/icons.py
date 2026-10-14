@@ -1,8 +1,8 @@
-"""Ícones próprios do OpenDTA.
+"""OpenDTA's own icons.
 
-Os SVGs em gui/icons/ usam `currentColor`; aqui a cor é trocada pela cor do
-texto do tema atual (claro ou escuro), e o estado desabilitado recebe uma
-versão mais apagada. Assim um único desenho serve aos dois temas.
+The SVGs in gui/icons/ use `currentColor`; here the color is replaced by the
+text color of the current theme (light or dark), and the disabled state gets a
+more faded version. So a single drawing serves both themes.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from PySide6.QtSvg import QSvgRenderer
 ICON_DIR = Path(__file__).with_name("icons")
 APPICON_DIR = Path(__file__).with_name("appicon")
 
-# cores no espírito dos ícones do macOS/iOS
+# colors in the spirit of the macOS/iOS icons
 LIGHT_INK = "#3a3a3c"
 DARK_INK = "#e5e5ea"
 ACCENT_RED = "#ff453a"
@@ -27,7 +27,7 @@ _THEME = {"name": "light"}
 
 
 def set_theme(name: str) -> None:
-    """Tema atual da interface; os ícones seguem esta escolha, não o sistema."""
+    """Current interface theme; the icons follow this choice, not the system."""
     _THEME["name"] = name
     themed_icon.cache_clear()
 
@@ -79,7 +79,7 @@ def icon(name: str, accent: str | None = None) -> QIcon:
 
 
 def app_icon(variant: str = "light") -> QIcon:
-    """Ícone do aplicativo. Padrão: "Tabela" claro; "dark" usa a versão escura."""
+    """Application icon. Default: light "Table"; "dark" uses the dark version."""
     name = "opendta-dark.png" if variant == "dark" else "opendta.png"
     path = APPICON_DIR / name
     return QIcon(str(path)) if path.exists() else QIcon()

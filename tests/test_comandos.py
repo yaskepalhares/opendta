@@ -22,8 +22,8 @@ def _c(run, n):
 
 
 def test_lowess_window_follows_manual(run):
-    """[R] lowess: janela de i-k a i+k, k = floor((N·bwidth - 0.5)/2), cortada
-    nas pontas; com mean e noweight, o valor é a média simples da janela."""
+    """[R] lowess: window from i-k to i+k, k = floor((N·bwidth - 0.5)/2), cut
+    at the ends; with mean and noweight, the value is the plain mean of the window."""
     run(DATA)
     run("lowess y x, bwidth(.3) mean noweight generate(lw) nograph")
     x, y, lw = _c(run, "x"), _c(run, "y"), _c(run, "lw")

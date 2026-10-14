@@ -1,72 +1,66 @@
 # OpenDTA
 
+**English** | [Português](README.pt-BR.md)
+
 **An open-source interpreter for statistical analysis built around do-files and `.dta` data files.**
 
 OpenDTA runs analysis scripts (do-files), reads and writes `.dta` datasets and comes with a desktop interface: Results, Command, Review, Variables and Properties windows, plus a data browser. The goal is a free and transparent tool for reproducible statistical work, from data management to estimation, complex survey analysis and graphics, able to run existing scripts without changes.
 
 It is a personal study project under active development, released under the [MIT License](LICENSE). The full plan is in the [ROADMAP](ROADMAP.md).
 
-## Download
+## Download (macOS)
 
 [![Download for macOS (Apple Silicon)](https://img.shields.io/badge/Download-macOS%20Apple%20Silicon-1f6feb?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg)
 [![Download for macOS (Intel)](https://img.shields.io/badge/Download-macOS%20Intel-57606a?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg)
 
-macOS 12 or later. Apple Silicon = M1, M2, M3, M4…; check  → About This Mac. The app is not notarized by Apple: on first launch, open **System Settings → Privacy & Security** and click **Open Anyway**. All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page. A Windows version is planned.
+Requires macOS 12 or later. Choose **Apple Silicon** for Macs with an M1, M2, M3 or M4 chip and **Intel** for the others (check  → About This Mac). Open the `.dmg` and drag OpenDTA to Applications. The app is not notarized by Apple, so on first launch open **System Settings → Privacy & Security** and click **Open Anyway** (only once). All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page. A Windows version is planned.
 
-*A documentação abaixo está em português.*
+## Current state: phases 5 to 9 (estimation, complex surveys, graphics, interface and language)
 
-## Baixar (macOS)
+What already works:
 
-Use os botões acima: **Apple Silicon** para Macs com chip M1, M2, M3 ou M4, e **Intel** para os demais (veja em  → Sobre Este Mac). Abra o `.dmg` e arraste o OpenDTA para Aplicativos. Como o app não tem a assinatura paga da Apple, na primeira abertura vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim** (só uma vez). A versão para Windows está planejada.
+- do-file reading: `*`, `//` and `/* */` comments (nested), `///` continuation and `#delimit ;`;
+- local and global macros, including nesting (``` ``i'' ```), `` `=exp' ``, `` `++i' ``, `local ++i` and extended functions (`word count`, `word # of`, `display`, `list`, `piece`, `env`);
+- expressions with Stata's operator precedence and missing-value rules (`.`, `.a`–`.z`);
+- 123 function names (counting synonyms such as `trim`/`strtrim`): mathematical, string, logical, distribution, date and random-number functions;
+- `display` with formats (`%9.2f`, `%10.3e`, `%-12s`, `%td`…) and directives (`_col`, `_skip`, `_dup`, `_n`, `_continue`, `as`…);
+- `forvalues`, `foreach`, `while`, `if`/`else if`/`else`, `continue` and `continue, break`;
+- the `quietly`, `noisily` and `capture` prefixes (also on `{ }` blocks);
+- `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` and `error`;
+- errors with Stata's messages and `r(#)` return codes, followed by an OpenDTA explanation of what went wrong in the command and how to fix it (turn it off with `set hints off`, or with Help → Explain Errors);
+- `set numerics precise`: the same estimates with more exact arithmetic (QR in `regress`, `D.`/`S.` differences in double, a final Newton step in `ml` and `optimize()`, numerical derivatives with Richardson extrapolation, new variables in double); the default `set numerics stata` reproduces Stata's rounding;
+- scientific notation with superscript exponents on screen (`1.0000×10¹⁰` instead of `1.00000e+10`); `set superscript off` restores Stata's form, and text that can be read back (`string()`, macros, `file write`, exports) always uses Stata's form;
+- graphical interface with the Results, Command, Review, Variables and Properties windows, menus, a toolbar with OpenDTA's own icons (light/dark) and Preferences (app icon and font);
+- text console and batch mode (`opendta -b do file.do`, which writes `file.log` like `stata -b`);
+- programming: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, extended macro functions, `matrix`, third-party `.ado` files on the adopath, `log`/`cmdlog`, `assert`, `set trace` and `timer`;
+- Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
+- data in memory with Stata's storage types (including `float` precision), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` and subscripts;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` and `recast`;
+- `.dta` files: OpenDTA's own reader for formats 113 to 119 (Stata 8 onward) and writer for formats 114, 115, 117, 118 and 119, with labels, notes and characteristics; older formats are read through ReadStat when the `pyreadstat` package is installed;
+- `use` (with varlist, `if` and `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
+- delimited text: `import delimited`, `export delimited`, `insheet` and `outsheet`;
+- spreadsheets: `import excel` and `export excel`;
+- free-format and fixed-column text: `infile` (including `.dct` dictionaries) and `infix`; `file open/write/read/close`;
+- File > Open/Save/Save as, dropping a `.dta` on the window, Data Editor (`browse` and `edit`, with every edit recorded as a command) and Variables Manager (`varmanage`);
+- descriptive statistics: `summarize`, `tabstat`, `tabulate` (with `chi2`, `exact`, `gamma`, `taub`…), `tab1`, `tab2`, `table`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, with `fweight`, `aweight` and `iweight`;
+- data management: `egen` (group and row functions), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
+- random numbers: 64-bit Mersenne Twister, `set seed` and `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` and other distributions;
+- Mata: `mata ... end` blocks, user functions, structs and pointers, about 150 library functions and the link to the data (`st_data`, `st_store`, `st_local`, `st_matrix`…);
+- estimation: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `xtlogit`, `xtpoisson`, `areg`, `ivregress`, `qreg`, `anova` and `oneway`, with factor variables, time-series operators, weights and robust, cluster and bootstrap standard errors;
+- postestimation: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `lrtest`, `hausman`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
+- complex surveys: `svyset` (several stages, replicate weights), `svydescribe`, `estat effects` and the `svy:` prefix with `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` and `tobit` (Taylor linearization, BRR, jackknife, bootstrap and SDR);
+- tests: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` and the immediate commands `cii`, `ttesti`, `prtesti` and `tabi`;
+- describing data: `codebook` and `misstable`; results to Excel with `putexcel`;
+- graphics with OpenDTA's own look: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` and a Graph window with a simple Graph Editor;
+- Do-file Editor with tabs, syntax highlighting and execution of the selection (Ctrl+D) or of the whole file;
+- dialog boxes in the Statistics and Graphics menus, which show the command before running it;
+- interface in English or Portuguese (**Edit → Preferences** or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
 
-## Estado atual: fases 5 a 9 (estimação, amostras complexas, gráficos, interface e idioma)
+The output of case `0603` (survey replicates) still awaits checking against the Stata log; all other cases in `compat/do` have been checked.
 
-Já funciona:
+## Installing from source
 
-- leitura de do-files: comentários `*`, `//` e `/* */` (aninhados), continuação `///` e `#delimit ;`;
-- macros locais e globais, incluindo aninhamento (``` ``i'' ```), `` `=exp' ``, `` `++i' ``, `local ++i` e funções estendidas (`word count`, `word # of`, `display`, `list`, `piece`, `env`);
-- expressões com a precedência do Stata e as regras de missing (`.`, `.a`–`.z`);
-- 123 nomes de função (contando sinônimos como `trim`/`strtrim`): matemáticas, de string, lógicas, distribuições, datas e números aleatórios;
-- `display` com formatos (`%9.2f`, `%10.3e`, `%-12s`, `%td`…) e diretivas (`_col`, `_skip`, `_dup`, `_n`, `_continue`, `as`…);
-- `forvalues`, `foreach`, `while`, `if`/`else if`/`else`, `continue` e `continue, break`;
-- os prefixos `quietly`, `noisily` e `capture` (também em blocos `{ }`);
-- `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` e `error`;
-- erros com as mensagens e os códigos `r(#)` do Stata, seguidos de uma explicação do OpenDTA: o que deu errado no comando e como resolver (desligue com `set hints off`, ou pelo menu Help → Explain Errors);
-- `set numerics precise`: as mesmas estimativas com contas mais exatas (QR no `regress`, diferenças `D.`/`S.` em double, passo final de Newton no `ml` e no `optimize()`, derivadas numéricas com extrapolação de Richardson, variáveis novas em double); o padrão `set numerics stata` reproduz os arredondamentos do Stata;
-- notação científica com expoente sobrescrito na exibição (`1.0000×10¹⁰` em vez de `1.00000e+10`); `set superscript off` volta à forma do Stata, e texto que pode ser lido de volta (`string()`, macros, `file write`, exportação) sempre usa a forma do Stata;
-- interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios (claro/escuro) e Preferences (ícone do app e fonte);
-- console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
-- programação: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, funções estendidas de macro, `matrix`, `.ado` de terceiros no adopath, `log`/`cmdlog`, `assert`, `set trace` e `timer`;
-- Viewer com `help` em SMCL (páginas próprias e as de pacotes instalados);
-- dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
-- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
-- arquivos `.dta`: leitura própria dos formatos 113 a 119 (Stata 8 em diante) e gravação nos formatos 114, 115, 117, 118 e 119, com rótulos, notas e características; formatos ainda mais antigos são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
-- `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
-- texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
-- planilhas: `import excel` e `export excel`;
-- texto em formato livre e em colunas fixas: `infile` (inclusive com dicionário `.dct`) e `infix`; `file open/write/read/close`;
-- File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`);
-- estatística descritiva: `summarize`, `tabstat`, `tabulate` (com `chi2`, `exact`, `gamma`, `taub`…), `tab1`, `tab2`, `table`, `ci`, `ttest`, `prtest`, `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, com `fweight`, `aweight` e `iweight`;
-- manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge`, `append`, `joinby`, `cross`, `reshape`, `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
-- números aleatórios: Mersenne Twister de 64 bits, `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições.
-
-- Mata: blocos `mata ... end`, funções do usuário, structs e ponteiros, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
-
-- estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `areg`, `ivregress`, `anova` e `oneway`, com variáveis fatoriais, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
-- pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
-- amostras complexas: `svyset` (vários estágios, pesos replicados), `svydescribe`, `estat effects` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` e `tobit` (linearização de Taylor, BRR, jackknife, bootstrap e SDR);
-- testes: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` e os comandos imediatos `cii`, `ttesti`, `prtesti` e `tabi`;
-- descrição dos dados: `codebook` e `misstable`; resultados para o Excel com `putexcel`;
-- gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` e janela Graph com um Graph Editor simples;
-- Do-file Editor com abas, realce de sintaxe e execução da seleção (Ctrl+D) ou do arquivo;
-- caixas de diálogo nos menus Statistics e Graphics, que mostram o comando antes de rodar;
-- interface em inglês ou português (**Edit → Preferences** ou `set language pt`); as saídas e as mensagens de erro no formato do Stata continuam em inglês, a menos que se peça a tradução (`set messages translated`).
-
-As saídas novas dos casos `0602` (svy ampliado) e `0804` (comandos da fase 8e) ainda aguardam a conferência com os logs do Stata; os demais casos de `compat/do` já foram conferidos.
-
-## Instalação a partir do código
-
-Requer Python 3.11 ou mais recente. No Terminal:
+Requires Python 3.11 or later. In the Terminal:
 
 ```bash
 git clone https://github.com/yaskepalhares/opendta.git
@@ -76,75 +70,75 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-No Linux os comandos são os mesmos. No Windows, o ambiente é ativado com `.venv\Scripts\activate`.
+The commands are the same on Linux. On Windows, activate the environment with `.venv\Scripts\activate`.
 
-### Aplicativo para o macOS
+### macOS application
 
-Para ter o OpenDTA na pasta Aplicativos, com ícone no Dock e "Abrir com" para arquivos `.do` e `.dta`, gere o pacote no Terminal (dentro da pasta `opendta`):
+To have OpenDTA in the Applications folder, with a Dock icon and "Open With" for `.do` and `.dta` files, build the package in the Terminal (inside the `opendta` folder):
 
 ```bash
 tools/build_macos.sh
 ```
 
-O script cria `dist/OpenDTA.app` e `dist/OpenDTA-<versão>.dmg`. Abra o `.dmg` e arraste o OpenDTA para Aplicativos. A assinatura é local (ad hoc): na primeira abertura, o macOS pode pedir confirmação em **Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim**. Em outros sistemas, `pyinstaller packaging/opendta.spec` gera a pasta `dist/OpenDTA` com o executável.
+The script creates `dist/OpenDTA.app` and `dist/OpenDTA-<version>.dmg`. Open the `.dmg` and drag OpenDTA to Applications. The signature is local (ad hoc): on first launch macOS may ask for confirmation in **System Settings → Privacy & Security → Open Anyway**. On other systems, `pyinstaller packaging/opendta.spec` builds the `dist/OpenDTA` folder with the executable.
 
-## Uso
+## Usage
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `opendta` | abre a interface gráfica |
-| `opendta arquivo.do` | abre a interface e executa o do-file |
-| `opendta --console` | console de texto |
-| `opendta -b do arquivo.do` | modo batch: grava `arquivo.log` no diretório atual |
+| `opendta` | opens the graphical interface |
+| `opendta file.do` | opens the interface and runs the do-file |
+| `opendta --console` | text console |
+| `opendta -b do file.do` | batch mode: writes `file.log` in the current directory |
 
-## Ícone
+## Icon
 
-O ícone do aplicativo ("Tabela") tem versão clara (padrão) e escura, escolhida em **Edit → Preferences**. Os conjuntos completos (Windows `.ico`, macOS `.icns`, Linux, web) estão em `assets/icons/opendta/` e `assets/icons/opendta-dark/`, e as fontes SVG ficam em `assets/icons/icon-work/`.
+The application icon ("Table") has a light (default) and a dark version, chosen in **Edit → Preferences**. The full sets (Windows `.ico`, macOS `.icns`, Linux, web) are in `assets/icons/opendta/` and `assets/icons/opendta-dark/`, and the SVG sources are in `assets/icons/icon-work/`.
 
-## Testes
+## Tests
 
-Os testes automáticos rodam com `pytest`. A comparação com os logs de referência do Stata 14 roda com `python tools/compare.py`. O passo a passo completo no macOS está em [docs/como-testar.md](docs/como-testar.md).
+The automated tests run with `pytest`. The comparison with the Stata 14 reference logs runs with `python tools/compare.py`. The complete step-by-step guide for macOS is in [docs/testing.md](docs/testing.md).
 
-## Organização do código
+## Code layout
 
 ```
 src/opendta/
-  core/       missing values, formatos de exibição, erros r(#), saída
-  lang/       lexer de do-files, macros, expressões, funções, interpretador
-  commands/   comandos (um módulo por grupo)
-  io/         leitura e gravação de .dta, texto e planilhas
-  estimation/ modelos, pós-estimação, svy e bootstrap
-  graphics/   gráficos (matplotlib, esquemas próprios)
-  mata/       a linguagem Mata
-  gui/        interface gráfica (PySide6), diálogos e Graph Editor
-  help/       páginas de ajuda (.sthlp)
-  i18n.py     idioma da interface (inglês ou português)
-  session.py  estado de uma sessão (macros, scalars, r(), e(), c())
-  cli.py      linha de comando: interface, console e batch
+  core/       missing values, display formats, r(#) errors, output
+  lang/       do-file lexer, macros, expressions, functions, interpreter
+  commands/   commands (one module per group)
+  io/         reading and writing .dta, text and spreadsheets
+  estimation/ models, postestimation, svy and bootstrap
+  graphics/   graphics (matplotlib, OpenDTA's own schemes)
+  mata/       the Mata language
+  gui/        graphical interface (PySide6), dialogs and Graph Editor
+  help/       help pages (.sthlp)
+  i18n.py     interface language (English or Portuguese)
+  session.py  state of a session (macros, scalars, r(), e(), c())
+  cli.py      command line: interface, console and batch
 compat/
-  do/         do-files de verificação
-  expected/   logs de referência gerados no Stata 14
-packaging/    especificação do PyInstaller (aplicativo empacotado)
+  do/         verification do-files
+  expected/   reference logs produced by Stata 14
+packaging/    PyInstaller spec (packaged application)
 tools/
-  compare.py      roda compat/do no OpenDTA e compara com compat/expected
-  build_macos.sh  gera OpenDTA.app e o .dmg
+  compare.py      runs compat/do in OpenDTA and compares with compat/expected
+  build_macos.sh  builds OpenDTA.app and the .dmg
 ```
 
-## Licença
+## License
 
-O OpenDTA é distribuído sob a [licença MIT](LICENSE): pode ser usado, copiado, modificado e redistribuído livremente, desde que o aviso de copyright e a licença acompanhem as cópias. O aplicativo empacotado inclui componentes de terceiros com licenças próprias (Qt/PySide6 sob LGPL-3.0, NumPy, SciPy, Matplotlib e outros), listados em [packaging/THIRD_PARTY_NOTICES.md](packaging/THIRD_PARTY_NOTICES.md).
+OpenDTA is released under the [MIT License](LICENSE): it may be used, copied, modified and redistributed freely, as long as the copyright notice and the license accompany the copies. The packaged application includes third-party components under their own licenses (Qt/PySide6 under LGPL-3.0, NumPy, SciPy, Matplotlib and others), listed in [packaging/THIRD_PARTY_NOTICES.md](packaging/THIRD_PARTY_NOTICES.md).
 
-## Publicar uma nova versão
+## Publishing a new version
 
-O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) gera os `.dmg` para Apple Silicon e Intel e cria a Release quando uma tag `v*` é enviada:
+The workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the `.dmg` files for Apple Silicon and Intel and creates the Release when a `v*` tag is pushed:
 
 ```bash
 git tag v0.1.1
 git push origin v0.1.1
 ```
 
-Os botões de download apontam sempre para a Release mais recente. Lembre de atualizar a versão em `src/opendta/__init__.py` e `pyproject.toml` antes da tag.
+The download buttons always point to the latest Release. Remember to update the version in `src/opendta/__init__.py` and `pyproject.toml` before tagging.
 
-## Aviso
+## Notice
 
-Stata é marca registrada da StataCorp LLC. O OpenDTA não tem relação com a StataCorp e não usa código dela; a compatibilidade com do-files do Stata 14 é construída só a partir de documentação pública e observação de comportamento. Veja a [política de desenvolvimento](docs/politica-clean-room.md).
+Stata is a registered trademark of StataCorp LLC. OpenDTA has no relationship with StataCorp and uses none of its code; compatibility with Stata 14 do-files is built only from public documentation and observation of behavior. See the [development policy](docs/clean-room-policy.md).

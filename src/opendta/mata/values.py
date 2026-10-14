@@ -1,9 +1,9 @@
-"""Valores do Mata.
+"""Mata values.
 
-Toda matriz é um MV: um vetor numpy de duas dimensões e o tipo dos
-elementos (eltype): real (float64, com os missing do Stata), complex,
-string (objetos str), pointer (Pointer ou None) e struct (StructVal).
-Um escalar é uma matriz 1×1.
+Every matrix is an MV: a two-dimensional numpy array and the element
+type (eltype): real (float64, with Stata's missing values), complex,
+string (str objects), pointer (Pointer or None) and struct (StructVal).
+A scalar is a 1×1 matrix.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ SYS = M.SYSMISS
 
 
 class MataError(Exception):
-    """Erro de execução do Mata: código (3200, 3499...) e mensagem."""
+    """Mata run-time error: code (3200, 3499...) and message."""
 
     def __init__(self, code: int, message: str):
         super().__init__(message)
         self.code = code
         self.message = message
-        self.where: list[str] = []      # pilha de funções (para a mensagem)
+        self.where: list[str] = []      # function stack (for the message)
 
 
 def conformability() -> MataError:
@@ -34,8 +34,8 @@ def type_mismatch(msg: str = "type mismatch") -> MataError:
 
 
 class Pointer:
-    """Ponteiro para uma variável (frame, nome), um elemento de struct ou uma
-    função (&f())."""
+    """Pointer to a variable (frame, name), a struct element or a
+    function (&f())."""
 
     def __init__(self, getter, setter=None, label: str = ""):
         self.get = getter
@@ -56,7 +56,7 @@ class MV:
     __slots__ = ("a", "t", "view")
 
     def __init__(self, a, t: str = "real"):
-        self.view = None        # st_view: (nomes das variáveis, linhas) para gravar de volta
+        self.view = None        # st_view: (variable names, rows) to write back
         arr = np.asarray(a, dtype=object if t in ("string", "pointer", "struct") else
                          (np.complex128 if t == "complex" else np.float64))
         if arr.ndim == 0:
@@ -66,7 +66,7 @@ class MV:
         self.a = arr
         self.t = t
 
-    # tamanho e organização ----------------------------------------------
+    # size and organization ----------------------------------------------
     @property
     def rows(self) -> int:
         return int(self.a.shape[0])
@@ -95,7 +95,7 @@ class MV:
     def __repr__(self) -> str:
         return f"MV({self.t}, {self.a.tolist()})"
 
-    # conversões -------------------------------------------------------------
+    # conversions -------------------------------------------------------------
     def scalar(self):
         if not self.is_scalar:
             raise MataError(3204, f"{self.orgtype()} found where scalar required")
@@ -162,8 +162,8 @@ def clean(a: np.ndarray) -> np.ndarray:
 
 
 def truth(v: MV) -> bool:
-    """Condição de if/while: escalar real; diferente de zero é verdadeiro
-    (missing também é verdadeiro, como no Stata)."""
+    """if/while condition: a real scalar; nonzero is true
+    (missing is also true, as in Stata)."""
     if v.t != "real":
         raise MataError(3253, "nonreal found where real required")
     return v.scalar() != 0

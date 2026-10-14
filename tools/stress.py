@@ -1,20 +1,20 @@
-"""Teste de estresse de arquivos: até onde o OpenDTA aguenta.
+"""File stress test: how far OpenDTA can go.
 
-Gera bases sintéticas de tamanho crescente e mede, em cada degrau, tempo,
-pico de memória (RSS) e tamanho do arquivo para `save` e `use` (.dta) e para
-`export delimited` / `import delimited` (CSV). Cada medição roda num
-subprocesso separado, vigiado por um teto de memória: se passar do teto, o
-subprocesso é encerrado e a série para ali. Os arquivos ficam numa pasta
-temporária apagada no fim.
+Generates synthetic datasets of increasing size and measures, at each step, time,
+peak memory (RSS) and file size for `save` and `use` (.dta) and for
+`export delimited` / `import delimited` (CSV). Each measurement runs in a
+separate subprocess, watched by a memory cap: if it goes over the cap, the
+subprocess is killed and the series stops there. The files live in a
+temporary folder deleted at the end.
 
-Uso:
-    python tools/stress.py --teto-gb 5 --saida resultados.json
-    python tools/stress.py --rapido
+Usage:
+    python tools/stress.py --cap-gb 5 --output results.json
+    python tools/stress.py --quick
 
-Perfis de base:
-    pesquisa  100 variáveis por bloco: 60 byte, 15 int, 5 long, 12 float,
-              4 double e 4 str16 (parecido com uma base de inquérito)
-    numerica  o mesmo sem as strings
+Dataset profiles:
+    survey    100 variables per block: 60 byte, 15 int, 5 long, 12 float,
+              4 double and 4 str16 (similar to a survey dataset)
+    numeric   the same without the strings
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ WORDS = ["Belo Horizonte", "Contagem", "Betim", "Sabará", "Nova Lima", "Ibirit�
 
 
 # ---------------------------------------------------------------------------
-# geração (no subprocesso)
+# generation (in the subprocess)
 # ---------------------------------------------------------------------------
 
 def build(nobs: int, nvars: int, profile: str, seed: int = 1):
@@ -51,11 +51,11 @@ def build(nobs: int, nvars: int, profile: str, seed: int = 1):
     rng = np.random.default_rng(seed)
     ds = Dataset()
     ds.nobs = nobs
-    spec = [(t, n) for t, n in PROFILE if not (profile == "numerica" and t.startswith("str"))]
+    spec = [(t, n) for t, n in PROFILE if not (profile == "numeric" and t.startswith("str"))]
     total = sum(n for _, n in spec)
     counts = [int(nvars * n / total) for _, n in spec]
-    counts[0] += nvars - sum(counts)              # o resto vai para byte
-    # intercala os tipos, como numa base real
+    counts[0] += nvars - sum(counts)              # the rest goes to byte
+    # interleaves the types, as in a real dataset
     order = []
     left = counts[:]
     while len(order) < nvars:
@@ -82,7 +82,7 @@ def build(nobs: int, nvars: int, profile: str, seed: int = 1):
             data[0] = M.EXTENDED["a"]
         ds.vars.append(Variable(name, vtype, data))
     ds.label = f"estresse {nobs}x{nvars}"
-    ds.vars[0].label = "primeira variável"
+    ds.vars[0].label = "first variable"
     ds.value_labels = {"sim": {1: "Sim", 2: "Não"}}
     ds.vars[0].value_label = "sim"
     return ds
@@ -110,7 +110,7 @@ def peak_mb() -> float:
 
 
 def child(args) -> dict:
-    """Uma medição. Imprime um JSON na última linha."""
+    """One measurement. Prints a JSON on the last line."""
     out: dict = {}
     path = Path(args.path)
     if args.phase == "save":
@@ -159,7 +159,7 @@ def child(args) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# orquestração (no processo principal)
+# orchestration (in the main process)
 # ---------------------------------------------------------------------------
 
 def run_step(phase: str, path: Path, nobs: int, nvars: int, profile: str,
@@ -180,11 +180,11 @@ def run_step(phase: str, path: Path, nobs: int, nvars: int, profile: str,
             break
         watched_peak = max(watched_peak, rss)
         if rss > ceiling_mb:
-            reason = f"passou do teto de {ceiling_mb:.0f} MB"
+            reason = f"went over the cap of {ceiling_mb:.0f} MB"
             proc.kill()
             break
         if time.perf_counter() - t0 > timeout:
-            reason = f"passou de {timeout:.0f} s"
+            reason = f"took more than {timeout:.0f} s"
             proc.kill()
             break
         time.sleep(0.02)
@@ -193,7 +193,7 @@ def run_step(phase: str, path: Path, nobs: int, nvars: int, profile: str,
         return {"phase": phase, "fail": reason, "watched_peak_mb": watched_peak}
     if proc.returncode != 0:
         last = (stderr.strip().splitlines() or ["?"])[-1]
-        return {"phase": phase, "fail": f"erro: {last}", "watched_peak_mb": watched_peak}
+        return {"phase": phase, "fail": f"error: {last}", "watched_peak_mb": watched_peak}
     res = json.loads(stdout.strip().splitlines()[-1])
     res["phase"] = phase
     res["wall_secs"] = time.perf_counter() - t0
@@ -203,7 +203,7 @@ def run_step(phase: str, path: Path, nobs: int, nvars: int, profile: str,
 def series(name, steps, profile, phases, tmp, ceiling_mb, timeout, log):
     results = []
     for nobs, nvars in steps:
-        row = {"serie": name, "nobs": nobs, "nvars": nvars, "profile": profile}
+        row = {"series": name, "nobs": nobs, "nvars": nvars, "profile": profile}
         ext = ".csv" if "export" in phases else ".dta"
         path = tmp / f"s_{nobs}_{nvars}{ext}"
         stop = False
@@ -230,20 +230,20 @@ def main() -> None:
     ap.add_argument("--path")
     ap.add_argument("--nobs", type=int, default=0)
     ap.add_argument("--nvars", type=int, default=0)
-    ap.add_argument("--profile", default="pesquisa")
-    ap.add_argument("--teto-gb", type=float, default=5.0)
+    ap.add_argument("--profile", default="survey")
+    ap.add_argument("--cap-gb", type=float, default=5.0)
     ap.add_argument("--timeout", type=float, default=900)
-    ap.add_argument("--rapido", action="store_true")
-    ap.add_argument("--series", default="longa,numerica,larga,csv")
-    ap.add_argument("--saida", default="")
+    ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--series", default="long,numeric,wide,csv")
+    ap.add_argument("--output", default="")
     args = ap.parse_args()
     if args.child:
         args.phase = args.child
         child(args)
         return
 
-    ceiling = args.teto_gb * 1024
-    if args.rapido:
+    ceiling = args.cap_gb * 1024
+    if args.quick:
         long_steps = [(10_000, 100), (100_000, 100)]
         wide_steps = [(1_000, 1_000)]
         csv_steps = [(10_000, 100)]
@@ -257,36 +257,36 @@ def main() -> None:
     all_rows = []
 
     def log(row):
-        parts = [f"{row['serie']:<9} {row['nobs']:>10,} obs x {row['nvars']:>6,} vars"]
+        parts = [f"{row['series']:<9} {row['nobs']:>10,} obs x {row['nvars']:>6,} vars"]
         for ph in ("save", "use", "readstat", "export", "import"):
             r = row.get(ph)
             if not r:
                 continue
             if "fail" in r:
-                parts.append(f"{ph}: FALHOU ({r['fail']})")
+                parts.append(f"{ph}: FAILED ({r['fail']})")
             else:
                 extra = f" {r['file_mb']:.0f}MB" if "file_mb" in r else ""
-                parts.append(f"{ph} {r['secs']:.1f}s pico {r['peak_mb']:.0f}MB{extra}")
+                parts.append(f"{ph} {r['secs']:.1f}s peak {r['peak_mb']:.0f}MB{extra}")
         if "roundtrip_ok" in row:
-            parts.append("idêntico" if row["roundtrip_ok"] else "DIFERENTE")
+            parts.append("identical" if row["roundtrip_ok"] else "DIFFERENT")
         print(" | ".join(parts), flush=True)
         all_rows.append(row)
 
     with tempfile.TemporaryDirectory(prefix="opendta-stress-") as td:
         tmp = Path(td)
         wanted = args.series.split(",")
-        if "longa" in wanted:
-            series("longa", long_steps, "pesquisa", ["save", "use"], tmp, ceiling, args.timeout, log)
-        if "numerica" in wanted:
-            series("numerica", long_steps, "numerica", ["save", "use"], tmp, ceiling, args.timeout, log)
-        if "larga" in wanted:
-            series("larga", wide_steps, "pesquisa", ["save", "use", "readstat"], tmp, ceiling,
+        if "long" in wanted:
+            series("long", long_steps, "survey", ["save", "use"], tmp, ceiling, args.timeout, log)
+        if "numeric" in wanted:
+            series("numeric", long_steps, "numeric", ["save", "use"], tmp, ceiling, args.timeout, log)
+        if "wide" in wanted:
+            series("wide", wide_steps, "survey", ["save", "use", "readstat"], tmp, ceiling,
                    args.timeout, log)
         if "csv" in wanted:
-            series("csv", csv_steps, "pesquisa", ["export", "import"], tmp, ceiling, args.timeout, log)
+            series("csv", csv_steps, "survey", ["export", "import"], tmp, ceiling, args.timeout, log)
 
-    if args.saida:
-        Path(args.saida).write_text(json.dumps(all_rows, indent=1, ensure_ascii=False))
+    if args.output:
+        Path(args.output).write_text(json.dumps(all_rows, indent=1, ensure_ascii=False))
 
 
 if __name__ == "__main__":

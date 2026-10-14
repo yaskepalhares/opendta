@@ -27,7 +27,7 @@ def test_rclass(run):
     assert run.session.r["m"] == 3.5 and run.session.r["txt"] == "de 3 e 4"
     assert run("display \"`r(txt)'\" r(m)") == "de 3 e 43.5\n"
     run("program falha, rclass\n return scalar m = 99\n error 459\nend\ncapture falha")
-    assert run.session.r["m"] == 3.5                  # erro: r() não muda
+    assert run.session.r["m"] == 3.5                  # error: r() does not change
     run("return scalar z = 1")
     assert run.rc == 151
 
@@ -74,7 +74,7 @@ def test_syntax_varlist_if_in_options(run):
         " display \"[`varlist'][`if'][`in'][`detail'][`by'][`level'][`log'][`title'][`options']\"\nend")
     out = run('p idade ren if idade > 10 in 1/4, d by(uf) l(90) nolog title("Um título") xyz(3)')
     assert out == '[idade renda][if idade > 10][in 1/4][detail][uf][90][nolog][Um título][xyz(3)]\n'
-    assert run("p") == "[idade renda uf][][][][][95][][][]\n"        # varlist padrão: todas
+    assert run("p") == "[idade renda uf][][][][][95][][][]\n"        # default varlist: all
     run("program pn\n syntax varlist(numeric)\nend")
     run("pn uf")
     assert run.rc == 109
@@ -90,7 +90,7 @@ def test_syntax_required_and_errors(run):
         " display \"`varlist'|`using'|`weight'|`exp'|`gen'\"\nend")
     assert run("q idade = 2*3 using \"a b.dta\", gen(z)") == "idade|a b.dta||2*3|z\n"
     run("q idade = 1")
-    assert run.rc == 198                                     # gen() obrigatória
+    assert run.rc == 198                                     # gen() required
     run("q idade renda = 1, gen(z)")
     assert run.rc == 103
     run("program r\n syntax [anything] [, opt]\n display `\"`anything'\"'\nend")
@@ -125,10 +125,10 @@ def test_marksample(run):
     run("program m\n syntax varlist [if] [in]\n marksample touse\n"
         " count if `touse'\n markout `touse' idade\n count if `touse'\nend")
     assert run("m renda if idade < 50") == "  3\n  3\n"
-    assert not any(n.startswith("__") for n in run.session.data.names)   # temporária apagada
+    assert not any(n.startswith("__") for n in run.session.data.names)   # temporary variable deleted
 
 
-# -- temporários e preserve ----------------------------------------------------------------
+# -- temporaries and preserve ----------------------------------------------------------------
 
 def test_tempvar_tempname_tempfile(run, tmp_path):
     _data(run)
@@ -157,7 +157,7 @@ def test_preserve_restore(run):
     _data(run)
     run("preserve\nkeep in 1/2\nrestore, preserve\nkeep in 1\nrestore")
     assert run.session.data.nobs == 5
-    # dentro de programa: restaura sozinho no fim, mesmo com erro
+    # inside a program: restores by itself at the end, even with an error
     run("program pr\n preserve\n drop in 1/3\n error 459\nend")
     run("capture pr")
     assert run.session.data.nobs == 5

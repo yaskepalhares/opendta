@@ -1,4 +1,4 @@
-* Fase 5b: glm (famílias binomial, poisson e gaussian; eform).
+* Phase 5b: glm (binomial, poisson and gaussian families; eform).
 clear
 estimates clear
 ereturn clear

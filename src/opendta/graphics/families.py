@@ -1,8 +1,8 @@
 """histogram, kdensity, graph bar/hbar, graph box/hbox, graph pie,
-graph matrix e graph combine ([R] histogram, [R] kdensity, [G-2] graph ...).
+graph matrix and graph combine ([R] histogram, [R] kdensity, [G-2] graph ...).
 
-Cada função monta um Graph e devolve também as opções de gráfico em texto
-(name(), saving(), nodraw ficam com o comando que chamou)."""
+Each function builds a Graph and also returns the graph options as text
+(name(), saving(), nodraw stay with the calling command)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 def _gfmt(x: float) -> str:
-    """Números da mensagem de histogram: %9.0g sem espaços (VERIFICAR)."""
+    """Numbers in the histogram message: %9.0g without spaces (VERIFY)."""
     from ..core.formats import format_value
     return format_value(float(x), "%9.0g", pad=False).strip()
 
@@ -125,8 +125,8 @@ def histogram(s: "Session", text: str) -> tuple[Graph, dict, str]:
 
 
 def _bins_fixed(x: np.ndarray, w, ho: dict, total: dict) -> dict:
-    """Barras com o início, a largura e o número de barras da amostra toda
-    (com by(), os painéis usam as mesmas barras)."""
+    """Bins with the start, width and number of bins of the whole sample
+    (with by(), the panels use the same bins)."""
     k = total["bins"]
     width = total["width"]
     start = total["start"]
@@ -186,7 +186,7 @@ def kdensity(s: "Session", text: str) -> tuple[Graph | None, dict]:
     gen = lopts.get("generate")
     if isinstance(gen, str):
         _generate(s, gen, kd, at_rows)
-    s.r = {"scale": 1.0, "n": float(kd["n"]), "bwidth": float(kd["bwidth"]), "kernel": kname}   # VERIFICAR
+    s.r = {"scale": 1.0, "n": float(kd["n"]), "bwidth": float(kd["bwidth"]), "kernel": kname}   # VERIFY
     if lopts.get("nograph"):
         return None, graw
     style = {k: (strip_outer_quotes(val) if isinstance(val, str) else val) for k, val in lopts.items()
@@ -209,7 +209,7 @@ def kdensity(s: "Session", text: str) -> tuple[Graph | None, dict]:
 
 
 def _fmt4(x: float) -> str:
-    # VERIFICAR: a nota do Stata usa %9.4f sem espaços
+    # VERIFY: Stata's note uses %9.4f without spaces
     t = f"{x:.4f}"
     return t[1:] if t.startswith("0.") else t
 
@@ -220,25 +220,25 @@ def _generate(s: "Session", spec: str, kd: dict, at_rows) -> None:
     ds = s.data
     if at_rows is not None:
         if len(names) != 1:
-            raise StataError(198, "only one variable may be specified in generate() with at()")   # VERIFICAR
+            raise StataError(198, "only one variable may be specified in generate() with at()")   # VERIFY
         dname = names[0]
         vals = np.full(ds.nobs, M.SYSMISS)
         vals[at_rows] = kd["d"]
         ds.add(Variable(dname, "double", vals, fmt="%10.0g"))
         return
     if len(names) != 2:
-        raise StataError(198, "generate() requires two new variable names")   # VERIFICAR
+        raise StataError(198, "generate() requires two new variable names")   # VERIFY
     for nm in names:
         if ds.has(nm):
             raise StataError(110, f"{nm} already defined")
     n = len(kd["x"])
     if n > ds.nobs:
-        ds.set_obs(n)   # VERIFICAR: o Stata aumenta _N quando n() > _N?
+        ds.set_obs(n)   # VERIFY: does Stata increase _N when n() > _N?
     xs = np.full(ds.nobs, M.SYSMISS)
     ys = np.full(ds.nobs, M.SYSMISS)
     xs[:n] = kd["x"]
     ys[:n] = kd["d"]
-    # double com formato %10.0g (compat 0701: list mostra -1.0146058)
+    # double with format %10.0g (compat 0701: list shows -1.0146058)
     ds.add(Variable(names[0], "double", xs, fmt="%10.0g"))
     ds.add(Variable(names[1], "double", ys, fmt="%10.0g"))
 
@@ -252,7 +252,7 @@ BAR_OPTS = {"over": 4, "asyvars": 4, "stack": 5, "percentages": 7, "blabel": 3, 
 
 
 def _yvars(s: "Session", text: str, default: str = "mean") -> list[tuple[str, str, str]]:
-    """'(mean) a b (sum) c d=e' -> [(stat, var, rótulo)]."""
+    """'(mean) a b (sum) c d=e' -> [(stat, var, label)]."""
     out = []
     stat = default
     t = text.strip()
@@ -267,7 +267,7 @@ def _yvars(s: "Session", text: str, default: str = "mean") -> list[tuple[str, st
             if stat in ("p50",):
                 stat = "median"
             if stat not in D.STATS and not (stat.startswith("p") and stat[1:].isdigit()):
-                raise StataError(198, f"({stat}) invalid statistic")   # VERIFICAR
+                raise StataError(198, f"({stat}) invalid statistic")   # VERIFY
             i = j + 1
             continue
         j = i
@@ -290,8 +290,8 @@ _STAT_TITLE = {"mean": "mean", "median": "median", "sum": "sum", "rawsum": "sum"
 
 
 def _over_list(graw: dict, key: str = "over") -> list[dict]:
-    """Os over() podem se repetir; o parse_options guarda só o último, então
-    reabrimos o texto bruto (graw['_raw'])."""
+    """over() may be repeated; parse_options keeps only the last one, so
+    we reopen the raw text (graw['_raw'])."""
     out = []
     from ..lang.syntax import parse_options
     for n, a in parse_options(graw.get("_raw", "")):
@@ -307,7 +307,7 @@ def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
     graw["_raw"] = p.options
     overs = _over_list(graw)
     if len(overs) > 3:
-        raise StataError(198, "too many over() options")   # VERIFICAR
+        raise StataError(198, "too many over() options")   # VERIFY
     ys = _yvars(s, p.varlist) if p.varlist.strip() else []
     mask = D.base_mask(s, p)
     w, mask = D.weights(s, p, mask, ("fweight", "aweight", "pweight", "iweight"))
@@ -316,7 +316,7 @@ def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
             mask &= D.valid(D.numeric(s, nm))
     overvars = [s.expand_varlist(o["var"])[0] for o in overs]
     if not ys and not overvars:
-        raise StataError(102, "too few variables specified")   # VERIFICAR
+        raise StataError(102, "too few variables specified")   # VERIFY
     opts = graph_options({k: v for k, v in graw.items() if k != "_raw"})
 
     def series_for(m: np.ndarray) -> tuple[list[str], list[dict]]:
@@ -341,7 +341,7 @@ def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
             label = lab or f"{_STAT_TITLE.get(stat, stat)} of {nm}"
             series.append({"label": label, "values": [None if v >= M.SYSMISS else v for v in vals]})
         if lopts.get("asyvars") and overvars and len(series) == 1:
-            # o primeiro over() vira séries (cores e legenda)
+            # the first over() becomes the series (colors and legend)
             vals = series[0]["values"]
             series = [{"label": c, "values": [v]} for c, v in zip(cats, vals)]
             cats = [""]
@@ -452,7 +452,7 @@ def pie(s: "Session", text: str) -> tuple[Graph, dict]:
     if not names and over is None:
         raise StataError(102, "too few variables specified")
     if len(names) > 1 and over is not None:
-        raise StataError(198, "only one variable allowed with over()")   # VERIFICAR
+        raise StataError(198, "only one variable allowed with over()")   # VERIFY
     plabel = None
     for n, a in parse_options(p.options):
         if len(n) >= 3 and "plabel".startswith(n) and a:
@@ -508,7 +508,7 @@ def matrix(s: "Session", text: str) -> tuple[Graph, dict]:
     for nm in names:
         if s.data.get(nm).is_string:
             raise StataError(109, "type mismatch")
-    # VERIFICAR: o Stata usa, em cada par, as obs. sem missing naquele par
+    # VERIFY: Stata uses, for each pair, the obs. without missing in that pair
     for nm in names:
         mask &= D.valid(D.numeric(s, nm))
     for nm in names:
@@ -540,9 +540,9 @@ def combine(s: "Session", text: str) -> tuple[Graph, dict]:
         elif nm.endswith(".gph") or gph_path(nm).exists():
             kids.append(load_gph(gph_path(nm)))
         else:
-            raise StataError(111, f"graph {nm} not found")   # VERIFICAR
+            raise StataError(111, f"graph {nm} not found")   # VERIFY
     if not kids:
-        raise StataError(198, "nothing to combine")   # VERIFICAR
+        raise StataError(198, "nothing to combine")   # VERIFY
     opts = graph_options(graw)
     for k in ("cols", "rows"):
         if isinstance(graw.get(k), str):
@@ -552,7 +552,7 @@ def combine(s: "Session", text: str) -> tuple[Graph, dict]:
 
 
 # ---------------------------------------------------------------------------
-# twoway com builder já montado (usado por tsline etc.)
+# twoway with an already built builder (used by tsline etc.)
 # ---------------------------------------------------------------------------
 
 def twoway_from_builder(s: "Session", b: Builder):

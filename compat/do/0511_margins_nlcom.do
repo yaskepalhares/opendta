@@ -1,4 +1,4 @@
-* Fase 5b: margins e nlcom.
+* Phase 5b: margins and nlcom.
 clear
 estimates clear
 ereturn clear

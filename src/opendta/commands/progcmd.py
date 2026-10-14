@@ -1,8 +1,8 @@
-"""program drop/dir/list e return, ereturn, sreturn ([P] program, [P] return).
+"""program drop/dir/list and return, ereturn, sreturn ([P] program, [P] return).
 
-r() de um programa rclass só muda quando ele termina sem erro: `return`
-grava num acúmulo do escopo, publicado no fim (lang/programs.py). e() muda
-na hora, como no Stata, e s() segue a mesma regra do r() para sclass.
+r() of an rclass program only changes when it ends without an error: `return`
+writes to an accumulator of the scope, published at the end (lang/programs.py).
+e() changes immediately, as in Stata, and s() follows the same rule as r() for sclass.
 """
 
 from __future__ import annotations
@@ -38,12 +38,12 @@ def cmd_program(s: "Session", args: str) -> None:
             return
         for name in rest:
             if name not in s.programs:
-                raise StataError(111, f"program {name} not found")   # VERIFICAR
+                raise StataError(111, f"program {name} not found")   # VERIFY
             del s.programs[name]
         return
     if sub == "dir":
         out = s.output
-        # VERIFICAR: layout de program dir
+        # VERIFY: layout of program dir
         for name, p in s.programs.items():
             size = sum(len(ln.text) + 1 for ln in p.lines)
             out.write(f"  {'ado' if p.source.endswith('.ado') else '   '} {size:>8,}  {name}\n", "text")
@@ -57,7 +57,7 @@ def cmd_program(s: "Session", args: str) -> None:
             p = s.programs.get(name)
             if p is None:
                 raise StataError(111, f"program {name} not found")
-            # VERIFICAR: layout de program list
+            # VERIFY: layout of program list
             out.write(f"\n{name}{', ' + p.kind if p.kind != 'nclass' else ''}:\n", "text")
             for k, ln in enumerate(p.lines, start=1):
                 out.write(f"  {k}.  {ln.text}\n", "text")
@@ -83,7 +83,7 @@ def _pending(s: "Session", kind: str) -> dict:
     sc = current_program_scope(s)
     if sc is None or sc.program is None or sc.program.kind != kind:
         letter = {"rclass": "r", "sclass": "s"}[kind]
-        raise StataError(151, f"non {letter}-class program may not set {letter}()")   # VERIFICAR
+        raise StataError(151, f"non {letter}-class program may not set {letter}()")   # VERIFY
     return sc.pending
 
 
@@ -169,8 +169,8 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
     scalars = {k: v for k, v in store.items() if isinstance(v, float) or isinstance(v, int)}
     macros = {k: v for k, v in store.items() if isinstance(v, str)}
     mats = {k: v for k, v in store.items() if isinstance(v, Matrix)}
-    # o Stata lista do último resultado gravado para o primeiro (observado
-    # em compat/expected/0201_programas.log) e alinha os nomes em 22 colunas
+    # Stata lists from the last stored result to the first (observed in
+    # compat/expected/0201_programas.log) and aligns the names in 22 columns
     scalars = dict(reversed(list(scalars.items())))
     macros = dict(reversed(list(macros.items())))
     mats = dict(reversed(list(mats.items())))
@@ -178,7 +178,7 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
         out.write("\nscalars:\n", "text")
         for k, v in scalars.items():
             out.write(f"{prefix + '(' + k + ')':>22} =  ", "text")
-            # valores com até 16 algarismos (%18.0g), como no Stata 14 (compat 0501, 0504)
+            # values with up to 16 digits (%18.0g), as in Stata 14 (compat 0501, 0504)
             out.write(format_value(float(v), "%18.0g", pad=False).strip() + "\n", "result")
     if macros:
         out.write("\nmacros:\n", "text")
@@ -191,6 +191,6 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
             out.write(f"{prefix + '(' + k + ')':>22} :  ", "text")
             out.write(f"{v.rows} x {v.cols}\n", "result")
     if prefix == "e" and "b" in store and s.data.esample is not None:
-        # VERIFICAR espaços depois de e(sample)
+        # VERIFY spaces after e(sample)
         out.write("\nfunctions:\n", "text")
         out.write(f"{'e(sample)':>22}\n", "text")

@@ -1,4 +1,4 @@
-* Fase 5b: tobit (censura à esquerda e nos dois lados).
+* Phase 5b: tobit (left censoring and censoring on both sides).
 clear
 estimates clear
 ereturn clear

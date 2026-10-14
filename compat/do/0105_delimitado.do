@@ -1,5 +1,5 @@
-* Fase 1b: export delimited, import delimited, insheet, outsheet, type.
-* Cria e apaga arquivos temporários na pasta atual.
+* Phase 1b: export delimited, import delimited, insheet, outsheet, type.
+* Creates and deletes temporary files in the current folder.
 clear
 input str20 nome idade double renda str2 uf
 "Ana" 30 1500.5 "SP"

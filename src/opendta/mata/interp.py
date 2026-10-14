@@ -1,9 +1,9 @@
-"""Execução do Mata: instruções, expressões, funções do usuário e a
-ligação com a sessão (blocos `mata ... end`, `mata: instrução`).
+"""Mata execution: statements, expressions, user functions and the
+link to the session (`mata ... end` blocks, `mata: statement`).
 
-Passagem de argumentos: como no Mata, por referência. Quando o argumento é
-uma variável, o que a função fizer com o parâmetro volta para a variável
-de quem chamou.
+Argument passing: as in Mata, by reference. When the argument is
+a variable, whatever the function does to the parameter goes back to the caller's
+variable.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ class _Return(Exception):
 
 
 class MataLeave(Exception):
-    """exit() sem código: sai do bloco mata em silêncio."""
+    """exit() without a code: leaves the mata block silently."""
 
 
 class Frame:
@@ -47,7 +47,7 @@ class Frame:
         self.name = name
         self.vars: dict[str, MV] = {}
         self.types: dict[str, tuple[str, str]] = {}
-        self.parent = parent           # só para variáveis external (globais)
+        self.parent = parent           # only for external (global) variables
 
     def get(self, name: str) -> MV:
         if name in self.vars:
@@ -59,7 +59,7 @@ class Frame:
 
 
 class Ref:
-    """Argumento passado por referência a uma função da biblioteca."""
+    """Argument passed by reference to a library function."""
 
     def __init__(self, frame: Frame, name: str):
         self.frame = frame
@@ -77,7 +77,7 @@ _DEFAULT_ORG_TYPES = {"real": "real", "complex": "complex", "string": "string", 
 
 
 def _names_used(node, out: set | None = None) -> set:
-    """Nomes citados em qualquer ponto de um trecho da AST (declarações não contam)."""
+    """Names mentioned anywhere in a piece of the AST (declarations do not count)."""
     import dataclasses
     if out is None:
         out = set()
@@ -104,14 +104,14 @@ class MataEngine:
         self.funcs: dict[str, FuncDef] = {}
         self.structs: dict[str, StructDef] = {}
         self.depth = 0
-        self.argc: list[int] = []      # nº de argumentos de cada chamada (args())
-        from . import library  # noqa: F401  (registra as funções)
+        self.argc: list[int] = []      # number of arguments of each call (args())
+        from . import library  # noqa: F401  (registers the functions)
 
     # ------------------------------------------------------------------
-    # Entrada a partir do Stata
+    # Entry from Stata
     # ------------------------------------------------------------------
     def run_statement(self, text: str) -> None:
-        """`mata: instrução` ou `mata instrução` numa linha só."""
+        """`mata: statement` or `mata statement` on a single line."""
         try:
             stmts = Parser(text).parse_program()
         except MataSyntaxError as e:
@@ -120,8 +120,8 @@ class MataEngine:
             self._top(st)
 
     def run_block(self, chunks: list[tuple[str, tuple[str, ...]]], *, echo: bool, stop_on_error: bool) -> None:
-        """Bloco mata ... end. `chunks`: (texto sem comentários, linhas para o
-        eco). Cada instrução é ecoada com ': ' (continuações com '> ')."""
+        """mata ... end block. `chunks`: (text without comments, lines for the
+        echo). Each statement is echoed with ': ' (continuations with '> ')."""
         out = self.s.output
         k = 0
         n = len(chunks)
@@ -138,8 +138,8 @@ class MataEngine:
                 continue
             dup = self._redefinition(text)
             if dup:
-                # o Stata acusa logo depois do cabeçalho; o corpo vira
-                # instruções soltas (observado no Stata 14)
+                # Stata reports it right after the header; the body becomes loose statements
+                # (observed in Stata 14)
                 if echo:
                     self._echo(raw, first=True)
                 self._guard(lambda d=dup: (_ for _ in ()).throw(StataError(3000, f"{d}() already exists")),
@@ -180,7 +180,7 @@ class MataEngine:
     _HEADER = None
 
     def _redefinition(self, text: str) -> str | None:
-        """Nome da função (ou struct) que a linha redefine, se já existe."""
+        """Name of the function (or struct) that the line redefines, if it already exists."""
         import re
         if MataEngine._HEADER is None:
             types = r"(?:real|string|complex|pointer|transmorphic|numeric|void|struct\s+\w+|class\s+\w+)"
@@ -204,7 +204,7 @@ class MataEngine:
             action()
         except StataError as e:
             if stop_on_error:
-                # mata: para no erro e conta as linhas que não rodaram (Stata 14)
+                # mata: stops at the error and counts the lines that did not run (Stata 14)
                 if remaining:
                     e.message = (e.message + "\n" if e.message else "") + \
                         f"({remaining} line{'s' if remaining != 1 else ''} skipped)"
@@ -216,16 +216,16 @@ class MataEngine:
             out.write("\n", "text")
 
     # ------------------------------------------------------------------
-    # Instruções de nível superior
+    # Top-level statements
     # ------------------------------------------------------------------
     def _top(self, st) -> None:
         try:
             if isinstance(st, FuncDef):
                 if st.name in self.funcs:
-                    raise MataError(3000, f"{st.name}() already exists")   # VERIFICAR
+                    raise MataError(3000, f"{st.name}() already exists")   # VERIFY
                 self.funcs[st.name] = st
-                # o compilador avisa os argumentos que o corpo não usa
-                # (observado no Stata 14, compat 0406)
+                # the compiler warns about arguments the body does not use (observed in Stata 14,
+                # compat 0406)
                 used = _names_used(st.body)
                 for prm in st.params:
                     if prm.name not in used:
@@ -285,7 +285,7 @@ class MataEngine:
             self.structs.clear()
             return
         if sub in ("describe", "d", "de", "des", "desc", "descr", "descri", "describ"):
-            # VERIFICAR: layout do mata describe
+            # VERIFY: layout of mata describe
             out.write("\n      # bytes   type                        name and extent\n", "text")
             out.write("-" * 79 + "\n", "text")
             for name in sorted(self.funcs):
@@ -314,17 +314,17 @@ class MataEngine:
                     self.funcs[new[:-2]] = self.funcs.pop(old[:-2])
                 else:
                     self.globals.vars[new] = self.globals.vars.pop(old)
-            return       # aceitos sem efeito (VERIFICAR)
+            return       # accepted without effect (VERIFY)
         self.run_statement(text)
 
     # ------------------------------------------------------------------
-    # Instruções
+    # Statements
     # ------------------------------------------------------------------
     def exec(self, st, fr: Frame) -> None:
         if isinstance(st, ExprStmt):
             v = self.eval(st.expr, fr)
-            # no nível de cima (fora de funções), expressões mostram o valor,
-            # mesmo dentro de laços: for (i=1; i<=3; i++) i
+            # at the top level (outside functions), expressions show their value, even inside
+            # loops: for (i=1; i<=3; i++) i
             if fr is self.globals and isinstance(v, MV) and not isinstance(st.expr, (Assign, IncDec)):
                 for line in render(v):
                     self.s.output.write(line + "\n", "result")
@@ -390,7 +390,7 @@ class MataEngine:
             raise MataError(3000, "invalid statement")
 
     def _initial(self, eltype: str, org: str) -> MV:
-        """Valor inicial de uma variável declarada (escalar missing, vetor vazio...)."""
+        """Initial value of a declared variable (missing scalar, empty vector...)."""
         if eltype.startswith("struct "):
             return MV(np.array([[self.new_struct(eltype[7:])]], dtype=object), "struct")
         t = _DEFAULT_ORG_TYPES.get(eltype, "real")
@@ -412,7 +412,7 @@ class MataEngine:
         return StructVal(sname, {nm: self._initial(el, org) for el, org, nm in sd.fields})
 
     # ------------------------------------------------------------------
-    # Expressões
+    # Expressions
     # ------------------------------------------------------------------
     def eval(self, node, fr: Frame):
         if isinstance(node, Num):
@@ -438,8 +438,8 @@ class MataEngine:
             try:
                 return ops.binary(node.op, a, b)
             except MataError as e:
-                # o produto de matrizes aparece como "função" (*:  3200 ...); os
-                # demais operadores dão o erro em <istmt> (observado no Stata 14)
+                # the matrix product appears as a "function" (*:  3200 ...); the other operators
+                # give the error in <istmt> (observed in Stata 14)
                 if not e.where and node.op == "*":
                     e.where.append(node.op)
                 raise
@@ -478,7 +478,7 @@ class MataEngine:
     def _value(self, node, fr: Frame) -> MV:
         v = self.eval(node, fr)
         if v is None:
-            raise MataError(3000, "void function used in expression")   # VERIFICAR
+            raise MataError(3000, "void function used in expression")   # VERIFY
         return v
 
     # ponteiros e structs --------------------------------------------------
@@ -496,12 +496,12 @@ class MataEngine:
 
     def _deref(self, p: MV) -> MV:
         if p.t != "pointer":
-            raise MataError(3000, "pointer required")   # VERIFICAR
+            raise MataError(3000, "pointer required")   # VERIFY
         ptr = p.scalar()
         if ptr is None:
             raise MataError(3010, "attempt to dereference NULL pointer")
         v = ptr.get()
-        if isinstance(v, str):          # ponteiro para função
+        if isinstance(v, str):          # pointer to a function
             raise MataError(3000, "function pointer dereferenced without call")
         return v
 
@@ -509,7 +509,7 @@ class MataEngine:
         if fr is self.globals and isinstance(node.base, Name) and not node.arrow:
             v = fr.vars.get(node.base.name)
             if v is None or v.t != "struct":
-                # erro de compilação no Stata 14
+                # compile error in Stata 14
                 raise MataError(3000, "type mismatch:  exp.exp:  transmorphic found where struct expected")
         base = self._value(node.base, fr)
         if node.arrow:
@@ -568,7 +568,7 @@ class MataEngine:
             raise MataError(3301, "subscript invalid")
         return np.arange(int(r1) - 1, int(r2)), np.arange(int(c1) - 1, int(c2))
 
-    # atribuição -------------------------------------------------------------
+    # assignment -------------------------------------------------------------
     def assign(self, target, value: MV, fr: Frame) -> None:
         if isinstance(target, Name):
             declared = fr.types.get(target.name)
@@ -652,10 +652,10 @@ class MataEngine:
         if org == "vector" and v.rows != 1 and v.cols != 1:
             raise MataError(3203, f"{v.orgtype()} found where vector required")
 
-    # chamadas de função -----------------------------------------------------
+    # function calls -----------------------------------------------------
     def call(self, node: Call, fr: Frame):
         name = node.func
-        # variável que guarda ponteiro para função: (*f)(x) não é sintaxe aceita aqui
+        # variable holding a pointer to a function: (*f)(x) is not accepted syntax here
         if name in self.funcs:
             return self.call_user(self.funcs[name], node.args, fr)
         from .library import LIBRARY
@@ -672,7 +672,7 @@ class MataEngine:
             n -= 1
         if not lo <= n <= hi:
             raise MataError(3001, f"expected {lo if lo == hi else f'{lo} to {hi}'} arguments "
-                                  f"but received {n}")   # VERIFICAR texto
+                                  f"but received {n}")   # VERIFY texto
         vals, refs = [], []
         for k, a in enumerate(node.args[:n]):
             if a is None:
@@ -697,8 +697,8 @@ class MataEngine:
             raise
 
     def call_with_values(self, f: FuncDef, values: list[MV]) -> list:
-        """Chama f com valores (não expressões) e devolve o valor final de cada
-        parâmetro (os "argumentos de saída" de avaliadores, como em optimize)."""
+        """Calls f with values (not expressions) and returns the final value of each
+        parameter (the "output arguments" of evaluators, as in optimize)."""
         local = Frame(f.name)
         for p, v in zip(f.params, values):
             local.vars[p.name] = v.copy()
@@ -758,7 +758,7 @@ class MataEngine:
         finally:
             self.depth -= 1
             self.argc.pop()
-        # passagem por referência: o valor final do parâmetro volta à variável
+        # pass by reference: the final value of the parameter goes back to the variable
         for pname, vname in back:
             if pname in local.vars:
                 fr.vars[vname] = local.vars[pname]
@@ -767,5 +767,5 @@ class MataEngine:
         if result is None:
             if f.rettype == "transmorphic" and f.retorg == "matrix":
                 return None
-            raise MataError(3000, f"{f.name}() returned nothing")   # VERIFICAR
+            raise MataError(3000, f"{f.name}() returned nothing")   # VERIFY
         return result

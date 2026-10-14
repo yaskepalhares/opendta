@@ -1,11 +1,11 @@
-"""Leitura e gravação de .dta (formatos 117, 118, 119).
+"""Reading and writing .dta files (formats 117, 118, 119).
 
-Três camadas de verificação:
-1. ida e volta pelo próprio leitor/gravador;
-2. leitura cruzada pela ReadStat (pyreadstat), que é uma implementação
-   independente da especificação — se ela lê igual, o arquivo está conforme;
-3. leitura, pelo OpenDTA, de arquivos gravados pela ReadStat (versões 8–15).
-O juiz final é o Stata (roteiro em compat/do/0104_arquivos.do).
+Three layers of checking:
+1. round trip through OpenDTA's own reader/writer;
+2. cross-reading by ReadStat (pyreadstat), which is an independent
+   implementation of the specification — if it reads the same, the file conforms;
+3. reading, by OpenDTA, of files written by ReadStat (versions 8–15).
+The final judge is Stata (script in compat/do/0104_arquivos.do).
 """
 
 import numpy as np
@@ -94,7 +94,7 @@ def test_latin1_in_117(run, tmp_path):
     assert read_dta(p).get("s").data[2] == "José"
 
 
-# -- verificação independente pela ReadStat -------------------------------------------
+# -- independent check through ReadStat -------------------------------------------
 
 def test_readstat_reads_ours(run, tmp_path, release):
     pyreadstat = pytest.importorskip("pyreadstat")
@@ -113,7 +113,7 @@ def test_readstat_reads_ours(run, tmp_path, release):
     assert list(df["l"]) == [-70000, 1, 70000]
     assert list(df["i"]) == [-5, 7, 300]
     assert df["f"][2] == 1.5
-    assert df["b"][0] == "a"                 # .a vira "a" com user_missing
+    assert df["b"][0] == "a"                 # .a becomes "a" with user_missing
     assert df["d"][1] == "z"
     assert df["longo"][2] == "x" * 3000
 
@@ -121,7 +121,7 @@ def test_readstat_reads_ours(run, tmp_path, release):
 @pytest.mark.parametrize("version", [8, 10, 11, 12, 13, 14, 15])
 def test_we_read_readstat(tmp_path, version):
     pyreadstat = pytest.importorskip("pyreadstat")
-    pd = pytest.importorskip("pandas")      # a gravação pela ReadStat pede um DataFrame
+    pd = pytest.importorskip("pandas")      # writing through ReadStat requires a DataFrame
     df = pd.DataFrame({"n": [1.5, None, 3.0], "k": [1, 2, 3], "t": ["a", "b", "ç"]})
     p = tmp_path / f"v{version}.dta"
     pyreadstat.write_dta(df, str(p), version=version, file_label="rs",
@@ -173,7 +173,7 @@ def test_use_subset(run, here):
     d = run.session.data
     assert d.names == ["y"]
     assert list(d.get("y").data) == [30, 40]
-    # o if só enxerga as variáveis lidas; o erro deixa a memória vazia (Stata 14)
+    # the if only sees the variables read; the error leaves memory empty (Stata 14)
     out = run("use y using a if x > 2, clear")
     assert run.rc == 111 and run.session.data.nvars == 0
     run("use a in 2/3, clear")
@@ -204,7 +204,7 @@ def test_notes_and_char(run, here):
 
 
 def test_numeric_edges(run, tmp_path, release):
-    """Negativos e extremos de cada tipo (um float negativo já virou missing)."""
+    """Negatives and extremes of each type (a negative float has already become missing)."""
     import numpy as np
 
     from opendta.core.dataset import Dataset, Variable
@@ -228,14 +228,14 @@ def test_numeric_edges(run, tmp_path, release):
 
 
 def test_chunked_io_and_atomic_replace(run, tmp_path, release, monkeypatch):
-    """Blocos minúsculos forçam vários blocos de leitura e gravação."""
+    """Tiny blocks force several reading and writing blocks."""
     import opendta.io.dta as D
     monkeypatch.setattr(D, "CHUNK_BYTES", 64)
     ds = build(run, release)
     p = tmp_path / "c.dta"
     write_dta(ds, p, release=release)
     _check_same(ds, read_dta(p))
-    # falha no meio da gravação: o arquivo antigo continua intacto
+    # failure in the middle of writing: the old file stays intact
     before = p.read_bytes()
     monkeypatch.setattr(D, "_write_body", lambda *a, **k: (_ for _ in ()).throw(OSError("disco cheio")))
     with pytest.raises(OSError):
@@ -253,8 +253,8 @@ def test_native_storage_sizes(run):
 
 @pytest.mark.parametrize("old", [114, 115])
 def test_old_formats(run, tmp_path, old):
-    """114/115: gravação própria, leitura própria e leitura pela ReadStat."""
-    ds = build(run, 117)                     # acentos em Latin-1, como no Stata 12
+    """114/115: OpenDTA's own writing, own reading and reading through ReadStat."""
+    ds = build(run, 117)                     # accents in Latin-1, as in Stata 12
     p = tmp_path / f"o{old}.dta"
     write_dta(ds, p, release=old)
     raw = p.read_bytes()
@@ -287,7 +287,7 @@ def test_saveold_versions(run, tmp_path, monkeypatch):
     assert "variable t truncated to str244" in out
     assert (tmp_path / "v12.dta").read_bytes()[0] == 115
     out = run("saveold v11, version(11)")
-    # o Stata 14 grava version(11) no formato 115, que o Stata 11 lê
+    # Stata 14 writes version(11) in format 115, which Stata 11 reads
     assert "(saving in Stata 12 format, which Stata 11 can read)" in out
     assert (tmp_path / "v11.dta").read_bytes()[0] == 115
     run("use v11, clear")

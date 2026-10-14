@@ -1,15 +1,15 @@
 """set numerics stata|precise (OpenDTA).
 
-stata (padrão): as contas seguem o Stata, inclusive nos arredondamentos
-(equações normais no regress, D.x guardado em float, critérios de parada do ml).
+stata (default): computations follow Stata, including its rounding
+(normal equations in regress, D.x stored as float, ml stopping criteria).
 
-precise: as mesmas estimativas, calculadas com mais exatidão:
-  * regress resolvido por decomposição QR (o erro cresce com κ(X), não κ(X)²);
-  * D.x e S.x calculados e mantidos em double;
-  * ml e optimize() dão um passo de Newton a mais depois de convergir;
-  * derivadas numéricas do optimize() com extrapolação de Richardson;
-  * generate, egen, input... criam variáveis double quando o tipo padrão é float.
-O compare.py e os testes de formato usam stata.
+precise: the same estimates, computed more exactly:
+  * regress solved by QR decomposition (the error grows with κ(X), not κ(X)²);
+  * D.x and S.x computed and kept in double;
+  * ml and optimize() take one more Newton step after converging;
+  * optimize()'s numerical derivatives with Richardson extrapolation;
+  * generate, egen, input... create double variables when the default type is float.
+compare.py and the format tests use stata.
 """
 
 _STATE = {"precise": False}

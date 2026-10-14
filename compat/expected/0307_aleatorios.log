@@ -4,9 +4,9 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 3d: gerador de números aleatórios (mt64) e funções r*().
-. * As sequências do OpenDTA só coincidem com as do Stata se a semente for
-. * convertida em estado do mesmo jeito (VERIFICAR em core/rng.py).
+. * Phase 3d: random-number generator (mt64) and r*() functions.
+. * OpenDTA's sequences only match Stata's if the seed is
+. * turned into a state in the same way (VERIFY in core/rng.py).
 . clear
 
 . set seed 123

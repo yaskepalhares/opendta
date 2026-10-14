@@ -1,21 +1,21 @@
-"""Gerador de números aleatórios: Mersenne Twister de 64 bits (MT19937-64).
+"""Random-number generator: 64-bit Mersenne Twister (MT19937-64).
 
-O manual do Stata 14 ([R] set seed) diz que o gerador padrão é o Mersenne
-Twister de 64 bits (mt64). Aqui ele segue o algoritmo publicado por
-Matsumoto e Nishimura (init_genrand64 + genrand64_int64). Detalhes não
-documentados ficam marcados VERIFICAR (caso compat/do/0307_aleatorios.do):
+The Stata 14 manual ([R] set seed) says the default generator is the 64-bit
+Mersenne Twister (mt64). Here it follows the algorithm published by
+Matsumoto and Nishimura (init_genrand64 + genrand64_int64). Undocumented
+details are marked VERIFY (case compat/do/0307_aleatorios.do):
 
-* `set seed #` vira o estado inicial por init_genrand64(#) e o inteiro de
-  64 bits vira um double em (0,1) pelos 52 bits altos + 1/2 (como
-  genrand64_real3). Com isso runiform() reproduz exatamente a sequência do
-  Stata 14 (conferido em compat/expected/0307_aleatorios.log com as
-  sementes 0, 42, 123 e 2147483647).
-* rbinomial() (inversão com um uniforme), rexponential(), rchi2(2) e
-  rgamma(1, b) (-b·ln u) também reproduzem o Stata (compat 0309).
-* rnormal() consome três uniformes por sorteio no Stata (observado em
-  compat 0309), com algoritmo não documentado; aqui usa inversão, então a
-  sequência difere. O mesmo vale para runiformint(), rpoisson(), rt() e
-  as formas gerais de rgamma/rchi2 (VERIFICAR).
+* `set seed #` becomes the initial state through init_genrand64(#) and the
+  64-bit integer becomes a double in (0,1) from the top 52 bits + 1/2 (like
+  genrand64_real3). With this, runiform() reproduces Stata 14's sequence
+  exactly (checked in compat/expected/0307_aleatorios.log with the
+  seeds 0, 42, 123 and 2147483647).
+* rbinomial() (inversion with one uniform), rexponential(), rchi2(2) and
+  rgamma(1, b) (-b·ln u) also reproduce Stata (compat 0309).
+* rnormal() consumes three uniforms per draw in Stata (observed in
+  compat 0309), with an undocumented algorithm; here it uses inversion, so the
+  sequence differs. The same holds for runiformint(), rpoisson(), rt() and
+  the general forms of rgamma/rchi2 (VERIFY).
 """
 
 from __future__ import annotations
@@ -49,17 +49,17 @@ class MT64:
         self.mti = NN
 
     def state(self) -> str:
-        """Estado como texto (c(seed)); `set seed` aceita de volta."""
+        """State as text (c(seed)); `set seed` accepts it back."""
         return "X" + format(self.mti, "03x") + "".join(format(int(x), "016x") for x in self.mt)
 
     def set_state(self, text: str) -> None:
         body = text[1:]
         if len(body) != 3 + 16 * NN:
-            raise ValueError("estado inválido")
+            raise ValueError("invalid state")
         self.mti = int(body[:3], 16)
         self.mt = np.array([int(body[3 + 16 * i: 19 + 16 * i], 16) for i in range(NN)], dtype=np.uint64)
 
-    # -- geração -------------------------------------------------------------
+    # -- generation -------------------------------------------------------------
     def _twist(self) -> None:
         mt = self.mt
         one = np.uint64(1)
@@ -72,7 +72,7 @@ class MT64:
         # i = 0..155: usa valores antigos
         a = mix(mt[0:NN - MM], mt[1:NN - MM + 1], mt[MM:NN])
         mt[0:NN - MM] = a
-        # i = 156..310: o termo "distante" já é novo (mt[i-156])
+        # i = 156..310: the "distant" term is already new (mt[i-156])
         mt[NN - MM:NN - 1] = mix(mt[NN - MM:NN - 1], mt[NN - MM + 1:NN], mt[0:MM - 1])
         # i = 311
         mt[NN - 1] = mix(mt[NN - 1:NN], mt[0:1], mt[MM - 1:MM])[0]
@@ -96,7 +96,7 @@ class MT64:
         return out
 
     def uniform(self, n: int) -> np.ndarray:
-        """Doubles em (0,1). VERIFICAR conversão usada pelo Stata."""
+        """Doubles in (0,1). VERIFY the conversion used by Stata."""
         x = self.uint64(n)
         return ((x >> np.uint64(12)).astype(np.float64) + 0.5) * (1.0 / 4503599627370496.0)
 
@@ -109,7 +109,7 @@ def reset(seed: int = 123456789) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Distribuições: (nº mínimo, máximo de argumentos, função(u, *args) -> valores)
+# Distributions: (min, max number of arguments, function(u, *args) -> values)
 # ---------------------------------------------------------------------------
 
 def _bad(*conds) -> np.ndarray:
@@ -158,19 +158,19 @@ def _gamma(u, a, b=1.0):
     bad = (np.asarray(a) >= M.SYSMISS) | (np.asarray(b) >= M.SYSMISS) | (a <= 0) | (b <= 0)
     with np.errstate(all="ignore"):
         v = st.gamma.ppf(u, np.where(bad, 1, a), scale=np.where(bad, 1, b))
-        # forma 1 = exponencial: -b·ln(u), como o Stata 14 (rchi2(2), compat 0309);
-        # VERIFICAR as demais formas
+        # shape 1 = exponential: -b·ln(u), as in Stata 14 (rchi2(2), compat 0309); VERIFY the other
+        # shapes
         v = np.where(np.asarray(a) == 1, -np.asarray(b) * np.log(u), v)
     return _clean(v, bad)
 
 
 def _chi2(u, df):
-    """rchi2(df) = 2·rgamma(df/2): com df = 2 dá -2·ln(u), igual ao Stata 14."""
+    """rchi2(df) = 2·rgamma(df/2): with df = 2 gives -2·ln(u), as in Stata 14."""
     return _gamma(u, np.asarray(df, dtype=np.float64) / 2, 2.0)
 
 
 def _exponential(u, b):
-    # -b·ln(u): reproduz o rexponential() do Stata 14 (compat 0309)
+    # -b·ln(u): reproduces Stata 14's rexponential() (compat 0309)
     bad = (np.asarray(b) >= M.SYSMISS) | (b <= 0)
     return _clean(-b * np.log(u), bad)
 
@@ -222,7 +222,7 @@ DISTRIBUTIONS = {
 
 
 def draw(name: str, args: list, n: int) -> np.ndarray:
-    """n sorteios da distribuição `name`; args escalares ou vetores de tamanho n."""
+    """n draws from distribution `name`; scalar args or vectors of length n."""
     lo, hi, fn = DISTRIBUTIONS[name]
     u = RNG.uniform(n)
     arrs = [np.broadcast_to(np.asarray(a, dtype=np.float64), (n,)) for a in args]

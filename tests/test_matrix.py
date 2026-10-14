@@ -1,4 +1,4 @@
-"""matrix: definição, operadores, funções, listagem e uso em expressões."""
+"""matrix: definition, operators, functions, listing and use in expressions."""
 
 import numpy as np
 

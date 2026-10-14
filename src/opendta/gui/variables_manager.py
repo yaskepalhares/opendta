@@ -1,8 +1,8 @@
-"""Variables Manager: propriedades de todas as variáveis numa tabela.
+"""Variables Manager: properties of all variables in a table.
 
-Cada alteração vira um comando (rename, label variable, recast, format,
-label values) executado pela sessão, ecoado em Results e guardado em
-Review, como no Stata.
+Each change becomes a command (rename, label variable, recast, format,
+label values) run by the session, echoed in Results and kept in
+Review, as in Stata.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def _quote(text: str) -> str:
 
 
 def property_command(name: str, column: int, value: str) -> str | None:
-    """Comando que muda a propriedade `column` (índice em COLUMNS) da variável."""
+    """Command that changes property `column` (index in COLUMNS) of the variable."""
     v = value.strip()
     if column == 0:
         return f"rename {name} {v}" if v and v != name else None

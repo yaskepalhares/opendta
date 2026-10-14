@@ -1,4 +1,4 @@
-* Fase 5a: tsset, xtset e operadores de séries temporais.
+* Phase 5a: tsset, xtset and time-series operators.
 clear
 estimates clear
 ereturn clear

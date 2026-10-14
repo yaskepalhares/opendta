@@ -1,6 +1,6 @@
-"""import excel e export excel ([D] import excel).
+"""import excel and export excel ([D] import excel).
 
-Mensagens e regras não documentadas estão marcadas VERIFICAR, com casos em
+Messages and undocumented rules are marked VERIFY, with cases in
 compat/do/0106_excel.do.
 """
 
@@ -28,7 +28,7 @@ def excel_path(text: str, *, must_exist: bool) -> Path:
         raise StataError(198, "invalid file specification")
     p = Path(t).expanduser()
     if p.suffix == "":
-        # VERIFICAR: extensão padrão (o Stata 14 usa .xls; o OpenDTA grava .xlsx)
+        # VERIFY: default extension (Stata 14 uses .xls; OpenDTA writes .xlsx)
         candidates = [p.with_suffix(".xlsx"), p.with_suffix(".xls")]
         if must_exist:
             for c in candidates:
@@ -60,7 +60,7 @@ def _sheet_arg(arg: str) -> tuple[str, str]:
 def import_excel(s: "Session", args: str) -> None:
     p = parse_standard(args)
     if p.using is not None:
-        file = p.using       # varlist antes de using (colunas): VERIFICAR, ainda ignorado
+        file = p.using       # varlist before using (columns): VERIFY, still ignored
     else:
         file = p.varlist
     o = match_options(p.options, {"sheet": 5, "cellrange": 9, "firstrow": 8, "case": 4,
@@ -76,7 +76,7 @@ def import_excel(s: "Session", args: str) -> None:
         out.write(f"  {'-' * (width - 1)}+{'-' * 9}\n", "text")
         for name, rng in rows:
             out.write(f"{name:>{width}} | {rng}\n", "text")
-        # gravados do último para o primeiro: return list mostra worksheet_1 antes
+        # written from last to first: return list shows worksheet_1 first
         s.r = {}
         for k, (name, rng) in reversed(list(enumerate(rows, start=1))):
             s.r[f"range_{k}"] = rng
@@ -114,7 +114,7 @@ def export_excel(s: "Session", args: str) -> None:
                                   "datestring": 10, "missing": 7, "locale": 6})
     ds = s.data
     if ds.nvars == 0:
-        raise StataError(102, "no variables defined")   # VERIFICAR
+        raise StataError(102, "no variables defined")   # VERIFY
     names = unique(expand(ds, names_text)) if names_text.strip() else list(ds.names)
     path = excel_path(file, must_exist=False)
     opts = ExcelWriteOptions()

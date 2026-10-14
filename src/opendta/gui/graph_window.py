@@ -1,8 +1,8 @@
-"""Janela Graph: uma aba por gráfico com nome (name()), como no Stata 14.
+"""Graph window: one tab per named graph (name()), as in Stata 14.
 
-O desenho vem de graphics/render.py; a janela só hospeda a Figure do
-matplotlib e oferece gravar (.gph), exportar (PNG, PDF, SVG...), copiar e
-um Graph Editor simples (gui/graph_editor.py) num painel lateral."""
+The drawing comes from graphics/render.py; the window only hosts the matplotlib
+Figure and offers saving (.gph), exporting (PNG, PDF, SVG...), copying and
+a simple Graph Editor (gui/graph_editor.py) in a side panel."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ class GraphWindow(QMainWindow):
         self._tb_actions.append((self.act_edit, "Edit graph"))
         self.addToolBar(tb)
 
-        # Graph Editor (painel lateral, escondido até ser pedido)
+        # Graph Editor (side panel, hidden until requested)
         self.editor = GE.make_editor(self, self._apply_edits)
         self.editor.btn_revert.clicked.connect(self._revert_edits)
         self.editor_dock = QDockWidget(tr("Graph Editor"), self)
@@ -72,10 +72,10 @@ class GraphWindow(QMainWindow):
         self._originals: dict[str, dict] = {}
         QShortcut(QKeySequence.StandardKey.Close, self, self.close)
 
-    # -- exibição ------------------------------------------------------------------
+    # -- display ------------------------------------------------------------------
     def show_graph(self, g: Graph, *, edited: bool = False) -> None:
         if not edited:
-            self._originals.pop(g.name, None)     # gráfico novo: edições anteriores não valem
+            self._originals.pop(g.name, None)     # new graph: earlier edits no longer apply
         fig = R.figure(g)
         canvas = FigureCanvasQTAgg(fig)
         old = self.canvases.get(g.name)
@@ -130,7 +130,7 @@ class GraphWindow(QMainWindow):
                 return n
         return ""
 
-    # -- ações ------------------------------------------------------------------------
+    # -- actions ------------------------------------------------------------------------
     def _cmd(self, text: str) -> None:
         if self.run is not None:
             self.run(text)

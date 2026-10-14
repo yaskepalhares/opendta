@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 1a: input, label, rename, order, format, drop/keep, compress.
+. * Phase 1a: input, label, rename, order, format, drop/keep, compress.
 . clear
 
 . input str8 nome idade sexo

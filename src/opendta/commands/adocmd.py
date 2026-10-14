@@ -27,7 +27,7 @@ def cmd_sysdir(s: "Session", args: str) -> None:
     if words[0] == "set" and len(words) == 3:
         key = words[1].upper()
         if key not in dirs:
-            raise StataError(198, f"{words[1]} invalid codeword")   # VERIFICAR
+            raise StataError(198, f"{words[1]} invalid codeword")   # VERIFY
         dirs[key] = str(Path(strip_outer_quotes(words[2])).expanduser())
         return
     raise StataError(198, "invalid syntax")
@@ -57,7 +57,7 @@ def cmd_adopath(s: "Session", args: str) -> None:
         elif entry in path or entry.upper() in path:
             path.remove(entry if entry in path else entry.upper())
         else:
-            raise StataError(198, f"{entry} not in adopath")   # VERIFICAR
+            raise StataError(198, f"{entry} not in adopath")   # VERIFY
     elif t:
         raise StataError(198, "invalid syntax")
     out = s.output
@@ -73,7 +73,7 @@ def cmd_which(s: "Session", args: str) -> None:
     head, comma, opts = args.partition(",")
     name = head.strip()
     if not name:
-        raise StataError(100, "name required")   # VERIFICAR
+        raise StataError(100, "name required")   # VERIFY
     o = match_options(opts, {"all": 3}) if comma else {}
     out = s.output
     if name in REGISTRY and not o.get("all"):
@@ -117,7 +117,7 @@ def cmd_findfile(s: "Session", args: str) -> None:
 
 @command("discard")
 def cmd_discard(s: "Session", args: str) -> None:
-    """Esquece os programas carregados de .ado (são relidos no próximo uso)."""
+    """Forgets the programs loaded from .ado files (they are read again on next use)."""
     for name in [n for n, p in s.programs.items() if p.source.endswith(".ado")]:
         del s.programs[name]
 

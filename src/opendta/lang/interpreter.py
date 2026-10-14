@@ -1,12 +1,12 @@
-"""Execução de linhas lógicas: blocos, laços, condicionais e prefixos.
+"""Running logical lines: blocks, loops, conditionals and prefixes.
 
-Blocos seguem as regras do manual [P]: a chave de abertura `{` é o último
-caractere da linha do comando; a chave de fechamento `}` fica sozinha na
-sua linha. `else` vem na linha seguinte ao `}` do `if`.
+Blocks follow the rules of manual [P]: the opening brace `{` is the last
+character of the command line; the closing brace `}` stands alone on
+its line. `else` comes on the line after the `}` of the `if`.
 
-Ao executar um do-file com eco, um bloco de nível superior é ecoado por
-inteiro antes da execução, com as linhas internas numeradas ("  2. ..."),
-como o Stata faz.
+When running a do-file with echo, a top-level block is echoed
+whole before running, with the inner lines numbered ("  2. ..."),
+as Stata does.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class Interpreter:
         self.s = session
 
     # ------------------------------------------------------------------
-    # Execução de uma sequência de linhas
+    # Running a sequence of lines
     # ------------------------------------------------------------------
     def run_lines(self, lines: list[LogicalLine], *, echo: bool = False) -> None:
         self._run_range(lines, 0, len(lines), echo="top" if echo else None)
@@ -63,11 +63,10 @@ class Interpreter:
         while i < end:
             i = self._run_one(lines, i, end, echo=echo)
 
-    # Modos de eco (observados nos logs do Stata):
-    #   "top"    comando de nível superior do do-file: '. linha', saída, linha em branco
-    #   "inline" linha dentro de if/else ou de bloco quietly/capture: '. linha', sem
-    #            linha em branco depois
-    #   None     sem eco (corpo de laços, que são ecoados inteiros antes de rodar)
+    # Echo modes (observed in the Stata logs):
+    #   "top"    top-level command of the do-file: '. line', output, blank line
+    #   "inline" line inside if/else or a quietly/capture block: '. line', no blank line after
+    #   None     no echo (body of loops, which are echoed whole before running)
     def _echo(self, ln: LogicalLine, echo: str | None) -> None:
         if echo:
             self.s.output.echo_command(ln.echo_lines)
@@ -122,7 +121,7 @@ class Interpreter:
         return first[0] not in ("drop", "dir", "list", "li", "l")
 
     def _define_program(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
-        """program [define] nome ... end: guarda o corpo sem executar."""
+        """program [define] name ... end: keeps the body without running it."""
         from .programs import make_program, parse_definition
 
         header = self.s.expand(lines[i].text.strip())
@@ -131,9 +130,9 @@ class Interpreter:
         while j < end and not (lines[j].kind == "cmd" and lines[j].text.strip() == "end"):
             j += 1
         if j >= end:
-            raise StataError(198, "program define: end not found")   # VERIFICAR
+            raise StataError(198, "program define: end not found")   # VERIFY
         if echo:
-            # VERIFICAR: numeração do corpo no eco de program define
+            # VERIFY: numbering of the body in the echo of program define
             out = self.s.output
             out.echo_command(lines[i].echo_lines)
             for k, ln in enumerate(lines[i + 1:j + 1], start=1):
@@ -149,8 +148,8 @@ class Interpreter:
         return j + 1
 
     def _autoload(self, word: str):
-        """Comando desconhecido: procura word.ado no adopath e roda o arquivo
-        (em silêncio, como o Stata), que deve definir o programa word."""
+        """Unknown command: looks for word.ado on the adopath and runs the file
+        (silently, as Stata does), which must define program word."""
         from .adopath import find_ado
         path = find_ado(self.s, word)
         if path is None:
@@ -159,16 +158,16 @@ class Interpreter:
         _run_file(self.s, f'"{path}"', echo=False, new_scope=True)
         prog = self.s.programs.get(word)
         if prog is None:
-            # VERIFICAR: mensagem do Stata quando o .ado não define o programa
+            # VERIFY: Stata's message when the .ado does not define the program
             raise StataError(199, f"{path.name} found but program {word} not defined")
         prog.source = str(path)
         return prog
 
     def run_program(self, prog) -> None:
-        """Corpo de um programa: sem eco (set trace mostra as linhas)."""
+        """Body of a program: no echo (set trace shows the lines)."""
         tracing = self._tracing()
-        # linhas begin/end ocupam a largura da tela (set linesize; observado
-        # no Stata 14 com linesize 255)
+        # begin/end lines take the screen width (set linesize; observed in Stata 14 with linesize
+        # 255)
         width = int(float(self.s.settings.get("linesize", 80)))
         pad = "  " * self._trace_depth()
         if tracing:
@@ -185,9 +184,9 @@ class Interpreter:
 
     def _run_mata_block(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None,
                         colon: bool) -> int:
-        """mata[:] ... end. O eco segue o Stata: cabeçalho de traços com
-        "mata (type end to exit)", cada instrução com ': ' e, no fim, ': end'
-        e uma linha de traços."""
+        """mata[:] ... end. The echo follows Stata: a dashed header with
+        "mata (type end to exit)", each statement with ': ' and, at the end, ': end'
+        and a dashed line."""
         j = i + 1
         while j < end and not (lines[j].kind == "cmd" and lines[j].text.strip() == "end"):
             j += 1
@@ -195,11 +194,11 @@ class Interpreter:
         width = int(float(self.s.settings.get("linesize", 80)))
         if echo:
             self._echo(lines[i], echo)
-            # 49 traços, o título e traços até a largura da tela (Stata 14)
+            # 49 dashes, the title and dashes up to the screen width (Stata 14)
             title = " mata (type end to exit) "
             out.write("-" * 49 + title + "-" * max(0, width - 49 - len(title)) + "\n", "text")
         def code(ln: LogicalLine) -> str:
-            # no Mata, "*" no começo da linha não é comentário (*p = 1)
+            # in Mata, "*" at the start of the line is not a comment (*p = 1)
             if ln.kind == "comment" and ln.echo_lines and ln.echo_lines[0].lstrip().startswith("*"):
                 return "\n".join(ln.echo_lines)
             return ln.text if ln.kind == "cmd" else ""
@@ -210,8 +209,8 @@ class Interpreter:
         except MataLeave:
             pass
         except StataError as e:
-            # bloco "mata:" interrompido: a linha de fechamento vem depois de
-            # "(# lines skipped)" e antes de r(#) (compat 0405)
+            # interrupted "mata:" block: the closing line comes after "(# lines skipped)" and
+            # before r(#) (compat 0405)
             if echo:
                 e.message = (e.message + "\n" if e.message else "") + "-" * width
             raise
@@ -223,7 +222,7 @@ class Interpreter:
         return j + 1
 
     def _run_input(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
-        """input var1 var2 ... seguido de linhas de dados até `end`."""
+        """input var1 var2 ... followed by data lines up to `end`."""
         from ..commands.data import run_input
 
         raw = self.s.expand(lines[i].text.strip())
@@ -238,9 +237,8 @@ class Interpreter:
         out = self.s.output
         if echo:
             self._echo(lines[i], echo)
-            # cabeçalho: 3 espaços e cada nome alinhado à direita numa coluna
-            # com a largura do formato do tipo + 2 (float %9.0g → 11,
-            # double %10.0g → 12, str20 %20s → 22; observado no Stata 14)
+            # header: 3 spaces and each name right-aligned in a column as wide as the type's format
+            # + 2 (float %9.0g → 11, double %10.0g → 12, str20 %20s → 22; observed in Stata 14)
             from ..core.dataset import default_format
             cells = []
             pending_type = None
@@ -264,7 +262,7 @@ class Interpreter:
         return j + 1
 
     def _echo_numbered(self, lines: list[LogicalLine], i: int, j: int) -> None:
-        """Eco de laço: cabeçalho e corpo numerado, antes da execução."""
+        """Loop echo: header and numbered body, before running."""
         out = self.s.output
         out.echo_command(lines[i].echo_lines)
         k = 2
@@ -327,8 +325,8 @@ class Interpreter:
                         *, echo: str | None) -> None:
         """quietly { ... }, capture { ... }, capture noisily { ... }
 
-        O cabeçalho é ecoado; as linhas internas são ecoadas uma a uma ao
-        rodar (e somem sob quietly/capture, como no Stata)."""
+        The header is echoed; the inner lines are echoed one by one as they
+        run (and disappear under quietly/capture, as in Stata)."""
         words = [_is_prefix_word(w) or w for w in header.replace(":", " ").split()]
         self._echo(lines[i], echo)
         inner = "inline" if echo else None
@@ -340,8 +338,8 @@ class Interpreter:
 
     # -- if / else ------------------------------------------------------------
     def _run_if_chain(self, lines: list[LogicalLine], i: int, end: int, *, echo: str | None) -> int:
-        """if / else if / else. Com eco, cada linha aparece ao ser alcançada,
-        inclusive as do ramo não executado (que não produzem saída)."""
+        """if / else if / else. With echo, each line appears when reached,
+        including those of the branch not taken (which produce no output)."""
         taken = False
         idx = i
         first = True
@@ -415,9 +413,9 @@ class Interpreter:
             raise StataError(109, "type mismatch")
         return v != 0
 
-    # -- laços ----------------------------------------------------------------
+    # -- loops ----------------------------------------------------------------
     def _loop_body(self, lines: list[LogicalLine], a: int, b: int) -> bool:
-        """Executa o corpo; devolve False se houve `continue, break`."""
+        """Runs the body; returns False if there was `continue, break`."""
         try:
             self._run_range(lines, a, b, echo=None)
         except ContinueLoop:
@@ -475,10 +473,10 @@ class Interpreter:
     # Comando individual
     # ------------------------------------------------------------------
     def execute(self, raw: str) -> None:
-        """Expande macros e executa um comando de uma linha."""
+        """Expands macros and runs a one-line command."""
         text = self.s.expand(raw)
         if self._tracing():
-            # set trace on: linha original (- ) e expandida (= ) dentro de programas
+            # set trace on: original line (- ) and expanded line (= ) inside programs
             out = self.s.output
             pad = "  " * self._trace_depth()
             out.write(f"{pad}- {raw.strip()}\n", "text", force=True)
@@ -491,8 +489,8 @@ class Interpreter:
                 and any(sc.kind == "program" for sc in self.s.scopes))
 
     def _trace_depth(self) -> int:
-        # um programa chamado de um do-file aparece com 4 espaços (Stata 14);
-        # VERIFICAR o recuo de programas aninhados
+        # a program called from a do-file appears with 4 spaces (Stata 14); VERIFY the indentation
+        # of nested programs
         return sum(1 for sc in self.s.scopes if sc.kind == "program") + 1
 
     def _execute_expanded(self, text: str) -> None:
@@ -533,9 +531,9 @@ class Interpreter:
             self._with_prefixes(words, lambda: self._execute_expanded(body))
             return
 
-        # comandos internos (inclusive abreviados) vêm antes dos programas:
-        # com `program define pr`, digitar `pr` ainda chama `program`
-        # (observado no Stata 14, compat/expected/0201_programas.log)
+        # built-in commands (including abbreviated ones) come before programs: with `program define
+        # pr`, typing `pr` still calls `program` (observed in Stata 14,
+        # compat/expected/0201_programas.log)
         prog = None if lookup(word) is not None else self.s.programs.get(word)
         if prog is None and lookup(word) is None and _plain_name(word):
             prog = self._autoload(word)
@@ -561,7 +559,7 @@ class Interpreter:
             spec.fn(self.s, rest)
         except StataError as err:
             if err.context is None:
-                err.context = (spec.name, text)   # para a explicação do erro
+                err.context = (spec.name, text)   # for the error explanation
             raise
 
     def _with_prefixes(self, words: list[str], action, block: bool = False) -> None:
@@ -585,7 +583,7 @@ class Interpreter:
                 self.s.set_rc(0)
             except StataError as e:
                 if noisy:
-                    # capture noisily cmd: só a mensagem; em bloco, também r(#)
+                    # capture noisily cmd: only the message; in a block, also r(#)
                     self.s.report_error(e, show_rc=block)
                 self.s.set_rc(e.rc)
             finally:

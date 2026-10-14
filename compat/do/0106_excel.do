@@ -1,5 +1,5 @@
-* Fase 1c: export excel e import excel.
-* Cria e apaga arquivos temporários na pasta atual.
+* Phase 1c: export excel and import excel.
+* Creates and deletes temporary files in the current folder.
 clear
 input str10 nome idade double renda dnasc
 "Ana" 30 1500.5 21915

@@ -1,6 +1,6 @@
-"""Comando mata numa linha só: `mata: instrução`, `mata instrução` e os
-subcomandos `mata clear`, `mata describe`, `mata drop`. O bloco
-`mata ... end` é tratado pelo interpretador (lang/interpreter.py)."""
+"""One-line mata command: `mata: statement`, `mata statement` and the
+subcommands `mata clear`, `mata describe`, `mata drop`. The
+`mata ... end` block is handled by the interpreter (lang/interpreter.py)."""
 
 from __future__ import annotations
 
