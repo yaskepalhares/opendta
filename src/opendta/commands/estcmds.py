@@ -305,6 +305,36 @@ def cmd_streg(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("mixed", "mixed")
+def cmd_mixed(s: "Session", args: str) -> None:
+    from ..estimation.mixed import cmd_mixed as run
+    run(s, args)
+
+
+@command("xtmixed", "xtmixed")
+def cmd_xtmixed(s: "Session", args: str) -> None:
+    from ..estimation.mixed import cmd_xtmixed as run
+    run(s, args)
+
+
+@command("melogit", "melogit")
+def cmd_melogit(s: "Session", args: str) -> None:
+    from ..estimation.meglm import cmd_melogit as run
+    run(s, args)
+
+
+@command("meprobit", "meprobit")
+def cmd_meprobit(s: "Session", args: str) -> None:
+    from ..estimation.meglm import cmd_meprobit as run
+    run(s, args)
+
+
+@command("mepoisson", "mepoisson")
+def cmd_mepoisson(s: "Session", args: str) -> None:
+    from ..estimation.meglm import cmd_mepoisson as run
+    run(s, args)
+
+
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY

@@ -54,6 +54,7 @@ What already works:
 - estimation: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg`, `xtlogit`, `xtpoisson`, `areg`, `ivregress`, `qreg`, `anova` and `oneway`, with factor variables, time-series operators, weights and robust, cluster and bootstrap standard errors;
 - postestimation: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `lrtest`, `hausman`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
 - complex surveys: `svyset` (several stages, replicate weights), `svydescribe`, `estat effects` and the `svy:` prefix with `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` and `tobit` (Taylor linearization, BRR, jackknife, bootstrap and SDR);
+- multilevel models: `mixed` (ML and REML, nested levels, random slopes and covariance structures) and `melogit`, `meprobit` and `mepoisson` (adaptive quadrature), with `estat icc`;
 - survival analysis: `stset` (single and multiple records, delayed entry, origin and scale), `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank and Wilcoxon tests), `stcox` (Breslow and Efron ties, strata, robust variance), `estat phtest` and `streg` (exponential, Weibull, Gompertz, lognormal and loglogistic);
 - tests: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` and the immediate commands `cii`, `ttesti`, `prtesti` and `tabi`;
 - describing data: `codebook` and `misstable`; results to Excel with `putexcel`;
@@ -62,7 +63,7 @@ What already works:
 - dialog boxes in the Statistics and Graphics menus, which show the command before running it;
 - interface in English or Portuguese (**Edit → Preferences** or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
 
-The outputs of cases `0603` (survey replicates), `0901` and `0902` (survival analysis) still await checking against the Stata log; all other cases in `compat/do` have been checked. The survival estimates were checked against statsmodels (Cox, Kaplan-Meier, log-rank and Wilcoxon) and against direct maximization of the likelihoods (`streg`).
+The outputs of cases `0603` (survey replicates), `0901` and `0902` (survival analysis) still await checking against the Stata log, as do the cases added in block 2 (`0408`, `0409`, `1001`, `1002`); all other cases in `compat/do` have been checked. The new estimators were checked against statsmodels (Cox, Kaplan-Meier, log-rank, Wilcoxon, `mixed`), against direct maximization of the likelihoods (`streg`) and against exact numerical integration (`melogit`, `mepoisson`).
 
 ## Installing from source
 

@@ -24,6 +24,7 @@ HELP_DIR = Path(__file__).resolve().parents[1] / "help"
 
 ALIASES = {
     "moptimize": "mata", "optimize": "mata", "m2_class": "mata", "class": "mata",
+    "xtmixed": "mixed", "meprobit": "melogit", "mepoisson": "melogit", "estat_icc": "mixed",
     "st": "stset", "streset": "stset", "stdes": "stdescribe", "estat_phtest": "stcox",
     "d": "describe", "de": "describe", "des": "describe", "g": "generate", "gen": "generate",
     "replace": "generate", "l": "list", "li": "list", "saveold": "save", "export": "import",
