@@ -19,9 +19,9 @@ import numpy as np
 
 from ..core import missing as M
 from ..core import stats as S
-from ..core.grouping import group_ids
 from ..core.dataset import Variable, check_name, smallest_type_for, str_type_for
 from ..core.errors import StataError
+from ..core.grouping import group_ids
 from ..lang.functions import _string
 from ..lang.syntax import Parsed, parse_options, parse_standard
 from ..lang.words import parse_numlist, strip_outer_quotes
@@ -41,11 +41,22 @@ def _group_ids(s: "Session", by: list[str], mask: np.ndarray) -> np.ndarray:
 
 
 def _by_reduce(x: np.ndarray, ids: np.ndarray, fn) -> np.ndarray:
-    """Applies fn(group values) and spreads the result over the group."""
+    """Applies fn(group values) and spreads the result over the group. The observations are
+    sorted by group once (stable, so each group keeps the data order) and fn sees contiguous
+    slices: one pass instead of one scan of the data per group."""
     out = np.full(len(x), M.SYSMISS)
-    for g in np.unique(ids[ids >= 0]):
-        sel = ids == g
-        out[sel] = fn(x[sel])
+    sel = np.flatnonzero(ids >= 0)
+    if not len(sel):
+        return out
+    order = sel[np.argsort(ids[sel], kind="stable")]
+    gs = ids[order]
+    bounds = np.flatnonzero(np.diff(gs)) + 1
+    xs = x[order]
+    vals = np.empty(len(bounds) + 1)
+    for j, (a, b) in enumerate(zip(np.concatenate([[0], bounds]), np.concatenate([bounds, [len(order)]]))):
+        vals[j] = fn(xs[a:b])
+    lengths = np.diff(np.concatenate([[0], bounds, [len(order)]]))
+    out[order] = np.repeat(vals, lengths)
     return out
 
 

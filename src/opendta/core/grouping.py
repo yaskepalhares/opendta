@@ -36,11 +36,29 @@ def group_ids(ds: Dataset, names: list[str], mask: np.ndarray | None = None
     if not names:
         ids[mask] = 0
         return ids, 1
-    mat = np.column_stack([c[mask] for c in key_columns(ds, names)])
-    _, inv = np.unique(mat, axis=0, return_inverse=True)
-    inv = inv.ravel()
+    inv = _dense_ids([c[mask] for c in key_columns(ds, names)])
     ids[mask] = inv
     return ids, int(inv.max()) + 1
+
+
+def _dense_ids(cols: list[np.ndarray]) -> np.ndarray:
+    """0..k-1 in increasing key order. One key: np.unique; several: a lexicographic sort and
+    the points where any key changes (np.unique(axis=0) sorts rows as structured records and
+    is many times slower)."""
+    if len(cols) == 1:
+        _, inv = np.unique(cols[0], return_inverse=True)
+        return inv.ravel().astype(np.int64)
+    m = len(cols[0])
+    order = np.lexsort(cols[::-1])
+    change = np.zeros(m, dtype=bool)
+    if m:
+        change[0] = True
+    for c in cols:
+        cs = c[order]
+        change[1:] |= cs[1:] != cs[:-1]
+    inv = np.empty(m, dtype=np.int64)
+    inv[order] = np.cumsum(change) - 1
+    return inv
 
 
 def first_index(ids: np.ndarray, k: int) -> np.ndarray:
@@ -67,9 +85,7 @@ def joint_keys(a: list[np.ndarray], b: list[np.ndarray]) -> tuple[np.ndarray, np
             cols.append(np.concatenate([ca, cb]).astype(np.float64))
     if not cols:
         return np.zeros(na, dtype=np.int64), np.zeros(len(b[0]) if b else 0, dtype=np.int64), 1
-    mat = np.column_stack(cols)
-    if len(mat) == 0:
+    if len(cols[0]) == 0:
         return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), 0
-    _, inv = np.unique(mat, axis=0, return_inverse=True)
-    inv = inv.ravel().astype(np.int64)
+    inv = _dense_ids(cols)
     return inv[:na], inv[na:], int(inv.max()) + 1

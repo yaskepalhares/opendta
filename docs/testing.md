@@ -87,13 +87,15 @@ The `compat/` folder holds verification do-files (`compat/do/`) and the referenc
    cd "~/opendta/compat"
    do gerar_esperados.do
    ```
-3. The `compat/expected/*.log` files appear. The generator forces `set dp period` while it runs and restores your setting at the end.
-4. Send the logs: attach the new files to the conversation, or commit them from the Terminal:
+3. The `compat/stata/*.log` files appear. The generator forces `set dp period` while it runs and restores your setting at the end. `compat/stata/` is not tracked by git, so the run never blocks a `git pull`.
+4. Review the logs, for example against OpenDTA with `python tools/compare.py --expected compat/stata`, and copy them to `compat/expected/` (the versioned references) in a branch and pull request:
    ```bash
    cd ~/opendta
+   git checkout -b stata-references
+   cp compat/stata/*.log compat/expected/
    git add compat/expected
    git commit -m "Stata 14 reference logs"
-   git push
+   git push -u origin stata-references
    ```
 
 ### Compare

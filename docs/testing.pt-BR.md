@@ -87,13 +87,15 @@ A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas d
    cd "~/opendta/compat"
    do gerar_esperados.do
    ```
-3. Os arquivos `compat/expected/*.log` aparecem. O gerador força `set dp period` durante a execução e restaura a sua configuração no fim.
-4. Envie os logs: anexe os arquivos novos aqui na conversa, ou faça commit pelo Terminal:
+3. Os arquivos `compat/stata/*.log` aparecem. O gerador força `set dp period` durante a execução e restaura a sua configuração no fim. A pasta `compat/stata/` não é rastreada pelo git, então a execução nunca bloqueia um `git pull`.
+4. Revise os logs, por exemplo contra o OpenDTA com `python tools/compare.py --expected compat/stata`, e copie-os para `compat/expected/` (as referências versionadas) num branch e pull request:
    ```bash
    cd ~/opendta
+   git checkout -b stata-references
+   cp compat/stata/*.log compat/expected/
    git add compat/expected
    git commit -m "Stata 14 reference logs"
-   git push
+   git push -u origin stata-references
    ```
 
 ### Comparar

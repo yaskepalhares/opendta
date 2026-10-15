@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:39
+ opened on:  15 Oct 2026, 12:26:19
 
 . * Phase 4: errors in Mata. Does the "mata" block (without a colon) continue after
 . * an error? And "mata:"?
@@ -82,5 +82,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:39
+ closed on:  15 Oct 2026, 12:26:19
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

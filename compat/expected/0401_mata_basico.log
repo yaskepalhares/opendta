@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0401_mata_basico.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:56
+ opened on:  15 Oct 2026, 12:26:34
 
 . * Phase 4: basic Mata (display, operators, subscripts, strings).
 . mata
@@ -199,5 +199,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0401_mata_basico.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:56
+ closed on:  15 Oct 2026, 12:26:34
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

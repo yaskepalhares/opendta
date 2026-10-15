@@ -8,10 +8,11 @@ are marked "VERIFY" and have cases in the compat/ suite.
 from __future__ import annotations
 
 import datetime as _dt
-from contextlib import contextmanager
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from functools import lru_cache
 
 from . import missing as M
 from .errors import StataError
@@ -40,7 +41,10 @@ class Format:
         return self.text
 
 
+@lru_cache(maxsize=1024)
 def parse_format(text: str) -> Format:
+    """Parsed %fmt (Format is frozen, so the results are cached: display and string() parse
+    the same few formats millions of times)."""
     t = text.strip()
     m = _NUMFMT.match(t)
     if m:
