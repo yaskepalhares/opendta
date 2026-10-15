@@ -377,6 +377,12 @@ def cmd_newey(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("mi", "mi")
+def cmd_mi(s: "Session", args: str) -> None:
+    from ..estimation.mi import cmd_mi as run
+    run(s, args)
+
+
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY

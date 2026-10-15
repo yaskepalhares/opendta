@@ -19,7 +19,7 @@ logs the Newton iterations, so the number of iterations may differ
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -29,7 +29,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
-from ..lang.syntax import find_top, match_options
+from ..lang.syntax import find_top
 from . import fvars
 from .ml import maximize, print_log
 from .results import Estimates, coef_table, post, rows_from_columns
