@@ -1,8 +1,8 @@
-"""Grupos definidos por variáveis-chave (by(), collapse, contract, merge...).
+"""Groups defined by key variables (by(), collapse, contract, merge...).
 
-`group_ids` numera os grupos 0..k-1 na ordem crescente das chaves, como o
-sort os deixaria: números antes de missing (. < .a < ... < .z) e strings em
-ordem de bytes. Observações fora da máscara recebem -1.
+`group_ids` numbers the groups 0..k-1 in increasing key order, as
+sort would leave them: numbers before missing (. < .a < ... < .z) and strings in
+byte order. Observations outside the mask get -1.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from .dataset import Dataset
 
 
 def key_columns(ds: Dataset, names: list[str]) -> list[np.ndarray]:
-    """Colunas float64 que ordenam como as variáveis (strings viram postos)."""
+    """float64 columns that sort like the variables (strings become ranks)."""
     cols = []
     for name in names:
         v = ds.get(name)
@@ -27,7 +27,7 @@ def key_columns(ds: Dataset, names: list[str]) -> list[np.ndarray]:
 
 def group_ids(ds: Dataset, names: list[str], mask: np.ndarray | None = None
               ) -> tuple[np.ndarray, int]:
-    """(id do grupo por observação, nº de grupos)."""
+    """(group id per observation, number of groups)."""
     n = ds.nobs
     mask = np.ones(n, dtype=bool) if mask is None else np.asarray(mask, dtype=bool)
     ids = np.full(n, -1, dtype=np.int64)
@@ -44,18 +44,18 @@ def group_ids(ds: Dataset, names: list[str], mask: np.ndarray | None = None
 
 
 def first_index(ids: np.ndarray, k: int) -> np.ndarray:
-    """Índice da primeira observação de cada grupo (na ordem dos dados)."""
+    """Index of the first observation of each group (in data order)."""
     first = np.full(k, -1, dtype=np.int64)
     sel = np.flatnonzero(ids >= 0)
-    # percorre de trás para a frente: a última escrita é a primeira obs.
+    # walks backward: the last write is the first obs.
     first[ids[sel[::-1]]] = sel[::-1]
     return first
 
 
 def joint_keys(a: list[np.ndarray], b: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, int]:
-    """Ids comuns para chaves de dois conjuntos de dados (merge, joinby).
-    Cada lista traz uma coluna por variável-chave, já comparáveis entre si
-    (números como float64; strings como objetos str)."""
+    """Common ids for the keys of two datasets (merge, joinby).
+    Each list has one column per key variable, already comparable with each other
+    (numbers as float64; strings as str objects)."""
     na = len(a[0]) if a else 0
     cols = []
     for ca, cb in zip(a, b):

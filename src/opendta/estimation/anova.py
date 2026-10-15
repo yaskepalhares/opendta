@@ -1,11 +1,11 @@
-"""oneway, anova e tabulate, summarize() ([R] oneway, [R] anova,
+"""oneway, anova and tabulate, summarize() ([R] oneway, [R] anova,
 [R] tabulate, summarize()).
 
-anova usa somas de quadrados parciais (tipo III): cada termo é testado com
-os demais no modelo, numa codificação por desvios (soma zero), que é o que
-o Stata reporta como Partial SS. Os coeficientes e(b) e e(V) vêm de um
-regress com os mesmos termos (fatores com i.), para que predict, test e
-margins funcionem depois de anova."""
+anova uses partial sums of squares (type III): each term is tested with
+the others in the model, in a deviation (sum-to-zero) coding, which is what
+Stata reports as Partial SS. The e(b) and e(V) coefficients come from a
+regress with the same terms (factors with i.), so that predict, test and
+margins work after anova."""
 
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def cmd_oneway(s: "Session", args: str) -> None:
         out.write("-" * 72 + "\n", "text")
         out.write(f"{'    Total':<14}", "text")
         out.write(f"{_g(tss, '%11.0g'):>16}{N - 1:>7.0f}{_g(tss / (N - 1), '%11.0g'):>13}\n", "result")
-    # Bartlett: só com todos os grupos com 2 ou mais observações
+    # Bartlett: only when all groups have 2 or more observations
     chi_b = SYS
     if all(n_g > 1 for n_g in ns) and all(v > 0 for v in sds):
         sp2 = sum((n_g - 1) * v for n_g, v in zip(ns, sds)) / dfw
@@ -116,13 +116,13 @@ def cmd_oneway(s: "Session", args: str) -> None:
         if not o.get("noanova"):
             out.write(f"\nBartlett's test for equal variances:  chi2({k - 1}) = {chi_b:>8.4f}  Prob>chi2 = {pb:.3f}\n",
                       "text")
-    # ordem do return list do Stata 14 (compat 0802)
+    # return list order of Stata 14 (compat 0802)
     s.r = dict(reversed([("N", N), ("mss", ssb), ("df_m", float(dfb)), ("rss", ssw), ("df_r", dfw),
                          ("F", F), ("chi2bart", chi_b), ("df_bart", float(k - 1))]))
 
 
 def _summary_table(s: "Session", gv, yname: str, groups, mask, y, w, o) -> None:
-    """Tabela de médias, desvios e frequências por grupo (oneway, tabulate e
+    """Table of means, standard deviations and frequencies by group (oneway, tabulate and
     tabulate, summarize())."""
     show = [k for k in ("means", "standard", "freq", "obs") if o.get(k)]
     if not show:
@@ -184,8 +184,8 @@ def _summary_table(s: "Session", gv, yname: str, groups, mask, y, w, o) -> None:
 
 
 def _wrap(text: str, width: int) -> list[str]:
-    """Quebra o título em linhas de até `width` caracteres (compat 0802:
-    "Summary of" / "price" sobre uma coluna só)."""
+    """Wraps the title in lines of up to `width` characters (compat 0802:
+    "Summary of" / "price" over a single column)."""
     if len(text) <= width:
         return [text]
     lines, cur = [], ""
@@ -201,7 +201,7 @@ def _wrap(text: str, width: int) -> list[str]:
 
 
 def tab_summarize(s: "Session", gv, yname: str, mask: np.ndarray, w, o: dict) -> None:
-    """tabulate var1, summarize(var2): uma linha por valor de var1."""
+    """tabulate var1, summarize(var2): one line per value of var1."""
     yv = s.data.get(yname)
     if yv.is_string:
         raise StataError(109, "type mismatch")
@@ -223,7 +223,7 @@ _TERM = re.compile(r"^(?:(c|i)\.)?([A-Za-z_]\w*)$")
 
 
 def _parse_terms(s: "Session", text: str, continuous: set[str]):
-    """Lista de termos: cada termo é uma lista de (variável, contínua?)."""
+    """List of terms: each term is a list of (variable, continuous?)."""
     terms: list[list[tuple[str, bool]]] = []
     for tok in text.split():
         if "##" in tok:
@@ -250,14 +250,14 @@ def _parse_terms(s: "Session", text: str, continuous: set[str]):
 def _comp(s: "Session", tok: str, continuous: set[str]) -> tuple[str, bool]:
     m = _TERM.match(tok.strip())
     if not m:
-        raise StataError(198, f"{tok} invalid term")   # VERIFICAR
+        raise StataError(198, f"{tok} invalid term")   # VERIFY
     prefix, name = m.group(1), m.group(2)
     name = s.expand_varlist(name)[0]
     return name, (prefix == "c" or name in continuous)
 
 
 def _effect_columns(x: np.ndarray, levels: list) -> np.ndarray:
-    """Codificação por desvios: k-1 colunas, a última categoria = -1."""
+    """Deviation coding: k-1 columns, the last category = -1."""
     k = len(levels)
     cols = np.zeros((len(x), max(k - 1, 0)))
     for j, lv in enumerate(levels[:-1]):
@@ -296,7 +296,7 @@ def cmd_anova(s: "Session", args: str) -> None:
     o = match_options(p.options, {"partial": 4, "sequential": 3, "continuous": 4, "repeated": 6,
                                   "noconstant": 4, "dropemptycells": 4, "category": 3})
     if o.get("sequential"):
-        raise StataError(198, "option sequential not implemented")   # VERIFICAR
+        raise StataError(198, "option sequential not implemented")   # VERIFY
     words = p.varlist.split()
     if len(words) < 2:
         raise StataError(102, "too few variables specified")
@@ -349,7 +349,7 @@ def cmd_anova(s: "Session", args: str) -> None:
     r2a = 1 - (1 - r2) * (N - 1) / df_r if df_r > 0 and r2 < SYS else SYS
     rmse = math.sqrt(mse) if mse < SYS else SYS
 
-    # e(b) e e(V): regress com os mesmos termos (fatores com i.)
+    # e(b) and e(V): regress with the same terms (factors with i.)
     rhs = " ".join("#".join(("c." if c else "i.") + n for n, c in t) for t in terms)
     wtxt = f" [{wtype}={p.weight[1]}]" if p.weight else ""
     cond = f" if {p.if_}" if p.if_ else ""
@@ -392,7 +392,7 @@ def cmd_anova(s: "Session", args: str) -> None:
     out.write(sep, "text")
     line("Total", tss, N - 1, tss / (N - 1))
 
-    # e() do anova no Stata 14, na ordem do ereturn list (compat 0802)
+    # e() of anova in Stata 14, in ereturn list order (compat 0802)
     e0 = dict(s.e)
     seen: list[str] = []
     for t_ in terms:

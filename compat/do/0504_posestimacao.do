@@ -1,4 +1,4 @@
-* Fase 5a: predict, test, testparm, lincom e estimates.
+* Phase 5a: predict, test, testparm, lincom and estimates.
 clear
 estimates clear
 ereturn clear

@@ -1,11 +1,11 @@
-"""Estatísticas básicas com pesos, nas definições do manual [R] (Methods and
-formulas de summarize, centile, pctile, correlate, ttest).
+"""Basic weighted statistics, with the definitions of manual [R] (Methods and
+formulas of summarize, centile, pctile, correlate, ttest).
 
-Pesos (w):
-    fweight  frequências inteiras: cada obs. conta w vezes
-    aweight  pesos analíticos: normalizados para somar N (nº de obs.)
-    iweight  pesos "importance": usados como dados, sem normalizar
-    pweight  pesos amostrais (tratados como aweight nas médias)
+Weights (w):
+    fweight  integer frequencies: each obs. counts w times
+    aweight  analytic weights: normalized to sum to N (number of obs.)
+    iweight  "importance" weights: used as data, not normalized
+    pweight  sampling weights (treated as aweight in means)
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def valid(x: np.ndarray) -> np.ndarray:
 
 @dataclass
 class Moments:
-    N: float          # nº de observações (fweight: soma dos pesos)
+    N: float          # number of observations (fweight: sum of the weights)
     sum_w: float
     mean: float
     var: float
@@ -37,7 +37,7 @@ class Moments:
 
 
 def moments(x: np.ndarray, w: np.ndarray | None = None, wtype: str = "") -> Moments:
-    """x e w já filtrados (sem missing). Variância com divisor N-1."""
+    """x and w already filtered (no missing). Variance with divisor N-1."""
     n_obs = len(x)
     if n_obs == 0:
         return Moments(0, 0, M.SYSMISS, M.SYSMISS, M.SYSMISS, M.SYSMISS, M.SYSMISS, 0.0)
@@ -52,7 +52,7 @@ def moments(x: np.ndarray, w: np.ndarray | None = None, wtype: str = "") -> Mome
     elif wtype == "iweight":
         N = sum_w
         ww = w
-    else:                                  # aweight / pweight: normaliza para somar n
+    else:                                  # aweight / pweight: normalized to sum to n
         N = float(n_obs)
         ww = w * n_obs / sum_w if sum_w else w
     mean = float((ww * x).sum() / ww.sum()) if ww.sum() else M.SYSMISS
@@ -73,9 +73,9 @@ def moments(x: np.ndarray, w: np.ndarray | None = None, wtype: str = "") -> Mome
 
 
 def percentile(xs: np.ndarray, p: float, w: np.ndarray | None = None) -> float:
-    """Percentil p (0–100) na definição de summarize/pctile: com P = W·p/100,
-    é x_(i) para o primeiro i com W_i > P, ou a média de x_(i) e x_(i+1)
-    quando W_i = P. xs ordenado; w alinhado com xs."""
+    """Percentile p (0–100) as defined by summarize/pctile: with P = W·p/100,
+    it is x_(i) for the first i with W_i > P, or the mean of x_(i) and x_(i+1)
+    when W_i = P. xs sorted; w aligned with xs."""
     n = len(xs)
     if n == 0:
         return M.SYSMISS
@@ -95,7 +95,7 @@ def percentile(xs: np.ndarray, p: float, w: np.ndarray | None = None) -> float:
 
 
 def centile_value(xs: np.ndarray, p: float) -> float:
-    """Definição do comando centile: interpolação em R = (n+1)p/100."""
+    """Definition of the centile command: interpolation at R = (n+1)p/100."""
     n = len(xs)
     if n == 0:
         return M.SYSMISS
@@ -123,14 +123,14 @@ def z_crit(level: float) -> float:
 
 
 def chi2_tail(x: float, df: float) -> float:
-    """P(χ²(df) > x). Como o chi2tail() do Stata, devolve números
-    subnormais (até ~5e-324) em vez de zero quando a cauda é minúscula
+    """P(χ²(df) > x). Like Stata's chi2tail(), returns subnormal
+    numbers (down to ~5e-324) instead of zero when the tail is tiny
     (compat 0509: e(p) = 1.4821969375e-323)."""
     from scipy import stats as _st
     p = float(_st.chi2.sf(x, df))
     if p > 0 or not math.isfinite(x) or x <= 0:
         return p
-    # série assintótica de Q(a, z) = Γ(a, z)/Γ(a), z = x/2, a = df/2
+    # asymptotic series of Q(a, z) = Γ(a, z)/Γ(a), z = x/2, a = df/2
     a, z = df / 2.0, x / 2.0
     term, total = 1.0, 1.0
     for k in range(1, 60):

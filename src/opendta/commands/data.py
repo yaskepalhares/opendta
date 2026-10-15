@@ -1,8 +1,8 @@
-"""Comandos de dados da fase 1a: set obs, generate, replace, drop, keep,
+"""Phase 1a data commands: set obs, generate, replace, drop, keep,
 count, rename, order, sort, gsort, format, compress, input.
 
-Mensagens seguem o Stata 14 (manuais [D]); as que dependem de detalhes não
-documentados estão marcadas com VERIFICAR e têm casos em compat/.
+Messages follow Stata 14 ([D] manuals); those that depend on undocumented
+details are marked VERIFY and have cases in compat/.
 """
 
 from __future__ import annotations
@@ -104,9 +104,9 @@ def cmd_generate(s: "Session", args: str) -> None:
             vtype = s.default_type()
         col = broadcast(value, n).astype(np.float64).copy()
         col[~mask] = M.SYSMISS
-        # conta só os missing da expressão e das obs excluídas por if/in; valores
-        # fora da faixa do tipo também viram missing, mas não entram na conta
-        # (gen byte b = 200 in 1/3 informa 3, observado no Stata)
+        # counts only missing values from the expression and obs excluded by if/in; values out of
+        # the type's range also become missing but are not counted (gen byte b = 200 in 1/3 reports
+        # 3, observed in Stata)
         nmiss = int(np.sum(col >= M.SYSMISS))
         col, _ = fit_numeric(col, vtype)
 
@@ -135,7 +135,7 @@ def cmd_replace(s: "Session", args: str) -> None:
     names = p.varlist.split()
     if len(names) != 1:
         raise StataError(198, "invalid syntax")
-    # VERIFICAR: o Stata exige o nome completo no replace?
+    # VERIFY: does Stata require the full name in replace?
     var = ds.get(resolve_name(ds, names[0]))
     opts = match_options(p.options, {"nopromote": 6})
     mask = touse(s, p)
@@ -167,7 +167,7 @@ def cmd_replace(s: "Session", args: str) -> None:
 
 
 def _replace_sequential(s: "Session", var: Variable, node, rows: np.ndarray) -> np.ndarray:
-    """replace x = x[_n-1] ... usa valores já substituídos nas obs anteriores."""
+    """replace x = x[_n-1] ... uses values already replaced in earlier obs."""
     ctx = ObsContext(s, groups(s))
     original = var.raw.copy()
     out = []
@@ -242,13 +242,13 @@ def cmd_count(s: "Session", args: str) -> None:
         s.r = {"N": float(n)} if len(ids) else {"N": 0.0}
         return
     n = int(mask.sum())
-    # VERIFICAR: recuo e separador de milhar na saída de count
+    # VERIFY: indentation and thousands separator in count's output
     s.output.write(f"  {n:,}\n", "result")
     s.r = {"N": float(n)}
 
 
 def _by_header(s: "Session", first_obs: int) -> None:
-    """Cabeçalho '-> g = 1' antes de cada grupo (comandos que repetem saída)."""
+    """'-> g = 1' header before each group (commands that repeat output)."""
     keys = getattr(s, "_by_keys", [])
     ds = s.data
     parts = []
@@ -262,7 +262,7 @@ def _by_header(s: "Session", first_obs: int) -> None:
             if float(v) == int(float(v)) and int(float(v)) in lab:
                 shown = lab[int(float(v))]
         parts.append(f"{k} = {shown}")
-    # a linha ocupa c(linesize) (255 tracos no compat; VERIFICAR com o padrao 80)
+    # the line takes c(linesize) (255 dashes in compat; VERIFY with the default 80)
     width = int(s.settings.get("linesize", 80))
     s.output.write("\n" + "-" * width + "\n", "text")
     s.output.write("-> " + ", ".join(parts) + "\n", "text")
@@ -309,7 +309,7 @@ def cmd_sort(s: "Session", args: str) -> None:
     names = unique(expand(ds, p.varlist, allow_empty=False))
     match_options(p.options, {"stable": 6})
     if p.in_:
-        raise StataError(198, "sort ... in ainda não é suportado")
+        raise StataError(198, "sort ... in is not supported yet")
     sorting.sort(ds, names)
     s.notify_state()
 
@@ -346,7 +346,7 @@ def cmd_format(s: "Session", args: str) -> None:
     words = args.split()
     fmt_pos = [i for i, w in enumerate(words) if w.startswith("%")]
     if not fmt_pos:
-        # `format varlist` lista os formatos
+        # `format varlist` lists the formats
         for n in expand(ds, args):
             s.output.write(f"{n:<16}{ds.get(n).fmt}\n", "text")
         return
@@ -375,7 +375,7 @@ _BYTES = {"byte": 1, "int": 2, "long": 4, "float": 4, "double": 8}
 def cmd_compress(s: "Session", args: str) -> None:
     ds = s.data
     names = expand(ds, args) if args.strip() else ds.names
-    # numéricas primeiro, depois strings (ordem observada no Stata)
+    # numeric first, then strings (order observed in Stata)
     names = [n for n in names if not ds.get(n).is_string] + [n for n in names if ds.get(n).is_string]
     saved = 0
     for n in names:
@@ -397,13 +397,13 @@ def cmd_compress(s: "Session", args: str) -> None:
         if var.vtype == "float" and need == "double":
             need = "float"
         if TYPE_ORDER[need] < TYPE_ORDER[var.vtype]:
-            # um float só desce para inteiro se todos os valores forem inteiros
+            # a float only goes down to an integer type if all values are integers
             _note(s, f"  variable {n} was {var.vtype} now {need}")
             saved += (_BYTES[var.vtype] - _BYTES[need]) * ds.nobs
             if var.fmt == default_format(var.vtype):
                 var.fmt = default_format(need)
             var.vtype = need
-    # VERIFICAR: formato exato do resumo
+    # VERIFY: exact format of the summary
     _note(s, f"  ({saved:,} bytes saved)")
     if saved:
         ds.changed = True
@@ -430,7 +430,7 @@ def cmd_recast(s: "Session", args: str) -> None:
     if newt == "str":
         raise StataError(198, "invalid syntax")
     if not (newt in NUMERIC_TYPES or re.match(r"^str(\d+|L)$", newt)):
-        raise StataError(198, f"{newt} invalid type")   # VERIFICAR
+        raise StataError(198, f"{newt} invalid type")   # VERIFY
     if newt.startswith("str") and newt != "strL" and not 1 <= int(newt[3:]) <= STR_MAX:
         raise StataError(198, f"{newt} invalid type")
     ds = s.data
@@ -439,7 +439,7 @@ def cmd_recast(s: "Session", args: str) -> None:
         if var.vtype == newt:
             continue
         if var.is_string != is_string_type(newt):
-            raise StataError(109, f"{n}:  {newt} invalid")   # VERIFICAR código de retorno
+            raise StataError(109, f"{n}:  {newt} invalid")   # VERIFY return code
         if var.is_string:
             if newt == "strL":
                 new = var.data
@@ -454,13 +454,13 @@ def cmd_recast(s: "Session", args: str) -> None:
                                          & (new.view(np.int64) == var.data.view(np.int64)))
             changed = int((~same).sum())
         if changed and not opts.get("force"):
-            # VERIFICAR: texto e código de retorno quando há perda sem force
+            # VERIFY: text and return code when there is loss without force
             _note(s, f"{n}:  {plural(changed, 'value')} would be changed; not changed")
             continue
         if changed:
             _note(s, f"{n}:  {plural(changed, 'value')} changed")
-        # recast mantém o formato e a ordenação (observado no Stata 14:
-        # double %10.0g vira int %10.0g; "Sorted by" continua)
+        # recast keeps the format and the sort order (observed in Stata 14: double %10.0g becomes
+        # int %10.0g; "Sorted by" remains)
         var.vtype = newt
         sortlist = list(ds.sortlist)
         if var.is_string:
@@ -473,7 +473,7 @@ def cmd_recast(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# input (os dados vêm nas linhas seguintes, até `end`)
+# input (the data come in the following lines, up to `end`)
 # ---------------------------------------------------------------------------
 
 def run_input(s: "Session", spec: str, rows: list[str]) -> None:
@@ -490,7 +490,7 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
         decl.append((t, pending_type or ""))
         pending_type = None
     if not decl:
-        # sem varlist: entra nas variáveis existentes
+        # no varlist: enters data into the existing variables
         decl = [(n, "") for n in ds.names]
     created = []
     for name, t in decl:

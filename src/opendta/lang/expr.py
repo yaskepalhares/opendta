@@ -1,22 +1,22 @@
-"""Expressões: tokenização, análise sintática (Pratt) e avaliação.
+"""Expressions: tokenization, parsing (Pratt) and evaluation.
 
-Precedência, da mais forte para a mais fraca (manual [U] 13.2.5):
+Precedence, from strongest to weakest (manual [U] 13.2.5):
 
-    !  (ou ~)          negação lógica
-    ^                  potência (associativa à esquerda)
-    -                  menos unário
+    !  (or ~)          logical negation
+    ^                  power (left-associative)
+    -                  unary minus
     /  *
     -  +
-    != ~= > < >= <= == relacionais
+    != ~= > < >= <= == relational
     &
     |
 
-Regras de missing: qualquer operação aritmética com missing resulta em `.`;
-nas comparações, missing é maior que qualquer número (. < .a < ... < .z);
-em contexto lógico, todo valor diferente de 0 é verdadeiro, inclusive missing.
+Missing-value rules: any arithmetic operation with missing gives `.`;
+in comparisons, missing is greater than any number (. < .a < ... < .z);
+in a logical context, every value other than 0 is true, including missing.
 
-Nesta fase a avaliação é escalar. Na fase 1 o avaliador passa a operar
-sobre vetores (uma posição por observação) para generate/replace/if.
+This evaluator is scalar. The vectorized evaluator (lang/vexpr.py) operates
+on vectors (one position per observation) for generate/replace/if.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from typing import Any, Callable, Protocol
 from ..core import missing as M
 from ..core.errors import StataError, syntax_error, type_mismatch
 
-Value = Any  # float ou str
+Value = Any  # float or str
 
 # ---------------------------------------------------------------------------
 # Tokens
@@ -46,15 +46,15 @@ class Tok:
 _NUM = re.compile(r"(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 _MISS = re.compile(r"\.([a-z])?(?![A-Za-z0-9_])")
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-# operadores de séries temporais numa expressão: L.y, L2.y, D.y, LD.y ([U] 13.9)
+# time-series operators in an expression: L.y, L2.y, D.y, LD.y ([U] 13.9)
 _TSNAME = re.compile(r"(?:(?:[LFDS]\d*)+\.)+[A-Za-z_][A-Za-z0-9_]*")
 _OPS = ("==", "!=", "~=", ">=", "<=", "+", "-", "*", "/", "^", "!", "~",
         ">", "<", "&", "|", "(", ")", "[", "]", ",", "=")
 
 
 def tokenize(text: str, *, stop_on_unknown: bool = False) -> list[Tok]:
-    """Com stop_on_unknown=True, um caractere desconhecido encerra a lista de
-    tokens (usado por display e pelo `if exp comando`)."""
+    """With stop_on_unknown=True, an unknown character ends the list of
+    tokens (used by display and by `if exp command`)."""
     toks: list[Tok] = []
     i, n = 0, len(text)
     while i < n:
@@ -116,7 +116,7 @@ def tokenize(text: str, *, stop_on_unknown: bool = False) -> list[Tok]:
 
 
 # ---------------------------------------------------------------------------
-# Árvore sintática
+# Syntax tree
 # ---------------------------------------------------------------------------
 
 
@@ -144,14 +144,14 @@ class Name(Node):
 class Call(Node):
     name: str
     args: list[Node] = field(default_factory=list)
-    raw: str = ""  # texto bruto do argumento (r(), e(), c())
+    raw: str = ""  # raw text of the argument (r(), e(), c())
 
 
 @dataclass
 class Subscript(Node):
     name: str
     index: Node | str
-    index2: Node | None = None          # A[i,j]: elemento de matriz
+    index2: Node | None = None          # A[i,j]: matrix element
 
 
 @dataclass
@@ -179,9 +179,9 @@ _INFIX_BP: dict[str, tuple[int, int]] = {
 _UMINUS_BP = 60
 _NOT_BP = 80
 
-# funções cujo argumento é um nome, não uma expressão: r(mean), e(N), c(pi)
+# functions whose argument is a name, not an expression: r(mean), e(N), c(pi)
 _RAW_ARG_FUNCS = {"r", "e", "c", "s"}
-# _b[x], _se[x]: índice é um nome
+# _b[x], _se[x]: the index is a name
 _RAW_SUBSCRIPTS = {"_b", "_se", "_coef"}
 
 
@@ -211,10 +211,10 @@ class Parser:
 
     @property
     def offset(self) -> int:
-        """Posição no texto do próximo token não consumido."""
+        """Position in the text of the next unconsumed token."""
         return self.tok.pos
 
-    # -- gramática -------------------------------------------------------
+    # -- grammar -------------------------------------------------------
     def parse_full(self) -> Node:
         node = self.parse_expr()
         if not self.at_end():
@@ -311,7 +311,7 @@ class Parser:
         return Name(name)
 
 
-# funções cujo 1º argumento é o nome de uma matriz (ver commands/matrix.py)
+# functions whose 1st argument is the name of a matrix (see commands/matrix.py)
 MATRIX_FUNCS = {"rowsof", "colsof", "el", "trace", "det", "issymmetric", "rownumb",
                 "colnumb", "matmissing", "mreldif"}
 
@@ -321,7 +321,7 @@ def parse(text: str) -> Node:
 
 
 # ---------------------------------------------------------------------------
-# Avaliação
+# Evaluation
 # ---------------------------------------------------------------------------
 
 
@@ -369,7 +369,7 @@ def evaluate(node: Node, ctx: Context) -> Value:
             return 0.0 if _truth(v) else 1.0
         if node.op == "+":
             if isinstance(v, str):
-                # display "a" + "b" termina em erro r(198) no Stata
+                # display "a" + "b" ends in error r(198) in Stata
                 raise StataError(198, "invalid syntax")
             return v
         if isinstance(v, str):
@@ -442,7 +442,7 @@ def _power(a: float, b: float) -> float:
 
 
 class SimpleContext:
-    """Contexto mínimo para testes: só constantes e funções."""
+    """Minimal context for tests: only constants and functions."""
 
     def __init__(self, functions: Callable[[str, list[Value]], Value] | None = None):
         self._functions = functions

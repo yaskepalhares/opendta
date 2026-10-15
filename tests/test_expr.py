@@ -9,8 +9,8 @@ from opendta.core.errors import StataError
 @pytest.mark.parametrize("expr, expected", [
     ("1+2*3", 7),
     ("(1+2)*3", 9),
-    ("2^3^2", 64),        # ^ associativa à esquerda
-    ("-2^2", -4),         # ^ antes do menos unário
+    ("2^3^2", 64),        # ^ left-associative
+    ("-2^2", -4),         # ^ before unary minus
     ("10/4", 2.5),
     ("!0", 1),
     ("!5", 0),
@@ -33,7 +33,7 @@ def test_missing_rules(run):
     assert run.eval(". > 1e300") == 1
     assert run.eval(".a > .") == 1
     assert run.eval(".z > .a") == 1
-    assert run.eval("!.") == 0           # missing é verdadeiro
+    assert run.eval("!.") == 0           # missing is true
     assert run.eval(". == .") == 1
     assert run.eval(".a == .") == 0
 
@@ -76,7 +76,7 @@ def test_functions(run):
     assert run.eval("year(mdy(10, 8, 2026))") == 2026
     assert run.eval('date("08oct2026", "DMY")') == run.eval("mdy(10, 8, 2026)")
     assert run.eval('regexm("abc123", "[0-9]+")') == 1
-    # comportamentos observados no Stata (compat/expected/0003)
+    # behaviors observed in Stata (compat/expected/0003)
     assert run.eval('proper("joão da silva")') == "JoãO Da Silva"
     assert run.eval('abbrev("variavel_muito_longa", 10)') == "variavel~a"
     assert run.eval("round(-2.5)") == -2 and run.eval("round(-1.5)") == -1

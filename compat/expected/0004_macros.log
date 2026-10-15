@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Macros locais e globais.
+. * Local and global macros.
 . local a hello
 
 . local b "hello world"

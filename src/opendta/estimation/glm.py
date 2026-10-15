@@ -1,6 +1,6 @@
-"""glm ([R] glm): modelos lineares generalizados por máxima verossimilhança
-(Newton-Raphson, erros-padrão OIM), famílias gaussian, binomial, poisson,
-gamma, igaussian e nbinomial; ligações identity, log, logit, probit,
+"""glm ([R] glm): generalized linear models by maximum likelihood
+(Newton-Raphson, OIM standard errors), families gaussian, binomial, poisson,
+gamma, igaussian and nbinomial; links identity, log, logit, probit,
 cloglog, loglog, logc, power #, opower #."""
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def g(x: float, fmt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# ligações: (g(μ), μ = g⁻¹(η), dμ/dη, texto, nome)
+# links: (g(μ), μ = g⁻¹(η), dμ/dη, text, name)
 # ---------------------------------------------------------------------------
 
 def _link(name: str, power: float | None = None):
@@ -60,7 +60,7 @@ def _link(name: str, power: float | None = None):
             return _link("log")
         return (lambda m: m ** a, lambda e: np.sign(e) * np.abs(e) ** (1 / a),
                 lambda e: (1 / a) * np.abs(e) ** (1 / a - 1), f"g(u) = u^({a:g})", f"Power({a:g})")
-    raise StataError(198, f"unknown link {name}")   # VERIFICAR
+    raise StataError(198, f"unknown link {name}")   # VERIFY
 
 
 _FAMILY_DEFAULT_LINK = {"gaussian": ("identity", None), "binomial": ("logit", None), "poisson": ("log", None),
@@ -85,7 +85,7 @@ def cmd_glm(s: "Session", args: str) -> None:
     fam_words = str(o.get("family") or "gaussian").split()
     fam = _FAMILY_ALIASES.get(fam_words[0].lower())
     if fam is None:
-        raise StataError(198, f"unknown family {fam_words[0]}")   # VERIFICAR
+        raise StataError(198, f"unknown family {fam_words[0]}")   # VERIFY
     ds = s.data
     y = pr.y
     m_trials = np.ones(len(y))
@@ -112,7 +112,7 @@ def cmd_glm(s: "Session", args: str) -> None:
     k = X.shape[1]
     w = pr.w
     if fam == "binomial" and (np.any(y < 0) or np.any(y > m_trials)):
-        raise StataError(499, f"{pr.smp.depname} has values outside [0, n]")   # VERIFICAR
+        raise StataError(499, f"{pr.smp.depname} has values outside [0, n]")   # VERIFY
 
     def var(mu):
         if fam == "gaussian":
@@ -166,15 +166,15 @@ def cmd_glm(s: "Session", args: str) -> None:
             return (special.gammaln(y + mm) - special.gammaln(mm) - special.gammaln(y + 1)
                     + mm * np.log(mm / (mm + mu)) + y * np.log(mu / (mm + mu)))
 
-    # quase-verossimilhança para o NR (dispersão 1): soma de (y-μ)/V dμ/dη x
+    # quasi-likelihood for NR (dispersion 1): sum of (y-μ)/V dμ/dη x
     def grad(b):
         eta = X @ b + off
         mu = ginv(eta)
         return X.T @ (w * (y - mu) / var(mu) * dmu(eta))
 
-    # hessiana analítica (OIM): -X'diag(w dμ²/V)X + X'diag(w (y-μ) h)X, com
-    # h = d/dη (dμ/dη / V); nas ligações canônicas h = 0. A hessiana numérica
-    # deixava a estatística de Wald com erro no 12º algarismo (compat 0509).
+    # analytic Hessian (OIM): -X'diag(w dμ²/V)X + X'diag(w (y-μ) h)X, with h = d/dη (dμ/dη / V);
+    # for canonical links h = 0. The numerical Hessian left the Wald statistic wrong in the 12th
+    # digit (compat 0509).
     lnorm = link_name.lower()
     canonical = (fam, lnorm) in (("binomial", "logit"), ("poisson", "log"), ("gaussian", "identity"))
 
@@ -198,7 +198,7 @@ def cmd_glm(s: "Session", args: str) -> None:
             return -np.inf, None, None
         if fam in ("poisson", "gamma", "igaussian", "nbinomial") and np.any(mu <= 0):
             return -np.inf, None, None
-        # NR na verossimilhança com dispersão fixa em 1 (gaussian: equivale a MQO)
+        # NR on the likelihood with dispersion fixed at 1 (gaussian: equivalent to OLS)
         ll = float(w @ loglik(mu, 1.0)) if fam not in ("gaussian",) else float(-0.5 * w @ (y - mu) ** 2)
         if fam in ("gamma", "igaussian"):
             ll = float(-0.5 * w @ deviance_i(mu))
@@ -206,8 +206,8 @@ def cmd_glm(s: "Session", args: str) -> None:
             return ll, None, None
         return ll, grad(b), hess(b)
 
-    # início: um passo de IRLS a partir de μ0 = m(y+.5)/(m+1) (binomial) ou
-    # (y + ȳ)/2 (demais): reproduz a iteração 0 do Stata (compat 0509)
+    # start: one IRLS step from μ0 = m(y+.5)/(m+1) (binomial) or (y + ȳ)/2 (others): reproduces
+    # Stata's iteration 0 (compat 0509)
     ybar = float(np.sum(w * y) / np.sum(w))
     mu0 = m_trials * (y + 0.5) / (m_trials + 1) if fam == "binomial" else (y + ybar) / 2
     eta0 = gfun(mu0)
@@ -225,13 +225,13 @@ def cmd_glm(s: "Session", args: str) -> None:
     else:
         phi = pearson / df
     ll_rep = float(w @ loglik(mu, phi if fam != "gaussian" else dev / N))
-    # log de iterações: nas famílias sem escala, o objetivo do NR é a própria
-    # verossimilhança. VERIFICAR o log do Stata para gaussian, gamma e igaussian
+    # iteration log: for families without a scale, the NR objective is the likelihood itself.
+    # VERIFY Stata's log for gaussian, gamma and igaussian
     if fam in ("binomial", "poisson", "nbinomial"):
         _log(s, pr, res)
     elif fam == "gaussian" and link_name.lower() == "identity":
-        # o passo de IRLS inicial já é a solução de MQO: o Stata mostra só a
-        # iteração 0, com a verossimilhança final, e e(ic) = 0 (compat 0509)
+        # the initial IRLS step is already the OLS solution: Stata shows only iteration 0, with the
+        # final likelihood, and e(ic) = 0 (compat 0509)
         res.log = [(0, ll_rep, "")]
         res.iterations = 0
         _log(s, pr, res)
@@ -268,10 +268,10 @@ def cmd_glm(s: "Session", args: str) -> None:
     pchi = float(_chi2_tail(chi2, len(slopes))) if chi2 < SYS else SYS
     fam_code = {"gaussian": 1, "binomial": 2, "poisson": 3, "gamma": 4, "igaussian": 5, "nbinomial": 6}[fam]
     link_code = {"Identity": 1, "Logit": 2, "Log": 3, "Probit": 8, "Complementary log-log": 7,
-                 "Log-log": 6, "Log-complement": 5}.get(link_name, 9)   # VERIFICAR códigos
+                 "Log-log": 6, "Log-complement": 5}.get(link_name, 9)   # VERIFY codes
     linkf = link_text.split("= ", 1)[1] if "= " in link_text else link_text
     varf = fam_text[0].split("= ", 1)[1]
-    # e(): nomes e ordem observados no Stata 14 (compat 0509, glm binomial logit)
+    # e(): names and order observed in Stata 14 (compat 0509, glm binomial logit)
     sv = [("N", N), ("ic", float(res.iterations)), ("k", float(k)), ("k_eq", 1.0), ("k_dv", 1.0),
           ("converged", 1.0 if res.converged else 0.0), ("ll", ll_rep), ("chi2", chi2), ("p", pchi), ("rc", 0.0),
           ("aic", aic), ("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0),
@@ -312,7 +312,7 @@ def cmd_glm(s: "Session", args: str) -> None:
     est.glm_ginv, est.glm_fam = ginv, fam
     est.predict = _predict_glm
     if o.get("eform"):
-        # títulos observados: binomial/log -> Risk Ratio (compat 0509); os demais VERIFICAR
+        # observed titles: binomial/log -> Risk Ratio (compat 0509); the others VERIFY
         title_ef = {("binomial", "Logit"): "Odds Ratio", ("binomial", "Log"): "Risk Ratio",
                     ("poisson", "Log"): "IRR", ("nbinomial", "Log"): "IRR"}.get((fam, link_name), "exp(b)")
         est.coef_title, est.eform_on = title_ef, True
@@ -327,7 +327,7 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
     x = est.extra
     if header:
         out.write("\n", "text")
-        L = 50   # VERIFICAR colunas
+        L = 50   # VERIFY colunas
         rows = [
             (f"{est.title}", ("No. of obs", g(x["N"], "%10.0fc") if False else f"{int(x['N']):,}")),
             ("Optimization     : ML", ("Residual df", f"{int(x['df']):,}")),

@@ -1,7 +1,7 @@
-"""codebook e misstable ([D] codebook, [R] misstable).
+"""codebook and misstable ([D] codebook, [R] misstable).
 
-Layouts reconstruídos de saídas do Stata 14; o que não pôde ser conferido
-tem a marca VERIFICAR e casos em compat/do/0803_codebook_bootstrap.do."""
+Layouts rebuilt from Stata 14 output; what could not be checked
+has the VERIFY mark and cases in compat/do/0803_codebook_bootstrap.do."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ def _width(s: "Session") -> int:
 
 
 def _g(x: float) -> str:
-    """Média e desvio-padrão do codebook: 6 algarismos significativos
-    (VERIFICAR; reproduz '21.2973' e '5.7855' da documentação)."""
+    """Mean and standard deviation in codebook: 6 significant digits
+    (VERIFY; reproduces '21.2973' and '5.7855' from the documentation)."""
     if x >= SYS or not math.isfinite(x):
         return "."
     t = f"{x:.6g}"
@@ -49,8 +49,8 @@ def _num(x: float) -> str:
 
 
 def _units(vals: np.ndarray, tol: float = 1e-9) -> str:
-    """Maior potência de 10 que divide todos os valores (VERIFICAR: o Stata
-    também usa unidades como 2 ou 5?)."""
+    """Largest power of 10 that divides all values (VERIFY: does Stata
+    also use units such as 2 or 5?)."""
     if len(vals) == 0:
         return "."
     top = float(np.max(np.abs(vals))) or 1.0
@@ -110,8 +110,7 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
         elif len(uniq) > 0:
             srt = sorted(nonmiss.tolist())
             n = len(srt)
-            # exemplos: posições floor(n·k/5), k = 1..4, na lista ordenada
-            # (compat 0803)
+            # examples: positions floor(n·k/5), k = 1..4, in the sorted list (compat 0803)
             picks = [srt[min(n - 1, n * k // 5)] for k in (1, 2, 3, 4)]
             for k, ex in enumerate(picks):
                 lab = "examples:" if k == 0 else ""
@@ -136,7 +135,7 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
     _line(s, "range", rng, "units", _units(valid, 1e-6 if v.vtype == "float" else 1e-12))
     uniq = np.unique(valid)
     _line(s, "unique values", str(len(uniq)), "missing .", f"{N - len(valid)}/{N}")
-    # VERIFICAR: com missing estendidos (.a, .b...) o Stata mostra "missing .*:"
+    # VERIFY: with extended missing values (.a, .b...) Stata shows "missing .*:"
     out.write("\n", "text")
     labs = ds.value_labels.get(v.value_label, {}) if v.value_label else {}
     if len(uniq) == 0:
@@ -162,7 +161,7 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
         out.write("\n", "text")
         return
     if labs:
-        # VERIFICAR: variável rotulada com muitos valores mostra exemplos?
+        # VERIFY: does a labeled variable with many values show examples?
         pass
     mean = float(valid.mean())
     sd = float(valid.std(ddof=1)) if len(valid) > 1 else SYS
@@ -171,7 +170,7 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
     out.write("\n", "text")
     srt = np.sort(valid)
     ps = [S.percentile(srt, q) for q in (10, 25, 50, 75, 90)]
-    # primeira coluna com 9 caracteres, as demais com 10 (compat 0803)
+    # first column 9 characters wide, the others 10 (compat 0803)
     out.write(f"{'percentiles:':>23}  ", "text")
     out.write("".join(f"{str(q) + '%':>{9 if i == 0 else 10}}" for i, q in enumerate((10, 25, 50, 75, 90)))
               + "\n", "text")
@@ -181,7 +180,7 @@ def _codebook_var(s: "Session", v: "Variable", mask: np.ndarray, tab_max: int, o
 
 
 def _compact(s: "Session", names: list[str], mask: np.ndarray) -> None:
-    """Uma linha por variável. Larguras pelo conteúdo, como no Stata 14
+    """One line per variable. Widths follow the content, as in Stata 14
     (compat 0803: "Variable   Obs Unique      Mean   Min    Max  Label")."""
     ds = s.data
     out = s.output
@@ -233,7 +232,7 @@ def cmd_codebook(s: "Session", args: str) -> None:
     s.output.write("\n", "text")
     if o.get("header") or o.get("all"):
         out = s.output
-        out.write(f"{'Dataset:':>17}  {ds.filename or '(unnamed)'}\n", "text")   # VERIFICAR
+        out.write(f"{'Dataset:':>17}  {ds.filename or '(unnamed)'}\n", "text")   # VERIFY
         out.write(f"{'Last saved:':>17}  {ds.timestamp or 'never'}\n", "text")
         out.write(f"{'Label:':>17}  {ds.label or '(none)'}\n", "text")
         out.write(f"{'Number of vars:':>17}  {ds.nvars:,}\n", "text")
@@ -278,7 +277,7 @@ def _problems(s: "Session", names: list[str], mask: np.ndarray) -> None:
                 add("vars with nonexistent labels", n)
     out.write("\n", "text")
     if not probs:
-        out.write("no potential problems in dataset\n", "text")   # VERIFICAR
+        out.write("no potential problems in dataset\n", "text")   # VERIFY
         return
     fname = ds.filename or "[unnamed]"
     out.write(f"   Potential problems in dataset   {fname}\n\n", "text")
@@ -324,7 +323,7 @@ def cmd_misstable(s: "Session", args: str) -> None:
     elif full == "patterns":
         _miss_patterns(s, names, mask, o)
     else:
-        raise StataError(198, f"misstable {full} not implemented")   # VERIFICAR
+        raise StataError(198, f"misstable {full} not implemented")   # VERIFY
 
 
 def _miss_summarize(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:
@@ -364,7 +363,7 @@ def _miss_summarize(s: "Session", names: list[str], mask: np.ndarray, o: dict) -
     num = [r for r in rows if r[1] is not None]
     if num:
         n_, eq, gt, lt, uq, mn, mx = num[-1]
-        # ordem do return list (compat 0803); valores da última variável numérica
+        # return list order (compat 0803); values of the last numeric variable
         s.r = {"vartype": "numeric", "N_lt_dot": float(lt), "min": float(mn), "max": float(mx),
                "N_eq_dot": float(eq), "N_gt_dot": float(gt), "K_uniq": float(uq)}
 
@@ -374,24 +373,24 @@ def _miss_patterns(s: "Session", names: list[str], mask: np.ndarray, o: dict) ->
     out = s.output
     cols = [n for n in names if np.any(ds.get(n).data[mask] >= SYS)]
     if not cols:
-        out.write("(no missing values)\n", "text")   # VERIFICAR
+        out.write("(no missing values)\n", "text")   # VERIFY
         return
-    # ordem das variáveis: menos missing primeiro (VERIFICAR)
+    # variable order: fewest missing first (VERIFY)
     cols.sort(key=lambda n: int((ds.get(n).data[mask] >= SYS).sum()))
     M_ = np.column_stack([(ds.get(n).data[mask] < SYS).astype(int) for n in cols])
     pats, counts = np.unique(M_, axis=0, return_counts=True)
-    # padrão completo primeiro, depois por frequência (VERIFICAR)
+    # complete pattern first, then by frequency (VERIFY)
     order = sorted(range(len(pats)), key=lambda j: (0 if pats[j].sum() == len(cols) else 1, -counts[j]))
     N = int(mask.sum())
     freq = bool(o.get("frequency"))
     k = len(cols)
-    # layout do Stata 14 (compat 0803)
+    # Stata 14 layout (compat 0803)
     out.write("\n" + " " * 3 + "Missing-value patterns\n", "text")
     out.write(" " * 5 + "(1 means complete)\n\n", "text")
     out.write(f"{'':>14}|   Pattern\n", "text")
     head = "    Frequency " if freq else "    Percent   "
     out.write(head + "|  " + "  ".join(str(j + 1) for j in range(k)) + "\n", "text")
-    dash = max(13, 3 * k + 7)   # VERIFICAR com mais variáveis
+    dash = max(13, 3 * k + 7)   # VERIFY with more variables
     out.write("  " + "-" * 12 + "+" + "-" * dash + "\n", "text")
     first = True
     for idx in order:
@@ -409,4 +408,4 @@ def _miss_patterns(s: "Session", names: list[str], mask: np.ndarray, o: dict) ->
     out.write((f"{N:>13,} " if freq else f"{'100':>9}%    ") + "|\n\n", "text")
     out.write("  Variables are  " + "  ".join(f"({j + 1}) {n}" for j, n in enumerate(cols)) + "\n", "text")
     s.r = {"N_complete": float(int((M_.sum(axis=1) == k).sum())), "N_incomplete": float(int((M_.sum(axis=1) < k).sum())),
-           "K": float(len(pats))}   # VERIFICAR nomes
+           "K": float(len(pats))}   # VERIFY nomes

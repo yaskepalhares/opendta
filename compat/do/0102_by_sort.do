@@ -1,4 +1,4 @@
-* Fase 1a: sort, gsort, by/bysort, _n, _N, subscritos, sum().
+* Phase 1a: sort, gsort, by/bysort, _n, _N, subscripts, sum().
 clear
 input g x
 2 20

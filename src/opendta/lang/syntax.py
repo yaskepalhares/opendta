@@ -1,10 +1,10 @@
-"""Sintaxe padrão dos comandos (manual [U] 11):
+"""Standard command syntax (manual [U] 11):
 
     [by varlist:] command [varlist] [=exp] [if exp] [in range] [weight] [using filename] [, options]
 
-`parse_standard` separa as partes respeitando aspas, parênteses e colchetes.
-`parse_options` e `match_options` tratam as opções com abreviações.
-`parse_in` converte um intervalo `in` em índices.
+`parse_standard` splits the parts, respecting quotes, parentheses and brackets.
+`parse_options` and `match_options` handle options with abbreviations.
+`parse_in` converts an `in` range into indices.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class Parsed:
 
 
 def _scan(text: str):
-    """Gera (posição, caractere, profundidade) fora de aspas."""
+    """Yields (position, character, depth) outside quotes."""
     depth = 0
     i, n = 0, len(text)
     while i < n:
@@ -72,7 +72,7 @@ def find_top(text: str, ch: str) -> int:
 
 
 def _find_keyword(text: str, word: str) -> int:
-    """Posição de `word` como palavra solta no nível superior (ou -1)."""
+    """Position of `word` as a standalone word at the top level (or -1)."""
     for i, c, d in _scan(text):
         if d != 0 or c != word[0]:
             continue
@@ -102,7 +102,7 @@ def _find_weight(text: str) -> tuple[int, int]:
                         break
             if _WEIGHT.match(text[i:j + 1]):
                 before = text[:i].rstrip()
-                # x[_n-1] é subscrito, não peso
+                # x[_n-1] is a subscript, not a weight
                 if before and (before[-1].isalnum() or before[-1] == "_") and not text[i - 1].isspace():
                     continue
                 return i, j + 1
@@ -138,7 +138,7 @@ def parse_standard(text: str) -> Parsed:
         p.weight = (_WEIGHT_NAMES[m.group(1)], m.group(2))
         t = (t[:a] + " " + t[b:]).strip()
 
-    # using, if e in: localiza e recorta do fim para o começo
+    # using, if and in: located and cut from the end toward the start
     marks = []
     for kw in ("using", "if", "in"):
         pos = _find_keyword(" " + t, kw)
@@ -169,7 +169,7 @@ def parse_standard(text: str) -> Parsed:
 
 
 # ---------------------------------------------------------------------------
-# Opções
+# Options
 # ---------------------------------------------------------------------------
 
 def parse_options(text: str) -> list[tuple[str, str | None]]:
@@ -208,8 +208,8 @@ def parse_options(text: str) -> list[tuple[str, str | None]]:
 
 
 def match_options(text: str, spec: dict[str, int]) -> dict[str, str | bool]:
-    """`spec`: nome completo -> tamanho mínimo da abreviação.
-    Devolve {nome completo: argumento ou True}."""
+    """`spec`: full name -> minimal abbreviation length.
+    Returns {full name: argument or True}."""
     result: dict[str, str | bool] = {}
     for name, arg in parse_options(text):
         for full, minimum in spec.items():
@@ -226,7 +226,7 @@ def match_options(text: str, spec: dict[str, int]) -> dict[str, str | bool]:
 # ---------------------------------------------------------------------------
 
 def parse_in(text: str, nobs: int) -> tuple[int, int]:
-    """Converte '1/10', 'f/l', '-5/l', '5' em (início, fim) 0-based, fim exclusivo."""
+    """Converts '1/10', 'f/l', '-5/l', '5' into 0-based (start, end), end exclusive."""
     t = text.replace(" ", "")
 
     def one(tok: str) -> int:
@@ -263,7 +263,7 @@ class ByPrefix:
 
 
 def parse_by(text: str) -> ByPrefix:
-    """Analisa o que vem entre 'by' e ':' — 'g1 g2 (t)', ', sort'."""
+    """Parses what comes between 'by' and ':' — 'g1 g2 (t)', ', sort'."""
     t = text.strip()
     bp = ByPrefix()
     comma = find_top(t, ",")

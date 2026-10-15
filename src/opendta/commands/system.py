@@ -48,8 +48,8 @@ def cmd_set(s: "Session", args: str) -> None:
         from ..estimation.numerics import set_precise
         set_precise(v == "precise")
     if name in ("language", "messages"):
-        # extensão do OpenDTA (não existe no Stata): idioma da interface e das
-        # explicações de erro, e tradução opcional das mensagens do Stata
+        # OpenDTA extension (not in Stata): language of the interface and of the error
+        # explanations, and optional translation of Stata's messages
         from .. import i18n
         v = value.split(",")[0].strip().lower()
         if name == "language":
@@ -76,7 +76,7 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
     from ..core import rng
     v = value.strip()
     if name == "rng":
-        # VERIFICAR: kiss32 (gerador do Stata 13 e anteriores) não implementado
+        # VERIFY: kiss32 (generator of Stata 13 and earlier) not implemented
         if v not in ("default", "mt64"):
             raise StataError(198, f"rng {v} not available")
         s.settings["rng"] = v
@@ -85,15 +85,15 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
         try:
             rng.RNG.set_state(v)
         except ValueError:
-            raise StataError(198, "invalid seed state")   # VERIFICAR
+            raise StataError(198, "invalid seed state")   # VERIFY
         return
     try:
         seed = int(v)
     except ValueError:
         raise StataError(198, "invalid syntax")
-    # o Stata 14 aceita sementes negativas sem erro (compat 0307); como as
-    # converte em estado não é documentado: aqui, complemento de dois em 64 bits
-    rng.RNG.seed(seed % 2**64)   # VERIFICAR sementes negativas
+    # Stata 14 accepts negative seeds without an error (compat 0307); how it turns them into a
+    # state is undocumented: here, 64-bit two's complement
+    rng.RNG.seed(seed % 2**64)   # VERIFY sementes negativas
     s.settings["seed"] = str(seed)
 
 
@@ -165,7 +165,7 @@ def cmd_cd(s: "Session", args: str) -> None:
 def cmd_about(s: "Session", args: str) -> None:
     out = s.output
     out.write(f"OpenDTA {__version__}\n", "result")
-    out.write("Interpretador de do-files compatível com a sintaxe do Stata 14\n", "text")
-    out.write(f"Python {sys.version.split()[0]} em {platform.system()}\n", "text")
+    out.write("Do-file interpreter compatible with Stata 14 syntax\n", "text")
+    out.write(f"Python {sys.version.split()[0]} on {platform.system()}\n", "text")
 
 

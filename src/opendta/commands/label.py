@@ -40,7 +40,7 @@ def cmd_label(s: "Session", args: str) -> None:
         if not words:
             raise StataError(100, "varlist required")
         if len(words) == 1:
-            vnames, lbl = words, ""          # sem nome: remove o rótulo
+            vnames, lbl = words, ""          # no name: removes the label
         else:
             *vnames, lbl = words
         if lbl == ".":

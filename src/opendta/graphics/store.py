@@ -1,8 +1,8 @@
-"""Gráficos em memória (graph dir/drop/rename/display) e arquivos .gph.
+"""Graphs in memory (graph dir/drop/rename/display) and .gph files.
 
-O .gph do OpenDTA é JSON próprio (não é o formato da StataCorp): guarda a
-descrição do gráfico (camadas e opções), não a imagem. `graph use` de um
-.gph gravado pelo Stata não é suportado."""
+OpenDTA's .gph is its own JSON (not StataCorp's format): it keeps the
+description of the graph (layers and options), not the image. `graph use` of a
+.gph saved by Stata is not supported."""
 
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ class GraphStore:
 
     def put(self, g: Graph, *, replace: bool) -> None:
         if g.name in self.graphs and not replace and g.name != "Graph":
-            # VERIFICAR: mensagem e código quando name() já existe sem replace
+            # VERIFY: message and code when name() already exists without replace
             raise StataError(110, f"graph {g.name} already exists")
-        # substituir mantém a posição na lista (VERIFICAR a ordem de graph dir)
+        # replacing keeps the position in the list (VERIFY the order of graph dir)
         self.graphs[g.name] = g
         self.current = g.name
 
@@ -37,13 +37,13 @@ class GraphStore:
         n = name or self.current
         if not n or n not in self.graphs:
             if not self.graphs:
-                raise StataError(111, "no graphs in memory")   # VERIFICAR
-            raise StataError(111, f"graph {n} not found")      # VERIFICAR
+                raise StataError(111, "no graphs in memory")   # VERIFY
+            raise StataError(111, f"graph {n} not found")      # VERIFY
         return self.graphs[n]
 
     def drop(self, name: str) -> None:
         if name not in self.graphs:
-            raise StataError(111, f"graph {name} not found")   # VERIFICAR
+            raise StataError(111, f"graph {name} not found")   # VERIFY
         del self.graphs[name]
         if self.current == name:
             self.current = next(reversed(self.graphs), "") if self.graphs else ""
@@ -76,7 +76,7 @@ def save_gph(g: Graph, path: Path, *, replace: bool, out=None) -> None:
     if path.exists() and not replace:
         raise StataError(602, f"file {path} already exists")
     if replace and not path.exists() and out is not None:
-        # como o save, replace: aviso quando o arquivo ainda não existe (compat 0701)
+        # like save, replace: a note when the file does not exist yet (compat 0701)
         out.write(f"(note: file {path} not found)\n", "text")
     payload = {"format": MAGIC, "version": VERSION, "graph": g.to_json()}
     try:
@@ -93,6 +93,6 @@ def load_gph(path: Path) -> Graph:
     except (OSError, ValueError, UnicodeDecodeError):
         payload = None
     if not isinstance(payload, dict) or payload.get("format") != MAGIC:
-        # .gph do Stata (binário próprio) ou arquivo corrompido
+        # Stata .gph (its own binary format) or a corrupt file
         raise StataError(610, f"file {path} not an OpenDTA graph file")
     return Graph.from_json(payload["graph"])

@@ -1,11 +1,11 @@
-"""Arrays associativos (asarray) e otimização (optimize) do Mata.
+"""Mata's associative arrays (asarray) and optimization (optimize).
 
-optimize() segue [M-5] optimize(): avaliadores d0, d1 e d2 (função,
-gradiente e hessiana), técnicas nr (Newton–Raphson) e bfgs, maximização ou
-minimização, critérios de convergência ptol, vtol e nrtol. As derivadas
-numéricas usam diferenças centrais; os passos do Stata não são
-documentados, então os valores de cada iteração podem diferir nas últimas
-casas (VERIFICAR o registro de iterações em compat/do/0406_mata_optimize.do).
+optimize() follows [M-5] optimize(): d0, d1 and d2 evaluators (function,
+gradient and Hessian), nr (Newton–Raphson) and bfgs techniques, maximization or
+minimization, ptol, vtol and nrtol convergence criteria. Numerical
+derivatives use central differences; Stata's steps are not
+documented, so the values of each iteration may differ in the last
+digits (VERIFY the iteration log in compat/do/0406_mata_optimize.do).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _box(obj) -> MV:
 def _unbox(v: MV, cls):
     obj = v.a[0, 0] if v.a.size == 1 else None
     if not isinstance(obj, cls):
-        raise MataError(3000, "invalid argument")   # VERIFICAR
+        raise MataError(3000, "invalid argument")   # VERIFY
     return obj
 
 
@@ -83,7 +83,7 @@ def _asarray_elements(eng, v, r):
 @lib("asarray_keys", 1)
 def _asarray_keys(eng, v, r):
     A = _unbox(v[0], AssocArray)
-    keys = sorted(A.data)          # VERIFICAR: o Stata devolve na ordem do hash
+    keys = sorted(A.data)          # VERIFY: Stata returns them in hash order
     if A.keytype == "string":
         out = np.empty((len(keys), A.keydim), dtype=object)
         for i, k in enumerate(keys):
@@ -135,7 +135,7 @@ def _opt_evaluator(eng, v, r):
         return string(S.evaluator or "")
     p = v[1]
     if p.t != "pointer" or p.scalar() is None:
-        raise MataError(3000, "function pointer required")   # VERIFICAR
+        raise MataError(3000, "function pointer required")   # VERIFY
     target = p.scalar().get()
     if not isinstance(target, str):
         raise MataError(3000, "function pointer required")
@@ -189,7 +189,7 @@ def _opt_nargs(eng, v, r):
 
 
 def _evaluate(eng, S: OptState, p: np.ndarray, todo: int):
-    """Chama o avaliador: f(todo, p, args..., v, g, H) e devolve (v, g, H)."""
+    """Calls the evaluator: f(todo, p, args..., v, g, H) and returns (v, g, H)."""
     f = eng.funcs.get(S.evaluator or "")
     if f is None:
         raise MataError(3499, f"{S.evaluator}() not found")
@@ -205,16 +205,16 @@ def _evaluate(eng, S: OptState, p: np.ndarray, todo: int):
 
 
 def _deltas(fun, p: np.ndarray, f0: float, second: bool = False) -> np.ndarray:
-    """Passos das derivadas numéricas, como descrito em [M-5] deriv(): d = h*scale,
-    h = (|p| + 1e-3)*1e-3, e a escala é procurada até |f(p) - f(p - d)| ficar
-    entre v0 = (|f|+1e-8)*1e-8 e v1 = (|f|+1e-7)*1e-7.
-    A escala anda em potências de 10 a partir de 1: com escala 0.1 o OpenDTA
-    reproduz os erros-padrão do logit d1 do compat 0406 até o último dígito.
-    VERIFICAR: quando um salto de 10 atravessa o intervalo, o Stata interpola
-    (não documentado); aqui, bisseção em escala log entre os dois lados.
-    `second`: passos da Hessiana de um avaliador d0, procurados pela segunda
-    diferença |f(p+d) - 2f(p) + f(p-d)|; com isso o caminho das iterações do
-    compat 0406 (d0) coincide com o do Stata. VERIFICAR o critério."""
+    """Steps of the numerical derivatives, as described in [M-5] deriv(): d = h*scale,
+    h = (|p| + 1e-3)*1e-3, and the scale is searched until |f(p) - f(p - d)| falls
+    between v0 = (|f|+1e-8)*1e-8 and v1 = (|f|+1e-7)*1e-7.
+    The scale moves in powers of 10 from 1: with scale 0.1 OpenDTA
+    reproduces the standard errors of the d1 logit of compat 0406 to the last digit.
+    VERIFY: when a jump of 10 crosses the interval, Stata interpolates
+    (undocumented); here, bisection on the log scale between the two sides.
+    `second`: steps of the Hessian of a d0 evaluator, searched through the second
+    difference |f(p+d) - 2f(p) + f(p-d)|; with this the iteration path of
+    compat 0406 (d0) matches Stata's. VERIFY the criterion."""
     v0 = (abs(f0) + 1e-8) * 1e-8
     v1 = (abs(f0) + 1e-7) * 1e-7
     out = np.empty_like(p)
@@ -234,7 +234,7 @@ def _deltas(fun, p: np.ndarray, f0: float, second: bool = False) -> np.ndarray:
         h = (abs(p[i]) + 1e-3) * 1e-3
         scale = 1.0
         d = diff_at(i, scale, h)
-        lo = hi = None                 # escalas com diferença < v0 e > v1
+        lo = hi = None                 # scales with difference < v0 and > v1
         for _ in range(40):
             if v0 <= d <= v1:
                 break
@@ -250,8 +250,8 @@ def _deltas(fun, p: np.ndarray, f0: float, second: bool = False) -> np.ndarray:
 
 
 def _richardson(D, h: float) -> float:
-    """Extrapolação de Richardson de uma diferença central: (4 D(h/2) - D(h)) / 3
-    elimina o termo de ordem h² do erro (set numerics precise)."""
+    """Richardson extrapolation of a central difference: (4 D(h/2) - D(h)) / 3
+    removes the order-h² term of the error (set numerics precise)."""
     return (4 * D(h / 2) - D(h)) / 3
 
 
@@ -322,8 +322,8 @@ def _num_grad(fun, p: np.ndarray, f0: float | None = None) -> np.ndarray:
 
 
 def _num_hess(fun, grad, p: np.ndarray, analytic_grad: bool = False) -> np.ndarray:
-    """Hessiana numérica: diferenças centrais do gradiente (avaliador d1) ou
-    segundas diferenças da função (d0), com os passos de _deltas()."""
+    """Numerical Hessian: central differences of the gradient (d1 evaluator) or
+    second differences of the function (d0), with the steps from _deltas()."""
     from ..estimation.numerics import precise
     if precise():
         return _num_hess_precise(fun, grad, p, analytic_grad)
@@ -359,7 +359,7 @@ def _num_hess(fun, grad, p: np.ndarray, analytic_grad: bool = False) -> np.ndarr
 def _optimize(eng, v, r):
     S = _state(v[0])
     if S.params is None:
-        raise MataError(111, "initial values not set")   # VERIFICAR
+        raise MataError(111, "initial values not set")   # VERIFY
     sign = 1.0 if S.which == "max" else -1.0
     order = {"d0": 0, "d1": 1, "d2": 2}.get(S.evaltype.lower().replace("debug", ""), 0)
 
@@ -401,7 +401,7 @@ def _optimize(eng, v, r):
                 concave = False
             Hm = H.copy()
             if not concave:
-                # força definida negativa somando um múltiplo da identidade
+                # forces negative definiteness by adding a multiple of the identity
                 lam = max(1e-8, float(np.max(np.linalg.eigvalsh(H))) * 1.1 + 1e-6)
                 Hm = H - lam * np.eye(p.size)
             step = -np.linalg.solve(Hm, g)
@@ -411,10 +411,10 @@ def _optimize(eng, v, r):
                       "text")
         if it >= S.maxiter:
             break
-        # passo com recuo (step halving); se o passo inteiro melhora, avança
-        # em incrementos de 1/8, 1/4, 1/2... do passo enquanto melhorar.
-        # VERIFICAR: regra deduzida do log do Stata (compat 0406: passos de
-        # 1.375 e 1.125 no logit); o manual só diz "forward"/"backward"
+        # step with backtracking (step halving); if the full step improves, it advances in
+        # increments of 1/8, 1/4, 1/2... of the step while it improves. VERIFY: rule deduced from
+        # Stata's log (compat 0406: steps of 1.375 and 1.125 in the logit); the manual only says
+        # "forward"/"backward"
         t = 1.0
         for _ in range(60):
             pn = p + t * step
@@ -459,7 +459,7 @@ def _optimize(eng, v, r):
             break
     from ..estimation.numerics import precise
     if converged and precise() and S.technique != "bfgs":
-        # passos de Newton extras, fora do log, enquanto o gradiente diminuir
+        # extra Newton steps, outside the log, while the gradient decreases
         for _ in range(5):
             try:
                 pn = p - np.linalg.solve(hess(p), g)
@@ -474,13 +474,13 @@ def _optimize(eng, v, r):
     H = hess(p)
     try:
         V = np.linalg.inv(-H)
-        V = (V + V.T) / 2              # simétrica, como a do Stata
+        V = (V + V.T) / 2              # symmetric, like Stata's
     except np.linalg.LinAlgError:
         V = np.full(H.shape, SYS)
     S.params = p
     S.result = {"params": p, "value": sign * f, "gradient": sign * g, "H": sign * H, "V": V,
-                # o Stata conta a iteração 0 (compat 0406: log 0..2 e 3 iterações)
-                "iterations": it + 1, "converged": converged}   # VERIFICAR
+                # Stata counts iteration 0 (compat 0406: log 0..2 and 3 iterations)
+                "iterations": it + 1, "converged": converged}   # VERIFY
     return real(p.reshape(1, -1))
 
 
@@ -488,7 +488,7 @@ def _result(key):
     def f(eng, v, r):
         S = _state(v[0])
         if key not in S.result:
-            raise MataError(3498, "optimize() has not been run")   # VERIFICAR
+            raise MataError(3498, "optimize() has not been run")   # VERIFY
         x = S.result[key]
         if isinstance(x, bool):
             return real(1.0 if x else 0.0)

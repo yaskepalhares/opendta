@@ -1,4 +1,4 @@
-* Fase 5a: qual variável o regress omite por colinearidade, pesos e opções.
+* Phase 5a: which variable regress omits for collinearity, weights and options.
 clear
 estimates clear
 ereturn clear

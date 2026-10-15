@@ -1,4 +1,4 @@
-* Mensagens de erro e códigos de retorno.
+* Error messages and return codes.
 capture noisily foo
 display _rc
 capture noisily display nada

@@ -1,4 +1,4 @@
-* Fase 5b: poisson (offset, exposure, irr, vce) e predict.
+* Phase 5b: poisson (offset, exposure, irr, vce) and predict.
 clear
 estimates clear
 ereturn clear

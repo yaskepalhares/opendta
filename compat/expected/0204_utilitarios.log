@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 2: assert, log com nome, set trace, creturn de valores fixos.
+. * Phase 2: assert, named log, set trace, creturn of fixed values.
 . clear
 
 . set obs 5

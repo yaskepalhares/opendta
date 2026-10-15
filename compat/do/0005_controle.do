@@ -1,4 +1,4 @@
-* Laços, condicionais e o eco de blocos.
+* Loops, conditionals and the echo of blocks.
 forvalues i = 1/3 {
     display "i = `i'"
 }

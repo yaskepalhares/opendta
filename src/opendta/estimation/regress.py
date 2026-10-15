@@ -1,5 +1,5 @@
-"""regress ([R] regress): mínimos quadrados com pesos, vce(robust) e
-vce(cluster), tabela ANOVA e tabela de coeficientes do Stata 14."""
+"""regress ([R] regress): least squares with weights, vce(robust) and
+vce(cluster), the ANOVA table and the coefficient table of Stata 14."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ SYS = M.SYSMISS
 
 
 def sig5(x: float) -> str:
-    """Root MSE: cinco algarismos significativos, sem o zero à esquerda."""
+    """Root MSE: five significant digits, without the leading zero."""
     if not np.isfinite(x) or abs(x) >= SYS:
         return "."
     t = f"{x:.5g}"
@@ -47,11 +47,11 @@ def comma(n: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# preparação comum aos comandos de estimação
+# preparation shared by the estimation commands
 # ---------------------------------------------------------------------------
 
 class Sample:
-    """Dependente, colunas e amostra de um comando de estimação."""
+    """Dependent variable, columns and sample of an estimation command."""
 
     def __init__(self, s: "Session", args: str, *, opts_spec: dict[str, int], weights=("aweight",
                  "fweight", "iweight", "pweight"), need_dep: bool = True, constant_opt: bool = True,
@@ -79,7 +79,7 @@ class Sample:
         if need_dep:
             dep_terms = fvars.expand_fv(ds, toks[0])
             if len(dep_terms) != 1 or dep_terms[0].is_interaction or dep_terms[0].comps[0].factor:
-                raise StataError(198, "depvar may not be a factor variable")   # VERIFICAR
+                raise StataError(198, "depvar may not be a factor variable")   # VERIFY
             self.depcomp = dep_terms[0].comps[0]
             self.depname = self.depcomp.tsname
         rest = " ".join(toks[1:] if need_dep else toks)
@@ -109,14 +109,14 @@ class Sample:
                 self.vce = "robust"
             elif "cluster".startswith(kind) and len(kind) >= 2:
                 if len(w) < 2:
-                    raise StataError(198, "option vce() misspecified")   # VERIFICAR
+                    raise StataError(198, "option vce() misspecified")   # VERIFY
                 self.vce, self.clustvar = "cluster", w[1]
             elif kind in ("ols", "oim", "opg"):
                 self.vce = kind
             elif kind in ("hc2", "hc3"):
                 self.vce = kind
             else:
-                raise StataError(198, f"vcetype '{w[0]}' not allowed")   # VERIFICAR
+                raise StataError(198, f"vcetype '{w[0]}' not allowed")   # VERIFY
         if self.wtype == "pweight" and self.vce in ("ols", "oim"):
             self.vce = "robust"
         if self.clustvar:
@@ -130,7 +130,7 @@ class Sample:
                 cm = cv >= SYS
                 if np.any(cm & self.mask):
                     self.mask &= ~cm
-                    # VERIFICAR: o Stata exclui observações com cluster missing
+                    # VERIFY: Stata excludes observations with a missing cluster
                 self.cluster = cv[self.mask]
         mask = self.mask
         n = int(mask.sum())
@@ -141,7 +141,7 @@ class Sample:
         self.n = int(mask.sum())
 
     def weights_for_fit(self) -> tuple[np.ndarray, float]:
-        """(pesos usados nas contas, N reportado)."""
+        """(weights used in the computations, reported N)."""
         n = self.n
         if self.w is None:
             return np.ones(n), float(n)
@@ -150,7 +150,7 @@ class Sample:
             return w, float(w.sum())
         if self.wtype in ("aweight", "pweight"):
             return w * n / w.sum(), float(n)
-        return w, float(w.sum())    # iweight: N = soma dos pesos (compat 0505)
+        return w, float(w.sum())    # iweight: N = sum of the weights (compat 0505)
 
 
 def cmdline(name: str, args: str) -> str:
@@ -248,8 +248,8 @@ def cmd_regress(s: "Session", args: str) -> None:
     if smp.vce == "ols":
         F = (mss / df_m) / s2 if df_m > 0 else 0.0
     elif smp.vce == "cluster" and np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300)) < k:
-        # poucos clusters: V tem posto menor que k; o Stata mostra F(posto-1, G-1)
-        # com valor missing (compat 0501). VERIFICAR o caso geral.
+        # few clusters: V has rank smaller than k; Stata shows F(rank-1, G-1) with a missing value
+        # (compat 0501). VERIFY the general case.
         rk = np.linalg.matrix_rank(Vb, tol=1e-12 * max(np.abs(Vb).max(), 1e-300))
         df_m_robust = rk - (1 if smp.constant else 0)
         F = SYS
@@ -262,7 +262,7 @@ def cmd_regress(s: "Session", args: str) -> None:
             F = SYS
     ll = -0.5 * N * (np.log(2 * np.pi) + np.log(rss / N) + 1) if rss > 0 else SYS
     ll_0 = -0.5 * N * (np.log(2 * np.pi) + np.log(tss / N) + 1) if tss > 0 and smp.constant else SYS
-    # resultados por nome (inclui bases e omitidas com zero)
+    # results by name (includes bases and omitted terms with zero)
     names = [c.name if not c.omitted else fvars.omitted_name(c.name) for c in smp.cols]
     if smp.constant:
         names.append("_cons")
@@ -300,7 +300,7 @@ def cmd_regress(s: "Session", args: str) -> None:
     scalars = [("N", N), ("df_m", df_m_report), ("df_r", df_r), ("F", F), ("r2", r2), ("rmse", rmse),
                ("mss", mss), ("rss", rss), ("r2_a", r2_a), ("ll", ll), ("ll_0", ll_0), ("rank", rank)]
     if n_clust is not None:
-        scalars.insert(1, ("N_clust", n_clust))   # VERIFICAR posição
+        scalars.insert(1, ("N_clust", n_clust))   # VERIFY position
     macros = [("cmdline", cmdline("regress", args)), ("title", "Linear regression"),
               ("marginsok", "XB default"), ("vce", smp.vce if smp.vce != "hc2" else "hc2")]
     if vcetype:
@@ -318,13 +318,13 @@ def cmd_regress(s: "Session", args: str) -> None:
 
 
 def _ols(X: np.ndarray, y: np.ndarray, w: np.ndarray, constant: bool):
-    """Coeficientes e (X'WX)⁻¹ (ordem: inclinações, depois a constante).
+    """Coefficients and (X'WX)⁻¹ (order: slopes, then the constant).
 
-    set numerics stata: como o regress do Stata, produtos cruzados dos
-    desvios em relação às médias (a constante sai de ȳ - x̄'b), invertidos
-    sem truncar autovalores pequenos.
-    set numerics precise: decomposição QR de W^(1/2)X (erro proporcional a
-    κ(X), não a κ(X)²)."""
+    set numerics stata: like Stata's regress, cross products of the
+    deviations from the means (the constant comes from ȳ - x̄'b), inverted
+    without truncating small eigenvalues.
+    set numerics precise: QR decomposition of W^(1/2)X (error proportional to
+    κ(X), not to κ(X)²)."""
     from .numerics import precise
     k = X.shape[1]
     if k == 0:
@@ -380,7 +380,7 @@ def display_regress(s: "Session", est: Estimates, *, header: bool = True, table:
         out.write("\n", "text")
     if table:
         if est.vcetype == "Robust" and est.clustvar:
-            # VERIFICAR texto e alinhamento
+            # VERIFY texto e alinhamento
             out.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                       "text")
         coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=lev, vcetype=est.vcetype)

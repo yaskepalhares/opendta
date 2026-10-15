@@ -1,5 +1,5 @@
-"""Painel e efeitos absorvidos: xtreg (fe, re, be), areg ([XT] xtreg, [R] areg),
-e variáveis instrumentais: ivregress 2sls ([R] ivregress)."""
+"""Panel and absorbed effects: xtreg (fe, re, be), areg ([XT] xtreg, [R] areg),
+and instrumental variables: ivregress 2sls ([R] ivregress)."""
 
 from __future__ import annotations
 
@@ -100,11 +100,11 @@ def cmd_xtreg(s: "Session", args: str) -> None:
     ds = s.data
     pvar = str(o.get("i")).strip() if o.get("i") else panel_info(ds)
     if not pvar:
-        raise StataError(459, "panel variable not set; use xtset varname ...")   # VERIFICAR
+        raise StataError(459, "panel variable not set; use xtset varname ...")   # VERIFY
     ids_all = ds.get(pvar).data
     mask = smp.mask & (ids_all < SYS)
     if not np.array_equal(mask, smp.mask):
-        raise StataError(459, f"{pvar} missing in sample")   # VERIFICAR
+        raise StataError(459, f"{pvar} missing in sample")   # VERIFY
     ids = ids_all[smp.mask]
     uniq, inv, counts = np.unique(ids, return_inverse=True, return_counts=True)
     G = len(uniq)
@@ -123,11 +123,11 @@ def cmd_xtreg(s: "Session", args: str) -> None:
     elif model == "re":
         _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar)
     else:
-        raise StataError(198, "xtreg, be not yet supported by OpenDTA")   # VERIFICAR
+        raise StataError(198, "xtreg, be not yet supported by OpenDTA")   # VERIFY
 
 
 def _drop_within_collinear(smp, Xw, est_cols, out):
-    """Variáveis constantes dentro dos grupos somem no fe (nota de colinearidade)."""
+    """Variables constant within groups drop out in fe (collinearity note)."""
     keep = []
     for j, c in enumerate(est_cols):
         if np.allclose(Xw[:, j], 0, atol=1e-12 * (np.abs(c.values).max() + 1)):
@@ -155,7 +155,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
     s2 = rss / df_r
     xbar, ybar = Xs.mean(axis=0), y.mean()
     cons = ybar - float(xbar @ b)
-    # V com a constante: regressão de (y - ȳi + ȳ) em (x - x̄i + x̄) e 1
+    # V with the constant: regression of (y - ȳi + ȳ) on (x - x̄i + x̄) and 1
     Xa = np.column_stack([Xw + xbar, np.ones(N)])
     Aa = np.linalg.inv(Xa.T @ Xa)
     V = s2 * Aa
@@ -163,7 +163,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
     vcetype = ""
     n_clust = None
     if smp.vce in ("robust", "cluster"):
-        # xtreg, vce(robust) = cluster no painel (Stata)
+        # xtreg, vce(robust) = cluster on the panel (Stata)
         cl = smp.cluster if smp.vce == "cluster" else ids
         ea = yw - Xw @ b
         uniq = np.unique(cl)
@@ -193,7 +193,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
     else:
         F = float(b @ np.linalg.solve(V[:k, :k], b)) / k if k else SYS
     pF = float(st.f.sf(F, k, df_r)) if F < SYS else SYS
-    # F de que todos os u_i = 0: MQO agrupado vs fe
+    # F test that all u_i = 0: pooled OLS vs fe
     Xp = np.column_stack([Xs, np.ones(N)])
     bp = np.linalg.lstsq(Xp, y, rcond=None)[0]
     rss_p = float(np.sum((y - Xp @ bp) ** 2))
@@ -213,7 +213,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
                      sigma_e=sigma_e, rho=rho, F_f=F_f, p_f=p_f, pvar=pvar)
     est.display = display_xtreg
     est.predict = _predict_xt
-    # e(): nomes e ordem observados no Stata 14 (compat 0510)
+    # e(): names and order observed in Stata 14 (compat 0510)
     tss_w = float(yw @ yw)
     ll = -0.5 * N * (np.log(2 * np.pi) + np.log(rss / N) + 1)
     ll_0 = -0.5 * N * (np.log(2 * np.pi) + np.log(tss_w / N) + 1)
@@ -228,7 +228,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
                ("r2_a", r2_a), ("rss", rss), ("mss", tss_w - rss), ("rmse", sigma_e), ("r2", r2_w), ("F", F),
                ("df_r", float(df_r)), ("N", float(N))]
     if n_clust is not None:
-        scalars.insert(scalars.index(("N", float(N))), ("N_clust", float(n_clust)))   # VERIFICAR posição
+        scalars.insert(scalars.index(("N", float(N))), ("N_clust", float(n_clust)))   # VERIFY position
     macros = [("cmdline", cmdline("xtreg", args)), ("cmd", "xtreg"), ("marginsnotok", "E U UE SCore STDP XBU"),
               ("predict", "xtrefe_p"), ("model", "fe"), ("vce", smp.vce if vcetype else "conventional")]
     if vcetype:
@@ -239,7 +239,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
 
 
 def _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
-    # Swamy-Arora: σe² do within, σu² do between (T̄ harmônico)
+    # Swamy-Arora: σe² from within, σu² from between (harmonic T̄)
     yw = _demean(y, ids, inv, counts)
     Xw = np.column_stack([_demean(Xs[:, j], ids, inv, counts) for j in range(k)]) if k else Xs
     keepw = [j for j in range(k) if not np.allclose(Xw[:, j], 0)]
@@ -260,7 +260,7 @@ def _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
     A = np.linalg.inv(Xstar.T @ Xstar)
     b = A @ (Xstar.T @ ys)
     e = ys - Xstar @ b
-    V = (float(e @ e) / (N - (k + 1))) * A   # VERIFICAR: s² da regressão transformada
+    V = (float(e @ e) / (N - (k + 1))) * A   # VERIFY: s² of the transformed regression
     vcetype = ""
     n_clust = None
     if smp.vce in ("robust", "cluster"):
@@ -354,7 +354,7 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
     out.write("-" * 78 + "\n", "text")
     if est.model == "fe" and not est.vcetype:
         out.write(f"F test that all u_i=0: F({int(x['G'] - 1)}, {int(x['df_r'])}) = {x['F_f']:.2f}".ljust(61)
-                  + f"Prob > F = {x['p_f']:.4f}\n", "text")   # VERIFICAR alinhamento
+                  + f"Prob > F = {x['p_f']:.4f}\n", "text")   # VERIFY alinhamento
 
 
 def _predict_xt(s, est, stat, mask):
@@ -384,7 +384,7 @@ def cmd_areg(s: "Session", args: str) -> None:
     avar = resolve_name(ds, str(o["absorb"]).strip())
     av = ds.get(avar).data
     if np.any(av[smp.mask] >= SYS):
-        smp.mask &= av < SYS   # VERIFICAR
+        smp.mask &= av < SYS   # VERIFY
     ids = av[smp.mask]
     uniq, inv, counts = np.unique(ids, return_inverse=True, return_counts=True)
     G = len(uniq)
@@ -471,7 +471,7 @@ def display_areg(s, est, *, header=True, table=True, level=None, **_kw):
                footer=False)
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     out.write(f"{x['avar']:>12} |", "text")
-    # compat 0510: sem linha de fechamento depois do teste dos indicadores
+    # compat 0510: no closing line after the test of the indicators
     out.write(f"{'':10}F({int(x['G'] - 1)}, {int(x['N'] - x['G'] - x['df_m'])}) = {x['F_abs']:10.3f}"
               f"{x['p_abs']:8.3f}{'':10}({int(x['G'])} categories)\n", "result")
 
@@ -488,17 +488,17 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         return
     m = re.match(r"^(\w+)\s+(.*)$", t, re.S)
     if not m or m.group(1) not in ("2sls", "liml", "gmm"):
-        raise StataError(198, "estimator must be 2sls, liml, or gmm")   # VERIFICAR
+        raise StataError(198, "estimator must be 2sls, liml, or gmm")   # VERIFY
     estimator = m.group(1)
     if estimator != "2sls":
         raise StataError(198, f"ivregress {estimator} not yet supported by OpenDTA")
     rest = m.group(2)
     mp = re.search(r"\(([^=()]+)=([^()]*)\)", rest)
     if not mp:
-        raise StataError(198, "equation not specified")   # VERIFICAR
+        raise StataError(198, "equation not specified")   # VERIFY
     endog_txt, inst_txt = mp.group(1), mp.group(2)
     exog_txt = rest[:mp.start()] + " " + rest[mp.end():]
-    # amostra: dependente + exógenas + endógenas + instrumentos sem missing
+    # sample: dependent + exogenous + endogenous + instruments without missing
     smp = Sample(s, exog_txt.strip(), opts_spec={"small": 2, "first": 3},
                  weights=("aweight", "fweight", "pweight"), extra_vars=endog_txt + " " + inst_txt)
     ds = s.data
@@ -568,7 +568,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     est.predict = _predict_xt
     r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
     est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
-    # e(): ordem observada no Stata 14 com small (compat 0510); sem small, VERIFICAR
+    # e(): order observed in Stata 14 with small (compat 0510); without small, VERIFY
     scalars = [("kappa", 1.0), ("rss", rss), ("N", float(N)), ("df_m", float(len(slopes)))]
     scalars += [("df_r", float(N - k))] if small else []
     scalars += [("rmse", rmse), ("mss", tss - rss), ("r2", r2), ("r2_a", r2_a)]
@@ -596,7 +596,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
 
 
 def _retarget(est, Xn, ex_cols, endog_terms, ex_terms):
-    """As colunas das endógenas e exógenas usam índices de termo da lista unida."""
+    """The endogenous and exogenous columns use term indices of the joined list."""
     off = len(endog_terms)
     for c in ex_cols:
         c.term = c.term + off if not getattr(c, "_retargeted", False) else c.term
@@ -607,7 +607,7 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
     out = s.output
     x = est.extra
     if header and x["small"] and not est.vcetype:
-        # com small, tabela ANOVA no layout antigo do regress (compat 0510)
+        # with small, ANOVA table in the old regress layout (compat 0510)
         out.write("\n\nInstrumental variables (2SLS) regression\n\n", "text")
         df_m, df_r, N = int(x["df_m"]), int(est.df_r), x["N"]
         right = [("Number of obs", comma(N)), (f"F({df_m:>3},{df_r:>6})", g(x["F"], "%10.2f")),

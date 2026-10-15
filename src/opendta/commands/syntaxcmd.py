@@ -1,9 +1,9 @@
-"""syntax, gettoken, marksample e markout ([P] syntax, [P] gettoken, [P] mark).
+"""syntax, gettoken, marksample and markout ([P] syntax, [P] gettoken, [P] mark).
 
-syntax lê `0' (o que veio depois do nome do programa) e o confere contra a
-descrição dada, criando as locais varlist, if, in, using, exp, weight e uma
-local por opção. Letras maiúsculas no nome de uma opção marcam a abreviação
-mínima (Detail aceita d, de, ..., detail).
+syntax reads `0' (what came after the program name) and checks it against the
+given description, creating the locals varlist, if, in, using, exp, weight and one
+local per option. Capital letters in an option name mark the minimal
+abbreviation (Detail accepts d, de, ..., detail).
 """
 
 from __future__ import annotations
@@ -28,18 +28,18 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# descrição
+# description
 # ---------------------------------------------------------------------------
 
 @dataclass
 class OptSpec:
-    name: str                # nome completo, minúsculo
-    minlen: int              # abreviação mínima
+    name: str                # full name, lowercase
+    minlen: int              # minimal abbreviation
     kind: str                # flag | string | integer | real | numlist | varlist | varname
     #                          | name | namelist | passthru | asis | star
     default: str = ""
     required: bool = False
-    no: bool = False         # noOPTION: local sem o "no"
+    no: bool = False         # noOPTION: local without the "no"
     asis: bool = False
     extra: str = ""          # especificadores (min=, max=, ascending, integer...)
 
@@ -49,7 +49,7 @@ class Spec:
     main: str = ""           # varlist | newvarlist | varname | newvarname | namelist | name | anything
     main_optional: bool = True
     main_args: str = ""
-    if_: str = ""            # "" (não aceito) | "opt" | "req"
+    if_: str = ""            # "" (not accepted) | "opt" | "req"
     if_slash: bool = False
     in_: str = ""
     in_slash: bool = False
@@ -116,7 +116,7 @@ def _option_spec(tok: str, required: bool) -> OptSpec:
         return OptSpec("*", 1, "star")
     m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\((.*)\))?", tok, re.S)
     if not m:
-        raise StataError(197, f"invalid syntax: {tok}")   # VERIFICAR
+        raise StataError(197, f"invalid syntax: {tok}")   # VERIFY
     raw, arg = m.group(1), m.group(2)
     no = raw.startswith("no") and len(raw) > 2 and raw[2].isupper()
     caps = len(raw) - len(raw.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
@@ -131,7 +131,7 @@ def _option_spec(tok: str, required: bool) -> OptSpec:
     rest = " ".join(words[1:])
     if kind not in ("string", "integer", "real", "numlist", "varlist", "varname", "name",
                     "namelist", "passthru", "asis"):
-        raise StataError(197, f"invalid syntax: {tok}")   # VERIFICAR
+        raise StataError(197, f"invalid syntax: {tok}")   # VERIFY
     spec = OptSpec(name, minlen, kind, required=required, extra=rest)
     if kind in ("integer", "real") and words[1:]:
         spec.default = words[1]
@@ -188,12 +188,12 @@ def parse_spec(text: str) -> Spec:
                 else:
                     spec.weights.append(wl)
             else:
-                raise StataError(197, f"invalid syntax: {t}")   # VERIFICAR
+                raise StataError(197, f"invalid syntax: {t}")   # VERIFY
     return spec
 
 
 # ---------------------------------------------------------------------------
-# conferência
+# checking
 # ---------------------------------------------------------------------------
 
 def _specifiers(args: str) -> dict[str, str]:
@@ -224,7 +224,7 @@ def _main(s: "Session", spec: Spec, text: str, locs: dict[str, str]) -> None:
             if not NAME_RE.match(n):
                 raise StataError(198, f"{n} invalid name")
         if kind == "name" and len(names) > 1:
-            raise StataError(103, "too many names specified")   # VERIFICAR
+            raise StataError(103, "too many names specified")   # VERIFY
         _count(names, sp, kind)
         locs[lname] = " ".join(names)
         return
@@ -277,10 +277,10 @@ def _count(items: list[str], sp: dict[str, str], kind: str) -> None:
 def _option_value(s: "Session", o: OptSpec, arg: str | None, typed: str) -> str:
     if o.kind == "flag":
         if arg is not None:
-            raise StataError(198, f"option {typed} incorrectly specified")   # VERIFICAR
+            raise StataError(198, f"option {typed} incorrectly specified")   # VERIFY
         return o.name
     if arg is None:
-        raise StataError(198, f"option {o.name}() incorrectly specified")    # VERIFICAR
+        raise StataError(198, f"option {o.name}() incorrectly specified")    # VERIFY
     if o.kind == "passthru":
         return f"{o.name}({arg})"
     if o.kind in ("string", "asis"):
@@ -296,7 +296,7 @@ def _option_value(s: "Session", o: OptSpec, arg: str | None, typed: str) -> str:
     if o.kind == "numlist":
         nums = parse_numlist(arg)
         if "integer" in o.extra and any(x != int(x) for x in nums):
-            raise StataError(126, "noninteger value not allowed")   # VERIFICAR
+            raise StataError(126, "noninteger value not allowed")   # VERIFY
         return " ".join(number_to_macro(x) for x in nums)
     if o.kind in ("varlist", "varname"):
         names = s.expand_varlist(arg)
@@ -320,10 +320,10 @@ def run_syntax(s: "Session", description: str, text: str) -> dict[str, str]:
     p: Parsed = parse_standard(text)
     locs: dict[str, str] = {}
 
-    # parse_standard põe "= exp" em p.exp e a lista antes dele em p.varlist
+    # parse_standard puts "= exp" in p.exp and the list before it in p.varlist
     if p.exp is not None:
         if not spec.exp:
-            raise StataError(101, "=exp not allowed")   # VERIFICAR
+            raise StataError(101, "=exp not allowed")   # VERIFY
         locs["exp"] = p.exp if spec.exp_slash else f"= {p.exp}"
     elif spec.exp == "req":
         raise StataError(100, "=exp required")
@@ -361,7 +361,7 @@ def run_syntax(s: "Session", description: str, text: str) -> dict[str, str]:
         locs["weight"] = wtype
         locs["exp"] = wexp if spec.weight_slash else f"= {wexp}"
 
-    # opções
+    # options
     given = parse_options(p.options) if p.options.strip() else []
     star = any(o.kind == "star" for o in spec.options)
     leftover: list[str] = []
@@ -400,7 +400,7 @@ def run_syntax(s: "Session", description: str, text: str) -> dict[str, str]:
 def cmd_syntax(s: "Session", args: str) -> None:
     text = s.macros.get_local("0")
     locs = run_syntax(s, args, text)
-    # todas as locais que a descrição pode criar começam vazias
+    # all locals the description can create start empty
     spec = parse_spec(args)
     names = {"varlist", "typlist", "namelist", "anything", "if", "in", "using", "exp", "weight",
              "options"} | {o.name[2:] if o.no else o.name for o in spec.options if o.kind != "star"}
@@ -442,7 +442,7 @@ def cmd_gettoken(s: "Session", args: str) -> None:
         if token.startswith("(") and token.endswith(")"):
             token = token[1:-1]
     s.macros.set_local(first, token)
-    if rest_name:                 # sem o 2º nome, a fonte não muda
+    if rest_name:                 # without the 2nd name, the source does not change
         s.macros.set_local(rest_name, remainder)
 
 
@@ -501,7 +501,7 @@ def _markout(s: "Session", mask: np.ndarray, names: list[str], strok: bool) -> n
         if v.is_string:
             if strok:
                 mask &= np.array([x != "" for x in v.raw], dtype=bool)
-            # VERIFICAR: sem strok, variáveis string são ignoradas
+            # VERIFY: without strok, string variables are ignored
         else:
             mask &= v.data < M.SYSMISS
     return mask

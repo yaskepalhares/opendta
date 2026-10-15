@@ -1,4 +1,4 @@
-"""Diálogo Edit > Preferences: aparência, ícone, fonte e idioma."""
+"""Edit > Preferences dialog: appearance, icon, font and language."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class PreferencesDialog(QDialog):
         self.prefs = prefs
         lay = QVBoxLayout(self)
 
-        # tema da interface
+        # interface theme
         box = QGroupBox(tr("Interface appearance"))
         row = QHBoxLayout(box)
         self.theme_group = QButtonGroup(self)
@@ -37,7 +37,7 @@ class PreferencesDialog(QDialog):
         row.addStretch(1)
         lay.addWidget(box)
 
-        # ícone do aplicativo
+        # application icon
         box = QGroupBox(tr("Application icon"))
         row = QHBoxLayout(box)
         self.icon_group = QButtonGroup(self)
@@ -95,7 +95,7 @@ class PreferencesDialog(QDialog):
         lay.addWidget(buttons)
 
     def _lang_changed(self) -> None:
-        # a tradução das mensagens do Stata só existe em português
+        # the translation of Stata's messages exists only in Portuguese
         self.translate_msgs.setEnabled(self.lang_box.currentData() == "pt")
 
     def _defaults(self) -> None:

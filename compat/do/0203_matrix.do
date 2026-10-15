@@ -1,4 +1,4 @@
-* Fase 2: matrix.
+* Phase 2: matrix.
 matrix drop _all
 matrix A = (1,2\3,4)
 matrix list A

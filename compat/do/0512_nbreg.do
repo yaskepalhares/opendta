@@ -1,4 +1,4 @@
-* Fase 5b: nbreg (Poisson, modelo só com a constante, modelo completo).
+* Phase 5b: nbreg (Poisson, constant-only model, full model).
 clear
 estimates clear
 ereturn clear

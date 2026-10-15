@@ -1,4 +1,4 @@
-* Fase 6b (continuação): BRR com hadamard(), vários estágios e pesos replicados (bootstrap, SDR, jackknife)
+* Phase 6b (continued): BRR with hadamard(), several stages and replicate weights (bootstrap, SDR, jackknife)
 clear
 estimates clear
 ereturn clear

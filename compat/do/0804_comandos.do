@@ -1,5 +1,5 @@
-* Fase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
-* qreg e putexcel
+* Phase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
+* qreg and putexcel
 clear
 set seed 804
 set obs 200

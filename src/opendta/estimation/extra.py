@@ -1,8 +1,8 @@
-"""lrtest, hausman, xtsum, xtdescribe e qreg ([R] lrtest, [R] hausman,
+"""lrtest, hausman, xtsum, xtdescribe and qreg ([R] lrtest, [R] hausman,
 [XT] xtsum, [XT] xtdescribe, [R] qreg).
 
-Fórmulas dos manuais; layouts de memória com a marca VERIFICAR até a
-conferência com o caso compat/do/0804_comandos.do."""
+Formulas from the manuals; layouts checked against case
+compat/do/0804_comandos.do, with the VERIFY mark where they could not be."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _opts(text: str, spec: dict) -> tuple[str, dict]:
 
 
 def _get_stored(s: "Session", name: str) -> dict:
-    """Resultados guardados (estimates store) ou os atuais ('.')."""
+    """Stored results (estimates store) or the current ones ('.')."""
     from .postest import _snapshot, _stored
     if name in (".", ""):
         if not s.e or "cmd" not in s.e:
@@ -65,14 +65,14 @@ def cmd_lrtest(s: "Session", args: str) -> None:
     ea, eb = _get_stored(s, a)["e"], _get_stored(s, b)["e"]
     for nm, e in ((a, ea), (b, eb)):
         if not isinstance(e.get("ll"), float):
-            raise StataError(498, f"{nm} does not contain scalar e(ll)")   # VERIFICAR
+            raise StataError(498, f"{nm} does not contain scalar e(ll)")   # VERIFY
     ka = float(ea.get("rank", ea.get("df_m", 0) + 1))
     kb = float(eb.get("rank", eb.get("df_m", 0) + 1))
     if ka == kb and not isinstance(o.get("df"), str):
-        raise StataError(498, "df(unrestricted) = df(restricted) = %d" % ka)   # VERIFICAR
+        raise StataError(498, "df(unrestricted) = df(restricted) = %d" % ka)   # VERIFY
     if float(ea.get("N", 0)) != float(eb.get("N", 0)) and not o.get("force"):
         raise StataError(498, "observations differ: %d vs. %d" % (ea.get("N", 0), eb.get("N", 0)))
-    # o modelo com mais parâmetros é o irrestrito
+    # the model with more parameters is the unrestricted one
     (u, eu, ku), (r, er, kr) = ((a, ea, ka), (b, eb, kb)) if ka > kb else ((b, eb, kb), (a, ea, ka))
     df = int(o["df"]) if isinstance(o.get("df"), str) else int(round(ku - kr))
     chi2 = 2 * (eu["ll"] - er["ll"])
@@ -83,7 +83,7 @@ def cmd_lrtest(s: "Session", args: str) -> None:
     out.write(f"{chi2:>9.2f}\n", "result")
     out.write(f"{'(Assumption: ' + r + ' nested in ' + u + ')':<54}Prob > chi2 = ", "text")
     out.write(f"{p:>9.4f}\n", "result")
-    s.r = dict(reversed([("p", p), ("chi2", chi2), ("df", float(df))]))   # ordem do compat 0804
+    s.r = dict(reversed([("p", p), ("chi2", chi2), ("df", float(df))]))   # order from compat 0804
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def cmd_hausman(s: "Session", args: str) -> None:
     common = [c for c in ca if c in cb and (o.get("constant") or c != "_cons")
               and Va[ca.index(c), ca.index(c)] > 0 and Vb[cb.index(c), cb.index(c)] > 0]
     if not common:
-        raise StataError(498, "no coefficients in common")   # VERIFICAR
+        raise StataError(498, "no coefficients in common")   # VERIFY
     ia = [ca.index(c) for c in common]
     ib = [cb.index(c) for c in common]
     b1 = np.asarray(ba.data, float).ravel()[ia]
@@ -114,7 +114,7 @@ def cmd_hausman(s: "Session", args: str) -> None:
     V1 = Va[np.ix_(ia, ia)]
     V2 = Vb[np.ix_(ib, ib)]
     if o.get("sigmamore") or o.get("sigmaless"):
-        # VERIFICAR: escala de V pelo sigma do modelo eficiente (ou do consistente)
+        # VERIFY: scaling of V by the sigma of the efficient (or of the consistent) model
         sa2 = float(eb.get("sigma_e", eb.get("rmse", 1.0))) ** 2
         sc2 = float(ea.get("sigma_e", ea.get("rmse", 1.0))) ** 2
         f = sa2 / sc2 if o.get("sigmamore") else sc2 / sa2
@@ -136,7 +136,7 @@ def cmd_hausman(s: "Session", args: str) -> None:
     na = names[0] if names[0] != "." else "."
     nb = names[1] if names[1] != "." else "."
     out.write("\n" + " " * 17 + "---- Coefficients ----\n", "text")
-    # larguras conferidas no compat 0804
+    # widths checked in compat 0804
     out.write(f"{'':>12} |{'(b)':>9}{'(B)':>13}{'(b-B)':>17}     sqrt(diag(V_b-V_B))\n", "text")
     out.write(f"{'':>12} |{na[:10]:>9}{nb[:10]:>13}{'Difference':>19}{'S.E.':>14}\n", "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
@@ -218,7 +218,7 @@ def cmd_xtsum(s: "Session", args: str) -> None:
             out.write(f"{lab:<16} |", "text")
             out.write(f"{mn:>10}{sd:>11}{lo:>11}{hi:>11}", "result")
             out.write(f" | {ol:>5} = ", "text")
-            out.write(f"{ov}\n", "result")   # layout conferido no compat 0804
+            out.write(f"{ov}\n", "result")   # layout checked in compat 0804
 
 
 def cmd_xtdescribe(s: "Session", args: str) -> None:
@@ -227,7 +227,7 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
     o = match_options(p.options, {"i": 1, "t": 1, "patterns": 1}) if p.options.strip() else {}
     pvar, tvar = _panel(s)
     if not tvar:
-        raise StataError(459, "time variable not set; use xtset varname timevar")   # VERIFICAR
+        raise StataError(459, "time variable not set; use xtset varname timevar")   # VERIFY
     ds = s.data
     m = touse(s, p) & (ds.get(pvar).data < SYS) & (ds.get(tvar).data < SYS)
     ids, tt = ds.get(pvar).data[m], ds.get(tvar).data[m]
@@ -259,7 +259,7 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
     out.write("\nDistribution of T_i:   min      5%     25%       50%       75%     95%     max\n", "text")
     widths = (26, 8, 8, 10, 10, 8, 8)     # compat 0804
     out.write("".join(f"{int(q):>{wd}}" for wd, q in zip(widths, qs)) + "\n", "result")
-    # padrões de presença (1 = observado, . = ausente) por período
+    # participation patterns (1 = observed, . = absent) by period
     tindex = {t: k for k, t in enumerate(uniq_t)}
     pats: dict[str, int] = {}
     for i in uniq_i:
@@ -286,7 +286,7 @@ def cmd_xtdescribe(s: "Session", args: str) -> None:
     out.write(" " + "-" * 27 + "+" + "-" * (T + 2) + "\n", "text")
     out.write(f"{n:>9}{100.0:>10.2f}{'':>8} |  {'X' * T}\n", "result")
     s.r = dict(reversed([("n", float(n)), ("N", float(len(ids))), ("max", float(np.max(counts))),
-                         ("min", float(np.min(counts)))]))   # VERIFICAR
+                         ("min", float(np.min(counts)))]))   # VERIFY
 
 
 def S_pct(x: np.ndarray, q: float) -> float:
@@ -299,7 +299,7 @@ def S_pct(x: np.ndarray, q: float) -> float:
 # ---------------------------------------------------------------------------
 
 def _qfit(X: np.ndarray, y: np.ndarray, tau: float, w: np.ndarray | None = None) -> np.ndarray:
-    """min Σ w ρ_τ(y - Xb) por programação linear (HiGHS)."""
+    """min Σ w ρ_τ(y - Xb) by linear programming (HiGHS)."""
     from scipy.optimize import linprog
     n, k = X.shape
     ww = np.ones(n) if w is None else w
@@ -325,7 +325,7 @@ def cmd_qreg(s: "Session", args: str) -> None:
     if q >= 1:
         q = q / 100
     if not 0 < q < 1:
-        raise StataError(198, "quantile() must be between 0 and 1")   # VERIFICAR
+        raise StataError(198, "quantile() must be between 0 and 1")   # VERIFY
     from . import fvars
     fvars.drop_collinear(smp.cols, smp.constant)
     est_cols = [c for c in smp.cols if c.values is not None]
@@ -339,16 +339,15 @@ def cmd_qreg(s: "Session", args: str) -> None:
     ww = np.ones(n) if w is None else w
     rho = lambda u, t: u * (t - (u < 0))   # noqa: E731
     min_dev = float(ww @ rho(r, q))
-    # desvio do modelo só com a constante: quantil de y
-    # o Stata usa a observação de ordem ceil(n·q) de y (com pesos, a primeira
-    # cujo peso acumulado chega a q·W): 5.36 e 3.44 no compat 0804
+    # deviation of the constant-only model: Stata uses the observation of order ceil(n·q) of y
+    # (with weights, the first whose cumulative weight reaches q·W): 5.36 and 3.44 in compat 0804
     o_ = np.argsort(y, kind="stable")
     cw = np.cumsum(ww[o_])
     yq = float(y[o_][min(int(np.searchsorted(cw, q * cw[-1] - 1e-9 * cw[-1])), n - 1)])
     raw_dev = float(ww @ rho(y - yq, q))
     pr2 = 1 - min_dev / raw_dev if raw_dev > 0 else SYS
-    # erros-padrão "iid" com densidade pelo método fitted e banda de
-    # Hall-Sheather ([R] qreg, Methods and formulas; VERIFICAR)
+    # "iid" standard errors with the density from the fitted method and the Hall-Sheather bandwidth
+    # ([R] qreg, Methods and formulas; VERIFY)
     alpha = 0.05
     zq = st.norm.ppf(q)
     h = n ** (-1 / 3) * st.norm.ppf(1 - alpha / 2) ** (2 / 3) * \
@@ -388,7 +387,7 @@ def cmd_qreg(s: "Session", args: str) -> None:
             return np.where(ok & (yy < SYS), yy - xb, SYS), ""
         raise StataError(198, f"option {stat} not allowed")
     est.predict = _pred
-    # e() na ordem do ereturn list do Stata 14 (compat 0804)
+    # e() in the ereturn list order of Stata 14 (compat 0804)
     scalars = [("rank", float(k)), ("sparsity", s_hat), ("bwidth", h),
                ("df_m", float(k - (1 if smp.constant else 0))), ("df_r", float(df_r)),
                ("f_r", 1 / s_hat if s_hat else SYS), ("N", float(n)), ("sum_w", float(ww.sum())),

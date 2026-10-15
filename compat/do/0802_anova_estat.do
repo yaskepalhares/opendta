@@ -1,4 +1,4 @@
-* Fase 8: oneway, anova, tabulate summarize() e estat
+* Phase 8: oneway, anova, tabulate summarize() and estat
 clear
 set obs 74
 gen mpg = 12 + mod(_n*7, 30) + (mod(_n, 4) == 0)*mod(_n, 9)

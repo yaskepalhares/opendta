@@ -1,4 +1,4 @@
-* Fase 6b: svy com vários estágios, réplicas (jackknife, BRR, bootstrap, SDR), estat effects e mais modelos
+* Phase 6b: svy with several stages, replicates (jackknife, BRR, bootstrap, SDR), estat effects and more models
 clear
 estimates clear
 ereturn clear

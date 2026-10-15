@@ -1,11 +1,11 @@
-"""putexcel ([P] putexcel): escreve textos, expressões e matrizes em
-células de uma planilha .xlsx (openpyxl).
+"""putexcel ([P] putexcel): writes text, expressions and matrices to
+cells of an .xlsx spreadsheet (openpyxl).
 
-Aceita as duas sintaxes do Stata 14:
-    putexcel set arquivo [, sheet(nome) replace modify]
-    putexcel A1 = "texto" B2 = (expressão) C3 = matrix(nome), names
-e a do 14.0, com o arquivo no próprio comando:
-    putexcel A1=("texto") B1=(expr) using arquivo [, sheet() replace modify]
+Accepts both Stata 14 syntaxes:
+    putexcel set file [, sheet(name) replace modify]
+    putexcel A1 = "text" B2 = (expression) C3 = matrix(name), names
+and the 14.0 one, with the file in the command itself:
+    putexcel A1=("text") B1=(expr) using file [, sheet() replace modify]
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ def _path(text: str) -> Path:
     if p.suffix == "":
         p = p.with_suffix(".xlsx")
     if p.suffix.lower() == ".xls":
-        raise StataError(198, ".xls files not supported by OpenDTA; use .xlsx")   # VERIFICAR
+        raise StataError(198, ".xls files not supported by OpenDTA; use .xlsx")   # VERIFY
     return p
 
 
 def _split_cells(text: str) -> list[tuple[str, str]]:
-    """'A1 = "x" B2 = (1+1) C3=matrix(m), names' -> [(célula, valor)]."""
+    """'A1 = "x" B2 = (1+1) C3=matrix(m), names' -> [(cell, value)]."""
     items: list[tuple[str, str]] = []
     i, n = 0, len(text)
     while i < n:
@@ -111,11 +111,11 @@ def cmd_putexcel(s: "Session", args: str) -> None:
     if head == "describe":
         out = s.output
         if not st:
-            out.write("  (no file set)\n", "text")   # VERIFICAR
+            out.write("  (no file set)\n", "text")   # VERIFY
             return
         out.write(f"  File: {st['path']}\n  Sheet: {st.get('sheet') or 'Sheet1'}\n", "text")
         return
-    # sintaxe do 14.0: ... using arquivo
+    # 14.0 syntax: ... using file
     m = re.search(r"\busing\b", t)
     c = find_top(t, ",")
     body, opt = (t, "") if c == -1 else (t[:c], t[c + 1:])
@@ -129,12 +129,12 @@ def cmd_putexcel(s: "Session", args: str) -> None:
         fresh = "replace" in o
     else:
         if opt.strip():
-            # na sintaxe com putexcel set, o Stata 14.0 não aceita opções no fim
-            # do comando (as de matriz vão dentro de matrix(nome, names));
-            # compat 0804: "option names not allowed"
+            # with the putexcel set syntax, Stata 14.0 does not accept options at the end of the
+            # command (matrix options go inside matrix(name, names)); compat 0804: "option names
+            # not allowed"
             raise StataError(198, f"option {next(iter(o))} not allowed")
         if not st:
-            raise StataError(198, "file not set; use putexcel set")   # VERIFICAR
+            raise StataError(198, "file not set; use putexcel set")   # VERIFY
         cells_txt = body
         path, sheet = st["path"], st.get("sheet", "")
         fresh = st.get("fresh", False)
@@ -158,7 +158,7 @@ def cmd_putexcel(s: "Session", args: str) -> None:
     except OSError:
         raise StataError(603, f"file {path} could not be opened")
     if st:
-        st["fresh"] = False    # depois da primeira gravação, as seguintes modificam
+        st["fresh"] = False    # after the first write, the following ones modify
     s.output.write(f"file {path} saved\n", "text")
 
 

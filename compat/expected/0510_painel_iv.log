@@ -4,7 +4,7 @@
   log type:  text
  opened on:  13 Oct 2026, 08:32:57
 
-. * Fase 5b: xtreg, areg e ivregress.
+. * Phase 5b: xtreg, areg and ivregress.
 . clear
 
 . estimates clear

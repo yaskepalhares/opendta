@@ -1,8 +1,8 @@
-"""Sessão: o estado de uma instância do OpenDTA.
+"""Session: the state of one OpenDTA instance.
 
-Equivale ao que vive na memória de uma janela do Stata: macros, scalars,
-resultados r() e e(), configurações (set), diretório de trabalho e, a partir
-da fase 1, o conjunto de dados.
+Equivalent to what lives in the memory of a Stata window: macros, scalars,
+r() and e() results, settings (set), the working directory and
+the dataset.
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "trace": "off",
     "seed": "123456789",
     "dp": "period",
-    "hints": "on",       # OpenDTA: explicação depois das mensagens de erro
-    "superscript": "on",  # OpenDTA: 1.0000×10¹⁰ em vez de 1.00000e+10 na exibição
+    "hints": "on",       # OpenDTA: explanation after error messages
+    "superscript": "on",  # OpenDTA: 1.0000×10¹⁰ instead of 1.00000e+10 on screen
     "numerics": "stata",  # OpenDTA: precise = contas mais exatas (estimation/numerics.py)
     "graphics": "on",
     "scheme": "s2color",
@@ -58,7 +58,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
 
 
 class EvalContext:
-    """Liga o avaliador de expressões ao estado da sessão."""
+    """Links the expression evaluator to the session state."""
 
     def __init__(self, session: "Session"):
         self.s = session
@@ -76,8 +76,8 @@ class EvalContext:
         return None
 
     def resolve_name(self, name: str) -> Value:
-        """Fora do contexto de observações (display, scalar, if de programação),
-        uma variável vale o seu valor na 1ª observação, como x[1]."""
+        """Outside the observation context (display, scalar, programming if),
+        a variable is worth its value in the 1st observation, like x[1]."""
         s = self.s
         if s.data.has(name):
             return self.resolve_subscript(name, 1.0)
@@ -113,7 +113,7 @@ class EvalContext:
         return "" if var.is_string else M.SYSMISS
 
     def _coef(self, name: str, index: Any) -> Value:
-        """_b[x], _se[x], _b[eq:x], [eq]_b[x] da última estimação."""
+        """_b[x], _se[x], _b[eq:x], [eq]_b[x] of the last estimation."""
         from .estimation.postest import _coef_index
         from .estimation.results import current
         import numpy as _np
@@ -143,7 +143,7 @@ class EvalContext:
         if raw in store:
             v = store[raw]
             if hasattr(v, "rows") and hasattr(v, "data"):
-                raise StataError(109, "type mismatch")   # matriz numa expressão escalar
+                raise StataError(109, "type mismatch")   # matrix in a scalar expression
             return v
         return M.SYSMISS
 
@@ -172,30 +172,30 @@ class Session:
         set_superscript(self.settings["superscript"] == "on")
         from .estimation.numerics import set_precise
         set_precise(self.settings["numerics"] == "precise")
-        self.by_groups = None   # Groups ativo durante um prefixo by
+        self.by_groups = None   # Groups active during a by prefix
         self.context = EvalContext(self)
         self._mata = None
         self._state_listeners: list[Callable[[], None]] = []
         self.do_depth = 0
         self.current_dofile = ""
-        # ganchos da interface gráfica (por exemplo "browse"); sem GUI, ficam vazios
+        # graphical interface hooks (for example "browse"); without a GUI, they stay empty
         self.ui_hooks: dict[str, Callable[..., None]] = {}
-        # programas do usuário e escopos (programas e do-files em execução)
+        # user programs and scopes (programs and do-files running)
         from .lang.programs import Program, Scope
         self.programs: dict[str, Program] = {}
         self.scopes: list[Scope] = []
 
         from .lang.interpreter import Interpreter
-        from . import commands  # noqa: F401  (registra os comandos)
+        from . import commands  # noqa: F401  (registers the commands)
         self.interp = Interpreter(self)
 
-    # -- notificações para a interface --------------------------------------
+    # -- notifications to the interface --------------------------------------
     def add_state_listener(self, fn: Callable[[], None]) -> None:
         self._state_listeners.append(fn)
 
     def default_type(self) -> str:
-        """Tipo das variáveis novas: set type; com set numerics precise, double
-        no lugar de float."""
+        """Type of new variables: set type; with set numerics precise, double
+        instead of float."""
         vt = self.settings.get("type", "float")
         if vt == "float" and self.settings.get("numerics", "stata") == "precise":
             return "double"
@@ -207,7 +207,7 @@ class Session:
 
     # -- escopos ------------------------------------------------------------------
     def close_scope(self, scope) -> None:
-        """Desfaz o que o programa/do-file deixou: temporários e preserve."""
+        """Undoes what the program/do-file left behind: temporaries and preserve."""
         ds = self.data
         if scope.tempvars:
             gone = [n for n in scope.tempvars if ds.has(n)]
@@ -239,7 +239,7 @@ class Session:
                       results=self._result_text)
 
     def _result_text(self, kind: str, name: str) -> str:
-        """`r(x)' e afins: texto da macro ou do escalar; vazio se não existir."""
+        """`r(x)' and the like: text of the macro or scalar; empty if it does not exist."""
         if kind == "c":
             v = self.creturn(name)
         else:
@@ -251,7 +251,7 @@ class Session:
             return v
         from .commands.matrix import Matrix
         if isinstance(v, Matrix):
-            return "matrix"     # VERIFICAR
+            return "matrix"     # VERIFY
         return number_to_macro(float(v))
 
     def _inline_eval(self, text: str) -> str:
@@ -318,7 +318,7 @@ class Session:
     # -- Mata ---------------------------------------------------------------
     @property
     def mata(self):
-        """Espaço de trabalho do Mata (criado no primeiro uso)."""
+        """Mata workspace (created on first use)."""
         if self._mata is None:
             from .mata.interp import MataEngine
             self._mata = MataEngine(self)
@@ -326,7 +326,7 @@ class Session:
 
     # -- by -----------------------------------------------------------------
     def run_by(self, bp, command_text: str) -> None:
-        """Executa `command_text` com o prefixo by/bysort."""
+        """Runs `command_text` with the by/bysort prefix."""
         from .core import sorting
         from .lang.vexpr import Groups
 
@@ -346,10 +346,10 @@ class Session:
             self.by_groups, self._by_keys = saved
         self.notify_state()
 
-    # -- execução -------------------------------------------------------------
+    # -- execution -------------------------------------------------------------
     def run(self, source: str, *, echo: bool = False) -> int:
-        """Executa texto (uma ou mais linhas) e devolve o código de retorno.
-        Erros são impressos como no Stata."""
+        """Runs text (one or more lines) and returns the return code.
+        Errors are printed as in Stata."""
         try:
             lines = split_commands(source)
             self.interp.run_lines(lines, echo=echo)
@@ -360,19 +360,19 @@ class Session:
         return 0
 
     def report_error(self, e: StataError, *, show_rc: bool = True) -> None:
-        """Mensagem de erro (como no Stata), explicação do OpenDTA e r(#)."""
+        """Error message (as in Stata), OpenDTA's explanation and r(#)."""
         lines: list[str] = []
         if self.settings.get("hints", "on") == "on":
             from .core.hints import explain
             try:
                 lines = explain(e, self)
-            except Exception:  # noqa: BLE001 - uma explicação nunca derruba o erro original
+            except Exception:  # noqa: BLE001 - an explanation never brings down the original error
                 lines = []
         from .i18n import translate_error
         self.output.error(translate_error(e.message), e.rc, show_rc=show_rc, hints=lines)
 
     def run_command(self, line: str) -> int:
-        """Comando digitado na janela Command: eco '. linha' e execução."""
+        """Command typed in the Command window: echo '. line' and run."""
         from .commands.logcmd import record_command
         record_command(self, line)
         self.output.echo_command(line)
@@ -386,8 +386,8 @@ class Session:
         return rc
 
     def run_text(self, text: str) -> int:
-        """Várias linhas digitadas ou coladas na janela Command: rodam como um
-        trecho de do-file (blocos inteiros, eco linha a linha)."""
+        """Several lines typed or pasted into the Command window: they run as a
+        piece of a do-file (whole blocks, echoed line by line)."""
         from .commands.logcmd import record_command
         record_command(self, text)
         try:

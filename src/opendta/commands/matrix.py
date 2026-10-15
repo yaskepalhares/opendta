@@ -1,17 +1,17 @@
-"""matrix ([P] matrix): definição, operadores, funções, listagem e nomes.
+"""matrix ([P] matrix): definition, operators, functions, listing and names.
 
-Matrizes ficam em s.matrices (e em r()/e() como resultados). Os valores são
-float64 com os códigos de missing do OpenDTA; nas contas, missing vira NaN
-e volta a '.' no fim (missing estendidos viram '.').
+Matrices live in s.matrices (and in r()/e() as results). Values are
+float64 with OpenDTA's missing codes; in computations, missing becomes NaN
+and goes back to '.' at the end (extended missing values become '.').
 
-Expressões de matriz:
+Matrix expressions:
 
-    A + B   A - B   A * B (produto ou escalar)   A # B (Kronecker)
-    A / k   -A   A'   (A, B) junta colunas   (A \\ B) junta linhas
+    A + B   A - B   A * B (product or scalar)   A # B (Kronecker)
+    A / k   -A   A'   (A, B) joins columns   (A \\ B) joins rows
     J(r,c,z) I(n) inv() invsym() cholesky() diag() vecdiag() hadamard()
-    corr() vec() nullmat() matuniform(r,c)   A[i..j, k...]   r(nome) e(nome)
+    corr() vec() nullmat() matuniform(r,c)   A[i..j, k...]   r(name) e(name)
 
-Nas expressões comuns: A[i,j], el(A,i,j), rowsof(), colsof(), trace(),
+In ordinary expressions: A[i,j], el(A,i,j), rowsof(), colsof(), trace(),
 det(), issymmetric(), rownumb(), colnumb(), matmissing(), mreldif().
 """
 
@@ -103,7 +103,7 @@ def matrix_names(s: "Session", name: str, which: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# expressões de matriz
+# matrix expressions
 # ---------------------------------------------------------------------------
 
 _TOKEN = re.compile(r"""
@@ -156,7 +156,7 @@ class _Parser:
         self.i += 1
 
     def parse(self) -> Matrix:
-        m = self.joined()             # A \ B e A, B também valem fora de parênteses
+        m = self.joined()             # A \ B and A, B also work outside parentheses
         if self.tok[0] != "end":
             raise StataError(198, "invalid syntax")
         return m
@@ -197,7 +197,7 @@ class _Parser:
         return self.power()
 
     def power(self) -> Matrix:
-        """x^y só entre escalares (1 x 1), como dentro de (`i', `i'^2)."""
+        """x^y only between scalars (1 x 1), as inside (`i', `i'^2)."""
         base = self.postfix()
         if self.is_op("^"):
             self.take()
@@ -243,7 +243,7 @@ class _Parser:
             if val in _store(self.s):
                 self.take()
                 return _store(self.s)[val].copy()
-            # escalar com nome (scalar, variável na 1ª obs.)
+            # named scalar (scalar, variable in the 1st obs.)
             self.take()
             x = self.s.eval(val)
             if isinstance(x, str):
@@ -252,8 +252,8 @@ class _Parser:
         raise StataError(198, "invalid syntax")
 
     def joined(self) -> Matrix:
-        """Dentro de parênteses: ',' junta colunas e '\\' junta linhas.
-        nullmat() de matriz inexistente some da junção."""
+        """Inside parentheses: ',' joins columns and '\\' joins rows.
+        nullmat() of a nonexistent matrix drops out of the join."""
         rows = [self.row()]
         while self.is_op("\\"):
             self.take()
@@ -416,7 +416,7 @@ def _mat_arg(s: "Session", text: str) -> Matrix:
 
 def _call(s: "Session", name: str, args: list[str]) -> Matrix:
     if name not in _MATFUNCS:
-        # função escalar: vira matriz 1 x 1
+        # scalar function: becomes a 1 x 1 matrix
         x = _scalar(s, f"{name}({', '.join(args)})")
         return Matrix(np.array([[x]]))
     if name == "J":
@@ -445,8 +445,8 @@ def _call(s: "Session", name: str, args: list[str]) -> Matrix:
         except np.linalg.LinAlgError:
             if name == "inv":
                 raise StataError(504, "matrix has missing values" if np.isnan(x).any()
-                                 else "matrix not positive definite")   # VERIFICAR
-            d = np.linalg.pinv(x)   # VERIFICAR: o Stata zera linhas/colunas dependentes
+                                 else "matrix not positive definite")   # VERIFY
+            d = np.linalg.pinv(x)   # VERIFY: o Stata zera linhas/colunas dependentes
         return Matrix(_miss(d), list(a.colnames), list(a.rownames))
     if name == "cholesky":
         try:
@@ -478,7 +478,7 @@ def _call(s: "Session", name: str, args: list[str]) -> Matrix:
 
 
 class _Empty(Matrix):
-    """nullmat() de matriz inexistente: elemento neutro da junção."""
+    """nullmat() of a nonexistent matrix: the neutral element of the join."""
 
     def __init__(self):
         self.data = np.zeros((0, 0))
@@ -493,7 +493,7 @@ def evaluate_matrix(s: "Session", text: str) -> Matrix:
 
 
 # ---------------------------------------------------------------------------
-# funções escalares sobre matrizes (usadas pelo avaliador de expressões)
+# scalar functions of matrices (used by the expression evaluator)
 # ---------------------------------------------------------------------------
 
 MATRIX_SCALAR_FUNCS = {"rowsof", "colsof", "el", "trace", "det", "issymmetric", "rownumb",
@@ -501,7 +501,7 @@ MATRIX_SCALAR_FUNCS = {"rowsof", "colsof", "el", "trace", "det", "issymmetric", 
 
 
 def matrix_scalar(s: "Session", name: str, args: list, eval_arg) -> float:
-    """args: nós da expressão; o 1º (e o 2º em mreldif) é nome de matriz."""
+    """args: expression nodes; the 1st (and the 2nd in mreldif) is a matrix name."""
     from ..lang.expr import Name, Call
 
     def mat(node) -> Matrix:
@@ -551,7 +551,7 @@ def matrix_element(s: "Session", name: str, i: float, j: float) -> float:
     i, j = int(i), int(j)
     if 1 <= i <= a.rows and 1 <= j <= a.cols:
         return float(a.data[i - 1, j - 1])
-    raise StataError(503, "conformability error")   # VERIFICAR
+    raise StataError(503, "conformability error")   # VERIFY
 
 
 # ---------------------------------------------------------------------------
@@ -567,15 +567,15 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
               else M.missing_name(float(x)) for x in row] for row in mat.data]
     rw = max([len(n) for n in mat.rownames] + [0]) if names else 0
     shown = [cells[i][j] for i in range(mat.rows) for j in range(mat.cols) if not sym or i >= j]
-    # nomes com operadores (1b.k, L.x) ocupam duas linhas: "1b." sobre "k"
+    # names with operators (1b.k, L.x) take two lines: "1b." above "k"
     split = names and any("." in c for c in mat.colnames)
     if split:
         heads = [(c[: c.rfind(".") + 1], c[c.rfind(".") + 1:]) if "." in c else ("", c)
                  for c in mat.colnames]
     else:
         heads = [("", c) for c in mat.colnames]
-    # todas as colunas com a largura do maior valor ou nome
-    # (observado no Stata 14, compat/expected/0203_matrix.log)
+    # all columns as wide as the largest value or name (observed in Stata 14,
+    # compat/expected/0203_matrix.log)
     w_all = max([max(len(a), len(b)) for a, b in heads] if names else [0])
     w_all = max([w_all] + [len(c) for c in shown])
     widths = [w_all] * mat.cols
@@ -585,7 +585,7 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
         out.write(f"\n{lead}{title}[{mat.rows},{mat.cols}]{extra}\n", "text")
     if names:
         if split:
-            # a parte do operador fica uma coluna à direita (compat 0502)
+            # the operator part sits one column to the right (compat 0502)
             line = " " * (rw + 1) + "".join("  " + a.rjust(w) for (a, _), w in zip(heads, widths))
             out.write(line.rstrip() + "\n", "text")
         line = " " * rw + "".join("  " + b.rjust(w) for (_, b), w in zip(heads, widths))
@@ -622,7 +622,7 @@ def _define(s: "Session", text: str) -> None:
         return
     value = evaluate_matrix(s, rhs)
     store = _store(s)
-    store.pop(name, None)       # redefinir conta como a mais recente (matrix dir)
+    store.pop(name, None)       # redefining counts as the most recent (matrix dir)
     store[name] = value
 
 
@@ -657,7 +657,7 @@ def _names_cmd(s: "Session", which: str, text: str) -> None:
     if len(names) != n:
         raise StataError(503, "conformability error")
     if which.endswith("eq"):
-        return                                   # equações: VERIFICAR (fase 5)
+        return                                   # equations: VERIFY (phase 5)
     if which.startswith("row"):
         mat.rownames = names
     else:
@@ -669,7 +669,7 @@ def cmd_matrix(s: "Session", args: str) -> None:
     t = args.strip()
     sub, _, rest = t.partition(" ")
     if re.match(r"\s*(=|\[)", rest) or "=" in sub or "[" in sub:
-        _define(s, t)                 # matrix d = ...: "d" é o nome, não define
+        _define(s, t)                 # matrix d = ...: "d" is the name, not define
         return
     if sub in ("define", "def", "de", "defi", "defin", "d"):
         _define(s, rest)
@@ -699,7 +699,7 @@ def cmd_matrix(s: "Session", args: str) -> None:
             del store[n]
         return
     if sub in ("dir",):
-        # da mais recente para a mais antiga, nome alinhado em 13 colunas
+        # from the most recent to the oldest, names aligned in 13 columns
         for n, mat in reversed(list(_store(s).items())):
             s.output.write(f"{n:>13}[{mat.rows},{mat.cols}]\n", "text")
         return
@@ -721,7 +721,7 @@ def cmd_matrix(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def take_matrix(s: "Session", text: str) -> tuple[str, Matrix]:
-    """return matrix nome = matriz [, copy]: a matriz sai de s.matrices."""
+    """return matrix name = matrix [, copy]: the matrix leaves s.matrices."""
     head, comma, opts = text.partition(",")
     m = re.match(r"\s*([A-Za-z_]\w*)\s*=\s*(\S+)\s*$", head)
     if not m:

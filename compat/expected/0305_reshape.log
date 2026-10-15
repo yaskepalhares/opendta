@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 3b: reshape long/wide.
+. * Phase 3b: reshape long/wide.
 . clear
 
 . input id sexo inc80 inc81 inc82 ue80 ue81 ue82

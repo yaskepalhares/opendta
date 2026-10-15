@@ -1,4 +1,4 @@
-"""Fase 9: idioma da interface, diálogos dos menus e Graph Editor."""
+"""Phase 9: interface language, menu dialogs and Graph Editor."""
 
 import os
 
@@ -30,7 +30,7 @@ def test_tr_and_accelerators():
 def test_translate_error_only_when_asked():
     msg = "variable zz not found"
     i18n.set_language("pt")
-    assert i18n.translate_error(msg) == msg          # mensagens do Stata ficam em inglês
+    assert i18n.translate_error(msg) == msg          # Stata's messages stay in English
     i18n.set_messages("translated")
     assert i18n.translate_error(msg) == "variável zz não encontrada"
     assert i18n.translate_error("invalid syntax") == "sintaxe inválida"
@@ -48,9 +48,9 @@ def _session_text(cmds: str) -> str:
 
 def test_set_language_hints_in_portuguese():
     out = _session_text("set obs 2\ngen x = 1\nset language pt\nsummarize y")
-    assert "Não existe" not in out          # há variáveis: a explicação é outra
+    assert "Não existe" not in out          # there are variables: the explanation is different
     assert "Nenhuma variável se chama" in out
-    assert "variable y not found" in out    # a mensagem do Stata continua em inglês
+    assert "variable y not found" in out    # Stata's message stays in English
     out = _session_text("set language pt\nset messages translated\nsummarize y")
     assert "variável y não encontrada" in out
     assert "Dica:" in out
@@ -93,7 +93,7 @@ def test_dialog_commands():
 
 
 def test_dialog_commands_run():
-    """Os comandos montados pelos diálogos rodam no interpretador."""
+    """The commands built by the dialogs run in the interpreter."""
     from opendta.gui import dialogs as D
     s = Session()
     s.run_text("set obs 40\ngen x = _n\ngen y = 2*x + mod(_n, 3)\ngen g = mod(_n, 2)")
@@ -116,9 +116,9 @@ def test_graph_editor_edits():
     GE.apply_edits(g, vals)
     o = g.opts
     assert o["title"]["lines"] == ["Título"]
-    assert o["xtitle"]["lines"] == []        # título do eixo apagado de propósito
+    assert o["xtitle"]["lines"] == []        # axis title cleared on purpose
     assert o["yscale"]["log"] and o["legend"]["off"] and o["xsize"] == 7
-    assert "ytitle" not in o                 # o que não mudou não é gravado
+    assert "ytitle" not in o                 # what did not change is not written
     vals = GE.current_values(g)
     vals["title"] = ""
     GE.apply_edits(g, vals)
@@ -135,14 +135,14 @@ def test_gui_language_switch():
     w.apply_preferences()
     assert [a.text() for a in w.menuBar().actions()][0] == "&Arquivo"
     assert w.dock_review.windowTitle() == "Histórico"
-    assert w.dock_review.objectName() == "Review"      # layout salvo não depende do idioma
+    assert w.dock_review.objectName() == "Review"      # the saved layout does not depend on the language
     w.run_command("set obs 3")
     data = {w._prop_data.child(k).data(0, 256): w._prop_data.child(k).text(1)
             for k in range(w._prop_data.childCount())}
     assert data["Observations"] == "3"
     stat = [a for a in w.menuBar().actions() if a.text() == "&Estatística"][0].menu()
     first = stat.actions()[0].menu().actions()[0]
-    assert first.text() == "Estatísticas descritivas..."      # abre o diálogo
+    assert first.text() == "Estatísticas descritivas..."      # opens the dialog
     w.prefs.language = "en"
     w.apply_preferences()
     assert w.dock_review.windowTitle() == "Review"

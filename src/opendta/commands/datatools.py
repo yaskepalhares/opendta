@@ -1,7 +1,7 @@
-"""Utilitários de dados ([D]): duplicates, isid, levelsof, encode, decode,
-destring, tostring, split, mvencode, mvdecode e recode.
+"""Data utilities ([D]): duplicates, isid, levelsof, encode, decode,
+destring, tostring, split, mvencode, mvdecode and recode.
 
-Mensagens seguem o Stata 14; as marcadas VERIFICAR têm caso em
+Messages follow Stata 14; those marked VERIFY have a case in
 compat/do/0306_utilitarios_dados.do.
 """
 
@@ -88,12 +88,12 @@ def cmd_duplicates(s: "Session", args: str) -> None:
         check_name(gen)
         _dup_header(s, names, all_vars)
         tag = np.where(mask, copies - 1, 0).astype(np.float64)
-        # VERIFICAR: tipo da variável criada
+        # VERIFY: type of the created variable
         ds.add(Variable(gen, smallest_type_for(tag) if len(tag) else "byte", tag))
     elif sub in ("drop",):
         opts = match_options(p.options, {"force": 5})
         if not all_vars and not opts.get("force"):
-            raise StataError(198, "force option required with duplicates drop varlist")  # VERIFICAR
+            raise StataError(198, "force option required with duplicates drop varlist")  # VERIFY
         _dup_header(s, names, all_vars)
         keep = np.ones(ds.nobs, dtype=bool)
         seen = np.zeros(k, dtype=bool)
@@ -109,18 +109,18 @@ def cmd_duplicates(s: "Session", args: str) -> None:
         _dup_header(s, names, all_vars)
         _dup_list(s, names, ids, k, sizes, examples=sub.startswith("e"))
     else:
-        raise StataError(198, f"invalid subcommand {sub}")   # VERIFICAR
+        raise StataError(198, f"invalid subcommand {sub}")   # VERIFY
     s.notify_state()
 
 
 def _dup_list(s: "Session", names: list[str], ids: np.ndarray, k: int, sizes: np.ndarray,
               *, examples: bool) -> None:
-    """Tabela no estilo de list com as colunas group:, obs: (ou e.g. obs:)."""
+    """list-style table with the group:, obs: (or e.g. obs:) columns."""
     from .inspect import cell_text
     ds = s.data
     dup_groups = [g for g in range(k) if sizes[g] > 1]
     if not dup_groups:
-        s.output.write("(0 observations are duplicates)\n", "text")   # VERIFICAR
+        s.output.write("(0 observations are duplicates)\n", "text")   # VERIFY
         return
     order = np.lexsort((np.arange(ds.nobs), ids))
     order = order[ids[order] >= 0]
@@ -141,8 +141,8 @@ def _dup_list(s: "Session", names: list[str], ids: np.ndarray, k: int, sizes: np
         head.append(str(i + 1))
         rows.append(head + [cell_text(ds, ds.get(n), int(i)) for n in names])
         group_of_row.append(g)
-    # com um só grupo de duplicatas o Stata 14 omite a coluna group: (VERIFICAR
-    # com vários grupos); em examples o título é "e.g. obs" sem dois-pontos
+    # with a single group of duplicates Stata 14 omits the group: column (VERIFY with several
+    # groups); in examples the title is "e.g. obs" without a colon
     show_group = len(dup_groups) > 1
     if not show_group:
         rows = [r[1:] for r in rows]
@@ -247,7 +247,7 @@ def cmd_encode(s: "Session", args: str) -> None:
         raise StataError(108, "not possible with numeric variable")
     gen = _opt_text(opts, "generate")
     if not gen:
-        raise StataError(100, "generate() required")   # VERIFICAR
+        raise StataError(100, "generate() required")   # VERIFY
     if ds.has(gen):
         raise StataError(110, f"variable {gen} already defined")
     check_name(gen)
@@ -257,7 +257,7 @@ def cmd_encode(s: "Session", args: str) -> None:
     rev = {t: c for c, t in lab.items()}
     new_texts = sorted(set(v.raw[mask].tolist()) - set(rev))
     if new_texts and opts.get("noextend") and lname in ds.value_labels:
-        raise StataError(459, f"there are values of {names[0]} not in label {lname}")   # VERIFICAR
+        raise StataError(459, f"there are values of {names[0]} not in label {lname}")   # VERIFY
     nxt = max(lab, default=0) + 1
     for t in new_texts:
         while nxt in lab:
@@ -283,7 +283,7 @@ def cmd_decode(s: "Session", args: str) -> None:
         raise StataError(103, "too many variables specified")
     v = ds.get(names[0])
     if v.is_string:
-        raise StataError(108, "not possible with string variable")   # VERIFICAR
+        raise StataError(108, "not possible with string variable")   # VERIFY
     if not v.value_label:
         raise StataError(182, f"{names[0]} not labeled")
     gen = _opt_text(opts, "generate")
@@ -307,7 +307,7 @@ def cmd_decode(s: "Session", args: str) -> None:
     ds.add(Variable(gen, str_type_for(longest), np.array(texts, dtype=object), label=v.label))
     nmiss = sum(1 for t in texts if t == "")
     if nmiss:
-        s.output.write(f"({plural(nmiss, 'missing value')} generated)\n", "text")   # VERIFICAR
+        s.output.write(f"({plural(nmiss, 'missing value')} generated)\n", "text")   # VERIFY
     s.notify_state()
 
 
@@ -325,7 +325,7 @@ def _gen_targets(s: "Session", names: list[str], opts: dict) -> list[str]:
         return list(names)
     targets = split_words(_opt_text(opts, "generate") or "")
     if len(targets) != len(names):
-        raise StataError(198, "number of variables in generate() must equal number in varlist")  # VERIFICAR
+        raise StataError(198, "number of variables in generate() must equal number in varlist")  # VERIFY
     for t in targets:
         if ds.has(t):
             raise StataError(110, f"variable {t} already defined")
@@ -337,7 +337,7 @@ _NUM_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eEdD][+-]?\d+)?$")
 
 
 def _to_number(t: str, *, dpcomma: bool) -> float | None:
-    """Texto → número; '' e '.'/.a-.z → missing; None se não numérico."""
+    """Text → number; '' and '.'/.a-.z → missing; None if not numeric."""
     u = t.strip()
     if u == "":
         return M.SYSMISS
@@ -364,7 +364,7 @@ def cmd_destring(s: "Session", args: str) -> None:
     for name, target in zip(names, targets):
         v = ds.get(name)
         if not v.is_string:
-            # VERIFICAR texto
+            # VERIFY texto
             w(f"{name} already numeric; no {'replace' if opts.get('replace') else 'generate'}\n", "text")
             continue
         removed = set()
@@ -386,7 +386,7 @@ def cmd_destring(s: "Session", args: str) -> None:
             if opts.get("percent") and "%" in t and x < M.SYSMISS:
                 x /= 100
             vals[i] = x
-        # mensagens observadas no Stata 14 (as marcadas VERIFICAR são deduzidas)
+        # messages observed in Stata 14 (those marked VERIFY are deduced)
         problem = ("contains characters not specified in ignore()" if ignore
                    else "contains nonnumeric characters")
         if bad and not opts.get("force"):
@@ -400,9 +400,9 @@ def cmd_destring(s: "Session", args: str) -> None:
         elif removed:
             chars = sorted(removed)
             word = "character" if len(chars) == 1 else "characters"
-            w(f"{name}: {word} {' '.join(chars)} removed; {verb} as {vtype}\n", "text")   # VERIFICAR
+            w(f"{name}: {word} {' '.join(chars)} removed; {verb} as {vtype}\n", "text")   # VERIFY
         else:
-            w(f"{name} has all characters numeric; {verb} as {vtype}\n", "text")   # VERIFICAR
+            w(f"{name} has all characters numeric; {verb} as {vtype}\n", "text")   # VERIFY
         nv = Variable(target, vtype, vals, label=v.label)
         if opts.get("replace"):
             pos = ds.index(name)
@@ -431,7 +431,7 @@ def cmd_tostring(s: "Session", args: str) -> None:
         if v.is_string:
             w(f"{name} already string; no {'replace' if opts.get('replace') else 'generate'}\n", "text")
             continue
-        use_fmt = fmt or (v.fmt if opts.get("usedisplayformat") else "%12.0g")   # VERIFICAR padrão
+        use_fmt = fmt or (v.fmt if opts.get("usedisplayformat") else "%12.0g")   # VERIFY default
         data = v.data
         texts = [("" if x == M.SYSMISS else M.missing_name(x)) if x >= M.SYSMISS else _string(float(x), use_fmt)
                  for x in data]
@@ -506,7 +506,7 @@ def cmd_split(s: "Session", args: str) -> None:
         ds.add(Variable(nm, str_type_for(longest), np.array(texts, dtype=object)))
     w = s.output.write
     if created:
-        w("variables created as string: \n", "text")   # VERIFICAR
+        w("variables created as string: \n", "text")   # VERIFY
         w("  ".join(created) + "\n", "result")
     s.r = {"nvars": float(len(created)), "varlist": " ".join(created)}
     if opts.get("destring") and created:
@@ -523,8 +523,8 @@ def cmd_split(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _mv_rules(text: str, *, decode: bool) -> list[tuple[list[float], float]]:
-    """mv(# | mvc=# [\\ mvc=# ...]) em mvencode; mv(numlist | numlist=mvc ...) em mvdecode.
-    Devolve (valores de origem, valor de destino)."""
+    """mv(# | mvc=# [\\ mvc=# ...]) in mvencode; mv(numlist | numlist=mvc ...) in mvdecode.
+    Returns (source values, target value)."""
     rules = []
     for part in text.split("\\"):
         part = part.strip()
@@ -587,7 +587,7 @@ def cmd_mvencode(s: "Session", args: str) -> None:
         targets = [dst for _, dst in rules]
         if not opts.get("override") and np.isin(x[x < M.SYSMISS], targets).any():
             raise StataError(9, f"{name}: already {num_str(targets[0])} in "
-                                f"{int(np.isin(x, targets).sum())} observations")   # VERIFICAR
+                                f"{int(np.isin(x, targets).sum())} observations")   # VERIFY
         new = x.copy()
         for src, dst in rules:
             hit = mask & ((x >= M.SYSMISS) if not src else np.isin(x, src))
@@ -607,7 +607,7 @@ def cmd_mvencode(s: "Session", args: str) -> None:
 class _Rule:
     def __init__(self, text: str):
         if "=" not in text:
-            raise StataError(198, f"invalid rule ({text})")   # VERIFICAR
+            raise StataError(198, f"invalid rule ({text})")   # VERIFY
         lhs, rhs = text.split("=", 1)
         m = re.match(r'^\s*(\S+)\s*(?:"(.*)"|`"(.*)"\')?\s*$', rhs, re.S)
         if not m:
@@ -623,7 +623,7 @@ class _Rule:
         return M.missing_code(t) if t.startswith(".") else float(t)
 
     def match(self, x: np.ndarray, lo: float, hi: float) -> tuple[np.ndarray, bool]:
-        """(observações que casam, é regra else)."""
+        """(matching observations, is the else rule)."""
         hit = np.zeros(len(x), dtype=bool)
         for it in self.items:
             il = it.lower()
@@ -655,7 +655,7 @@ class _Rule:
 @command("recode")
 def cmd_recode(s: "Session", args: str) -> None:
     text = args.strip()
-    # varlist (regra) [(regra) ...] [if] [in] [, opções]
+    # varlist (rule) [(rule) ...] [if] [in] [, options]
     start = text.find("(")
     if start == -1:
         raise StataError(198, "invalid syntax")
@@ -694,7 +694,7 @@ def cmd_recode(s: "Session", args: str) -> None:
     gens = split_words(_opt_text(opts, "generate") or "")
     prefix = _opt_text(opts, "prefix")
     if gens and len(gens) != len(names):
-        raise StataError(198, "generate() must contain as many names as varlist")   # VERIFICAR
+        raise StataError(198, "generate() must contain as many names as varlist")   # VERIFY
     targets = gens or ([prefix + n for n in names] if prefix else names)
     new_var = bool(gens or prefix)
     for t in (targets if new_var else []):
@@ -707,7 +707,7 @@ def cmd_recode(s: "Session", args: str) -> None:
     for name, target in zip(names, targets):
         v = ds.get(name)
         if v.is_string:
-            raise StataError(109, "type mismatch")   # VERIFICAR: recode só aceita numéricas
+            raise StataError(109, "type mismatch")   # VERIFY: recode only accepts numeric variables
         x = np.array(v.data, dtype=np.float64)
         ok = x < M.SYSMISS
         lo = float(x[ok & mask].min()) if (ok & mask).any() else M.SYSMISS
@@ -726,7 +726,7 @@ def cmd_recode(s: "Session", args: str) -> None:
         from ..core.dataset import TYPE_ORDER
         if TYPE_ORDER[need] > TYPE_ORDER[vtype]:
             vtype = need if not (vtype == "float" and need == "double") else "float"
-        # VERIFICAR: com generate(), conta só as diferenças dentro da amostra
+        # VERIFY: with generate(), counts only the changes within the sample
         changes = int((new != x).sum()) if not new_var else int(((new != x) & mask).sum())
         lname = None
         if labelled:
@@ -739,7 +739,7 @@ def cmd_recode(s: "Session", args: str) -> None:
             ds.value_labels[lname] = lab
         if new_var:
             nv = Variable(target, vtype, new, label=f"RECODE of {name}"
-                          + (f" ({v.label})" if v.label else ""),   # VERIFICAR rótulo
+                          + (f" ({v.label})" if v.label else ""),   # VERIFY label
                           value_label=lname or "")
             ds.add(nv)
             w(f"({plural(changes, 'difference')} between {name} and {target})\n", "text")

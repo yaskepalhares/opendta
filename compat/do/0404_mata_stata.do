@@ -1,4 +1,4 @@
-* Fase 4: interface Stata <-> Mata (st_*).
+* Phase 4: Stata <-> Mata interface (st_*).
 clear
 set obs 4
 gen x = _n

@@ -1,4 +1,4 @@
-* Fase 4: Mata básico (exibição, operadores, subscritos, strings).
+* Phase 4: basic Mata (display, operators, subscripts, strings).
 mata
 x = 2
 x

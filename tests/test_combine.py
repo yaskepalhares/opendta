@@ -106,7 +106,7 @@ gen b = mod(_n, 2)
 replace b = 0 in 3
 contract a b, percent(p) cfreq(cf) zero
 """)
-    # combinações (a,b): (0,1) (0,0) (1,0) (1,1) (1,0) (1,0)
+    # combinations (a,b): (0,1) (0,0) (1,0) (1,1) (1,0) (1,0)
     assert names(run) == ["a", "b", "_freq", "cf", "p"]
     assert col(run, "_freq") == [1, 1, 3, 1]
     assert col(run, "cf") == [1, 2, 5, 6]
@@ -118,7 +118,7 @@ contract a b, percent(p) cfreq(cf) zero
 def test_expand(run):
     run("set obs 3\ngen k = _n - 1")
     out = run("expand k, generate(novo)")
-    assert out == "(1 observation created)\n"     # k < 1 mantém a obs. sem cópias
+    assert out == "(1 observation created)\n"     # k < 1 keeps the obs. without copies
     assert col(run, "k") == [0, 1, 2, 2]
     assert col(run, "novo") == [0, 0, 0, 1]
     out = run("expand 3 if k == 1")
@@ -141,7 +141,7 @@ def test_fillin(run):
 def test_append(run, files):
     run(f'use "{files}/m", clear\nappend using "{files}/u", generate(fonte)')
     assert run.rc == 0
-    # generate() fica logo depois das variáveis da master (Stata 14)
+    # generate() goes right after the master's variables (Stata 14)
     assert names(run) == ["id", "nome", "renda", "fonte", "idade"]
     assert col(run, "fonte") == [0, 0, 0, 0, 1, 1, 1]
     assert col(run, "renda")[4:] == [11, 22, 44]
@@ -188,7 +188,7 @@ def test_merge_1to1_report(run, files):
         "    matched                                 2  (_merge==3)\n"
         "    -----------------------------------------\n")
     assert out == expected
-    # master na ordem original, depois as obs. só da using (Stata 14)
+    # master in the original order, then the obs. only in using (Stata 14)
     assert col(run, "id") == [1, 2, 3, 5, 4]
     assert col(run, "_merge") == [3, 3, 1, 1, 2]
     assert col(run, "renda") == [10, MISS, 30, 50, 44]
@@ -209,7 +209,7 @@ def test_merge_update_replace(run, files):
 def test_merge_keep_keepusing_nogen(run, files):
     run(f'use "{files}/m", clear')
     out = run(f'merge 1:1 id using "{files}/u", keep(match) keepusing(idade) nogenerate')
-    # com nogenerate, sem a anotação (_merge==3)
+    # with nogenerate, without the note (_merge==3)
     assert "    matched                                 2\n" in out
     assert names(run) == ["id", "nome", "renda", "idade"]
     assert col(run, "renda") == [10, MISS]
@@ -256,7 +256,7 @@ def test_merge_errors(run, files, tmp_path):
 
 def test_merge_by_n(run, files):
     run(f'use "{files}/m", clear\nmerge 1:1 _n using "{files}/u", noreport')
-    # renda vem da master nas linhas casadas
+    # income comes from the master in the matched rows
     assert col(run, "renda")[:3] == [10, MISS, 30]
     assert col(run, "_merge") == [3, 3, 3, 1]
 
@@ -283,7 +283,7 @@ joinby k using "{d}/j1"
     assert run.session.data.nobs == 4
     assert col(run, "b") == [10, 10, 20, 20]
     run(f'clear\ninput k b\n1 10\n3 30\nend\njoinby k using "{d}/j1", unmatched(both) _merge(m)')
-    # master na ordem original; só da using no fim
+    # master in the original order; using-only at the end
     assert col(run, "m") == [3, 3, 1, 2]
     assert run.session.data.names == ["k", "b", "m", "a"]
     run(f'clear\nset obs 2\ngen c = _n\ncross using "{d}/j1"')

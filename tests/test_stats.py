@@ -1,5 +1,5 @@
-"""Estatística descritiva: summarize, ci, ttest, prtest, correlate, centile,
-pctile/xtile, tabulate e table. Valores conferidos com numpy/scipy."""
+"""Descriptive statistics: summarize, ci, ttest, prtest, correlate, centile,
+pctile/xtile, tabulate and table. Values checked against numpy/scipy."""
 
 import numpy as np
 import pytest
@@ -106,7 +106,7 @@ def test_tabulate(run):
     run("tabulate grupo, generate(gg) matcell(F)")
     assert run.session.data.has("gg1") and run.session.matrices["F"].data.ravel().tolist() == [10, 10]
     out = run("table grupo, contents(freq mean x)")
-    # colunas de largura única (o maior rótulo ou valor; Stata 14)
+    # single-width columns (the longest label or value; Stata 14)
     assert " Controle |       10      17.6" in out
 
 

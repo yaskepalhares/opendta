@@ -1,8 +1,8 @@
-"""estat: ic, vce, summarize, hettest, ovtest, classification e gof
+"""estat: ic, vce, summarize, hettest, ovtest, classification and gof
 ([R] estat, [R] regress postestimation, [R] logistic postestimation).
 
-Fórmulas dos manuais; layouts de memória do Stata 14, com a marca
-VERIFICAR até a conferência com os logs (compat/do/0802_estat.do)."""
+Formulas from the manuals; layouts checked against the Stata 14 logs
+(compat/do/0802_anova_estat.do); what could not be checked has the VERIFY mark."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _g(x: float, fmt: str = "%9.0g") -> str:
 def cmd_estat(s: "Session", args: str) -> None:
     words = args.strip().split(None, 1)
     if not words:
-        raise StataError(321, "estat requires a subcommand")   # VERIFICAR
+        raise StataError(321, "estat requires a subcommand")   # VERIFY
     sub = words[0].rstrip(",")
     rest = words[1] if len(words) > 1 else ""
     if "," in words[0]:
@@ -45,7 +45,7 @@ def cmd_estat(s: "Session", args: str) -> None:
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
-        raise StataError(321, f"invalid subcommand {sub}")   # VERIFICAR
+        raise StataError(321, f"invalid subcommand {sub}")   # VERIFY
     fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
           "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
     if fn is None:
@@ -72,7 +72,7 @@ def _ic(s: "Session", est, rest: str) -> None:
     _, o = _opts(rest, {"n": 1})
     ll = _e(s, "ll")
     if ll >= SYS:
-        raise StataError(321, "estat ic not valid")   # VERIFICAR
+        raise StataError(321, "estat ic not valid")   # VERIFY
     N = float(o["n"]) if isinstance(o.get("n"), str) else _e(s, "N")
     ll0 = _e(s, "ll_0")
     df = _e(s, "rank")
@@ -115,8 +115,8 @@ def _vce(s: "Session", est, rest: str) -> None:
     k = len(names)
     from ..lang.functions import _abbrev
     eqs = est.eqnames or [""] * k
-    # largura da coluna = largura do formato + 1 (compat 0802: %10.0g -> 11,
-    # %8.4f -> 9), mais um espaço entre colunas
+    # column width = format width + 1 (compat 0802: %10.0g -> 11, %8.4f -> 9), plus one space
+    # between columns
     import re as _re
     mw = _re.match(r"%-?(\d+)", fmt)
     cw = (int(mw.group(1)) if mw else 10) + 1
@@ -170,7 +170,7 @@ def _summarize(s: "Session", est, rest: str) -> None:
         names = s.expand_varlist(body)
     out = s.output
     N = int(mask.sum())
-    # layout do Stata 14 (compat 0802): valores em %9.0g, 67 traços
+    # Stata 14 layout (compat 0802): values in %9.0g, 67 dashes
     out.write(f"\n  Estimation sample {est.cmd}".ljust(44) + f"Number of obs = {N:>10,}\n", "text")
     out.write("\n  " + "-" * 67 + "\n", "text")
     out.write(f"  {'Variable':>12} |{'Mean':>13}{'Std. Dev.':>15}{'Min':>12}{'Max':>13}\n", "text")
@@ -197,7 +197,7 @@ def _summarize(s: "Session", est, rest: str) -> None:
 def _regress_data(s: "Session", est):
     from .postest import design_all, esample
     if est.cmd != "regress":
-        raise StataError(321, f"estat {''} not valid")   # VERIFICAR
+        raise StataError(321, f"estat {''} not valid")   # VERIFY
     mask = esample(s)
     X, _ = design_all(s, est)
     keep = np.abs(np.diag(est.V)) > 0
@@ -242,8 +242,8 @@ def _hettest(s: "Session", est, rest: str) -> None:
     else:
         sig2 = (e @ e) / N
         u = e * e / sig2
-        # ESS com regressores centrados, sem a subtração de somas grandes
-        # (compat 0802: chi2 perto de zero)
+        # ESS with centered regressors, without subtracting large sums (compat 0802: chi2 close to
+        # zero)
         uc = u - u.mean()
         Zm = Z - Z.mean(axis=0)
         beta = np.linalg.lstsq(Zm, uc, rcond=None)[0]
@@ -269,10 +269,10 @@ def _ovtest(s: "Session", est, rest: str) -> None:
     if o.get("rhs"):
         base = [j for j in range(k) if np.ptp(X[:, j]) > 0]
         extra = np.column_stack([X[:, j] ** p for j in base for p in (2, 3, 4)])
-        desc = "powers of the independent variables"   # VERIFICAR
+        desc = "powers of the independent variables"   # VERIFY
     else:
-        # escala [0, 1] e potências guardadas em float, como o Stata (compat
-        # 0802: F = .2525909782551101)
+        # [0, 1] scale and powers stored as float, as Stata does (compat 0802: F =
+        # .2525909782551101)
         z = (yhat - yhat.min()) / (yhat.max() - yhat.min())
         f32 = lambda a: a.astype(np.float32).astype(float)   # noqa: E731
         extra = np.column_stack([f32(z ** 2), f32(z ** 3), f32(z ** 4)])
@@ -303,7 +303,7 @@ _BINARY = ("logit", "logistic", "probit")
 def _binary(s: "Session", est):
     from .postest import esample, xb_all
     if est.cmd not in _BINARY:
-        raise StataError(321, f"estat not valid after {est.cmd}")   # VERIFICAR
+        raise StataError(321, f"estat not valid after {est.cmd}")   # VERIFY
     mask = esample(s)
     xb, _ = xb_all(s, est)
     xb = xb[mask]
@@ -362,8 +362,7 @@ def _classification(s: "Session", est, rest: str) -> None:
     out.write(f"{'Correctly classified':<41}", "text")
     out.write(f"{cc:>8.2f}%\n", "result")
     out.write("-" * 50 + "\n", "text")
-    # r(P_xy): Pr(x|y) com p/n = classificado +/-, 1/0 = verdadeiro D/~D
-    # (VERIFICAR a ordem do return list)
+    # r(P_xy): Pr(x|y) with p/n = classified +/-, 1/0 = true D/~D (VERIFY the return list order)
     s.r = dict(reversed([("P_1n", pct(c, c + d)), ("P_0p", pct(b, a + b)), ("P_0n", pct(d, c + d)),
                          ("P_1p", pct(a, a + b)), ("P_n1", pct(c, a + c)), ("P_p0", pct(b, b + d)),
                          ("P_n0", pct(d, b + d)), ("P_p1", pct(a, a + c)), ("P_corr", cc)]))
@@ -377,7 +376,7 @@ def _gof(s: "Session", est, rest: str) -> None:
     out.write(f"\n{_model_title(est)}, goodness-of-fit test\n\n", "text")
     if isinstance(o.get("group"), str):
         G = int(o["group"])
-        # grupos pelos quantis das probabilidades previstas (como xtile)
+        # groups by the quantiles of the predicted probabilities (like xtile)
         order = np.argsort(p, kind="stable")
         ps = p[order]
         cuts = [ps[min(N - 1, int(math.ceil(N * q / G)) - 1)] for q in range(1, G)]
@@ -400,9 +399,9 @@ def _gof(s: "Session", est, rest: str) -> None:
         out.write(f"{'number of groups':>29} = {ng:>9}\n", "text")
         out.write(f"{'Hosmer-Lemeshow chi2(' + str(df) + ')':>29} = {chi:>12.2f}\n", "text")
         out.write(f"{'Prob > chi2':>29} = {pv:>14.4f}\n", "text")
-        s.r = dict(reversed([("df", float(df)), ("chi2", chi), ("m", float(ng)), ("N", float(N))]))   # VERIFICAR
+        s.r = dict(reversed([("df", float(df)), ("chi2", chi), ("m", float(ng)), ("N", float(N))]))   # VERIFY
         return
-    # padrões de covariáveis: linhas iguais de X
+    # covariate patterns: identical rows of X
     from .postest import design_all
     X, _ = design_all(s, est)
     X = X[mask]

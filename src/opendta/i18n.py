@@ -1,14 +1,14 @@
-"""Idioma da interface (fase 9).
+"""Interface language (phase 9).
 
-Dois idiomas: inglês (padrão, como o Stata) e português. A escolha vale para
-menus, janelas, diálogos, as explicações de erro do OpenDTA (core/hints.py)
-e as mensagens próprias do OpenDTA. As mensagens no formato do Stata (erros
-como "variable x not found") continuam em inglês, a menos que o usuário peça
-a tradução: quem compara com logs e manuais do Stata precisa delas iguais.
+Two languages: English (default, as in Stata) and Portuguese. The choice applies to
+menus, windows, dialogs, OpenDTA's error explanations (core/hints.py)
+and OpenDTA's own messages. Messages in Stata's format (errors
+such as "variable x not found") stay in English unless the user asks
+for the translation: those who compare with Stata logs and manuals need them identical.
 
-    tr("Open...")            -> "Abrir..." com o português ligado
-    L("en text", "pt text")  -> escolhe pelo idioma (textos com variáveis)
-    translate_error(msg)     -> mensagem de erro traduzida, se pedido
+    tr("Open...")            -> "Abrir..." with Portuguese on
+    L("en text", "pt text")  -> picks by language (texts with variables)
+    translate_error(msg)     -> translated error message, if requested
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 _LANG = "en"
-_MESSAGES = "stata"      # "stata" (inglês, como no Stata) ou "translated"
+_MESSAGES = "stata"      # "stata" (English, as in Stata) or "translated"
 
 LANGUAGES = {"en": "English", "pt": "Português"}
 
@@ -44,12 +44,12 @@ def L(en: str, pt: str) -> str:
 
 
 def tr(text: str) -> str:
-    """Tradução de um texto fixo da interface (o próprio texto se não houver)."""
+    """Translation of a fixed interface text (the text itself if there is none)."""
     if _LANG != "pt" or not text:
         return text
     if text in PT:
         return PT[text]
-    # "&File" e afins: tenta sem o atalho
+    # "&File" and the like: try without the accelerator
     bare = text.replace("&", "")
     if bare in PT:
         t = PT[bare]
@@ -58,7 +58,7 @@ def tr(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# textos da interface
+# interface texts
 # ---------------------------------------------------------------------------
 
 PT: dict[str, str] = {
@@ -130,7 +130,7 @@ PT: dict[str, str] = {
     "About Error Explanations": "Sobre as explicações de erro",
     "Superscript Exponents (set superscript)": "Expoentes sobrescritos (set superscript)",
     "About OpenDTA": "Sobre o OpenDTA", "Error explanations": "Explicações de erro",
-    # barra de ferramentas e painéis
+    # toolbar and panels
     "Log (begin or close)": "Log (iniciar ou fechar)", "Data Editor (Edit)": "Editor de dados (editar)",
     "Data Browser (Browse)": "Navegador de dados (ver)", "Variables Manager": "Gerenciador de variáveis",
     "Clear --more-- condition": "Limpar a condição --more--", "Break": "Interromper", "Toolbar": "Barra de ferramentas",
@@ -179,7 +179,7 @@ PT: dict[str, str] = {
     # Data Browser / Variables Manager / Viewer
     "Browse": "Ver", "Mode": "Modo", "Back": "Voltar", "Forward": "Avançar",
     "help topic, or a file to view": "tópico de ajuda, ou um arquivo para ver",
-    # diálogos de comandos
+    # command dialogs
     "OK": "OK", "Submit": "Enviar", "Cancel": "Cancelar", "Copy to Command window": "Copiar para a janela Command",
     "Variables:": "Variáveis:", "Dependent variable:": "Variável dependente:",
     "Independent variables:": "Variáveis independentes:", "Variable:": "Variável:",
@@ -236,7 +236,7 @@ PT: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# mensagens de erro no formato do Stata (só com a tradução pedida)
+# error messages in Stata's format (only when translation is requested)
 # ---------------------------------------------------------------------------
 
 _ERRORS: list[tuple[str, str]] = [

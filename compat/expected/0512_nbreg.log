@@ -4,7 +4,7 @@
   log type:  text
  opened on:  13 Oct 2026, 08:32:57
 
-. * Fase 5b: nbreg (Poisson, modelo só com a constante, modelo completo).
+. * Phase 5b: nbreg (Poisson, constant-only model, full model).
 . clear
 
 . estimates clear

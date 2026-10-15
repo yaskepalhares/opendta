@@ -1,13 +1,13 @@
-"""Data Editor: grade dos dados em memória, nos modos Browse e Edit.
+"""Data Editor: grid of the data in memory, in Browse and Edit modes.
 
-Como no Data Editor do Stata 14: uma coluna por variável, linhas numeradas
-pela observação, valores exibidos no formato da variável. Strings em
-vermelho, valores com rótulo em azul, números na cor do texto.
+As in Stata 14's Data Editor: one column per variable, rows numbered
+by observation, values shown in the variable's format. Strings in
+red, labeled values in blue, numbers in the text color.
 
-No modo Edit, cada célula alterada vira um comando (replace ... in #,
-set obs, generate) executado pela sessão, ecoado em Results e guardado em
-Review, de modo que toda alteração fica registrada e reproduzível. A linha
-e a coluna vazias depois dos dados criam observações e variáveis novas.
+In Edit mode, each changed cell becomes a command (replace ... in #,
+set obs, generate) run by the session, echoed in Results and kept in
+Review, so that every change is recorded and reproducible. The empty row
+and column after the data create new observations and variables.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ LABEL_COLOR_DARK = QColor("#79B8FF")
 
 
 def _quote(text: str) -> str:
-    """Texto entre aspas para um comando; aspas compostas se houver aspas."""
+    """Quoted text for a command; compound quotes if there are quotes."""
     if '"' in text:
         return '`"' + text + '"\''
     return '"' + text + '"'
@@ -49,10 +49,10 @@ def _new_var_name(ds) -> str:
 
 
 def edit_commands(ds, var, obs: int, text: str) -> list[str]:
-    """Comandos que gravam `text` na observação obs (0-based) da variável var.
+    """Commands that write `text` into observation obs (0-based) of variable var.
 
-    var None = coluna nova; obs == ds.nobs = observação nova. Levanta
-    ValueError com a mensagem para o usuário se o texto não servir."""
+    var None = new column; obs == ds.nobs = new observation. Raises
+    ValueError with the message for the user if the text does not fit."""
     cmds: list[str] = []
     if obs >= ds.nobs:
         cmds.append(f"set obs {obs + 1}")
@@ -78,7 +78,7 @@ def edit_commands(ds, var, obs: int, text: str) -> list[str]:
         if lab == value:
             cmds.append(f"replace {var.name} = {code} in {n}")
             return cmds
-    # VERIFICAR: mensagem do Stata ao digitar texto numa variável numérica
+    # VERIFY: Stata's message when text is typed into a numeric variable
     raise ValueError(f"'{value}' is not a number and is not a label of {var.name}")
 
 
@@ -88,13 +88,13 @@ class DatasetModel(QAbstractTableModel):
         self.session = session
         self.dark = False
         self.columns: list[str] | None = None   # browse varlist
-        self.rows = None                         # browse if/in (índices)
+        self.rows = None                         # browse if/in (indices)
         self._cols: list = []
-        self._seen = None                        # conjunto de dados exibido
+        self._seen = None                        # displayed dataset
         self._shape = (-1, -1)
         self.editable = False
         self.nolabel = False
-        self.run: Callable[[str], int] | None = None   # executa um comando (devolve rc)
+        self.run: Callable[[str], int] | None = None   # runs a command (returns rc)
         self.on_error: Callable[[str], None] | None = None
 
     @property
@@ -113,7 +113,7 @@ class DatasetModel(QAbstractTableModel):
         self.refresh()
 
     def _extra(self) -> tuple[int, int]:
-        """Linha e coluna vazias para criar observações e variáveis (modo Edit)."""
+        """Empty row and column to create observations and variables (Edit mode)."""
         if not self.editable:
             return 0, 0
         return (1 if self.rows is None else 0, 1 if self.columns is None else 0)
@@ -125,13 +125,13 @@ class DatasetModel(QAbstractTableModel):
                      and all(a is b for a, b in zip(self._cols, ds.vars)))
         shape = (ds.nobs, ds.nvars)
         if same_vars and shape == self._shape and self.rows is None:
-            # só valores mudaram: mantém posição de rolagem e seleção
+            # only values changed: keeps the scroll position and the selection
             if self.rowCount() and self.columnCount():
                 self.dataChanged.emit(self.index(0, 0),
                                       self.index(self.rowCount() - 1, self.columnCount() - 1))
             return
         self.beginResetModel()
-        if ds is not self._seen:                 # outro arquivo: sai do filtro
+        if ds is not self._seen:                 # another file: leaves the filter
             self.columns = self.rows = None
             self._seen = ds
         if self.columns is not None and all(ds.has(n) for n in self.columns):
@@ -196,14 +196,14 @@ class DatasetModel(QAbstractTableModel):
             return None
         if self._is_extra(index):
             if role == Qt.ItemDataRole.BackgroundRole:
-                return QColor(127, 127, 127, 28)      # linha/coluna para dados novos
+                return QColor(127, 127, 127, 28)      # row/column for new data
             return "" if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole) else None
         var = self._cols[index.column()]
         i = self.obs(index.row())
         if role == Qt.ItemDataRole.DisplayRole:
             return cell_text(self.ds, var, i, use_labels=not self.nolabel)
         if role == Qt.ItemDataRole.EditRole:
-            # valor cru para edição (sem rótulo; strings como estão)
+            # raw value for editing (no label; strings as they are)
             return var.value(i) if var.is_string else cell_text(self.ds, var, i, use_labels=False)
         if role == Qt.ItemDataRole.TextAlignmentRole:
             left = var.is_string and parse_format(var.fmt).left
@@ -236,7 +236,7 @@ class DatasetModel(QAbstractTableModel):
 
 
 class DataBrowser(QMainWindow):
-    """Janela separada, como no Stata. Fica aberta e acompanha os dados."""
+    """Separate window, as in Stata. Stays open and follows the data."""
 
     def __init__(self, session: "Session", font=None, parent=None,
                  run: Callable[[str], int] | None = None):

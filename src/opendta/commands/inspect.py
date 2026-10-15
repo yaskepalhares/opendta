@@ -1,7 +1,7 @@
-"""list e describe (manual [D] list, [D] describe), no layout do Stata 14.
+"""list and describe (manual [D] list, [D] describe), in the Stata 14 layout.
 
-VERIFICAR (casos em compat/do/0101_list_describe.do): larguras de coluna do
-list, separadores, alinhamento de cabeçalhos e o cabeçalho do describe.
+VERIFY (cases in compat/do/0101_list_describe.do): list column widths,
+separators, alignment of headers and the describe header.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ def cell_text(ds: "Dataset", var: "Variable", i: int, *, use_labels: bool = True
 
 
 def _left_aligned(var: "Variable", use_labels: bool) -> bool:
-    """Strings seguem a justificação do formato (%-18s à esquerda, %18s à
-    direita); números, com ou sem rótulo de valor, ficam à direita."""
+    """Strings follow the justification of the format (%-18s left, %18s
+    right); numbers, with or without a value label, are right-aligned."""
     if var.is_string:
         return parse_format(var.fmt).left
     return False
@@ -65,8 +65,8 @@ def cmd_list(s: "Session", args: str) -> None:
     divider = bool(opts.get("divider"))
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
-    # nomes maiores que a coluna são abreviados para max(abbreviate(#), largura
-    # dos valores); o padrão é ab(8) ("Rendamensal" → "Rendam~l")
+    # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
+    # default is ab(8) ("Rendamensal" → "Rendam~l")
     ab = int(opts["abbreviate"]) if isinstance(opts.get("abbreviate"), str) else 8
     from ..lang.functions import _abbrev
     titles = []
@@ -84,8 +84,8 @@ def cmd_list(s: "Session", args: str) -> None:
             parts.append(t.ljust(w) if lft else t.rjust(w))
         return (" | " if divider else "   ").join(parts)
 
-    # layout observado nos logs do Stata: 3 espaços entre colunas, rótulo da
-    # observação "  1." seguido de " | " (tabela) ou de 3 espaços (clean)
+    # layout observed in the Stata logs: 3 spaces between columns, observation label "  1."
+    # followed by " | " (table) or by 3 spaces (clean)
     obs_w = max(3, len(str(int(rows[-1]) + 1))) if len(rows) else 3
     header = fmt_row(titles)
     inner = len(header) + 2
@@ -122,8 +122,8 @@ def cmd_list(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _hline(s: "Session") -> str:
-    """Linha cheia de describe: ocupa c(linesize) (255 tracos com set linesize
-    255, conferido no compat; VERIFICAR com o padrao 80)."""
+    """Full describe line: takes c(linesize) (255 dashes with set linesize
+    255, checked in compat; VERIFY with the default 80)."""
     return "-" * int(s.settings.get("linesize", 80))
 
 
@@ -144,7 +144,7 @@ def cmd_describe(s: "Session", args: str) -> None:
 
     out.ensure_line_start()
     out.write("\n", "text")
-    # com varlist, o Stata 14 mostra só a tabela das variáveis
+    # with a varlist, Stata 14 shows only the variables table
     only_vars = bool(p.varlist.strip())
     if not only_vars:
         src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
@@ -166,18 +166,18 @@ def cmd_describe(s: "Session", args: str) -> None:
             shown = n if len(n) <= 15 or opts.get("fullnames") else n[:14] + "~"
             star = "*" if ds.chars.get(n, {}).get("note0") else " "
             # formatos longos aparecem cortados ("%tdnn/dd/CCYY" → "%td..")
-            fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFICAR regra do corte
+            fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFY truncation rule
             line = f"{shown:<16}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
     if only_vars:
-        # VERIFICAR: rodapé de notas com varlist
+        # VERIFY: notes footer with a varlist
         return
-    # a nota das variáveis com notes vem logo abaixo da tabela; describe, short
-    # não tem linha antes de "Sorted by:" (compat 0104 e 0201)
+    # the note about variables with notes comes right below the table; describe, short has no line
+    # before "Sorted by:" (compat 0104 and 0201)
     if not opts.get("short"):
         if any(ds.chars.get(n, {}).get("note0") for n in names):
             out.write(" " * 44 + "* indicated variables have notes\n", "text")
         out.write(_LINE + "\n", "text")
-    out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 espaços (Stata 14)
+    out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 spaces (Stata 14)
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")

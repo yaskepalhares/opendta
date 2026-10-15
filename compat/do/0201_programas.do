@@ -1,4 +1,4 @@
-* Fase 2: program, syntax, args, gettoken, return/ereturn, temporários, preserve.
+* Phase 2: program, syntax, args, gettoken, return/ereturn, temporaries, preserve.
 capture program drop _all
 clear
 set obs 5

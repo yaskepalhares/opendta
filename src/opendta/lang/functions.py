@@ -1,11 +1,11 @@
-"""Funções disponíveis em expressões (manual [FN]).
+"""Functions available in expressions (manual [FN]).
 
-Cada função recebe a lista de argumentos já avaliados (float ou str) e
-devolve float ou str. A tabela FUNCTIONS registra nome -> (implementação,
-mínimo de argumentos, máximo de argumentos).
+Each function receives the list of already evaluated arguments (float or str) and
+returns float or str. The FUNCTIONS table maps name -> (implementation,
+minimum number of arguments, maximum number of arguments).
 
-Esta é a primeira leva: matemática, strings, lógicas, algumas
-distribuições e datas. A cobertura completa do Stata 14 está no ROADMAP.
+Covered: mathematics, strings, logical, distributions, dates and random
+numbers. Full Stata 14 coverage is tracked in the ROADMAP.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _miss(*xs: float) -> bool:
 
 
 def _num(fn: Callable[..., float]) -> Impl:
-    """Envolve função numérica: missing entra -> missing sai; erros -> missing."""
+    """Wraps a numeric function: missing in -> missing out; errors -> missing."""
     def wrapped(*args: Value) -> float:
         xs = [_n(a) for a in args]
         if _miss(*xs):
@@ -83,7 +83,7 @@ def call(name: str, args: list[Value]) -> Value:
     return fn(*args)
 
 
-# -- matemática --------------------------------------------------------------
+# -- mathematics --------------------------------------------------------------
 
 register("abs", 1)(_num(abs))
 register("ceil", 1)(_num(math.ceil))
@@ -118,8 +118,8 @@ register("digamma", 1)(_num(lambda x: float(special.digamma(x))))
 
 @register("round", 1, 2)
 def _round(x: Value, y: Value = 1.0) -> float:
-    """round(x, y) = y * floor(x/y + .5): meio arredondado para cima
-    (round(-2.5) = -2), confirmado nos logs do Stata."""
+    """round(x, y) = y * floor(x/y + .5): halves rounded up
+    (round(-2.5) = -2), confirmed in the Stata logs."""
     x, y = _n(x), _n(y)
     if _miss(x, y):
         return M.SYSMISS
@@ -148,7 +148,7 @@ def _max(*xs: Value) -> float:
     return max(vals) if vals else M.SYSMISS
 
 
-# -- lógicas / programação ------------------------------------------------------
+# -- logical / programming ------------------------------------------------------
 
 @register("cond", 3, 4)
 def _cond(x: Value, a: Value, b: Value, c: Value | None = None) -> Value:
@@ -203,9 +203,9 @@ register("ustrlen", 1)(_str1(lambda s: float(len(s))))
 register("strupper", 1)(_str1(lambda s: s.upper()))
 register("strlower", 1)(_str1(lambda s: s.lower()))
 def _proper(s: str) -> str:
-    """Maiúscula em letras ASCII que vêm depois de algo que não é letra ASCII.
-    Como no Stata, caracteres acentuados contam como "não letra":
-    proper("joão") = "JoãO" (use ustrtitle() para texto Unicode)."""
+    """Uppercases ASCII letters that come after something that is not an ASCII letter.
+    As in Stata, accented characters count as "not a letter":
+    proper("joão") = "JoãO" (use ustrtitle() for Unicode text)."""
     out = []
     prev_letter = False
     for ch in s:
@@ -320,7 +320,7 @@ def _real(s: Value) -> float:
 
 @register("string", 1, 2)
 def _string(x: Value, fmt: Value = "%9.0g") -> str:
-    """VERIFICAR: string(n) sem formato usa %9.0g."""
+    """VERIFY: string(n) without a format uses %9.0g."""
     x = _n(x)
     return format_value(x, parse_format(_s(fmt)), pad=False, dp=False).strip()
 
@@ -330,8 +330,8 @@ alias("strofreal", "string")
 
 @register("abbrev", 2)
 def _abbrev(s: Value, n: Value) -> str:
-    """abbrev("variavel_muito_longa", 10) = "variavel~a": os primeiros n-2
-    caracteres, '~' e o último caractere (observado no Stata). n mínimo: 5."""
+    """abbrev("variavel_muito_longa", 10) = "variavel~a": the first n-2
+    characters, '~' and the last character (observed in Stata). Minimum n: 5."""
     s, n = _s(s), int(_n(n))
     n = max(n, 5)
     if len(s) <= n:
@@ -339,7 +339,7 @@ def _abbrev(s: Value, n: Value) -> str:
     return s[: n - 2] + "~" + s[-1]
 
 
-# expressões regulares: regexm guarda as capturas para regexs()
+# regular expressions: regexm keeps the captures for regexs()
 _last_match: list[re.Match[str] | None] = [None]
 
 
@@ -368,7 +368,7 @@ def _regexs(n: Value) -> str:
     return m.group(k) or ""
 
 
-# -- distribuições ---------------------------------------------------------------
+# -- distributions ---------------------------------------------------------------
 
 register("normal", 1)(_num(lambda z: stats.norm.cdf(z)))
 register("normalden", 1, 3)(_num(lambda z, m=0.0, s=1.0: stats.norm.pdf(z, m, s) if s > 0 else None))
@@ -437,7 +437,7 @@ _MONTH_NAMES = {m: i + 1 for i, m in enumerate(
 
 @register("date", 2, 3)
 def _date(s: Value, mask: Value, topyear: Value | None = None) -> float:
-    """Subconjunto de date(): máscaras com D, M e Y, mês numérico ou por nome."""
+    """Subset of date(): masks with D, M and Y, numeric or named month."""
     text, mask = _s(s).strip().lower(), _s(mask).upper()
     parts = re.findall(r"[a-z]+|\d+", text)
     order = [c for c in mask if c in "DMY"]
@@ -467,7 +467,7 @@ register("epsdouble", 0)(lambda: M.EPSDOUBLE)
 register("smallestdouble", 0)(lambda: 2.0 ** -1022)
 
 
-# -- números aleatórios (core/rng.py) --------------------------------------------
+# -- random numbers (core/rng.py) --------------------------------------------
 
 def _random(name: str) -> Impl:
     def fn(*args: Value) -> float:

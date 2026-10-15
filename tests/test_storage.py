@@ -46,10 +46,10 @@ def test_variable_api():
     assert v.value(1) == 2.0 and M.is_missing(v.value(2))
     v.set_value(0, 50)
     assert v.data.tolist()[0] == 50
-    v.vtype = "double"                   # promoção mantém os valores
+    v.vtype = "double"                   # promotion keeps the values
     assert v.raw.dtype == np.float64 and v.value(0) == 50
     with pytest.raises(ValueError):
-        v.data[0] = 3                     # data é só leitura
+        v.data[0] = 3                     # data is read-only
     s = Variable("s", "str3", ["a", "bb", ""])
     s.set_value(2, "c")
     assert s.data.tolist() == ["a", "bb", "c"]

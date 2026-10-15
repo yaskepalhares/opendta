@@ -1,1 +1,1 @@
-"""Mata: linguagem matricial do Stata ([M] manual)."""
+"""Mata: Stata's matrix language ([M] manual)."""

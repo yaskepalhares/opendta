@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:08
 
-. * Fase 1a: sort, gsort, by/bysort, _n, _N, subscritos, sum().
+. * Phase 1a: sort, gsort, by/bysort, _n, _N, subscripts, sum().
 . clear
 
 . input g x

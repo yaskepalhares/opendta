@@ -1,5 +1,5 @@
-* Gráficos: mensagens de histogram, kdensity com generate(), memória de
-* gráficos (graph dir/drop/rename), graph export/save/use e erros
+* Graphics: histogram messages, kdensity with generate(), graph
+* memory (graph dir/drop/rename), graph export/save/use and errors
 graph drop _all
 clear
 set obs 74

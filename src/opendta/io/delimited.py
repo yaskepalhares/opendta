@@ -1,9 +1,9 @@
-"""Arquivos de texto delimitado (CSV, TSV): leitura e gravação.
+"""Delimited text files (CSV, TSV): reading and writing.
 
-Usado por import delimited / export delimited e pelos antigos insheet /
-outsheet. As regras de inferência seguem o manual [D] import delimited do
-Stata 14; os pontos não documentados estão marcados com VERIFICAR e têm
-casos em compat/do/0105_delimitado.do.
+Used by import delimited / export delimited and by the old insheet /
+outsheet. The inference rules follow Stata 14's [D] import delimited
+manual; undocumented points are marked VERIFY and have
+cases in compat/do/0105_delimitado.do.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ _NUM_RE = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eEdD][+-]?\d+)?$")
 
 @dataclass
 class ReadOptions:
-    delimiter: str | None = None        # None: detecta vírgula ou tabulação
-    varnames: int | None = None         # linha dos nomes (1-based); 0 = nonames; None = detectar
+    delimiter: str | None = None        # None: detects comma or tab
+    varnames: int | None = None         # line with the names (1-based); 0 = nonames; None = detect
     case: str = "lower"                 # lower | upper | preserve
     asdouble: bool = False
     stringcols: set[int] = field(default_factory=set)    # 1-based
@@ -38,18 +38,18 @@ class ReadOptions:
     encoding: str | None = None
     bindquote: str = "loose"            # loose | strict | nobind
     stripquotes: str = "default"        # default | yes | no
-    # insheet: se a 1ª linha tem menos campos que os dados, ela não é cabeçalho
+    # insheet: if the 1st line has fewer fields than the data, it is not a header
     header_must_cover: bool = False
-    trim_cells: bool = False            # insheet: tira espaços das pontas dos campos
+    trim_cells: bool = False            # insheet: strips spaces from the ends of the fields
 
 
 def _sniff(first_line: str) -> str:
-    # VERIFICAR: o Stata detecta vírgula ou tabulação pela primeira linha
+    # VERIFY: Stata detects comma or tab from the first line
     return "\t" if first_line.count("\t") > first_line.count(",") else ","
 
 
 def split_rows(text: str, delimiter: str, bindquote: str = "loose") -> list[list[str]]:
-    """Divide um texto inteiro em linhas e células (usado em testes e trechos curtos)."""
+    """Splits a whole text into lines and cells (used in tests and short snippets)."""
     if bindquote == "nobind":
         return [line.split(delimiter) for line in text.splitlines()]
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter,
@@ -76,13 +76,13 @@ def _numeric_cell(s: str) -> bool:
 
 
 def make_name(raw: str, case: str) -> str | None:
-    """Nome de variável a partir do cabeçalho; None se não der um nome válido."""
+    """Variable name from the header; None if it does not give a valid name."""
     t = raw.strip()
     if case == "lower":
         t = t.lower()
     elif case == "upper":
         t = t.upper()
-    # VERIFICAR: troca de caracteres inválidos por _ e corte em 32
+    # VERIFY: replacing invalid characters with _ and cutting at 32
     t = re.sub(r"[^A-Za-z0-9_]", "_", t)[:32]
     if not t or not NAME_RE.match(t) or t in RESERVED:
         return None
@@ -90,23 +90,23 @@ def make_name(raw: str, case: str) -> str | None:
 
 
 CHUNK_ROWS = 50_000           # linhas convertidas por vez
-_STR_CACHE_MAX = 50_000       # valores distintos guardados por coluna de texto
+_STR_CACHE_MAX = 50_000       # distinct values kept per text column
 
 
 class _Column:
-    """Coluna em construção. Começa numérica; vira texto na primeira célula
-    que não é número (a não ser com numericcols)."""
+    """Column under construction. Starts numeric; becomes text at the first cell
+    that is not a number (unless numericcols)."""
 
     def __init__(self, index: int, offset: int, force_str: bool, force_num: bool):
         self.index = index
-        self.offset = offset             # linhas anteriores ao aparecimento da coluna
+        self.offset = offset             # lines before the column appeared
         self.numeric = not force_str
         self.force_num = force_num
         self.num_chunks: list[np.ndarray] = []
         self.text: list[str] = []
         self.maxlen = 1
         self.cache: dict[str, str] | None = {}
-        self.flipped_late = False        # virou texto depois do 1º bloco: precisa reler
+        self.flipped_late = False        # became text after the 1st block: needs rereading
 
     def add_text(self, cells) -> None:
         cache = self.cache
@@ -144,7 +144,7 @@ class _Column:
 
 
 def _parse_numbers(cells: list[str], strict: bool) -> np.ndarray | None:
-    """Converte um bloco de células em float64. None se houver texto (strict)."""
+    """Converts a block of cells to float64. None if there is text (strict)."""
     if not cells:
         return np.empty(0)
     s = np.array(cells, dtype=str)
@@ -166,7 +166,7 @@ def _parse_numbers(cells: list[str], strict: bool) -> np.ndarray | None:
         return vals
     except (ValueError, KeyError):
         pass
-    # caminho lento: missing estendidos (.a), expoente com d, texto
+    # slow path: extended missing values (.a), exponent with d, text
     out = np.empty(len(cells))
     for i, c in enumerate(cells):
         if _numeric_cell(c):
@@ -179,7 +179,7 @@ def _parse_numbers(cells: list[str], strict: bool) -> np.ndarray | None:
 
 
 def _open_rows(path: Path, opts: ReadOptions, encoding: str):
-    """Arquivo aberto e iterador de linhas (listas de células)."""
+    """Open file and an iterator over lines (lists of cells)."""
     f = open(path, encoding=encoding, newline="")
     first = f.readline()
     f.seek(0)
@@ -189,14 +189,14 @@ def _open_rows(path: Path, opts: ReadOptions, encoding: str):
     else:
         rows = csv.reader(f, delimiter=delim, quotechar='"', doublequote=True, strict=False)
     if opts.trim_cells:
-        # insheet tira os espaços das pontas de cada campo (observado no Stata 14)
+        # insheet strips the spaces from the ends of each field (observed in Stata 14)
         rows = ([c.strip() for c in r] for r in rows)
     return f, rows
 
 
 def _data_rows(rows, opts: ReadOptions, header_out: list):
-    """Aplica cabeçalho, colrange e rowrange; descarta linhas em branco no fim.
-    O cabeçalho encontrado é posto em header_out[0]."""
+    """Applies header, colrange and rowrange; drops blank lines at the end.
+    The header found is put in header_out[0]."""
     c0, c1 = opts.colrange
     c0 = (c0 or 1) - 1
     r0, r1 = opts.rowrange
@@ -208,8 +208,8 @@ def _data_rows(rows, opts: ReadOptions, header_out: list):
     header_out.append(None)
     lead: list[list[str]] = []
     if opts.varnames is None:
-        # VERIFICAR: heurística de detecção dos nomes na 1ª linha (aqui: todas
-        # as células preenchidas da 1ª linha são texto não numérico)
+        # VERIFY: heuristic to detect names in the 1st line (here: all filled cells of the 1st line
+        # are non-numeric text)
         first = next(it, None)
         if first is None:
             return
@@ -225,7 +225,7 @@ def _data_rows(rows, opts: ReadOptions, header_out: list):
         h = next(it, None)
         header_out[0] = cut(h) if h is not None else None
 
-    k = 0          # linha de dados (1-based), para o rowrange
+    k = 0          # data line (1-based), for rowrange
     pending: list[list[str]] = []
     for r in itertools.chain(lead, (cut(x) for x in it)):
         if not ((r and r[0].strip()) or any(c.strip() for c in r)):
@@ -233,7 +233,7 @@ def _data_rows(rows, opts: ReadOptions, header_out: list):
             continue
         for b in pending + [r]:
             k += 1
-            # VERIFICAR: aqui rowrange conta as linhas de dados (depois do cabeçalho)
+            # VERIFY: here rowrange counts data lines (after the header)
             if r0 and k < r0:
                 continue
             if r1 and k > r1:
@@ -291,7 +291,7 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
             j = len(cols)
             cols.append(_Column(j, nrows, (j + 1) in opts.stringcols, (j + 1) in opts.numericcols))
 
-    # colunas que viraram texto depois do 1º bloco: relê só elas
+    # columns that became text after the 1st block: reread only those
     late = [c for c in cols if c.flipped_late]
     if late:
         for c in late:
@@ -318,8 +318,7 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
         if name is None or name in used:
             name = f"v{j + 1}"
         used.add(name)
-        # VERIFICAR: o cabeçalho original vira rótulo quando o nome teve de mudar
-        # (além da caixa)
+        # VERIFY: the original header becomes the label when the name had to change (beyond case)
         label = raw_name.strip() if raw_name.strip() and name.lower() != raw_name.strip().lower() else ""
         if c.numeric:
             parts = ([np.full(c.offset, M.SYSMISS)] if c.offset else []) + c.num_chunks
@@ -330,10 +329,10 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
                 vtype = "double"
             elif vtype == "double" and not opts.asdouble:
                 nm = vals[vals < M.SYSMISS]
-                # inteiros grandes ficam double; decimais viram float (VERIFICAR)
+                # large integers stay double; decimals become float (VERIFY)
                 if not (nm.size and np.all(nm == np.trunc(nm))):
                     vtype = "float"
-            var = Variable(name, vtype, vals)       # float: arredonda para precisão simples
+            var = Variable(name, vtype, vals)       # float: rounds to single precision
             del vals
         else:
             text = ([""] * c.offset if c.offset else []) + c.text
@@ -346,7 +345,7 @@ def _read(path: Path, opts: ReadOptions, encoding: str) -> Dataset:
 
 
 # ---------------------------------------------------------------------------
-# gravação
+# writing
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -355,13 +354,13 @@ class WriteOptions:
     varnames: bool = True
     nolabel: bool = False
     datafmt: bool = False
-    quote: bool = False          # aspas em todas as strings
-    leading_zero: bool = False   # VERIFICAR: o Stata grava .5 em vez de 0.5
-    never_quote: bool = False    # outsheet, noquote: texto cru, mesmo com o delimitador
+    quote: bool = False          # quotes around all strings
+    leading_zero: bool = False   # VERIFY: Stata writes .5 instead of 0.5
+    never_quote: bool = False    # outsheet, noquote: raw text, even with the delimiter
 
 
 def number_text(x: float, vtype: str, fmt: str | None = None, *, leading_zero: bool = False) -> str:
-    """Texto de um valor, igual ao que export delimited grava."""
+    """Text of a value, the same as export delimited writes."""
     if fmt and x < M.SYSMISS:
         from ..core.formats import format_value, plain_numbers
         with plain_numbers():
@@ -371,7 +370,7 @@ def number_text(x: float, vtype: str, fmt: str | None = None, *, leading_zero: b
 
 
 def _number_cells(v: Variable, raw: np.ndarray, leading_zero: bool) -> np.ndarray:
-    """Texto de cada valor numérico (vetor de str), sem laço em Python."""
+    """Text of each numeric value (vector of str), without a Python loop."""
     dec = storage.decode(raw, v.vtype)
     miss = dec >= M.SYSMISS
     out = np.empty(len(dec), dtype=object)
@@ -400,7 +399,7 @@ def _number_cells(v: Variable, raw: np.ndarray, leading_zero: bool) -> np.ndarra
 
 def write_delimited(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarray,
                     opts: WriteOptions | None = None) -> None:
-    """Grava em blocos de linhas, montando cada coluna de uma vez."""
+    """Writes in blocks of lines, building each column at once."""
     opts = opts or WriteOptions()
     d = opts.delimiter
     vars_ = [ds.get(n) for n in names]

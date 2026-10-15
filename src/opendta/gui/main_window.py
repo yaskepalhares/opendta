@@ -1,19 +1,19 @@
-"""Janela principal no layout do Stata 14.
+"""Main window in the Stata 14 layout.
 
     ┌──────────────────────────────────────────────────────────┐
     │ Menus: File Edit Data Graphics Statistics User Window Help│
-    │ Barra de ferramentas                                      │
+    │ Toolbar                                                   │
     ├──────────┬───────────────────────────────┬───────────────┤
     │ Review   │ Results                       │ Variables     │
     │          │                               ├───────────────┤
     │          ├───────────────────────────────┤ Properties    │
     │          │ Command                       │               │
     ├──────────┴───────────────────────────────┴───────────────┤
-    │ diretório de trabalho                       CAP  NUM  OVR │
+    │ working directory                           CAP  NUM  OVR │
     └──────────────────────────────────────────────────────────┘
 
-Ícones e identidade visual são próprios do OpenDTA. Itens de menu ainda não
-implementados aparecem desabilitados com a fase prevista na dica.
+Icons and visual identity are OpenDTA's own. Menu items not yet
+implemented appear disabled, with a tooltip explaining why.
 """
 
 from __future__ import annotations
@@ -64,8 +64,8 @@ def _human_size(nbytes: int) -> str:
 
 
 def monospace_font(prefs: Preferences | None = None) -> QFont:
-    """Fonte das janelas de texto: a escolhida nas preferências, ou o padrão do
-    sistema (Menlo no macOS, Courier New no Windows, DejaVu Sans Mono no Linux)."""
+    """Font of the text windows: the one chosen in the preferences, or the system
+    default (Menlo on macOS, Courier New on Windows, DejaVu Sans Mono on Linux)."""
     prefs = prefs or Preferences()
     available = set(QFontDatabase.families())
     candidates = [prefs.font_family] + MONOSPACE_FALLBACKS
@@ -94,7 +94,7 @@ class ResultsView(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setFont(monospace_font())
         self.setObjectName("Results")
-        self._segments: list[tuple[str, str]] = []   # para redesenhar ao trocar o tema
+        self._segments: list[tuple[str, str]] = []   # to redraw when the theme changes
         self.set_scheme(scheme)
 
     def set_scheme(self, scheme: ResultsScheme) -> None:
@@ -134,11 +134,11 @@ class ResultsView(QPlainTextEdit):
 # ---------------------------------------------------------------------------
 
 class CommandLine(QPlainTextEdit):
-    """Janela Command: redimensionável e com várias linhas.
+    """Command window: resizable and multi-line.
 
-    Enter executa; Shift+Enter quebra a linha. Texto colado com várias
-    linhas é executado linha a linha. PgUp/PgDn percorrem o histórico; as
-    setas ↑/↓ também, enquanto o comando tiver uma linha só."""
+    Enter runs; Shift+Enter breaks the line. Pasted text with several
+    lines is run line by line. PgUp/PgDn walk through the history; so do the
+    ↑/↓ arrows, while the command has a single line."""
 
     submitted = Signal(str)
 
@@ -157,10 +157,10 @@ class CommandLine(QPlainTextEdit):
         self._update_min_height()
 
     def _update_min_height(self) -> None:
-        # pelo menos uma linha visível, qualquer que seja a fonte
+        # at least one visible line, whatever the font
         self.setMinimumHeight(self.fontMetrics().lineSpacing() + 14)
 
-    # compatibilidade com a API de QLineEdit usada pela janela
+    # compatibility with the QLineEdit API used by the window
     def text(self) -> str:
         return self.toPlainText()
 
@@ -209,7 +209,7 @@ class CommandLine(QPlainTextEdit):
 
 
 def _titled(title: str, widget: QWidget) -> QWidget:
-    """Painel com barra de título fina, como os painéis encaixados do Stata."""
+    """Panel with a thin title bar, like Stata's docked panels."""
     box = QWidget()
     lay = QVBoxLayout(box)
     lay.setContentsMargins(0, 0, 0, 0)
@@ -347,7 +347,7 @@ class MainWindow(QMainWindow):
         self.command = CommandLine()
         self.command.submitted.connect(self.run_commands)
 
-        # Results e Command separados por uma divisória arrastável nos dois sentidos
+        # Results and Command separated by a splitter that can be dragged both ways
         split = QSplitter(Qt.Orientation.Vertical)
         split.setObjectName("CentralSplitter")
         split.setHandleWidth(6)
@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
 
     def _dock(self, title: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
         d = QDockWidget(tr(title), self)
-        d.setObjectName(title)          # o nome do objeto fica em inglês (layout salvo)
+        d.setObjectName(title)          # the object name stays in English (saved layout)
         d.setWidget(widget)
         d.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable
                       | QDockWidget.DockWidgetFeature.DockWidgetMovable
@@ -403,7 +403,7 @@ class MainWindow(QMainWindow):
         self.var_filter.setPlaceholderText(tr("Filter variables here"))
         self.var_filter.textChanged.connect(self._filter_variables)
         self.variables.itemSelectionChanged.connect(self._show_variable_properties)
-        # duplo clique envia o nome para a janela Command, como no Stata
+        # double click sends the name to the Command window, as in Stata
         self.variables.itemDoubleClicked.connect(
             lambda it, _c: (self.command.insert(it.text(0) + " "), self.command.setFocus()))
         lay.addWidget(self.var_filter)
@@ -423,7 +423,7 @@ class MainWindow(QMainWindow):
                                                 "Observations", "Size", "Memory", "Sorted by"])):
             for k in keys:
                 item = QTreeWidgetItem([tr(k), ""])
-                item.setData(0, Qt.ItemDataRole.UserRole, k)     # chave em inglês
+                item.setData(0, Qt.ItemDataRole.UserRole, k)     # key in English
                 parent.addChild(item)
             self.properties.addTopLevelItem(parent)
             parent.setExpanded(True)
@@ -486,8 +486,8 @@ class MainWindow(QMainWindow):
             for item, cmd in items:
                 self._template_action(sub, item, cmd)
 
-        # sem caixas de diálogo: os itens escrevem o comando na janela Command,
-        # pronto para completar com as variáveis
+        # items without dialogs write the command to the Command window, ready to be completed with
+        # the variables
         m = mb.addMenu(tr("&Graphics"))
         for item, cmd in GRAPHICS_TEMPLATES:
             if item is None:
@@ -540,8 +540,8 @@ class MainWindow(QMainWindow):
             menu.setToolTipsVisible(True)
 
     def _template_action(self, menu, item: str, cmd: str) -> QAction:
-        """Item de menu de um comando: abre a caixa de diálogo, quando existe,
-        ou escreve o comando na janela Command, pronto para completar."""
+        """Menu item for a command: opens the dialog box, when there is one,
+        or writes the command to the Command window, ready to be completed."""
         from .dialogs import spec_for
         spec = spec_for(cmd)
         if spec is not None:
@@ -561,7 +561,7 @@ class MainWindow(QMainWindow):
         dlg.raise_()
 
     def retranslate(self) -> None:
-        """Troca o idioma da interface sem reiniciar: refaz menus e textos."""
+        """Switches the interface language without restarting: rebuilds menus and texts."""
         self.menuBar().clear()
         self._build_menus()
         self.refresh_state()
@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setIconSize(TOOLBAR_SIZE)
         tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        # mesma disposição da barra do Stata 14; desenho próprio (gui/icons/)
+        # same arrangement as Stata 14's toolbar; OpenDTA's own drawing (gui/icons/)
         groups = [
             [("open", "Open", self.open_dataset, 1), ("save", "Save", self.save_dataset, 1),
              ("print", "Print", self.print_results, 8)],
@@ -648,10 +648,10 @@ class MainWindow(QMainWindow):
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
         """)
 
-    # -- ações ---------------------------------------------------------------
+    # -- actions ---------------------------------------------------------------
     def run_commands(self, text: str) -> None:
-        """Texto da janela Command. Uma linha: comando comum. Várias linhas:
-        rodam juntas como um trecho de do-file (blocos { } inteiros)."""
+        """Text of the Command window. One line: an ordinary command. Several lines:
+        they run together as a piece of a do-file (whole { } blocks)."""
         lines = [ln for ln in text.splitlines() if ln.strip()]
         if len(lines) <= 1:
             self.run_command(lines[0] if lines else text)
@@ -696,9 +696,9 @@ class MainWindow(QMainWindow):
             it = self.review.topLevelItem(k)
             it.setHidden(bool(text) and text.lower() not in it.text(0).lower())
 
-    # -- arquivos de dados ---------------------------------------------------
+    # -- data files ---------------------------------------------------
     def _confirm_discard(self) -> bool:
-        """Dados alterados: oferece salvar antes de substituir. False = cancelar."""
+        """Changed data: offers to save before replacing. False = cancel."""
         ds = self.session.data
         if not (ds.changed and ds.nvars):
             return True
@@ -739,7 +739,7 @@ class MainWindow(QMainWindow):
             return False
         if not path.lower().endswith(".dta"):
             path += ".dta"
-        # o diálogo já confirmou a substituição, por isso replace
+        # the dialog has already confirmed the replacement, hence replace
         self.run_command(f'save "{path}", replace')
         return self.session.rc == 0
 
@@ -771,7 +771,7 @@ class MainWindow(QMainWindow):
         self.viewer.raise_()
         self.viewer.activateWindow()
 
-    # -- gráficos e Do-file Editor ------------------------------------------------
+    # -- graphs and Do-file Editor ------------------------------------------------
     def show_graph(self, g) -> None:
         if self.graph_window is None:
             self.graph_window = GraphWindow(self.session, self, run=self._run_from_editor)
@@ -812,8 +812,8 @@ class MainWindow(QMainWindow):
         self.command.setFocus()
 
     def copy_table(self) -> None:
-        """Copia a seleção de Results com colunas separadas por tabulação
-        (para colar numa planilha), como Copy table do Stata."""
+        """Copies the Results selection with columns separated by tabs
+        (to paste into a spreadsheet), like Stata's Copy table."""
         import re as _re
         text = self.results.textCursor().selectedText().replace("\u2029", "\n")
         if not text:
@@ -858,7 +858,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, tr("Begin log"), os.path.join(os.getcwd(), "log.smcl"),
                                               tr("SMCL log (*.smcl);;Text log (*.log)"))
         if path:
-            # o diálogo já confirmou a substituição
+            # the dialog has already confirmed the replacement
             opts = "replace text" if path.lower().endswith(".log") else "replace"
             self.run_command(f'log using "{path}", {opts}')
 
@@ -885,8 +885,8 @@ class MainWindow(QMainWindow):
         self.varmanager.activateWindow()
 
     def _run_from_editor(self, line: str) -> int:
-        """Comando gerado pelo Data Editor ou pelo Variables Manager: ecoa em
-        Results e entra em Review, como no Stata."""
+        """Command generated by the Data Editor or the Variables Manager: echoed in
+        Results and added to Review, as in Stata."""
         self.run_command(line)
         return self.session.rc
 
@@ -907,7 +907,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def apply_preferences(self) -> None:
-        """Aplica tema, fonte, ícone e idioma escolhidos (também chamado na abertura)."""
+        """Applies the chosen theme, font, icon and language (also called at startup)."""
         old = (i18n.language(), i18n.messages())
         i18n.set_language(self.prefs.language)
         i18n.set_messages(self.prefs.messages)
@@ -927,7 +927,7 @@ class MainWindow(QMainWindow):
         if app is not None:
             app.setWindowIcon(ico)
 
-    # -- layout salvo entre sessões -------------------------------------------
+    # -- layout saved between sessions -------------------------------------------
     def _restore_layout(self) -> None:
         geo, state, split = self.prefs.layout()
         if geo:
@@ -947,7 +947,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def apply_theme(self, theme: str) -> None:
-        """Tema claro ou escuro da interface inteira, independente do sistema."""
+        """Light or dark theme for the whole interface, independent of the system."""
         app = QApplication.instance()
         if app is not None:
             apply_theme(app, theme)
@@ -967,7 +967,7 @@ class MainWindow(QMainWindow):
             self.browser.set_dark(theme == "dark")
 
     def _set_permanently(self, name: str, value: str) -> None:
-        """set ..., permanently: lembrado na próxima abertura (hints, superscript, numerics)."""
+        """set ..., permanently: remembered at the next startup (hints, superscript, numerics)."""
         if name == "hints":
             self.prefs.hints = value == "on"
         elif name == "superscript":
@@ -983,7 +983,7 @@ class MainWindow(QMainWindow):
         self.run_command(f"set superscript {'on' if on else 'off'}, permanently")
 
     def _toggle_hints(self, on: bool) -> None:
-        # vira comando, para ficar em Results e Review como qualquer set
+        # becomes a command, so that it shows in Results and Review like any set
         self.run_command(f"set hints {'on' if on else 'off'}, permanently")
 
     def show_hints_help(self) -> None:
@@ -1071,8 +1071,8 @@ class MainWindow(QMainWindow):
             child = self._prop_data.child(k)
             child.setText(1, data_props.get(child.data(0, Qt.ItemDataRole.UserRole), ""))
         self._show_variable_properties()
-        # as janelas auxiliares se atualizam depois do comando terminar
-        # (a edição de uma célula dispara comandos de dentro do próprio modelo)
+        # the auxiliary windows refresh after the command ends (editing a cell runs commands from
+        # inside the model itself)
         QTimer.singleShot(0, self._refresh_aux_windows)
 
     def _refresh_aux_windows(self) -> None:
@@ -1102,7 +1102,7 @@ class MainWindow(QMainWindow):
             child = self._prop_vars.child(k)
             child.setText(1, props.get(child.data(0, Qt.ItemDataRole.UserRole), ""))
 
-    # -- arrastar e soltar do-files -------------------------------------------
+    # -- drag and drop of do-files -------------------------------------------
     def dragEnterEvent(self, event) -> None:  # noqa: N802
         if event.mimeData().hasUrls():
             event.acceptProposedAction()

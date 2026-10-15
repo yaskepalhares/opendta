@@ -4,8 +4,8 @@
   log type:  text
  opened on:  14 Oct 2026, 11:45:58
 
-. * Fase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
-. * qreg e putexcel
+. * Phase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
+. * qreg and putexcel
 . clear
 
 . set seed 804

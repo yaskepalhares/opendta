@@ -1,17 +1,17 @@
-"""Programas definidos pelo usuário ([P] program) e escopos de execução.
+"""User-defined programs ([P] program) and execution scopes.
 
-    program [define] nome [, rclass eclass sclass nclass byable(recall|onecall)
+    program [define] name [, rclass eclass sclass nclass byable(recall|onecall)
                             properties(...) sortpreserve plugin]
         ...
     end
 
-Ao chamar `nome argumentos`, o corpo roda num novo escopo de macros locais
-com `0' = tudo o que veio depois do nome e `1', `2', ... = as palavras.
+When `name arguments` is called, the body runs in a new scope of local macros
+with `0' = everything after the name and `1', `2', ... = the words.
 
-Cada programa (e cada do-file) abre um Scope, que guarda o que precisa ser
-desfeito na saída: variáveis, nomes e arquivos temporários, e os dados
-guardados por preserve. Programas rclass/sclass acumulam os resultados de
-`return`/`sreturn` e só os publicam em r()/s() quando terminam sem erro.
+Each program (and each do-file) opens a Scope, which keeps what must be
+undone on exit: temporary variables, names and files, and the data
+kept by preserve. rclass/sclass programs accumulate the results of
+`return`/`sreturn` and only publish them in r()/s() when they end without an error.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class Program:
     kind: str = "nclass"                 # rclass | eclass | sclass | nclass
     byable: str = ""                     # recall | onecall | ""
     properties: str = ""
-    source: str = ""                     # arquivo .ado de origem, se houver
+    source: str = ""                     # source .ado file, if any
     options: str = ""
 
 
@@ -47,7 +47,7 @@ class Scope:
     kind: str                            # program | do
     name: str = ""
     program: Program | None = None
-    pending: dict = field(default_factory=dict)      # return/sreturn ainda não publicados
+    pending: dict = field(default_factory=dict)      # return/sreturn not yet published
     tempvars: list[str] = field(default_factory=list)
     tempnames: list[str] = field(default_factory=list)
     tempfiles: list[Path] = field(default_factory=list)
@@ -55,7 +55,7 @@ class Scope:
 
 
 def parse_definition(rest: str) -> tuple[str, dict[str, str]]:
-    """Texto depois de `program [define]` -> (nome, opções)."""
+    """Text after `program [define]` -> (name, options)."""
     head, comma, opts = rest.partition(",")
     words = head.split()
     if words and len(words[0]) >= 2 and "define".startswith(words[0]):
@@ -81,13 +81,13 @@ def make_program(name: str, options: dict[str, str], lines: list[LogicalLine],
 
 
 def call_program(s: "Session", prog: Program, args: str) -> None:
-    """Executa o programa com os argumentos dados."""
+    """Runs the program with the given arguments."""
     argv = split_words(args)
     frame = {str(k): v for k, v in enumerate(argv, start=1)}
     if args.strip():
         frame["0"] = args.strip()
     if len(s.scopes) > 60:
-        raise StataError(1000, "system limit exceeded: nested program calls")   # VERIFICAR
+        raise StataError(1000, "system limit exceeded: nested program calls")   # VERIFY
     s.macros.push_frame(frame)
     scope = Scope("program", prog.name, prog)
     s.scopes.append(scope)

@@ -1,14 +1,14 @@
-"""xtpoisson (fe, re) e xtlogit (fe, re) ([XT] xtpoisson, [XT] xtlogit).
+"""xtpoisson (fe, re) and xtlogit (fe, re) ([XT] xtpoisson, [XT] xtlogit).
 
-- xtpoisson, fe: verossimilhança condicional (multinomial dentro do grupo);
-- xtpoisson, re: efeito gama, verossimilhança fechada;
-- xtlogit, fe: logit condicional (soma sobre os subconjuntos com o mesmo
-  total, por programação dinâmica);
-- xtlogit, re: efeito normal integrado por Gauss-Hermite adaptativa com 12
-  pontos (o padrão do Stata é mvaghermite com 12 pontos; detalhes da
-  adaptação VERIFICAR).
+- xtpoisson, fe: conditional likelihood (multinomial within the group);
+- xtpoisson, re: gamma effect, closed-form likelihood;
+- xtlogit, fe: conditional logit (sum over the subsets with the same
+  total, by dynamic programming);
+- xtlogit, re: normal effect integrated by adaptive Gauss-Hermite with 12
+  points (Stata's default is mvaghermite with 12 points; details of the
+  adaptation VERIFY).
 
-Layouts seguem o xtreg/logit do OpenDTA; VERIFICAR com o caso 0804."""
+Layouts checked against case 0804."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class _Panel:
                                   "offset": 3, "normal": 4, "intpoints": 4, "intmethod": 4})
         o = self.pr.o
         if o.get("pa"):
-            raise StataError(198, f"{cmd}, pa not implemented")   # VERIFICAR
+            raise StataError(198, f"{cmd}, pa not implemented")   # VERIFY
         ds = s.data
         pvar = str(o["i"]).strip() if isinstance(o.get("i"), str) else panel_info(ds)
         if not pvar:
@@ -87,7 +87,7 @@ def _header(s, title: str, sub: str, x: dict) -> None:
         out.write(f"{val:>10}\n", "result")
     out.write("\n", "text")
     if x.get("intpoints"):
-        # xtlogit, re: método e pontos de integração (compat 0804)
+        # xtlogit, re: integration method and points (compat 0804)
         out.write(f"{'Integration method: mvaghermite':<48}{'Integration pts.':<18}= ", "text")
         out.write(f"{x['intpoints']:>10}\n", "result")
         out.write("\n", "text")
@@ -115,7 +115,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         chi2 = SYS
     chi2type = "Wald"
     if lr0 is not None:
-        # xtlogit, fe: teste LR contra o modelo sem covariáveis (compat 0804)
+        # xtlogit, fe: LR test against the model without covariates (compat 0804)
         chi2, chi2type = max(2 * (res.ll - lr0), 0.0), "LR"
     p = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
     names = [c.name for c in smp.cols] + ([] if P.fe or not pr.constant else ["_cons"])
@@ -168,7 +168,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
                        coef_title=ee.coef_title, eform=ee.eform_on)
             if chibar is not None:
                 lab, val, pv = chibar
-                # "LR test of rho=0: chibar2(01) = 8.21" e o Prob na coluna 56 (compat 0804)
+                # "LR test of rho=0: chibar2(01) = 8.21" with Prob at column 56 (compat 0804)
                 ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(55)
                                 + f"Prob >= chibar2 = {pv:5.3f}\n", "text")
     est.display = disp
@@ -204,7 +204,7 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
     pr = P.pr
     y, X, inv = P.y, pr.X, P.inv
     if np.any(y < 0) or np.any(y != np.trunc(y)):
-        raise StataError(459, f"{pr.smp.depname} must be nonnegative integers")   # VERIFICAR
+        raise StataError(459, f"{pr.smp.depname} must be nonnegative integers")   # VERIFY
     out = s.output
     eform = "IRR" if pr.o.get("irr") else ""
     if P.fe:
@@ -246,7 +246,7 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
         _finish(s, P, "xtpoisson", args, res.b, V, res, [], "Conditional fixed-effects Poisson regression", "",
                 keep, eform=eform)
         return
-    # efeitos aleatórios gama
+    # gamma random effects
     Xc = np.column_stack([X, np.ones(len(y))]) if pr.constant else X
     k = Xc.shape[1]
     lgy = special.gammaln(y + 1)
@@ -269,7 +269,7 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
         g = _num_grad(ll_re, par)
         H = num_hess(lambda q: _num_grad(ll_re, q), par)
         return ll, g, H
-    # início: Poisson agrupado e ln(alpha) = 0
+    # start: pooled Poisson and ln(alpha) = 0
     from .models import _poisson
     pf, _ = _poisson(y, Xc, np.ones(len(y)), np.zeros(len(y)))
     from .ml import maximize, print_log
@@ -277,8 +277,8 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
     if pr.constant:
         b0[-1] = math.log(max(y.mean(), 1e-8))
     rp = maximize(pf, b0)
-    # o Stata mostra o Poisson já partindo do ponto ótimo (iterações 0 e 1
-    # iguais; compat 0804): o ajuste exato fica fora do log
+    # Stata shows the Poisson starting already at the optimum (iterations 0 and 1 equal; compat
+    # 0804): the exact fit stays out of the log
     rp = maximize(pf, rp.b)
     res = pr.maximize(fun, np.concatenate([rp.b, [0.0]]))
     if not pr.o.get("nolog"):
@@ -306,10 +306,10 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _clogit_ll(eta: np.ndarray, y: np.ndarray) -> float:
-    """log P(y | Σy) do logit condicional de um grupo."""
+    """log P(y | Σy) of the conditional logit for one group."""
     k = int(y.sum())
     T = len(eta)
-    # f[j] = log Σ_{|S|=j} exp(Σ_S eta), pelas observações já vistas
+    # f[j] = log Σ_{|S|=j} exp(Σ_S eta), over the observations seen so far
     f = np.full(k + 1, -np.inf)
     f[0] = 0.0
     for t in range(T):
@@ -341,7 +341,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         keep = good[inv]
         dg = int((~good).sum())
         if np.any(tot[good] > 1):
-            # esta nota vem antes da de grupos descartados (compat 0804)
+            # this note comes before the one about dropped groups (compat 0804)
             out.write("note: multiple positive outcomes within groups encountered.\n", "text")
         if dg:
             out.write(f"note: {dg} group{'s' if dg > 1 else ''} ({int((~keep).sum())} obs) dropped because of "
@@ -358,7 +358,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
                 return ll, None, None
             g = _num_grad(ll_fe, b)
             return ll, g, num_hess(lambda q: _num_grad(ll_fe, q), b)
-        # início: logit agrupado (com constante) nos grupos mantidos (compat 0804)
+        # start: pooled logit (with a constant) on the groups kept (compat 0804)
         from .models import _logit
         from .ml import maximize
         Xk = np.column_stack([X[keep], np.ones(int(keep.sum()))])
@@ -387,7 +387,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         for g in range(G):
             ix = order[bounds[g]:bounds[g + 1]]
             e, sg = eta[ix], sign[ix]
-            # modo e curvatura do integrando em nu (adaptativo)
+            # mode and curvature of the integrand in nu (adaptive)
             mu, tau = 0.0, sig
             for _ in range(8):
                 p = special.expit(sg * (e + mu))
@@ -418,9 +418,9 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         p0 = y.mean()
         b0[-1] = math.log(p0 / (1 - p0))
     rl = maximize(lf, b0)
-    # busca em tau = sigma2/(1 + sigma2) com os coeficientes do logit agrupado e
-    # quadratura de Gauss-Hermite simples, até a verossimilhança cair; o modelo
-    # completo parte do melhor tau (compat 0804)
+    # search over tau = sigma2/(1 + sigma2) with the pooled logit coefficients and plain
+    # Gauss-Hermite quadrature, until the likelihood falls; the full model starts from the best tau
+    # (compat 0804)
 
     def ll_grid(t):
         if t == 0:

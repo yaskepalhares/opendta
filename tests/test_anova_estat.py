@@ -1,5 +1,5 @@
-"""Fase 8: oneway, anova, tabulate summarize() e estat, conferidos com contas
-independentes (scipy e numpy)."""
+"""Phase 8: oneway, anova, tabulate summarize() and estat, checked against independent
+computations (scipy and numpy)."""
 
 import math
 
@@ -55,7 +55,7 @@ def test_anova_partial_ss_interaction(run):
     run("anova y g##h")
     e = run.session.e
     y, g, h = _col(run, "y"), _col(run, "g"), _col(run, "h")
-    # codificação por desvios, independente da implementação
+    # deviation coding, independent of the implementation
     G = np.column_stack([(g == 1) * 1.0 - (g == 3), (g == 2) * 1.0 - (g == 3)])
     H = ((h == 0) * 1.0 - (h == 1) * 1.0)[:, None]
     GH = G * H
@@ -65,7 +65,7 @@ def test_anova_partial_ss_interaction(run):
     assert e["ss_3"] == pytest.approx(_partial_ss(y, full, np.column_stack([one, G, H])), rel=1e-9)
     assert e["df_1"] == 2 and e["df_3"] == 2
     assert e["cmd"] == "anova"
-    # o modelo é o mesmo do regress com fatores
+    # the model is the same as regress with factors
     b, *_ = np.linalg.lstsq(full, y, rcond=None)
     r = y - full @ b
     assert e["rss"] == pytest.approx(r @ r, rel=1e-9)

@@ -1,4 +1,4 @@
-* Fase 4: funções da biblioteca do Mata.
+* Phase 4: Mata library functions.
 mata
 X = (1, 2 \ 3, 5 \ 5, 6)
 rows(X), cols(X), length(X)

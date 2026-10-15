@@ -1,5 +1,5 @@
-* Fase 1c: file write, infile (livre e com dicionário) e infix.
-* Cria e apaga arquivos temporários na pasta atual.
+* Phase 1c: file write, infile (free format and with a dictionary) and infix.
+* Creates and deletes temporary files in the current folder.
 capture file close _all
 file open h using odta_f.raw, write replace
 file write h "Ana 30 1.5" _n `""Bia Lima" . 2"' _n "Caio, 41, abc" _n "Davi 7" _n

@@ -1,6 +1,6 @@
-* Fase 3d: dados para reproduzir rnormal() e as outras distribuições do
-* Stata. Os runiform() da mesma semente mostram os uniformes disponíveis;
-* comparando, dá para descobrir quantos cada função consome e como.
+* Phase 3d: data to reproduce rnormal() and Stata's other
+* distributions. The runiform() draws with the same seed show the available uniforms;
+* by comparing, one can find out how many each function consumes and how.
 clear
 set obs 8
 set seed 123

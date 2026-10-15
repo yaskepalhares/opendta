@@ -1,14 +1,14 @@
-"""Amostras complexas ([SVY] svyset, svydescribe, svy estimation) e as
-estatísticas mean, proportion, total e ratio ([R] mean, [R] proportion...).
+"""Complex surveys ([SVY] svyset, svydescribe, svy estimation) and the
+statistics mean, proportion, total and ratio ([R] mean, [R] proportion...).
 
-Variância por linearização de Taylor (desenho com estratos, UPAs e fpc
-num estágio):
+Variance by Taylor linearization (design with strata, PSUs and fpc
+in one stage):
 
     V = Σ_h (1 - f_h) n_h/(n_h - 1) Σ_j (z_hj - z̄_h)(z_hj - z̄_h)'
 
-z_hj é a soma, na UPA j do estrato h, dos escores linearizados de cada
-observação. Graus de liberdade do desenho = nº de UPAs - nº de estratos.
-A declaração fica nas características de _dta (_svy_*), como no Stata.
+z_hj is the sum, in PSU j of stratum h, of the linearized scores of each
+observation. Design degrees of freedom = number of PSUs - number of strata.
+The declaration is kept in the _dta characteristics (_svy_*), as in Stata.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ SYS = M.SYSMISS
 
 @dataclass
 class Design:
-    psu: str = ""            # "" ou "_n" = cada observação é uma UPA
+    psu: str = ""            # "" or "_n" = each observation is a PSU
     weight: str = ""
     wtype: str = ""          # pweight / iweight
     strata: str = ""
@@ -47,9 +47,9 @@ class Design:
     vce: str = "linearized"
     poststrata: str = ""
     postweight: str = ""
-    # estágios 2, 3...: [{"su": ..., "strata": ..., "fpc": ...}]
+    # stages 2, 3...: [{"su": ..., "strata": ..., "fpc": ...}]
     stages: list = field(default_factory=list)
-    # pesos replicados e opções dos métodos de replicação
+    # replicate weights and options of the replication methods
     brrweight: str = ""
     fay: float = 0.0
     bsrweight: str = ""
@@ -101,7 +101,7 @@ def _show_design(s: "Session", d: Design) -> None:
         rows.append(("pweight", "<none>"))
     rows += [("VCE", d.vce)]
     if d.vce != "linearized":
-        # métodos de replicação mostram o MSE: off/on (compat 0602)
+        # replication methods show MSE: off/on (compat 0602)
         rows.append(("MSE", "on" if d.mse else "off"))
     for lab, val in (("brrweight", d.brrweight), ("bsrweight", d.bsrweight), ("jkrweight", d.jkrweight),
                      ("sdrweight", d.sdrweight)):
@@ -154,7 +154,7 @@ def cmd_svyset(s: "Session", args: str) -> None:
     if not t:
         d = get_design(ds)
         if d is None:
-            s.output.write("no survey characteristics are set\n", "text")   # VERIFICAR
+            s.output.write("no survey characteristics are set\n", "text")   # VERIFY
             return
         _show_design(s, d)
         return
@@ -165,7 +165,7 @@ def cmd_svyset(s: "Session", args: str) -> None:
         return
     from ..core.varlist import resolve_name
     pieces = _split_stages(t)
-    # as opções gerais (pesos replicados, vce...) podem vir depois do último estágio
+    # the general options (replicate weights, vce...) may come after the last stage
     last = pieces[-1]
     p = parse_standard(pieces[0])
     o = match_options(p.options, _SVYSET_OPTS) if p.options.strip() else {}
@@ -191,7 +191,7 @@ def cmd_svyset(s: "Session", args: str) -> None:
     if p.weight:
         wtype, wexp = p.weight
         if wtype not in ("pweight", "iweight", "weight"):
-            raise StataError(101, f"{wtype}s not allowed")   # VERIFICAR
+            raise StataError(101, f"{wtype}s not allowed")   # VERIFY
         d.wtype = "pweight" if wtype == "weight" else wtype
         d.weight = resolve_name(ds, wexp.strip())
     if o.get("strata"):
@@ -201,7 +201,7 @@ def cmd_svyset(s: "Session", args: str) -> None:
     if o.get("singleunit"):
         su = str(o["singleunit"]).strip()
         if su not in ("missing", "certainty", "scaled", "centered"):
-            raise StataError(198, "invalid singleunit() option")   # VERIFICAR
+            raise StataError(198, "invalid singleunit() option")   # VERIFY
         d.singleunit = su
     for key in ("brrweight", "bsrweight", "jkrweight", "sdrweight"):
         if o.get(key):
@@ -210,7 +210,7 @@ def cmd_svyset(s: "Session", args: str) -> None:
     if o.get("fay"):
         d.fay = float(o["fay"])
         if not 0 <= d.fay < 2 or d.fay == 1:
-            raise StataError(198, "fay() must be in [0, 2) and not 1")   # VERIFICAR
+            raise StataError(198, "fay() must be in [0, 2) and not 1")   # VERIFY
     if o.get("bsn"):
         d.bsn = float(o["bsn"])
     d.mse = bool(o.get("mse"))
@@ -230,11 +230,11 @@ def cmd_svyset(s: "Session", args: str) -> None:
     elif d.sdrweight:
         d.vce = "sdr"
     if d.vce not in ("linearized", "jackknife", "brr", "bootstrap", "sdr"):
-        raise StataError(198, f"vce({d.vce}) not allowed")   # VERIFICAR
+        raise StataError(198, f"vce({d.vce}) not allowed")   # VERIFY
     if d.vce == "bootstrap" and not d.bsrweight:
-        raise StataError(198, "bsrweight() required for vce(bootstrap)")   # VERIFICAR
+        raise StataError(198, "bsrweight() required for vce(bootstrap)")   # VERIFY
     if d.vce == "sdr" and not d.sdrweight:
-        raise StataError(198, "sdrweight() required for vce(sdr)")   # VERIFICAR
+        raise StataError(198, "sdrweight() required for vce(sdr)")   # VERIFY
     if o.get("poststrata"):
         d.poststrata = resolve_name(ds, str(o["poststrata"]).strip())
         d.postweight = resolve_name(ds, str(o.get("postweight", "")).strip())
@@ -275,13 +275,13 @@ def require_design(s: "Session") -> Design:
 
 
 # ---------------------------------------------------------------------------
-# estrutura do desenho na amostra
+# structure of the design in the sample
 # ---------------------------------------------------------------------------
 
 def _hadamard(r: int) -> np.ndarray:
-    """Matriz de Hadamard de ordem r (potência de 2, construção de Sylvester).
-    VERIFICAR: o Stata também usa ordens 12, 20, 24...; aqui, a menor
-    potência de 2 que cobre os estratos."""
+    """Hadamard matrix of order r (power of 2, Sylvester construction).
+    VERIFY: Stata also uses orders 12, 20, 24...; here, the smallest
+    power of 2 that covers the strata."""
     H = np.array([[1.0]])
     while H.shape[0] < r:
         H = np.block([[H, H], [H, -H]])
@@ -289,7 +289,7 @@ def _hadamard(r: int) -> np.ndarray:
 
 
 class DesignData:
-    """Pesos, estratos e UPAs das observações em `mask` (amostra do desenho)."""
+    """Weights, strata and PSUs of the observations in `mask` (design sample)."""
 
     def __init__(self, s: "Session", d: Design, mask: np.ndarray, vce: str | None = None, mse: bool | None = None,
                  hadamard=False):
@@ -307,8 +307,8 @@ class DesignData:
         self.rep_vars = d.repweights if self.vce == d.vce else []
         self.hadamard = hadamard or None
         if hadamard is not False and self.vce == "brr" and not self.rep_vars and not hadamard:
-            # BRR calculado pelo OpenDTA precisa da matriz de Hadamard, como no
-            # Stata (compat 0602): svy brr, hadamard(matriz) ...
+            # BRR computed by OpenDTA needs the Hadamard matrix, as in Stata (compat 0602): svy
+            # brr, hadamard(matrix) ...
             raise StataError(198, "option hadamard() required when brrweights are not svyset")
         R = None
         if self.rep_vars:
@@ -321,14 +321,14 @@ class DesignData:
         self.psu = psu[mask]
         self.fpc = ds.get(d.fpc).data[mask].astype(float) if d.fpc else None
         self.n = int(mask.sum())
-        # estágios seguintes (UPA dentro de estrato dentro da unidade anterior)
+        # following stages (PSU within stratum within the previous unit)
         self.stage_cols = []
         for st_ in d.stages:
             su = ds.get(st_["su"]).data[mask] if st_["su"] else np.arange(n_all, dtype=float)[mask]
             sh = ds.get(st_["strata"]).data[mask] if st_["strata"] else np.zeros(self.n)
             fp = ds.get(st_["fpc"]).data[mask].astype(float) if st_["fpc"] else None
             self.stage_cols.append((sh, su, fp))
-        # identificadores de UPA dentro de estrato
+        # PSU identifiers within stratum
         self.h_ids, self.h_inv = np.unique(self.strata, return_inverse=True)
         pairs = np.column_stack([self.h_inv, self.psu])
         _, self.u_inv = np.unique(pairs, axis=0, return_inverse=True)
@@ -336,15 +336,15 @@ class DesignData:
         self.n_strata = len(self.h_ids)
         self.n_psu = int(self.u_inv.max()) + 1 if self.n else 0
         if self.rep is not None and not d.psu and not d.strata:
-            self.df = self.rep.shape[1] - 1     # VERIFICAR: gl com pesos replicados
+            self.df = self.rep.shape[1] - 1     # VERIFY: df with replicate weights
         else:
             self.df = self.n_psu - self.n_strata
         if d.dof:
             self.df = int(d.dof)
 
-    # -- linearização ------------------------------------------------------
+    # -- linearization ------------------------------------------------------
     def variance(self, z: np.ndarray) -> np.ndarray:
-        """V a partir dos escores z (n x k) das observações da amostra."""
+        """V from the scores z (n x k) of the sample observations."""
         z = np.atleast_2d(z.T).T if z.ndim == 1 else z
         k = z.shape[1]
         U = np.zeros((self.n_psu, k))
@@ -369,12 +369,12 @@ class DesignData:
                     dev = U[idx] - grand
                     V += (1 - f) * dev.T @ dev
                 elif mode == "scaled":
-                    single = True   # VERIFICAR: escalonamento pela média dos demais estratos
+                    single = True   # VERIFY: scaling by the mean of the other strata
                 continue
             dev = U[idx] - U[idx].mean(axis=0)
             V += (1 - f) * nh / (nh - 1) * dev.T @ dev
-            # estágios seguintes: só contam se o 1º estágio for sem reposição
-            # (f_h > 0), multiplicados por f_h ([SVY] variance estimation)
+            # following stages: they only count if the 1st stage is without replacement (f_h > 0),
+            # multiplied by f_h ([SVY] variance estimation)
             if f > 0 and self.stage_cols:
                 for u in idx:
                     rows = np.nonzero(self.u_inv == u)[0]
@@ -405,7 +405,7 @@ class DesignData:
                     V += f * self._stage_var(z, rh[su[rh] == u], level + 1)
         return V
 
-    # -- replicação ----------------------------------------------------------
+    # -- replication ----------------------------------------------------------
     @property
     def replicated(self) -> bool:
         return self.vce in ("jackknife", "brr", "bootstrap", "sdr")
@@ -413,15 +413,15 @@ class DesignData:
     @property
     def vcetype(self) -> str:
         if self.mse and self.vce != "linearized":
-            # com mse o Stata abrevia e marca com *: "Jknife *" (compat 0602);
-            # os demais nomes com * são VERIFICAR
+            # with mse Stata abbreviates and marks with *: "Jknife *" (compat 0602); the other
+            # names with * are VERIFY
             return {"jackknife": "Jknife *", "brr": "BRR *", "bootstrap": "Bootstrap *",
                     "sdr": "SDR *"}[self.vce]
         return {"linearized": "Linearized", "jackknife": "Jackknife", "brr": "BRR", "bootstrap": "Bootstrap",
                 "sdr": "SDR"}[self.vce]
 
     def replicates(self):
-        """Gera (pesos do réplica, estrato, multiplicador) para o método."""
+        """Yields (replicate weights, stratum, multiplier) for the method."""
         w = self.w
         if self.rep is not None:
             for r in range(self.rep.shape[1]):
@@ -445,11 +445,11 @@ class DesignData:
         if self.vce == "brr":
             counts = np.bincount(psu_h, minlength=self.n_strata)
             if np.any(counts != 2):
-                raise StataError(459, "BRR requires 2 PSUs per stratum")   # VERIFICAR
+                raise StataError(459, "BRR requires 2 PSUs per stratum")   # VERIFY
             from ..commands.matrix import get_matrix
             H = np.asarray(get_matrix(self.s, str(self.hadamard).strip()).data, dtype=float)
             if H.shape[1] < self.n_strata:
-                raise StataError(198, "Hadamard matrix has too few columns")   # VERIFICAR
+                raise StataError(198, "Hadamard matrix has too few columns")   # VERIFY
             R = H.shape[0]
             fay = self.d.fay
             for r in range(R):
@@ -462,17 +462,17 @@ class DesignData:
                     ww[self.u_inv == second] *= b
                 yield ww, 0, None
             return
-        raise StataError(198, f"vce({self.vce}) requires replicate weights")   # VERIFICAR
+        raise StataError(198, f"vce({self.vce}) requires replicate weights")   # VERIFY
 
     def rep_variance(self, estimator, theta0: np.ndarray) -> tuple[np.ndarray, int]:
-        """V por replicação; `estimator(w)` devolve o vetor de estimativas."""
+        """V by replication; `estimator(w)` returns the vector of estimates."""
         thetas, strata, mults = [], [], []
         reps = list(self.replicates())
         out = self.s.output
         name = {"jackknife": "Jackknife", "brr": "BRR", "bootstrap": "Bootstrap",
                 "sdr": "SDR"}.get(self.vce, self.vce)
-        # linha de pontos das réplicas, como no prefixo jackknife; VERIFICAR para
-        # brr, bootstrap e sdr (no 0602 só o jackknife chegou a rodar no Stata)
+        # replication dots, as with the jackknife prefix; VERIFY for brr, bootstrap and sdr (in
+        # 0602 only the jackknife got to run in Stata)
         out.write(f"\n{name} replications ({len(reps)})\n"
                   "----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 \n", "text")
         for k, (ww, h, m) in enumerate(reps):
@@ -488,9 +488,9 @@ class DesignData:
                 out.write(f"{k + 1:>6}\n", "text")
         if len(reps) % 50:
             out.write("\n", "text")
-        # as estimativas de cada réplica são guardadas em float, como no Stata
-        # (svy jackknife/brr/bootstrap/sdr só usam double com a opção double;
-        # [SVY] svy jackknife e [R] jackknife) — compat 0602
+        # the estimates of each replicate are stored as float, as in Stata (svy
+        # jackknife/brr/bootstrap/sdr only use double with the double option; [SVY] svy jackknife
+        # and [R] jackknife) — compat 0602
         T = np.array(thetas).astype(np.float32).astype(float)
         R = len(T)
         k = len(theta0)
@@ -554,7 +554,7 @@ def _over_groups(s, over: str, mask: np.ndarray):
 
 
 def _estimate(stat: str, Y: list[np.ndarray], w: np.ndarray, groups, names: list[str], X=None):
-    """Valores e escores (n x k) de cada estatística, por grupo de over()."""
+    """Values and scores (n x k) of each statistic, by over() group."""
     vals, scores, labels = [], [], []
     n = len(w)
     for j, y in enumerate(Y):
@@ -572,7 +572,7 @@ def _estimate(stat: str, Y: list[np.ndarray], w: np.ndarray, groups, names: list
                 Wx = float(ws @ x)
                 m = float(ws @ y) / Wx if Wx else SYS
                 z = ws * (y - m * x) / Wx if Wx else np.zeros(n)
-            else:   # proportion: y já é indicador
+            else:   # proportion: y is already an indicator
                 W = ws.sum()
                 m = float(ws @ y) / W if W > 0 else SYS
                 z = ws * (y - m) / W if W > 0 else np.zeros(n)
@@ -602,8 +602,8 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
     for (var, grp), b, e in zip(labels, vals, se):
         if grp:
             if var != last:
-                # cabeçalho da variável à esquerda; entre blocos de over(), uma
-                # linha separadora (compat 0601)
+                # variable header on the left; between over() blocks, a separator line (compat
+                # 0601)
                 if last is not None and over_names:
                     out.write("-" * 13 + "+" + "-" * 48 + "\n", "text")
                 out.write(f"{var[:12]:<12} |" + "\n", "text")
@@ -616,7 +616,7 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
             out.write(f"  {g9(b):>9}  {'.':>9}     {'.':>9}   {'.':>9}\n", "result")
             continue
         if stat_title == "Proportion" and 0 < b < 1:
-            # IC na escala logit (padrão do proportion no Stata 14, VERIFICAR)
+            # CI on the logit scale (proportion's default in Stata 14, VERIFY)
             from scipy.special import expit, logit
             half = crit * e / (b * (1 - b))
             lo, hi = expit(logit(b) - half), expit(logit(b) + half)
@@ -627,7 +627,7 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
 
 
 def _proportion_vars(s, names, mask):
-    """proportion: um indicador por categoria de cada variável."""
+    """proportion: one indicator per category of each variable."""
     ds = s.data
     Y, labs = [], []
     for n in names:
@@ -679,7 +679,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             subpop = _subpop_mask(s, str(so["subpop"]))
         est_mask = mask & dd.mask
         out.write(f"\n(running {stat} on estimation sample)\n", "text")
-        # escores fora da amostra (ou da subpop) são zero, mas o desenho conta todas as UPAs
+        # scores outside the sample (or subpop) are zero, but the design counts all PSUs
         full = dd.mask
         inside = est_mask[full] & (subpop[full] if subpop is not None else True)
         w = dd.w * inside
@@ -727,7 +727,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         return _estimate(stat, Y, wv, groups, names, X)
 
     vals, Z, labels = compute(w)
-    # grupo de over() de cada coluna (para a variância "analytic" sem svy)
+    # over() group of each column (for the "analytic" variance without svy)
     colsel = [sel for _y in Y for _g, sel, _k in groups]
     if svy:
         n_rep = None
@@ -737,26 +737,26 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             V = dd.variance(Z)
         df = dd.df
         vcetype = dd.vcetype
-        # variâncias sob AAS para o estat effects ([SVY] estat, Methods and formulas)
+        # variances under SRS for estat effects ([SVY] estat, Methods and formulas)
         _srs = _srs_variances(Z, w, dd, int(est_mask[full].sum()))
     else:
-        # V = N/(N-1) Σ z z' (com fweight, cada escore conta w vezes)
+        # V = N/(N-1) Σ z z' (with fweight, each score counts w times)
         robust = str(o.get("vce", "")).startswith("r")
         pw = bool(p.weight and p.weight[0] == "pweight")
-        # com pweight o erro-padrão é linearizado, mas o Stata não mostra rótulo
+        # with pweight the standard error is linearized, but Stata shows no label
         vcetype = "Robust" if robust else ""
         fw = bool(p.weight and p.weight[0] == "fweight")
         cnt = w if fw else np.ones(len(w))
         nn = float(cnt.sum())
         Zr = Z / np.where(w > 0, w, 1)[:, None] if fw else Z
         if stat == "total" or stat == "ratio" or robust or pw:
-            # linearização: escores centrados, V = n/(n-1) Σ (z - z̄)(z - z̄)'
+            # linearization: centered scores, V = n/(n-1) Σ (z - z̄)(z - z̄)'
             zbar = (cnt @ Zr) / nn if stat == "total" else np.zeros(Z.shape[1])
             Zc = Zr - zbar
             V = nn / (nn - 1) * (Zc * cnt[:, None]).T @ Zc
         else:
-            # mean/proportion "analytic": s²/n em cada grupo de over(), sem
-            # covariância entre grupos (compat 0601: .1209974 = sd/sqrt(n_g))
+            # "analytic" mean/proportion: s²/n within each over() group, with no covariance between
+            # groups (compat 0601: .1209974 = sd/sqrt(n_g))
             V = (Zr * cnt[:, None]).T @ Zr
             Wg = np.array([float(cnt @ sel) for sel in colsel])
             c = np.sqrt(np.where(Wg > 1, Wg / (Wg - 1), np.nan))
@@ -767,7 +767,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
     se = np.sqrt(np.maximum(np.diag(V), 0)) if V.size else np.zeros(0)
     if np.isnan(V).any():
         se = np.full(len(vals), np.nan)
-    # cabeçalho
+    # header
     if not o.get("noheader"):
         if svy:
             pop = float(dd.w[est_mask[full]].sum())
@@ -777,7 +777,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             if subpop is not None:
                 right += [("Subpop. no. obs", f"{n_obs:,}"), ("Subpop. size", _num(float(w.sum())))]
             if n_rep:
-                right.append(("Replications", f"{n_rep:,}"))   # VERIFICAR posição
+                right.append(("Replications", f"{n_rep:,}"))   # VERIFY position
             right.append(("Design df", f"{df:,}"))
             left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
             for i, (rl, rv) in enumerate(right):
@@ -789,7 +789,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             out.write(f"{_TITLES[stat]:<34}{'Number of obs':<16}= ", "text")
             out.write(f"{n_obs:>10,}\n", "result")
         if over:
-            # legenda dos grupos: "         masc: sexo = masc" (compat 0601)
+            # group legend: "         masc: sexo = masc" (compat 0601)
             out.write("\n", "text")
             for ln in legend:
                 out.write(ln + "\n", "text")
@@ -813,7 +813,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         est.svy_effects = dict(V=V, srs=_srs, labels=labels, vals=vals, title=stat_title, vcetype=vcetype,
                                over=over, level=level, legend=legend)
     if svy:
-        # e() do svy no Stata 14, na ordem do ereturn list (compat 0601)
+        # e() of svy in Stata 14, in ereturn list order (compat 0601)
         k = len(vals)
         n_over = len(groups) if over else 1
         scalars = [("df_r", float(df))]
@@ -833,7 +833,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
                   ("estat_cmd", "svy_estat"), ("varlist", " ".join(allv))]
         if over:
             macros += [("over", over), ("over_labels", " ".join(g[0] for g in groups)),
-                       ("over_namelist", " ".join(g[0] for g in groups))]   # VERIFICAR
+                       ("over_namelist", " ".join(g[0] for g in groups))]   # VERIFY
         if subpop is not None:
             macros.append(("subpop", str(so["subpop"]).strip()))
         macros += [("marginsnotok", "_ALL")]
@@ -869,7 +869,7 @@ def _num(x: float) -> str:
 
 
 def parse_svy_opts(text: str) -> dict:
-    """Opções do prefixo svy: subpop(), vce(), mse, dof()."""
+    """Options of the svy prefix: subpop(), vce(), mse, dof()."""
     so = match_options(text, {"subpop": 3, "vce": 3, "mse": 3, "dof": 3, "nodots": 5, "dots": 4,
                               "level": 1, "hadamard": 3, "fay": 3}) if text.strip() else {}
     out = {}
@@ -886,7 +886,7 @@ def parse_svy_opts(text: str) -> dict:
 
 
 def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
-    """V_srswor e V_srswr de [SVY] estat (fórmula do total com os escores
+    """V_srswor and V_srswr from [SVY] estat (total formula with the scores
     u = z/w): V = (1 - f) M̂/(m - 1) Σ w (u - ū)(u - ū)'."""
     with np.errstate(divide="ignore", invalid="ignore"):
         U = np.where(w[:, None] > 0, Z / np.where(w > 0, w, 1)[:, None], 0.0)
@@ -898,7 +898,7 @@ def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tu
     f = 0.0
     if dd.fpc is not None:
         fv = float(dd.fpc[0])
-        f = fv if fv <= 1 else m / fv   # VERIFICAR: f = m/M̂ com fpc no 1º estágio
+        f = fv if fv <= 1 else m / fv   # VERIFY: f = m/M̂ with fpc in the 1st stage
     return (1 - f) * Vwr, Vwr
 
 
@@ -1006,7 +1006,7 @@ def cmd_ratio(s, args):
 # ---------------------------------------------------------------------------
 
 def _g6(x: float) -> str:
-    """DEFF e DEFT com seis algarismos significativos, sem o zero à esquerda
+    """DEFF and DEFT with six significant digits, without the leading zero
     (.64512, 1.05667, .803194; compat 0602)."""
     if x is None or x >= SYS or not np.isfinite(x):
         return "."
@@ -1019,11 +1019,11 @@ def _g6(x: float) -> str:
 
 
 def estat_effects(s: "Session", est, rest: str) -> None:
-    """DEFF = V/V_srswor e DEFT = sqrt(V/V_srswr) ([SVY] estat). Layout
-    conferido no compat 0602."""
+    """DEFF = V/V_srswor and DEFT = sqrt(V/V_srswr) ([SVY] estat). Layout
+    checked in compat 0602."""
     info = getattr(est, "svy_effects", None)
     if info is None:
-        raise StataError(321, "estat effects not allowed after this command")   # VERIFICAR
+        raise StataError(321, "estat effects not allowed after this command")   # VERIFY
     o = match_options(rest.lstrip(", "), {"deff": 4, "deft": 4, "srssubpop": 3, "meff": 4, "meft": 4}) \
         if rest.strip(" ,") else {}
     V = np.asarray(info["V"], dtype=float)
@@ -1031,7 +1031,7 @@ def estat_effects(s: "Session", est, rest: str) -> None:
     out = s.output
     width = 58
     if info.get("legend"):
-        # mesma legenda dos grupos do comando (compat 0602)
+        # same group legend as the command (compat 0602)
         out.write("\n" + "\n".join(info["legend"]) + "\n", "text")
     out.write("\n" + "-" * width + "\n", "text")
     vt = info["vcetype"]

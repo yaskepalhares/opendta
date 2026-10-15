@@ -1,6 +1,6 @@
-"""infile (formato livre e com dicionário) e infix ([D] infile, [D] infix).
+"""infile (free format and with a dictionary) and infix ([D] infile, [D] infix).
 
-Mensagens e regras não documentadas estão marcadas VERIFICAR, com casos em
+Messages and undocumented rules are marked VERIFY, with cases in
 compat/do/0107_infile_infix.do.
 """
 
@@ -38,8 +38,8 @@ def _path(text: str, ext: str) -> Path:
 
 
 def _echo_dictionary(s: "Session", text: str) -> None:
-    """O infile com dicionário mostra o dicionário, da linha `dictionary`
-    até a chave que fecha (observado no Stata 14, compat 0108)."""
+    """infile with a dictionary shows the dictionary, from the `dictionary` line
+    to the closing brace (observed in Stata 14, compat 0108)."""
     lines = text.splitlines()
     start = next((k for k, ln in enumerate(lines) if re.search(r"\bdictionary\b", ln)), None)
     if start is None:
@@ -53,7 +53,7 @@ def _echo_dictionary(s: "Session", text: str) -> None:
 def _check_empty(s: "Session", clear: bool) -> None:
     ds = s.data
     if ds.nvars and not clear:
-        # observado no Stata 14 (infile; VERIFICAR o infix)
+        # observed in Stata 14 (infile; VERIFY infix)
         raise StataError(18, "you must start with an empty dataset")
 
 
@@ -70,9 +70,8 @@ def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None,
     except Exception:
         s.data = old
         raise
-    # avisos de valores não numéricos: o Stata numera pela posição que o
-    # registro ocupa nos dados no momento da leitura (os registros descartados
-    # antes pelo if não contam; observado no Stata 14)
+    # warnings about non-numeric values: Stata numbers them by the position the record has in the
+    # data at read time (records discarded earlier by the if do not count; observed in Stata 14)
     for k, (text, name, rec) in enumerate(warnings or []):
         if k >= 20:
             break
@@ -88,7 +87,7 @@ def _finish(s: "Session", new: "Dataset", if_: str | None, in_: str | None,
 
 
 def _expand_names(token: str) -> list[str]:
-    """x1-x5 -> x1 ... x5 (novas variáveis)."""
+    """x1-x5 -> x1 ... x5 (new variables)."""
     m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*?)(\d+)-\1(\d+)", token)
     if m:
         a, b = int(m.group(2)), int(m.group(3))
@@ -100,8 +99,8 @@ def _expand_names(token: str) -> list[str]:
 
 
 def parse_free_spec(text: str, default_type: str) -> list[FreeVar]:
-    """O tipo vale só para o nome seguinte (str10 nome idade: idade é
-    numérica); type(a b c) aplica o tipo a todos os nomes entre parênteses."""
+    """The type applies only to the next name (str10 name age: age is
+    numeric); type(a b c) applies the type to all names in parentheses."""
     spec: list[FreeVar] = []
 
     def group(m: re.Match) -> str:
@@ -135,7 +134,7 @@ def cmd_infile(s: "Session", args: str) -> None:
     o = match_options(p.options, {"clear": 5, "automatic": 4, "byvariable": 2, "using": 5})
     _check_empty(s, bool(o.get("clear")))
     if not p.varlist.strip():
-        # dicionário
+        # dictionary
         dpath = _path(p.using, ".dct")
         dtext = read_text(dpath)
         d = parse_dictionary(dtext, "infile")

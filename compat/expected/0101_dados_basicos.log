@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 1a: criação de dados, tipos, generate/replace, describe, list, count.
+. * Phase 1a: creating data, types, generate/replace, describe, list, count.
 . clear
 
 . set obs 6

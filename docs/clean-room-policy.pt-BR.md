@@ -1,5 +1,7 @@
 # Política de desenvolvimento ("clean room")
 
+[English](clean-room-policy.md) | **Português**
+
 O OpenDTA reimplementa o comportamento do Stata a partir de fontes públicas. Não usa código da StataCorp.
 
 ## Pode ser usado como fonte
@@ -18,6 +20,6 @@ O OpenDTA reimplementa o comportamento do Stata a partir de fontes públicas. N�
 
 ## Na prática
 
-- Cada comando é escrito a partir do manual. Quando o manual não define um detalhe (por exemplo, quando o `%g` troca a notação fixa pela exponencial), o código recebe a marca `VERIFICAR` e um caso em `compat/do/`. O comportamento real é fixado pelo log gerado no Stata.
+- Cada comando é escrito a partir do manual. Quando o manual não define um detalhe (por exemplo, quando o `%g` troca a notação fixa pela exponencial), o código recebe a marca `VERIFY` e um caso em `compat/do/`. O comportamento real é fixado pelo log gerado no Stata.
 - Pacotes do SSC e do-files de usuários podem ser usados como casos de teste, respeitando suas licenças.
 - A interface reproduz o layout e o fluxo de trabalho do Stata 14, mas os ícones e a identidade visual são próprios.

@@ -1,6 +1,6 @@
-"""Modelos com mais de uma equação ou parâmetros auxiliares:
+"""Models with more than one equation or ancillary parameters:
 ologit, oprobit ([R] ologit, [R] oprobit), mlogit ([R] mlogit),
-nbreg ([R] nbreg) e tobit ([R] tobit)."""
+nbreg ([R] nbreg) and tobit ([R] tobit)."""
 
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ def g(x: float, fmt: str) -> str:
 
 
 def num_hess(grad: Callable[[np.ndarray], np.ndarray], b: np.ndarray) -> np.ndarray:
-    """Hessiana por diferenças centrais do gradiente analítico, com extrapolação
-    de Richardson (erro de truncamento O(h⁴))."""
+    """Hessian by central differences of the analytic gradient, with Richardson
+    extrapolation (truncation error O(h⁴))."""
     k = b.size
     H = np.zeros((k, k))
     for i in range(k):
@@ -48,7 +48,7 @@ def num_hess(grad: Callable[[np.ndarray], np.ndarray], b: np.ndarray) -> np.ndar
 
 
 class _Prep:
-    """Amostra, pesos e colunas das variáveis independentes (sem constante)."""
+    """Sample, weights and columns of the independent variables (without a constant)."""
 
     def __init__(self, s: "Session", args: str, spec: dict[str, int], weights=("fweight", "iweight",
                  "pweight"), constant: bool | None = None):
@@ -82,7 +82,7 @@ class _Prep:
                         nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
 
     def vce(self, H: np.ndarray, scores: np.ndarray | None) -> tuple[np.ndarray, int | None]:
-        """V do modelo (OIM) ou sanduíche com os escores por observação (n x k)."""
+        """Model V (OIM) or the sandwich with the scores per observation (n x k)."""
         try:
             V = np.linalg.inv(-H)
         except np.linalg.LinAlgError:
@@ -90,8 +90,8 @@ class _Prep:
         V = (V + V.T) / 2
         ctx = getattr(self.s, "_svy_ctx", None)
         if ctx is not None and scores is not None:
-            # svy: escores linearizados u = w s V levados às observações do
-            # desenho (zero fora da amostra/subpop), V = variância do desenho
+            # svy: linearized scores u = w s V carried to the design observations (zero outside the
+            # sample/subpop), V = design variance
             sc = scores * self.w[:, None]
             Z = sc @ V
             dd = ctx["dd"]
@@ -162,7 +162,7 @@ def _model_test(pr: _Prep, b: np.ndarray, V: np.ndarray, idx: list[int], ll: flo
 
 
 def _slope_rows(pr: _Prep, b: np.ndarray, V: np.ndarray, offset: int = 0):
-    """Linhas e nomes das inclinações (sem constante), a partir de b/V do bloco."""
+    """Rows and names of the slopes (without a constant), from the block's b/V."""
     smp = pr.smp
     bmap, semap = {}, {}
     names = []
@@ -185,8 +185,8 @@ def s_data(pr: _Prep):
 
 
 def _expand(pr: _Prep, b_est: np.ndarray, V_est: np.ndarray, layout: list[tuple[str, bool]]):
-    """Coloca b/V estimados (só colunas livres) nas posições de e(b), que inclui
-    bases e omitidas com zero. `layout` = [(nome, livre?)]."""
+    """Places the estimated b/V (free columns only) at the positions of e(b), which includes
+    bases and omitted terms with zero. `layout` = [(name, free?)]."""
     kk = len(layout)
     pos = [i for i, (_, free) in enumerate(layout) if free]
     b = np.zeros(kk)
@@ -196,8 +196,8 @@ def _expand(pr: _Prep, b_est: np.ndarray, V_est: np.ndarray, layout: list[tuple[
     return b, V
 
 
-# ordem de e() observada no Stata 14 (compat 0508, 0509); para os comandos sem
-# log de referência, a ordem segue o padrão dos parecidos (VERIFICAR)
+# e() order observed in Stata 14 (compat 0508, 0509); for commands without a reference log, the
+# order follows similar ones (VERIFY)
 _E_ORDER = {
     "ologit": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
                 "ll_0", "df_m", "chi2", "p", "N_cd", "k_cat", "k_aux", "r2_p"],
@@ -210,7 +210,7 @@ _E_ORDER = {
                 "chi2type", "opt", "vce", "vcetype", "clustvar", "user", "ml_method", "technique", "which",
                 "wtype", "wexp", "depvar", "properties"],
                ["out", "ilog", "gradient"]),
-    # compat 0512: ordem do ereturn list do Stata 14 (sem p_c e diparm1)
+    # compat 0512: ereturn list order of Stata 14 (without p_c and diparm1)
     "nbreg": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
                "ll_0", "rank0", "df_m", "chi2", "p", "ll_c", "chi2_c", "r2_p", "k_aux", "alpha"],
               ["cmdline", "cmd", "predict", "dispers", "chi2_ct", "chi2type", "opt", "vce", "vcetype",
@@ -275,7 +275,7 @@ def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: 
     scalars = [(k_, sv[k_]) for k_ in so if k_ in sv]
     macros = [(k_, mv[k_]) for k_ in mo if k_ in mv]
     if order is None:
-        # sem ordem explícita, o que não está na lista vai para o fim
+        # without an explicit order, what is not in the list goes to the end
         scalars += [(k_, v) for k_, v in sv.items() if k_ not in so]
         macros += [(k_, v) for k_, v in mv.items() if k_ not in mo]
     mlist = [(k_, md[k_]) for k_ in xo if k_ in md]
@@ -312,9 +312,9 @@ def _ordered(s: "Session", cmd: str, args: str) -> None:
     y = pr.y
     levels = sorted(set(y.tolist()))
     if len(levels) < 2:
-        raise StataError(2000, "outcome does not vary")   # VERIFICAR
+        raise StataError(2000, "outcome does not vary")   # VERIFY
     if len(levels) > 50:
-        raise StataError(149, f"{smp_name(pr)}:  too many outcomes")   # VERIFICAR
+        raise StataError(149, f"{smp_name(pr)}:  too many outcomes")   # VERIFY
     J = len(levels)
     yi = np.searchsorted(levels, y)
     X, w = pr.X, pr.w
@@ -417,7 +417,7 @@ def _display_std(s: "Session", est: Estimates, *, header: bool = True, table: bo
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
         left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         if getattr(est, "dispersion", ""):
-            # o rótulo acompanha a largura de "Log (pseudo)likelihood" (compat 0512)
+            # the label follows the width of "Log (pseudo)likelihood" (compat 0512)
             left[2] = f"{'Dispersion':<{len(lab) + 1}}= {est.dispersion}"
         r2p = x.get("r2_p")
         _header(s, left, _std_right(x["N"], x["chi2type"], int(x["df_m"]), x["chi2"], x["p"],
@@ -438,12 +438,11 @@ def _predict_ordered(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     if stat == "xb":
         return np.where(ok, xb, SYS), ""
     if stat in ("", "pr", "p"):
-        # sem outcome(): a primeira categoria (VERIFICAR: o Stata pede uma
-        # variável por categoria)
+        # without outcome(): the first category (VERIFY: Stata asks for one variable per category)
         k = est.kslopes
         cut1 = est.b[est.names.index("_cons", k)] if "_cons" in est.names else 0.0
         p = est.Fcdf(cut1 - xb)
-        return np.where(ok, p, SYS), f"(option pr assumed; predicted probability)"   # VERIFICAR
+        return np.where(ok, p, SYS), f"(option pr assumed; predicted probability)"   # VERIFY
     raise StataError(198, f"option {stat} not allowed")
 
 
@@ -471,7 +470,7 @@ def cmd_mlogit(s: "Session", args: str) -> None:
     levels = sorted(set(y.tolist()))
     J = len(levels)
     if J < 2:
-        raise StataError(2000, "outcome does not vary")   # VERIFICAR
+        raise StataError(2000, "outcome does not vary")   # VERIFY
     w = pr.w
     yi = np.searchsorted(levels, y)
     freq = np.array([w[yi == j].sum() for j in range(J)])
@@ -481,10 +480,10 @@ def cmd_mlogit(s: "Session", args: str) -> None:
             base = int(bv) - 1
         else:
             if bv not in levels:
-                raise StataError(198, "outcome not found")   # VERIFICAR
+                raise StataError(198, "outcome not found")   # VERIFY
             base = levels.index(bv)
     else:
-        base = int(np.argmax(freq))      # a categoria mais frequente (a primeira em empate)
+        base = int(np.argmax(freq))      # the most frequent category (the first one in case of a tie)
     X = np.column_stack([pr.X, np.ones(len(y))]) if pr.constant else pr.X
     kx = X.shape[1]
     others = [j for j in range(J) if j != base]
@@ -533,10 +532,10 @@ def cmd_mlogit(s: "Session", args: str) -> None:
     vlab = ds.value_labels.get(depv.value_label, {}) if depv.value_label else {}
 
     def eqname(j):
-        # rótulos com espaços viram nomes de equação com _ (compat 0508)
+        # labels with spaces become equation names with _ (compat 0508)
         lv = levels[j]
         return vlab.get(int(lv), f"{int(lv)}" if lv == int(lv) else f"{lv:g}").replace(" ", "_")
-    # e(b) com todas as equações, inclusive a base (zeros); linhas da tabela
+    # e(b) with all equations, including the base (zeros); table rows
     names_all, eqs_all, free = [], [], []
     rows: list[CoefRow] = []
     bvals, Vidx = [], []
@@ -553,7 +552,7 @@ def cmd_mlogit(s: "Session", args: str) -> None:
         for c in pr.smp.cols:
             nm = c.name if not c.omitted else fvars.omitted_name(c.name)
             if m is None and not c.omitted and not c.base:
-                nm = fvars.omitted_name(c.name)       # equação de base: o.x1
+                nm = fvars.omitted_name(c.name)       # base equation: o.x1
             names_all.append(nm)
             eqs_all.append(eqname(j))
             if c.values is not None and m is not None:
@@ -607,7 +606,7 @@ def cmd_mlogit(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# nbreg (dispersão média, NB2)
+# nbreg (mean dispersion, NB2)
 # ---------------------------------------------------------------------------
 
 def cmd_nbreg(s: "Session", args: str) -> None:
@@ -620,7 +619,7 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     pr.write_notes(out)
     y = pr.y
     if np.any(y < 0) or np.any(y != np.trunc(y)):
-        raise StataError(459, f"{pr.smp.depname} must be nonnegative integers")   # VERIFICAR
+        raise StataError(459, f"{pr.smp.depname} must be nonnegative integers")   # VERIFY
     ds = s.data
     off = np.zeros(len(y))
     if pr.o.get("exposure"):
@@ -659,13 +658,13 @@ def cmd_nbreg(s: "Session", args: str) -> None:
             return ll, grad(b), num_hess(grad, b)
         return fun, scores
 
-    # 1) Poisson, 2) só a constante, 3) modelo completo (como o Stata)
+    # 1) Poisson, 2) constant only, 3) full model (as Stata does)
     from .models import _poisson
     pfun, _ = _poisson(y, X, w, off)
     ybar = float(np.sum(w * y) / np.sum(w))
-    # início do Poisson: três passos de IRLS a partir de μ0 = (y + ȳ)/2, sem
-    # log. Chega perto do que o Stata mostra (compat 0512: iteração 0 =
-    # -245.31049, aqui -245.3105); a regra exata não é documentada (VERIFICAR)
+    # Poisson start: three IRLS steps from μ0 = (y + ȳ)/2, without a log. Gets close to what Stata
+    # shows (compat 0512: iteration 0 = -245.31049, here -245.3105); the exact rule is undocumented
+    # (VERIFY)
     mu0 = (y + ybar) / 2
     b0p = np.zeros(kx)
     for _ in range(3):
@@ -691,13 +690,13 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     if not pr.o.get("nolog"):
         out.write("\nFitting full model:\n", "text")
     _log(s, pr, res)
-    # alpha na fronteira (ln alpha muito negativo): a verossimilhança fica plana
-    # em ln alpha e o Stata termina com os coeficientes do Poisson e erro-padrão
-    # missing para /lnalpha e alpha (compat 0602, svy: nbreg). Limite VERIFICAR
+    # alpha at the boundary (very negative ln alpha): the likelihood is flat in ln alpha and Stata
+    # ends with the Poisson coefficients and missing standard errors for /lnalpha and alpha (compat
+    # 0602, svy: nbreg). Threshold VERIFY
     boundary = float(res.b[-1]) < -20
     if boundary:
         res.b[:kx] = resp.b
-        H = np.array(fun(res.b, 2)[2], dtype=float)     # Hessiana no novo ponto
+        H = np.array(fun(res.b, 2)[2], dtype=float)     # Hessian at the new point
         H[-1, :] = 0
         H[:, -1] = 0
         H[-1, -1] = -1.0
@@ -747,7 +746,7 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     est.dispersion = "mean"
     est.chibar = (chibar, p_chibar)
     if not pr.robust:
-        # com vce(robust) o Stata não mostra o teste LR de alpha (compat 0512)
+        # with vce(robust) Stata does not show the LR test of alpha (compat 0512)
         est.footer = _nbreg_footer
     if pr.o.get("irr"):
         est.coef_title, est.eform_on = "IRR", True
@@ -809,7 +808,7 @@ def cmd_tobit(s: "Session", args: str) -> None:
     if o.get("ul") is not None and o.get("ul") is not False:
         hi = float(y.max()) if o["ul"] is True or str(o["ul"]).strip() == "" else float(s.eval(str(o["ul"])))
     if lo is None and hi is None:
-        raise StataError(198, "must specify censoring point")   # VERIFICAR
+        raise StataError(198, "must specify censoring point")   # VERIFY
     left = (y <= lo) if lo is not None else np.zeros(len(y), bool)
     right = (y >= hi) if hi is not None else np.zeros(len(y), bool)
     unc = ~(left | right)
@@ -861,7 +860,7 @@ def cmd_tobit(s: "Session", args: str) -> None:
             return ll, grad(b), num_hess(grad, b)
         return fun, scores
 
-    # início: MQO (VERIFICAR: valores iniciais do Stata)
+    # start: OLS (VERIFY: Stata's starting values)
     beta, *_ = np.linalg.lstsq(X * np.sqrt(w)[:, None], y * np.sqrt(w), rcond=None)
     resid = y - X @ beta
     sig0 = np.sqrt(np.sum(w * resid ** 2) / w.sum())
@@ -869,9 +868,9 @@ def cmd_tobit(s: "Session", args: str) -> None:
     res0 = pr.maximize(fun0, np.array([np.average(y, weights=w), np.log(np.std(y) or 1.0)]))
     fun, scores = make(X)
     res = pr.maximize(fun, np.concatenate([beta, [np.log(sig0)]]))
-    # o tobit do Stata 14 não mostra o log de iterações (compat 0510)
+    # Stata 14's tobit does not show the iteration log (compat 0510)
     Vl, n_clust = pr.vce(res.H, scores(res.b) if pr.robust else None)
-    # e(b) do Stata 14 guarda sigma (não ln sigma): delta-método
+    # Stata 14's e(b) stores sigma (not ln sigma): delta method
     sg = float(np.exp(res.b[-1]))
     Jm = np.eye(kx + 1)
     Jm[-1, -1] = sg
@@ -905,14 +904,14 @@ def cmd_tobit(s: "Session", args: str) -> None:
                   extra_macros=[("footnote", 'censobs_table e(N_unc) e(N_lc) e(N_rc) "" e(llopt) e(ulopt)'),
                                 ("marginsok", "default XB Pr(passthru) E(passthru) YStar(passthru)")],
                   constant=pr.constant,
-                  # o tobit do Stata 14 não usa o moptimize: e() próprio, sem ilog
-                  # e gradient (compat 0513)
+                  # Stata 14's tobit does not use moptimize: its own e(), without ilog and gradient
+                  # (compat 0513)
                   order=(["N", "N_clust", "ll_0", "ll", "r2_p", "llopt", "ulopt", "k_aux", "N_lc", "N_rc",
                           "N_unc", "chi2", "converged", "rank", "df_m", "df_r"],
                          ["cmdline", "chi2type", "footnote", "title", "vce", "vcetype", "clustvar",
                           "marginsok", "wtype", "wexp", "depvar", "cmd", "predict", "properties"], []))
     est.cens = (float(w[left].sum()), float(w[unc].sum()), float(w[right].sum()), lo, hi)
-    # graus de liberdade N - df_m (compat 0513: 60 obs, 2 inclinações -> 58)
+    # degrees of freedom N - df_m (compat 0513: 60 obs, 2 slopes -> 58)
     est.stat, est.df_r = "t", pr.N - len(slope)
     est.footer = _tobit_footer
     _display_std(s, est)

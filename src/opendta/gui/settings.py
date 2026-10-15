@@ -1,9 +1,9 @@
-"""Preferências persistentes da interface (QSettings).
+"""Persistent interface preferences (QSettings).
 
-Ficam no local padrão de cada sistema: registro no Windows, .plist no macOS
-e ~/.config no Linux. Com a variável de ambiente OPENDTA_SETTINGS apontando
-para um arquivo .ini, ficam nesse arquivo (os testes usam isso para não
-ler nem alterar as preferências de quem roda o pytest).
+They live in each system's standard place: the registry on Windows, a .plist on macOS
+and ~/.config on Linux. With the OPENDTA_SETTINGS environment variable pointing
+to an .ini file, they live in that file (the tests use this so they neither
+read nor change the preferences of whoever runs pytest).
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class Preferences:
     def __init__(self, settings: QSettings | None = None):
         self._s = settings or default_store()
 
-    # ícone do aplicativo
+    # application icon
     @property
     def app_icon(self) -> str:
         v = str(self._s.value("appearance/app_icon", "light"))
@@ -43,7 +43,7 @@ class Preferences:
     def app_icon(self, value: str) -> None:
         self._s.setValue("appearance/app_icon", value if value in APP_ICON_VARIANTS else "light")
 
-    # tema da interface (independente do sistema)
+    # interface theme (independent of the system)
     @property
     def theme(self) -> str:
         v = str(self._s.value("appearance/theme", "light"))
@@ -53,10 +53,10 @@ class Preferences:
     def theme(self, value: str) -> None:
         self._s.setValue("appearance/theme", value if value in ("light", "dark") else "light")
 
-    # fonte das janelas Results, Command e Review
+    # font of the Results, Command and Review windows
     @property
     def hints(self) -> bool:
-        """Explicação dos erros (set hints) ligada ao abrir o programa."""
+        """Error explanations (set hints) turned on when the program opens."""
         return str(self._s.value("behavior/hints", "on")) != "off"
 
     @hints.setter
@@ -65,7 +65,7 @@ class Preferences:
 
     @property
     def superscript(self) -> bool:
-        """Expoente sobrescrito na notação científica (set superscript) ao abrir."""
+        """Superscript exponent in scientific notation (set superscript) at startup."""
         return str(self._s.value("behavior/superscript", "on")) != "off"
 
     @superscript.setter
@@ -74,7 +74,7 @@ class Preferences:
 
     @property
     def numerics(self) -> str:
-        """set numerics stata|precise ao abrir o programa."""
+        """set numerics stata|precise at startup."""
         v = str(self._s.value("behavior/numerics", "stata"))
         return v if v in ("stata", "precise") else "stata"
 
@@ -82,7 +82,7 @@ class Preferences:
     def numerics(self, value: str) -> None:
         self._s.setValue("behavior/numerics", value if value in ("stata", "precise") else "stata")
 
-    # idioma da interface (fase 9)
+    # interface language (phase 9)
     @property
     def language(self) -> str:
         v = str(self._s.value("behavior/language", "en"))
@@ -94,7 +94,7 @@ class Preferences:
 
     @property
     def messages(self) -> str:
-        """stata (mensagens de erro em inglês, como no Stata) ou translated."""
+        """stata (error messages in English, as in Stata) or translated."""
         v = str(self._s.value("behavior/messages", "stata"))
         return v if v in ("stata", "translated") else "stata"
 
@@ -121,7 +121,7 @@ class Preferences:
     def font_size(self, value: int) -> None:
         self._s.setValue("fonts/size", int(value))
 
-    # posição das janelas e altura da Command
+    # position of the windows and height of the Command window
     def layout(self):
         return (self._s.value("layout/geometry"), self._s.value("layout/state"),
                 self._s.value("layout/splitter"))

@@ -1,9 +1,9 @@
-"""Viewer: mostra páginas de help e arquivos SMCL ou texto.
+"""Viewer: shows help pages and SMCL or text files.
 
-Os links {help tópico} abrem outra página no mesmo Viewer; links da web
-abrem no navegador; Voltar e Avançar percorrem o histórico. A caixa no
-topo aceita um tópico ("describe"), "help tópico" ou o caminho de um
-arquivo, como a caixa de comando do Viewer do Stata.
+{help topic} links open another page in the same Viewer; web links
+open in the browser; Back and Forward walk through the history. The box at the
+top accepts a topic ("describe"), "help topic" or the path of a
+file, like the command box of Stata's Viewer.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ class Viewer(QMainWindow):
         QShortcut(QKeySequence.StandardKey.Back, self, lambda: self.go(-1))
         QShortcut(QKeySequence.StandardKey.Forward, self, lambda: self.go(1))
 
-    # -- navegação -----------------------------------------------------------------
+    # -- navigation -----------------------------------------------------------------
     def show_page(self, path: Path, title: str, *, record: bool = True) -> None:
         raw = path.read_bytes()
         try:

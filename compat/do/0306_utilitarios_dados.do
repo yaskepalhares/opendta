@@ -1,5 +1,5 @@
-* Fase 3c: duplicates, isid, levelsof, encode/decode, destring/tostring, split,
-* mvencode/mvdecode e recode.
+* Phase 3c: duplicates, isid, levelsof, encode/decode, destring/tostring, split,
+* mvencode/mvdecode and recode.
 clear
 input str8 nome x str6 v
 "ana" 1 "10"

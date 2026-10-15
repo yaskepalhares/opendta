@@ -43,7 +43,7 @@ def _resolve_do(path: str) -> Path:
 def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
     path_text, rest = _split_path(args)
     if "," in rest and rest.strip().startswith(","):
-        rest = ""  # opções (nostop) chegam depois
+        rest = ""  # options (nostop) come later
     path = _resolve_do(path_text)
     try:
         source = path.read_text(encoding="utf-8")
@@ -92,7 +92,7 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
         if new_scope:
             s.macros.pop_frame()
             s.scopes.remove(scope)
-            s.close_scope(scope)      # temporários e preserve do do-file
+            s.close_scope(scope)      # temporaries and preserve of the do-file
     if echo:
         out.ensure_line_start()
         out.write(". \nend of do-file\n", "text")
@@ -136,7 +136,7 @@ def cmd_error(s: "Session", args: str) -> None:
     rc = int(float(s.eval(t)))
     if rc == 0:
         return
-    # erro pedido de propósito (error #): sem explicação do OpenDTA
+    # error raised on purpose (error #): no OpenDTA explanation
     raise StataError(rc, STANDARD_MESSAGES.get(rc, ""), hint="")
 
 

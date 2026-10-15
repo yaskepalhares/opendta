@@ -1,31 +1,31 @@
-* Gera os logs de referência no Stata 14.
+* Produces the reference logs in Stata 14.
 *
-* Como usar (no Stata 14):
-*   1. cd para a pasta compat do repositório, por exemplo:
+* How to use it (in Stata 14):
+*   1. cd to the compat folder of the repository, for example:
 *        cd "~/opendta/compat"
 *   2. do gerar_esperados.do
 *
-* Cada do-file de compat/do/ é executado e sua saída é gravada em
-* compat/expected/<nome>.log.
+* Each do-file in compat/do/ is run and its output is written to
+* compat/expected/<name>.log.
 
 version 14
 set more off
 set linesize 255
 capture log close
 
-* as referências usam ponto decimal; a configuração original é restaurada no fim
+* the references use a decimal point; the original setting is restored at the end
 local dp_original = c(dp)
 set dp period
 
 local arquivos : dir "do" files "*.do"
 foreach f of local arquivos {
     local nome = subinstr("`f'", ".do", "", .)
-    * apaga restos (odta_*) de um caso interrompido antes de rodar o próximo
+    * deletes leftovers (odta_*) of an interrupted case before running the next one
     local restos : dir . files "odta_*"
     foreach r of local restos {
         capture erase "`r'"
     }
-    * cada caso começa com o Mata vazio (funções de um caso não vazam para o outro)
+    * each case starts with an empty Mata (functions of one case do not leak into another)
     capture mata: mata clear
     log using "expected/`nome'.log", text replace
     capture noisily do "do/`f'"

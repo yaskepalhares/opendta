@@ -1,4 +1,4 @@
-* Fase 5b: xtreg, areg e ivregress.
+* Phase 5b: xtreg, areg and ivregress.
 clear
 estimates clear
 ereturn clear

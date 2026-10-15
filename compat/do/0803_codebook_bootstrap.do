@@ -1,6 +1,6 @@
-* Fase 8: codebook, misstable e bootstrap
-* (as réplicas do bootstrap usam a reamostragem do OpenDTA: os erros-padrão
-* diferem dos do Stata; o caso confere o layout e as estimativas observadas)
+* Phase 8: codebook, misstable and bootstrap
+* (the bootstrap replicates use OpenDTA's resampling: the standard errors
+* differ from Stata's; the case checks the layout and the observed estimates)
 clear
 set obs 74
 gen mpg = 12 + mod(_n*7, 30) + (mod(_n, 4) == 0)*mod(_n, 9)

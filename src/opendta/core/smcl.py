@@ -1,17 +1,17 @@
-"""Renderização de SMCL (o formato de help e logs) para HTML e para texto.
+"""Rendering of SMCL (the help and log format) to HTML and to text.
 
-SMCL mistura texto com diretivas entre chaves. Fora de parágrafos, cada
-linha sai como está (tabelas alinhadas por espaço); dentro de {p}...{p_end}
-(ou {pstd}, {phang}, {pmore}...), as linhas formam um parágrafo corrido.
+SMCL mixes text with directives in braces. Outside paragraphs, each
+line comes out as is (tables aligned by spaces); inside {p}...{p_end}
+(or {pstd}, {phang}, {pmore}...), the lines form a running paragraph.
 
-Diretivas tratadas: {title:} {cmd:} {cmdab:a:b} {opt} {opth} {it:} {bf:}
+Directives handled: {title:} {cmd:} {cmdab:a:b} {opt} {opth} {it:} {bf:}
 {ul:} {hi:} {res:} {txt:} {err:} {com:} {inp:} {help} {helpb} {browse}
-{view} {manhelp}/{manlink} (só o texto), {p ...} {pstd} {phang} {pmore}
+{view} {manhelp}/{manlink} (text only), {p ...} {pstd} {phang} {pmore}
 {p2colset}/{p2col} {synoptset}/{synopt}/{p2coldent} {synoptline}
 {synopthdr} {hline} {.-} {c X} {col #} {space #} {tab} {break} {...}
 {marker} {dlgtab} {right:} {center:} {bind:} {varlist} {newvar} {ifin}
-{weight} {depvar} {indepvars} e {* comentário}. Diretivas desconhecidas
-mostram o texto depois dos dois-pontos, se houver.
+{weight} {depvar} {indepvars} and {* comment}. Unknown directives
+show the text after the colon, if any.
 """
 
 from __future__ import annotations
@@ -38,12 +38,12 @@ class Span:
 class Block:
     kind: str                   # line | para | rule | title
     spans: list[Span] = field(default_factory=list)
-    indent: int = 0             # parágrafos: recuo da 1ª linha e das demais
+    indent: int = 0             # paragraphs: indentation of the 1st line and of the others
     subindent: int = 0
 
 
 def _find_close(text: str, i: int) -> int:
-    """Índice da '}' que fecha a '{' em i (com aninhamento)."""
+    """Index of the '}' that closes the '{' at i (with nesting)."""
     depth = 0
     j = i
     while j < len(text):
@@ -85,7 +85,7 @@ class _Renderer:
     def __init__(self):
         self.blocks: list[Block] = []
         self.para: Block | None = None
-        self.p2col = (4, 20)        # recuo e coluna das tabelas p2col/synopt
+        self.p2col = (4, 20)        # indentation and column of p2col/synopt tables
 
     def spans(self, text: str, style: str = "") -> list[Span]:
         out: list[Span] = []
@@ -123,7 +123,7 @@ class _Renderer:
         if n in styles:
             return self.spans(text or args or "", styles[n] or style)
         if n in ("cmdab", "opt", "opth", "opt2") and args and text is not None:
-            # {opt s:hort}: os dois-pontos marcam a abreviação, não o texto
+            # {opt s:hort}: the colon marks the abbreviation, not the text
             args, text = f"{args}:{text}", None
         if n == "cmdab":
             first, _, rest = (text or args).partition(":")
@@ -182,7 +182,7 @@ class _Renderer:
             return [Span(f"\x00DLGTAB{text or args}", style)]
         return self.spans(text, style) if text is not None else []
 
-    # -- linhas e parágrafos -------------------------------------------------------------------
+    # -- lines and paragraphs -------------------------------------------------------------------
     _SETTINGS_ONLY = re.compile(r"^(\{(p2colset|synoptset|p2colreset|marker|viewerjumpto|"
                                 r"vieweralsosee|viewerdialog|findalias|\*)[^{}]*(\{[^{}]*\})?[^{}]*\})+$")
 
@@ -194,9 +194,9 @@ class _Renderer:
             if raw.endswith("{...}"):
                 body = raw[:-5]
                 if self._SETTINGS_ONLY.match(body.strip() or "{*}") and not pending:
-                    self.line(body)          # só ajustes: não gera linha nem se junta
+                    self.line(body)          # settings only: produces no line and does not join
                     continue
-                pending += body              # {...}: o conteúdo continua na linha seguinte
+                pending += body              # {...}: the content continues on the next line
                 continue
             self.line(pending + raw)
             pending = ""
@@ -249,7 +249,7 @@ class _Renderer:
                                                         "Description", "bf")]))
                 return
             if tag in ("synopt", "p2col", "p2coldent"):
-                # {synopt:{opt x}}descrição -> coluna esquerda e texto
+                # {synopt:{opt x}}description -> left column and text
                 self.end_para()
                 left_body = s[m.start():]
                 j = _find_close(left_body, 0)
@@ -304,7 +304,7 @@ def parse(source: str) -> list[Block]:
 
 
 # ---------------------------------------------------------------------------
-# saída em texto (console, modo batch)
+# text output (console, batch mode)
 # ---------------------------------------------------------------------------
 
 def _plain(spans: list[Span], col0: int = 0) -> str:
@@ -347,7 +347,7 @@ def render_text(source: str, width: int = 79) -> str:
 
 
 # ---------------------------------------------------------------------------
-# saída em HTML (Viewer)
+# HTML output (Viewer)
 # ---------------------------------------------------------------------------
 
 def _html_spans(spans: list[Span], colors: dict[str, str]) -> str:
@@ -411,7 +411,7 @@ def render_html(source: str, *, dark: bool = False, font: str = "Menlo", size: i
             parts.append(f'<div style="white-space:pre; color:{colors["dim"]}">'
                          f'{"&nbsp;" * b.indent}{"-" * (79 - b.indent)}</div>')
         elif b.kind == "para":
-            # o QTextBrowser não entende a unidade ch: recuo em pixels
+            # QTextBrowser does not understand the ch unit: indentation in pixels
             cw = size * 0.8
             parts.append(f'<div style="margin-left:{b.subindent * cw:.0f}px; '
                          f'text-indent:{(b.indent - b.subindent) * cw:.0f}px; '

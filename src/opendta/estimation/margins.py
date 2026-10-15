@@ -1,7 +1,7 @@
-"""margins ([R] margins) e nlcom ([R] nlcom): previsões médias, efeitos
-marginais e combinações não lineares, com erros-padrão pelo método delta.
+"""margins ([R] margins) and nlcom ([R] nlcom): average predictions, marginal
+effects and nonlinear combinations, with delta-method standard errors.
 
-As derivadas em relação a b e a x são numéricas (diferenças centrais)."""
+The derivatives with respect to b and x are numerical (central differences)."""
 
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ SYS = M.SYSMISS
 
 
 # ---------------------------------------------------------------------------
-# previsão em função de b e de valores fixados das variáveis
+# prediction as a function of b and of fixed values of the variables
 # ---------------------------------------------------------------------------
 
 def _xb(s: "Session", est, b: np.ndarray, rows: np.ndarray, overrides: dict) -> np.ndarray:
-    """xb nas linhas `rows`, com variáveis trocadas por `overrides` (var -> vetor)."""
+    """xb at rows `rows`, with variables replaced by `overrides` (var -> vector)."""
     ds = s.data
     n = len(rows)
     out = np.zeros(n)
@@ -49,7 +49,7 @@ def _xb(s: "Session", est, b: np.ndarray, rows: np.ndarray, overrides: dict) -> 
                 x = fvars.comp_values(ds, comp)[rows]
             if comp.factor:
                 if isinstance(x, dict):
-                    # atmeans: indicador do nível na média (proporção na amostra)
+                    # atmeans: level indicator at its mean (proportion in the sample)
                     y = y * x.get(c.cell[k], 0.0)
                 else:
                     y = y * (x == c.cell[k])
@@ -63,7 +63,7 @@ def _xb(s: "Session", est, b: np.ndarray, rows: np.ndarray, overrides: dict) -> 
 
 
 def _transform(est, predict: str):
-    """Função de xb que dá a previsão padrão do modelo, e o texto do Expression."""
+    """Function of xb that gives the model's default prediction, and the Expression text."""
     cmd = getattr(est, "ml_cmd", est.cmd)
     dep = est.depvar
     p = predict.strip()
@@ -99,7 +99,7 @@ def _jacobian(f, b: np.ndarray) -> np.ndarray:
 
 
 def _parse_at(s: "Session", text: str) -> list[dict]:
-    """at(x=(1 2) w=3) -> lista de dicionários {var: valor | "mean"}."""
+    """at(x=(1 2) w=3) -> list of dicts {var: value | "mean"}."""
     specs: list[tuple[str, list]] = []
     pairs = []
     i = 0
@@ -185,8 +185,8 @@ def cmd_margins(s: "Session", args: str) -> None:
         for c in est.terms:
             for comp in c.comps:
                 vals = fvars.comp_values(ds, comp)[rows]
-                # o Stata guarda as médias do atmeans em float (compat 0511:
-                # muda o 7º algarismo da margem)
+                # Stata stores the atmeans means as float (compat 0511: changes the 7th digit of
+                # the margin)
                 if not comp.factor:
                     means[comp.var] = float(np.float32(np.mean(vals)))
                 elif comp.var not in means:
@@ -202,7 +202,7 @@ def cmd_margins(s: "Session", args: str) -> None:
                 dydx_vars = sorted({c.var for t in est.terms for c in t.comps}, key=lambda v: ds.index(v))
             else:
                 dydx_vars = txt.split()
-    results = []   # (rótulo do grupo, rótulo da linha, valor, J)
+    results = []   # (group label, row label, value, J)
 
     def base_overrides(at: dict) -> dict:
         ov = {}
@@ -264,9 +264,9 @@ def cmd_margins(s: "Session", args: str) -> None:
                 comps = t.comps
                 for c in comps:
                     if c.var in factor_vars:
-                        c.factor = True   # margins g: g é fator no modelo
+                        c.factor = True   # margins g: g is a factor in the model
                 if not all(c.factor for c in comps):
-                    raise StataError(198, "only factor variables and their interactions are allowed")   # VERIFICAR
+                    raise StataError(198, "only factor variables and their interactions are allowed")   # VERIFY
                 lvls = [sorted(set(ds.get(c.var).data[rows].tolist())) for c in comps]
                 for cell in itertools.product(*lvls):
                     ov = dict(ov0, **{c.var: np.full(len(rows), lv) for c, lv in zip(comps, cell)})
@@ -279,7 +279,7 @@ def cmd_margins(s: "Session", args: str) -> None:
     J = np.vstack([_jacobian(fn, b) for _, _, fn, _ in results])
     Vm = J @ V @ J.T
     se = np.sqrt(np.maximum(np.diag(Vm), 0))
-    # exibição
+    # display
     out = s.output
     if dydx_vars:
         title = "Conditional marginal effects" if atmeans else "Average marginal effects"
@@ -330,7 +330,7 @@ def cmd_margins(s: "Session", args: str) -> None:
     col = "Margin" if not dydx_vars else {"dydx": "dy/dx", "eyex": "ey/ex", "dyex": "dy/ex",
                                           "eydx": "ey/dx"}[dydx_kind]
     _margins_table(s, rws, stat, est.df_r, lev, col)
-    # para o marginsplot: linhas, valores dos at() e intervalos
+    # for marginsplot: rows, at() values and intervals
     cc = crit(stat, lev, est.df_r)
     s._margins_plot = {"results": [(h_, l_, a_) for h_, l_, _f, a_ in results], "vals": vals.tolist(),
                        "lo": (vals - cc * se).tolist(), "hi": (vals + cc * se).tolist(),
@@ -365,7 +365,7 @@ def cmd_margins(s: "Session", args: str) -> None:
         else:
             at_vals.append(SYS)
             stats_at.append("asobserved")
-    # r(): nomes e ordem observados no Stata 14 (compat 0511); a lista sai invertida
+    # r(): names and order observed in Stata 14 (compat 0511); the list comes out reversed
     r = {}
     r["_N"] = Matrix(np.full((1, km), float(len(rows))), ["r1"], names)
     r["b"] = Matrix(vals.reshape(1, -1), ["y1"], names)
@@ -425,7 +425,7 @@ def _all_fixed(est, ats) -> bool:
 
 
 def _at_legend(s, est, ats, means, rows, atmeans):
-    """Legenda do at() no formato do Stata 14 (compat 0511):
+    """at() legend in the Stata 14 format (compat 0511):
     1._at        : x1              =           2
     at           : x1              =        4.77 (mean)"""
     out = s.output
@@ -468,7 +468,7 @@ def _margins_table(s, rws, stat, df, lev, col):
 
 
 def coef_rows_only(s, rws, stat, df, lev):
-    """Corpo da tabela (sem cabeçalho e rodapé)."""
+    """Body of the table (without header and footer)."""
     out = s.output
     c = crit(stat, lev, df)
     for r in rws:
@@ -539,7 +539,7 @@ def cmd_nlcom(s: "Session", args: str) -> None:
     out.write("\n", "text")
     lev = float(o["level"]) if o.get("level") else getattr(est, "level", 95.0)
     rws = [CoefRow("coef", name, vals[i], se[i]) for i, (name, _) in enumerate(items)]
-    stat = "z"     # nlcom usa a normal mesmo depois do regress (compat 0511)
+    stat = "z"     # nlcom uses the normal even after regress (compat 0511)
     coef_table(s, est.depvar, rws, stat=stat, df=None, level=lev)
     from ..commands.matrix import Matrix
     names = [n for n, _ in items]

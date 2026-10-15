@@ -1,10 +1,10 @@
-"""Funções st_* do Mata: leitura e gravação de dados, macros, escalares e
-matrizes do Stata ([M-5] st_data(), st_store(), st_local()...).
+"""Mata's st_* functions: reading and writing Stata's data, macros, scalars and
+matrices ([M-5] st_data(), st_store(), st_local()...).
 
-st_view() devolve uma matriz ligada aos dados: atribuir a elementos dela
-(V[i,j] = x, V[.,1] = ...) grava na base, como no Stata. A leitura é uma
-fotografia do momento do st_view (no Stata, a view acompanha os dados;
-VERIFICAR mudanças feitas na base depois do st_view).
+st_view() returns a matrix linked to the data: assigning to its elements
+(V[i,j] = x, V[.,1] = ...) writes to the dataset, as in Stata. Reading is a
+snapshot taken at the time of st_view (in Stata, the view follows the data;
+VERIFY changes made to the dataset after st_view).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def _var_names(eng, jv: MV) -> list[str]:
         try:
             return eng.s.expand_varlist(text)
         except StataError:
-            raise MataError(3500, "invalid Stata variable name")   # VERIFICAR
+            raise MataError(3500, "invalid Stata variable name")   # VERIFY
     idx = jv.a.ravel()
     if idx.size == 1 and idx[0] >= SYS:
         return list(ds.names)
@@ -51,8 +51,8 @@ def _obs_rows(eng, iv: MV | None, sel: MV | None) -> np.ndarray:
         if iv.t != "real":
             raise MataError(3253, "nonreal found where real required")
         if a.shape[1] == 2 and a.shape[0] >= 1 and a.shape != (2, 1):
-            # cada linha (i1, i2) é um intervalo de observações: st_data((1,3), .)
-            # lê da 1ª à 3ª (observado no Stata 14)
+            # each row (i1, i2) is a range of observations: st_data((1,3), .) reads from the 1st to
+            # the 3rd (observed in Stata 14)
             a = np.where(a >= SYS, np.array([[1.0, float(n)]]), a)
             if np.any(a < 1) or np.any(a > n) or np.any(a[:, 0] > a[:, 1]):
                 raise MataError(3301, "subscript invalid")
@@ -121,7 +121,7 @@ def _data(eng, v, *, strings: bool) -> MV:
         var = ds.get(nm)
         if var.is_string != strings:
             if strings:
-                raise MataError(3254, "nonstring found where string required")   # VERIFICAR
+                raise MataError(3254, "nonstring found where string required")   # VERIFY
             cols.append(np.full(len(rows), SYS))
             continue
         cols.append(np.asarray(var.raw if strings else var.data)[rows])
@@ -164,7 +164,7 @@ def _st_sview(eng, v, r):
 
 
 def write_view(eng, base: MV, cols) -> None:
-    """Grava nas variáveis as colunas alteradas de uma view."""
+    """Writes the changed columns of a view to the variables."""
     names, rows = base.view
     ds = _ds(eng)
     for j in sorted(set(int(c) for c in cols)):
@@ -229,7 +229,7 @@ def _st_addvar(eng, v, r):
     out = []
     for t, nm in zip(types, names):
         if ds.has(nm):
-            raise MataError(3300, f"variable {nm} already defined")   # VERIFICAR
+            raise MataError(3300, f"variable {nm} already defined")   # VERIFY
         try:
             check_name(nm)
         except StataError:
@@ -357,7 +357,7 @@ def _stripe(eng, v, which: str):
     store, key = _matrix_target(eng, name)
     mat = store.get(key)
     if not isinstance(mat, Matrix):
-        raise MataError(3499, f"matrix {name} not found")   # VERIFICAR
+        raise MataError(3499, f"matrix {name} not found")   # VERIFY
     names = mat.rownames if which == "row" else mat.colnames
     if len(v) == 1:
         out = np.empty((len(names), 2), dtype=object)
@@ -398,7 +398,7 @@ def _st_eclear(eng, v, r):
     return None
 
 
-# atributos de variáveis ------------------------------------------------------
+# variable attributes ------------------------------------------------------
 
 def _one_var(eng, v):
     names = _var_names(eng, v[0])
@@ -462,7 +462,7 @@ def _st_tempname(eng, v, r):
     return MV(arr, "string")
 
 
-# executar comandos do Stata --------------------------------------------------
+# running Stata commands --------------------------------------------------
 
 @lib("stata", 1, 3)
 def _stata(eng, v, r):
@@ -470,7 +470,7 @@ def _stata(eng, v, r):
     quiet = len(v) > 1 and v[1] is not None and v[1].real_scalar() != 0
     rc = _run_stata(eng, cmd, quiet)
     if rc:
-        raise MataError(rc, "Stata returned error")    # VERIFICAR (3598?)
+        raise MataError(rc, "Stata returned error")    # VERIFY (3598?)
     return None
 
 

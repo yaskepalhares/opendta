@@ -1,14 +1,14 @@
-"""Texto em formato livre (infile) e em colunas fixas (infix e dicionários).
+"""Free-format text (infile) and fixed columns (infix and dictionaries).
 
-Formato livre: valores separados por espaços ou vírgulas, lidos em
-sequência sem olhar as quebras de linha ([D] infile (free format)).
+Free format: values separated by spaces or commas, read in
+sequence regardless of line breaks ([D] infile (free format)).
 
-Colunas fixas: cada variável ocupa uma faixa de colunas numa das linhas da
-observação ([D] infix, [D] infile (fixed format)). Quando todas as posições
-são conhecidas de antemão, a leitura é vetorizada: o arquivo vira uma
-matriz de bytes e cada variável é um recorte de colunas.
+Fixed columns: each variable takes a range of columns in one of the lines of the
+observation ([D] infix, [D] infile (fixed format)). When all positions
+are known in advance, reading is vectorized: the file becomes a
+byte matrix and each variable is a slice of columns.
 
-Pontos não documentados estão marcados com VERIFICAR e têm casos em
+Undocumented points are marked VERIFY and have cases in
 compat/do/0107_infile_infix.do.
 """
 
@@ -38,7 +38,7 @@ def read_text(path: Path) -> str:
 
 
 def to_number(text: str) -> float | None:
-    """Número do Stata a partir do texto; None se não for número."""
+    """Stata number from the text; None if it is not a number."""
     t = text.strip()
     if t in ("", "."):
         return M.SYSMISS
@@ -58,8 +58,8 @@ def to_number(text: str) -> float | None:
 # ---------------------------------------------------------------------------
 
 def tokenize_free(text: str) -> list[str]:
-    """Separa valores por espaços e vírgulas; aspas (simples ou duplas)
-    delimitam strings; duas vírgulas seguidas indicam valor ausente."""
+    """Splits values on spaces and commas; quotes (single or double)
+    delimit strings; two consecutive commas mean a missing value."""
     out: list[str] = []
     i, n = 0, len(text)
     last_comma = False
@@ -92,17 +92,17 @@ def tokenize_free(text: str) -> list[str]:
 
 @dataclass
 class FreeVar:
-    name: str            # "" para _skip
+    name: str            # "" for _skip
     vtype: str
     skip: int = 0
-    value_label: str = ""    # nome:rótulo; com automatic, textos viram códigos
+    value_label: str = ""    # name:label; with automatic, texts become codes
 
 
 def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
               ) -> tuple[Dataset, list[tuple[str, str, int]], bool]:
-    """Devolve (dados, avisos (texto, variável, registro 0-based), terminou no
-    meio de uma observação). `automatic` só vale para variáveis declaradas
-    com :rótulo (observado no Stata 14)."""
+    """Returns (data, warnings (text, variable, 0-based record), ended in the
+    middle of an observation). `automatic` only applies to variables declared
+    with :label (observed in Stata 14)."""
     tokens = tokenize_free(text)
     width = sum(v.skip if not v.name else 1 for v in spec)
     if width == 0:
@@ -161,10 +161,10 @@ def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
 class FixedField:
     name: str
     vtype: str
-    line: int                    # 1-based dentro da observação
+    line: int                    # 1-based within the observation
     start: int                   # coluna inicial, 1-based
     width: int
-    decimals: int = 0            # casas decimais implícitas (%#.#f)
+    decimals: int = 0            # implied decimal places (%#.#f)
     label: str = ""
     value_label: str = ""
 
@@ -172,19 +172,19 @@ class FixedField:
 @dataclass
 class FixedLayout:
     fields: list[FixedField] = field(default_factory=list)
-    lines: int = 1               # linhas por observação
-    first: int = 1               # primeira linha de dados no arquivo
+    lines: int = 1               # lines per observation
+    first: int = 1               # first data line in the file
 
 
 def read_fixed(text: str, layout: FixedLayout) -> Dataset:
-    """Lê colunas fixas de forma vetorizada."""
+    """Reads fixed columns in a vectorized way."""
     raw_lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if raw_lines and raw_lines[-1] == "":
         raw_lines.pop()
     raw_lines = raw_lines[layout.first - 1:]
     L = max(1, layout.lines)
     nobs = len(raw_lines) // L
-    # VERIFICAR: observação incompleta no fim é descartada
+    # VERIFY: an incomplete observation at the end is dropped
     raw_lines = raw_lines[:nobs * L]
     ds = Dataset()
     ds.nobs = nobs
@@ -206,7 +206,7 @@ def read_fixed(text: str, layout: FixedLayout) -> Dataset:
         cells = cut.view(f"S{f.width}").reshape(nobs)
         if f.vtype.startswith("str"):
             texts = [b.decode("utf-8", "replace").rstrip() for b in cells.tolist()]
-            texts = [t.lstrip() for t in texts]        # VERIFICAR: espaços à esquerda
+            texts = [t.lstrip() for t in texts]        # VERIFY: leading spaces
             vtype = f.vtype
             if vtype == "str":
                 vtype = str_type_for(max(1, f.width))
@@ -234,7 +234,7 @@ def _numbers(cells: np.ndarray, decimals: int) -> np.ndarray:
         for i, b in enumerate(s.tolist()):
             t = b.decode("latin-1")
             x = to_number(t)
-            out[i] = M.SYSMISS if x is None else x   # VERIFICAR: texto vira missing
+            out[i] = M.SYSMISS if x is None else x   # VERIFY: text becomes missing
             has_point[i] = "." in t
         if decimals:
             scale = ~has_point & (out < M.SYSMISS)
@@ -248,7 +248,7 @@ def _numbers(cells: np.ndarray, decimals: int) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# especificação do infix: [#lines] [#:] [type] var start[-end] ...
+# infix specification: [#lines] [#:] [type] var start[-end] ...
 # ---------------------------------------------------------------------------
 
 _INFIX_TOKEN = re.compile(r"\d+:|\d+-\d+|\d+|/|\S+")
@@ -285,7 +285,7 @@ def parse_infix_spec(text: str) -> FixedLayout:
         if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", t):
             names = [t]
             i += 1
-            # varlist com uma única posição não é permitido; cada nome tem a sua
+            # a varlist with a single position is not allowed; each name has its own
             if i >= len(toks):
                 raise StataError(198, "invalid syntax")
             pos = toks[i]
@@ -313,7 +313,7 @@ def parse_infix_spec(text: str) -> FixedLayout:
 
 
 # ---------------------------------------------------------------------------
-# dicionários do infile e do infix
+# infile and infix dictionaries
 # ---------------------------------------------------------------------------
 
 _FMT = re.compile(r"^%(\d+)(?:\.(\d+))?([fgesS])$")
@@ -324,8 +324,8 @@ _DIRECTIVE = re.compile(r"^_(column|skip|line|lines|newline|firstlineoffile|firs
 class Dictionary:
     layout: FixedLayout
     datafile: str | None
-    inline: str | None           # dados depois da chave de fechamento
-    free: bool = False           # algum campo sem largura: leitura livre
+    inline: str | None           # data after the closing brace
+    free: bool = False           # some field without a width: free-format reading
 
 
 def _strip_comments(line: str) -> str:
@@ -338,7 +338,7 @@ def _strip_comments(line: str) -> str:
 
 
 def parse_dictionary(text: str, kind: str = "infile") -> Dictionary:
-    """Lê um arquivo de dicionário. kind = infile | infix."""
+    """Reads a dictionary file. kind = infile | infix."""
     m = re.search(r"\b(?:infile\s+|infix\s+)?dictionary\b(.*?)\{", text, re.S)
     if not m:
         raise StataError(198, "dictionary invalid")
@@ -363,7 +363,7 @@ def parse_dictionary(text: str, kind: str = "infile") -> Dictionary:
         if not raw:
             continue
         toks = re.findall(r'"[^"]*"|\S+', raw)
-        # diretivas no começo da linha (_column(5) long id %6f ...)
+        # directives at the start of the line (_column(5) long id %6f ...)
         while toks and _DIRECTIVE.match(toks[0]):
             d = _DIRECTIVE.match(toks.pop(0))
             name, arg = d.group(1), int(d.group(2)) if d.group(2) else None
@@ -403,7 +403,7 @@ def parse_dictionary(text: str, kind: str = "infile") -> Dictionary:
             decimals = int(fm.group(2) or 0) if fm.group(3) == "f" else 0
             i += 1
         label = toks[i].strip('"') if i < len(toks) and toks[i].startswith('"') else ""
-        if width is None:          # sem formato: leitura livre (str# só limita o tamanho)
+        if width is None:          # no format: free-format reading (str# only limits the length)
             free = True
             width = 0
         layout.fields.append(FixedField(name, vtype, line, col, width, decimals, label, value_label))
@@ -413,9 +413,9 @@ def parse_dictionary(text: str, kind: str = "infile") -> Dictionary:
 
 
 def read_dictionary_free(text: str, layout: FixedLayout) -> Dataset:
-    """Dicionário com campos sem largura: lê campo a campo (mais lento).
-    Campos sem largura pegam o próximo valor separado por espaço a partir
-    da coluna atual."""
+    """Dictionary with fields without a width: reads field by field (slower).
+    Fields without a width take the next space-separated value starting
+    at the current column."""
     raw_lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if raw_lines and raw_lines[-1] == "":
         raw_lines.pop()

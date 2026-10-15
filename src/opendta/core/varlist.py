@@ -1,11 +1,11 @@
-"""Expansão de varlists (manual [U] 11.4).
+"""Varlist expansion (manual [U] 11.4).
 
-    mpg            nome exato
-    mp             abreviação (se `set varabbrev on`, padrão)
-    m*  *g  m?g    curingas: * (zero ou mais), ? (exatamente um)
-    m~             como *, mas deve corresponder a uma única variável
-    make-weight    intervalo, na ordem do conjunto de dados
-    _all  ou  *    todas as variáveis
+    mpg            exact name
+    mp             abbreviation (if `set varabbrev on`, the default)
+    m*  *g  m?g    wildcards: * (zero or more), ? (exactly one)
+    m~             like *, but must match a single variable
+    make-weight    range, in dataset order
+    _all  or  *    all variables
 """
 
 from __future__ import annotations

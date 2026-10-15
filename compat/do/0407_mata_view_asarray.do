@@ -1,4 +1,4 @@
-* Fase 4: st_view (grava nos dados) e arrays associativos.
+* Phase 4: st_view (writes to the data) and associative arrays.
 clear
 set obs 3
 gen x = _n

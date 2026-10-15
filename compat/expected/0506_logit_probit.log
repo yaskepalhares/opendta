@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 12:14:27
 
-. * Fase 5b: logit, logistic e probit (log de iterações, tabelas, pós-estimação).
+. * Phase 5b: logit, logistic and probit (iteration log, tables, postestimation).
 . clear
 
 . estimates clear

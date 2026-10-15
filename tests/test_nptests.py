@@ -1,4 +1,4 @@
-"""Fase 8: testes não paramétricos, de normalidade e comandos imediatos."""
+"""Phase 8: nonparametric and normality tests and immediate commands."""
 
 import numpy as np
 import pytest
@@ -61,7 +61,7 @@ def test_signrank_small_example(run):
 
 
 def test_swilk_royston_manual_example():
-    # exemplo do manual [R] swilk (auto.dta, mpg): W = 0.94821, n = 74
+    # example from manual [R] swilk (auto.dta, mpg): W = 0.94821, n = 74
     W, V, z, p = _royston(0.94821, 74)
     assert round(V, 3) == pytest.approx(3.335, abs=0.002)
     assert round(z, 3) == pytest.approx(2.627, abs=0.002)
@@ -97,7 +97,7 @@ def test_immediate_commands(run):
     run("clear\nset obs 3\ngen keep = 1")
     out = run("tabi 30 18 \\ 38 14, chi2")
     assert "Pearson chi2(1)" in out
-    assert run.session.data.nobs == 3          # os dados em memória voltam
+    assert run.session.data.nobs == 3          # the data in memory come back
 
 
 def test_two_sample_ttest_has_no_full_rule_before_diff(run):

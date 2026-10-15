@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:08
 
-. * Fase 4: optimize() do Mata (registro de iterações e resultados).
+. * Phase 4: Mata's optimize() (iteration log and results).
 . mata
 ------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 : void q(todo, p, v, g, H)

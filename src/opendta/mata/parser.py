@@ -1,22 +1,22 @@
-"""Analisador do Mata: instruções e expressões ([M-2]).
+"""Mata parser: statements and expressions ([M-2]).
 
-Precedência (da mais forte para a mais fraca), conforme [M-2] op_intro:
+Precedence (from strongest to weakest), as in [M-2] op_intro:
 
-    postfixos   '  [ ]  [| |]  ( )  ++  --  ->  .
-    prefixos    -  !  &  *  ++  --
+    postfix     '  [ ]  [| |]  ( )  ++  --  ->  .
+    prefix      -  !  &  *  ++  --
     ^  :^
     *  /  :*  :/  #
     +  -  :+  :-
-    ..  ::                      (sequências)
-    ,                           (junta colunas)
-    \\                          (junta linhas)
-    ==  !=  >  >=  <  <=  e as versões com dois-pontos
+    ..  ::                      (ranges)
+    ,                           (joins columns)
+    \\                          (joins rows)
+    ==  !=  >  >=  <  <=  and the colon versions
     &  :&
     |  :|
     &&
     ||
     ?:
-    =                           (atribuição, associa à direita)
+    =                           (assignment, right-associative)
 """
 
 from __future__ import annotations
@@ -87,15 +87,15 @@ class Call:
 @dataclass
 class Subscript:
     base: object
-    rows: object       # None = todas (.), ou expressão
-    cols: object       # None se subscrito de um índice só
+    rows: object       # None = all (.), or an expression
+    cols: object       # None for a single-index subscript
     single: bool = False
 
 
 @dataclass
 class RangeSub:
     base: object
-    spec: object       # expressão 2x2 (ou 1x2) com os cantos
+    spec: object       # 2x2 (or 1x2) expression with the corners
 
 
 @dataclass
@@ -122,10 +122,10 @@ class Deref:
 
 @dataclass
 class Missing:
-    """O "." usado como subscrito (todas as linhas ou colunas)."""
+    """The "." used as a subscript (all rows or columns)."""
 
 
-# instruções
+# statements
 
 @dataclass
 class ExprStmt:
@@ -273,7 +273,7 @@ class Parser:
             self.skip_semis()
         return out
 
-    # instruções --------------------------------------------------------------
+    # statements --------------------------------------------------------------
     def statement(self, top: bool = False):
         t = self.tok
         if t.kind == "eof":
@@ -339,7 +339,7 @@ class Parser:
                 return Continue()
             if kw == "return":
                 if not self.in_function:
-                    # fora de função (observado no Stata 14)
+                    # outside a function (observed in Stata 14)
                     raise MataSyntaxError("'return' found where almost anything else expected")
                 self.take()
                 if self.at("("):
@@ -364,8 +364,8 @@ class Parser:
             decl = self._try_decl()
             if decl is not None:
                 if not self.in_function:
-                    # fora de função não há declarações (observado no Stata 14):
-                    # no nível de cima o Mata espera o "(" de uma função
+                    # outside a function there are no declarations (observed in Stata 14): at the
+                    # top level Mata expects the "(" of a function
                     if not top:
                         raise MataSyntaxError(f"'{kw}' found where almost anything else expected")
                     self.i = save
@@ -389,10 +389,10 @@ class Parser:
                 return Block(body)
             body.append(self.statement())
 
-    # declarações -----------------------------------------------------------
+    # declarations -----------------------------------------------------------
     def _type_spec(self) -> tuple[str, str] | None:
-        """Lê [eltype] [org] (ex.: real scalar, string matrix, pointer(real) scalar,
-        struct nome scalar). Devolve None se não há tipo aqui."""
+        """Reads [eltype] [org] (e.g. real scalar, string matrix, pointer(real) scalar,
+        struct name scalar). Returns None if there is no type here."""
         save = self.i
         el, org = "", ""
         if self.at_id("struct", "class"):
@@ -405,7 +405,7 @@ class Parser:
             el = self.take().value
             if el == "pointer" and self.at("("):
                 depth = 0
-                while True:            # pointer(real matrix) — o alvo não importa
+                while True:            # pointer(real matrix) — the target does not matter
                     if self.at("("):
                         depth += 1
                     elif self.at(")"):
@@ -448,13 +448,13 @@ class Parser:
         if spec is None or self.tok.kind != "id":
             self.i = save
             return None
-        # "real x" é declaração; "real(x)" seria chamada de função
+        # "real x" is a declaration; "real(x)" would be a function call
         names = []
         while True:
             if self.tok.kind != "id":
                 raise MataSyntaxError("invalid declaration")
             names.append(self.take().value)
-            if self.at("["):            # real matrix A[2,2]? (não usado no Mata moderno)
+            if self.at("["):            # real matrix A[2,2]? (not used in modern Mata)
                 raise MataSyntaxError("invalid declaration")
             if not self.at(","):
                 break
@@ -516,7 +516,7 @@ class Parser:
                 fields.append((d.eltype, d.org, nm))
         return StructDef(name, fields)
 
-    # expressões ----------------------------------------------------------------
+    # expressions ----------------------------------------------------------------
     def expression(self):
         return self.assignment()
 
@@ -714,7 +714,7 @@ _ARITH = {"+", "-", "*", "/", "^", ":+", ":-", ":*", ":/", ":^", "#"}
 
 
 def _literal_types(op: str, a, b) -> None:
-    """Constantes de tipos diferentes já dão erro na compilação:
+    """Constants of different types already fail at compile time:
     "a" + 1 → type mismatch:  string + real not allowed (Stata 14)."""
     if op not in _ARITH:
         return
@@ -723,7 +723,7 @@ def _literal_types(op: str, a, b) -> None:
         kinds.append("string" if isinstance(x, Str) else "real" if isinstance(x, Num) else None)
     if None in kinds or kinds[0] == kinds[1]:
         return
-    if op in ("*", ":*") and "real" in kinds:      # "ab" * 3 é repetição
+    if op in ("*", ":*") and "real" in kinds:      # "ab" * 3 is repetition
         return
     raise MataSyntaxError(f"type mismatch:  {kinds[0]} {op} {kinds[1]} not allowed")
 

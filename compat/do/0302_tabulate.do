@@ -1,4 +1,4 @@
-* Fase 3a: tabulate (uma e duas vias), tab1, tab2, table.
+* Phase 3a: tabulate (one- and two-way), tab1, tab2, table.
 clear
 input sexo resp str5 regiao
 1 1 "norte"

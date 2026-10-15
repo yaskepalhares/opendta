@@ -1,4 +1,4 @@
-"""Números aleatórios: MT19937-64, set seed, c(seed) e funções r*()."""
+"""Random numbers: MT19937-64, set seed, c(seed) and the r*() functions."""
 
 import numpy as np
 import pytest
@@ -13,10 +13,10 @@ def col(run, name):
 
 
 def test_mt64_reference_value():
-    # valor exigido pelo padrão C++ para std::mt19937_64 com a semente 5489
+    # value required by the C++ standard for std::mt19937_64 with seed 5489
     g = MT64(5489)
     assert int(g.uint64(10000)[-1]) == 9981545732273789042
-    # gerar em pedaços dá a mesma sequência
+    # generating in pieces gives the same sequence
     g1, g2 = MT64(42), MT64(42)
     a = g1.uint64(1000)
     b = np.concatenate([g2.uint64(7), g2.uint64(500), g2.uint64(493)])
@@ -112,7 +112,7 @@ def test_vector_parameters(run):
 
 
 def test_runiform_matches_stata14():
-    # valores de compat/expected/0307_aleatorios.log (Stata/SE 14.0)
+    # values from compat/expected/0307_aleatorios.log (Stata/SE 14.0)
     cases = {123: [0.31320017867847072, 0.55597911939485856], 0: [0.15979336337046079],
              2147483647: [0.16803268731662413]}
     for seed, want in cases.items():
@@ -121,7 +121,7 @@ def test_runiform_matches_stata14():
 
 
 def test_draws_only_in_sample(run):
-    # como no Stata, o if/in decide quais observações consomem a sequência
+    # as in Stata, if/in decides which observations consume the sequence
     run("set obs 4\nset seed 1\ngen double a = runiform() if mod(_n, 2)\n"
         "set seed 1\ngen double b = runiform() in 1/2")
     a, b = col(run, "a"), col(run, "b")
@@ -130,7 +130,7 @@ def test_draws_only_in_sample(run):
 
 
 def test_exponential_chi2_binomial_match_stata14(run):
-    # valores de compat/expected/0309_aleatorios_2.log (Stata/SE 14.0)
+    # values from compat/expected/0309_aleatorios_2.log (Stata/SE 14.0)
     run("set obs 2\nset seed 123\ngen double e = rexponential(1)\nset seed 123\n"
         "gen double c = rchi2(2)\nset seed 123\ngen double b = rbinomial(10, .5)")
     assert [float(f"{x:.17f}") for x in col(run, "e")] == [1.16091274437245029, 0.58702454048198149]

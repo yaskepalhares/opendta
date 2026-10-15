@@ -1,10 +1,10 @@
-# Especificação do PyInstaller para o OpenDTA.
+# PyInstaller spec for OpenDTA.
 #
 #   pyinstaller packaging/opendta.spec --noconfirm
 #
-# No macOS gera dist/OpenDTA.app (pasta única, assinatura ad hoc); no Linux e
-# no Windows, a pasta dist/OpenDTA com o executável. tools/build_macos.sh faz
-# o processo inteiro e ainda monta um .dmg.
+# On macOS it builds dist/OpenDTA.app (one folder, ad hoc signature); on Linux and
+# Windows, the dist/OpenDTA folder with the executable. tools/build_macos.sh runs
+# the whole process and also builds a .dmg.
 # -*- mode: python -*-
 
 import sys
@@ -19,15 +19,15 @@ from opendta import __version__  # noqa: E402
 datas = collect_data_files("opendta", includes=["help/*.sthlp", "gui/icons/*.svg", "gui/appicon/*.png"])
 hidden = collect_submodules("opendta")
 
-# licenças: a do OpenDTA, o aviso de terceiros e os metadados (com o texto das
-# licenças) dos pacotes levados no app
+# licenses: OpenDTA's own, the third-party notice and the metadata (with the license texts) of the
+# packages bundled in the app
 datas += [(str(ROOT / "LICENSE"), "."), (str(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md"), ".")]
 for pkg in ("PySide6", "shiboken6", "numpy", "scipy", "matplotlib", "openpyxl", "pillow",
             "pyreadstat", "pandas", "fonttools", "kiwisolver", "contourpy", "cycler", "pyparsing",
             "python-dateutil", "packaging", "et-xmlfile"):
     try:
         datas += copy_metadata(pkg)
-    except Exception:  # noqa: BLE001 - pacote opcional ausente no ambiente de build
+    except Exception:  # noqa: BLE001 - optional package missing from the build environment
         pass
 
 a = Analysis(
@@ -46,8 +46,8 @@ exe = EXE(
     pyz, a.scripts, [],
     exclude_binaries=True,
     name="OpenDTA",
-    console=False,               # sem janela de terminal
-    argv_emulation=False,        # os arquivos chegam pelo QFileOpenEvent (gui/app.py)
+    console=False,               # no terminal window
+    argv_emulation=False,        # files arrive through QFileOpenEvent (gui/app.py)
     icon=str(ROOT / "assets/icons/opendta/windows/opendta.ico")
     if sys.platform == "win32" else None,
 )
@@ -66,11 +66,11 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": __version__,
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
-            "LSMinimumSystemVersion": "12.0",      # mínimo do Qt 6.8
+            "LSMinimumSystemVersion": "12.0",      # minimum for Qt 6.8
             "NSHumanReadableCopyright": "© 2026 Yaske Palhares. MIT License. "
                                         "Not affiliated with StataCorp.",
-            # "Abrir com" para do-files e bases .dta; o OpenDTA não se torna o
-            # aplicativo padrão desses arquivos (LSHandlerRank = Alternate)
+            # "Open With" for do-files and .dta datasets; OpenDTA does not become the default
+            # application for these files (LSHandlerRank = Alternate)
             "CFBundleDocumentTypes": [
                 {"CFBundleTypeName": "Do-file", "CFBundleTypeRole": "Editor",
                  "LSHandlerRank": "Alternate", "CFBundleTypeExtensions": ["do", "ado"]},

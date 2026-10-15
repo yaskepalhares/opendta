@@ -4,7 +4,7 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:09
 
-. * Fase 3a: summarize, ci, ttest, prtest, correlate, pwcorr, centile, pctile, xtile, tabstat.
+. * Phase 3a: summarize, ci, ttest, prtest, correlate, pwcorr, centile, pctile, xtile, tabstat.
 . clear
 
 . input grupo x y peso
@@ -263,7 +263,7 @@ grupo is not a 0/1 variable
 
 . xtile q = x, nq(3)
 
-. * o sort do Stata desempata ao acaso (set sortseed): ordena por x antes de listar
+. * Stata's sort breaks ties at random (set sortseed): sort by x before listing
 . sort grupo x
 
 . list x q

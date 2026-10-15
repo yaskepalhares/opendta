@@ -1,8 +1,8 @@
-"""Ordenação de observações (sort, gsort, bysort).
+"""Sorting of observations (sort, gsort, bysort).
 
-Missing ficam depois de todos os números (. < .a < ... < .z), o que já é a
-ordem natural dos códigos usados. A ordenação é estável. O Stata não garante
-a ordem dos empates sem a opção `stable`; aqui ela é sempre estável.
+Missing values go after all numbers (. < .a < ... < .z), which is already the
+natural order of the codes used. Sorting is stable. Stata does not guarantee
+the order of ties without the `stable` option; here it is always stable.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def sort_order(ds: Dataset, keys: list[str], descending: list[bool] | None = Non
                 r = -r
             else:
                 miss = r >= SYSMISS
-                # gsort -x: missing vão para o fim, a menos que mfirst
+                # gsort -x: missing values go last, unless mfirst
                 r = np.where(miss, (-np.inf if missing_first else np.inf), -r)
         cols.append(r)
     if not cols:

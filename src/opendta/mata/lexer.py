@@ -1,7 +1,7 @@
-"""Tokens do Mata ([M-2] syntax).
+"""Mata tokens ([M-2] syntax).
 
-Números (1, 1.5, .5, 1e-3), valores missing (., .a–.z), strings entre
-aspas ("abc" ou `"abc"'), nomes e operadores. Comentários // e /* */.
+Numbers (1, 1.5, .5, 1e-3), missing values (., .a–.z), quoted strings
+("abc" or `"abc"'), names and operators. // and /* */ comments.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from ..core import missing as M
 
 
 class MataSyntaxError(Exception):
-    """Erro de sintaxe. `incomplete` indica que o texto acabou no meio de
-    uma instrução (o bloco mata pede mais uma linha, com o prompt '>')."""
+    """Syntax error. `incomplete` means the text ended in the middle of
+    a statement (the mata block asks for one more line, with the '>' prompt)."""
 
     def __init__(self, message: str, incomplete: bool = False):
         super().__init__(message)
@@ -71,7 +71,7 @@ def tokenize(text: str) -> list[Token]:
             out.append(Token("str", text[i + 1:j], i))
             i = j + 1
             continue
-        # números e missing
+        # numbers and missing values
         if c.isdigit() or (c == "." and i + 1 < n and text[i + 1].isdigit()):
             j = i
             while j < n and text[j].isdigit():
@@ -95,7 +95,7 @@ def tokenize(text: str) -> list[Token]:
             prev = out[-1] if out else None
             member = prev is not None and (prev.kind == "id" or (prev.kind == "op" and prev.value in (")", "]")))
             if not member:
-                # missing: "." ou ".a"–".z" (sem ser seguido de letra/dígito)
+                # missing: "." or ".a"–".z" (not followed by a letter/digit)
                 if i + 1 < n and text[i + 1].islower() and not (
                         i + 2 < n and (text[i + 2].isalnum() or text[i + 2] == "_")):
                     out.append(Token("num", M.missing_code(text[i:i + 2]), i))

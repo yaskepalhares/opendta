@@ -1,16 +1,16 @@
-"""Valores missing numéricos.
+"""Numeric missing values.
 
-O OpenDTA representa números como double (float64) e usa, para os missing,
-os mesmos padrões de bits que o formato .dta documenta para variáveis double:
+OpenDTA represents numbers as doubles (float64) and uses, for missing values,
+the same bit patterns that the .dta format documents for double variables:
 
     .   = 0x7fe0000000000000  (2**1023)
     .a  = 0x7fe0010000000000
     ...
     .z  = 0x7fe01a0000000000
 
-Com isso, qualquer valor >= 2**1023 é missing, e a ordenação natural dos
-floats já reproduz a regra do Stata: todo número < . < .a < ... < .z.
-Também facilita ler e gravar .dta sem conversão.
+Thus any value >= 2**1023 is missing, and the natural ordering of
+floats already reproduces Stata's rule: every number < . < .a < ... < .z.
+It also makes reading and writing .dta files easy, without conversion.
 """
 
 from __future__ import annotations
@@ -31,23 +31,23 @@ def _to_bits(x: float) -> int:
 
 
 SYSMISS: float = _from_bits(_BASE_BITS)          # .
-MISSING_THRESHOLD: float = SYSMISS                # x >= isto  =>  missing
+MISSING_THRESHOLD: float = SYSMISS                # x >= this  =>  missing
 EXTENDED: dict[str, float] = {
     chr(ord("a") + i): _from_bits(_BASE_BITS + (i + 1) * _STEP_BITS) for i in range(26)
 }
 _BY_VALUE: dict[float, str] = {SYSMISS: "."}
 _BY_VALUE.update({v: "." + k for k, v in EXTENDED.items()})
 
-# Constantes c(maxdouble), c(mindouble), c(epsdouble) seguem da representação
-# acima: o maior double não-missing é o predecessor de 2**1023.
+# The constants c(maxdouble), c(mindouble), c(epsdouble) follow from the representation above: the
+# largest non-missing double is the predecessor of 2**1023.
 MAXDOUBLE: float = math.nextafter(SYSMISS, 0.0)
 MINDOUBLE: float = -MAXDOUBLE
 EPSDOUBLE: float = 2.0 ** -52
 
 
 def is_missing(x: float) -> bool:
-    """True para ., .a–.z e qualquer valor fora do intervalo representável."""
-    return x != x or x >= MISSING_THRESHOLD  # x != x captura NaN por segurança
+    """True for ., .a–.z and any value outside the representable range."""
+    return x != x or x >= MISSING_THRESHOLD  # x != x catches NaN for safety
 
 
 def missing_code(name: str) -> float:
@@ -60,15 +60,15 @@ def missing_code(name: str) -> float:
 
 
 def missing_name(x: float) -> str:
-    """Nome de exibição de um missing ('.', '.a', ...). Pressupõe is_missing(x)."""
+    """Display name of a missing value ('.', '.a', ...). Assumes is_missing(x)."""
     if x != x:
         return "."
     return _BY_VALUE.get(x, ".")
 
 
 def normalize(x: float) -> float:
-    """Converte NaN/inf e qualquer valor >= 2**1023 que não seja um código
-    conhecido em SYSMISS. Resultados de operações aritméticas passam por aqui."""
+    """Converts NaN/inf and any value >= 2**1023 that is not a known code
+    into SYSMISS. Results of arithmetic operations go through here."""
     if x != x or x in (math.inf, -math.inf):
         return SYSMISS
     if x >= MISSING_THRESHOLD and x not in _BY_VALUE:

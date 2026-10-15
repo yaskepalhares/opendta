@@ -1,4 +1,4 @@
-"""local, global, macro e funções estendidas de macro (manual [P] macro)."""
+"""local, global, macro and extended macro functions (manual [P] macro)."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def cmd_macro(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Funções estendidas: local x : <função>
+# Extended functions: local x : <function>
 # ---------------------------------------------------------------------------
 
 def extended_function(s: "Session", text: str) -> str:
@@ -130,7 +130,7 @@ def extended_function(s: "Session", text: str) -> str:
     if value is not None:
         return value
     word = t.split()[0] if t else ""
-    # VERIFICAR: mensagem do Stata para função estendida desconhecida
+    # VERIFY: Stata's message for an unknown extended function
     raise StataError(198, f"{word} not allowed")
 
 
@@ -140,8 +140,8 @@ def _var(s: "Session", name: str):
 
 
 def _data_function(s: "Session", t: str) -> str | None:
-    """Funções que consultam os dados, rótulos, características, arquivos e
-    resultados guardados."""
+    """Functions that query the data, labels, characteristics, files and
+    stored results."""
     import fnmatch
     from pathlib import Path
 
@@ -183,7 +183,7 @@ def _data_function(s: "Session", t: str) -> str | None:
         if not folder.is_dir():
             if "nofail" in opts:
                 return ""
-            raise StataError(601, f"directory {folder} not found")   # VERIFICAR
+            raise StataError(601, f"directory {folder} not found")   # VERIFY
         kind = m.group(2)
         respect = "respectcase" in opts
         out = []
@@ -196,7 +196,7 @@ def _data_function(s: "Session", t: str) -> str | None:
                 ok = not (p.is_file() or p.is_dir())
             name = p.name
             if name.startswith(".") and not pattern.startswith("."):
-                continue                       # ocultos só com padrão explícito
+                continue                       # hidden only with an explicit pattern
             hit = (fnmatch.fnmatchcase(name, pattern) if respect
                    else fnmatch.fnmatchcase(name.lower(), pattern.lower()))
             if ok and hit:
@@ -232,8 +232,8 @@ def _data_function(s: "Session", t: str) -> str | None:
         all_ = re.search(r"\ball\b", opts) is not None
         word = re.search(r"\bword\b", opts) is not None
         if word:
-            # troca a palavra no lugar, sem mexer nos espaços em volta
-            # ("a b a" sem o 1º "a" vira " b a"; observado no Stata 14)
+            # replaces the word in place, without touching the surrounding spaces ("a b a" without
+            # the 1st "a" becomes " b a"; observed in Stata 14)
             pattern = r"(?<!\S)" + re.escape(old) + r"(?!\S)"
             result, n = re.subn(pattern, lambda _m: new, text, count=0 if all_ else 1)
         else:
@@ -294,7 +294,7 @@ def _capture_display(s: "Session", args: str) -> str:
     out.quiet_depth = out.noisy_depth = 0
     from ..core.formats import plain_numbers
     try:
-        with plain_numbers():          # texto de macro pode ser lido de volta
+        with plain_numbers():          # macro text can be read back
             cmd_display(s, args + " _continue")
     finally:
         out._listeners, out.column, out.quiet_depth, out.noisy_depth = saved

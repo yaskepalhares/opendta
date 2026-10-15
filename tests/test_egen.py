@@ -1,4 +1,4 @@
-"""egen: funções de grupo e de linha, conferidas com numpy."""
+"""egen: group and row functions, checked against numpy."""
 
 import numpy as np
 import pytest
@@ -46,7 +46,7 @@ def test_group_stats_match_numpy(base):
         assert (col(run, "c")[g == k] == len(v)).all()
         assert (col(run, "lo")[g == k] == np.float32(v.min())).all()
         assert (col(run, "hi")[g == k] == np.float32(v.max())).all()
-    assert run.session.data.get("c").vtype == "float"      # tipo padrão (Stata 14)
+    assert run.session.data.get("c").vtype == "float"      # default type (Stata 14)
 
 
 def test_by_prefix_equals_by_option(base):

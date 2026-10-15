@@ -1,9 +1,9 @@
-"""help, view e search.
+"""help, view and search.
 
-help procura o tópico primeiro nas pastas do adopath (arquivos .sthlp e
-.hlp de pacotes de terceiros) e depois nas páginas próprias do OpenDTA
-(src/opendta/help). Com a interface gráfica, a página abre no Viewer; sem
-ela, o texto sai em Results.
+help looks for the topic first in the adopath folders (.sthlp and
+.hlp files of third-party packages) and then in OpenDTA's own pages
+(src/opendta/help). With the graphical interface, the page opens in the Viewer;
+without it, the text goes to Results.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ ALIASES = {
     "kdensity": "histogram", "graph_hbar": "graph_bar", "graph_box": "graph_bar",
     "graph_hbox": "graph_bar", "graph_pie": "graph_bar", "graph_matrix": "graph_bar",
     "graph_dot": "graph_bar", "doedit": "doedit",
-    # páginas que reúnem vários comandos (fase 9)
+    # pages that cover several commands (phase 9)
     "areg": "regress", "ivregress": "regress", "reg": "regress", "logistic": "logit",
     "probit": "logit", "oprobit": "ologit", "mlogit": "ologit", "nbreg": "poisson",
     "xtset": "xtreg", "tsset": "xtreg", "testparm": "test", "lincom": "test", "nlcom": "test",
@@ -110,7 +110,7 @@ def cmd_help(s: "Session", args: str) -> None:
     topic = args.strip().split(",")[0].strip()
     path = find_help(s, topic)
     if path is None:
-        # VERIFICAR: mensagem do Stata 14 para tópico inexistente
+        # VERIFY: Stata 14 message for a nonexistent topic
         raise StataError(111, f"help for {topic} not found",
                          hint=f'"{topic}" has no help page yet.\nHint: type "help" to see the '
                          "topics available.")
@@ -144,10 +144,10 @@ def cmd_view(s: "Session", args: str) -> None:
 
 @command("search")
 def cmd_search(s: "Session", args: str) -> None:
-    """Procura palavras nos títulos e no texto das páginas de help."""
+    """Searches for words in the titles and text of the help pages."""
     words = [w.lower() for w in args.split() if not w.startswith(",")]
     if not words:
-        raise StataError(198, "nothing to search for")   # VERIFICAR
+        raise StataError(198, "nothing to search for")   # VERIFY
     out = s.output
     hits = []
     for path in sorted(HELP_DIR.glob("*.sthlp")):

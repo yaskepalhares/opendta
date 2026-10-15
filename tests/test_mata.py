@@ -1,4 +1,4 @@
-"""Mata: analisador, operadores, funções do usuário, biblioteca e st_*."""
+"""Mata: parser, operators, user functions, library and st_*."""
 
 import numpy as np
 import pytest
@@ -10,7 +10,7 @@ MISS = 8.98846567431158e307
 
 
 def mata(run, code: str) -> str:
-    """Roda um bloco mata ... end e devolve a saída (sem eco)."""
+    """Runs a mata ... end block and returns the output (without echo)."""
     return run("mata\n" + code + "\nend")
 
 
@@ -136,9 +136,9 @@ def test_errors(run):
     out = run("mata: nada2")
     assert run.rc == 3499
     out = run("mata:\nnada3\nx = 7\nend")
-    assert run.rc == 3499                          # mata: para no erro
+    assert run.rc == 3499                          # mata: stops at the error
     out = mata(run, "real scalar f() {\n    return((1,2)*(3,4))\n}\nf()")
-    # o operador aparece como a "função" que falhou, depois f() e <istmt>
+    # the operator appears as the "function" that failed, then f() and <istmt>
     assert ("                       *:  3200  conformability error\n"
             "                     f():     -  function returned error\n"
             "                 <istmt>:     -  function returned error\n") in out
@@ -163,7 +163,7 @@ symeigensystem((2,1\\1,2), V, L)
 J1 = J(2, 3, 7)
 id = I(2)
 miss = missing((1,.,.a))""")
-    assert val(run, "m").a.tolist() == [[2, 3]]            # linha com missing sai
+    assert val(run, "m").a.tolist() == [[2, 3]]            # row with missing is left out
     X = np.array([[1, 2], [3, 5], [5, 6]], dtype=float)
     assert np.allclose(val(run, "v").a, np.cov(X.T))
     assert val(run, "s").a[0, 0] == 4 and val(run, "mx").a[0, 0] == 7
@@ -270,7 +270,7 @@ def test_block_echo_in_do_file(run, tmp_path):
 
 
 def test_display_format_and_uniform_columns(run):
-    # observado no Stata 14: %12.0g e colunas de largura única
+    # observed in Stata 14: %12.0g and single-width columns
     out = mata(run, "1/3\n1e10\n123456789\n(3, 4.333333333333)\n(\"a\", \"bb\", \"ccc\")")
     assert "  .3333333333\n" in out and "  1.00000e+10\n" in out and "  123456789\n" in out
     assert ("                 1             2\n    +-----------------------------+\n"
@@ -285,7 +285,7 @@ def test_plain_plus_needs_same_size_and_literal_types(run):
 
 
 def test_redefinition_and_top_level_rules(run):
-    # como no Stata: "já existe" logo após o cabeçalho e o corpo vira instruções soltas
+    # as in Stata: "already exists" right after the header and the body becomes loose statements
     mata(run, "real scalar f()\n{\n    return(1)\n}")
     out = mata(run, "real scalar f()\n{\n    return(2)\n}\nreal scalar x, y")
     assert out.startswith("f() already exists\nr(3000);\n")
@@ -310,7 +310,7 @@ def test_st_data_row_range(run):
 def test_st_view_writes_back(run):
     run("set obs 3\ngen x = _n")
     mata(run, 'V = .\nst_view(V, ., "x")\nV[2,1] = 99\nV[.,1] = V[.,1] :* 2\nW = V\nW[1,1] = -1')
-    assert list(run.session.data.get("x").data) == [2, 198, 6]      # W é cópia comum
+    assert list(run.session.data.get("x").data) == [2, 198, 6]      # W is an ordinary copy
 
 
 def test_asarray(run):
@@ -319,7 +319,7 @@ def test_asarray(run):
                     'asarray_remove(A, "um")\nasarray_keys(A)')
     assert "  1 |  2   2  |" in out
     assert "  0\n  2\n" in out
-    assert out.endswith("  dois\n")          # uma chave só: escalar
+    assert out.endswith("  dois\n")          # a single key: scalar
 
 
 def test_optimize_quadratic_and_logit():
@@ -357,7 +357,7 @@ V = optimize_result_V(T)
 end""")
     g = s.mata.globals.vars
     assert np.allclose(g["p"].a, [[8 / 3, -10 / 3]], atol=1e-6)
-    # logit conferido com statsmodels/fórmula fechada: MLE de (x, cons)
+    # logit checked against statsmodels/closed form: MLE of (x, cons)
     import scipy.optimize as so
     yy = np.array([0, 0, 1, 1, 0, 1, 1, 1.0])
     xx = np.column_stack([np.arange(1, 9.0), np.ones(8)])
@@ -377,8 +377,8 @@ def test_unused_argument_notes(run):
 
 
 def test_optimize_forward_steps_like_stata(run):
-    """Logit d1 do compat 0406: passos de 1.375 e 1.125 do passo de Newton e
-    erros-padrão iguais aos do Stata até o último dígito."""
+    """d1 logit of compat 0406: steps of 1.375 and 1.125 of the Newton step and
+    standard errors equal to Stata's to the last digit."""
     out = run(r"""mata:
 void lg(todo, b, y, X, v, g, H)
 {

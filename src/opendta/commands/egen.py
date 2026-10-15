@@ -1,11 +1,11 @@
-"""egen ([D] egen): funções de grupo e de linha.
+"""egen ([D] egen): group and row functions.
 
     egen [type] newvar = fcn(arguments) [if] [in] [, by(varlist) options]
 
-Funções de grupo (calculadas dentro de by): count, mean, sd, total/sum,
+Group functions (computed within by): count, mean, sd, total/sum,
 min, max, median, mode, pctile, iqr, kurt, skew, mad, mdev, std, rank.
-Outras: group, tag, seq, fill, cut, concat, ends, diff.
-Funções de linha: rowmean, rowtotal, rowmin, rowmax, rowsd, rownonmiss,
+Others: group, tag, seq, fill, cut, concat, ends, diff.
+Row functions: rowmean, rowtotal, rowmin, rowmax, rowsd, rownonmiss,
 rowmiss, rowfirst, rowlast, rowmedian, rowpctile, anycount, anymatch,
 anyvalue.
 """
@@ -35,13 +35,13 @@ _TYPES = ("byte", "int", "long", "float", "double")
 
 
 def _group_ids(s: "Session", by: list[str], mask: np.ndarray) -> np.ndarray:
-    """Id de grupo (0..k-1) por observação, em ordem crescente das chaves;
-    -1 fora da máscara."""
+    """Group id (0..k-1) per observation, in increasing key order;
+    -1 outside the mask."""
     return group_ids(s.data, by, mask)[0]
 
 
 def _by_reduce(x: np.ndarray, ids: np.ndarray, fn) -> np.ndarray:
-    """Aplica fn(valores do grupo) e espalha o resultado pelo grupo."""
+    """Applies fn(group values) and spreads the result over the group."""
     out = np.full(len(x), M.SYSMISS)
     for g in np.unique(ids[ids >= 0]):
         sel = ids == g
@@ -94,10 +94,10 @@ def _rank(x: np.ndarray, how: str) -> np.ndarray:
 
 
 def _fill(nums: list[float], n: int) -> np.ndarray:
-    """fill(numlist): progressão ou padrão que se repete. Procura o menor
-    período p tal que nums[i+p] - nums[i] seja constante (d); o valor da
-    obs. k é nums[k % p] + (k // p)·d. Ex.: 1 2 3 → 1 2 3 4...;
-    10 20 10 20 → repete; 1 1 2 2 → 1 1 2 2 3 3..."""
+    """fill(numlist): a progression or a repeating pattern. Finds the smallest
+    period p such that nums[i+p] - nums[i] is constant (d); the value of
+    obs. k is nums[k % p] + (k // p)·d. E.g.: 1 2 3 → 1 2 3 4...;
+    10 20 10 20 → repeats; 1 1 2 2 → 1 1 2 2 3 3..."""
     if not nums:
         raise StataError(198, "invalid syntax")
     if len(nums) == 1:
@@ -134,7 +134,7 @@ def cmd_egen(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     vtype, name, fn = m.group(1), m.group(2), m.group(3)
     rest = m.group(4)
-    # argumento: até o parêntese que fecha
+    # argument: up to the closing parenthesis
     depth, k = 1, 0
     while k < len(rest) and depth:
         if rest[k] == "(":
@@ -160,7 +160,7 @@ def cmd_egen(s: "Session", args: str) -> None:
     ids = _group_ids(s, by, mask)
     n = ds.nobs
     is_string = False
-    auto_int = False          # tipo inteiro mínimo (seq(); observado no Stata 14)
+    auto_int = False          # smallest integer type (seq(); observed in Stata 14)
     default_type = s.default_type()
     fn_l = fn.lower()
 
@@ -304,14 +304,14 @@ def cmd_egen(s: "Session", args: str) -> None:
                 elif o.get("decode") and v.value_label:
                     parts.append(cell_text(ds, v, i, use_labels=True).strip())
                 else:
-                    # VERIFICAR: formato padrão de concat para variáveis numéricas
+                    # VERIFY: default format of concat for numeric variables
                     parts.append(_string(v.value(i), fmt) if fmt else _string(v.value(i)))
             t = punct.join(parts)
             texts.append(t[:maxlen] if maxlen else t)
         res = texts
         is_string = True
-        # largura: soma das larguras das variáveis e da pontuação (str6 para
-        # g + "-" + str4, mesmo se o maior resultado tem 5; Stata 14)
+        # width: sum of the widths of the variables and the punctuation (str6 for g + "-" + str4,
+        # even if the longest result has 5; Stata 14)
         widths = []
         for v in vs:
             if v.is_string:
@@ -416,8 +416,8 @@ _LABELS = {"rank": "rank of ({})", "std": "Standardized values of ({})", "group"
 
 
 def _label_for(fn: str, arg: str, o: dict) -> str:
-    """Rótulo que o egen põe na variável nova (observado no Stata 14; as
-    demais funções não rotulam)."""
+    """Label that egen gives the new variable (observed in Stata 14; the
+    other functions do not label)."""
     a = " ".join(arg.split())
     if fn == "rank":
         how = next((k for k in ("field", "track", "unique") if o.get(k)), "")

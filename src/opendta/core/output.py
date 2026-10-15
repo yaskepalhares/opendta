@@ -1,11 +1,11 @@
-"""Saída de texto (janela Results, console, logs).
+"""Text output (Results window, console, logs).
 
-Toda saída passa por `Output`, que mantém a coluna atual (necessária para
-_column() e _continue) e repassa os trechos para os ouvintes registrados:
-a janela Results da interface, o console e arquivos de log.
+All output goes through `Output`, which keeps the current column (needed for
+_column() and _continue) and passes the pieces on to the registered listeners:
+the Results window of the interface, the console and log files.
 
-Estilos seguem as categorias do Stata: "text", "result", "error",
-"input" e "command" (eco do comando digitado).
+Styles follow Stata's categories: "text", "result", "error",
+"input" and "command" (echo of the typed command).
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ STYLES = ("text", "result", "error", "input", "command")
 class Output:
     def __init__(self) -> None:
         self._listeners: list[Listener] = []
-        self.column = 0           # coluna atual (0 = início da linha)
-        self.quiet_depth = 0      # > 0 dentro de quietly
-        self.noisy_depth = 0      # noisily dentro de quietly
-        self.capture_depth = 0    # > 0 dentro de capture: silencia até erros
+        self.column = 0           # current column (0 = start of the line)
+        self.quiet_depth = 0      # > 0 inside quietly
+        self.noisy_depth = 0      # noisily inside quietly
+        self.capture_depth = 0    # > 0 inside capture: silences even errors
 
     # -- ouvintes -------------------------------------------------------
     def add_listener(self, fn: Listener) -> None:
@@ -33,7 +33,7 @@ class Output:
         if fn in self._listeners:
             self._listeners.remove(fn)
 
-    # -- estado de silêncio -----------------------------------------------
+    # -- silence state -----------------------------------------------
     @property
     def suppressed(self) -> bool:
         return self.quiet_depth > 0 and self.noisy_depth == 0
@@ -43,7 +43,7 @@ class Output:
         if not text:
             return
         if force:
-            # mensagens de erro aparecem sob quietly, mas não sob capture
+            # error messages appear under quietly, but not under capture
             if self.capture_depth > 0 and self.noisy_depth == 0:
                 return
         elif self.suppressed:
@@ -65,8 +65,8 @@ class Output:
 
     def error(self, message: str, rc: int, *, show_rc: bool = True,
               hints: list[str] | None = None) -> None:
-        """Mensagem de erro e r(#); — mostradas mesmo sob quietly (mas não
-        sob capture). `hints`: explicação do OpenDTA, entre as duas."""
+        """Error message and r(#); — shown even under quietly (but not
+        under capture). `hints`: OpenDTA's explanation, between the two."""
         self.ensure_line_start(force=True)
         if message:
             self.write(message + "\n", "error", force=True)
@@ -77,8 +77,8 @@ class Output:
             self.write(f"r({rc});\n", "error", force=True)
 
     def echo_command(self, lines) -> None:
-        """Eco '. comando' como a janela Results faz; linhas de continuação
-        aparecem com '> '."""
+        """Echo '. command' as the Results window does; continuation lines
+        appear with '> '."""
         if isinstance(lines, str):
             lines = (lines,)
         self.ensure_line_start()
@@ -88,13 +88,13 @@ class Output:
             self.write("> " + cont + "\n", "command")
 
     def end_command(self) -> None:
-        """Linha em branco depois de cada comando (como no Stata)."""
+        """Blank line after each command (as in Stata)."""
         self.ensure_line_start()
         self.write("\n")
 
 
 class Capture:
-    """Ouvinte que acumula o texto (usado em testes e no modo batch)."""
+    """Listener that accumulates the text (used in tests and in batch mode)."""
 
     def __init__(self) -> None:
         self.parts: list[tuple[str, str]] = []

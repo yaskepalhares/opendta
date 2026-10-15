@@ -1,11 +1,11 @@
-"""preserve/restore e tempvar/tempname/tempfile ([P] preserve, [P] macro).
+"""preserve/restore and tempvar/tempname/tempfile ([P] preserve, [P] macro).
 
-Os temporários e o preserve pertencem ao escopo atual (programa ou
-do-file) e são desfeitos quando ele termina, com ou sem erro. Fora de
-programas e do-files, pertencem à sessão interativa.
+Temporaries and preserve belong to the current scope (program or
+do-file) and are undone when it ends, with or without an error. Outside
+programs and do-files, they belong to the interactive session.
 
-O preserve guarda uma cópia dos dados na memória (os vetores nativos de
-cada variável), o que é rápido; o Stata grava num arquivo temporário.
+preserve keeps a copy of the data in memory (the native vectors of
+each variable), which is fast; Stata writes a temporary file.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def current_scope(s: "Session") -> Scope:
 
 
 def restore_preserved(s: "Session", scope: Scope) -> None:
-    """Fim do programa ou do-file: volta aos dados preservados."""
+    """End of the program or do-file: back to the preserved data."""
     if scope.preserved is not None:
         s.data = scope.preserved
         scope.preserved = None

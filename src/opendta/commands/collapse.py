@@ -1,12 +1,12 @@
-"""collapse, contract, expand e fillin ([D] collapse, contract, expand, fillin).
+"""collapse, contract, expand and fillin ([D] collapse, contract, expand, fillin).
 
-collapse troca os dados por uma linha por grupo de by() com as estatísticas
-pedidas:
+collapse replaces the data with one row per by() group holding the requested
+statistics:
 
     collapse [(stat)] varlist [(stat) ...] [weight] [if] [in] [, by(varlist) cw fast]
 
-e também aceita `(stat) novo=velho`. O rótulo de cada variável nova é
-"(stat) rótulo-ou-nome" (VERIFICAR). collapse não imprime nada.
+and also accepts `(stat) new=old`. The label of each new variable is
+"(stat) label-or-name" (VERIFY). collapse prints nothing.
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ def _stat_name(token: str) -> str:
     if re.fullmatch(r"p\d{1,2}(\.\d+)?", st) and 0 < float(st[1:]) < 100:
         return st
     if st not in _STATS:
-        raise StataError(198, f"{st} invalid statistic")   # VERIFICAR mensagem
+        raise StataError(198, f"{st} invalid statistic")   # VERIFY mensagem
     return st
 
 
 def _parse_clist(s: "Session", text: str) -> list[tuple[str, str, str]]:
-    """Lista de (estatística, variável nova, variável de origem)."""
+    """List of (statistic, new variable, source variable)."""
     toks = re.findall(r"\([^)]*\)|=|[^\s=()]+", text)
     out: list[tuple[str, str, str]] = []
     stat = "mean"
@@ -77,15 +77,15 @@ def _parse_clist(s: "Session", text: str) -> list[tuple[str, str, str]]:
     seen: set[str] = set()
     for _, new, _ in out:
         if new in seen:
-            # VERIFICAR mensagem
+            # VERIFY mensagem
             raise StataError(198, f"{new} specified more than once")
         seen.add(new)
     return out
 
 
 class _Groups:
-    """Observações usadas, agrupadas: `g` é o id do grupo (0..k-1) de cada
-    observação usada, na ordem dos dados."""
+    """Observations used, grouped: `g` is the group id (0..k-1) of each
+    observation used, in data order."""
 
     def __init__(self, ids: np.ndarray, k: int, w: np.ndarray | None, wtype: str):
         self.rows = np.flatnonzero(ids >= 0)
@@ -96,7 +96,7 @@ class _Groups:
 
 
 def _compute(stat: str, x: np.ndarray, G: _Groups) -> np.ndarray:
-    """Estatística `stat` de x (alinhado com G.rows) para cada grupo."""
+    """Statistic `stat` of x (aligned with G.rows) for each group."""
     k = G.k
     out = np.full(k, M.SYSMISS)
     ok = x < M.SYSMISS
@@ -106,7 +106,7 @@ def _compute(stat: str, x: np.ndarray, G: _Groups) -> np.ndarray:
     n_obs = np.bincount(g, minlength=k).astype(np.float64)
     sum_w = np.bincount(g, weights=w, minlength=k)
     if G.wtype in ("aweight", "pweight"):
-        # pesos normalizados para somar o nº de observações do grupo
+        # weights normalized to sum to the number of observations in the group
         with np.errstate(all="ignore"):
             wn = w * (n_obs / sum_w)[g]
         N = n_obs
@@ -209,7 +209,7 @@ def cmd_collapse(s: "Session", args: str) -> None:
     by = s.expand_varlist(str(opts["by"])) if opts.get("by") not in (None, True) else []
     for _, new, _ in items:
         if new in by:
-            raise StataError(198, f"{new} may not be both a by() variable and a target")  # VERIFICAR
+            raise StataError(198, f"{new} may not be both a by() variable and a target")  # VERIFY
     mask = touse(s, Parsed(if_=p.if_, in_=p.in_))
     w, wtype, mask = weights(s, p, mask, ("aweight", "fweight", "iweight", "pweight"))
     if opts.get("cw"):
@@ -234,8 +234,8 @@ def cmd_collapse(s: "Session", args: str) -> None:
             used_labels.add(v.value_label)
     for stat, name, src in items:
         v = ds.get(src)
-        # rótulo com o nome (não o rótulo) da origem e percentis como "p 50";
-        # o formato da origem é mantido (observado no Stata 14)
+        # label with the name (not the label) of the source and percentiles as "p 50"; the source
+        # format is kept (observed in Stata 14)
         shown_stat = f"p {stat[1:]}" if re.fullmatch(r"p\d.*", stat) else stat
         lab = f"({shown_stat}) {src}"
         if v.is_string:
@@ -260,7 +260,7 @@ def cmd_collapse(s: "Session", args: str) -> None:
         elif stat in ("sum", "rawsum"):
             vtype = "double"
         else:
-            vtype = "double" if v.vtype == "double" else "float"           # VERIFICAR origem inteira
+            vtype = "double" if v.vtype == "double" else "float"           # VERIFY origem inteira
         nv = Variable(name, vtype, res, fmt=fmt or default_format(vtype), label=lab, value_label=vlab)
         if vlab:
             used_labels.add(vlab)
@@ -334,10 +334,10 @@ def cmd_contract(s: "Session", args: str) -> None:
     total = freq.sum()
     ptype = "float" if opts.get("float") else "double"
     pfmt = strip_outer_quotes(str(opts["format"])) if opts.get("format") not in (None, True) else "%8.2f"
-    ftype = smallest_type_for(freq) if k else "byte"   # VERIFICAR tipo de _freq
+    ftype = smallest_type_for(freq) if k else "byte"   # VERIFY type of _freq
     if ftype in ("float", "double"):
         ftype = "long"
-    # formatos observados no Stata 14: _freq %12.0g e cfreq %10.0g, mesmo byte
+    # formats observed in Stata 14: _freq %12.0g and cfreq %10.0g, even for byte
     columns = {
         "freq": (freq, ftype, "%12.0g", "Frequency"),
         "cfreq": (np.cumsum(freq), ftype, "%10.0g", "Cumulative frequency"),
@@ -345,7 +345,7 @@ def cmd_contract(s: "Session", args: str) -> None:
         "cpercent": (np.cumsum(freq) / total * 100 if total else freq * 0, ptype, pfmt,
                      "Cumulative percent"),
     }
-    for key in ("freq", "cfreq", "percent", "cpercent"):    # VERIFICAR ordem e rótulos
+    for key in ("freq", "cfreq", "percent", "cpercent"):    # VERIFY order and labels
         if key in out_names:
             vals, vt, fmt, lab = columns[key]
             new.vars.append(Variable(out_names[key], vt, vals, fmt=fmt, label=lab))
@@ -377,7 +377,7 @@ def cmd_expand(s: "Session", args: str) -> None:
         check_name(gen)
     mask = touse(s, Parsed(if_=p.if_, in_=p.in_))
     k = np.broadcast_to(np.asarray(eval_vector(s, p.varlist), dtype=np.float64), (ds.nobs,))
-    # VERIFICAR: valores não inteiros são truncados; < 1 ou missing mantêm a obs.
+    # VERIFY: non-integer values are truncated; < 1 or missing keep the obs.
     copies = np.where(mask & (k < M.SYSMISS) & (k >= 1), np.trunc(np.minimum(k, 2**31)), 1).astype(np.int64)
     extra = np.repeat(np.arange(ds.nobs), copies - 1)
     n0 = ds.nobs
@@ -407,7 +407,7 @@ def cmd_fillin(s: "Session", args: str) -> None:
     ds = s.data
     names = s.expand_varlist(p.varlist)
     if len(names) < 2:
-        raise StataError(102, "too few variables specified")   # VERIFICAR
+        raise StataError(102, "too few variables specified")   # VERIFY
     if ds.has("_fillin"):
         raise StataError(110, "variable _fillin already defined")
     levels = []

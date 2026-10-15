@@ -1,12 +1,12 @@
-"""reshape ([D] reshape): troca entre os formatos largo e longo.
+"""reshape ([D] reshape): converts between the wide and long forms.
 
     reshape long stubnames, i(varlist) [j(varname [values]) string]
     reshape wide stubnames, i(varlist) j(varname [values]) [string]
-    reshape long | reshape wide       (repete a última especificação)
+    reshape long | reshape wide       (repeats the last specification)
 
-Nos stubnames, `@` marca onde fica o valor de j (inc@r → inc80r). A
-tabela impressa segue o Stata; posições das colunas e ordem das variáveis
-no resultado estão marcadas VERIFICAR (caso compat/do/0305_reshape.do).
+In stubnames, `@` marks where the value of j goes (inc@r → inc80r). The
+printed table follows Stata; column positions and the order of variables
+in the result are marked VERIFY (case compat/do/0305_reshape.do).
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
 
 def _explain(s: "Session", head: str, paragraphs: list[str]) -> str:
-    """Mensagem longa do reshape: parágrafos com recuo de 4, quebrados na
-    largura de set linesize (como o Stata)."""
+    """Long reshape message: paragraphs indented by 4, wrapped at the
+    width of set linesize (as in Stata)."""
     import textwrap
     width = int(float(s.settings.get("linesize", 80)))
     out = [head]
@@ -128,12 +128,12 @@ def _parse(s: "Session", args: str):
 def cmd_reshape(s: "Session", args: str) -> None:
     sub, stubs, opts = _parse(s, args)
     if sub not in ("long", "wide"):
-        # VERIFICAR: reshape error, reshape i/j/xij e reshape clear não implementados
+        # VERIFY: reshape error, reshape i/j/xij and reshape clear not implemented
         raise StataError(198, "invalid syntax")
     state = getattr(s, "_reshape", None)
     if not stubs:
         if not state:
-            raise StataError(198, "reshape:  i(), j(), and stubnames not specified")   # VERIFICAR
+            raise StataError(198, "reshape:  i(), j(), and stubnames not specified")   # VERIFY
         stubs, i_text, j_spec, string = state["stubs"], state["i"], state["j"], state["string"]
     else:
         if not opts.get("i"):
@@ -161,7 +161,7 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     if ds.has(jname):
         raise StataError(110, f"variable {jname} already defined")
     check_name(jname)
-    # valores de j e variáveis de cada stub
+    # values of j and variables of each stub
     found: dict[str, dict] = {}
     all_j: set = set()
     for stub in stubs:
@@ -178,18 +178,18 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     else:
         jvals = sorted(all_j)
     if not jvals:
-        raise StataError(111, "no xij variables found")    # VERIFICAR
+        raise StataError(111, "no xij variables found")    # VERIFY
     if not string:
         bad = [x for x in jvals if x != int(x)]
         if bad:
-            raise StataError(198, "j values must be integers")   # VERIFICAR
-    # i deve identificar as observações
+            raise StataError(198, "j values must be integers")   # VERIFY
+    # i must identify the observations
     s.output.write(f"(note: j = {' '.join(_jtext(x) for x in jvals)})\n", "text")
     for stub in stubs:
         for x in jvals:
             if x not in found[stub]:
                 s.output.write(f"(note: {_wide_name(stub, _jtext(x))} not found)\n", "text")
-    # i deve identificar as observações (texto observado no Stata 14)
+    # i must identify the observations (text observed in Stata 14)
     ids, k = group_ids(ds, ivars)
     if k != ds.nobs:
         il = " ".join(ivars)
@@ -205,7 +205,7 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     for stub in stubs:
         ln = _long_name(stub)
         if ds.has(ln) and ln not in xij_names:
-            raise StataError(110, f"variable {ln} already defined")   # VERIFICAR
+            raise StataError(110, f"variable {ln} already defined")   # VERIFY
     n0, k0 = ds.nobs, ds.nvars
     nj = len(jvals)
     rows = np.repeat(np.arange(n0), nj)
@@ -223,18 +223,18 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
         jv = Variable(jname, jtype, np.array([jvals[t] for t in jidx], dtype=object))
     else:
         jarr = np.array(jvals, dtype=np.float64)[jidx]
-        # tipo mínimo, mas formato %9.0g (byte %9.0g; observado no Stata 14)
+        # smallest type, but %9.0g format (byte %9.0g; observed in Stata 14)
         jv = Variable(jname, smallest_type_for(np.array(jvals, dtype=np.float64)), jarr, fmt="%9.0g")
     long_vars: dict[str, Variable] = {}
-    last_of: dict[str, str] = {}             # variável larga mais à direita de cada stub
+    last_of: dict[str, str] = {}             # rightmost wide variable of each stub
     table_rows = []
     for stub in stubs:
         names = [found[stub].get(x) for x in jvals]
         present = [ds.get(nm) for nm in names if nm]
         if not present:
-            raise StataError(111, f"no xij variables found for {stub}")   # VERIFICAR
+            raise StataError(111, f"no xij variables found for {stub}")   # VERIFY
         if len({v.is_string for v in present}) > 1:
-            raise StataError(109, "type mismatch")   # VERIFICAR
+            raise StataError(109, "type mismatch")   # VERIFY
         vtype = present[0].vtype
         for v in present[1:]:
             vtype = common_type(vtype, v.vtype)
@@ -256,8 +256,8 @@ def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,
         last_of[max((nm for nm in names if nm), key=ds.index)] = stub
         table_rows.append((" ".join(nm for nm in names if nm), _long_name(stub)))
     new.vars.append(jv)
-    # cada variável longa fica no lugar da última variável larga do seu stub;
-    # as demais mantêm a ordem (observado no Stata 14)
+    # each long variable takes the place of the last wide variable of its stub; the others keep
+    # their order (observed in Stata 14)
     for v in ds.vars:
         if v.name in ivars:
             continue
@@ -280,7 +280,7 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     jvar = ds.get(jname)
     if jvar.is_string != string:
         if jvar.is_string:
-            raise StataError(109, f"variable {jname} is string; specify string option")   # VERIFICAR
+            raise StataError(109, f"variable {jname} is string; specify string option")   # VERIFY
         raise StataError(109, "type mismatch")
     for stub in stubs:
         ds.get(_long_name(stub))
@@ -292,12 +292,12 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     else:
         jcol = np.asarray(jvar.data, dtype=np.float64)
         if (jcol >= M.SYSMISS).any():
-            raise StataError(498, f"variable {jname} contains missing values")   # VERIFICAR
+            raise StataError(498, f"variable {jname} contains missing values")   # VERIFY
         jvals = [float(x) for x in parse_numlist(jvals_spec)] if jvals_spec else sorted(set(jcol.tolist()))
     jtexts = [_jtext(x) for x in jvals]
     s.output.write(f"(note: j = {' '.join(jtexts)})\n", "text")
     ids, k = group_ids(ds, ivars)
-    # (i, j) único
+    # (i, j) unique
     pair_ids, kp = group_ids(ds, ivars + [jname])
     ilist = " ".join(ivars)
     if kp != n0:
@@ -307,7 +307,7 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
             f"value of j({jname}).  In the long data, variables i() and j() together must uniquely "
             "identify the observations.",
             "@" + _PICTURE,
-            "Type reshape error for a list of the problem observations."]))   # VERIFICAR
+            "Type reshape error for a list of the problem observations."]))   # VERIFY
     others = [v for v in ds.vars if v.name not in ivars and v.name != jname and v.name not in longs]
     from ..core.grouping import first_index
     first = first_index(ids, k)
@@ -338,7 +338,7 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
     pos = {x: t for t, x in enumerate(jvals)}
     jpos = np.array([pos.get(x, -1) for x in (jcol.tolist())], dtype=np.int64)
     if (jpos < 0).any():
-        keep = jpos >= 0   # valores de j fora da lista dada são descartados (VERIFICAR)
+        keep = jpos >= 0   # values of j outside the given list are discarded (VERIFY)
     else:
         keep = np.ones(n0, dtype=bool)
     new = Dataset()
@@ -365,14 +365,14 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
                 vals = Variable("_t", src.vtype, np.full(k, M.SYSMISS)).raw.copy()
             sel = keep & (jpos == t)
             vals[ids[sel]] = src.raw[sel]
-            # rótulo "80 inc" (valor de j e nome da variável longa; Stata 14)
+            # label "80 inc" (value of j and name of the long variable; Stata 14)
             nv = Variable(wn, src.vtype, np.empty(0), fmt=src.fmt, value_label=src.value_label,
                           label=f"{jt} {src.label or ln}")
             nv.raw = vals
             wide_vars[(t, stub)] = nv
             names.append(wn)
         table_rows.append((ln, " ".join(names)))
-    # VERIFICAR: ordem intercalada por j (inc80 ue80 inc81 ue81 ...)
+    # VERIFY: ordem intercalada por j (inc80 ue80 inc81 ue81 ...)
     for t in range(len(jtexts)):
         for stub in stubs:
             new.vars.append(wide_vars[(t, stub)])

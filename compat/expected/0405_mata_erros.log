@@ -4,8 +4,8 @@
   log type:  text
  opened on:   9 Oct 2026, 10:27:08
 
-. * Fase 4: erros no Mata. O bloco "mata" (sem dois-pontos) continua depois
-. * de um erro? E o "mata:"?
+. * Phase 4: errors in Mata. Does the "mata" block (without a colon) continue after
+. * an error? And "mata:"?
 . mata
 ------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 : nada

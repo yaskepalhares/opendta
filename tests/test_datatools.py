@@ -49,7 +49,7 @@ def test_duplicates_tag_list_drop(people):
     run("duplicates tag nome, gen(d)")
     assert col(run, "d") == [2, 0, 2, 0, 2]
     out = run("duplicates list nome x")
-    # um só grupo de duplicatas: sem a coluna group: (Stata 14)
+    # a single group of duplicates: without the group: column (Stata 14)
     assert "| obs:   nome   x |" in out
     assert out.count("ana") == 3
     run("duplicates drop nome")
@@ -138,7 +138,7 @@ def test_tostring(people):
     run('tostring y, gen(ys) format(%5.2f)')
     assert raw(run, "ys")[0] == "0.33"
     run('tostring y, gen(yf) force')
-    assert raw(run, "yf")[0] == ".3333333433"     # float exibido com %12.0g
+    assert raw(run, "yf")[0] == ".3333333433"     # float shown with %12.0g
 
 
 def test_split(run):
@@ -171,7 +171,7 @@ def test_mvdecode_mvencode(run):
 def test_recode(run):
     run("clear\nset obs 6\ngen v = _n\nreplace v = . in 6")
     out = run("recode v (1 2 = 1) (3/4 = 2) (missing = 9) (else = 0)")
-    assert out == "(v: 5 changes made)\n"     # 1 → 1 não conta
+    assert out == "(v: 5 changes made)\n"     # 1 → 1 does not count
     assert col(run, "v") == [1, 1, 2, 2, 0, 9]
 
 
@@ -185,7 +185,7 @@ def test_recode_counts_only_changes(run):
 def test_recode_generate_labels_and_if(run):
     run("clear\nset obs 5\ngen v = _n")
     out = run('recode v (1/2 = 1 "low") (3/max = 2 "high") if v != 4, gen(g)')
-    assert out == "(3 differences between v and g)\n"     # só na amostra (VERIFICAR)
+    assert out == "(3 differences between v and g)\n"     # only in the sample (VERIFY)
     assert col(run, "g")[:3] == [1, 1, 2] and col(run, "g")[3] >= MISS
     ds = run.session.data
     assert ds.value_labels["g"] == {1: "low", 2: "high"}

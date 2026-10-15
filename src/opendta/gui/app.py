@@ -1,4 +1,4 @@
-"""Ponto de entrada da interface gráfica."""
+"""Entry point of the graphical interface."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import sys
 
 
 def open_paths(win, paths) -> None:
-    """Do-files são executados (como o Stata faz com `stata arquivo.do`);
-    bases .dta são carregadas; outros arquivos de texto abrem no Do-file Editor."""
+    """Do-files are run (as Stata does with `stata file.do`);
+    .dta datasets are loaded; other text files open in the Do-file Editor."""
     for a in paths:
         low = str(a).lower()
         if low.endswith(".do"):
@@ -31,11 +31,11 @@ def run_gui(args: list[str] | None = None) -> int:
     app.setApplicationName("OpenDTA")
     prefs = Preferences()
     i18n.set_language(prefs.language)
-    apply_theme(app, prefs.theme)   # antes de criar a janela: sem piscar
+    apply_theme(app, prefs.theme)   # before creating the window: no flicker
     win = MainWindow()
 
-    # macOS: arquivos abertos pelo Finder (duplo clique, "Abrir com", arrastar
-    # para o ícone do Dock) chegam como QFileOpenEvent, não como argumentos
+    # macOS: files opened from the Finder (double click, "Open With", dragging onto the Dock icon)
+    # arrive as QFileOpenEvent, not as arguments
     class _FileOpen(QObject):
         def eventFilter(self, obj, event):  # noqa: N802
             if event.type() == QEvent.Type.FileOpen:

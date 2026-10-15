@@ -1,4 +1,4 @@
-* Fase 1a: criação de dados, tipos, generate/replace, describe, list, count.
+* Phase 1a: creating data, types, generate/replace, describe, list, count.
 clear
 set obs 6
 gen id = _n

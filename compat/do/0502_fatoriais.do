@@ -1,4 +1,4 @@
-* Fase 5a: variáveis fatoriais e interações em regress.
+* Phase 5a: factor variables and interactions in regress.
 clear
 estimates clear
 ereturn clear

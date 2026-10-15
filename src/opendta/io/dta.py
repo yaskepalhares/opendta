@@ -1,21 +1,21 @@
-"""Leitura e gravação de arquivos .dta.
+"""Reading and writing .dta files.
 
-Implementação própria dos formatos 113 a 115 (Stata 8 a 12, só leitura em
-113), 117 (Stata 13), 118 (Stata 14/15) e 119 (Stata 15+, mais de 32.767
-variáveis), escrita a partir da especificação pública do formato. Formatos
-anteriores a 113 são lidos pela ReadStat (pyreadstat), que também serve,
-nos testes, de verificação independente de tudo o que este módulo lê e
-grava.
+OpenDTA's own implementation of formats 113 to 115 (Stata 8 to 12, read only for
+113), 117 (Stata 13), 118 (Stata 14/15) and 119 (Stata 15+, more than 32,767
+variables), written from the public specification of the format. Formats
+older than 113 are read through ReadStat (pyreadstat), which also serves,
+in the tests, as an independent check of everything this module reads and
+writes.
 
-Estrutura dos formatos 117+ (seções delimitadas por marcadores de texto):
+Structure of formats 117+ (sections delimited by text tags):
 
     <stata_dta><header>...</header><map>...</map><variable_types>...
     <varnames>...<sortlist>...<formats>...<value_label_names>...
     <variable_labels>...<characteristics>...<data>...<strls>...
     <value_labels>...</stata_dta>
 
-VERIFICAR: os detalhes de layout estão cobertos por testes de ida e volta
-contra a ReadStat e por arquivos gravados e abertos no Stata 14.
+VERIFY: the layout details are covered by round-trip tests
+against ReadStat and by files saved and opened in Stata 14.
 """
 
 from __future__ import annotations
@@ -31,14 +31,14 @@ from ..core import missing as M
 from ..core.dataset import Dataset, Variable, default_format
 from ..core.errors import StataError
 
-# códigos de tipo (117+)
+# type codes (117+)
 T_DOUBLE, T_FLOAT, T_LONG, T_INT, T_BYTE = 65526, 65527, 65528, 65529, 65530
 T_STRL = 32768
 _TYPE_CODE = {"double": T_DOUBLE, "float": T_FLOAT, "long": T_LONG, "int": T_INT, "byte": T_BYTE}
 _CODE_TYPE = {v: k for k, v in _TYPE_CODE.items()}
 _NP = {"double": "f8", "float": "f4", "long": "i4", "int": "i2", "byte": "i1"}
-# os vetores nativos das variáveis (core/storage.py) já usam a codificação de
-# missing do formato: ler e gravar é copiar bytes
+# the native vectors of the variables (core/storage.py) already use the format's missing encoding:
+# reading and writing is copying bytes
 _SIZE = {"double": 8, "float": 4, "long": 4, "int": 2, "byte": 1}
 
 
@@ -46,7 +46,7 @@ _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 
 
 class _Layout:
-    """Tamanhos de campos que mudam entre as versões 117, 118 e 119."""
+    """Field sizes that change between versions 117, 118 and 119."""
 
     def __init__(self, release: int):
         self.release = release
@@ -60,10 +60,10 @@ class _Layout:
 
 
 # ---------------------------------------------------------------------------
-# Gravação (formato 118)
+# Writing (format 118)
 # ---------------------------------------------------------------------------
 
-_ENC = {"enc": "utf-8"}   # formato 117 (Stata 13) não é Unicode: latin-1
+_ENC = {"enc": "utf-8"}   # format 117 (Stata 13) is not Unicode: latin-1
 
 
 def _enc(text: str) -> bytes:
@@ -80,8 +80,8 @@ def _timestamp(now: _dt.datetime | None = None) -> str:
     return f"{now.day:2d} {_MONTHS[now.month - 1]} {now.year} {now.hour:02d}:{now.minute:02d}"
 
 
-CHUNK_BYTES = 32 * 2**20      # dados gravados e lidos em blocos de ~32 MB
-_CACHE_MAX = 50_000           # valores distintos por variável string antes de desistir do cache
+CHUNK_BYTES = 32 * 2**20      # data written and read in blocks of ~32 MB
+_CACHE_MAX = 50_000           # distinct values per string variable before giving up on the cache
 
 
 def _widths(ds: Dataset) -> list[int]:
@@ -98,7 +98,7 @@ def _widths(ds: Dataset) -> list[int]:
 
 def _fill_block(vars_, widths: list[int], rec: int, start: int, stop: int, release: int,
                 strls: list[tuple[int, int, bytes]]) -> np.ndarray:
-    """Registros das observações start..stop-1, prontos para o disco."""
+    """Records of observations start..stop-1, ready for the disk."""
     n = stop - start
     block = np.zeros((n, rec), dtype=np.uint8)
     pos = 0
@@ -118,7 +118,7 @@ def _fill_block(vars_, widths: list[int], rec: int, start: int, stop: int, relea
                 strls.append((vv, oo, _enc(str(text))))
             block[:, pos:pos + 8] = refs
         elif v.is_string:
-            # dtype S{w}: completa com zeros, como no formato
+            # dtype S{w}: pads with zeros, as in the format
             enc = np.array([_enc(str(x))[:w] for x in part], dtype=f"S{w}")
             block[:, pos:pos + w] = enc.view(np.uint8).reshape(n, w)
         else:
@@ -129,7 +129,7 @@ def _fill_block(vars_, widths: list[int], rec: int, start: int, stop: int, relea
 
 
 # ---------------------------------------------------------------------------
-# Formatos 114 e 115 (Stata 10 a 12): cabeçalho binário de tamanho fixo
+# Formats 114 and 115 (Stata 10 to 12): fixed-size binary header
 # ---------------------------------------------------------------------------
 
 _OLD_TYPE = {"byte": 251, "int": 252, "long": 253, "float": 254, "double": 255}
@@ -138,8 +138,8 @@ OLD_STR_MAX = 244
 
 
 def _old_vars(ds: Dataset) -> tuple[list, list[str]]:
-    """Variáveis prontas para 114/115: strL e str acima de 244 viram str244
-    (cortando o texto). Devolve (variáveis, nomes das que foram cortadas)."""
+    """Variables ready for 114/115: strL and str above 244 become str244
+    (cutting the text). Returns (variables, names of those that were cut)."""
     out, cut = [], []
     for v in ds.vars:
         if v.is_string and (v.vtype == "strL" or int(v.vtype[3:]) > OLD_STR_MAX):
@@ -161,7 +161,7 @@ def _write_old_body(ds: Dataset, tmp: Path, release: int, ts_text: str) -> None:
         raise StataError(900, "too many variables for this file format")
     with open(tmp, "wb") as f:
         out = bytearray()
-        out += bytes([release, 2, 1, 0])               # versão, LOHI, filetype, livre
+        out += bytes([release, 2, 1, 0])               # version, LOHI, filetype, unused
         out += K.to_bytes(2, "little") + N.to_bytes(4, "little")
         out += _fixed(ds.label, 81)
         out += _fixed(ts_text, 18)
@@ -179,7 +179,7 @@ def _write_old_body(ds: Dataset, tmp: Path, release: int, ts_text: str) -> None:
             out += _fixed(v.value_label, 33)
         for v in vars_:
             out += _fixed(v.label, 81)
-        # campos de expansão: características
+        # expansion fields: characteristics
         for owner, chars in getattr(ds, "chars", {}).items():
             for cname, content in chars.items():
                 body = _fixed(owner, 33) + _fixed(cname, 33) + _enc(content) + b"\x00"
@@ -324,12 +324,12 @@ def _read_old(path: Path) -> Dataset:
 
 def write_dta(ds: Dataset, path: str | Path, *, release: int = 118,
               timestamp: str | None = None) -> str:
-    """Grava ds em path e devolve o carimbo de data gravado no cabeçalho.
+    """Writes ds to path and returns the date stamp written in the header.
 
-    Os dados vão para o disco em blocos de linhas, sem montar o arquivo
-    inteiro na memória. A gravação é feita num arquivo temporário na mesma
-    pasta, que só substitui o destino no fim: uma falha no meio não destrói
-    o arquivo antigo."""
+    The data go to disk in blocks of lines, without building the whole file
+    in memory. Writing goes to a temporary file in the same
+    folder, which replaces the target only at the end: a failure midway does not destroy
+    the old file."""
     if release not in (114, 115, 117, 118, 119):
         raise StataError(198, f"dta release {release} not supported")
     if release == 118 and ds.nvars > 32767:
@@ -389,7 +389,7 @@ def _write_body(ds: Dataset, tmp: Path, release: int, L: "_Layout", K: int, N: i
         offsets["map"] = here()
         tag("map")
         map_pos = here()
-        out.extend(b"\x00" * 8 * 14)          # preenchido no fim
+        out.extend(b"\x00" * 8 * 14)          # filled in at the end
         end("map")
 
         offsets["variable_types"] = here()
@@ -444,7 +444,7 @@ def _write_body(ds: Dataset, tmp: Path, release: int, L: "_Layout", K: int, N: i
                 out.extend(b"<ch>" + len(body).to_bytes(4, "little") + body + b"</ch>")
         end("characteristics")
 
-        # dados: registros de largura fixa, gravados em blocos de linhas
+        # data: fixed-width records, written in blocks of lines
         offsets["data"] = here()
         tag("data")
         flush()
@@ -533,9 +533,9 @@ class _Reader:
 
 
 def _cstr(b: bytes, release: int = 118) -> str:
-    """Texto terminado em zero. O Stata 13 (formato 117) e anteriores gravam
-    Latin-1, mas outros programas gravam UTF-8 nesses formatos: tenta UTF-8
-    primeiro e cai para Latin-1."""
+    """Zero-terminated text. Stata 13 (format 117) and earlier write
+    Latin-1, but other programs write UTF-8 in these formats: try UTF-8
+    first and fall back to Latin-1."""
     j = b.find(b"\x00")
     raw = b if j == -1 else b[:j]
     try:
@@ -545,8 +545,8 @@ def _cstr(b: bytes, release: int = 118) -> str:
 
 
 def _fix_text(text: str) -> str:
-    """Desfaz UTF-8 lido como Latin-1 ('joÃ£o' -> 'joão'), caso da ReadStat
-    com arquivos antigos gravados em UTF-8."""
+    """Undoes UTF-8 read as Latin-1 ('joÃ£o' -> 'joão'), the case of ReadStat
+    with old files written in UTF-8."""
     try:
         fixed = text.encode("latin-1").decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
@@ -568,9 +568,9 @@ def read_dta(path: str | Path) -> Dataset:
 
 
 def _read_117plus(f, path: Path) -> Dataset:
-    """Lê os metadados de uma vez, os dados em blocos de linhas direto para
-    os vetores nativos de cada variável, e o fim do arquivo (strLs e rótulos)
-    de uma vez."""
+    """Reads the metadata at once, the data in blocks of lines straight into
+    the native vectors of each variable, and the end of the file (strLs and labels)
+    at once."""
     f.seek(0)
     head = f.read(4096)
     r = _Reader(head)
@@ -593,7 +593,7 @@ def _read_117plus(f, path: Path) -> Dataset:
     offsets = [r.uint(8) for _ in range(14)]
     bo = r.bo
 
-    # metadados: tudo antes de <data>
+    # metadata: everything before <data>
     f.seek(0)
     r = _Reader(f.read(offsets[9]))
     r.bo = bo
@@ -641,7 +641,7 @@ def _read_117plus(f, path: Path) -> Dataset:
         else:
             raise StataError(610, f"unknown variable type {c}")
 
-    # dados, em blocos
+    # data, in blocks
     f.seek(offsets[9])
     if f.read(6) != b"<data>":
         raise StataError(610, "file not Stata format")
@@ -654,8 +654,8 @@ def _read_117plus(f, path: Path) -> Dataset:
             cols.append(np.empty(N, dtype=object))
         else:
             cols.append(np.empty(N, dtype=_NP[vtype]))
-    # strings repetidas (categorias, municípios...) viram um único objeto str:
-    # 8 bytes por célula em vez de ~60. Desliga para variáveis quase únicas.
+    # repeated strings (categories, municipalities...) become a single str object: 8 bytes per cell
+    # instead of ~60. Turned off for nearly unique variables.
     caches: list[dict | None] = [{} for _ in vtypes]
     step = max(1, CHUNK_BYTES // max(rec, 1))
     for start in range(0, N, step):
@@ -687,11 +687,11 @@ def _read_117plus(f, path: Path) -> Dataset:
                         caches[j] = None
             else:
                 raw = np.ascontiguousarray(part).view(bo + _NP[vtype]).reshape(n)
-                cols[j][start:stop] = raw            # converte a ordem dos bytes se preciso
+                cols[j][start:stop] = raw            # converts the byte order if needed
             pos += w
         del block, buf
 
-    # fim do arquivo: strLs e rótulos de valor
+    # end of the file: strLs and value labels
     f.seek(offsets[10])
     r = _Reader(f.read())
     r.bo = bo
@@ -768,13 +768,13 @@ def _read_117plus(f, path: Path) -> Dataset:
 
 
 def _read_legacy(path: Path) -> Dataset:
-    """Formatos até 115 (Stata 12 e anteriores), lidos pela ReadStat."""
+    """Formats up to 115 (Stata 12 and earlier), read through ReadStat."""
     try:
         import pyreadstat
     except ImportError:
         raise StataError(610, "file format not supported: install pyreadstat to read older .dta files")
     try:
-        # saída em dicionário de listas: dispensa o pandas
+        # output as a dict of lists: no need for pandas
         cols, meta = pyreadstat.read_dta(str(path), user_missing=True, output_format="dict")
     except Exception as e:  # noqa: BLE001
         raise StataError(610, f"file not Stata format ({e})")

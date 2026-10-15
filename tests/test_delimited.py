@@ -79,7 +79,7 @@ def test_type(run, here):
     assert run.rc == 601 and "file nada.txt not found" in out
 
 
-# -- leitura em blocos (CHUNK_ROWS pequeno força vários blocos) ------------------------
+# -- reading in blocks (a small CHUNK_ROWS forces several blocks) ------------------------
 
 @pytest.fixture
 def small_chunks(monkeypatch):
@@ -88,8 +88,8 @@ def small_chunks(monkeypatch):
 
 
 def test_chunked_late_text_and_ragged(here, small_chunks):
-    # 'cod' é numérico nos primeiros blocos e vira texto na 8ª linha;
-    # a 3ª coluna só aparece na 5ª linha; linhas em branco no fim somem
+    # 'cod' is numeric in the first blocks and becomes text on the 8th line; the 3rd column only
+    # appears on the 5th line; blank lines at the end disappear
     lines = ["id,cod"] + [f"{i},0{i}" for i in range(1, 8)] + ["8,X9"]
     lines[5] += ",extra"
     (here / "c.csv").write_text("\n".join(lines) + "\n,\n\n")
@@ -107,7 +107,7 @@ def test_chunked_numbers_and_missing(here, small_chunks):
     from opendta.core import missing as M
     b = ds.get("b").data
     assert M.missing_name(b[0]) == ".a" and M.is_missing(b[1]) and b[2] == 100
-    assert ds.get("c").is_string                    # 'nan' não é número no Stata
+    assert ds.get("c").is_string                    # 'nan' is not a number in Stata
 
 
 def test_rowrange_colrange_latin1(here, small_chunks):

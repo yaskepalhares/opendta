@@ -1,7 +1,7 @@
-"""Resultados de estimação: e(b), e(V), e(sample) e a tabela de coeficientes
+"""Estimation results: e(b), e(V), e(sample) and the coefficient table
 ([R] estimation commands, [P] ereturn, [R] estimates).
 
-A tabela segue o layout do Stata 14 (78 colunas):
+The table follows the Stata 14 layout (78 columns):
 
     ------------------------------------------------------------------------------
            price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
@@ -36,7 +36,7 @@ def g9(x: float, fmt: str = "%9.0g") -> str:
 
 
 def abbrev(name: str, width: int = 12) -> str:
-    """Abrevia como o Stata nas tabelas: começo~fim."""
+    """Abbreviates as Stata does in tables: start~end."""
     if len(name) <= width:
         return name
     return name[: width - 1] + "~" if "#" not in name else name[: width - 1] + "~"
@@ -44,21 +44,21 @@ def abbrev(name: str, width: int = 12) -> str:
 
 @dataclass
 class CoefRow:
-    """Uma linha da tabela."""
+    """One row of the table."""
     kind: str                     # "coef", "header", "blank", "base", "omitted", "empty"
     label: str = ""
     b: float = 0.0
     se: float = 0.0
     eq: str = ""
-    name: str = ""                # nome em e(b), para estimates table
+    name: str = ""                # name in e(b), for estimates table
 
 
 @dataclass
 class Estimates:
-    """O que uma estimação deixa para a pós-estimação."""
+    """What an estimation leaves for postestimation."""
     cmd: str
     depvar: str
-    names: list[str]                       # colnames de e(b), com b./o.
+    names: list[str]                       # colnames of e(b), with b./o.
     b: np.ndarray
     V: np.ndarray
     N: int
@@ -70,7 +70,7 @@ class Estimates:
 
 def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
          macros: list[tuple[str, str]], sample: np.ndarray, *, extra_mats=()) -> None:
-    """Grava e(): o Stata lista na ordem inversa da gravação (ver progcmd)."""
+    """Stores e(): Stata lists in the reverse order of storage (see progcmd)."""
     from ..commands.matrix import Matrix
     e: dict = {}
     for k, v in reversed(macros):
@@ -86,8 +86,7 @@ def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
         m.roweq = eqs if name == "V" else ["_"]
         m.coleq = eqs
         e[name] = m
-    # matrizes primeiro na inserção = listadas por último; escalares e macros
-    # mantêm a ordem acima
+    # matrices first in insertion = listed last; scalars and macros keep the order above
     s.e = e
     s.data.esample = np.asarray(sample, dtype=bool).copy()
     s._estimates = est
@@ -133,10 +132,10 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
     ci = f"[{lv}% Conf. Interval]"
     out.write(LINE + "\n", "text")
     if top_line is not None:
-        # bootstrap: "Observed   Bootstrap ... Normal-based" (VERIFICAR alinhamento)
+        # bootstrap: "Observed   Bootstrap ... Normal-based" (VERIFY alinhamento)
         out.write(top_line + "\n", "text")
     elif vcetype:
-        # VERIFICAR alinhamento do rótulo (Robust, Bootstrap...)
+        # VERIFY alignment of the label (Robust, Bootstrap...)
         lab = vcetype
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."
         out.write(f"{'':>12} |" + " " * max(start - 14, 1) + lab + "\n", "text")
@@ -169,15 +168,15 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             out.write("          0  (empty)\n", "result")
             continue
         if r.kind == "fixed":
-            # exposure()/offset(): coeficiente fixo em 1 (compat 0507)
+            # exposure()/offset(): coefficient fixed at 1 (compat 0507)
             out.write(f"          1  {r.eq}\n", "result")
             continue
         b, se = r.b, r.se
         if r.kind == "aux":
-            # parâmetros auxiliares (/cut1, /sigma, alpha): sem z e P>|z|; o
-            # intervalo pode vir pronto (transformado) em r.eq = "lo hi"
+            # ancillary parameters (/cut1, /sigma, alpha): no z and P>|z|; the interval may come
+            # ready (transformed) in r.eq = "lo hi"
             if not (np.isfinite(se) and abs(se) < SYS):
-                # erro-padrão missing (alpha na fronteira, compat 0602)
+                # missing standard error (alpha at the boundary, compat 0602)
                 out.write(f"  {g9(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
                 continue
             if r.eq:
@@ -196,7 +195,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             out.write(f"  {g9(b):>9}  {g9(se):>9}  {tval:>7.2f}  {p:>6.3f}    {g9(lo):>9}   {g9(hi):>9}\n",
                       "result")
         else:
-            # VERIFICAR: erro-padrão zero ou missing (constrained)
+            # VERIFY: zero or missing standard error (constrained)
             out.write(f"  {g9(b):>9}  {g9(se) if se == 0 else '.':>9}  {'.':>7}  {'.':>6}    "
                       f"{'.':>9}   {'.':>9}\n", "result")
     if footer:
@@ -205,8 +204,8 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
 
 def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, float],
                       ds, *, constant: bool, show_base: bool = False) -> list[CoefRow]:
-    """Linhas da tabela: termos fatoriais e variáveis com operadores de séries
-    temporais ganham cabeçalho e linha em branco antes e depois."""
+    """Table rows: factor terms and variables with time-series operators
+    get a header and a blank line before and after."""
     rows: list[CoefRow] = []
     i = 0
     n = len(cols)
@@ -228,8 +227,8 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
                                      or (c.group[0] == "v" and c.rowlab != "--."))
         if (not grouped and c.group and c.group[0] == "t" and not interaction and len(shown) == 1
                 and _has_value_label(ds, shown[0])):
-            # fator com um nível só e rótulo de valor: cabeçalho e o rótulo,
-            # sem linha em branco depois (compat 0601: "sexo |" / "fem  |")
+            # factor with a single level and a value label: header and the label, without a blank
+            # line after (compat 0601: "sexo |" / "fem  |")
             blank_before()
             g = shown[0]
             rows.append(CoefRow("header", c.labels[0]))
@@ -241,8 +240,8 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
             i = j
             continue
         if not grouped:
-            # uma linha só: "x", "1.h" (fator com um nível), "c.x#c.x"; as
-            # interações ficam entre linhas em branco (compat 0502)
+            # a single line: "x", "1.h" (factor with one level), "c.x#c.x"; interactions go between
+            # blank lines (compat 0502)
             if interaction:
                 blank_before()
             for g in shown:
@@ -280,7 +279,7 @@ def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, f
 
 
 def _has_value_label(ds, col) -> bool:
-    """O nível do fator tem rótulo de valor?"""
+    """Does the factor level have a value label?"""
     try:
         var = col.name.split(".", 1)[1]
         v = ds.get(var)
@@ -301,7 +300,7 @@ def _strip_b(name: str) -> str:
 
 
 def _cell_label(ds, col) -> str:
-    """Nível de um fator: o rótulo de valor, se houver (VERIFICAR largura)."""
+    """Level of a factor: its value label, if any (VERIFY width)."""
     from .fvars import _level_text
     parts = col.name.split("#")
     texts = []

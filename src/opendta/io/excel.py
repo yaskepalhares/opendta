@@ -1,8 +1,8 @@
-"""Planilhas do Excel: leitura (.xlsx, e .xls com xlrd) e gravação (.xlsx).
+"""Excel spreadsheets: reading (.xlsx, and .xls with xlrd) and writing (.xlsx).
 
-Usado por import excel / export excel. As regras seguem o manual
-[D] import excel do Stata 14; os pontos não documentados estão marcados com
-VERIFICAR e têm casos em compat/do/0106_excel.do.
+Used by import excel / export excel. The rules follow Stata 14's
+[D] import excel manual; undocumented points are marked
+VERIFY and have cases in compat/do/0106_excel.do.
 """
 
 from __future__ import annotations
@@ -65,12 +65,12 @@ class ExcelOptions:
     sheet: str | None = None
     cellrange: str | None = None
     firstrow: bool = False
-    case: str = "preserve"          # VERIFICAR: padrão do import excel
+    case: str = "preserve"          # VERIFY: import excel's default
     allstring: bool = False
 
 
 def _open(path: Path):
-    """Devolve (nomes das planilhas, função que lê uma planilha em linhas)."""
+    """Returns (sheet names, a function that reads a sheet as rows)."""
     suffix = path.suffix.lower()
     if suffix == ".xls":
         try:
@@ -106,7 +106,7 @@ def _open(path: Path):
 
 
 def _trim(rows: list[list]) -> list[list]:
-    """Remove linhas e colunas vazias no fim."""
+    """Removes empty rows and columns at the end."""
     while rows and all(v is None or v == "" for v in rows[-1]):
         rows.pop()
     width = 0
@@ -140,10 +140,10 @@ def _cell_text(v) -> str:
     if isinstance(v, float) and v.is_integer() and abs(v) < 1e15:
         return str(int(v))
     if isinstance(v, _dt.datetime):
-        # allstring: a data como o Excel a mostra (m/d/aaaa; observado no Stata 14)
+        # allstring: the date as Excel shows it (m/d/yyyy; observed in Stata 14)
         if not (v.hour or v.minute or v.second or v.microsecond):
             return f"{v.month}/{v.day}/{v.year}"
-        return f"{v.month}/{v.day}/{v.year} {v.hour}:{v.minute:02d}:{v.second:02d}"   # VERIFICAR
+        return f"{v.month}/{v.day}/{v.year} {v.hour}:{v.minute:02d}:{v.second:02d}"   # VERIFY
     if isinstance(v, _dt.date):
         return f"{v.month}/{v.day}/{v.year}"
     return str(v)
@@ -155,8 +155,7 @@ def _make_name(raw: str, case: str) -> str | None:
         t = t.lower()
     elif case == "upper":
         t = t.upper()
-    # caracteres inválidos são removidos ("Renda mensal" → Rendamensal,
-    # observado no Stata 14)
+    # invalid characters are removed ("Renda mensal" → Rendamensal, observed in Stata 14)
     t = re.sub(r"[^A-Za-z0-9_]", "", t)[:32]
     if not t or not NAME_RE.match(t) or t in RESERVED:
         return None
@@ -184,7 +183,7 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
         first_col = 1
     rows = _trim(rows)
     if not opts.cellrange:
-        # VERIFICAR: linhas vazias no início também são descartadas
+        # VERIFY: empty rows at the start are also dropped
         while rows and all(v is None or v == "" for v in rows[0]):
             rows.pop(0)
 
@@ -204,7 +203,7 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
         if name is None or name in used:
             name = letters
         used.add(name)
-        # VERIFICAR: o cabeçalho vira rótulo da variável
+        # VERIFY: the header becomes the variable label
         label = raw_name.strip() if header is not None else ""
         col = [r[j] if j < len(r) else None for r in rows]
         filled = [v for v in col if v is not None and v != ""]
@@ -224,19 +223,18 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
                 vals[i] = (delta.days * 86_400_000 + delta.seconds * 1000
                            + delta.microseconds // 1000) if has_time else delta.days
             vtype = "double" if has_time else smallest_type_for(vals)
-            # VERIFICAR: formato de data-hora (o de data foi observado no Stata 14)
+            # VERIFY: datetime format (the date one was observed in Stata 14)
             var = Variable(name, vtype, vals,
                            fmt="%tcnn/dd/CCYY_hh:MM:SS" if has_time else "%tdnn/dd/CCYY")
         elif is_num:
             vals = np.array([M.SYSMISS if v is None or v == "" else float(v) for v in col])
             vtype = smallest_type_for(vals)
             if vtype == "float":
-                vtype = "double"        # VERIFICAR: decimais do Excel ficam double
+                vtype = "double"        # VERIFY: Excel decimals stay double
             var = Variable(name, vtype, vals)
         else:
-            # datas como texto ficam alinhadas à direita em 10 posições: o
-            # Stata cria str10 e lista "1/1/2020" numa coluna de 10 (VERIFICAR
-            # se o espaço fica mesmo no texto)
+            # dates as text are right-aligned in 10 positions: Stata creates str10 and lists
+            # "1/1/2020" in a column of 10 (VERIFY whether the space really is in the text)
             texts = [_cell_text(v).rjust(10) if isinstance(v, (_dt.datetime, _dt.date)) else _cell_text(v)
                      for v in col]
             width = max((str_len(s) for s in texts), default=1) or 1
@@ -248,13 +246,13 @@ def read_excel(path: str | Path, opts: ExcelOptions | None = None) -> Dataset:
 
 
 # ---------------------------------------------------------------------------
-# gravação
+# writing
 # ---------------------------------------------------------------------------
 
 @dataclass
 class ExcelWriteOptions:
     sheet: str = "Sheet1"
-    mode: str = "new"            # new | replace (arquivo) | modify | sheetreplace
+    mode: str = "new"            # new | replace (file) | modify | sheetreplace
     cell: str = "A1"
     firstrow: str | None = None  # None | variables | varlabels
     nolabel: bool = False
@@ -270,7 +268,7 @@ def _date_kind(v: Variable) -> str:
 
 
 def _excel_values(ds: Dataset, v: Variable, idx: np.ndarray, nolabel: bool) -> list:
-    """Valores de uma coluna para a planilha (None = célula vazia)."""
+    """Values of a column for the spreadsheet (None = empty cell)."""
     if v.is_string:
         return [s if s != "" else None for s in v.raw[idx].tolist()]
     dec = storage.decode(v.raw[idx], v.vtype)
@@ -294,13 +292,13 @@ def _excel_values(ds: Dataset, v: Variable, idx: np.ndarray, nolabel: bool) -> l
     return out
 
 
-_NUMBER_FORMAT = {"date": "m/d/yyyy", "datetime": "m/d/yyyy h:mm:ss"}  # VERIFICAR
+_NUMBER_FORMAT = {"date": "m/d/yyyy", "datetime": "m/d/yyyy h:mm:ss"}  # VERIFY
 
 
 def write_excel(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarray,
                 opts: ExcelWriteOptions | None = None) -> None:
-    """Arquivo novo: modo write_only do openpyxl (rápido, linha a linha).
-    sheetmodify/sheetreplace: abre a pasta de trabalho existente."""
+    """New file: openpyxl's write_only mode (fast, row by row).
+    sheetmodify/sheetreplace: opens the existing workbook."""
     import openpyxl
     from openpyxl.cell import WriteOnlyCell
 

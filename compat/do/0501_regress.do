@@ -1,4 +1,4 @@
-* Fase 5a: regress (tabela ANOVA, coeficientes, vce, pesos, opções).
+* Phase 5a: regress (ANOVA table, coefficients, vce, weights, options).
 clear
 estimates clear
 ereturn clear
