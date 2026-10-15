@@ -344,3 +344,35 @@ def test_menu_templates_fill_command(app):
     w.insert_command("histogram ")
     assert w.command.toPlainText() == "histogram "
     w.close()
+
+
+def test_error_explanation_links_open_help(app):
+    """The "help topic" at the end of an explanation is a link in Results: clicking it runs
+    the help command."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.session.settings["hints"] = "on"
+    w.run_command("set obs 2")
+    w.run_command("generate y = 1")
+    w.run_command("list if y = 1")
+    assert "Learn more: help operators" in w.results.toPlainText()
+    ran = []
+    w.run_command = ran.append          # the click runs a command; record it instead
+    w.results.linkActivated.disconnect()
+    w.results.linkActivated.connect(w.run_command)
+    w.results.resize(900, 600)
+    w.results.show()
+    found = w.results.document().find("help operators")
+    assert not found.isNull()
+    at = w.results.textCursor()
+    at.setPosition(found.selectionStart() + 3)
+    w.results.setTextCursor(at)
+    w.results.ensureCursorVisible()
+    rect = w.results.cursorRect(at)
+    QTest.mouseClick(w.results.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(rect.right() + 2, rect.center().y()))
+    assert ran == ["help operators"]
+    w.close()

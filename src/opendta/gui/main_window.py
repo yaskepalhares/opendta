@@ -130,6 +130,7 @@ class MainWindow(QMainWindow):
         self.results = ResultsView()
         self.command = CommandLine()
         self.command.submitted.connect(self.run_commands)
+        self.results.linkActivated.connect(self.run_command)    # "help topic" of an explanation
 
         # Results and Command separated by a splitter that can be dragged both ways
         split = QSplitter(Qt.Orientation.Vertical)

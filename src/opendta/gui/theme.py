@@ -23,8 +23,10 @@ class ResultsScheme:
         "input": "#000000",
         "command": "#000000",
         "hint": "#6b5a00",      # error explanations (OpenDTA)
+        "hint_label": "#6b5a00",  # "How to fix:", "Learn more:" (bold)
+        "hint_link": "#1f5fbf",   # "help topic" links (underlined, clickable)
     })
-    bold: frozenset[str] = frozenset({"result", "input"})
+    bold: frozenset[str] = frozenset({"result", "input", "hint_label"})
 
 
 STANDARD = ResultsScheme()
@@ -38,6 +40,8 @@ DARK_RESULTS = ResultsScheme(
         "input": "#ffffff",
         "command": "#d4d4d6",
         "hint": "#e5c07b",
+        "hint_label": "#e5c07b",
+        "hint_link": "#7cb7ff",
     },
 )
 

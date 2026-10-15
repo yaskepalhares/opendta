@@ -137,7 +137,7 @@ def cmd_error(s: "Session", args: str) -> None:
     if rc == 0:
         return
     # error raised on purpose (error #): no OpenDTA explanation
-    raise StataError(rc, STANDARD_MESSAGES.get(rc, ""), hint="")
+    raise StataError(rc, STANDARD_MESSAGES.get(rc, ""), explain=False)
 
 
 @command("continue")

@@ -217,7 +217,7 @@ def match_options(text: str, spec: dict[str, int]) -> dict[str, str | bool]:
                 result[full] = arg if arg is not None else True
                 break
         else:
-            raise StataError(198, f"option {name} not allowed")
+            raise StataError(198, f"option {name} not allowed", options=list(spec))
     return result
 
 

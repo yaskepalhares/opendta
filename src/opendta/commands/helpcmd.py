@@ -34,6 +34,7 @@ ALIASES = {
     "infix": "infile", "restore": "preserve", "tempvar": "preserve", "tempfile": "preserve",
     "tempname": "preserve", "return": "program", "ereturn": "program", "sreturn": "program",
     "args": "syntax", "gettoken": "syntax", "marksample": "syntax", "markout": "syntax",
+    "bysort": "by", "bys": "by", "missing_values": "missing", "mi_values": "missing",
     "mat": "matrix", "cmdlog": "log", "set_hints": "hints", "hint": "hints",
     "set_superscript": "superscript", "set_numerics": "numerics",
     "su": "summarize", "sum": "summarize", "summ": "summarize", "tabstat": "summarize",
@@ -115,9 +116,7 @@ def cmd_help(s: "Session", args: str) -> None:
     path = find_help(s, topic)
     if path is None:
         # VERIFY: Stata 14 message for a nonexistent topic
-        raise StataError(111, f"help for {topic} not found",
-                         hint=f'"{topic}" has no help page yet.\nHint: type "help" to see the '
-                         "topics available.")
+        raise StataError(111, f"help for {topic} not found")
     hook = s.ui_hooks.get("help")
     if hook is not None:
         hook(path, topic or "opendta")

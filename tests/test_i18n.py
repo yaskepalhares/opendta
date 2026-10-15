@@ -53,7 +53,7 @@ def test_set_language_hints_in_portuguese():
     assert "variable y not found" in out    # Stata's message stays in English
     out = _session_text("set language pt\nset messages translated\nsummarize y")
     assert "variável y não encontrada" in out
-    assert "Dica:" in out
+    assert "Como corrigir:" in out
 
 
 def test_set_language_invalid():

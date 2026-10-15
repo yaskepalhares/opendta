@@ -42,3 +42,14 @@ def stata_exponents():
     yield
     set_superscript(False)
     set_precise(False)
+
+
+@pytest.fixture(autouse=True)
+def english_interface():
+    """set language is global as well: each test starts and ends in English."""
+    from opendta import i18n
+    i18n.set_language("en")
+    i18n.set_messages("stata")
+    yield
+    i18n.set_language("en")
+    i18n.set_messages("stata")
