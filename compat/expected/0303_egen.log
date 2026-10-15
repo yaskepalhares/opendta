@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0303_egen.log
   log type:  text
- opened on:  15 Oct 2026, 11:22:12
+ opened on:  15 Oct 2026, 12:09:55
 
 . * Phase 3b: egen (group and row functions).
 . clear
@@ -155,5 +155,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0303_egen.log
   log type:  text
- closed on:  15 Oct 2026, 11:22:12
+ closed on:  15 Oct 2026, 12:09:55
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

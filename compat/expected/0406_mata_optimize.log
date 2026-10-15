@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0406_mata_optimize.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:38
+ opened on:  15 Oct 2026, 12:09:40
 
 . * Phase 4: Mata's optimize() (iteration log and results).
 . mata
@@ -108,5 +108,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0406_mata_optimize.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:38
+ closed on:  15 Oct 2026, 12:09:40
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

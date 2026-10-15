@@ -415,16 +415,45 @@ def cmd_me(s: "Session", args: str, kind: str, cmdname: str) -> None:
     est.estat = {"icc": (3, estat_icc), "recovariance": (5, estat_recov)}
     est.eform_default = "Odds Ratio" if (kind == "logit" and o.get("or")) else \
         ("IRR" if (kind == "poisson" and o.get("irr")) else "")
-    scalars = [("N", float(n)), ("k", float(ball.size)), ("k_f", float(kk)), ("k_r", float(th.size)),
-               ("ll", r.ll), ("chi2", wchi2), ("p", wp), ("df_m", float(len(slopes))), ("ll_c", rfe.ll),
-               ("chi2_c", chi2_c), ("df_c", float(lv.npar())), ("p_c", _p_chibar(chi2_c, lv.npar())),
-               ("n_quad", float(est.extra["npts"])), ("rank", float(ball.size)),
-               ("ic", float(r.iterations)), ("converged", 1.0 if r.converged else 0.0)]
-    macros = [("cmd", cmdname), ("cmdline", cmdline(cmdname, args)), ("depvar", smp.depname),
-              ("ivars", lv.var), ("model", kind), ("title", _TITLE[kind]),
-              ("intmethod", method), ("covariances", lv.cov), ("chi2type", "Wald"), ("vce", "oim"),
-              ("predict", "meglm_p"), ("estat_cmd", "meglm_estat"), ("properties", "b V")]
-    post(s, est, scalars, macros, smp.mask)
+    # e() in the order Stata lists it after melogit (compat 1002); VERIFY for meprobit/mepoisson
+    nvar_p = {"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q)
+    ncov_p = lv.npar() - nvar_p
+    scalars = [("rank", float(ball.size)), ("N", float(n)), ("ic", float(r.iterations)),
+               ("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("ll", r.ll),
+               ("k", float(ball.size)), ("k_eq", float(1 + lv.npar())), ("k_eq_model", 1.0),
+               ("ll_c", rfe.ll), ("k_rs", float(nvar_p)), ("k_rc", float(ncov_p)), ("k_dv", 1.0),
+               ("k_r", float(lv.q)), ("k_f", float(len(slopes))),   # VERIFY: k_f without _cons
+               ("p_c", _p_chibar(chi2_c, lv.npar())), ("df_c", float(lv.npar())), ("chi2_c", chi2_c),
+               ("p", wp), ("chi2", wchi2), ("df_m", float(len(slopes)))]
+    from ..commands.matrix import Matrix
+    from .fvars import base_vars
+    from .ml import ilog
+    from .results import datasignature
+    covs = [c.name for c in smp.cols if c.values is not None]
+    sigvars = [lv.var] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
+    model_name = {"logit": "logistic", "probit": "probit", "poisson": "Poisson"}[kind]
+    family = {"logit": "bernoulli", "probit": "bernoulli", "poisson": "poisson"}[kind]
+    link = {"logit": "logit", "probit": "probit", "poisson": "log"}[kind]
+    macros = [("cmd", "meglm"), ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"),
+              ("cmdline", cmdline(cmdname, args)), ("cmd2", cmdname), ("model", model_name),
+              ("title", _TITLE[kind]), ("link", link), ("family", family),
+              ("n_quad", str(int(est.extra["npts"]))), ("ivars", lv.var), ("chi2type", "Wald"),
+              ("datasignaturevars", " ".join(sigvars)),
+              ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
+              ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
+              ("covariates", " ".join(covs)), ("opt", "moptimize"), ("vce", "oim"),
+              ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"), ("technique", "nr"),
+              ("which", "max"), ("properties", "b V")]
+    g1 = est.extra["groups"][0]
+    names_all = list(est.names)
+    grad = np.zeros((1, len(names_all)))
+    if r.g is not None and len(r.g) == len(names_all):
+        grad[0] = r.g
+    extra_mats = [(nm, Matrix(np.array([[val]], dtype=float), ["r1"], [lv.var]))
+                  for nm, val in (("g_max", g1[4]), ("g_avg", g1[3]), ("g_min", g1[2]), ("N_g", g1[1]))]
+    extra_mats += [("gradient", Matrix(grad, ["r1"], names_all)),
+                   ("ilog", Matrix(ilog(r), ["r1"], [f"c{i + 1}" for i in range(20)]))]
+    post(s, est, scalars, macros, smp.mask, extra_mats=extra_mats)
     display_me(s, est, header=not o.get("noheader"), group=not o.get("nogroup"),
                lrtest=not o.get("nolrtest"))
 
@@ -443,7 +472,7 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
                       (f"Integration method: {meth}", "Integration pts.", f"{int(x['npts'])}"),
                       ("", "", ""),
                       ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
-                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
+                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))], gv_right=True)
     if not table:
         return
     z = st.norm.ppf(1 - (1 - lev / 100) / 2)

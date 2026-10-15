@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0408_mata_moptimize.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:42
+ opened on:  15 Oct 2026, 12:09:44
 
 . * Mata: moptimize() with lf, d2 and lf2 evaluators, vce(robust), display and results
 . clear
@@ -12,50 +12,50 @@
 . set obs 200
 number of observations (_N) was 0, now 200
 
-. gen x1 = rnormal()
+. gen x1 = invnormal(runiform())
 
 . gen x2 = runiform()
 
 . gen y = runiform() < invlogit(-.5 + x1 - 2*x2)
 
-. gen yc = 1 + 2*x1 - x2 + rnormal()*1.5
+. gen yc = 1 + 2*x1 - x2 + invnormal(runiform())*1.5
 
 . logit y x1 x2
 
-Iteration 0:   log likelihood = -113.55237  
-Iteration 1:   log likelihood = -88.373896  
-Iteration 2:   log likelihood = -86.268978  
-Iteration 3:   log likelihood = -86.254553  
-Iteration 4:   log likelihood = -86.254547  
+Iteration 0:   log likelihood = -119.52277  
+Iteration 1:   log likelihood = -105.35547  
+Iteration 2:   log likelihood = -104.92972  
+Iteration 3:   log likelihood = -104.92824  
+Iteration 4:   log likelihood = -104.92824  
 
 Logistic regression                             Number of obs     =        200
-                                                LR chi2(2)        =      54.60
+                                                LR chi2(2)        =      29.19
                                                 Prob > chi2       =     0.0000
-Log likelihood = -86.254547                     Pseudo R2         =     0.2404
+Log likelihood = -104.92824                     Pseudo R2         =     0.1221
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-          x1 |   1.062827   .2231247     4.76   0.000     .6255104    1.500143
-          x2 |  -3.675877   .7620138    -4.82   0.000    -5.169396   -2.182357
-       _cons |   .2996216   .3456563     0.87   0.386    -.3778523    .9770955
+          x1 |   .8782079    .181642     4.83   0.000      .522196     1.23422
+          x2 |  -.4177746   .5670836    -0.74   0.461    -1.529238    .6936888
+       _cons |   -.840973   .3331682    -2.52   0.012    -1.493971   -.1879753
 ------------------------------------------------------------------------------
 
 . regress yc x1 x2
 
       Source |       SS           df       MS      Number of obs   =       200
--------------+----------------------------------   F(2, 197)       =    208.54
-       Model |  787.010382         2  393.505191   Prob > F        =    0.0000
-    Residual |  371.737805       197  1.88699393   R-squared       =    0.6792
--------------+----------------------------------   Adj R-squared   =    0.6759
-       Total |  1158.74819       199  5.82285521   Root MSE        =    1.3737
+-------------+----------------------------------   F(2, 197)       =    212.50
+       Model |  1010.41201         2  505.206003   Prob > F        =    0.0000
+    Residual |  468.346691       197  2.37739437   R-squared       =    0.6833
+-------------+----------------------------------   Adj R-squared   =    0.6801
+       Total |   1478.7587       199  7.43094823   Root MSE        =    1.5419
 
 ------------------------------------------------------------------------------
           yc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-          x1 |   1.853156   .0915158    20.25   0.000      1.67268    2.033632
-          x2 |  -.9333048   .3369626    -2.77   0.006    -1.597822    -.268788
-       _cons |   1.028189   .1914848     5.37   0.000     .6505658    1.405812
+          x1 |   2.120882   .1066935    19.88   0.000     1.910474     2.33129
+          x2 |  -1.577815   .3616356    -4.36   0.000    -2.290989   -.8646407
+       _cons |   1.244651   .2125954     5.85   0.000     .8253962    1.663906
 ------------------------------------------------------------------------------
 
 . mata:
@@ -77,15 +77,14 @@ Log likelihood = -86.254547                     Pseudo R2         =     0.2404
 
 : moptimize_init_eq_indepvars(M, 1, "x1 x2")
 
+: moptimize_init_search(M, "off")
+
 : moptimize(M)
-initial:       f(p) = -138.62944
-alternative:   f(p) =  -120.3154
-rescale:       f(p) = -113.65234
-Iteration 0:   f(p) = -113.65234  
-Iteration 1:   f(p) =   -88.3567  
-Iteration 2:   f(p) = -86.273982  
-Iteration 3:   f(p) =  -86.25455  
-Iteration 4:   f(p) = -86.254547  
+Iteration 0:   f(p) = -138.62944  
+Iteration 1:   f(p) =    -105.06  
+Iteration 2:   f(p) = -104.92831  
+Iteration 3:   f(p) = -104.92824  
+Iteration 4:   f(p) = -104.92824  
 
 : moptimize_result_display(M)
 
@@ -94,15 +93,15 @@ Iteration 4:   f(p) = -86.254547
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-          x1 |   1.062827   .2231247     4.76   0.000     .6255105    1.500143
-          x2 |  -3.675877   .7620138    -4.82   0.000    -5.169397   -2.182357
-       _cons |   .2996216   .3456563     0.87   0.386    -.3778523    .9770956
+          x1 |   .8782079    .181642     4.83   0.000      .522196     1.23422
+          x2 |  -.4177746   .5670836    -0.74   0.461    -1.529238    .6936888
+       _cons |   -.840973   .3331682    -2.52   0.012    -1.493971   -.1879753
 ------------------------------------------------------------------------------
 
 : moptimize_result_coefs(M)
                   1              2              3
     +----------------------------------------------+
-  1 |   1.062826886   -3.675876964     .299621645  |
+  1 |   .8782078604   -.4177745845   -.8409730233  |
     +----------------------------------------------+
 
 : void d2logit(transmorphic M, real scalar todo, real rowvector b, lnf, g, H) {
@@ -134,30 +133,32 @@ Iteration 4:   f(p) = -86.254547
 : moptimize_result_coefs(M2)
                   1              2              3
     +----------------------------------------------+
-  1 |   1.062826884   -3.675876954    .2996216454  |
+  1 |   .8782078552   -.4177745824   -.8409730181  |
     +----------------------------------------------+
 
 : sqrt(diagonal(moptimize_result_V(M2)))'
                  1             2             3
     +-------------------------------------------+
-  1 |   .223124684   .7620138223   .3456563262  |
+  1 |  .1816420451   .5670835582   .3331682077  |
     +-------------------------------------------+
 
 : void lf2norm(transmorphic M, real scalar todo, real rowvector b, lnfj, S, H) {
 >     real colvector mu, lns, y, z, s
+>     real matrix h11, h12, h22
+>     real scalar lnf
 >     mu = moptimize_util_xb(M, b, 1)
 >     lns = moptimize_util_xb(M, b, 2)
 >     y = moptimize_util_depvar(M, 1)
->     s = exp(lns)
+>     s = exp(lns) :* J(rows(y), 1, 1)
 >     z = (y - mu):/s
->     lnfj = ln(normalden(z)) - lns
+>     lnfj = ln(normalden(z)) - ln(s)
 >     if (todo >= 1) {
 >         S = (z:/s, z:*z :- 1)
 >         if (todo == 2) {
->             real matrix h11, h12, h22
->             h11 = -moptimize_util_matsum(M, 1, 1, 1:/(s:^2), lnfj)
->             h12 = -moptimize_util_matsum(M, 1, 2, 2*z:/s, lnfj)
->             h22 = -moptimize_util_matsum(M, 2, 2, 2*z:*z, lnfj)
+>             lnf = moptimize_util_sum(M, lnfj)
+>             h11 = -moptimize_util_matsum(M, 1, 1, 1:/(s:^2), lnf)
+>             h12 = -moptimize_util_matsum(M, 1, 2, 2*z:/s, lnf)
+>             h22 = -moptimize_util_matsum(M, 2, 2, 2*z:*z, lnf)
 >             H = (h11, h12 \ h12', h22)
 >         }
 >     }
@@ -179,19 +180,26 @@ Iteration 4:   f(p) = -86.254547
 
 : moptimize_init_vcetype(M3, "robust")
 
+: moptimize_init_search(M3, "off")
+
 : moptimize(M3)
-               lf2norm():  3200  conformability error
-    mopt__calluser_lf2():     -  function returned error
-      opt__eval_nr_lf2():     -  function returned error
-             opt__eval():     -  function returned error
-    _optimize_evaluate():     -  function returned error
-       _mopt__evaluate():     -  function returned error
-   _moptimize_evaluate():     -  function returned error
-     _moptimize_search():     -  function returned error
-      moptimize_search():     -  function returned error
-             moptimize():     -  function returned error
+Iteration 0:   f(p) = -938.05925  (not concave)
+Iteration 1:   f(p) = -394.74997  
+Iteration 2:   f(p) = -368.95771  
+Iteration 3:   f(p) = -368.87691  
+Iteration 4:   f(p) = -368.87685  
+Iteration 5:   f(p) = -368.87685  
+
+: moptimize_result_display(M3)
+          _robust_work():  3200  conformability error
+          rob__compute():     -  function returned error
+                robust():     -  function returned error
+moptimize_result_V_robust():     -  function returned error
+        mopt__result_V():     -  function returned error
+ moptimize_result_post():     -  function returned error
+moptimize_result_display():     -  function returned error
                  <istmt>:     -  function returned error
-(1 line skipped)
+(0 lines skipped)
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 r(3200);
 
@@ -199,5 +207,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0408_mata_moptimize.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:42
+ closed on:  15 Oct 2026, 12:09:44
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

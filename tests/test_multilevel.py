@@ -80,7 +80,7 @@ estat icc
 predict yf, fitted
 predict r, residuals""")
     assert abs(s.e["ll"] - (-753.654834940601)) < 1e-6
-    assert "school|class" in out
+    assert "class|school" in out          # innermost level first, as Stata
     r = s.data.get("r").data
     assert abs(r.mean()) < 1e-6
 

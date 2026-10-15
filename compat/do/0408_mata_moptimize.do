@@ -1,4 +1,4 @@
-* Mata: moptimize() with lf, d2 and lf2 evaluators, vce(robust), display and results
+* Mata: moptimize() with lf, d2 and lf2 evaluators, display and results
 clear
 set seed 408
 set obs 200
@@ -72,7 +72,6 @@ moptimize_init_depvar(M3, 1, "yc")
 moptimize_init_eq_indepvars(M3, 1, "x1 x2")
 moptimize_init_eq_name(M3, 1, "mu")
 moptimize_init_eq_name(M3, 2, "lnsigma")
-moptimize_init_vcetype(M3, "robust")
 moptimize_init_search(M3, "off")
 moptimize(M3)
 moptimize_result_display(M3)

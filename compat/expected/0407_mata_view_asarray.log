@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0407_mata_view_asarray.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:42
+ opened on:  15 Oct 2026, 12:09:44
 
 . * Phase 4: st_view (writes to the data) and associative arrays.
 . clear
@@ -81,5 +81,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0407_mata_view_asarray.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:42
+ closed on:  15 Oct 2026, 12:09:44
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
