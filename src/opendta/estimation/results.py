@@ -52,6 +52,7 @@ class CoefRow:
     eq: str = ""
     name: str = ""                # name in e(b), for estimates table
     noeform: bool = False         # never exponentiated (e.g. /ln_p in streg)
+    tight: bool = False           # label over 13 columns, touching the bar (var(_cons)| in me)
 
 
 @dataclass
@@ -158,7 +159,10 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         if r.kind == "sep":
             out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
             continue
-        out.write(f"{abbrev(r.label):>12} |", "text")
+        if r.tight:
+            out.write(f"{abbrev(r.label, 13):>13}|", "text")
+        else:
+            out.write(f"{abbrev(r.label):>12} |", "text")
         if r.kind == "base":
             out.write("          0  (base)\n", "result")
             continue
