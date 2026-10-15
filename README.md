@@ -20,7 +20,7 @@ It is a personal study project under active development, released under the [MIT
 
 All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page.
 
-**Updates:** from version 0.2.0 on, OpenDTA checks GitHub for a new release when it opens (at most once a day; turn it off in **Edit → Preferences**) and in **Help → Check for Updates**. When there is one, it shows the release notes and, with **Install and Restart**, downloads the right file, closes, installs and opens again. Installations from source are only notified.
+**Updates:** from version 0.2.0 on, OpenDTA checks GitHub for a new release when it opens (at most once a day; turn it off in **Settings** (Ctrl+, / ⌘,)) and in **Help → Check for Updates**. When there is one, it shows the release notes and, with **Install and Restart**, downloads the right file, closes, installs and opens again. Installations from source are only notified.
 
 ## Current state: phases 5 to 9 (estimation, complex surveys, graphics, interface and language)
 
@@ -37,7 +37,7 @@ What already works:
 - errors with Stata's messages and `r(#)` return codes, followed by an OpenDTA explanation of what went wrong in the command and how to fix it (turn it off with `set hints off`, or with Help → Explain Errors);
 - `set numerics precise`: the same estimates with more exact arithmetic (QR in `regress`, `D.`/`S.` differences in double, a final Newton step in `ml` and `optimize()`, numerical derivatives with Richardson extrapolation, new variables in double); the default `set numerics stata` reproduces Stata's rounding;
 - scientific notation with superscript exponents on screen (`1.0000×10¹⁰` instead of `1.00000e+10`); `set superscript off` restores Stata's form, and text that can be read back (`string()`, macros, `file write`, exports) always uses Stata's form;
-- graphical interface with the Results, Command, Review, Variables and Properties windows, menus, a toolbar with OpenDTA's own icons (light/dark) and Preferences (app icon and font);
+- graphical interface with the Results, Command, Review, Variables and Properties windows, menus, a toolbar with OpenDTA's own icons and a Settings window (Ctrl+, / ⌘,) with search, light, dark or system theme, app icon, font, language, results options and updates, applied at once;
 - text console and batch mode (`opendta -b do file.do`, which writes `file.log` like `stata -b`);
 - programming: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, extended macro functions, `matrix`, third-party `.ado` files on the adopath, `log`/`cmdlog`, `assert`, `set trace` and `timer`;
 - Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
@@ -65,7 +65,7 @@ What already works:
 - graphics with OpenDTA's own look: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` and a Graph window with a simple Graph Editor;
 - Do-file Editor with tabs, syntax highlighting and execution of the selection (Ctrl+D) or of the whole file;
 - dialog boxes in the Statistics and Graphics menus, which show the command before running it;
-- interface in English or Portuguese (**Edit → Preferences** or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
+- interface in English or Portuguese (**Settings** (Ctrl+, / ⌘,) or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
 
 The outputs of cases `0603` (survey replicates), `0901` and `0902` (survival analysis) still await checking against the Stata log, as do the cases added in block 2 (`0408`, `0409`, `1001`, `1002`, `1101`); all other cases in `compat/do` have been checked. The new estimators were checked against statsmodels (Cox, Kaplan-Meier, log-rank, Wilcoxon, `mixed`, `arima`, `var`, `dfuller`, `corrgram`, `newey`), against direct maximization of the likelihoods (`streg`) and against exact numerical integration (`melogit`, `mepoisson`).
 
@@ -104,7 +104,7 @@ The script creates `dist/OpenDTA.app` and `dist/OpenDTA-<version>.dmg`. Open the
 
 ## Icon
 
-The application icon ("Table") has a light (default) and a dark version, chosen in **Edit → Preferences**. The full sets (Windows `.ico`, macOS `.icns`, Linux, web) are in `assets/icons/opendta/` and `assets/icons/opendta-dark/`, and the SVG sources are in `assets/icons/icon-work/`.
+The application icon ("Table") has a light (default) and a dark version, chosen in **Settings** (Ctrl+, / ⌘,). The full sets (Windows `.ico`, macOS `.icns`, Linux, web) are in `assets/icons/opendta/` and `assets/icons/opendta-dark/`, and the SVG sources are in `assets/icons/icon-work/`.
 
 ## Tests
 

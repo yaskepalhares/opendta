@@ -56,6 +56,7 @@ def _start(owner, worker: _Worker) -> QThread:
 
 class UpdateController(QObject):
     """Owned by the main window: checks, shows the dialog and keeps the install step."""
+    checked = Signal()          # after each check, successful or not (Settings shows the date)
 
     def __init__(self, window):
         super().__init__(window)
@@ -84,6 +85,7 @@ class UpdateController(QObject):
         self._thread = _start(self, self._worker)
 
     def _check_failed(self, msg: str, manual: bool) -> None:
+        self.checked.emit()
         if manual:
             QMessageBox.warning(self.win, tr("Check for Updates"),
                                 L("Could not check for updates:", "Não foi possível procurar atualizações:")
@@ -92,6 +94,7 @@ class UpdateController(QObject):
     def _checked(self, rel: updater.Release, manual: bool) -> None:
         self.prefs.last_update_check = time.time()
         self.prefs.sync()
+        self.checked.emit()
         if not updater.is_newer(rel.version):
             if manual:
                 QMessageBox.information(self.win, tr("Check for Updates"),

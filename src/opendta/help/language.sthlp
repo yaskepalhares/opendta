@@ -21,7 +21,7 @@ Messages in Stata's format (error messages such as {cmd:variable x not found}) a
 {p_end}
 
 {pstd}
-{bf:Edit > Preferences} has the same choices, saved for the next session; so does {opt permanently}.
+{bf:Settings} (Ctrl+, or Cmd+,) has the same choices, saved for the next session; so does {opt permanently}.
 {p_end}
 
 {title:Examples}
