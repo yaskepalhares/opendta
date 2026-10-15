@@ -64,6 +64,34 @@ class Preferences:
         self._s.setValue("behavior/hints", "on" if on else "off")
 
     @property
+    def check_updates(self) -> bool:
+        """Look for a new release on GitHub when OpenDTA opens (at most once a day)."""
+        return str(self._s.value("updates/check", "on")) != "off"
+
+    @check_updates.setter
+    def check_updates(self, on: bool) -> None:
+        self._s.setValue("updates/check", "on" if on else "off")
+
+    @property
+    def last_update_check(self) -> float:
+        try:
+            return float(self._s.value("updates/last", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @last_update_check.setter
+    def last_update_check(self, t: float) -> None:
+        self._s.setValue("updates/last", float(t))
+
+    @property
+    def skipped_version(self) -> str:
+        return str(self._s.value("updates/skip", "") or "")
+
+    @skipped_version.setter
+    def skipped_version(self, v: str) -> None:
+        self._s.setValue("updates/skip", v)
+
+    @property
     def superscript(self) -> bool:
         """Superscript exponent in scientific notation (set superscript) at startup."""
         return str(self._s.value("behavior/superscript", "on")) != "off"

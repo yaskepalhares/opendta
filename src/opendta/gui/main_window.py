@@ -321,6 +321,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.session = session or Session()
         self.prefs = Preferences()
+        from .update_dialog import UpdateController
+        self.updates = UpdateController(self)
+        self._pending_update = None
         i18n.set_language(self.prefs.language)
         i18n.set_messages(self.prefs.messages)
         self.resize(1280, 800)
@@ -551,6 +554,7 @@ class MainWindow(QMainWindow):
         self.act_superscript.triggered.connect(self._toggle_superscript)
         m.addAction(self.act_superscript)
         m.addSeparator()
+        self._action(m, "Check for Updates...", lambda: self.updates.check_now())
         self._action(m, "About OpenDTA", self.show_about)
 
         for menu in mb.findChildren(QMenu):
@@ -962,6 +966,12 @@ class MainWindow(QMainWindow):
             self.dofile_editor.cleanup()
         self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
         super().closeEvent(event)
+        start = getattr(self, "_pending_update", None)
+        if start is not None and event.isAccepted():
+            # the installer (or the replacement script) waits for this process to end
+            self._pending_update = None
+            start()
+            QApplication.quit()
 
     def apply_theme(self, theme: str) -> None:
         """Light or dark theme for the whole interface, independent of the system."""

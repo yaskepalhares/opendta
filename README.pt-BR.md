@@ -20,6 +20,8 @@ O OpenDTA executa scripts de análise (do-files), lê e grava bases `.dta` e tem
 
 Todas as versões estão na página de [Releases](https://github.com/yaskepalhares/opendta/releases).
 
+**Atualizações:** a partir da versão 0.2.0, o OpenDTA procura uma versão nova no GitHub ao abrir (no máximo uma vez por dia; dá para desligar em **Edit → Preferences**) e em **Help → Check for Updates**. Quando há, ele mostra as notas da versão e, em **Install and Restart**, baixa o arquivo certo, fecha, instala e abre de novo. Instalações a partir do código-fonte só recebem o aviso.
+
 ## Estado atual: fases 5 a 9 (estimação, amostras complexas, gráficos, interface e idioma)
 
 Já funciona:

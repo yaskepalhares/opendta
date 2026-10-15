@@ -19,7 +19,7 @@ def open_paths(win, paths) -> None:
 
 
 def run_gui(args: list[str] | None = None) -> int:
-    from PySide6.QtCore import QEvent, QObject
+    from PySide6.QtCore import QEvent, QObject, QTimer
     from PySide6.QtWidgets import QApplication
 
     from .. import i18n
@@ -47,4 +47,5 @@ def run_gui(args: list[str] | None = None) -> int:
     app.installEventFilter(opener)
     win.show()
     open_paths(win, args or [])
+    QTimer.singleShot(4000, win.updates.check_at_startup)   # daily check for a new release
     return app.exec()

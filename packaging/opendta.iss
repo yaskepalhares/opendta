@@ -39,6 +39,9 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ChangesAssociations=yes
+; updates from inside OpenDTA run this installer with /SILENT /RELAUNCH=1 after the app exits
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -70,3 +73,11 @@ Root: HKA; Subkey: "Software\Classes\Applications\OpenDTA.exe\SupportedTypes"; V
 
 [Run]
 Filename: "{app}\OpenDTA.exe"; Description: "{cm:LaunchProgram,OpenDTA}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\OpenDTA.exe"; Flags: nowait; Check: RelaunchRequested
+
+[Code]
+// /RELAUNCH=1 (used by OpenDTA's updater): open OpenDTA again after a silent update
+function RelaunchRequested: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
