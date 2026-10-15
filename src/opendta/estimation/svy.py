@@ -562,7 +562,7 @@ class SurveyEngine:
         all_obs = np.ones(s.data.nobs, bool) if not p.if_ and not p.in_ else touse(s, p)
         self.dd = dd = DesignData(s, d, all_obs, vce=so.get("vce"), mse=so.get("mse"),
                                   hadamard=so.get("hadamard"))
-        self.subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
+        self.subpop = subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
         s.output.write(f"\n(running {req.stat} on estimation sample)\n", "text")
         # scores outside the sample (or subpop) are zero, but the design counts all PSUs
         self.rows = dd.mask
@@ -580,16 +580,16 @@ class SurveyEngine:
         else:
             V = dd.variance(fit.Z)
         # variances under SRS for estat effects ([SVY] estat, Methods and formulas)
-        self.srs = _srs_variances(fit.Z, self.w, dd, self.n_sample)
+        self.srs = srs_variances(fit.Z, self.w, dd, self.n_sample)
         return V, None if dd.normal else dd.df, dd.vcetype
 
     def header(self, s, req, df):
         dd, out = self.dd, s.output
         title = f"Survey: {req.info.title}"
         out.write("\n", "text")
-        right = [("Number of obs", f"{self.n_sample:,}"), ("Population size", _num(self.population))]
+        right = [("Number of obs", f"{self.n_sample:,}"), ("Population size", format_size(self.population))]
         if self.subpop is not None:
-            right += [("Subpop. no. obs", f"{self.n_obs:,}"), ("Subpop. size", _num(float(self.w.sum())))]
+            right += [("Subpop. no. obs", f"{self.n_obs:,}"), ("Subpop. size", format_size(float(self.w.sum())))]
         if self.n_rep:
             right.append(("Replications", f"{self.n_rep:,}"))
         if df is not None:
@@ -663,7 +663,7 @@ class SurveyEngine:
         post(s, est, scalars, macros, dd.mask.copy(), extra_mats=mats)
 
 
-def _num(x: float) -> str:
+def format_size(x: float) -> str:
     return f"{x:,.0f}" if abs(x - round(x)) < 1e-6 else format_value(x, "%11.0g", pad=False).strip()
 
 
@@ -684,7 +684,7 @@ def parse_svy_opts(text: str) -> dict:
     return out
 
 
-def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
+def srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
     """V_srswor and V_srswr from [SVY] estat (total formula with the scores
     u = z/w): V = (1 - f) M̂/(m - 1) Σ w (u - ū)(u - ū)'."""
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -701,7 +701,7 @@ def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tu
     return (1 - f) * Vwr, Vwr
 
 
-def _subpop_mask(s: "Session", text: str) -> np.ndarray:
+def subpop_mask(s: "Session", text: str) -> np.ndarray:
     from ..commands._util import eval_vector
     t = text.strip()
     ds = s.data

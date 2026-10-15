@@ -40,6 +40,7 @@ def sandwich(V: np.ndarray, scores: np.ndarray, w: np.ndarray, *, fweight: bool,
         np.add.at(G, inv, ws)
         meat = G.T @ G * n_clust / (n_clust - 1)
     else:
+        # VERIFY: fweight as expanded data in every ML command (compat 0514)
         meat = ws.T @ (scores if fweight else ws) * n / (n - 1)
     out = V @ meat @ V
     return (out + out.T) / 2, n_clust

@@ -21,7 +21,7 @@ from ..lazy import lazy
 from . import fvars
 from .regress import Sample
 from .results import Estimates, coef_table, post, rows_from_columns
-from .svy import DesignData, _num, _subpop_mask, require_design
+from .svy import DesignData, format_size, parse_svy_opts, require_design, srs_variances, subpop_mask
 
 # imported on first use (start-up time; see opendta/lazy.py)
 special = lazy("scipy.special")
@@ -57,14 +57,13 @@ def _adjusted_F(b, V, idx, d):
 def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     d = require_design(s)
     ds = s.data
-    from .svy import parse_svy_opts
     so = parse_svy_opts(svyopts)
     smp = Sample(s, args, opts_spec={"or": 2, "irr": 3, "nolog": 4, "coef": 4, "noheader": 6},
                  weights=("pweight",))
     out = s.output
     dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"),
                     hadamard=so.get("hadamard"))
-    subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
+    subpop = subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
     inside_all = smp.mask & dd.mask & (subpop if subpop is not None else True)
     full = dd.mask
     inside = inside_all[full]
@@ -124,8 +123,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     else:
         V = dd.variance(Z)
     V = (V + V.T) / 2
-    from .svy import _srs_variances
-    srs = _srs_variances(Z, w, dd, int((smp.mask & dd.mask).sum()))
+    srs = srs_variances(Z, w, dd, int((smp.mask & dd.mask).sum()))
     df = dd.df
     slopes = list(range(len(est_cols)))
     F, df1, df2 = _adjusted_F(b, V, slopes, df)
@@ -194,9 +192,9 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
     if header:
         out.write("\n", "text")
         out.write(f"Survey: {est.svytitle}\n\n", "text")
-        right = [("Number of obs", f"{x['N']:,}"), ("Population size", _num(x["pop"]))]
+        right = [("Number of obs", f"{x['N']:,}"), ("Population size", format_size(x["pop"]))]
         if x.get("sub"):
-            right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", _num(x["sub"][1]))]
+            right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", format_size(x["sub"][1]))]
         if x.get("n_rep"):
             right.append(("Replications", f"{x['n_rep']:,}"))   # VERIFY position
         right += [("Design df", f"{x['df']:,}"), (f"F({x['df1']:>4},{x['df2']:>7})", g(x["F"], "%10.2f")),
@@ -239,7 +237,7 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
     for n in names:
         mask &= ds.get(n).data < SYS
     if so.get("subpop"):
-        mask &= _subpop_mask(s, str(so["subpop"]))
+        mask &= subpop_mask(s, str(so["subpop"]))
     inside = mask[full]
     w = dd.w * inside
     out = s.output
@@ -255,7 +253,7 @@ def svy_tabulate(s: "Session", args: str, svyopts: str) -> None:
         return t if t else (f"{int(lv)}" if lv == int(lv) else f"{lv:g}")
     N = int(inside.sum())
     out.write("\n(running tabulate on estimation sample)\n\n", "text")
-    right = [("Number of obs", f"{N:,}"), ("Population size", _num(W)), ("Design df", f"{dd.df:,}")]
+    right = [("Number of obs", f"{N:,}"), ("Population size", format_size(W)), ("Design df", f"{dd.df:,}")]
     left = [f"Number of strata   = {dd.n_strata:>9,}", f"Number of PSUs     = {dd.n_psu:>9,}"]
     for i, (rl, rv) in enumerate(right):
         lft = left[i] if i < len(left) else ""
@@ -386,7 +384,6 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     a replication vce, the command runs again with each replicate weight)."""
     from ..core.dataset import Variable
     from ..lang.syntax import parse_standard
-    from .svy import parse_svy_opts
     d = require_design(s)
     ds = s.data
     so = parse_svy_opts(svyopts)
@@ -397,7 +394,7 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
         raise StataError(198, "option vce() not allowed")   # VERIFY
     dd = DesignData(s, d, np.ones(ds.nobs, bool), vce=so.get("vce"), mse=so.get("mse"),
                     hadamard=so.get("hadamard"))
-    subpop = _subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
+    subpop = subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
     full = dd.mask
     inside_all = full & (subpop if subpop is not None else True)
     pos = np.full(ds.nobs, -1)
@@ -502,8 +499,7 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     est.coef_title, est.eform_on = (title_ef, True) if title_ef else ("Coef.", False)
     Z = ctx.get("Z")
     if Z is not None:
-        from .svy import _srs_variances
-        srs = _srs_variances(Z, dd.w * inside_all[full], dd, N)
+        srs = srs_variances(Z, dd.w * inside_all[full], dd, N)
         labs = [("/" + eq if (eq.startswith("cut") or eq in aux_eq) and nm == "_cons" else nm, "")
                 for nm, eq in zip(names, eqs)]
         est.svy_effects = dict(V=V, srs=srs, labels=labs, vals=b, title="Coef.",
@@ -547,9 +543,9 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
     if header:
         out.write("\n", "text")
         out.write(f"Survey: {est.svytitle}\n\n", "text")
-        right = [("Number of obs", f"{x['N']:,}"), ("Population size", _num(x["pop"]))]
+        right = [("Number of obs", f"{x['N']:,}"), ("Population size", format_size(x["pop"]))]
         if x.get("sub"):
-            right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", _num(x["sub"][1]))]
+            right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", format_size(x["sub"][1]))]
         if x.get("n_rep"):
             right.append(("Replications", f"{x['n_rep']:,}"))
         right += [("Design df", f"{x['df']:,}")]
