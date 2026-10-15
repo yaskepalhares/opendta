@@ -67,6 +67,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 **3c ✅**
 - [x] `duplicates` (report/examples/list/tag/drop), `isid`, `levelsof`
+- [x] `sample` (percentual ou `count`, `if`/`in`, `by()` e o prefixo by)
 - [x] `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`
 - O `distinct` não é comando oficial: é um pacote do SSC e roda pelo adopath (fase 2).
 
