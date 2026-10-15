@@ -1,0 +1,799 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1002_melogit.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:49
+
+. * Phase 10: melogit, meprobit and mepoisson (adaptive Gauss-Hermite quadrature)
+. clear
+
+. set seed 1003
+
+. set obs 40
+number of observations (_N) was 0, now 40
+
+. gen g = _n
+
+. gen u = rnormal()*.9
+
+. gen v = rnormal()*.3
+
+. expand 15
+(560 observations created)
+
+. gen x = rnormal()
+
+. gen yb = runiform() < invlogit(-.4 + .8*x + u + v*x)
+
+. gen yc = rpoisson(exp(.2 + .5*x + u/2))
+
+. melogit yb x || g:
+
+Fitting fixed-effects model:
+
+Iteration 0:   log likelihood = -373.82597  
+Iteration 1:   log likelihood = -373.69791  
+Iteration 2:   log likelihood = -373.69786  
+Iteration 3:   log likelihood = -373.69786  
+
+Refining starting values:
+
+Grid node 0:   log likelihood = -354.09017
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -354.09017  
+Iteration 1:   log likelihood = -352.83154  
+Iteration 2:   log likelihood = -352.79609  
+Iteration 3:   log likelihood = -352.79607  
+
+Mixed-effects logistic regression               Number of obs     =        600
+Group variable:               g                 Number of groups  =         40
+
+                                                Obs per group:
+                                                              min =         15
+                                                              avg =       15.0
+                                                              max =         15
+
+Integration method: mvaghermite                 Integration pts.  =          7
+
+                                                Wald chi2(1)      =      65.10
+Log likelihood = -352.79607                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .9325823    .115585     8.07   0.000     .7060398    1.159125
+       _cons |  -.4360627   .1776223    -2.45   0.014     -.784196   -.0879294
+-------------+----------------------------------------------------------------
+g            |
+   var(_cons)|   .8781531   .3060571                      .4435131    1.738738
+------------------------------------------------------------------------------
+LR test vs. logistic model: chibar2(01) = 41.80       Prob >= chibar2 = 0.0000
+
+. melogit yb x || g:, or
+
+Fitting fixed-effects model:
+
+Iteration 0:   log likelihood = -373.82597  
+Iteration 1:   log likelihood = -373.69791  
+Iteration 2:   log likelihood = -373.69786  
+Iteration 3:   log likelihood = -373.69786  
+
+Refining starting values:
+
+Grid node 0:   log likelihood = -354.09017
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -354.09017  
+Iteration 1:   log likelihood = -352.83154  
+Iteration 2:   log likelihood = -352.79609  
+Iteration 3:   log likelihood = -352.79607  
+
+Mixed-effects logistic regression               Number of obs     =        600
+Group variable:               g                 Number of groups  =         40
+
+                                                Obs per group:
+                                                              min =         15
+                                                              avg =       15.0
+                                                              max =         15
+
+Integration method: mvaghermite                 Integration pts.  =          7
+
+                                                Wald chi2(1)      =      65.10
+Log likelihood = -352.79607                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+          yb | Odds Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   2.541062   .2937088     8.07   0.000     2.025952    3.187143
+       _cons |   .6465772   .1148465    -2.45   0.014     .4564866    .9158255
+-------------+----------------------------------------------------------------
+g            |
+   var(_cons)|   .8781531   .3060571                      .4435131    1.738738
+------------------------------------------------------------------------------
+LR test vs. logistic model: chibar2(01) = 41.80       Prob >= chibar2 = 0.0000
+
+. estat icc
+
+Residual intraclass correlation
+
+------------------------------------------------------------------------------
+                       Level |        ICC   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+                           g |   .2106882    .057959      .1187966    .3457693
+------------------------------------------------------------------------------
+
+. meprobit yb x || g:
+
+Fitting fixed-effects model:
+
+Iteration 0:   log likelihood = -373.71489  
+Iteration 1:   log likelihood = -373.64806  
+Iteration 2:   log likelihood = -373.64805  
+
+Refining starting values:
+
+Grid node 0:   log likelihood =   -359.933
+
+Fitting full model:
+
+Iteration 0:   log likelihood =   -359.933  (not concave)
+Iteration 1:   log likelihood = -353.34071  
+Iteration 2:   log likelihood = -352.21765  
+Iteration 3:   log likelihood =  -352.2158  
+Iteration 4:   log likelihood =  -352.2158  
+
+Mixed-effects probit regression                 Number of obs     =        600
+Group variable:               g                 Number of groups  =         40
+
+                                                Obs per group:
+                                                              min =         15
+                                                              avg =       15.0
+                                                              max =         15
+
+Integration method: mvaghermite                 Integration pts.  =          7
+
+                                                Wald chi2(1)      =      71.62
+Log likelihood =  -352.2158                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .564006   .0666428     8.46   0.000     .4333886    .6946234
+       _cons |  -.2627034   .1064058    -2.47   0.014    -.4712549    -.054152
+-------------+----------------------------------------------------------------
+g            |
+   var(_cons)|   .3189808   .1077367                       .164539    .6183871
+------------------------------------------------------------------------------
+LR test vs. probit model: chibar2(01) = 42.86         Prob >= chibar2 = 0.0000
+
+. mepoisson yc x || g:
+
+Fitting fixed-effects model:
+
+Iteration 0:   log likelihood = -1050.3376  
+Iteration 1:   log likelihood = -927.52692  
+Iteration 2:   log likelihood = -926.69339  
+Iteration 3:   log likelihood = -926.69297  
+Iteration 4:   log likelihood = -926.69297  
+
+Refining starting values:
+
+Grid node 0:   log likelihood = -901.59268
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -901.59268  (not concave)
+Iteration 1:   log likelihood = -890.23655  
+Iteration 2:   log likelihood = -886.66959  (backed up)
+Iteration 3:   log likelihood =    -886.53  
+Iteration 4:   log likelihood = -886.52769  
+Iteration 5:   log likelihood = -886.52769  
+
+Mixed-effects Poisson regression                Number of obs     =        600
+Group variable:               g                 Number of groups  =         40
+
+                                                Obs per group:
+                                                              min =         15
+                                                              avg =       15.0
+                                                              max =         15
+
+Integration method: mvaghermite                 Integration pts.  =          7
+
+                                                Wald chi2(1)      =     209.70
+Log likelihood = -886.52769                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5179717   .0357693    14.48   0.000     .4478652    .5880782
+       _cons |    .163861   .0765068     2.14   0.032     .0139105    .3138116
+-------------+----------------------------------------------------------------
+g            |
+   var(_cons)|   .1660742   .0503437                      .0916789    .3008397
+------------------------------------------------------------------------------
+LR test vs. Poisson model: chibar2(01) = 80.33        Prob >= chibar2 = 0.0000
+
+. melogit yb x || g: x, covariance(unstructured)
+
+Fitting fixed-effects model:
+
+Iteration 0:   log likelihood = -373.82597  
+Iteration 1:   log likelihood = -373.69791  
+Iteration 2:   log likelihood = -373.69786  
+Iteration 3:   log likelihood = -373.69786  
+
+Refining starting values:
+
+Grid node 0:   log likelihood = -365.31326
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -365.31326  (not concave)
+Iteration 1:   log likelihood = -356.01853  (not concave)
+Iteration 2:   log likelihood = -354.20391  
+Iteration 3:   log likelihood = -353.41599  (backed up)
+Iteration 4:   log likelihood = -353.39575  (backed up)
+Iteration 5:   log likelihood = -353.37857  (backed up)
+Iteration 6:   log likelihood = -353.36418  (backed up)
+Iteration 7:   log likelihood = -353.35732  (backed up)
+Iteration 8:   log likelihood = -353.35394  (backed up)
+Iteration 9:   log likelihood =  -353.3531  (backed up)
+Iteration 10:  log likelihood = -353.35268  (backed up)
+Iteration 11:  log likelihood = -353.35247  (backed up)
+Iteration 12:  log likelihood = -353.35242  (backed up)
+Iteration 13:  log likelihood =  -353.3524  (backed up)
+Iteration 14:  log likelihood =  -353.3524  (backed up)
+Iteration 15:  log likelihood =  -353.3524  (backed up)
+Iteration 16:  log likelihood =  -353.3524  (backed up)
+Iteration 17:  log likelihood =  -353.3524  (backed up)
+Iteration 18:  log likelihood =  -353.3524  (backed up)
+Iteration 19:  log likelihood =  -353.3524  (backed up)
+Iteration 20:  log likelihood =  -353.3524  (backed up)
+Iteration 21:  log likelihood =  -353.3524  (backed up)
+Iteration 22:  log likelihood =  -353.3524  (backed up)
+Iteration 23:  log likelihood =  -353.3524  (not concave)
+Iteration 24:  log likelihood =  -353.3524  (not concave)
+Iteration 25:  log likelihood =  -353.3524  (not concave)
+Iteration 26:  log likelihood =  -353.3524  (not concave)
+Iteration 27:  log likelihood =  -353.3524  (not concave)
+Iteration 28:  log likelihood =  -353.3524  (not concave)
+Iteration 29:  log likelihood =  -353.3524  (not concave)
+Iteration 30:  log likelihood =  -353.3524  (not concave)
+Iteration 31:  log likelihood =  -353.3524  (not concave)
+Iteration 32:  log likelihood =  -353.3524  (not concave)
+Iteration 33:  log likelihood =  -353.3524  (not concave)
+Iteration 34:  log likelihood =  -353.3524  (not concave)
+Iteration 35:  log likelihood =  -353.3524  (not concave)
+Iteration 36:  log likelihood =  -353.3524  (not concave)
+Iteration 37:  log likelihood =  -353.3524  (not concave)
+Iteration 38:  log likelihood =  -353.3524  (not concave)
+Iteration 39:  log likelihood =  -353.3524  (not concave)
+Iteration 40:  log likelihood =  -353.3524  (not concave)
+Iteration 41:  log likelihood =  -353.3524  (not concave)
+Iteration 42:  log likelihood =  -353.3524  (not concave)
+Iteration 43:  log likelihood =  -353.3524  (not concave)
+Iteration 44:  log likelihood =  -353.3524  (not concave)
+Iteration 45:  log likelihood =  -353.3524  (not concave)
+Iteration 46:  log likelihood =  -353.3524  (not concave)
+Iteration 47:  log likelihood =  -353.3524  (not concave)
+Iteration 48:  log likelihood =  -353.3524  (not concave)
+Iteration 49:  log likelihood =  -353.3524  (not concave)
+Iteration 50:  log likelihood =  -353.3524  (not concave)
+Iteration 51:  log likelihood =  -353.3524  (not concave)
+Iteration 52:  log likelihood =  -353.3524  (not concave)
+Iteration 53:  log likelihood =  -353.3524  (backed up)
+Iteration 54:  log likelihood =  -353.3524  (not concave)
+Iteration 55:  log likelihood =  -353.3524  (not concave)
+Iteration 56:  log likelihood =  -353.3524  (not concave)
+Iteration 57:  log likelihood =  -353.3524  (not concave)
+Iteration 58:  log likelihood =  -353.3524  (not concave)
+Iteration 59:  log likelihood =  -353.3524  (not concave)
+Iteration 60:  log likelihood =  -353.3524  (not concave)
+Iteration 61:  log likelihood =  -353.3524  (not concave)
+Iteration 62:  log likelihood =  -353.3524  (not concave)
+Iteration 63:  log likelihood =  -353.3524  (not concave)
+Iteration 64:  log likelihood =  -353.3524  (not concave)
+Iteration 65:  log likelihood =  -353.3524  (not concave)
+Iteration 66:  log likelihood =  -353.3524  (not concave)
+Iteration 67:  log likelihood =  -353.3524  (not concave)
+Iteration 68:  log likelihood =  -353.3524  (not concave)
+Iteration 69:  log likelihood =  -353.3524  (not concave)
+Iteration 70:  log likelihood =  -353.3524  (not concave)
+Iteration 71:  log likelihood =  -353.3524  (not concave)
+Iteration 72:  log likelihood =  -353.3524  (not concave)
+Iteration 73:  log likelihood =  -353.3524  (not concave)
+Iteration 74:  log likelihood =  -353.3524  (not concave)
+Iteration 75:  log likelihood =  -353.3524  (not concave)
+Iteration 76:  log likelihood =  -353.3524  (not concave)
+Iteration 77:  log likelihood =  -353.3524  (not concave)
+Iteration 78:  log likelihood =  -353.3524  (not concave)
+Iteration 79:  log likelihood =  -353.3524  (not concave)
+Iteration 80:  log likelihood =  -353.3524  (not concave)
+Iteration 81:  log likelihood =  -353.3524  (not concave)
+Iteration 82:  log likelihood =  -353.3524  (not concave)
+Iteration 83:  log likelihood =  -353.3524  (not concave)
+Iteration 84:  log likelihood =  -353.3524  (not concave)
+Iteration 85:  log likelihood =  -353.3524  (not concave)
+Iteration 86:  log likelihood =  -353.3524  (not concave)
+Iteration 87:  log likelihood =  -353.3524  (not concave)
+Iteration 88:  log likelihood =  -353.3524  (not concave)
+Iteration 89:  log likelihood =  -353.3524  (not concave)
+Iteration 90:  log likelihood =  -353.3524  (not concave)
+Iteration 91:  log likelihood =  -353.3524  (not concave)
+Iteration 92:  log likelihood =  -353.3524  (not concave)
+Iteration 93:  log likelihood =  -353.3524  (not concave)
+Iteration 94:  log likelihood =  -353.3524  (not concave)
+Iteration 95:  log likelihood =  -353.3524  (not concave)
+Iteration 96:  log likelihood =  -353.3524  (not concave)
+Iteration 97:  log likelihood =  -353.3524  (not concave)
+Iteration 98:  log likelihood =  -353.3524  (backed up)
+Iteration 99:  log likelihood =  -353.3524  (not concave)
+Iteration 100: log likelihood =  -353.3524  (backed up)
+Iteration 101: log likelihood =  -353.3524  (not concave)
+Iteration 102: log likelihood =  -353.3524  (not concave)
+Iteration 103: log likelihood =  -353.3524  (not concave)
+Iteration 104: log likelihood =  -353.3524  (not concave)
+Iteration 105: log likelihood =  -353.3524  (backed up)
+Iteration 106: log likelihood =  -353.3524  (not concave)
+Iteration 107: log likelihood =  -353.3524  (not concave)
+Iteration 108: log likelihood =  -353.3524  (not concave)
+Iteration 109: log likelihood =  -353.3524  (not concave)
+Iteration 110: log likelihood =  -353.3524  (backed up)
+Iteration 111: log likelihood =  -353.3524  (not concave)
+Iteration 112: log likelihood =  -353.3524  (not concave)
+Iteration 113: log likelihood =  -353.3524  (not concave)
+Iteration 114: log likelihood =  -353.3524  (not concave)
+Iteration 115: log likelihood =  -353.3524  (not concave)
+Iteration 116: log likelihood =  -353.3524  (backed up)
+Iteration 117: log likelihood =  -353.3524  (not concave)
+Iteration 118: log likelihood =  -353.3524  (not concave)
+Iteration 119: log likelihood =  -353.3524  (not concave)
+Iteration 120: log likelihood =  -353.3524  (not concave)
+Iteration 121: log likelihood =  -353.3524  (not concave)
+Iteration 122: log likelihood =  -353.3524  (not concave)
+Iteration 123: log likelihood =  -353.3524  (backed up)
+Iteration 124: log likelihood =  -353.3524  (not concave)
+Iteration 125: log likelihood =  -353.3524  (not concave)
+Iteration 126: log likelihood =  -353.3524  (backed up)
+Iteration 127: log likelihood =  -353.3524  (not concave)
+Iteration 128: log likelihood =  -353.3524  (not concave)
+Iteration 129: log likelihood =  -353.3524  (not concave)
+Iteration 130: log likelihood =  -353.3524  (not concave)
+Iteration 131: log likelihood =  -353.3524  (backed up)
+Iteration 132: log likelihood =  -353.3524  (not concave)
+Iteration 133: log likelihood =  -353.3524  (not concave)
+Iteration 134: log likelihood =  -353.3524  (not concave)
+Iteration 135: log likelihood =  -353.3524  (not concave)
+Iteration 136: log likelihood =  -353.3524  (not concave)
+Iteration 137: log likelihood =  -353.3524  (not concave)
+Iteration 138: log likelihood =  -353.3524  (not concave)
+Iteration 139: log likelihood =  -353.3524  (not concave)
+Iteration 140: log likelihood =  -353.3524  (not concave)
+Iteration 141: log likelihood =  -353.3524  (backed up)
+Iteration 142: log likelihood =  -353.3524  (not concave)
+Iteration 143: log likelihood =  -353.3524  (not concave)
+Iteration 144: log likelihood =  -353.3524  (not concave)
+Iteration 145: log likelihood = -352.59963  
+Iteration 146: log likelihood = -352.59963  (backed up)
+Iteration 147: log likelihood = -352.59963  (backed up)
+Iteration 148: log likelihood = -352.59963  (backed up)
+Iteration 149: log likelihood = -352.59963  (backed up)
+Iteration 150: log likelihood = -352.59963  (backed up)
+Iteration 151: log likelihood = -352.59963  (not concave)
+Iteration 152: log likelihood = -352.59963  (not concave)
+Iteration 153: log likelihood = -352.59963  (not concave)
+Iteration 154: log likelihood = -352.59963  (not concave)
+Iteration 155: log likelihood = -352.59963  (not concave)
+Iteration 156: log likelihood = -352.59963  (backed up)
+Iteration 157: log likelihood = -352.59963  (not concave)
+Iteration 158: log likelihood = -352.59963  (not concave)
+Iteration 159: log likelihood = -352.59963  (not concave)
+Iteration 160: log likelihood = -352.59963  (not concave)
+Iteration 161: log likelihood = -352.59963  (not concave)
+Iteration 162: log likelihood = -352.59963  (not concave)
+Iteration 163: log likelihood = -352.59963  (not concave)
+Iteration 164: log likelihood = -352.59963  (not concave)
+Iteration 165: log likelihood = -352.59963  (not concave)
+Iteration 166: log likelihood = -352.59963  (not concave)
+Iteration 167: log likelihood = -352.59963  (not concave)
+Iteration 168: log likelihood = -352.59963  (not concave)
+Iteration 169: log likelihood = -352.59963  (not concave)
+Iteration 170: log likelihood = -352.59963  (not concave)
+Iteration 171: log likelihood = -352.59963  (not concave)
+Iteration 172: log likelihood = -352.59963  (not concave)
+Iteration 173: log likelihood = -352.59963  (not concave)
+Iteration 174: log likelihood = -352.59963  (not concave)
+Iteration 175: log likelihood = -352.59963  (not concave)
+Iteration 176: log likelihood = -352.59963  (not concave)
+Iteration 177: log likelihood = -352.59963  (not concave)
+Iteration 178: log likelihood = -352.59963  (not concave)
+Iteration 179: log likelihood = -352.59963  (not concave)
+Iteration 180: log likelihood = -352.59963  (not concave)
+Iteration 181: log likelihood = -352.59963  (not concave)
+Iteration 182: log likelihood = -352.59963  (not concave)
+Iteration 183: log likelihood = -352.59963  (not concave)
+Iteration 184: log likelihood = -352.59963  (not concave)
+Iteration 185: log likelihood = -352.59963  (not concave)
+Iteration 186: log likelihood = -352.59963  (not concave)
+Iteration 187: log likelihood = -352.59963  (not concave)
+Iteration 188: log likelihood = -352.59963  (not concave)
+Iteration 189: log likelihood = -352.59963  (not concave)
+Iteration 190: log likelihood = -352.59963  (not concave)
+Iteration 191: log likelihood = -352.59963  (not concave)
+Iteration 192: log likelihood = -352.59963  (not concave)
+Iteration 193: log likelihood = -352.59963  (not concave)
+Iteration 194: log likelihood = -352.59963  (not concave)
+Iteration 195: log likelihood = -352.59963  (not concave)
+Iteration 196: log likelihood = -352.59963  (not concave)
+Iteration 197: log likelihood = -352.59963  (not concave)
+Iteration 198: log likelihood = -352.59963  (not concave)
+Iteration 199: log likelihood = -352.59963  (not concave)
+Iteration 200: log likelihood = -352.59963  (not concave)
+Iteration 201: log likelihood = -352.59963  (not concave)
+Iteration 202: log likelihood = -352.59963  (not concave)
+Iteration 203: log likelihood = -352.59963  (not concave)
+Iteration 204: log likelihood = -352.59963  (not concave)
+Iteration 205: log likelihood = -352.59963  (not concave)
+Iteration 206: log likelihood = -352.59963  (not concave)
+Iteration 207: log likelihood = -352.59963  (not concave)
+Iteration 208: log likelihood = -352.59963  (not concave)
+Iteration 209: log likelihood = -352.59963  (not concave)
+Iteration 210: log likelihood = -352.59963  (not concave)
+Iteration 211: log likelihood = -352.59963  (not concave)
+Iteration 212: log likelihood = -352.59963  (not concave)
+Iteration 213: log likelihood = -352.59963  (not concave)
+Iteration 214: log likelihood = -352.59963  (not concave)
+Iteration 215: log likelihood = -352.59963  (not concave)
+Iteration 216: log likelihood = -352.59963  (not concave)
+Iteration 217: log likelihood = -352.59963  (not concave)
+Iteration 218: log likelihood = -352.59963  (not concave)
+Iteration 219: log likelihood = -352.59963  (not concave)
+Iteration 220: log likelihood = -352.59963  (not concave)
+Iteration 221: log likelihood = -352.59963  (not concave)
+Iteration 222: log likelihood = -352.59963  (not concave)
+Iteration 223: log likelihood = -352.59963  (not concave)
+Iteration 224: log likelihood = -352.59963  (not concave)
+Iteration 225: log likelihood = -352.59963  (not concave)
+Iteration 226: log likelihood = -352.59963  (not concave)
+Iteration 227: log likelihood = -352.59963  (not concave)
+Iteration 228: log likelihood = -352.59963  (not concave)
+Iteration 229: log likelihood = -352.59963  (not concave)
+Iteration 230: log likelihood = -352.59963  (not concave)
+Iteration 231: log likelihood = -352.59963  (not concave)
+Iteration 232: log likelihood = -352.59963  (not concave)
+Iteration 233: log likelihood = -352.59963  (not concave)
+Iteration 234: log likelihood = -352.59963  (not concave)
+Iteration 235: log likelihood = -352.59963  (not concave)
+Iteration 236: log likelihood = -352.59963  (not concave)
+Iteration 237: log likelihood = -352.59963  (not concave)
+Iteration 238: log likelihood = -352.59963  (not concave)
+Iteration 239: log likelihood = -352.59963  (not concave)
+Iteration 240: log likelihood = -352.59963  (not concave)
+Iteration 241: log likelihood = -352.59963  (not concave)
+Iteration 242: log likelihood = -352.59963  (not concave)
+Iteration 243: log likelihood = -352.59963  (not concave)
+Iteration 244: log likelihood = -352.59963  (not concave)
+Iteration 245: log likelihood = -352.59963  (not concave)
+Iteration 246: log likelihood = -352.59963  (not concave)
+Iteration 247: log likelihood = -352.59963  (backed up)
+Iteration 248: log likelihood = -352.59963  (not concave)
+Iteration 249: log likelihood = -352.59963  (not concave)
+Iteration 250: log likelihood = -352.59963  (not concave)
+Iteration 251: log likelihood = -352.59963  (not concave)
+Iteration 252: log likelihood = -352.59963  (not concave)
+Iteration 253: log likelihood = -352.59963  (not concave)
+Iteration 254: log likelihood = -352.59963  (not concave)
+Iteration 255: log likelihood = -352.59963  (not concave)
+Iteration 256: log likelihood = -352.59963  (not concave)
+Iteration 257: log likelihood = -352.59963  (not concave)
+Iteration 258: log likelihood = -352.59963  (not concave)
+Iteration 259: log likelihood = -352.59963  (not concave)
+Iteration 260: log likelihood = -352.59963  (not concave)
+Iteration 261: log likelihood = -352.59963  (not concave)
+Iteration 262: log likelihood = -352.59963  (not concave)
+Iteration 263: log likelihood = -352.59963  (not concave)
+Iteration 264: log likelihood = -352.59963  (not concave)
+Iteration 265: log likelihood = -352.59963  (not concave)
+Iteration 266: log likelihood = -352.59963  (not concave)
+Iteration 267: log likelihood = -352.59963  (not concave)
+Iteration 268: log likelihood = -352.59963  (not concave)
+Iteration 269: log likelihood = -352.59963  (not concave)
+Iteration 270: log likelihood = -352.59963  (not concave)
+Iteration 271: log likelihood = -352.59963  (not concave)
+Iteration 272: log likelihood = -352.59963  (not concave)
+Iteration 273: log likelihood = -352.59963  (not concave)
+Iteration 274: log likelihood = -352.59963  (not concave)
+Iteration 275: log likelihood = -352.59963  (not concave)
+Iteration 276: log likelihood = -352.59963  (not concave)
+Iteration 277: log likelihood = -352.59963  (not concave)
+Iteration 278: log likelihood = -352.59963  (not concave)
+Iteration 279: log likelihood = -352.59963  (not concave)
+Iteration 280: log likelihood = -352.59963  (not concave)
+Iteration 281: log likelihood = -352.59963  (not concave)
+Iteration 282: log likelihood = -352.59963  (not concave)
+Iteration 283: log likelihood = -352.59963  (not concave)
+Iteration 284: log likelihood = -352.59963  (not concave)
+Iteration 285: log likelihood = -352.59963  (not concave)
+Iteration 286: log likelihood = -352.59963  (not concave)
+Iteration 287: log likelihood = -352.59963  (not concave)
+Iteration 288: log likelihood = -352.59963  (not concave)
+Iteration 289: log likelihood = -352.59963  (not concave)
+Iteration 290: log likelihood = -352.59963  (not concave)
+Iteration 291: log likelihood = -352.59963  (not concave)
+Iteration 292: log likelihood = -352.59963  (not concave)
+Iteration 293: log likelihood = -352.59963  (not concave)
+Iteration 294: log likelihood = -352.59963  (not concave)
+Iteration 295: log likelihood = -352.59963  (not concave)
+Iteration 296: log likelihood = -352.59963  (not concave)
+Iteration 297: log likelihood = -352.59963  (not concave)
+Iteration 298: log likelihood = -352.59963  (not concave)
+Iteration 299: log likelihood = -352.59963  (not concave)
+Iteration 300: log likelihood = -352.59963  (not concave)
+Iteration 301: log likelihood = -352.59963  (not concave)
+Iteration 302: log likelihood = -352.59963  (not concave)
+Iteration 303: log likelihood = -352.59963  (not concave)
+Iteration 304: log likelihood = -352.59963  (not concave)
+Iteration 305: log likelihood = -352.59963  (not concave)
+Iteration 306: log likelihood = -352.59963  (not concave)
+Iteration 307: log likelihood = -352.59963  (not concave)
+Iteration 308: log likelihood = -352.59963  (not concave)
+Iteration 309: log likelihood = -352.59963  (not concave)
+Iteration 310: log likelihood = -352.59963  (not concave)
+Iteration 311: log likelihood = -352.59963  (not concave)
+Iteration 312: log likelihood = -352.59963  (not concave)
+Iteration 313: log likelihood = -352.59963  (not concave)
+Iteration 314: log likelihood = -352.59963  (not concave)
+Iteration 315: log likelihood = -352.59963  (not concave)
+Iteration 316: log likelihood = -352.59963  (not concave)
+Iteration 317: log likelihood = -352.59963  (not concave)
+Iteration 318: log likelihood = -352.59963  (not concave)
+Iteration 319: log likelihood = -352.59963  (not concave)
+Iteration 320: log likelihood = -352.59963  (not concave)
+Iteration 321: log likelihood = -352.59963  (not concave)
+Iteration 322: log likelihood = -352.59963  (not concave)
+Iteration 323: log likelihood = -352.59963  (not concave)
+Iteration 324: log likelihood = -352.59963  (not concave)
+Iteration 325: log likelihood = -352.59963  (not concave)
+Iteration 326: log likelihood = -352.59963  (not concave)
+Iteration 327: log likelihood = -352.59963  (not concave)
+Iteration 328: log likelihood = -352.59963  (not concave)
+Iteration 329: log likelihood = -352.59963  (not concave)
+Iteration 330: log likelihood = -352.59963  (not concave)
+Iteration 331: log likelihood = -352.59963  (not concave)
+Iteration 332: log likelihood = -352.59963  (not concave)
+Iteration 333: log likelihood = -352.59963  (not concave)
+Iteration 334: log likelihood = -352.59963  (backed up)
+Iteration 335: log likelihood = -352.59963  (not concave)
+Iteration 336: log likelihood = -352.59963  (not concave)
+Iteration 337: log likelihood = -352.59963  (not concave)
+Iteration 338: log likelihood = -352.59963  (backed up)
+Iteration 339: log likelihood = -352.59963  (not concave)
+Iteration 340: log likelihood = -352.59963  (not concave)
+Iteration 341: log likelihood = -352.59963  (not concave)
+Iteration 342: log likelihood = -352.59963  (not concave)
+Iteration 343: log likelihood = -352.59963  (not concave)
+Iteration 344: log likelihood = -352.59963  (not concave)
+Iteration 345: log likelihood = -352.59963  (not concave)
+Iteration 346: log likelihood = -352.59963  (not concave)
+Iteration 347: log likelihood = -352.59963  (not concave)
+Iteration 348: log likelihood = -352.59963  (not concave)
+Iteration 349: log likelihood = -352.59963  (not concave)
+Iteration 350: log likelihood = -352.59963  (backed up)
+Iteration 351: log likelihood = -352.59963  (not concave)
+Iteration 352: log likelihood = -352.59963  (not concave)
+Iteration 353: log likelihood = -352.59963  (not concave)
+Iteration 354: log likelihood = -352.59963  (not concave)
+Iteration 355: log likelihood = -352.59963  (not concave)
+Iteration 356: log likelihood = -352.59963  (not concave)
+Iteration 357: log likelihood = -352.59963  (not concave)
+Iteration 358: log likelihood = -352.59963  (not concave)
+Iteration 359: log likelihood = -352.59963  (not concave)
+Iteration 360: log likelihood = -352.59963  (not concave)
+Iteration 361: log likelihood = -352.59963  (not concave)
+Iteration 362: log likelihood = -352.59963  (not concave)
+Iteration 363: log likelihood = -352.59963  (not concave)
+Iteration 364: log likelihood = -352.59963  (not concave)
+Iteration 365: log likelihood = -352.59963  (not concave)
+Iteration 366: log likelihood = -352.59963  (not concave)
+Iteration 367: log likelihood = -352.59963  (not concave)
+Iteration 368: log likelihood = -352.59963  (not concave)
+Iteration 369: log likelihood = -352.59963  (not concave)
+Iteration 370: log likelihood = -352.59963  (not concave)
+Iteration 371: log likelihood = -352.59963  (not concave)
+Iteration 372: log likelihood = -352.59963  (not concave)
+Iteration 373: log likelihood = -352.59963  (not concave)
+Iteration 374: log likelihood = -352.59963  (not concave)
+Iteration 375: log likelihood = -352.59963  (not concave)
+Iteration 376: log likelihood = -352.59963  (not concave)
+Iteration 377: log likelihood = -352.59963  (not concave)
+Iteration 378: log likelihood = -352.59963  (not concave)
+Iteration 379: log likelihood = -352.59963  (not concave)
+Iteration 380: log likelihood = -352.59963  (not concave)
+Iteration 381: log likelihood = -352.59963  (not concave)
+Iteration 382: log likelihood = -352.59963  (not concave)
+Iteration 383: log likelihood = -352.59963  (not concave)
+Iteration 384: log likelihood = -352.59963  (not concave)
+Iteration 385: log likelihood = -352.59963  (not concave)
+Iteration 386: log likelihood = -352.59963  (not concave)
+Iteration 387: log likelihood = -352.59963  (not concave)
+Iteration 388: log likelihood = -352.59963  (not concave)
+Iteration 389: log likelihood = -352.59963  (not concave)
+Iteration 390: log likelihood = -352.59963  (not concave)
+Iteration 391: log likelihood = -352.59963  (not concave)
+Iteration 392: log likelihood = -352.59963  (not concave)
+Iteration 393: log likelihood = -352.59963  (not concave)
+Iteration 394: log likelihood = -352.59963  (not concave)
+Iteration 395: log likelihood = -352.59963  (not concave)
+Iteration 396: log likelihood = -352.59963  (not concave)
+Iteration 397: log likelihood = -352.59963  (not concave)
+Iteration 398: log likelihood = -352.59963  (not concave)
+Iteration 399: log likelihood = -352.59963  (not concave)
+Iteration 400: log likelihood = -352.59963  (not concave)
+Iteration 401: log likelihood = -352.59963  (not concave)
+Iteration 402: log likelihood = -352.59963  (not concave)
+Iteration 403: log likelihood = -352.59963  (not concave)
+Iteration 404: log likelihood = -352.59963  (not concave)
+Iteration 405: log likelihood = -352.59963  (not concave)
+Iteration 406: log likelihood = -352.59963  (not concave)
+Iteration 407: log likelihood = -352.59963  (backed up)
+Iteration 408: log likelihood = -352.59963  (not concave)
+Iteration 409: log likelihood = -352.59963  (not concave)
+Iteration 410: log likelihood = -352.59963  (not concave)
+Iteration 411: log likelihood = -352.59963  (backed up)
+Iteration 412: log likelihood = -352.59963  (backed up)
+Iteration 413: log likelihood = -352.59963  (not concave)
+Iteration 414: log likelihood = -352.59963  (not concave)
+Iteration 415: log likelihood = -352.59963  (not concave)
+Iteration 416: log likelihood = -352.59963  (not concave)
+Iteration 417: log likelihood = -352.59963  (backed up)
+Iteration 418: log likelihood = -352.59963  (not concave)
+Iteration 419: log likelihood = -352.59963  (not concave)
+Iteration 420: log likelihood = -352.59963  (not concave)
+Iteration 421: log likelihood = -352.59963  (not concave)
+Iteration 422: log likelihood = -352.59963  (not concave)
+Iteration 423: log likelihood = -352.59963  (not concave)
+Iteration 424: log likelihood = -352.59963  (not concave)
+Iteration 425: log likelihood = -352.59963  (not concave)
+Iteration 426: log likelihood = -352.59963  (not concave)
+Iteration 427: log likelihood = -352.59963  (not concave)
+Iteration 428: log likelihood = -352.59963  (not concave)
+Iteration 429: log likelihood = -352.59963  (not concave)
+Iteration 430: log likelihood = -352.59963  (not concave)
+Iteration 431: log likelihood = -352.59963  (not concave)
+Iteration 432: log likelihood = -352.59963  (not concave)
+Iteration 433: log likelihood = -352.59963  (backed up)
+Iteration 434: log likelihood = -352.59963  (not concave)
+Iteration 435: log likelihood = -352.59963  (not concave)
+Iteration 436: log likelihood = -352.59963  (not concave)
+Iteration 437: log likelihood = -352.59963  (not concave)
+Iteration 438: log likelihood = -352.59963  (not concave)
+Iteration 439: log likelihood = -352.59963  (not concave)
+Iteration 440: log likelihood = -352.59963  (not concave)
+Iteration 441: log likelihood = -352.56293  
+Iteration 442: log likelihood = -352.56293  (not concave)
+Iteration 443: log likelihood = -352.56293  (not concave)
+Iteration 444: log likelihood = -352.56293  (not concave)
+Iteration 445: log likelihood = -352.56293  (not concave)
+Iteration 446: log likelihood = -352.56293  (not concave)
+Iteration 447: log likelihood = -352.56293  (not concave)
+Iteration 448: log likelihood = -352.56293  (not concave)
+Iteration 449: log likelihood = -352.56293  (not concave)
+Iteration 450: log likelihood = -352.56293  (not concave)
+Iteration 451: log likelihood = -352.56293  (not concave)
+Iteration 452: log likelihood = -352.56293  (backed up)
+Iteration 453: log likelihood = -352.56293  (not concave)
+Iteration 454: log likelihood = -352.56293  (not concave)
+Iteration 455: log likelihood = -352.56293  (not concave)
+Iteration 456: log likelihood = -352.56293  (not concave)
+Iteration 457: log likelihood = -352.56293  (not concave)
+Iteration 458: log likelihood = -352.56293  (not concave)
+Iteration 459: log likelihood = -352.56293  (not concave)
+Iteration 460: log likelihood = -352.56293  (not concave)
+Iteration 461: log likelihood = -352.56293  (not concave)
+Iteration 462: log likelihood = -352.56293  (not concave)
+Iteration 463: log likelihood = -352.56293  (not concave)
+Iteration 464: log likelihood = -352.56293  (not concave)
+Iteration 465: log likelihood = -352.56293  (not concave)
+Iteration 466: log likelihood = -352.56293  (not concave)
+Iteration 467: log likelihood = -352.56293  (not concave)
+Iteration 468: log likelihood = -352.56293  (not concave)
+Iteration 469: log likelihood = -352.56293  (backed up)
+Iteration 470: log likelihood = -352.56002  
+Iteration 471: log likelihood = -352.56002  (backed up)
+Iteration 472: log likelihood = -352.56002  (backed up)
+Iteration 473: log likelihood = -352.56002  (not concave)
+Iteration 474: log likelihood = -352.56002  (not concave)
+Iteration 475: log likelihood = -352.56002  (not concave)
+Iteration 476: log likelihood = -352.56002  (not concave)
+Iteration 477: log likelihood = -352.56002  (not concave)
+Iteration 478: log likelihood = -352.56002  (not concave)
+Iteration 479: log likelihood = -352.56002  (not concave)
+Iteration 480: log likelihood = -352.56002  (not concave)
+Iteration 481: log likelihood = -352.56002  (not concave)
+Iteration 482: log likelihood = -352.56002  (not concave)
+Iteration 483: log likelihood = -352.56002  (not concave)
+Iteration 484: log likelihood = -352.56002  (not concave)
+Iteration 485: log likelihood = -352.56002  (not concave)
+Iteration 486: log likelihood = -352.56002  (not concave)
+Iteration 487: log likelihood = -352.56002  (not concave)
+Iteration 488: log likelihood = -352.56002  
+Iteration 489: log likelihood = -352.56002  (backed up)
+Iteration 490: log likelihood = -352.56002  (backed up)
+Iteration 491: log likelihood = -352.56002  (backed up)
+Iteration 492: log likelihood = -352.56002  (backed up)
+Iteration 493: log likelihood = -352.56002  (not concave)
+Iteration 494: log likelihood = -352.56002  (backed up)
+Iteration 495: log likelihood = -352.56002  (not concave)
+Iteration 496: log likelihood = -352.56002  (not concave)
+Iteration 497: log likelihood = -352.56002  (not concave)
+Iteration 498: log likelihood = -352.56002  (not concave)
+Iteration 499: log likelihood = -352.56002  (not concave)
+Iteration 500: log likelihood = -352.56002  (not concave)
+Iteration 501: log likelihood = -352.56002  (not concave)
+Iteration 502: log likelihood = -352.56002  (not concave)
+Iteration 503: log likelihood = -352.56002  (not concave)
+Iteration 504: log likelihood = -352.56002  (not concave)
+Iteration 505: log likelihood = -352.56002  (not concave)
+Iteration 506: log likelihood = -352.56002  (not concave)
+Iteration 507: log likelihood = -352.56002  (not concave)
+Iteration 508: log likelihood = -352.56002  (not concave)
+Iteration 509: log likelihood = -352.56002  (not concave)
+Iteration 510: log likelihood = -352.56002  (not concave)
+Iteration 511: log likelihood = -352.56002  (not concave)
+Iteration 512: log likelihood = -352.56002  (not concave)
+Iteration 513: log likelihood = -352.56002  (not concave)
+Iteration 514: log likelihood = -352.56001  
+Iteration 515: log likelihood = -352.56001  (backed up)
+Iteration 516: log likelihood = -352.56001  (not concave)
+Iteration 517: log likelihood = -352.56001  (not concave)
+Iteration 518: log likelihood = -352.56001  (not concave)
+Iteration 519: log likelihood = -352.56001  (backed up)
+Iteration 520: log likelihood = -352.56001  (not concave)
+Iteration 521: log likelihood = -352.56001  (not concave)
+Iteration 522: log likelihood = -352.56001  (not concave)
+Iteration 523: log likelihood = -352.56001  (backed up)
+
+Mixed-effects logistic regression               Number of obs     =        600
+Group variable:               g                 Number of groups  =         40
+
+                                                Obs per group:
+                                                              min =         15
+                                                              avg =       15.0
+                                                              max =         15
+
+Integration method: mvaghermite                 Integration pts.  =          7
+
+                                                Wald chi2(1)      =      69.21
+Log likelihood = -352.56001                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .9408838   .1130954     8.32   0.000     .7192209    1.162547
+       _cons |  -.4573968   .1825071    -2.51   0.012    -.8151042   -.0996895
+-------------+----------------------------------------------------------------
+g            |
+       var(x)|    .006391   .0000266                      .0063392    .0064433
+   var(_cons)|   .9471957   .0019774                      .9433279    .9510793
+-------------+----------------------------------------------------------------
+g            |
+ cov(_cons,x)|  -.0778046   .0001182  -658.10   0.000    -.0780364   -.0775729
+------------------------------------------------------------------------------
+LR test vs. logistic model: chi2(3) = 42.28               Prob > chi2 = 0.0000
+
+Note: LR test is conservative and provided only for reference.
+
+. predict p
+(predictions based on fixed effects and posterior means of random effects)
+(option mu assumed)
+(using 7 quadrature points)
+
+. predict re, reffects
+(calculating posterior means of random effects)
+too few variables specified
+r(102);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1002_melogit.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:22:11
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

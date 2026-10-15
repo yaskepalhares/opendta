@@ -46,7 +46,7 @@ def test_stset_variables_and_report():
     assert ds.has("_st") and ds.has("_d") and ds.has("_t") and ds.has("_t0")
     assert ds.get("_t").vtype == "double"           # the time variable is double
     assert "21  failures in single-record/single-failure data" in out
-    assert "1,595  total analysis time at risk and under observation" in out
+    assert "1595  total analysis time at risk and under observation" in out
     assert np.all(ds.get("_t0").data == 0)
 
 
@@ -64,7 +64,10 @@ def test_cox_breslow_efron_robust():
     assert abs(s.e["ll"] - (-78.06471393075837)) < 1e-8
     s.run_command("stcox drug age, vce(robust)")
     b, se = _bse(s)
-    assert np.allclose(np.exp(b) * se, [0.38938351, 0.04435619], rtol=1e-6)
+    # statsmodels' sandwich without Stata's small-sample factor n/(n-1)
+    n = s.e["N"]
+    assert np.allclose(np.exp(b) * se, np.array([0.38938351, 0.04435619]) * np.sqrt(n / (n - 1)),
+                       rtol=1e-6)
 
 
 def test_logrank_and_wilcoxon():
@@ -106,7 +109,8 @@ def test_streg_weibull_matches_direct_maximization():
                           options={"gtol": 1e-10})
     b, _ = _bse(s)
     assert np.allclose(b, r.x, atol=1e-5)
-    assert abs(s.e["ll"] + r.fun) < 1e-8
+    # Stata reports the log likelihood of ln t: sum(d ln t) more than that of t
+    assert abs(s.e["ll"] - np.sum(d * np.log(t)) + r.fun) < 1e-8
     assert "Weibull regression -- log relative-hazard form" in out
     # AFT: same likelihood, coefficients -b/p
     s.run_command("streg drug age, distribution(weibull) time")
@@ -119,7 +123,9 @@ def test_streg_weibull_matches_direct_maximization():
 def test_streg_other_distributions_converge(dist):
     s, out = _session(f"streg drug age, distribution({dist})")
     assert s.e["converged"] == 1
-    assert np.max(np.abs(s.e["gradient"].data)) < 1e-4 if "gradient" in s.e else True
+    # Stata's convergence criterion: g V g' below nrtolerance()
+    g = s.e["gradient"].data.ravel()
+    assert float(g @ s.e["V"].data @ g) < 1e-5
 
 
 def test_streg_lognormal_matches_direct_maximization():
@@ -158,7 +164,7 @@ input id t0 t1 died
 end
 stset t1, id(id) failure(died) time0(t0)""")
     out = "".join(lines)
-    assert "obs. begin on or after (first) failure" in out
+    assert "observation begins on or after (first) failure" in out
     assert "6  subjects" in out and "4  failures in single-failure-per-subject data" in out
     st_ = s.data.get("_st").data
     assert st_.tolist() == [1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0]
@@ -183,3 +189,26 @@ def test_not_st():
     s.output.add_listener(lambda t, style: lines.append(t))
     s.run_text("set obs 3\ngen t = _n\ncapture stcox t\ndisplay _rc")
     assert "119" in "".join(lines)
+
+
+def test_stset_exclusion_lines():
+    s = Session()
+    lines = []
+    s.output.add_listener(lambda t, style: lines.append(t))
+    s.run_text("""clear
+input id t1 died
+1 5 0
+1 9 1
+4 3 0
+4 3 1
+5 . 1
+7 10 1
+7 14 1
+end
+stset t1, id(id) failure(died)""")
+    out = "".join(lines)
+    # both records at the same instant are excluded; the reason continues on a second line
+    assert "          2  multiple records at same instant" + " " * 19 + "PROBABLE ERROR\n" in out
+    assert "             (t1[_n-1]==t1)\n" in out
+    assert "observation begins on or after (first) failure" in out
+    assert "          3  observations remaining, representing" in out

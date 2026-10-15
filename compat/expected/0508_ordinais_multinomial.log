@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0508_ordinais_multinomial.log
   log type:  text
- opened on:   9 Oct 2026, 12:10:02
+ opened on:  15 Oct 2026, 11:21:48
 
 . * Phase 5b: ologit, oprobit and mlogit.
 . clear
@@ -317,5 +317,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0508_ordinais_multinomial.log
   log type:  text
- closed on:   9 Oct 2026, 12:10:02
+ closed on:  15 Oct 2026, 11:21:48
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

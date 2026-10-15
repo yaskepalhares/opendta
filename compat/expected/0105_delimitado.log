@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0105_delimitado.log
   log type:  text
- opened on:   9 Oct 2026, 10:27:08
+ opened on:  15 Oct 2026, 11:21:37
 
 . * Phase 1b: export delimited, import delimited, insheet, outsheet, type.
 . * Creates and deletes temporary files in the current folder.
@@ -182,5 +182,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0105_delimitado.log
   log type:  text
- closed on:   9 Oct 2026, 10:27:08
+ closed on:  15 Oct 2026, 11:21:37
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

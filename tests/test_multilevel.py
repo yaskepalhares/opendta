@@ -102,3 +102,24 @@ def test_melogit_icc_and_predict():
     assert "Residual intraclass correlation" in out
     p = s.data.get("p").data
     assert np.all((p > 0) & (p < 1))
+
+
+def test_reffects_one_variable_per_effect():
+    s, out = _run(LMM + "mixed y week x || id: week\ncapture noisily predict re, reffects\n"
+                  "predict re1 re0, reffects")
+    assert "too few variables specified\nyou must specify 2 new variable(s)" in out
+    ds = s.data
+    # one value per group, in the order of e(revars): week, then _cons
+    assert s.e["revars"] == "week _cons"
+    ids = ds.get("id").data
+    for v in ("re1", "re0"):
+        vals = ds.get(v).data
+        assert all(len(set(vals[ids == g].tolist())) == 1 for g in np.unique(ids))
+    assert np.std(ds.get("re0").data) > np.std(ds.get("re1").data)
+
+
+def test_icc_title_with_covariates():
+    _s, out = _run(LMM + "mixed y week x || id:\nestat icc")
+    assert "Residual intraclass correlation" in out
+    _s, out = _run(LMM + "mixed y || id:\nestat icc")
+    assert "\nIntraclass correlation" in out

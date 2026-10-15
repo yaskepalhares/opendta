@@ -116,7 +116,7 @@ To compare a single file, by the beginning of its name:
 python tools/compare.py 0104
 ```
 
-For each do-file, the output says whether the results are equal (`ok`), different (`XX`), different in a known and documented way (`~~`, see `compat/known_differences.txt`) or still without a reference (`?`). Log headers, blank lines, trailing spaces and the date stamp of `describe` are ignored.
+For each do-file, the output says whether the results are equal (`ok`), different (`XX`), different in a known and documented way (`~~`, see `compat/known_differences.txt`) or still without a reference (`?`). Log headers, blank lines, trailing spaces, the date stamp of `describe` and the checksums of `e(datasignature)` (Stata's algorithm is undocumented) are ignored. A known difference can be limited to some lines with `ignore(/REGEX/)` at the start of its reason: those lines are dropped from both logs and the rest must still be equal.
 
 ### `.dta` files
 

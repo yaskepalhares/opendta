@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
   log type:  text
- opened on:   9 Oct 2026, 10:27:09
+ opened on:  15 Oct 2026, 11:21:41
 
 . * Phase 1a: creating data, types, generate/replace, describe, list, count.
 . clear
@@ -141,5 +141,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
   log type:  text
- closed on:   9 Oct 2026, 10:27:09
+ closed on:  15 Oct 2026, 11:21:41
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

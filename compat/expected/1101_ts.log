@@ -1,0 +1,351 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1101_ts.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:37
+
+. * Phase 10: time series: arima, var, vargranger, varsoc, dfuller, corrgram, newey
+. clear
+
+. set seed 1101
+
+. set obs 150
+number of observations (_N) was 0, now 150
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 150
+                delta:  1 unit
+
+. gen e = rnormal()
+
+. gen u = e
+
+. replace u = 0.6*u[_n-1] + e + 0.3*e[_n-1] in 2/l
+(149 real changes made)
+
+. gen x = rnormal()
+
+. gen y = 2 + 0.5*x + u
+
+. gen w = sum(rnormal() + .1)
+
+. gen z = 0.4*L.y + rnormal() in 2/l
+(1 missing value generated)
+
+. arima y x, ar(1) ma(1)
+
+(setting optimization to BHHH)
+Iteration 0:   log likelihood = -205.58563  
+Iteration 1:   log likelihood = -205.31158  
+Iteration 2:   log likelihood =  -205.1568  
+Iteration 3:   log likelihood = -205.13314  
+Iteration 4:   log likelihood =  -205.1234  
+(switching optimization to BFGS)
+Iteration 5:   log likelihood = -205.12033  
+Iteration 6:   log likelihood = -205.11854  
+Iteration 7:   log likelihood = -205.11853  
+
+ARIMA regression
+
+Sample:  1 - 150                                Number of obs     =        150
+                                                Wald chi2(3)      =     246.51
+Log likelihood = -205.1185                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           x |   .5707906   .0602977     9.47   0.000     .4526094    .6889719
+       _cons |   2.083681   .2911571     7.16   0.000     1.513023    2.654338
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .6327604   .0730773     8.66   0.000     .4895316    .7759893
+             |
+          ma |
+         L1. |   .3739748   .1020788     3.66   0.000      .173904    .5740456
+-------------+----------------------------------------------------------------
+      /sigma |   .9463844   .0574386    16.48   0.000     .8338068    1.058962
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. arima w, arima(1,1,1)
+
+(setting optimization to BHHH)
+Iteration 0:   log likelihood = -203.01872  
+Iteration 1:   log likelihood = -202.82103  
+Iteration 2:   log likelihood = -202.81341  
+Iteration 3:   log likelihood = -202.80398  
+Iteration 4:   log likelihood = -202.78473  
+(switching optimization to BFGS)
+Iteration 5:   log likelihood = -202.78285  
+Iteration 6:   log likelihood = -202.77881  
+Iteration 7:   log likelihood = -202.76903  
+Iteration 8:   log likelihood = -202.76877  
+Iteration 9:   log likelihood = -202.76874  
+Iteration 10:  log likelihood = -202.76874  
+
+ARIMA regression
+
+Sample:  2 - 150                                Number of obs     =        149
+                                                Wald chi2(2)      =       0.04
+Log likelihood = -202.7687                      Prob > chi2       =     0.9819
+
+------------------------------------------------------------------------------
+             |                 OPG
+         D.w |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+w            |
+       _cons |   .2369872   .0772362     3.07   0.002     .0856071    .3883674
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |  -.6262957   6.276211    -0.10   0.921    -12.92744    11.67485
+             |
+          ma |
+         L1. |   .6196624   6.319622     0.10   0.922    -11.76657    13.00589
+-------------+----------------------------------------------------------------
+      /sigma |   .9435782   .0585858    16.11   0.000     .8287521    1.058404
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. arima y, ar(1 2) vce(oim)
+
+(setting optimization to BHHH)
+Iteration 0:   log likelihood = -238.06587  
+Iteration 1:   log likelihood = -238.06158  
+Iteration 2:   log likelihood = -238.06144  
+Iteration 3:   log likelihood = -238.06139  
+Iteration 4:   log likelihood = -238.06137  
+(switching optimization to BFGS)
+Iteration 5:   log likelihood = -238.06136  
+
+ARIMA regression
+
+Sample:  1 - 150                                Number of obs     =        150
+                                                Wald chi2(2)      =     149.21
+Log likelihood = -238.0614                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+       _cons |   2.041074   .2907177     7.02   0.000     1.471278     2.61087
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .7684553   .0813807     9.44   0.000     .6089521    .9279585
+         L2. |  -.0963476   .0816453    -1.18   0.238    -.2563695    .0636743
+-------------+----------------------------------------------------------------
+      /sigma |   1.180446   .0681627    17.32   0.000     1.046849    1.314042
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. var y z, lags(1/2)
+
+Vector autoregression
+
+Sample:  4 - 150                                Number of obs     =        147
+Log likelihood =  -443.3442                     AIC               =   6.167949
+FPE            =   1.635989                     HQIC              =   6.250605
+Det(Sigma_ml)  =   1.427808                     SBIC              =    6.37138
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+y                     5     1.19242   0.4971    145.277   0.0000
+z                     5     1.03738   0.3382   75.12192   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           y |
+         L1. |   .7558391   .0815247     9.27   0.000     .5960536    .9156246
+         L2. |   -.089335   .0940451    -0.95   0.342      -.27366    .0949901
+             |
+           z |
+         L1. |   .0314109   .0934183     0.34   0.737    -.1516856    .2145074
+         L2. |   -.034255   .0831764    -0.41   0.680    -.1972777    .1287676
+             |
+       _cons |   .7089968   .1639396     4.32   0.000      .387681    1.030313
+-------------+----------------------------------------------------------------
+z            |
+           y |
+         L1. |   .3352278   .0709244     4.73   0.000     .1962185     .474237
+         L2. |   .1426543   .0818168     1.74   0.081    -.0177037    .3030124
+             |
+           z |
+         L1. |   -.064594   .0812715    -0.79   0.427    -.2238832    .0946952
+         L2. |   .0374401   .0723613     0.52   0.605    -.1043854    .1792657
+             |
+       _cons |  -.0676864   .1426232    -0.47   0.635    -.3472228      .21185
+------------------------------------------------------------------------------
+
+. vargranger
+
+   Granger causality Wald tests
+  +------------------------------------------------------------------+
+  |          Equation           Excluded |   chi2     df Prob > chi2 |
+  |--------------------------------------+---------------------------|
+  |                 y                  z |  .27928     2    0.870    |
+  |                 y                ALL |  .27928     2    0.870    |
+  |--------------------------------------+---------------------------|
+  |                 z                  y |  56.503     2    0.000    |
+  |                 z                ALL |  56.503     2    0.000    |
+  +------------------------------------------------------------------+
+
+. varsoc y z
+
+   Selection-order criteria
+   Sample:  6 - 150                             Number of obs      =       145
+  +---------------------------------------------------------------------------+
+  |lag |    LL      LR      df    p      FPE       AIC      HQIC      SBIC    |
+  |----+----------------------------------------------------------------------|
+  |  0 |  -504.71                       3.7186    6.9891   7.00578   7.03016  |
+  |  1 | -441.316  126.79*   4  0.000  1.63907*  6.16987*  6.21992*  6.29305* |
+  |  2 | -438.533  5.5646    4  0.234   1.6669   6.18667   6.27008   6.39196  |
+  |  3 | -436.811  3.4452    4  0.486  1.72026   6.21808   6.33486   6.50549  |
+  |  4 | -434.209  5.2036    4  0.267  1.75405   6.23736   6.38751   6.60689  |
+  +---------------------------------------------------------------------------+
+   Endogenous:  y z
+    Exogenous:  _cons
+
+. dfuller w
+
+Dickey-Fuller test for unit root                   Number of obs   =       149
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(t)              0.267            -3.494            -2.887            -2.577
+------------------------------------------------------------------------------
+MacKinnon approximate p-value for Z(t) = 0.9758
+
+. dfuller w, trend lags(2) regress
+
+Augmented Dickey-Fuller test for unit root         Number of obs   =       147
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(t)             -1.913            -4.024            -3.444            -3.144
+------------------------------------------------------------------------------
+MacKinnon approximate p-value for Z(t) = 0.6479
+
+------------------------------------------------------------------------------
+D.w          |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           w |
+         L1. |  -.0339533   .0177483    -1.91   0.058    -.0690383    .0011317
+         LD. |   .0296512   .0824199     0.36   0.720    -.1332774    .1925798
+        L2D. |   .1193947   .0826334     1.44   0.151    -.0439559    .2827452
+      _trend |   .0115189   .0056041     2.06   0.042     .0004406    .0225972
+       _cons |  -.1799017   .2187113    -0.82   0.412    -.6122527    .2524492
+------------------------------------------------------------------------------
+
+. dfuller y, noconstant
+
+Dickey-Fuller test for unit root                   Number of obs   =       149
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(t)             -3.076            -2.593            -1.950            -1.613
+
+. dfuller w, drift
+
+Dickey-Fuller test for unit root                   Number of obs   =       149
+
+                               ----------- Z(t) has t-distribution -----------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(t)              0.267            -2.352            -1.655            -1.287
+------------------------------------------------------------------------------
+p-value for Z(t) = 0.6052
+
+. corrgram y, lags(8)
+
+                                          -1       0       1 -1       0       1
+ LAG       AC       PAC      Q     Prob>Q  [Autocorrelation]  [Partial Autocor]
+-------------------------------------------------------------------------------
+1        0.6995   0.7051   74.875  0.0000          |-----             |-----   
+2        0.4413  -0.0963   104.88  0.0000          |---               |        
+3        0.2682  -0.0129   116.04  0.0000          |--                |        
+4        0.0694  -0.1742   116.79  0.0000          |                 -|        
+5       -0.0230   0.0424   116.87  0.0000          |                  |        
+6       -0.0832  -0.0636   117.97  0.0000          |                  |        
+7       -0.0808   0.0599   119.01  0.0000          |                  |        
+8       -0.0206   0.0547   119.08  0.0000          |                  |        
+
+. newey y x, lag(3)
+
+Regression with Newey-West standard errors      Number of obs     =        150
+maximum lag: 3                                  F(  1,       148) =      13.14
+                                                Prob > F          =     0.0004
+
+------------------------------------------------------------------------------
+             |             Newey-West
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5768467   .1591635     3.62   0.000       .26232    .8913734
+       _cons |   2.092619   .2139536     9.78   0.000      1.66982    2.515418
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(df_m) =  1
+               e(df_r) =  148
+                  e(F) =  13.13510605261021
+                  e(N) =  150
+                e(lag) =  3
+               e(rank) =  2
+
+macros:
+              e(title) : "Regression with Newey-West standard errors"
+                e(cmd) : "newey"
+            e(cmdline) : "newey y x, lag(3)"
+          e(estat_cmd) : "newey_estat"
+            e(predict) : "newey_p"
+            e(vcetype) : "Newey-West"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+
+functions:
+             e(sample)   
+
+. predict yhat
+(option xb assumed; fitted values)
+
+. predict res, residuals
+
+. summarize yhat res
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+        yhat |        150    2.063501     .588359   .4734913   3.610724
+         res |        150   -4.86e-10    1.564573  -4.815091   3.642786
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1101_ts.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:21:38
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

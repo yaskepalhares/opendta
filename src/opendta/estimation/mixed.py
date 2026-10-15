@@ -473,6 +473,7 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     est.display = display_mixed
     est.predict = _predict_mixed
     est.predict_opts = {"fitted": 3, "reffects": 4, "residuals": 3, "rstandard": 4}
+    est.predict_multi = {"reffects": _reffects}
     est.estat = {"icc": (3, estat_icc), "group": (3, estat_group), "recovariance": (5, estat_recov)}
     est.ml_cmd = "mixed"
     # groups per level
@@ -481,23 +482,41 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
         cnt = np.bincount(lv.gid)
         ginfo.append((lv.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max())))
     est.extra["groups"] = ginfo
-    scalars = [("N", float(n)), ("k", float(ball.size)), ("k_f", float(kk)), ("k_r", float(th.size)),
-               ("k_rs", float(nvc)), ("nrgroups", float(len(levels))), ("ll", r.ll), ("chi2", wchi2),
-               ("p", wp), ("df_m", float(len(slopes))), ("ll_c", ll_lin), ("chi2_c", chi2_c),
-               ("df_c", float(nvc)), ("p_c", _p_chibar(chi2_c, nvc)), ("rank", float(ball.size)),
-               ("ic", float(r.iterations)), ("converged", 1.0 if r.converged else 0.0)]
-    macros = [("cmd", "mixed"), ("cmdline", cmdline(cmdname, args)), ("depvar", smp.depname),
-              ("ivars", " ".join(lv.var for lv in levels)),
+    # e() in the order Stata lists it (compat 1001)
+    nvar_p = sum({"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q) for lv in levels)
+    ncov_p = nvc - nvar_p
+    scalars = [("rank", float(ball.size)), ("k_f", float(kk)), ("k_r", float(th.size)),
+               ("k", float(ball.size)), ("k_rs", float(nvar_p + 1)), ("k_rc", float(ncov_p)),
+               ("k_res", 0.0), ("converged", 1.0 if r.converged else 0.0), ("ll", r.ll),
+               ("ll_c", ll_lin), ("df_c", float(nvc)), ("chi2_c", chi2_c),
+               ("p_c", _p_chibar(chi2_c, nvc)), ("N", float(n)), ("nrgroups", float(len(levels))),
+               ("rc", 0.0), ("df_m", float(len(slopes))), ("chi2", wchi2), ("p", wp), ("small", 0.0)]
+    from .results import datasignature
+    sigvars = [smp.depname] + fvars.base_vars(smp.terms)
+    for lv in levels:
+        for nm in lv.names + [lv.var]:
+            if nm != "_cons" and nm not in sigvars and ds.has(nm):
+                sigvars.append(nm)
+    macros = [("cmdline", cmdline(cmdname, args)), ("datasignaturevars", " ".join(sigvars)),
+              ("datasignature", datasignature(s, sigvars, smp.mask)), ("chi2type", "Wald"),
+              ("rstructlab", "Independent"), ("rstructure", "independent"),
+              ("estat_cmd", "mixed_estat"), ("predict", "mixed_p"),
               ("redim", " ".join(str(lv.q) for lv in levels)),
+              ("ivars", " ".join(lv.var for lv in levels)),
               ("vartypes", " ".join({"identity": "Identity", "independent": "Independent",
                                     "exchangeable": "Exchangeable", "unstructured": "Unstructured"}[lv.cov]
                                    for lv in levels)),
-              ("revars", " ".join(" ".join(lv.names) for lv in levels)),
-              ("method", "REML" if reml else "ML"), ("chi2type", "Wald"), ("vce", "oim"),
+              ("revars", " ".join(" ".join(lv.names) for lv in levels)), ("cmd", "mixed"),
               ("title", "Mixed-effects REML regression" if reml else "Mixed-effects ML regression"),
-              ("predict", "mixed_p"), ("estat_cmd", "mixed_estat"), ("properties", "b V"),
-              ("opt", "ml"), ("optmetric", "matsqrt")]
-    post(s, est, scalars, macros, smp.mask)
+              ("technique", "nr"), ("ml_method", "d0"), ("opt", "moptimize"),
+              ("method", "REML" if reml else "ML"), ("optmetric", "matsqrt"), ("depvar", smp.depname),
+              ("properties", "b V")]
+    from ..commands.matrix import Matrix
+    gcols = [lv.var for lv in levels]
+    extra_mats = [(nm, Matrix(np.array([[fn(g) for g in ginfo]], dtype=float), ["r1"], gcols))
+                  for nm, fn in (("g_max", lambda g: g[4]), ("g_avg", lambda g: g[3]),
+                                 ("g_min", lambda g: g[2]), ("N_g", lambda g: g[1]))]
+    post(s, est, scalars, macros, smp.mask, extra_mats=extra_mats)
     display_mixed(s, est, header=not o.get("noheader"), table=not o.get("nofetable"),
                   retable=not o.get("noretable"), group=not o.get("nogroup"),
                   lrtest=not o.get("nolrtest"))
@@ -692,23 +711,6 @@ def _predict_mixed(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     ds = s.data
     rows = np.nonzero(L["mask"])[0]
     u = model.blups(th, b)
-    if stat == "reffects":
-        # random intercept (or the last random effect) of the deepest level, as in predict
-        # newvar, reffects with one variable (VERIFY: Stata asks for one variable per effect)
-        lv_i = len(model.levels) - 1
-        lv = model.levels[lv_i]
-        vals = np.full(ds.nobs, SYS)
-        for cl, uc in zip(model.clusters, u):
-            k = 0
-            for li, copies in cl.blocks:
-                q = model.levels[li].q
-                for c in range(copies):
-                    if li == lv_i:
-                        g = np.unique(lv.gid[cl.rows])[c]
-                        m = lv.gid[cl.rows] == g
-                        vals[rows[cl.rows[m]]] = uc[k + q - 1]
-                    k += q
-        return vals, ""
     fitted = np.full(ds.nobs, SYS)
     for cl, uc in zip(model.clusters, u):
         zu = cl.Z @ uc
@@ -725,6 +727,34 @@ def _predict_mixed(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     raise StataError(198, f"option {stat} not allowed")
 
 
+def _reffects(s: "Session", est: Estimates):
+    """predict newvarlist, reffects: one variable per random effect, from the highest level
+    down and, within a level, in the order of e(revars) ([ME] mixed postestimation)."""
+    L = est.lmm
+    model, th, b = L["model"], L["theta"], L["beta"]
+    nreq = sum(lv.q for lv in model.levels)
+
+    def fn(mask):
+        ds = s.data
+        rows = np.nonzero(L["mask"])[0]
+        u = model.blups(th, b)
+        out = [np.full(ds.nobs, SYS) for _ in range(nreq)]
+        offs = np.cumsum([0] + [lv.q for lv in model.levels])
+        for cl, uc in zip(model.clusters, u):
+            k = 0
+            for li, copies in cl.blocks:
+                lv = model.levels[li]
+                q = lv.q
+                gids = np.unique(lv.gid[cl.rows])
+                for c in range(copies):
+                    m = lv.gid[cl.rows] == gids[c]
+                    for j in range(q):
+                        out[offs[li] + j][rows[cl.rows[m]]] = uc[k + j]
+                    k += q
+        return out
+    return nreq, fn
+
+
 def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
     """Intraclass correlations: for level l, the share of the total variance of the random
     intercepts at l and above ([ME] estat icc). Only random-intercept models."""
@@ -736,13 +766,14 @@ def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
         model, th, Vth = L["model"], L["theta"], L["Vth"]
         levels = L["levels"]
         resid = lambda t: math.exp(2 * t[-1])   # noqa: E731
-        title = "Intraclass correlation"
     else:
         model = None
         levels = est.glmm["levels"]
         th, Vth = est.glmm["theta"], est.glmm["Vth"]
         resid = lambda t: est.glmm["resid_var"]   # noqa: E731
-        title = "Residual intraclass correlation"
+    # with covariates in the fixed part the correlation is conditional on them (compat 1001)
+    has_cov = any(c.values is not None for c in (est.cols or []))
+    title = "Residual intraclass correlation" if has_cov else "Intraclass correlation"
     if any(lv.q != 1 or lv.names[0] != "_cons" for lv in levels):
         raise StataError(498, "estat icc is available only for random-intercept models")   # VERIFY
     out.write(f"\n{title}\n\n", "text")

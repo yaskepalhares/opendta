@@ -116,7 +116,7 @@ Para comparar só um arquivo, pelo começo do nome:
 python tools/compare.py 0104
 ```
 
-A saída indica, para cada do-file, se as saídas são iguais (`ok`), diferentes (`XX`) ou se ainda falta a referência (`?`). Cabeçalhos de log, linhas em branco, espaços no fim das linhas e o carimbo de data do `describe` são ignorados.
+A saída indica, para cada do-file, se as saídas são iguais (`ok`), diferentes (`XX`), diferentes de um modo conhecido e documentado (`~~`, veja `compat/known_differences.txt`) ou se ainda falta a referência (`?`). Cabeçalhos de log, linhas em branco, espaços no fim das linhas, o carimbo de data do `describe` e os checksums de `e(datasignature)` (o algoritmo do Stata não é documentado) são ignorados. Uma diferença conhecida pode ficar restrita a algumas linhas com `ignore(/REGEX/)` no início do motivo: essas linhas saem dos dois logs e o resto ainda precisa ser igual.
 
 ### Arquivos `.dta` (fase 1b)
 
