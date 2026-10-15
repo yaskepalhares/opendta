@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0307_aleatorios.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0307_aleatorios.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:24
+ opened on:  15 Oct 2026, 16:21:34
 
 . * Phase 3d: random-number generator (mt64) and r*() functions.
 . * OpenDTA's sequences only match Stata's if the seed is
@@ -68,7 +68,7 @@ mt64
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0307_aleatorios.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0307_aleatorios.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:24
+ closed on:  15 Oct 2026, 16:21:34
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1201_mi.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1201_mi.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:24
+ opened on:  15 Oct 2026, 16:21:34
 
 . * Phase 10: multiple imputation (mi set, register, impute, estimate, passive, xeq)
 . clear
@@ -36,7 +36,7 @@ number of observations (_N) was 0, now 200
 . mi describe
 
   Style:  mlong
-          last mi update 15oct2026 12:26:24, 0 seconds ago
+          last mi update 15oct2026 16:21:34, 0 seconds ago
 
   Obs.:   complete          135
           incomplete         65  (M = 0 imputations)
@@ -72,7 +72,7 @@ Imputed: m=1 through m=5                        updated =        0
 . mi describe
 
   Style:  mlong
-          last mi update 15oct2026 12:26:24, 0 seconds ago
+          last mi update 15oct2026 16:21:34, 0 seconds ago
 
   Obs.:   complete          135
           incomplete         65  (M = 5 imputations)
@@ -212,7 +212,7 @@ m=1 data:
 
 Contains data
   obs:           200                          
- vars:             6                          15 Oct 2026 12:26
+ vars:             6                          15 Oct 2026 16:21
  size:         4,200                          
 Sorted by: 
      Note: Dataset has changed since last saved.
@@ -223,7 +223,7 @@ Sorted by:
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1201_mi.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1201_mi.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:25
+ closed on:  15 Oct 2026, 16:21:35
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -30,7 +30,10 @@ sort id
 list id g
 restore
 preserve
-bysort g: sample 10
+* bysort would leave the observations of each group in an order that Stata's sort does not
+* fix (ties): sort on a unique key first
+sort g id
+by g: sample 10
 count
 list id g
 restore
@@ -47,6 +50,8 @@ sample 100
 sample 0
 count
 restore
+sample 50, count
+display runiform()
 capture noisily sample 120
 capture noisily sample -1, count
 capture noisily sample 2.5, count

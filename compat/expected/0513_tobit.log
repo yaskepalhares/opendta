@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0513_tobit.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0513_tobit.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 5b: tobit (left censoring and censoring on both sides).
 . clear
@@ -117,7 +117,7 @@ Log likelihood = -87.381235                     Pseudo R2         =     0.1549
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0513_tobit.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0513_tobit.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

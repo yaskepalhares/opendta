@@ -16,11 +16,12 @@ def _run(extra: str):
     return s, "".join(lines), rc
 
 
-def test_percentage_rounds_to_nearest_and_keeps_order():
+def test_percentage_matches_stata_draws_and_order():
+    # Stata 14 (compat 0310): the same ten observations, left in the order of the draws
     s, out, rc = _run("sample 25")
     assert rc == 0 and "(30 observations deleted)" in out
-    ids = s.data.get("id").data
-    assert len(ids) == 10 and np.all(np.diff(ids) > 0) and len(set(ids)) == 10
+    assert s.data.get("id").data.tolist() == [16, 40, 7, 30, 22, 6, 17, 34, 36, 12]
+    assert s.data.sortlist == []
     s, out, _ = _run("keep in 1/37\nsample 10")      # 3.7 -> 4
     assert s.data.nobs == 4
 
@@ -47,9 +48,24 @@ def test_by_option_and_by_prefix():
     assert np.bincount(s.data.get("g").data.astype(int)).tolist() == [7, 7, 7]
 
 
-@pytest.mark.parametrize("cmd,msg", [("sample 120", "percentage must be between 0 and 100"),
-                                     ("sample -1, count", "invalid observation count"),
-                                     ("sample", "invalid syntax")])
-def test_errors(cmd, msg):
-    _s, out, rc = _run(f"capture noisily {cmd}\ndisplay _rc")
-    assert msg in out and "198" in out
+@pytest.mark.parametrize("cmd,msg,rc", [
+    ("sample 120", "120:  # must be between 0 and 100", "198"),
+    ("sample 2.5, count", "'2.5' found where integer expected", "126"),
+    ("sample", "invalid syntax", "198")])
+def test_errors(cmd, msg, rc):
+    _s, out, _ = _run(f"capture noisily {cmd}\ndisplay _rc")
+    assert msg in out and f"\n{rc}\n" in out
+
+
+def test_negative_count_explains_and_drops_all():
+    # Stata 14 carries on after the message (compat 0310)
+    s, out, _ = _run("sample -1, count\ndisplay _rc")
+    assert "-1:  # must be 0 or positive" in out and "(40 observations deleted)" in out
+    assert s.data.nobs == 0
+
+
+def test_sample_100_draws_nothing():
+    s, out, _ = _run("sample 100\ndisplay runiform()")
+    assert "deleted" not in out
+    t, out2, _ = _run("display runiform()")
+    assert out.strip().splitlines()[-1] == out2.strip().splitlines()[-1]

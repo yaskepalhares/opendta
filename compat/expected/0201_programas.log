@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0201_programas.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 2: program, syntax, args, gettoken, return/ereturn, temporaries, preserve.
 . capture program drop _all
@@ -137,7 +137,7 @@ Sorted by:
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0201_programas.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0201_programas.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

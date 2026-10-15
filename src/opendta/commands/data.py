@@ -232,10 +232,11 @@ def cmd_sample(s: "Session", args: str) -> None:
     Observations outside if/in are kept; with by() or the by prefix, each group is sampled
     separately.
 
-    One uniform draw per observation, in the current order; in each group the observations
-    with the smallest draws are kept, and the data keep their order. VERIFY: this order of
-    draws, the rounding of the percentage (to the nearest integer) and the messages are
-    checked in compat/do/0310_sample.do."""
+    As observed in Stata 14 (compat 0310): two uniform draws per observation, in the current
+    order (the first set orders the observations, the second breaks ties; VERIFY), also with
+    by (VERIFY); the data end up sorted by group, then the observations in if/in, then the
+    draws, with no sort order recorded; in each group the first n candidates are kept, n being
+    # or round(# x size/100). sample 100 draws nothing."""
     from ..core import rng
     from ..core.grouping import group_ids
     p = parse_standard(args)
@@ -244,19 +245,27 @@ def cmd_sample(s: "Session", args: str) -> None:
     text = p.varlist.strip()
     if not text:
         raise StataError(198, "invalid syntax")
-    try:
-        num = float(s.eval(text))
-    except StataError:
-        raise StataError(198, "invalid syntax") from None
     o = match_options(p.options, {"count": 5, "by": 2}) if p.options.strip() else {}
     count = bool(o.get("count"))
-    if num >= M.SYSMISS:
-        raise StataError(198, "invalid syntax")   # VERIFY
-    if count:
-        if num < 0 or num != int(num):
-            raise StataError(198, f"{text} invalid observation count")   # VERIFY
-    elif not 0 <= num <= 100:
-        raise StataError(198, "percentage must be between 0 and 100")   # VERIFY
+    try:
+        num = float(text)
+    except ValueError:
+        try:
+            num = float(s.eval(text))
+        except StataError:
+            raise StataError(198, "invalid syntax") from None
+    if count and num != int(num):
+        raise StataError(126, f"'{text}' found where integer expected")   # VERIFY: rc
+    if count and num < 0:
+        # Stata 14 explains and carries on, keeping no observation (compat 0310)
+        s.output.write(f"{text}:  # must be 0 or positive; with the count option, it represents "
+                       "the # of observations to be drawn\n", "text")
+        num = 0.0
+    elif not count and not 0 <= num <= 100:
+        s.output.write(f"{text}:  # must be between 0 and 100 and is interpreted as a percent unless "
+                       "option count is also specified, in which case # is interpreted as the number "
+                       "of observations to be drawn\n", "text")
+        raise StataError(198, "invalid syntax")
     ds = s.data
     n = ds.nobs
     mask = touse(s, p)
@@ -269,20 +278,31 @@ def cmd_sample(s: "Session", args: str) -> None:
         ids = np.asarray(s.by_groups.ids, dtype=np.int64)
     else:
         ids = np.zeros(n, dtype=np.int64)
-    u = rng.RNG.uniform(n) if n else np.zeros(0)
+    if not count and num == 100:
+        # nothing to drop: Stata does not draw (compat 0310: the stream advances by 2N for
+        # sample 0 but not for sample 100; VERIFY count >= N)
+        return
+    u1 = rng.RNG.uniform(n) if n else np.zeros(0)
+    u2 = rng.RNG.uniform(n) if n else np.zeros(0)
+    cand = mask & (ids >= 0)
+    # group, then the candidates first, then the draws
+    order = np.lexsort((u2, u1, ~cand, ids))
     keep = np.ones(n, dtype=bool)
-    cand = np.flatnonzero(mask & (ids >= 0))
-    if len(cand):
-        # within each group, the candidates in increasing order of their draw
-        order = cand[np.lexsort((u[cand], ids[cand]))]
-        g = ids[order]
-        starts = np.flatnonzero(np.r_[True, g[1:] != g[:-1]])
-        sizes = np.diff(np.r_[starts, len(order)])
-        for a, size in zip(starts, sizes):
+    oc = cand[order]
+    og = ids[order]
+    sel = order[oc]
+    gs = og[oc]
+    if len(sel):
+        starts = np.flatnonzero(np.r_[True, gs[1:] != gs[:-1]])
+        sizes = np.diff(np.r_[starts, len(sel)])
+        for a_, size in zip(starts, sizes):
             want = min(int(num), size) if count else int(np.floor(num * size / 100 + 0.5))
-            keep[order[a + want:a + size]] = False
-    removed = ds.keep_obs(keep)
-    _note(s, f"({plural(removed, 'observation')} deleted)")
+            keep[sel[a_ + want:a_ + size]] = False
+    ds.reorder_obs(order)
+    ds.sortlist = []
+    removed = ds.keep_obs(keep[order])
+    if removed:
+        _note(s, f"({plural(removed, 'observation')} deleted)")
     s.notify_state()
 
 

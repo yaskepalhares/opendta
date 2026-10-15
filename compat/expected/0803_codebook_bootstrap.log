@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0803_codebook_bootstrap.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0803_codebook_bootstrap.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 8: codebook, misstable and bootstrap
 . * (the bootstrap replicates use OpenDTA's resampling: the standard errors
@@ -290,7 +290,7 @@ Linear regression                               Number of obs     =         74
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0803_codebook_bootstrap.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0803_codebook_bootstrap.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

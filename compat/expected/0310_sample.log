@@ -1,0 +1,226 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/0310_sample.log
+  log type:  text
+ opened on:  15 Oct 2026, 16:21:42
+
+. * Phase 3c: sample (simple random sampling without replacement): percentage, count, if,
+. * by() and the by prefix, rounding, use of the random-number stream and sort order
+. clear
+
+. set seed 310
+
+. set obs 40
+number of observations (_N) was 0, now 40
+
+. gen id = _n
+
+. gen g = mod(_n, 3)
+
+. preserve
+
+. sample 25
+(30 observations deleted)
+
+. count
+  10
+
+. list id
+
+     +----+
+     | id |
+     |----|
+  1. | 16 |
+  2. | 40 |
+  3. |  7 |
+  4. | 30 |
+  5. | 22 |
+     |----|
+  6. |  6 |
+  7. | 17 |
+  8. | 34 |
+  9. | 36 |
+ 10. | 12 |
+     +----+
+
+. display runiform()
+.33797164
+
+. restore
+
+. preserve
+
+. sample 7, count
+(33 observations deleted)
+
+. list id
+
+     +----+
+     | id |
+     |----|
+  1. | 23 |
+  2. | 15 |
+  3. | 30 |
+  4. | 28 |
+  5. | 11 |
+     |----|
+  6. |  9 |
+  7. |  8 |
+     +----+
+
+. display runiform()
+.58277289
+
+. restore
+
+. preserve
+
+. sample 50 if g == 0
+(6 observations deleted)
+
+. tabulate g
+
+          g |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          0 |          7       20.59       20.59
+          1 |         14       41.18       61.76
+          2 |         13       38.24      100.00
+------------+-----------------------------------
+      Total |         34      100.00
+
+. restore
+
+. preserve
+
+. sample 50 in 1/10
+(5 observations deleted)
+
+. list id in 1/12
+
+     +----+
+     | id |
+     |----|
+  1. |  1 |
+  2. |  6 |
+  3. |  8 |
+  4. |  7 |
+  5. |  2 |
+     |----|
+  6. | 33 |
+  7. | 35 |
+  8. | 32 |
+  9. | 36 |
+ 10. | 25 |
+     |----|
+ 11. | 20 |
+ 12. | 31 |
+     +----+
+
+. restore
+
+. preserve
+
+. sample 2, count by(g)
+(34 observations deleted)
+
+. sort id
+
+. list id g
+
+     +--------+
+     | id   g |
+     |--------|
+  1. |  1   1 |
+  2. |  6   0 |
+  3. | 10   1 |
+  4. | 12   0 |
+  5. | 14   2 |
+     |--------|
+  6. | 32   2 |
+     +--------+
+
+. restore
+
+. preserve
+
+. bysort g: sample 10
+(37 observations deleted)
+
+. count
+  3
+
+. list id g
+
+     +--------+
+     | id   g |
+     |--------|
+  1. | 15   0 |
+  2. | 31   1 |
+  3. | 32   2 |
+     +--------+
+
+. restore
+
+. preserve
+
+. sort g id
+
+. sample 50
+(20 observations deleted)
+
+. describe, short
+
+Contains data
+  obs:            20                          
+ vars:             2                          
+ size:           160                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. restore
+
+. preserve
+
+. keep in 1/37
+(3 observations deleted)
+
+. sample 10
+(33 observations deleted)
+
+. count
+  4
+
+. sample 100
+
+. sample 0
+(4 observations deleted)
+
+. count
+  0
+
+. restore
+
+. capture noisily sample 120
+120:  # must be between 0 and 100 and is interpreted as a percent unless option count is also specified, in which case # is interpreted as the number of observations to be drawn
+invalid syntax
+
+. capture noisily sample -1, count
+-1:  # must be 0 or positive; with the count option, it represents the # of observations to be drawn
+(40 observations deleted)
+
+. capture noisily sample 2.5, count
+'2.5' found where integer expected
+
+. capture noisily sample
+invalid syntax
+
+. display runiform()
+.65482256
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/0310_sample.log
+  log type:  text
+ closed on:  15 Oct 2026, 16:21:42
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

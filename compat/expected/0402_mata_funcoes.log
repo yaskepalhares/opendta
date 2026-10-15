@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0402_mata_funcoes.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0402_mata_funcoes.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:31
+ opened on:  15 Oct 2026, 16:21:42
 
 . * Phase 4: user functions, references, structs and pointers in Mata.
 . mata
@@ -88,7 +88,7 @@
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0402_mata_funcoes.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0402_mata_funcoes.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:31
+ closed on:  15 Oct 2026, 16:21:42
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

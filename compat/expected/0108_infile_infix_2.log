@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0108_infile_infix_2.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0108_infile_infix_2.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:23
+ opened on:  15 Oct 2026, 16:21:33
 
 . * Phase 1c (continuation of 0107, which stopped at label list): infile with
 . * :label and automatic, x1-x2, infix, dictionary and file read.
@@ -207,7 +207,7 @@ Ana 30 1.5 eof=0
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0108_infile_infix_2.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0108_infile_infix_2.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:23
+ closed on:  15 Oct 2026, 16:21:33
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

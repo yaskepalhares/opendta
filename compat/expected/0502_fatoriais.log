@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0502_fatoriais.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0502_fatoriais.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 5a: factor variables and interactions in regress.
 . clear
@@ -355,7 +355,7 @@ gfrac:  factor variables may not contain noninteger values
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0502_fatoriais.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0502_fatoriais.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0601_svy.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:23
+ opened on:  15 Oct 2026, 16:21:32
 
 . * Phase 6: svyset, svydescribe, mean/proportion/total/ratio and svy:.
 . clear
@@ -494,7 +494,7 @@ Number of PSUs   =      20        Population size =     15,980
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0601_svy.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:23
+ closed on:  15 Oct 2026, 16:21:33
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

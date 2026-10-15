@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0902_stcox_streg.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0902_stcox_streg.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:31
+ opened on:  15 Oct 2026, 16:21:42
 
 . * Phase 10: stcox, estat phtest, predict after stcox and streg
 . clear
@@ -726,7 +726,7 @@ Log pseudolikelihood =   -143.12836             Prob > chi2      =      0.0004
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0902_stcox_streg.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0902_stcox_streg.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:31
+ closed on:  15 Oct 2026, 16:21:42
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
