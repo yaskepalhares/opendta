@@ -335,6 +335,48 @@ def cmd_mepoisson(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("arima", "arima")
+def cmd_arima(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_arima as run
+    run(s, args)
+
+
+@command("var", "var")
+def cmd_var(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_var as run
+    run(s, args)
+
+
+@command("varsoc", "varsoc")
+def cmd_varsoc(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_varsoc as run
+    run(s, args)
+
+
+@command("vargranger", "vargranger")
+def cmd_vargranger(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_vargranger as run
+    run(s, args)
+
+
+@command("dfuller", "dfuller")
+def cmd_dfuller(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_dfuller as run
+    run(s, args)
+
+
+@command("corrgram", "corrgram")
+def cmd_corrgram(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_corrgram as run
+    run(s, args)
+
+
+@command("newey", "newey")
+def cmd_newey(s: "Session", args: str) -> None:
+    from ..estimation.tsmodels import cmd_newey as run
+    run(s, args)
+
+
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY

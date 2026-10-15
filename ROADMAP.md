@@ -129,7 +129,8 @@ The phases are in dependency order. Each one ends with something that can be ope
 - [x] Mata classes (`class`, `extends`, virtual methods, `super`, `this`, static members, constructors; case `0409` awaits the Stata run)
 - [x] Survival analysis: `stset` (with `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (Breslow and Efron ties, strata, robust), `estat phtest`, `streg` (exponential, Weibull, Gompertz, lognormal, loglogistic) and their `predict` options; cases `0901`–`0902` await the Stata run
 - [x] Multilevel models: `mixed` (ML and REML, nested levels, random slopes, identity/independent/exchangeable/unstructured covariances; `estat icc`, `group`, `recovariance`; `predict`) and `melogit`, `meprobit`, `mepoisson` (adaptive Gauss-Hermite quadrature); cases `1001`–`1002` await the Stata run
-- [ ] Time series (`arima`, `var`), `sem`, `power`, `mi` (multiple imputation) and other commands, prioritized by use
+- [x] Time series: `arima` (exact ML with the Kalman filter, OPG variance), `var`, `varsoc`, `vargranger`, `dfuller` (Fuller critical values, MacKinnon p-values), `corrgram`, `newey`; case `1101` awaits the Stata run
+- [ ] `sem`, `power`, `mi` (multiple imputation), `irf` and other commands, prioritized by use
 - [x] Menu dialogs (38 Statistics and Graphics commands), with a preview of the command and OK, Submit and Copy
 - [x] Help pages for all commands
 - [x] macOS package (`tools/build_macos.sh`: `OpenDTA.app` and `.dmg`; "Open With" for `.do` and `.dta`)
