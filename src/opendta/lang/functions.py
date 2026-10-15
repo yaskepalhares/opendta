@@ -17,11 +17,15 @@ import re
 from typing import Any, Callable
 
 import numpy as np
-from scipy import special, stats
 
 from ..core import missing as M
 from ..core.errors import StataError, type_mismatch
 from ..core.formats import STATA_EPOCH, format_value, parse_format
+from ..lazy import lazy
+
+# scipy is imported when a distribution function is first called (start-up time)
+special = lazy("scipy.special")
+stats = lazy("scipy.stats")
 
 Value = Any
 Impl = Callable[..., Value]

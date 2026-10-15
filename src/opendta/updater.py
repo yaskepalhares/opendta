@@ -23,6 +23,7 @@ import os
 import platform
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -141,9 +142,25 @@ def parse_release(data: dict) -> Release:
     return rel
 
 
+def ssl_context() -> ssl.SSLContext:
+    """Certificate check with certifi's CA bundle. The Python inside the packaged application
+    looks for the certificates where the build machine kept them, which do not exist on the
+    user's computer ("certificate verify failed"); the system store is the fallback when certifi
+    is missing."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except (ImportError, OSError):
+        return ssl.create_default_context()
+
+
+def _urlopen(req, timeout: float):
+    return urllib.request.urlopen(req, timeout=timeout, context=ssl_context())
+
+
 def fetch_latest(timeout: float = 10.0, opener: Callable | None = None) -> Release:
     """The latest published release (drafts and pre-releases are not returned by GitHub)."""
-    open_ = opener or urllib.request.urlopen
+    open_ = opener or _urlopen
     try:
         with open_(_request(API_LATEST), timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -171,7 +188,7 @@ def download(asset: Asset, dest_dir: Path, progress: Callable[[int, int], None] 
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / asset.name
     part = target.with_suffix(target.suffix + ".part")
-    open_ = opener or urllib.request.urlopen
+    open_ = opener or _urlopen
     h = hashlib.sha256()
     done = 0
     try:

@@ -16,15 +16,19 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
+from ..lazy import lazy
 from . import fvars
 from .models2 import _Prep, num_hess
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -119,7 +123,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         chi2, chi2type = max(2 * (res.ll - lr0), 0.0), "LR"
     p = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
     names = [c.name for c in smp.cols] + ([] if P.fe or not pr.constant else ["_cons"])
-    from .models2 import _bmap, _semap, _expand
+    from .models2 import _bmap, _expand, _semap
     kx = pr.X.shape[1] + (0 if P.fe or not pr.constant else 1)
     if P.fe:
         bmap = {}
@@ -359,8 +363,8 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
             g = _num_grad(ll_fe, b)
             return ll, g, num_hess(lambda q: _num_grad(ll_fe, q), b)
         # start: pooled logit (with a constant) on the groups kept (compat 0804)
-        from .models import _logit
         from .ml import maximize
+        from .models import _logit
         Xk = np.column_stack([X[keep], np.ones(int(keep.sum()))])
         lk, _ = _logit(y[keep], Xk, np.ones(int(keep.sum())))
         b_start = maximize(lk, np.zeros(Xk.shape[1])).b[:-1]
@@ -410,8 +414,8 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
             return ll, None, None
         g = _num_grad(ll_re, par)
         return ll, g, num_hess(lambda q: _num_grad(ll_re, q), par)
-    from .models import _logit
     from .ml import maximize
+    from .models import _logit
     lf, _ = _logit(y, Xc, np.ones(len(y)))
     b0 = np.zeros(k)
     if pr.constant:

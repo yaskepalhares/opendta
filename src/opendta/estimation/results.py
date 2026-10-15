@@ -16,10 +16,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core.formats import format_value
+from ..lazy import lazy
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

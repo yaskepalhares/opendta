@@ -10,14 +10,17 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options, parse_standard
+from ..lazy import lazy
 from .results import CoefRow, Estimates, coef_table, post
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -313,8 +316,8 @@ def _qfit(X: np.ndarray, y: np.ndarray, tau: float, w: np.ndarray | None = None)
 
 
 def cmd_qreg(s: "Session", args: str) -> None:
-    from .regress import Sample
     from .postest import replay
+    from .regress import Sample
     if not args.strip() or args.strip().startswith(","):
         replay(s, "qreg", args)
         return

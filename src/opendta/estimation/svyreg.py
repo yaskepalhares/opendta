@@ -11,17 +11,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
 from ..core.dataset import is_string_type
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options
+from ..lazy import lazy
 from . import fvars
 from .regress import Sample
 from .results import Estimates, coef_table, post, rows_from_columns
 from .svy import DesignData, _num, _subpop_mask, require_design
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

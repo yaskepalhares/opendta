@@ -8,18 +8,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QMainWindow, QTabWidget,
-                               QToolBar)
+from PySide6.QtWidgets import (
+    QApplication,
+    QDockWidget,
+    QFileDialog,
+    QMainWindow,
+    QTabWidget,
+    QToolBar,
+)
 
 from ..graphics import render as R
 from ..graphics.model import Graph
 from ..i18n import tr
+from ..lazy import lazy
 from . import graph_editor as GE
 
+# imported with the first graph (start-up time; see opendta/lazy.py)
+_qtagg = lazy("matplotlib.backends.backend_qtagg")
+
 if TYPE_CHECKING:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+
     from ..session import Session
 
 
@@ -77,7 +88,7 @@ class GraphWindow(QMainWindow):
         if not edited:
             self._originals.pop(g.name, None)     # new graph: earlier edits no longer apply
         fig = R.figure(g)
-        canvas = FigureCanvasQTAgg(fig)
+        canvas = _qtagg.FigureCanvasQTAgg(fig)
         old = self.canvases.get(g.name)
         if old is not None:
             idx = self.tabs.indexOf(old)

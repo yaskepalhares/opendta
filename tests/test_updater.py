@@ -77,3 +77,46 @@ def test_update_dialog_builds(monkeypatch, tmp_path):
     d = UpdateDialog(w.updates, updater.parse_release(RELEASE), w)
     assert "0.9.0" in d.findChildren(QtWidgets.QLabel)[0].text()
     w.close()
+
+
+@pytest.mark.parametrize("fails", [True, False])
+def test_check_result_handled_in_gui_thread(monkeypatch, tmp_path, fails):
+    """The check runs in a QThread; its result (error message or update dialog) must be shown
+    from the GUI thread: a dialog opened in the worker thread aborts OpenDTA on macOS."""
+    import threading
+    import time
+
+    monkeypatch.setenv("OPENDTA_SETTINGS", str(tmp_path / "prefs.ini"))
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets")
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from opendta.gui import update_dialog as UD
+    from opendta.gui.main_window import MainWindow
+
+    def fake_fetch():
+        if fails:
+            raise updater.UpdateError("certificate verify failed")
+        return updater.parse_release(RELEASE)
+
+    monkeypatch.setattr(updater, "fetch_latest", fake_fetch)
+    seen = []
+    monkeypatch.setattr(UD.QMessageBox, "warning", lambda *a, **k: seen.append(threading.current_thread()))
+    monkeypatch.setattr(UD.QMessageBox, "information",
+                        lambda *a, **k: seen.append(threading.current_thread()))
+    monkeypatch.setattr(UD.UpdateDialog, "exec", lambda self: seen.append(threading.current_thread()))
+    w = MainWindow()
+    w.updates.check_now()
+    deadline = time.time() + 10
+    while not seen and time.time() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert seen and seen[0] is threading.main_thread()
+    w.updates._thread.wait(5000)
+    w.close()
+
+
+def test_ssl_context_uses_certifi():
+    certifi = pytest.importorskip("certifi")
+    ctx = updater.ssl_context()
+    assert ctx.verify_mode.name == "CERT_REQUIRED"
+    assert ctx.cert_store_stats()["x509_ca"] > 50
+    assert certifi.where()

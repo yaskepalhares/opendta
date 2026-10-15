@@ -8,14 +8,17 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core import stats as S
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
+from ..lazy import lazy
 from .registry import command
 from .summarize import _clopper, _level, _prtest_one, _ttest_one, _ttest_two, g9
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

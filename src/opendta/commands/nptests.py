@@ -12,15 +12,18 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core import stats as S
 from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
+from ..lazy import lazy
 from ._util import touse
 from .registry import command
 from .summarize import _corr_table, _level, _ttest_table, g9, name12, numeric_vars
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

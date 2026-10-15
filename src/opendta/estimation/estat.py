@@ -10,15 +10,17 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
-
-from ..core.stats import chi2_tail as _chi2_tail
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
+from ..core.stats import chi2_tail as _chi2_tail
 from ..lang.syntax import find_top, match_options
+from ..lazy import lazy
 from .results import current
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

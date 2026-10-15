@@ -10,14 +10,18 @@ import re
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_standard
+from ..lazy import lazy
 from . import fvars
-from .results import LINE, CoefRow, coef_table, current, crit, g9, pvalue
+from .results import LINE, CoefRow, coef_table, crit, current, g9, pvalue
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -167,8 +171,8 @@ def cmd_margins(s: "Session", args: str) -> None:
                                   "predict": 4, "level": 1, "post": 4, "noatlegend": 6, "nose": 4,
                                   "vce": 3, "over": 4, "asobserved": 3}) if p.options.strip() else {}
     ds = s.data
-    from .postest import esample
     from ..commands._util import touse
+    from .postest import esample
     sample = esample(s) & touse(s, p)
     rows = np.nonzero(sample)[0]
     if not len(rows):

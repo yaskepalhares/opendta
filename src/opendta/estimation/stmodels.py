@@ -15,16 +15,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
+from ..lazy import lazy
 from . import fvars
 from .ml import maximize, print_log
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
 from .st import header, n_subjects, require_st, st_data
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
