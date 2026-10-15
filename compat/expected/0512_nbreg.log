@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0512_nbreg.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0512_nbreg.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:22
+ opened on:  15 Oct 2026, 16:21:32
 
 . * Phase 5b: nbreg (Poisson, constant-only model, full model).
 . clear
@@ -173,7 +173,7 @@ Log pseudolikelihood = -204.16609               Pseudo R2         =     0.0284
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0512_nbreg.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0512_nbreg.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:23
+ closed on:  15 Oct 2026, 16:21:32
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

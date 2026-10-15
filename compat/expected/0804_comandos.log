@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0804_comandos.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0804_comandos.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:33
+ opened on:  15 Oct 2026, 16:21:44
 
 . * Phase 8: lowess, lrtest, hausman, xtsum, xtdescribe, xtpoisson, xtlogit,
 . * qreg and putexcel
@@ -243,9 +243,9 @@ LR test of rho=0: chibar2(01) = 8.21                   Prob >= chibar2 = 0.002
 
 scalars:
                r(rank) =  1
-               r(chi2) =  .1211168076364858
+               r(chi2) =  .121116807636287
                  r(df) =  1
-                  r(p) =  .7278263640830552
+                  r(p) =  .7278263640832698
 
 . quietly logit yb x
 
@@ -352,7 +352,7 @@ r(198);
 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0804_comandos.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0804_comandos.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

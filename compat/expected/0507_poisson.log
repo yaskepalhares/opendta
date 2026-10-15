@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0507_poisson.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0507_poisson.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:19
+ opened on:  15 Oct 2026, 16:21:29
 
 . * Phase 5b: poisson (offset, exposure, irr, vce) and predict.
 . clear
@@ -213,7 +213,7 @@ Log likelihood =  -166.6254                     Pseudo R2         =     0.0010
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0507_poisson.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0507_poisson.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:19
+ closed on:  15 Oct 2026, 16:21:29
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

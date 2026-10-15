@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0802_anova_estat.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:23
+ opened on:  15 Oct 2026, 16:21:33
 
 . * Phase 8: oneway, anova, tabulate summarize() and estat
 . clear
@@ -427,7 +427,7 @@ Akaike's information criterion and Bayesian information criterion
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0802_anova_estat.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:23
+ closed on:  15 Oct 2026, 16:21:33
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

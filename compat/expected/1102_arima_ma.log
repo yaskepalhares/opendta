@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1102_arima_ma.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1102_arima_ma.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 10: arima with MA terms (Stata's starting values for MA terms are undocumented)
 . clear
@@ -112,7 +112,7 @@ Note: The test of the variance against zero is one sided, and the two-sided
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1102_arima_ma.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1102_arima_ma.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:35
+ closed on:  15 Oct 2026, 16:21:46
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

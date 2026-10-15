@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0901_st.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0901_st.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:35
+ opened on:  15 Oct 2026, 16:21:46
 
 . * Phase 10: survival-time data: stset, stdescribe, stsum, sts list,
 . * sts test and sts generate
@@ -441,7 +441,7 @@ obs. time interval:  (t0, t1]
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0901_st.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0901_st.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:35
+ closed on:  15 Oct 2026, 16:21:46
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0405_mata_erros.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:19
+ opened on:  15 Oct 2026, 16:21:29
 
 . * Phase 4: errors in Mata. Does the "mata" block (without a colon) continue after
 . * an error? And "mata:"?
@@ -80,7 +80,7 @@ r(3499);
 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0405_mata_erros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0405_mata_erros.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:19
+ closed on:  15 Oct 2026, 16:21:29
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

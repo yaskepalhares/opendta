@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0005_controle.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0005_controle.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:23
+ opened on:  15 Oct 2026, 16:21:32
 
 . * Loops, conditionals and the echo of blocks.
 . forvalues i = 1/3 {
@@ -113,7 +113,7 @@ fim
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0005_controle.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0005_controle.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:23
+ closed on:  15 Oct 2026, 16:21:32
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

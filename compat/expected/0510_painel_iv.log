@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0510_painel_iv.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0510_painel_iv.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:22
+ opened on:  15 Oct 2026, 16:21:32
 
 . * Phase 5b: xtreg, areg and ivregress.
 . clear
@@ -268,7 +268,7 @@ functions:
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0510_painel_iv.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0510_painel_iv.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:22
+ closed on:  15 Oct 2026, 16:21:32
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

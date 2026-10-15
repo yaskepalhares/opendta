@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0007_delimit_capture.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0007_delimit_capture.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:31
+ opened on:  15 Oct 2026, 16:21:42
 
 . * #delimit, capture and nested do-files.
 . #delimit ;
@@ -43,7 +43,7 @@ r(198);
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0007_delimit_capture.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0007_delimit_capture.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:31
+ closed on:  15 Oct 2026, 16:21:42
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

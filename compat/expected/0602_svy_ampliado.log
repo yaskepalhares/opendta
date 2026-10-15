@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0602_svy_ampliado.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0602_svy_ampliado.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:21
+ opened on:  15 Oct 2026, 16:21:30
 
 . * Phase 6b: svy with several stages, replicates (jackknife, BRR, bootstrap, SDR), estat effects and more models
 . clear
@@ -406,7 +406,7 @@ r(198);
 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0602_svy_ampliado.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0602_svy_ampliado.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:22
+ closed on:  15 Oct 2026, 16:21:31
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

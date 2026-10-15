@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0506_logit_probit.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0506_logit_probit.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Phase 5b: logit, logistic and probit (iteration log, tables, postestimation).
 . clear
@@ -413,7 +413,7 @@ outcome does not vary; remember:
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0506_logit_probit.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0506_logit_probit.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

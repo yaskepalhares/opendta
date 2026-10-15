@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0303_egen.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0303_egen.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:33
+ opened on:  15 Oct 2026, 16:21:44
 
 . * Phase 3b: egen (group and row functions).
 . clear
@@ -153,7 +153,7 @@ unknown egen function naoexiste()
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0303_egen.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0303_egen.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:33
+ closed on:  15 Oct 2026, 16:21:44
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

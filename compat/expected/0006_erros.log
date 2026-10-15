@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0006_erros.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:34
+ opened on:  15 Oct 2026, 16:21:45
 
 . * Error messages and return codes.
 . capture noisily foo
@@ -85,7 +85,7 @@ scalar naoexiste not found
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0006_erros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0006_erros.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:34
+ closed on:  15 Oct 2026, 16:21:45
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0404_mata_stata.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0404_mata_stata.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:19
+ opened on:  15 Oct 2026, 16:21:28
 
 . * Phase 4: Stata <-> Mata interface (st_*).
 . clear
@@ -116,7 +116,7 @@ r2   3   4
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0404_mata_stata.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0404_mata_stata.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:19
+ closed on:  15 Oct 2026, 16:21:28
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1001_mixed.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:32
+ opened on:  15 Oct 2026, 16:21:43
 
 . * Phase 10: mixed (ML, REML, random slopes, covariances, nested levels),
 . * estat icc/group, predict
@@ -482,7 +482,7 @@ Residual intraclass correlation
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/1001_mixed.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:33
+ closed on:  15 Oct 2026, 16:21:44
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

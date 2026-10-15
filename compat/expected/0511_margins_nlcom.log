@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0511_margins_nlcom.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0511_margins_nlcom.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:22
+ opened on:  15 Oct 2026, 16:21:31
 
 . * Phase 5b: margins and nlcom.
 . clear
@@ -322,7 +322,7 @@ Expression   : Linear prediction, predict()
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0511_margins_nlcom.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0511_margins_nlcom.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:22
+ closed on:  15 Oct 2026, 16:21:32
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

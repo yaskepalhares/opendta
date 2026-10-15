@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0503_series.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:24
+ opened on:  15 Oct 2026, 16:21:34
 
 . * Phase 5a: tsset, xtset and time-series operators.
 . clear
@@ -327,7 +327,7 @@ repeated time values in sample
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0503_series.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:24
+ closed on:  15 Oct 2026, 16:21:34
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

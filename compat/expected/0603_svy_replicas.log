@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0603_svy_replicas.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0603_svy_replicas.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:20
+ opened on:  15 Oct 2026, 16:21:29
 
 . * Phase 6b (continued): BRR with hadamard(), several stages and replicate weights (bootstrap, SDR, jackknife)
 . clear
@@ -307,7 +307,7 @@ Survey: Mean estimation           Number of obs   =        200
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0603_svy_replicas.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0603_svy_replicas.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:21
+ closed on:  15 Oct 2026, 16:21:30
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

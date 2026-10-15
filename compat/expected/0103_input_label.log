@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0103_input_label.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:32
+ opened on:  15 Oct 2026, 16:21:43
 
 . * Phase 1a: input, label, rename, order, format, drop/keep, compress.
 . clear
@@ -130,7 +130,7 @@ type mismatch
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0103_input_label.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0103_input_label.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:32
+ closed on:  15 Oct 2026, 16:21:43
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

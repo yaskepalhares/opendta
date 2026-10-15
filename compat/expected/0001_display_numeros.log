@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0001_display_numeros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0001_display_numeros.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:25
+ opened on:  15 Oct 2026, 16:21:35
 
 . * Default number format in display (%9.0g) and precision cases.
 . * Items marked VERIFY in the code depend on this file.
@@ -117,7 +117,7 @@
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0001_display_numeros.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0001_display_numeros.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:25
+ closed on:  15 Oct 2026, 16:21:35
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

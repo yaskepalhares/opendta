@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0101_dados_basicos.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:22
+ opened on:  15 Oct 2026, 16:21:32
 
 . * Phase 1a: creating data, types, generate/replace, describe, list, count.
 . clear
@@ -139,7 +139,7 @@ Sorted by:
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0101_dados_basicos.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0101_dados_basicos.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:22
+ closed on:  15 Oct 2026, 16:21:32
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

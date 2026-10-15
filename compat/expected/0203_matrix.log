@@ -1,8 +1,8 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0203_matrix.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0203_matrix.log
   log type:  text
- opened on:  15 Oct 2026, 12:26:35
+ opened on:  15 Oct 2026, 16:21:46
 
 . * Phase 2: matrix.
 . matrix drop _all
@@ -138,7 +138,7 @@ matrix nada not found
 . 
 end of do-file
       name:  <unnamed>
-       log:  /Users/yaskepalhares/opendta/compat/expected/0203_matrix.log
+       log:  /Users/yaskepalhares/opendta/compat/stata/0203_matrix.log
   log type:  text
- closed on:  15 Oct 2026, 12:26:35
+ closed on:  15 Oct 2026, 16:21:46
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

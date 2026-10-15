@@ -22,7 +22,8 @@ observations. Observations that do not meet {it:if} and {it:in} are kept.
 
 {pstd}
 The draw uses the random-number generator: set the seed first
-({cmd:set seed}) to get the same sample again. The data keep their order.
+({cmd:set seed}) to get the same sample again. Afterwards the observations
+are in random order (sort them again if the order matters).
 {p_end}
 
 {title:Options}
