@@ -19,16 +19,14 @@ implemented appear disabled, with a tooltip explaining why.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import (QAction, QColor, QFont, QFontDatabase, QKeySequence,
-                           QTextCharFormat, QTextCursor)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
-                               QLineEdit, QMainWindow, QMenu, QMessageBox,
-                               QPlainTextEdit, QSplitter, QToolBar,
-                               QTreeWidget, QTreeWidgetItem, QVBoxLayout,
-                               QWidget)
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSplitter, QToolBar,
+                               QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import __version__
 from .. import i18n
@@ -42,9 +40,11 @@ from .graph_window import GraphWindow
 from .dofile_editor import DoFileEditor
 from .icons import ACCENT_RED, TOOLBAR_SIZE, app_icon, icon
 from .icons import set_theme as set_icon_theme
+from .menu_templates import DATA_TEMPLATES, GRAPHICS_TEMPLATES, STATISTICS_TEMPLATES
+from .panes import CommandLine, ResultsView, monospace_font, titled
 from .preferences import PreferencesDialog
 from .settings import Preferences
-from .theme import MONOSPACE_FALLBACKS, STANDARD, ResultsScheme, apply_theme, results_scheme
+from .theme import apply_theme, results_scheme
 
 
 def _dta_notes(ds) -> list[str]:
@@ -63,257 +63,22 @@ def _human_size(nbytes: int) -> str:
     return str(nbytes)
 
 
-def monospace_font(prefs: Preferences | None = None) -> QFont:
-    """Font of the text windows: the one chosen in the preferences, or the system
-    default (Menlo on macOS, Courier New on Windows, DejaVu Sans Mono on Linux)."""
-    prefs = prefs or Preferences()
-    available = set(QFontDatabase.families())
-    candidates = [prefs.font_family] + MONOSPACE_FALLBACKS
-    for fam in candidates:
-        if fam in available:
-            f = QFont(fam, prefs.font_size)
-            break
-    else:
-        f = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        f.setPointSize(prefs.font_size)
-    f.setStyleHint(QFont.StyleHint.Monospace)
-    return f
-
-
-# ---------------------------------------------------------------------------
-# Results
-# ---------------------------------------------------------------------------
-
-class ResultsView(QPlainTextEdit):
-    MAX_SEGMENTS = 200_000
-
-    def __init__(self, scheme: ResultsScheme = STANDARD):
-        super().__init__()
-        self.setReadOnly(True)
-        self.setUndoRedoEnabled(False)
-        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        self.setFont(monospace_font())
-        self.setObjectName("Results")
-        self._segments: list[tuple[str, str]] = []   # to redraw when the theme changes
-        self.set_scheme(scheme)
-
-    def set_scheme(self, scheme: ResultsScheme) -> None:
-        self._scheme = scheme
-        self.setStyleSheet(f"QPlainTextEdit#Results {{ background: {scheme.background}; "
-                           f"color: {scheme.colors['text']}; }}")
-        self._formats: dict[str, QTextCharFormat] = {}
-        for style, color in scheme.colors.items():
-            fmt = QTextCharFormat()
-            fmt.setForeground(QColor(color))
-            if style in scheme.bold:
-                fmt.setFontWeight(QFont.Weight.Bold)
-            self._formats[style] = fmt
-        if self._segments:
-            segments, self._segments = self._segments, []
-            super().clear()
-            for text, style in segments:
-                self.append_styled(text, style)
-
-    def clear(self) -> None:  # noqa: D401
-        self._segments = []
-        super().clear()
-
-    def append_styled(self, text: str, style: str) -> None:
-        self._segments.append((text, style))
-        if len(self._segments) > self.MAX_SEGMENTS:
-            del self._segments[: len(self._segments) // 2]
-        cursor = self.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(text, self._formats.get(style, self._formats["text"]))
-        self.setTextCursor(cursor)
-        self.ensureCursorVisible()
-
-
-# ---------------------------------------------------------------------------
-# Command
-# ---------------------------------------------------------------------------
-
-class CommandLine(QPlainTextEdit):
-    """Command window: resizable and multi-line.
-
-    Enter runs; Shift+Enter breaks the line. Pasted text with several
-    lines is run line by line. PgUp/PgDn walk through the history; so do the
-    ↑/↓ arrows, while the command has a single line."""
-
-    submitted = Signal(str)
-
-    def __init__(self):
-        super().__init__()
-        self.setFont(monospace_font())
-        self.setObjectName("Command")
-        self.setTabChangesFocus(True)
-        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
-        self.history: list[str] = []
-        self._pos = 0
-        self._update_min_height()
-
-    def setFont(self, font) -> None:  # noqa: N802
-        super().setFont(font)
-        self._update_min_height()
-
-    def _update_min_height(self) -> None:
-        # at least one visible line, whatever the font
-        self.setMinimumHeight(self.fontMetrics().lineSpacing() + 14)
-
-    # compatibility with the QLineEdit API used by the window
-    def text(self) -> str:
-        return self.toPlainText()
-
-    def setText(self, text: str) -> None:  # noqa: N802
-        self.setPlainText(text)
-        self.moveCursor(QTextCursor.MoveOperation.End)
-
-    def insert(self, text: str) -> None:
-        self.insertPlainText(text)
-
-    def _submit(self) -> None:
-        text = self.toPlainText()
-        if not text.strip():
-            return
-        self.history.append(text)
-        self._pos = len(self.history)
-        self.clear()
-        self.submitted.emit(text)
-
-    def _recall(self, step: int) -> None:
-        if not self.history:
-            return
-        self._pos = min(max(self._pos + step, 0), len(self.history))
-        self.setText(self.history[self._pos] if self._pos < len(self.history) else "")
-
-    def keyPressEvent(self, event) -> None:  # noqa: N802
-        key = event.key()
-        mods = event.modifiers()
-        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if mods & Qt.KeyboardModifier.ShiftModifier:
-                self.insertPlainText("\n")
-            else:
-                self._submit()
-            return
-        single = "\n" not in self.toPlainText()
-        if key == Qt.Key.Key_PageUp or (key == Qt.Key.Key_Up and single):
-            self._recall(-1)
-            return
-        if key == Qt.Key.Key_PageDown or (key == Qt.Key.Key_Down and single):
-            self._recall(+1)
-            return
-        if key == Qt.Key.Key_Escape:
-            self.clear()
-            return
-        super().keyPressEvent(event)
-
-
-def _titled(title: str, widget: QWidget) -> QWidget:
-    """Panel with a thin title bar, like Stata's docked panels."""
-    box = QWidget()
-    lay = QVBoxLayout(box)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(0)
-    label = QLabel(f"  {tr(title)}")
-    label.setObjectName("PaneTitle")
-    label.setProperty("key", title)
-    lay.addWidget(label)
-    lay.addWidget(widget)
-    return box
-
-
-# ---------------------------------------------------------------------------
-# Janela principal
-# ---------------------------------------------------------------------------
-
-DATA_TEMPLATES = [
-    ("Create or change data", [("Create new variable", "generate "), ("Change contents of variable", "replace "),
-                               ("Create new variable (extended)", "egen "), ("Recode", "recode "),
-                               ("Encode string", "encode , generate()"), ("Destring", "destring , replace")]),
-    ("Variables", [("Rename", "rename "), ("Label variable", "label variable "),
-                   ("Define value label", "label define "), ("Keep variables", "keep "),
-                   ("Drop variables", "drop "), ("Order", "order ")]),
-    ("Sort", [("Sort", "sort "), ("Sort (ascending/descending)", "gsort ")]),
-    ("Data utilities", [("Duplicates report", "duplicates report "), ("Codebook", "codebook "),
-                        ("Missing values", "misstable summarize "), ("Compress", "compress"),
-                        ("Count", "count if ")]),
-    ("Combine datasets", [("Merge", "merge 1:1  using "), ("Append", "append using "),
-                          ("Reshape", "reshape long , i() j()"), ("Collapse", "collapse (mean) , by()")]),
-]
-
-GRAPHICS_TEMPLATES = [
-    ("Twoway graph (scatter, line, etc.)", "twoway scatter "),
-    ("Line plot", "twoway line "),
-    ("Bar chart", "graph bar (mean) "),
-    ("Dot chart", "graph dot (mean) "),
-    ("Pie chart", "graph pie "),
-    ("Histogram", "histogram "),
-    ("Box plot", "graph box "),
-    ("Kernel density", "kdensity "),
-    ("Scatterplot matrix", "graph matrix "),
-    (None, None),
-    ("Margins plot", "marginsplot"),
-    ("Residuals vs. fitted", "rvfplot"),
-    ("Normal quantile plot", "qnorm "),
-    ("Lowess smoother", "lowess "),
-    (None, None),
-    ("Combine graphs", "graph combine "),
-    ("Export graph", "graph export "),
-    ("Manage graphs", "graph dir"),
-]
-
-STATISTICS_TEMPLATES = [
-    ("Summaries, tables, and tests", [
-        ("Summary statistics", "summarize "), ("One-way table", "tabulate "),
-        ("Two-way table with chi2", "tabulate  , chi2"), ("Table of statistics", "tabstat , statistics(mean sd n)"),
-        ("Correlations", "correlate "), ("t test", "ttest "), ("Proportion test", "prtest "),
-        ("Confidence intervals", "ci means "), ("Centiles", "centile "),
-        ("ANOVA", "oneway "), ("Normality tests", "swilk "),
-        ("Nonparametric tests", "ranksum , by()")]),
-    ("Linear models and related", [
-        ("Linear regression", "regress "), ("Instrumental variables", "ivregress 2sls "),
-        ("Absorbed indicators", "areg , absorb()"), ("Quantile regression", "qreg "),
-        ("Tobit", "tobit ")]),
-    ("Binary outcomes", [("Logistic (odds ratios)", "logistic "), ("Logit", "logit "), ("Probit", "probit ")]),
-    ("Ordinal outcomes", [("Ordered logit", "ologit "), ("Ordered probit", "oprobit ")]),
-    ("Categorical outcomes", [("Multinomial logit", "mlogit ")]),
-    ("Count outcomes", [("Poisson", "poisson "), ("Negative binomial", "nbreg ")]),
-    ("Generalized linear models", [("GLM", "glm , family() link()")]),
-    ("Longitudinal/panel data", [("Declare panel", "xtset "), ("Fixed effects", "xtreg , fe"),
-                                 ("Random effects", "xtreg , re"), ("Panel summary", "xtsum ")]),
-    ("Multilevel mixed-effects models", [("Linear regression (mixed)", "mixed  || :"),
-                                         ("Logistic regression", "melogit  || :"),
-                                         ("Probit regression", "meprobit  || :"),
-                                         ("Poisson regression", "mepoisson  || :"),
-                                         ("Intraclass correlation", "estat icc")]),
-    ("Multiple imputation", [("Declare data (mlong)", "mi set mlong"), ("Register imputed variables", "mi register imputed "),
-                             ("Describe", "mi describe"), ("Impute by linear regression", "mi impute regress  = , add(20) rseed()"),
-                             ("Chained equations", "mi impute chained (regress)  = , add(20) rseed()"),
-                             ("Estimate and combine", "mi estimate: ")]),
-    ("Survival analysis", [("Declare survival data", "stset , failure()"), ("Describe", "stdescribe"),
-                           ("Summarize", "stsum"), ("List survivor function", "sts list"),
-                           ("Kaplan-Meier graph", "sts graph"), ("Compare survivor functions", "sts test "),
-                           ("Cox model", "stcox "), ("Parametric models", "streg , distribution(weibull)"),
-                           ("Test proportional hazards", "estat phtest, detail")]),
-    ("Time series", [("Declare time variable", "tsset "), ("Line plot", "tsline "),
-                     ("ARIMA models", "arima , arima(1,0,0)"), ("Vector autoregression", "var , lags(1/2)"),
-                     ("Lag-order selection", "varsoc "), ("Dickey-Fuller unit-root test", "dfuller "),
-                     ("Correlogram", "corrgram "), ("Newey-West regression", "newey , lag(1)")]),
-    ("Survey data analysis", [("Declare design", "svyset "), ("Describe design", "svydescribe"),
-                              ("Means", "svy: mean "), ("Proportions", "svy: proportion "),
-                              ("Linear regression", "svy: regress "), ("Tables", "svy: tabulate "),
-                              ("Design effects", "estat effects")]),
-    ("Postestimation", [("Predictions", "predict "), ("Marginal effects", "margins "),
-                        ("Wald tests", "test "), ("Linear combinations", "lincom "),
-                        ("Nonlinear combinations", "nlcom "), ("Compare estimates", "estimates table "),
-                        ("Likelihood-ratio test", "lrtest "), ("Hausman test", "hausman  ."),
-                        ("Bootstrap", "bootstrap, reps(1000): ")]),
-]
-
+# toolbar buttons that exist in Stata but do nothing here, with the reason in their tooltip
 _PENDING = {
     "more": "No effect: OpenDTA always runs with set more off",
     "break": "Not available yet: commands run in the interface thread",
 }
+
+
+def _present(window: QWidget) -> None:
+    window.show()
+    window.raise_()
+    window.activateWindow()
+
+
+def _paint(item: QTreeWidgetItem, color: QColor) -> None:
+    for col in (0, 1):
+        item.setForeground(col, color)
 
 
 class MainWindow(QMainWindow):
@@ -324,6 +89,14 @@ class MainWindow(QMainWindow):
         from .update_dialog import UpdateController
         self.updates = UpdateController(self)
         self._pending_update = None
+        # windows created on first use
+        self.browser: DataBrowser | None = None
+        self.varmanager: VariablesManager | None = None
+        self.viewer: Viewer | None = None
+        self.graph_window: GraphWindow | None = None
+        self.dofile_editor: DoFileEditor | None = None
+        self._settings: PreferencesDialog | None = None
+        self._last_find = ""
         i18n.set_language(self.prefs.language)
         i18n.set_messages(self.prefs.messages)
         self.resize(1280, 800)
@@ -348,18 +121,9 @@ class MainWindow(QMainWindow):
         self._restore_layout()
         self.command.setFocus()
         self.setAcceptDrops(True)
-        self.browser: DataBrowser | None = None
-        self.varmanager: VariablesManager | None = None
-        self.session.ui_hooks["browse"] = self.show_browser
-        self.session.ui_hooks["varmanage"] = self.show_variables_manager
-        self.viewer: Viewer | None = None
-        self.session.ui_hooks["help"] = self.show_viewer
-        self.session.ui_hooks["view"] = self.show_viewer
-        self.graph_window: GraphWindow | None = None
-        self.session.ui_hooks["graph"] = self.show_graph
-        self.session.ui_hooks["graph_close"] = self.close_graph
-        self.dofile_editor: DoFileEditor | None = None
-        self.session.ui_hooks["doedit"] = self.show_dofile_editor
+        self.session.ui_hooks.update(browse=self.show_browser, varmanage=self.show_variables_manager,
+                                     help=self.show_viewer, view=self.show_viewer, graph=self.show_graph,
+                                     graph_close=self.close_graph, doedit=self.show_dofile_editor)
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -371,8 +135,8 @@ class MainWindow(QMainWindow):
         split = QSplitter(Qt.Orientation.Vertical)
         split.setObjectName("CentralSplitter")
         split.setHandleWidth(6)
-        split.addWidget(_titled("Results", self.results))
-        split.addWidget(_titled("Command", self.command))
+        split.addWidget(titled("Results", self.results))
+        split.addWidget(titled("Command", self.command))
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 0)
         split.setCollapsible(0, False)
@@ -454,17 +218,11 @@ class MainWindow(QMainWindow):
         self.resizeDocks([self.dock_variables], [300], Qt.Orientation.Horizontal)
         self.resizeDocks([self.dock_variables, self.dock_properties], [420, 330], Qt.Orientation.Vertical)
 
-    def _action(self, menu, text: str, slot=None, *, shortcut: str | None = None,
-                phase: int | None = None) -> QAction:
+    def _action(self, menu, text: str, slot, *, shortcut: str | None = None) -> QAction:
         act = QAction(tr(text), self)
         if shortcut:
             act.setShortcut(QKeySequence(shortcut))
-        if slot is not None:
-            act.triggered.connect(slot)
-        if phase is not None:
-            act.setEnabled(False)
-            act.setToolTip(tr(_PENDING.get(phase, "")))
-            act.setStatusTip(tr(_PENDING.get(phase, "")))
+        act.triggered.connect(slot)
         menu.addAction(act)
         return act
 
@@ -616,26 +374,27 @@ class MainWindow(QMainWindow):
         tb.setIconSize(TOOLBAR_SIZE)
         tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         # same arrangement as Stata 14's toolbar; OpenDTA's own drawing (gui/icons/)
+        # buttons without a slot are the _PENDING ones: shown disabled, with the reason
         groups = [
-            [("open", "Open", self.open_dataset, 1), ("save", "Save", self.save_dataset, 1),
-             ("print", "Print", self.print_results, 8)],
-            [("log", "Log (begin or close)", self.toggle_log, 2),
-             ("viewer", "Viewer", lambda: self.run_command("help"), 2), ("graph", "Graph", self.show_graph_window, 7),
-             ("dofile", "Do-file Editor", lambda: self.show_dofile_editor(""), 8)],
-            [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit"), 1),
-             ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse"), 1),
-             ("variables", "Variables Manager", lambda: self.run_command("varmanage"), 1)],
-            [("more", "Clear --more-- condition", None, "more"), ("break", "Break", None, "break")],
+            [("open", "Open", self.open_dataset), ("save", "Save", self.save_dataset),
+             ("print", "Print", self.print_results)],
+            [("log", "Log (begin or close)", self.toggle_log),
+             ("viewer", "Viewer", lambda: self.run_command("help")), ("graph", "Graph", self.show_graph_window),
+             ("dofile", "Do-file Editor", lambda: self.show_dofile_editor(""))],
+            [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit")),
+             ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse")),
+             ("variables", "Variables Manager", lambda: self.run_command("varmanage"))],
+            [("more", "Clear --more-- condition", None), ("break", "Break", None)],
         ]
         self.toolbar_actions: dict[str, QAction] = {}
         for gi, group in enumerate(groups):
             if gi:
                 tb.addSeparator()
-            for name, text, slot, phase in group:
+            for name, text, slot in group:
                 accent = ACCENT_RED if name == "break" else None
                 act = QAction(icon(name, accent), tr(text), self)
                 act.setData((name, accent))
-                suffix = f" — {tr(_PENDING[phase])}" if phase in _PENDING and slot is None else ""
+                suffix = f" — {tr(_PENDING[name])}" if slot is None else ""
                 act.setProperty("key", text)
                 act.setProperty("suffix", suffix)
                 act.setToolTip(tr(text) + suffix)
@@ -692,9 +451,7 @@ class MainWindow(QMainWindow):
         item.setData(0, Qt.ItemDataRole.UserRole, text)
         item.setToolTip(0, text)
         if rc:
-            err = QColor(results_scheme(self.prefs.effective_theme).colors["error"])
-            for col in (0, 1):
-                item.setForeground(col, err)
+            _paint(item, QColor(results_scheme(self.prefs.effective_theme).colors["error"]))
         self.review.addTopLevelItem(item)
         self.review.scrollToItem(item)
 
@@ -774,9 +531,7 @@ class MainWindow(QMainWindow):
         self.browser.model.nolabel = nolabel
         self.browser.model.set_subset(columns, rows)
         self.browser.set_mode(edit)
-        self.browser.show()
-        self.browser.raise_()
-        self.browser.activateWindow()
+        _present(self.browser)
 
     # -- Viewer e log ---------------------------------------------------------------
     def show_viewer(self, path, title: str) -> None:
@@ -788,9 +543,7 @@ class MainWindow(QMainWindow):
             self.viewer.setWindowFlag(Qt.WindowType.Window, True)
         self.viewer.dark = self.prefs.effective_theme == "dark"
         self.viewer.show_page(path, title)
-        self.viewer.show()
-        self.viewer.raise_()
-        self.viewer.activateWindow()
+        _present(self.viewer)
 
     # -- graphs and Do-file Editor ------------------------------------------------
     def show_graph(self, g) -> None:
@@ -810,9 +563,7 @@ class MainWindow(QMainWindow):
             if st.current:
                 self.show_graph(st.get())
             return
-        self.graph_window.show()
-        self.graph_window.raise_()
-        self.graph_window.activateWindow()
+        _present(self.graph_window)
 
     def show_dofile_editor(self, path: str = "") -> None:
         if self.dofile_editor is None:
@@ -821,9 +572,7 @@ class MainWindow(QMainWindow):
             self.dofile_editor.setWindowFlag(Qt.WindowType.Window, True)
         if path:
             self.dofile_editor.open_path(path)
-        self.dofile_editor.show()
-        self.dofile_editor.raise_()
-        self.dofile_editor.activateWindow()
+        _present(self.dofile_editor)
 
     def insert_command(self, text: str) -> None:
         self.command.setPlainText(text)
@@ -835,7 +584,6 @@ class MainWindow(QMainWindow):
     def copy_table(self) -> None:
         """Copies the Results selection with columns separated by tabs
         (to paste into a spreadsheet), like Stata's Copy table."""
-        import re as _re
         text = self.results.textCursor().selectedText().replace("\u2029", "\n")
         if not text:
             return
@@ -844,7 +592,7 @@ class MainWindow(QMainWindow):
             line = line.replace("|", " ").strip()
             if not line or set(line) <= set("-+= "):
                 continue
-            rows.append("\t".join(_re.split(r"\s{2,}", line)))
+            rows.append("\t".join(re.split(r"\s{2,}", line)))
         QApplication.clipboard().setText("\n".join(rows))
 
     def print_results(self) -> None:
@@ -866,8 +614,6 @@ class MainWindow(QMainWindow):
             self.results.setTextCursor(cur)
             if not self.results.find(text):
                 self.statusBar().showMessage(f'"{text}" not found', 3000)
-
-    _last_find = ""
 
     def search_help(self) -> None:
         self.run_command("help")
@@ -901,9 +647,7 @@ class MainWindow(QMainWindow):
                                                run=self._run_from_editor)
             self.varmanager.setWindowFlag(Qt.WindowType.Window, True)
         self.varmanager.refresh()
-        self.varmanager.show()
-        self.varmanager.raise_()
-        self.varmanager.activateWindow()
+        _present(self.varmanager)
 
     def _run_from_editor(self, line: str) -> int:
         """Command generated by the Data Editor or the Variables Manager: echoed in
@@ -924,7 +668,7 @@ class MainWindow(QMainWindow):
 
     def show_preferences(self, page: str | None = None) -> None:
         """The Settings window (not modal: the changes show in the windows behind it)."""
-        dlg = getattr(self, "_settings", None)
+        dlg = self._settings
         if dlg is None or not dlg.isVisible():
             dlg = PreferencesDialog(self.prefs, self)
             dlg.applied.connect(self.apply_preferences)
@@ -933,24 +677,22 @@ class MainWindow(QMainWindow):
             self._settings = dlg
         if page:
             dlg.select(page)
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
+        _present(dlg)
 
     def apply_preferences(self) -> None:
         """Applies the chosen theme, font, icon and language (also called at startup)."""
         old = (i18n.language(), i18n.messages())
         i18n.set_language(self.prefs.language)
         i18n.set_messages(self.prefs.messages)
-        if (i18n.language(), i18n.messages()) != old and hasattr(self, "toolbar_actions"):
+        if (i18n.language(), i18n.messages()) != old:
             self.retranslate()
         self.apply_theme(self.prefs.effective_theme)
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
-        if getattr(self, "browser", None) is not None:
+        if self.browser is not None:
             self.browser.table.setFont(font)
-        if getattr(self, "dofile_editor", None) is not None:
+        if self.dofile_editor is not None:
             self.dofile_editor.set_theme(self.prefs.effective_theme)
         ico = app_icon(self.prefs.app_icon)
         self.setWindowIcon(ico)
@@ -976,7 +718,7 @@ class MainWindow(QMainWindow):
             self.dofile_editor.cleanup()
         self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
         super().closeEvent(event)
-        start = getattr(self, "_pending_update", None)
+        start = self._pending_update
         if start is not None and event.isAccepted():
             # the installer (or the replacement script) waits for this process to end
             self._pending_update = None
@@ -994,27 +736,20 @@ class MainWindow(QMainWindow):
         for k in range(self.review.topLevelItemCount()):
             it = self.review.topLevelItem(k)
             if it.text(1):
-                for col in (0, 1):
-                    it.setForeground(col, err)
-        for act in getattr(self, "toolbar_actions", {}).values():
+                _paint(it, err)
+        for act in self.toolbar_actions.values():
             name, accent = act.data()
             act.setIcon(icon(name, accent))
         self._apply_styles()
-        if getattr(self, "browser", None) is not None:
+        if self.browser is not None:
             self.browser.set_dark(theme == "dark")
 
     def _set_permanently(self, name: str, value: str) -> None:
         """set ..., permanently: remembered at the next startup (hints, superscript, numerics)."""
-        if name == "hints":
-            self.prefs.hints = value == "on"
-        elif name == "superscript":
-            self.prefs.superscript = value == "on"
-        elif name == "numerics":
-            self.prefs.numerics = value
-        elif name == "language":
-            self.prefs.language = value
-        elif name == "messages":
-            self.prefs.messages = value
+        if name in ("hints", "superscript"):
+            setattr(self.prefs, name, value == "on")
+        elif name in ("numerics", "language", "messages"):
+            setattr(self.prefs, name, value)
 
     def _toggle_superscript(self, on: bool) -> None:
         self.run_command(f"set superscript {'on' if on else 'off'}, permanently")
@@ -1024,24 +759,7 @@ class MainWindow(QMainWindow):
         self.run_command(f"set hints {'on' if on else 'off'}, permanently")
 
     def show_hints_help(self) -> None:
-        if i18n.language() == "pt":
-            QMessageBox.information(
-                self, tr("Error explanations"),
-                "<p>Quando um comando falha, o OpenDTA mostra a mensagem de erro e o código "
-                "<tt>r(#)</tt> de sempre e, entre eles, uma explicação curta do que deu errado "
-                "naquele comando e uma dica de como corrigir:</p>"
-                "<pre>. replace nota = 9 in 2\nObs. nos. out of range\n"
-                "  \u2192 \"in 2\" pede observações que não existem; ...\n"
-                "    Dica: crie observações com \"set obs #\" ...\nr(198);</pre>"
-                "<p>Os códigos de retorno não mudam: <tt>capture</tt> e <tt>_rc</tt> funcionam "
-                "como antes. Erros provocados de propósito com <tt>error #</tt> não são explicados.</p>"
-                "<p><b>set hints on</b> &nbsp;liga as explicações (padrão)<br>"
-                "<b>set hints off</b> &nbsp;mostra só a mensagem de erro e o código</p>"
-                "<p>Acrescente <b>, permanently</b> para guardar a escolha na próxima abertura. "
-                "O item <i>Ajuda \u2192 Explicar erros</i> faz isso.</p>")
-            return
-        QMessageBox.information(
-            self, "Error explanations",
+        QMessageBox.information(self, tr("Error explanations"), i18n.L(
             "<p>When a command fails, OpenDTA shows the usual error message and return "
             "code <tt>r(#)</tt>, and between them a short explanation of what went wrong "
             "in that command and a hint on how to fix it:</p>"
@@ -1053,7 +771,19 @@ class MainWindow(QMainWindow):
             "<p><b>set hints on</b> &nbsp;turns the explanations on (default)<br>"
             "<b>set hints off</b> &nbsp;shows only the error message and return code</p>"
             "<p>Add <b>, permanently</b> to remember the choice the next time OpenDTA "
-            "opens. The menu item <i>Help \u2192 Explain Errors</i> does that.</p>")
+            "opens. The menu item <i>Help \u2192 Explain Errors</i> does that.</p>",
+            "<p>Quando um comando falha, o OpenDTA mostra a mensagem de erro e o código "
+            "<tt>r(#)</tt> de sempre e, entre eles, uma explicação curta do que deu errado "
+            "naquele comando e uma dica de como corrigir:</p>"
+            "<pre>. replace nota = 9 in 2\nObs. nos. out of range\n"
+            "  \u2192 \"in 2\" pede observações que não existem; ...\n"
+            "    Dica: crie observações com \"set obs #\" ...\nr(198);</pre>"
+            "<p>Os códigos de retorno não mudam: <tt>capture</tt> e <tt>_rc</tt> funcionam "
+            "como antes. Erros provocados de propósito com <tt>error #</tt> não são explicados.</p>"
+            "<p><b>set hints on</b> &nbsp;liga as explicações (padrão)<br>"
+            "<b>set hints off</b> &nbsp;mostra só a mensagem de erro e o código</p>"
+            "<p>Acrescente <b>, permanently</b> para guardar a escolha na próxima abertura. "
+            "O item <i>Ajuda \u2192 Explicar erros</i> faz isso.</p>"))
 
     def show_about(self) -> None:
         QMessageBox.about(self, tr("About OpenDTA"),
