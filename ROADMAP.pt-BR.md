@@ -139,7 +139,8 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 ## Fase 9: idioma da interface ✅
 
-- [x] Seletor de idioma em Preferences: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
+- [x] Janela de configurações com barra lateral e busca: tema (claro, escuro ou do sistema), ícone do app, fonte com prévia, idioma, explicações de erro, expoentes sobrescritos, numerics e atualizações, aplicados na hora
+- [x] Seletor de idioma em Settings: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
 - [x] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário (`set language`, `set messages`)
 
 ## Distribuição e documentação

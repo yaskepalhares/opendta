@@ -31,7 +31,7 @@ def run_gui(args: list[str] | None = None) -> int:
     app.setApplicationName("OpenDTA")
     prefs = Preferences()
     i18n.set_language(prefs.language)
-    apply_theme(app, prefs.theme)   # before creating the window: no flicker
+    apply_theme(app, prefs.theme)   # before creating the window: no flicker ("system" is resolved inside)
     win = MainWindow()
 
     # macOS: files opened from the Finder (double click, "Open With", dragging onto the Dock icon)

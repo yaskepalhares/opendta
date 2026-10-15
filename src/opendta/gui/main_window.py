@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
         self._action(m, "Find...", self.find_results, shortcut="Ctrl+F")
         m.addSeparator()
         self._action(m, "Clear Results", self.results.clear)
-        self._action(m, "Preferences...", self.show_preferences, shortcut="Ctrl+,")
+        self._action(m, "Settings...", lambda: self.show_preferences(), shortcut="Ctrl+,")
 
         m = mb.addMenu(tr("&Data"))
         self._action(m, "Describe data", lambda: self.run_command("describe"))
@@ -692,7 +692,7 @@ class MainWindow(QMainWindow):
         item.setData(0, Qt.ItemDataRole.UserRole, text)
         item.setToolTip(0, text)
         if rc:
-            err = QColor(results_scheme(self.prefs.theme).colors["error"])
+            err = QColor(results_scheme(self.prefs.effective_theme).colors["error"])
             for col in (0, 1):
                 item.setForeground(col, err)
         self.review.addTopLevelItem(item)
@@ -770,7 +770,7 @@ class MainWindow(QMainWindow):
             self.browser = DataBrowser(self.session, monospace_font(self.prefs), self,
                                        run=self._run_from_editor)
             self.browser.setWindowFlag(Qt.WindowType.Window, True)
-            self.browser.set_dark(self.prefs.theme == "dark")
+            self.browser.set_dark(self.prefs.effective_theme == "dark")
         self.browser.model.nolabel = nolabel
         self.browser.model.set_subset(columns, rows)
         self.browser.set_mode(edit)
@@ -783,10 +783,10 @@ class MainWindow(QMainWindow):
         if self.viewer is None:
             font = monospace_font(self.prefs)
             self.viewer = Viewer(self.session, self, font_family=font.family(),
-                                 font_size=max(9, font.pointSize()), dark=self.prefs.theme == "dark",
+                                 font_size=max(9, font.pointSize()), dark=self.prefs.effective_theme == "dark",
                                  run=self._run_from_editor)
             self.viewer.setWindowFlag(Qt.WindowType.Window, True)
-        self.viewer.dark = self.prefs.theme == "dark"
+        self.viewer.dark = self.prefs.effective_theme == "dark"
         self.viewer.show_page(path, title)
         self.viewer.show()
         self.viewer.raise_()
@@ -817,7 +817,7 @@ class MainWindow(QMainWindow):
     def show_dofile_editor(self, path: str = "") -> None:
         if self.dofile_editor is None:
             self.dofile_editor = DoFileEditor(self.session, self, run=self.run_command,
-                                              font=monospace_font(self.prefs), theme=self.prefs.theme)
+                                              font=monospace_font(self.prefs), theme=self.prefs.effective_theme)
             self.dofile_editor.setWindowFlag(Qt.WindowType.Window, True)
         if path:
             self.dofile_editor.open_path(path)
@@ -922,10 +922,20 @@ class MainWindow(QMainWindow):
         if path:
             self.run_command(f'cd "{path}"')
 
-    def show_preferences(self) -> None:
-        dlg = PreferencesDialog(self.prefs, self)
-        dlg.applied.connect(self.apply_preferences)
-        dlg.exec()
+    def show_preferences(self, page: str | None = None) -> None:
+        """The Settings window (not modal: the changes show in the windows behind it)."""
+        dlg = getattr(self, "_settings", None)
+        if dlg is None or not dlg.isVisible():
+            dlg = PreferencesDialog(self.prefs, self)
+            dlg.applied.connect(self.apply_preferences)
+            dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dlg.destroyed.connect(lambda *_: setattr(self, "_settings", None))
+            self._settings = dlg
+        if page:
+            dlg.select(page)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def apply_preferences(self) -> None:
         """Applies the chosen theme, font, icon and language (also called at startup)."""
@@ -934,14 +944,14 @@ class MainWindow(QMainWindow):
         i18n.set_messages(self.prefs.messages)
         if (i18n.language(), i18n.messages()) != old and hasattr(self, "toolbar_actions"):
             self.retranslate()
-        self.apply_theme(self.prefs.theme)
+        self.apply_theme(self.prefs.effective_theme)
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
         if getattr(self, "browser", None) is not None:
             self.browser.table.setFont(font)
         if getattr(self, "dofile_editor", None) is not None:
-            self.dofile_editor.set_theme(self.prefs.theme)
+            self.dofile_editor.set_theme(self.prefs.effective_theme)
         ico = app_icon(self.prefs.app_icon)
         self.setWindowIcon(ico)
         app = QApplication.instance()

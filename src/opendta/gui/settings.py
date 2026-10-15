@@ -43,15 +43,21 @@ class Preferences:
     def app_icon(self, value: str) -> None:
         self._s.setValue("appearance/app_icon", value if value in APP_ICON_VARIANTS else "light")
 
-    # interface theme (independent of the system)
+    # interface theme: light (default), dark, or "system" (follows the operating system)
     @property
     def theme(self) -> str:
         v = str(self._s.value("appearance/theme", "light"))
-        return v if v in ("light", "dark") else "light"
+        return v if v in ("light", "dark", "system") else "light"
 
     @theme.setter
     def theme(self, value: str) -> None:
-        self._s.setValue("appearance/theme", value if value in ("light", "dark") else "light")
+        self._s.setValue("appearance/theme", value if value in ("light", "dark", "system") else "light")
+
+    @property
+    def effective_theme(self) -> str:
+        """light or dark: the chosen theme, with "system" resolved from the operating system."""
+        from .theme import system_theme
+        return system_theme() if self.theme == "system" else self.theme
 
     # font of the Results, Command and Review windows
     @property

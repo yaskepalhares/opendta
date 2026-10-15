@@ -48,8 +48,8 @@ def results_scheme(theme: str) -> ResultsScheme:
     return DARK_RESULTS if theme == "dark" else STANDARD
 
 
-# Interface colors (windows, panels, menus) in each theme. The interface does not follow the
-# system's light/dark mode: the theme is chosen in Preferences, with light as the default.
+# Interface colors (windows, panels, menus) in each theme. The theme is chosen in Settings:
+# light (default), dark, or system (follows the operating system).
 _UI = {
     "light": {
         "Window": "#ececec", "WindowText": "#1d1d1f", "Base": "#ffffff",
@@ -71,12 +71,28 @@ _UI = {
 _DISABLED_TEXT = {"light": "#a1a1a6", "dark": "#6e6e73"}
 
 
+def system_theme() -> str:
+    """The operating system's appearance (light or dark), ignoring OpenDTA's own override."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance()
+    if app is None:
+        return "light"
+    hints = app.styleHints()
+    if hasattr(hints, "unsetColorScheme"):         # Qt 6.8+: drop the override to read the system
+        hints.unsetColorScheme()
+    scheme = hints.colorScheme() if hasattr(hints, "colorScheme") else None
+    return "dark" if scheme == Qt.ColorScheme.Dark else "light"
+
+
 def apply_theme(app, theme: str) -> None:
     """Applies the light or dark theme to the whole application."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPalette
     from PySide6.QtWidgets import QStyleFactory
 
+    if theme == "system":
+        theme = system_theme()
     theme = theme if theme in THEMES else "light"
     hints = app.styleHints()
     if hasattr(hints, "setColorScheme"):           # Qt 6.8+: includes the title bar

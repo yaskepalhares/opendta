@@ -139,7 +139,8 @@ The phases are in dependency order. Each one ends with something that can be ope
 
 ## Phase 9: interface language ✅
 
-- [x] Language selector in Preferences: English (default) or Portuguese, for menus, windows, dialogs, error explanations and OpenDTA's own messages
+- [x] Settings window with a sidebar and search: theme (light, dark or system), app icon, font with preview, language, error explanations, superscript exponents, numerics and updates, applied at once
+- [x] Language selector in Settings: English (default) or Portuguese, for menus, windows, dialogs, error explanations and OpenDTA's own messages
 - [x] With Portuguese on, Stata-style messages can stay in English (for those who compare with Stata logs and manuals) or be translated, at the user's choice (`set language`, `set messages`)
 
 ## Distribution and documentation
