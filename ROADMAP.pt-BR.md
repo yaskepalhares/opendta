@@ -147,6 +147,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Licença MIT e avisos de licença dos componentes de terceiros
 - [x] Download para macOS (Apple Silicon e Intel) com a Release gerada pelo GitHub Actions a cada tag `v*`
 - [x] Toda a documentação publicada no GitHub em inglês, com cópia em português (`*.pt-BR.md`) e o seletor **English | Português** no topo de cada página; comentários do código e mensagens de commit em inglês
+- [x] Busca e instalação de atualizações dentro do app (Releases do GitHub, download verificado, verificação diária que pode ser desligada)
 - [x] Download para Windows (64 bits, Intel/AMD): instalador por usuário e `.zip` portátil, gerados pelo mesmo workflow
 
 ## Melhorias em relação ao Stata (ao longo das fases)

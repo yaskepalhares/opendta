@@ -20,6 +20,8 @@ It is a personal study project under active development, released under the [MIT
 
 All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page.
 
+**Updates:** from version 0.2.0 on, OpenDTA checks GitHub for a new release when it opens (at most once a day; turn it off in **Edit → Preferences**) and in **Help → Check for Updates**. When there is one, it shows the release notes and, with **Install and Restart**, downloads the right file, closes, installs and opens again. Installations from source are only notified.
+
 ## Current state: phases 5 to 9 (estimation, complex surveys, graphics, interface and language)
 
 What already works:

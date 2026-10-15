@@ -147,6 +147,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 - [x] MIT License and license notices for third-party components
 - [x] macOS download (Apple Silicon and Intel), with the Release built by GitHub Actions for every `v*` tag
 - [x] All documentation published on GitHub in English, with a Portuguese copy (`*.pt-BR.md`) and an **English | Português** selector at the top of each page; code comments and commit messages in English
+- [x] Update check and installation from inside the app (GitHub Releases, verified download, daily check that can be turned off)
 - [x] Windows download (64-bit, Intel/AMD): per-user installer and portable `.zip`, built by the same workflow
 
 ## Improvements over Stata (throughout the phases)

@@ -30,6 +30,10 @@ From the Terminal instead: `xattr -dr com.apple.quarantine /Applications/OpenDTA
 
 Portable version: unzip **OpenDTA-windows-x64-portable.zip** anywhere and run `OpenDTA.exe`.
 
+## Updates
+
+OpenDTA 0.2.0 and later look for new releases when they open (once a day) and in **Help → Check for Updates**, and can download and install them by themselves.
+
 ## Notice
 
 Personal study project, released under the MIT License. Stata is a registered trademark of StataCorp LLC; OpenDTA is not affiliated with StataCorp.
@@ -67,6 +71,10 @@ Se preferir o Terminal: `xattr -dr com.apple.quarantine /Applications/OpenDTA.ap
 2. Como o instalador não tem assinatura digital, o SmartScreen pode avisar "O Windows protegeu o computador". Clique em **Mais informações → Executar assim mesmo**.
 
 Versão portátil: descompacte **OpenDTA-windows-x64-portable.zip** em qualquer pasta e abra `OpenDTA.exe`.
+
+### Atualizações
+
+O OpenDTA 0.2.0 e as versões seguintes procuram novidades ao abrir (uma vez por dia) e em **Help → Check for Updates**, e conseguem baixar e instalar sozinhos.
 
 ### Aviso
 

@@ -86,6 +86,15 @@ class PreferencesDialog(QDialog):
         self._lang_changed()
         lay.addWidget(box)
 
+        # updates
+        box = QGroupBox(tr("Updates"))
+        row = QHBoxLayout(box)
+        self.check_updates = QCheckBox(tr("Check for updates when OpenDTA opens (once a day)"))
+        self.check_updates.setChecked(prefs.check_updates)
+        row.addWidget(self.check_updates)
+        row.addStretch(1)
+        lay.addWidget(box)
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                                    | QDialogButtonBox.StandardButton.Cancel
                                    | QDialogButtonBox.StandardButton.RestoreDefaults)
@@ -108,6 +117,7 @@ class PreferencesDialog(QDialog):
             b.setChecked(b.property("theme") == "light")
         self.lang_box.setCurrentIndex(max(0, self.lang_box.findData("en")))
         self.translate_msgs.setChecked(False)
+        self.check_updates.setChecked(True)
 
     def _ok(self) -> None:
         theme = self.theme_group.checkedButton()
@@ -119,6 +129,7 @@ class PreferencesDialog(QDialog):
         self.prefs.language = self.lang_box.currentData() or "en"
         self.prefs.messages = ("translated" if self.translate_msgs.isChecked()
                                and self.prefs.language == "pt" else "stata")
+        self.prefs.check_updates = self.check_updates.isChecked()
         self.prefs.sync()
         self.applied.emit()
         self.accept()
