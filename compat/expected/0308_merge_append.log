@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:44
+ opened on:  15 Oct 2026, 12:26:23
 
 . * Phase 3b: append, merge, joinby, cross. Creates and deletes files in the current folder.
 . clear
@@ -74,7 +74,7 @@ file odta_u.dta saved
 
 Contains data from odta_m.dta
   obs:             5                          
- vars:             5                          15 Oct 2026 12:09
+ vars:             5                          15 Oct 2026 12:26
  size:            75                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -213,7 +213,7 @@ merge:  after merge, not all observations matched
 
 Contains data from odta_m.dta
   obs:             7                          
- vars:             5                          15 Oct 2026 12:09
+ vars:             5                          15 Oct 2026 12:26
  size:           105                          
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
               storage   display    value
@@ -323,8 +323,8 @@ file odta_j.dta saved
      +--------------------------------------------+
      | k    b                          _merge   a |
      |--------------------------------------------|
-  1. | 1   10   both in master and using data   y |
-  2. | 1   10   both in master and using data   x |
+  1. | 1   10   both in master and using data   x |
+  2. | 1   10   both in master and using data   y |
   3. | 3   30             only in master data     |
   4. | 2    .              only in using data   z |
      +--------------------------------------------+
@@ -382,5 +382,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0308_merge_append.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:44
+ closed on:  15 Oct 2026, 12:26:23
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

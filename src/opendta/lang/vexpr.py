@@ -19,8 +19,19 @@ import numpy as np
 from ..core import missing as M
 from ..core.errors import StataError, type_mismatch
 from . import functions as F
-from .expr import (MATRIX_FUNCS, Binary, Call, Name, Node, Num, Str, Subscript, Unary,
-                   _RAW_ARG_FUNCS, _binary)
+from .expr import (
+    _RAW_ARG_FUNCS,
+    MATRIX_FUNCS,
+    Binary,
+    Call,
+    Name,
+    Node,
+    Num,
+    Str,
+    Subscript,
+    Unary,
+    _binary,
+)
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -183,7 +194,7 @@ class VectorContext:
         if name not in F.FUNCTIONS:
             raise StataError(133, f"unknown function {name}()")
         cols = [broadcast(a, self.n) for a in args]
-        results = [F.call(name, [c[i] for c in cols]) for i in range(self.n)]
+        results = _elementwise(name, cols, self.n)
         if any(isinstance(r, str) for r in results):
             return np.array(results, dtype=object)
         return np.array(results, dtype=np.float64)
@@ -231,6 +242,36 @@ class VectorContext:
         total = np.cumsum(v)
         base = np.where(self.groups.start > 0, total[self.groups.start - 1], 0.0) if self.n else total
         return total - base
+
+
+# functions whose result depends on earlier calls (regexs reads the last regexm match): they are
+# evaluated observation by observation, in order
+_STATEFUL = {"regexm", "regexs"}
+
+
+def _elementwise(name: str, cols: list[np.ndarray], n: int) -> list:
+    """Scalar evaluation of a function with no vectorized form. Each distinct combination of
+    arguments is evaluated once (string() of a variable with 50 values over a million
+    observations calls the function 50 times, not a million)."""
+    if name in _STATEFUL or n < 64:
+        return [F.call(name, [c[i] for c in cols]) for i in range(n)]
+    lists = [c.tolist() for c in cols]
+    cache: dict = {}
+    out = []
+    append = out.append
+    if len(lists) == 1:
+        for v in lists[0]:
+            r = cache.get(v, cache)
+            if r is cache:
+                r = cache[v] = F.call(name, [v])
+            append(r)
+        return out
+    for key in zip(*lists):
+        r = cache.get(key, cache)
+        if r is cache:
+            r = cache[key] = F.call(name, list(key))
+        append(r)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +477,43 @@ def _float(x):
     return np.where(miss, x, x.astype(np.float32).astype(np.float64))
 
 
+def _vnum(fn, domain=None, nargs=None):
+    """Vectorized form of a numeric function of several arguments: missing in, missing out;
+    outside the domain, missing; NaN and infinities become missing (as functions._num)."""
+    def f(*xs):
+        if any(is_str(x) for x in xs):
+            raise type_mismatch()
+        n = max(len(x) for x in xs if is_vec(x))
+        arrs = [broadcast(x, n).astype(np.float64, copy=False) for x in xs]
+        miss = np.zeros(n, dtype=bool)
+        for a in arrs:
+            miss |= a >= SYS
+        safe = [np.where(miss, 0.5, a) for a in arrs]
+        if domain is not None:
+            with np.errstate(all="ignore"):
+                miss = miss | ~np.asarray(domain(*safe), dtype=bool)
+            safe = [np.where(miss, 0.5, a) for a in safe]
+        with np.errstate(all="ignore"):
+            r = fn(*safe)
+        return _clean(np.asarray(r, dtype=np.float64), miss)
+    return f
+
+
+def _st():
+    from scipy import stats
+    return stats
+
+
+def _sp():
+    from scipy import special
+    return special
+
+
+def _lnfact(x):
+    from scipy import special
+    return special.gammaln(x + 1)
+
+
 _RANDOM = {"runiform", "runiformint", "rnormal", "rbinomial", "rpoisson", "rchi2", "rt", "rbeta",
            "rgamma", "rexponential", "rlogistic", "rweibull", "rnbinomial", "rhypergeometric"}
 
@@ -460,4 +538,43 @@ _FAST = {
     "inlist": _inlist,
     "inrange": _inrange,
     "float": _float,
+    "sin": _vnum(np.sin),
+    "cos": _vnum(np.cos),
+    "tan": _vnum(np.tan),
+    "asin": _vnum(np.arcsin, lambda x: np.abs(x) <= 1),
+    "acos": _vnum(np.arccos, lambda x: np.abs(x) <= 1),
+    "atan": _vnum(np.arctan),
+    "atan2": _vnum(np.arctan2),
+    "sinh": _vnum(np.sinh),
+    "cosh": _vnum(np.cosh),
+    "tanh": _vnum(np.tanh),
+    "sign": _vnum(np.sign),
+    "lngamma": _vnum(lambda x: _sp().gammaln(x), lambda x: x > 0),
+    "lnfactorial": _vnum(_lnfact, lambda x: (x >= 0) & (x == np.trunc(x))),
+    "logit": _vnum(lambda p: np.log(p / (1 - p)), lambda p: (p > 0) & (p < 1)),
+    "invlogit": _vnum(lambda x: np.where(x > -700, 1 / (1 + np.exp(-np.maximum(x, -700))), 0.0)),
+    "digamma": _vnum(lambda x: _sp().digamma(x)),
+    "normal": _vnum(lambda z: _st().norm.cdf(z)),
+    "normalden": _vnum(lambda z, m=0.0, s=1.0: _st().norm.pdf(z, m, s), lambda z, m=0.0, s=1.0: s > 0),
+    "invnormal": _vnum(lambda p: _st().norm.ppf(p), lambda p: (p > 0) & (p < 1)),
+    "lnnormal": _vnum(lambda z: _st().norm.logcdf(z)),
+    "chi2": _vnum(lambda df, x: _st().chi2.cdf(x, df), lambda df, x: df > 0),
+    "chi2tail": _vnum(lambda df, x: _st().chi2.sf(x, df), lambda df, x: df > 0),
+    "invchi2": _vnum(lambda df, p: _st().chi2.ppf(p, df), lambda df, p: (p >= 0) & (p < 1)),
+    "invchi2tail": _vnum(lambda df, p: _st().chi2.isf(p, df), lambda df, p: (p > 0) & (p <= 1)),
+    "F": _vnum(lambda d1, d2, f: _st().f.cdf(f, d1, d2)),
+    "Ftail": _vnum(lambda d1, d2, f: _st().f.sf(f, d1, d2)),
+    "invF": _vnum(lambda d1, d2, p: _st().f.ppf(p, d1, d2), lambda d1, d2, p: (p >= 0) & (p < 1)),
+    "invFtail": _vnum(lambda d1, d2, p: _st().f.isf(p, d1, d2), lambda d1, d2, p: (p > 0) & (p <= 1)),
+    "t": _vnum(lambda df, t: _st().t.cdf(t, df)),
+    "ttail": _vnum(lambda df, t: _st().t.sf(t, df)),
+    "invt": _vnum(lambda df, p: _st().t.ppf(p, df), lambda df, p: (p > 0) & (p < 1)),
+    "invttail": _vnum(lambda df, p: _st().t.isf(p, df), lambda df, p: (p > 0) & (p < 1)),
+    "binomial": _vnum(lambda n, k, p: _st().binom.cdf(k, n, p)),
+    "binomialtail": _vnum(lambda n, k, p: _st().binom.sf(k - 1, n, p)),
+    "poisson": _vnum(lambda m, k: _st().poisson.cdf(k, m)),
+    "poissontail": _vnum(lambda m, k: _st().poisson.sf(k - 1, m)),
+    "betaden": _vnum(lambda a, b, x: _st().beta.pdf(x, a, b)),
+    "ibeta": _vnum(lambda a, b, x: _sp().betainc(a, b, x)),
+    "gammap": _vnum(lambda a, x: _sp().gammainc(a, x)),
 }

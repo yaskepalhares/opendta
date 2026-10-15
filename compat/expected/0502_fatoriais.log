@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0502_fatoriais.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:56
+ opened on:  15 Oct 2026, 12:26:34
 
 . * Phase 5a: factor variables and interactions in regress.
 . clear
@@ -357,5 +357,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0502_fatoriais.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:56
+ closed on:  15 Oct 2026, 12:26:34
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

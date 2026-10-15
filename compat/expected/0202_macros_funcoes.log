@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0202_macros_funcoes.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:55
+ opened on:  15 Oct 2026, 12:26:33
 
 . * Phase 2: extended macro functions.
 . clear
@@ -85,5 +85,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0202_macros_funcoes.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:55
+ closed on:  15 Oct 2026, 12:26:33
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

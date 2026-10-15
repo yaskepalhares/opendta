@@ -19,7 +19,7 @@ from ..core.errors import StataError
 from ..core.formats import format_value
 from .advanced import _box, _num_grad, _num_hess, _unbox
 from .library import lib
-from .values import MV, MataError, SYS, empty, real, string
+from .values import MV, SYS, MataError, empty, real, string
 
 
 class MoptState:
@@ -698,9 +698,9 @@ def _display(eng, v, r):
             trows.append(CoefRow("sep"))
     level = float(eng.s.settings.get("level", "95"))
     vlab = {"robust": "Robust", "opg": "OPG"}.get(S.vce, "")
-    # the first dependent variable heads the table with one equation (VERIFY: several equations)
+    # the first dependent variable heads the table, with one or several equations (compat 0408)
     dep = ""
-    if neq == 1 and S.depnames.get(1):
+    if S.depnames.get(1):
         dep = S.depnames[1][0]
     coef_table(eng.s, dep, trows, stat="z", df=None, level=level, vcetype=vlab)
     return None

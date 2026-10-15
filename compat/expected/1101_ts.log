@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/1101_ts.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:39
+ opened on:  15 Oct 2026, 12:26:19
 
 . * Phase 10: time series: arima (AR), var, vargranger, varsoc, dfuller, corrgram, newey
 . clear
@@ -265,5 +265,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/1101_ts.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:40
+ closed on:  15 Oct 2026, 12:26:20
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

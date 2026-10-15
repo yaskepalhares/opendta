@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
   log type:  text
- opened on:  15 Oct 2026, 12:09:43
+ opened on:  15 Oct 2026, 12:26:23
 
 . * Phase 8: oneway, anova, tabulate summarize() and estat
 . clear
@@ -429,5 +429,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0802_anova_estat.log
   log type:  text
- closed on:  15 Oct 2026, 12:09:44
+ closed on:  15 Oct 2026, 12:26:23
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
