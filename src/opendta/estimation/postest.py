@@ -112,7 +112,8 @@ def cmd_predict(s: "Session", args: str) -> None:
     est = current(s)
     from ..commands._util import touse
     p = parse_standard(args)
-    o = match_options(p.options, _PRED_OPTS) if p.options.strip() else {}
+    extra = getattr(est, "predict_opts", {}) or {}
+    o = match_options(p.options, {**_PRED_OPTS, **extra}) if p.options.strip() else {}
     words = p.varlist.split()
     if not words:
         raise StataError(100, "varlist required")
@@ -128,6 +129,10 @@ def cmd_predict(s: "Session", args: str) -> None:
     mask = touse(s, p)
     stats = [k for k in ("xb", "residuals", "stdp", "stdf", "stdr", "hat", "leverage", "rstandard",
                          "rstudent", "cooksd", "pr", "p", "n", "ir") if o.get(k)]
+    stats += [k for k in extra if o.get(k) and k not in stats and k != "partial"]
+    if "time" in stats and len(stats) > 1:
+        stats.remove("time")      # "median time", "mean time" (streg)
+    est._partial = bool(o.get("partial"))
     if len(stats) > 1:
         raise StataError(198, "only one statistic may be specified")   # VERIFY
     out = s.output

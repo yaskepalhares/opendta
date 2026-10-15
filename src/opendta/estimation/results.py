@@ -51,6 +51,7 @@ class CoefRow:
     se: float = 0.0
     eq: str = ""
     name: str = ""                # name in e(b), for estimates table
+    noeform: bool = False         # never exponentiated (e.g. /ln_p in streg)
 
 
 @dataclass
@@ -190,7 +191,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             tval = b / se
             p = pvalue(stat, tval, df)
             lo, hi = b - c * se, b + c * se
-            if eform:
+            if eform and not r.noeform:
                 b, se, lo, hi = np.exp(b), np.exp(b) * se, np.exp(lo), np.exp(hi)
             out.write(f"  {g9(b):>9}  {g9(se):>9}  {tval:>7.2f}  {p:>6.3f}    {g9(lo):>9}   {g9(hi):>9}\n",
                       "result")

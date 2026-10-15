@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 HELP_DIR = Path(__file__).resolve().parents[1] / "help"
 
 ALIASES = {
+    "st": "stset", "streset": "stset", "stdes": "stdescribe", "estat_phtest": "stcox",
     "d": "describe", "de": "describe", "des": "describe", "g": "generate", "gen": "generate",
     "replace": "generate", "l": "list", "li": "list", "saveold": "save", "export": "import",
     "insheet": "import", "outsheet": "import", "import_delimited": "import",

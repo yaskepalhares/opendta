@@ -127,8 +127,9 @@ The phases are in dependency order. Each one ends with something that can be ope
 - [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
 - [x] `codebook`, `misstable`, `putexcel`
 - [ ] Mata classes (`class`, inheritance, virtual methods)
-- [ ] Survival (`stset`, `sts`, `stcox`, `streg`), time series (`arima`, `var`), multilevel (`mixed`, `melogit`), `sem`, `power`, `mi` (multiple imputation) and other commands, prioritized by use
-- [x] Menu dialogs (33 Statistics and Graphics commands), with a preview of the command and OK, Submit and Copy
+- [x] Survival analysis: `stset` (with `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (Breslow and Efron ties, strata, robust), `estat phtest`, `streg` (exponential, Weibull, Gompertz, lognormal, loglogistic) and their `predict` options; cases `0901`–`0902` await the Stata run
+- [ ] Time series (`arima`, `var`), multilevel (`mixed`, `melogit`), `sem`, `power`, `mi` (multiple imputation) and other commands, prioritized by use
+- [x] Menu dialogs (38 Statistics and Graphics commands), with a preview of the command and OK, Submit and Copy
 - [x] Help pages for all commands
 - [x] macOS package (`tools/build_macos.sh`: `OpenDTA.app` and `.dmg`; "Open With" for `.do` and `.dta`)
 - Checked against the Stata logs: cases `0801`–`0804`
