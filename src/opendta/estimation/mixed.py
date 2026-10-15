@@ -32,6 +32,7 @@ from ..lang.syntax import find_top
 from ..lazy import lazy
 from . import fvars
 from .ml import maximize, print_log
+from .ml import options as ml_options
 from .results import Estimates, coef_table, post, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
@@ -401,12 +402,9 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
             return model.loglik(th), None, None
         return _numderiv(model.loglik, th)
 
-    maxiter = int(o["iterate"]) if o.get("iterate") else 16000
     # silent rough maximization (in place of Stata's EM iterations)
     pre = maximize(fun, th0, maxiter=50, tol=1e-2, ltol=1e-3, nrtol=1e2)
-    r = maximize(fun, pre.b, maxiter=maxiter, tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
-                 ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-                 nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
+    r = maximize(fun, pre.b, **ml_options(o))
     lab = "log restricted-likelihood" if reml else "log likelihood"
     if not o.get("nolog"):
         out.write("\nPerforming EM optimization: \n\nPerforming gradient-based optimization: \n\n", "text")

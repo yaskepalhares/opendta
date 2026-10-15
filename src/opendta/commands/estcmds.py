@@ -295,13 +295,13 @@ def cmd_sts(s: "Session", args: str) -> None:
 
 @command("stcox", "stcox")
 def cmd_stcox(s: "Session", args: str) -> None:
-    from ..estimation.stmodels import cmd_stcox as run
+    from ..estimation.stcox import cmd_stcox as run
     run(s, args)
 
 
 @command("streg", "streg")
 def cmd_streg(s: "Session", args: str) -> None:
-    from ..estimation.stmodels import cmd_streg as run
+    from ..estimation.streg import cmd_streg as run
     run(s, args)
 
 

@@ -107,22 +107,37 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
             converged = True
             log.append((it, ll, ""))
             break
+    res = MLResult(b, ll, g, H, it, converged, log)
     if converged and k:
         from .numerics import precise
         if precise():
-            # set numerics precise: extra Newton steps (outside the log) until the gradient stops
-            # decreasing, taking b to the exact maximum
-            for _ in range(5):
-                try:
-                    bn = b - np.linalg.solve(H, g)
-                except np.linalg.LinAlgError:
-                    break
-                lln, gn, Hn = fun(bn, 2)
-                if not np.isfinite(lln) or lln < ll - 1e-12 * max(1.0, abs(ll)) or \
-                        np.linalg.norm(gn) >= np.linalg.norm(g):
-                    break
-                b, ll, g, H = bn, lln, gn, Hn
-    return MLResult(b, ll, g, H, it, converged, log)
+            refine(fun, res)      # set numerics precise
+    return res
+
+
+def refine(fun, res: MLResult, steps: int = 5) -> None:
+    """Newton steps outside the iteration log, while the log likelihood does not fall and the
+    gradient keeps shrinking: they take b to the exact maximum (set numerics precise; stcox's
+    "Refining estimates")."""
+    for _ in range(steps):
+        try:
+            bn = res.b - np.linalg.solve(res.H, res.g)
+        except np.linalg.LinAlgError:
+            return
+        lln, gn, Hn = fun(bn, 2)
+        if not np.isfinite(lln) or lln < res.ll - 1e-12 * max(1.0, abs(res.ll)) or \
+                np.linalg.norm(gn) >= np.linalg.norm(res.g):
+            return
+        res.b, res.ll, res.g, res.H = bn, lln, gn, Hn
+
+
+def options(o: dict, maxiter: int = 16000) -> dict:
+    """maximize() keywords from the iterate(), tolerance(), ltolerance() and nrtolerance()
+    options ([R] maximize), with Stata's defaults."""
+    return dict(maxiter=int(o["iterate"]) if o.get("iterate") else maxiter,
+                tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
+                ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
+                nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
 
 
 def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.ndarray], np.ndarray],
