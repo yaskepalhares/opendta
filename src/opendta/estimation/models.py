@@ -13,7 +13,9 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
 from ..lazy import lazy
 from . import fvars
+from .vce import bread, sandwich
 from .ml import maximize, print_log
+from .ml import options as ml_options
 from .regress import Sample, cmdline, comma, wexp_macros
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
 
@@ -181,40 +183,17 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         # Stata's poisson already starts close to the maximum (compat 0507: iteration 0 equal to
         # the final one): starting values obtained beforehand, without a log
         b0 = maximize(fun, b0, maxiter=maxiter).b
-    res = maximize(fun, b0, maxiter=maxiter,
-                   tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
-                   ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-                   nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
+    res = maximize(fun, b0, **ml_options(o))
     robust = smp.vce in ("robust", "cluster")
     lab = "log pseudolikelihood" if robust else "log likelihood"
     if cmd != "logistic" and not o.get("nolog"):
         out.write("\n", "text")
         print_log(out, res, lab)
-    try:
-        Vb = np.linalg.inv(-res.H) if k else np.zeros((0, 0))
-    except np.linalg.LinAlgError:
-        Vb = np.linalg.pinv(-res.H)
-    Vb = (Vb + Vb.T) / 2
+    Vb = bread(res.H)
     n_clust = None
     if robust:
-        sc = X * (w * scores(res.b))[:, None]
-        if smp.vce == "cluster":
-            ids = smp.cluster
-            uniq = np.unique(ids)
-            n_clust = len(uniq)
-            meat = np.zeros((k, k))
-            for u in uniq:
-                sg = sc[ids == u].sum(axis=0)
-                meat += np.outer(sg, sg)
-            q = n_clust / (n_clust - 1)
-        else:
-            if smp.wtype == "fweight":
-                meat = (X * (w * scores(res.b) ** 2)[:, None]).T @ X
-            else:
-                meat = sc.T @ sc
-            q = N / (N - 1)
-        Vb = q * Vb @ meat @ Vb
-        Vb = (Vb + Vb.T) / 2
+        Vb, n_clust = sandwich(Vb, X * scores(res.b)[:, None], w, fweight=smp.wtype == "fweight", n=N,
+                               clusters=smp.cluster if smp.vce == "cluster" else None)
     slopes = list(range(len(est_cols)))
     df_m = len(slopes)
     rank_def = False

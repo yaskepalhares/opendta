@@ -41,6 +41,7 @@ from .mixed import (
     split_levels,
 )
 from .ml import maximize, print_log
+from .ml import options as ml_options
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
@@ -308,10 +309,7 @@ def cmd_me(s: "Session", args: str, kind: str, cmdname: str) -> None:
               "mcaghermite": "mcaghermite", "gh": "ghermite", "ghermite": "ghermite",
               "laplace": "laplace"}.get(method, method)
     model = GLMM(kind, y, X, off, lv, npts, method)
-    kw = dict(maxiter=int(o["iterate"]) if o.get("iterate") else 16000,
-              tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
-              ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-              nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
+    kw = ml_options(o)
     # fixed-effects model
     p = X.shape[1]
     fam = _family(kind, y)

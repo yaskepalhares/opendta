@@ -676,7 +676,7 @@ class PreferencesDialog(QDialog):
         for key in ("system", "light", "dark"):
             self.theme.buttons[key].setIcon(icon(f"theme-{key}"))
         # preview in the Results window's colors and font
-        from .main_window import monospace_font
+        from .panes import monospace_font
         rs = results_scheme("dark" if dark else "light")
         self.preview.setFont(monospace_font(self.prefs))
         self.preview.setStyleSheet(f"QLabel#Preview {{ background: {rs.background}; color: {rs.colors['text']}; "

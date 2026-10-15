@@ -28,6 +28,7 @@ from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
 from . import fvars
 from .ml import maximize_switching, print_log
+from .ml import options as ml_options
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
 from .tsops import _fmt_time, require_ts
 
@@ -248,11 +249,7 @@ def cmd_arima(s: "Session", args: str) -> None:
     b0 = np.concatenate([beta0, arma0, [sig0 or float(np.std(res0)) or 1.0]])
     if not np.isfinite(ll(b0)):
         b0 = np.concatenate([beta0, np.zeros(na + nm), [float(np.std(res0)) or 1.0]])
-    kw = dict(maxiter=int(o["iterate"]) if o.get("iterate") else 16000,
-              tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
-              ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-              nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
-    r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **kw)
+    r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **ml_options(o))
     # the estimates are those of the last iteration, as in Stata (compat 1101: with the same
     # starting values the BHHH log and the estimates match); the variance needs the Hessian there
     _llm, _gm, Hm = _numderiv(ll, r.b)

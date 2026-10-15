@@ -1,5 +1,4 @@
-"""Complex surveys ([SVY] svyset, svydescribe, svy estimation) and the
-statistics mean, proportion, total and ratio ([R] mean, [R] proportion...).
+"""Complex surveys ([SVY] svyset, svydescribe, the svy prefix and estat effects).
 
 Variance by Taylor linearization (design with strata, PSUs and fpc
 in one stage):
@@ -547,330 +546,103 @@ class DesignData:
 
 
 # ---------------------------------------------------------------------------
-# estimadores: mean, proportion, total, ratio
+# mean, proportion, ratio and total under svy (the estimators are in summaries.py)
 # ---------------------------------------------------------------------------
 
-def _over_groups(s, over: str, mask: np.ndarray):
-    if not over:
-        return [("", np.ones(int(mask.sum()), bool), "")]
-    from ..core.varlist import expand
-    ds = s.data
-    names = expand(ds, over)
-    cols = [ds.get(n).data[mask] for n in names]
-    keys = sorted(set(zip(*[c.tolist() for c in cols])))
-    groups = []
-    for key in keys:
-        sel = np.ones(int(mask.sum()), bool)
-        labs = []
-        for n, c, k_ in zip(names, cols, key):
-            sel &= c == k_
-            v = ds.get(n)
-            lab = ds.value_labels.get(v.value_label, {}).get(int(k_)) if v.value_label else None
-            labs.append(lab if lab else (f"{int(k_)}" if k_ == int(k_) else f"{k_:g}"))
-        groups.append((" ".join(labs), sel, key))
-    return groups
+class SurveyEngine:
+    """svy: mean/proportion/ratio/total: design weights, design variance (linearized or
+    replicated), the survey header and the e() of svy."""
 
-
-def _estimate(stat: str, Y: list[np.ndarray], w: np.ndarray, groups, names: list[str], X=None):
-    """Values and scores (n x k) of each statistic, by over() group."""
-    vals, scores, labels = [], [], []
-    n = len(w)
-    for j, y in enumerate(Y):
-        for gname, sel, _ in groups:
-            ws = w * sel
-            if stat == "mean":
-                W = ws.sum()
-                m = float(ws @ y) / W if W > 0 else SYS
-                z = ws * (y - m) / W if W > 0 else np.zeros(n)
-            elif stat == "total":
-                m = float(ws @ y)
-                z = ws * y
-            elif stat == "ratio":
-                x = X[j]
-                Wx = float(ws @ x)
-                m = float(ws @ y) / Wx if Wx else SYS
-                z = ws * (y - m * x) / Wx if Wx else np.zeros(n)
-            else:   # proportion: y is already an indicator
-                W = ws.sum()
-                m = float(ws @ y) / W if W > 0 else SYS
-                z = ws * (y - m) / W if W > 0 else np.zeros(n)
-            vals.append(m)
-            scores.append(z)
-            labels.append((names[j], gname))
-    return np.array(vals), np.column_stack(scores) if scores else np.zeros((n, 0)), labels
-
-
-_TITLES = {"mean": "Mean estimation", "proportion": "Proportion estimation", "total": "Total estimation",
-           "ratio": "Ratio estimation"}
-
-
-def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str, over_names: str):
-    out = s.output
-    lv = f"{level:g}"
-    width = 62
-    crit = st.t.ppf(1 - (1 - level / 100) / 2, df) if df and df > 0 else st.norm.ppf(1 - (1 - level / 100) / 2)
-    out.write("-" * width + "\n", "text")
-    if vcetype == "Bootstrap" and not (df and df > 0):
-        # bootstrap replicate weights: observed value and normal-based interval (compat 0603)
-        out.write(f"{'':>12} |   Observed   Bootstrap         Normal-based\n", "text")
-    elif vcetype:
-        start = 28 + (9 - len(vcetype)) // 2
-        out.write(f"{'':>12} |" + " " * (start - 14) + vcetype + "\n", "text")
-    head = "Over" if over_names else ""
-    out.write(f"{head:>12} | {stat_title:>10}   Std. Err.     [{lv}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 48 + "\n", "text")
-    last = None
-    for (var, grp), b, e in zip(labels, vals, se):
-        if grp:
-            if var != last:
-                # variable header on the left; between over() blocks, a separator line (compat
-                # 0601)
-                if last is not None and over_names:
-                    out.write("-" * 13 + "+" + "-" * 48 + "\n", "text")
-                out.write(f"{var[:12]:<12} |" + "\n", "text")
-                last = var
-            lab = grp
-        else:
-            lab = var
-        out.write(f"{lab[:12]:>12} |", "text")
-        if e is None or not np.isfinite(e):
-            out.write(f"  {g9(b):>9}  {'.':>9}     {'.':>9}   {'.':>9}\n", "result")
-            continue
-        if stat_title == "Proportion" and 0 < b < 1 and vcetype in ("Linearized", ""):
-            # CI on the logit scale (proportion's default in Stata 14, VERIFY)
-            from scipy.special import expit, logit
-            half = crit * e / (b * (1 - b))
-            lo, hi = expit(logit(b) - half), expit(logit(b) + half)
-        else:
-            lo, hi = b - crit * e, b + crit * e
-        out.write(f"  {g9(b):>9}  {g9(e):>9}     {g9(lo):>9}   {g9(hi):>9}\n", "result")
-    out.write("-" * width + "\n", "text")
-
-
-def _proportion_vars(s, names, mask):
-    """proportion: one indicator per category of each variable."""
-    ds = s.data
-    Y, labs = [], []
-    for n in names:
-        v = ds.get(n)
-        x = v.data[mask]
-        for lv in sorted(set(x.tolist())):
-            Y.append((x == lv).astype(float))
-            lab = ds.value_labels.get(v.value_label, {}).get(int(lv)) if v.value_label else None
-            labs.append((n, lab or (f"{int(lv)}" if lv == int(lv) else f"{lv:g}")))
-    return Y, labs
-
-
-def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyopts: str = "") -> None:
-    from ..commands._util import touse
-    from ..core.varlist import expand
-    p = parse_standard(args)
-    o = match_options(p.options, {"over": 2, "level": 1, "vce": 3, "nolegend": 4, "noheader": 6,
-                                  "missing": 4, "percent": 3, "citype": 3}) if p.options.strip() else {}
-    ds = s.data
-    level = float(o["level"]) if o.get("level") else float(s.settings.get("level", "95"))
-    mask = touse(s, p)
-    if stat == "ratio":
-        pairs = re.findall(r"(?:\(?\s*(\w+)\s*:)?\s*(\w+)\s*/\s*(\w+)\s*\)?", p.varlist)
-        if not pairs:
-            raise StataError(198, "invalid syntax")
-        rnames = [nm or f"_ratio_{k + 1}" for k, (nm, _a, _b) in enumerate(pairs)]
-        names = list(rnames)
-        num = [expand(ds, a)[0] for _, a, _b in pairs]
-        den = [expand(ds, b)[0] for _, _a, b in pairs]
-        allv = num + den
-    else:
-        names = expand(ds, p.varlist, allow_empty=False)
-        allv = names
-    for n in allv:
-        x = ds.get(n).data
-        mask &= x < SYS
-    over = str(o.get("over") or "").split(",")[0].strip()
-    if over:
-        for n in expand(ds, over):
-            mask &= ds.get(n).data < SYS
-    out = s.output
-    d = require_design(s) if svy else None
-    subpop = None
-    if svy:
-        so = parse_svy_opts(svyopts)
-        dd = DesignData(s, d, np.ones(ds.nobs, bool) if not p.if_ and not p.in_ else touse(s, p),
-                        vce=so.get("vce"), mse=so.get("mse"), hadamard=so.get("hadamard"))
-        if so.get("subpop"):
-            subpop = _subpop_mask(s, str(so["subpop"]))
-        est_mask = mask & dd.mask
-        out.write(f"\n(running {stat} on estimation sample)\n", "text")
+    def __init__(self, s: "Session", req, svyopts: str = ""):
+        from ..commands._util import touse
+        self.design = d = require_design(s)
+        self.svyopts = svyopts
+        self.so = so = parse_svy_opts(svyopts)
+        p = req.p
+        all_obs = np.ones(s.data.nobs, bool) if not p.if_ and not p.in_ else touse(s, p)
+        self.dd = dd = DesignData(s, d, all_obs, vce=so.get("vce"), mse=so.get("mse"),
+                                  hadamard=so.get("hadamard"))
+        self.subpop = subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
+        s.output.write(f"\n(running {req.stat} on estimation sample)\n", "text")
         # scores outside the sample (or subpop) are zero, but the design counts all PSUs
-        full = dd.mask
-        inside = est_mask[full] & (subpop[full] if subpop is not None else True)
-        w = dd.w * inside
-        rows_idx = np.nonzero(full)[0]
-        n_obs = int(inside.sum())
-    else:
-        full = mask
-        w_all = np.ones(ds.nobs)
-        if p.weight:
-            from ..commands.summarize import weights as get_weights
-            w_all, wtype, mask = get_weights(s, p, mask, ("pweight", "aweight", "fweight", "iweight"))
-            full = mask
-        w = (w_all[full] if p.weight else np.ones(int(full.sum()))).astype(float)
-        rows_idx = np.nonzero(full)[0]
-        n_obs = int(full.sum()) if not (p.weight and p.weight[0].startswith("f")) else int(w.sum())
-    if stat == "proportion":
-        Y, labs_p = _proportion_vars(s, names, full)
-        names_eff = [f"{a}" for a, _ in labs_p]
-    else:
-        Y = [ds.get(n).data[full].astype(float) for n in (num if stat == "ratio" else names)]
-        Y = [np.where(y < SYS, y, 0.0) for y in Y]
-    X = [np.where(ds.get(n).data[full] < SYS, ds.get(n).data[full], 0.0) for n in den] if stat == "ratio" else None
-    groups = _over_groups(s, over, full) if over else [("", np.ones(len(w), bool), "")]
-    legend: list[str] = []
-    if over:
-        ovars = over.split()
-        seen = []
-        for gname, _sel, key in groups:
-            if gname in seen:
-                continue
-            seen.append(gname)
-            desc = ", ".join(f"{v} = {lab}" for v, lab in zip(ovars, gname.split(" "))) \
-                if len(ovars) > 1 else f"{ovars[0]} = {gname}"
-            legend.append(f"{gname[:13]:>13}: {desc}")
-    def compute(wv):
-        if stat == "proportion":
-            vals_, Z_all, labels_ = [], [], []
-            for i, y in enumerate(Y):
-                for gname, sel, _ in groups:
-                    v_, Z_, _l = _estimate("proportion", [y], wv, [(gname, sel, None)], [names_eff[i]])
-                    vals_.extend(v_.tolist())
-                    Z_all.append(Z_)
-                    labels_.append((labs_p[i][0], f"{labs_p[i][1]}" + (f" {gname}" if over else "")))
-            return np.array(vals_), (np.column_stack(Z_all) if Z_all else np.zeros((len(wv), 0))), labels_
-        return _estimate(stat, Y, wv, groups, names, X)
+        self.rows = dd.mask
+        self.in_sample = (req.mask & dd.mask)[dd.mask]
+        self.inside = self.in_sample & (self.subpop[dd.mask] if self.subpop is not None else True)
+        self.w = dd.w * self.inside
+        self.n_obs = int(self.inside.sum())
+        self.n_sample = int(self.in_sample.sum())
+        self.n_rep = None
 
-    vals, Z, labels = compute(w)
-    # over() group of each column (for the "analytic" variance without svy)
-    colsel = [sel for _y in Y for _g, sel, _k in groups]
-    if svy:
-        n_rep = None
+    def variance(self, req, fit, refit):
+        dd = self.dd
         if dd.replicated:
-            V, n_rep = dd.rep_variance(lambda ww: compute(ww * inside)[0], vals)
+            V, self.n_rep = dd.rep_variance(lambda ww: refit(ww * self.inside), fit.vals)
         else:
-            V = dd.variance(Z)
-        df = None if dd.normal else dd.df
-        vcetype = dd.vcetype
+            V = dd.variance(fit.Z)
         # variances under SRS for estat effects ([SVY] estat, Methods and formulas)
-        _srs = _srs_variances(Z, w, dd, int(est_mask[full].sum()))
-    else:
-        # V = N/(N-1) Σ z z' (with fweight, each score counts w times)
-        robust = str(o.get("vce", "")).startswith("r")
-        pw = bool(p.weight and p.weight[0] == "pweight")
-        # with pweight the standard error is linearized, but Stata shows no label
-        vcetype = "Robust" if robust else ""
-        fw = bool(p.weight and p.weight[0] == "fweight")
-        cnt = w if fw else np.ones(len(w))
-        nn = float(cnt.sum())
-        Zr = Z / np.where(w > 0, w, 1)[:, None] if fw else Z
-        if stat == "total" or stat == "ratio" or robust or pw:
-            # linearization: centered scores, V = n/(n-1) Σ (z - z̄)(z - z̄)'
-            zbar = (cnt @ Zr) / nn if stat == "total" else np.zeros(Z.shape[1])
-            Zc = Zr - zbar
-            V = nn / (nn - 1) * (Zc * cnt[:, None]).T @ Zc
-        else:
-            # "analytic" mean/proportion: s²/n within each over() group, with no covariance between
-            # groups (compat 0601: .1209974 = sd/sqrt(n_g))
-            V = (Zr * cnt[:, None]).T @ Zr
-            Wg = np.array([float(cnt @ sel) for sel in colsel])
-            c = np.sqrt(np.where(Wg > 1, Wg / (Wg - 1), np.nan))
-            V = V * np.outer(c, c)
-        df = int(nn) - 1
-        if stat == "ratio":
-            vcetype = "Linearized"
-    se = np.sqrt(np.maximum(np.diag(V), 0)) if V.size else np.zeros(0)
-    if np.isnan(V).any():
-        se = np.full(len(vals), np.nan)
-    # header
-    if not o.get("noheader"):
-        if svy:
-            pop = float(dd.w[est_mask[full]].sum())
-            out.write("\n", "text")
-            right = [("Number of obs", f"{int(est_mask[full].sum()):,}"), ("Population size", _num(pop))]
-            if subpop is not None:
-                right += [("Subpop. no. obs", f"{n_obs:,}"), ("Subpop. size", _num(float(w.sum())))]
-            if n_rep:
-                right.append(("Replications", f"{n_rep:,}"))
-            if df is not None:
-                right.append(("Design df", f"{df:,}"))
-            # replicate weights (compat 0603): jackknife shows the strata but not the PSUs;
-            # bootstrap and SDR show neither, and the title shares the line with Number of obs
-            if dd.rep is not None and dd.normal:
-                left = []
-            elif dd.rep is not None:
-                left = [f"Number of strata = {dd.n_strata:>7,}", ""]
-            else:
-                left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
-            if left:
-                out.write(f"Survey: {_TITLES[stat]}\n\n", "text")
-            else:
-                left = [f"Survey: {_TITLES[stat]}"]
-            for i, (rl, rv) in enumerate(right):
-                lft = left[i] if i < len(left) else ""
-                out.write(f"{lft:<34}{rl:<16}= ", "text")
-                out.write(f"{rv:>10}\n", "result")
-        else:
-            out.write("\n", "text")
-            out.write(f"{_TITLES[stat]:<34}{'Number of obs':<16}= ", "text")
-            out.write(f"{n_obs:>10,}\n", "result")
-        if over:
-            # group legend: "         masc: sexo = masc" (compat 0601)
-            out.write("\n", "text")
-            for ln in legend:
-                out.write(ln + "\n", "text")
-        if stat == "ratio":
-            out.write("\n", "text")
-            for rn, (num_, den_) in zip(rnames, zip(num, den)):
-                out.write(f"{rn[:13]:>13}: {num_}/{den_}\n", "text")
+        self.srs = srs_variances(fit.Z, self.w, dd, self.n_sample)
+        return V, None if dd.normal else dd.df, dd.vcetype
+
+    def header(self, s, req, df):
+        dd, out = self.dd, s.output
+        title = f"Survey: {req.info.title}"
         out.write("\n", "text")
-    stat_title = {"mean": "Mean", "proportion": "Proportion", "total": "Total", "ratio": "Ratio"}[stat]
-    _summary_table(s, stat_title, labels, vals, se, df, level, vcetype, over)
-    # e()
-    from ..commands.matrix import Matrix
-    from .results import Estimates, post
-    cn = [f"{a}:{b}" if b else a for a, b in labels]
-    est = Estimates(stat, "", [c.split(":")[-1] if False else c for c in cn], vals, V, n_obs,
-                    "t" if svy else "t", df)
-    est.rows = []
-    est.level = level
-    est.display = lambda ss, ee, **kw: _summary_table(ss, stat_title, labels, vals, se, df, level, vcetype, over)
-    if svy:
-        est.svy_effects = dict(V=V, srs=_srs, labels=labels, vals=vals, title=stat_title, vcetype=vcetype,
-                               over=over, level=level, legend=legend)
-    if svy:
-        # e() of svy in Stata 14, in ereturn list order (compat 0601)
-        k = len(vals)
-        n_over = len(groups) if over else 1
+        right = [("Number of obs", f"{self.n_sample:,}"), ("Population size", format_size(self.population))]
+        if self.subpop is not None:
+            right += [("Subpop. no. obs", f"{self.n_obs:,}"), ("Subpop. size", format_size(float(self.w.sum())))]
+        if self.n_rep:
+            right.append(("Replications", f"{self.n_rep:,}"))
+        if df is not None:
+            right.append(("Design df", f"{df:,}"))
+        # replicate weights (compat 0603): jackknife shows the strata but not the PSUs; bootstrap
+        # and SDR show neither, and the title shares the line with Number of obs
+        if dd.rep is not None and dd.normal:
+            left = [title]
+        else:
+            out.write(f"{title}\n\n", "text")
+            left = [f"Number of strata = {dd.n_strata:>7,}",
+                    "" if dd.rep is not None else f"Number of PSUs   = {dd.n_psu:>7,}"]
+        for i, (rl, rv) in enumerate(right):
+            lft = left[i] if i < len(left) else ""
+            out.write(f"{lft:<34}{rl:<16}= ", "text")
+            out.write(f"{rv:>10}\n", "result")
+
+    @property
+    def population(self) -> float:
+        return float(self.dd.w[self.in_sample].sum())
+
+    def post(self, s, est, req, fit, df):
+        """e() of svy in Stata 14, in ereturn list order (compat 0601)."""
+        from ..commands.matrix import Matrix
+        from .results import post
+        d, dd, V, Z, w = self.design, self.dd, est.V, fit.Z, self.w
+        stat, over, cn = req.stat, req.over, fit.colnames
+        est.svy_effects = dict(V=V, srs=self.srs, labels=fit.labels, vals=fit.vals, title=req.info.column,
+                               vcetype=dd.vcetype, over=over, level=req.level, legend=fit.legend)
+        k = len(fit.vals)
         scalars = [("df_r", float(df) if df is not None else SYS)]
-        if subpop is not None:
-            scalars += [("N_subpop", float(w.sum())), ("N_sub", float(n_obs))]
+        if self.subpop is not None:
+            scalars += [("N_subpop", float(w.sum())), ("N_sub", float(self.n_obs))]
         scalars += [("N_strata_omit", 0.0), ("singleton", 0.0), ("census", 0.0),
-                    ("N_pop", float(dd.w[est_mask[full]].sum())), ("N_psu", float(dd.n_psu)),
-                    ("N_strata", float(dd.n_strata)), ("N_over", float(n_over)),
-                    ("N", float(int(est_mask[full].sum()))), ("stages", 1.0), ("k_eq", 1.0),
+                    ("N_pop", self.population), ("N_psu", float(dd.n_psu)),
+                    ("N_strata", float(dd.n_strata)), ("N_over", float(len(fit.groups) if over else 1)),
+                    ("N", float(self.n_sample)), ("stages", 1.0), ("k_eq", 1.0),
                     ("rank", float(np.linalg.matrix_rank(V)) if V.size else 0.0)]
-        wvar = d.weight
-        cmdtxt = f"{stat} {args.strip()}".strip()
-        command = cmdtxt if "," in cmdtxt else cmdtxt + ","
-        macros = [("cmdline", f"svy{', ' + svyopts.strip() if svyopts.strip() else ' '}: {cmdtxt}"),
-                  ("cmd", stat), ("prefix", "svy"), ("cmdname", stat), ("command", command),
-                  ("title", f"Survey: {_TITLES[stat]}"), ("vcetype", vcetype), ("vce", dd.vce),
-                  ("estat_cmd", "svy_estat"), ("varlist", " ".join(allv))]
+        cmdtxt = f"{stat} {req.args.strip()}".strip()
+        opts = self.svyopts.strip()
+        macros = [("cmdline", f"svy{', ' + opts if opts else ' '}: {cmdtxt}"),
+                  ("cmd", stat), ("prefix", "svy"), ("cmdname", stat),
+                  ("command", cmdtxt if "," in cmdtxt else cmdtxt + ","),
+                  ("title", f"Survey: {req.info.title}"), ("vcetype", dd.vcetype), ("vce", dd.vce),
+                  ("estat_cmd", "svy_estat"), ("varlist", " ".join(req.allv))]
         if over:
-            macros += [("over", over), ("over_labels", " ".join(g[0] for g in groups)),
-                       ("over_namelist", " ".join(g[0] for g in groups))]   # VERIFY
-        if subpop is not None:
-            macros.append(("subpop", str(so["subpop"]).strip()))
+            glabs = " ".join(g[0] for g in fit.groups)
+            macros += [("over", over), ("over_labels", glabs), ("over_namelist", glabs)]   # VERIFY
+        if self.subpop is not None:
+            macros.append(("subpop", str(self.so["subpop"]).strip()))
         macros += [("marginsnotok", "_ALL")]
-        if wvar:
-            macros += [("wtype", d.wtype or "pweight"), ("wvar", wvar), ("wexp", f"= {wvar}")]
+        if d.weight:
+            macros += [("wtype", d.wtype or "pweight"), ("wvar", d.weight), ("wexp", f"= {d.weight}")]
         macros.append(("singleunit", d.singleunit))
         if d.psu and d.psu != "_n":
             macros.append(("su1", d.psu))
@@ -878,25 +650,20 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             macros.append(("strata1", d.strata))
         if d.fpc:
             macros.append(("fpc1", d.fpc))
-        macros += [("properties", "b V"), ("depvar", stat_title)]
-        Nk = np.array([[float(np.count_nonzero(Z[:, j]) or n_obs) for j in range(k)]])
+        macros += [("properties", "b V"), ("depvar", req.info.column)]
+        Nk = np.array([[float(np.count_nonzero(Z[:, j]) or self.n_obs) for j in range(k)]])
         Wk = np.array([[float(np.sum(w * (np.abs(Z[:, j]) > 0))) or float(w.sum()) for j in range(k)]])
-        nn_ = max(n_obs, 2)
+        nn_ = max(self.n_obs, 2)
         Vsrs = nn_ / (nn_ - 1) * Z.T @ Z
         mats = [("_N_subp", Matrix(Wk, ["r1"], list(cn))), ("V_srs", Matrix(Vsrs, list(cn), list(cn))),
                 ("_N", Matrix(Nk, ["r1"], list(cn))),
                 ("_N_strata_certain", Matrix(np.zeros((1, 1)))), ("_N_strata_single", Matrix(np.zeros((1, 1)))),
                 ("_N_strata", Matrix(np.array([[float(dd.n_strata)]]))),
                 ("error", Matrix(np.zeros((1, k)), ["r1"], list(cn)))]
-        post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx), extra_mats=mats)
-        return
-    scalars = [("N", float(n_obs)), ("df_r", float(df) if df is not None else SYS)]
-    macros = [("cmd", stat), ("cmdline", f"{stat} {args.strip()}".strip()), ("properties", "b V"),
-              ("varlist", " ".join(allv))]
-    post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx))
+        post(s, est, scalars, macros, dd.mask.copy(), extra_mats=mats)
 
 
-def _num(x: float) -> str:
+def format_size(x: float) -> str:
     return f"{x:,.0f}" if abs(x - round(x)) < 1e-6 else format_value(x, "%11.0g", pad=False).strip()
 
 
@@ -917,7 +684,7 @@ def parse_svy_opts(text: str) -> dict:
     return out
 
 
-def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
+def srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tuple:
     """V_srswor and V_srswr from [SVY] estat (total formula with the scores
     u = z/w): V = (1 - f) M̂/(m - 1) Σ w (u - ū)(u - ū)'."""
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -934,7 +701,7 @@ def _srs_variances(Z: np.ndarray, w: np.ndarray, dd: "DesignData", m: int) -> tu
     return (1 - f) * Vwr, Vwr
 
 
-def _subpop_mask(s: "Session", text: str) -> np.ndarray:
+def subpop_mask(s: "Session", text: str) -> np.ndarray:
     from ..commands._util import eval_vector
     t = text.strip()
     ds = s.data
@@ -958,9 +725,8 @@ def _subpop_mask(s: "Session", text: str) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def cmd_svydescribe(s: "Session", args: str) -> None:
-    d = require_design(s)
-    ds = s.data
     from ..commands._util import touse
+    d = require_design(s)
     p = parse_standard(args)
     mask = touse(s, p)
     dd = DesignData(s, d, mask)
@@ -1000,7 +766,8 @@ def cmd_svy(s: "Session", args: str) -> None:
     spec = lookup(word)
     name = spec.name if spec else word
     if name in ("mean", "proportion", "total", "ratio"):
-        summary_stat(s, name, rest, svy=True, svyopts=opts)
+        from .summaries import summary_stat
+        summary_stat(s, name, rest, engine=lambda s_, req: SurveyEngine(s_, req, opts))
         return
     if name in ("regress", "logit", "logistic", "probit", "poisson"):
         from .svyreg import svy_model
@@ -1015,22 +782,6 @@ def cmd_svy(s: "Session", args: str) -> None:
         svy_tabulate(s, rest, opts)
         return
     raise StataError(199, f"svy: {word} not yet supported by OpenDTA")
-
-
-def cmd_mean(s, args):
-    summary_stat(s, "mean", args)
-
-
-def cmd_proportion(s, args):
-    summary_stat(s, "proportion", args)
-
-
-def cmd_total(s, args):
-    summary_stat(s, "total", args)
-
-
-def cmd_ratio(s, args):
-    summary_stat(s, "ratio", args)
 
 
 # ---------------------------------------------------------------------------
@@ -1056,8 +807,9 @@ def estat_effects(s: "Session", est, rest: str) -> None:
     info = getattr(est, "svy_effects", None)
     if info is None:
         raise StataError(321, "estat effects not allowed after this command")   # VERIFY
-    o = match_options(rest.lstrip(", "), {"deff": 4, "deft": 4, "srssubpop": 3, "meff": 4, "meft": 4}) \
-        if rest.strip(" ,") else {}
+    if rest.strip(" ,"):
+        # validated only: the table always shows DEFF and DEFT
+        match_options(rest.lstrip(", "), {"deff": 4, "deft": 4, "srssubpop": 3, "meff": 4, "meft": 4})
     V = np.asarray(info["V"], dtype=float)
     Vwor, Vwr = info["srs"]
     out = s.output

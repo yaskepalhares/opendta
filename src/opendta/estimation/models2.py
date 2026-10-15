@@ -14,7 +14,9 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
 from ..lazy import lazy
 from . import fvars
+from .vce import bread, sandwich
 from .ml import maximize, print_log
+from .ml import options as ml_options
 from .regress import Sample, cmdline, comma, wexp_macros
 from .results import CoefRow, Estimates, coef_table, crit, post, rows_from_columns
 
@@ -80,18 +82,11 @@ class _Prep:
 
     def maximize(self, fun, b0):
         o = self.o
-        return maximize(fun, b0, maxiter=int(o["iterate"]) if o.get("iterate") else 300,
-                        tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
-                        ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-                        nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
+        return maximize(fun, b0, **ml_options(o, maxiter=300))
 
     def vce(self, H: np.ndarray, scores: np.ndarray | None) -> tuple[np.ndarray, int | None]:
         """Model V (OIM) or the sandwich with the scores per observation (n x k)."""
-        try:
-            V = np.linalg.inv(-H)
-        except np.linalg.LinAlgError:
-            V = np.linalg.pinv(-H)
-        V = (V + V.T) / 2
+        V = bread(H)
         ctx = getattr(self.s, "_svy_ctx", None)
         if ctx is not None and scores is not None:
             # svy: linearized scores u = w s V carried to the design observations (zero outside the
@@ -108,24 +103,8 @@ class _Prep:
         if not self.robust or scores is None:
             return V, None
         smp = self.smp
-        sc = scores * self.w[:, None] if smp.wtype != "fweight" else scores
-        n_clust = None
-        if smp.vce == "cluster":
-            uniq = np.unique(smp.cluster)
-            n_clust = len(uniq)
-            meat = np.zeros_like(V)
-            for u in uniq:
-                sg = sc[smp.cluster == u].sum(axis=0)
-                meat += np.outer(sg, sg)
-            q = n_clust / (n_clust - 1)
-        else:
-            if smp.wtype == "fweight":
-                meat = (scores * self.w[:, None]).T @ scores
-            else:
-                meat = sc.T @ sc
-            q = self.N / (self.N - 1)
-        V = q * V @ meat @ V
-        return (V + V.T) / 2, n_clust
+        return sandwich(V, scores, self.w, fweight=smp.wtype == "fweight", n=self.N,
+                        clusters=smp.cluster if smp.vce == "cluster" else None)
 
 
 def _header(s: "Session", left: list[str], right: list[tuple[str, str]]) -> None:

@@ -18,7 +18,7 @@ import numpy as np
 from ..core.errors import StataError
 from ..core.formats import format_value
 from .advanced import _box, _num_grad, _num_hess, _unbox
-from .library import lib
+from .libbase import lib
 from .values import MV, SYS, MataError, empty, real, string
 
 
