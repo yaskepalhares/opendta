@@ -9,13 +9,20 @@ Stata's as described in [G-3], without copying StataCorp graphical elements."""
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
-from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
 
+from ..lazy import lazy
 from . import scheme as SC
 from .model import Graph, Layer, Panel
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
+# matplotlib is imported when the first graph is drawn (start-up time; see opendta/lazy.py)
+_mfigure = lazy("matplotlib.figure")
+_mticker = lazy("matplotlib.ticker")
 
 # Stata's default size: 5.5 × 4 inches ([G-3] region_options)
 DEFAULT_SIZE = (5.5, 4.0)
@@ -219,7 +226,7 @@ def _apply_axis(ax, which: str, o: dict, sch: dict, value_labels: dict | None) -
         axis.set_ticks(vals)
         axis.set_ticklabels(texts)
     elif lab.get("auto"):
-        axis.set_major_locator(MaxNLocator(nbins=max(1, lab["auto"] - 1)))
+        axis.set_major_locator(_mticker.MaxNLocator(nbins=max(1, lab["auto"] - 1)))
     elif lab.get("valuelabel") and value_labels:
         keys = sorted(value_labels)
         axis.set_ticks(keys)
@@ -563,7 +570,7 @@ def figure(g: Graph, default_scheme: str = "opendta") -> Figure:
     sch = SC.get(g.opts.get("scheme") or default_scheme)
     w = float(g.opts.get("xsize", DEFAULT_SIZE[0]))
     h = float(g.opts.get("ysize", DEFAULT_SIZE[1]))
-    fig = Figure(figsize=(w, h), layout="constrained")
+    fig = _mfigure.Figure(figsize=(w, h), layout="constrained")
     fig.patch.set_facecolor(sch["background"])
     draw(fig, g, sch)
     return fig

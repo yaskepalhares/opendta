@@ -11,14 +11,17 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core.errors import StataError
 from ..lang.syntax import parse_standard
+from ..lazy import lazy
 from . import data as D
 from .model import Graph, Layer, Panel
 from .opts import graph_options, split_layer_graph
 from .twoway import layer_spec
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
                                QPushButton, QTextBrowser, QVBoxLayout)
 
@@ -19,6 +19,8 @@ DAY = 24 * 3600
 
 
 class _Worker(QObject):
+    """Runs in its own QThread. Its signals must go to slots of objects that live in the GUI
+    thread (never to lambdas, which would run here)."""
     done = Signal(object)
     failed = Signal(str)
     progress = Signal(int, int)
@@ -64,6 +66,7 @@ class UpdateController(QObject):
         self.prefs = window.prefs
         self._thread = None
         self._worker = None
+        self._manual = False
 
     # -- checking --------------------------------------------------------------
     def check_at_startup(self) -> None:
@@ -79,10 +82,22 @@ class UpdateController(QObject):
     def _check(self, manual: bool) -> None:
         if self._thread is not None and self._thread.isRunning():
             return
+        self._manual = manual
         self._worker = _Worker("check")
-        self._worker.done.connect(lambda rel: self._checked(rel, manual))
-        self._worker.failed.connect(lambda msg: self._check_failed(msg, manual))
+        # bound slots of this object (which lives in the GUI thread): Qt queues the call to the
+        # GUI thread. A lambda would run in the worker thread, and a dialog opened there aborts
+        # the application (macOS: NSWindow outside the main thread)
+        self._worker.done.connect(self._on_checked)
+        self._worker.failed.connect(self._on_check_failed)
         self._thread = _start(self, self._worker)
+
+    @Slot(object)
+    def _on_checked(self, rel) -> None:
+        self._checked(rel, self._manual)
+
+    @Slot(str)
+    def _on_check_failed(self, msg: str) -> None:
+        self._check_failed(msg, self._manual)
 
     def _check_failed(self, msg: str, manual: bool) -> None:
         self.checked.emit()
@@ -190,6 +205,7 @@ class UpdateDialog(QDialog):
         self._worker.failed.connect(self._failed)
         self._thread = _start(self, self._worker)
 
+    @Slot(int, int)
     def _progress(self, done: int, total: int) -> None:
         if total:
             self.bar.setRange(0, 1000)
@@ -202,6 +218,7 @@ class UpdateDialog(QDialog):
             self._worker.cancel = True
         self.reject()
 
+    @Slot(str)
     def _failed(self, msg: str) -> None:
         if msg == "cancelled":
             return
@@ -212,6 +229,7 @@ class UpdateDialog(QDialog):
         self.install.clicked.disconnect()
         self.install.clicked.connect(lambda: (updater.open_externally(self.rel.page), self.accept()))
 
+    @Slot(object)
     def _downloaded(self, path) -> None:
         self.bar.setRange(0, 1)
         self.bar.setValue(1)

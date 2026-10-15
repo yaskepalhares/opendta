@@ -15,12 +15,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
+from ..lazy import lazy
 from .st import STData, _g, _level_label, _qualifiers, header, require_st, st_data
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -431,12 +434,12 @@ def _steps(x0: float, times: np.ndarray, y: np.ndarray, y0: float, tmax: float):
 
 
 def sts_graph(s: "Session", args: str) -> None:
+    from ..commands._util import touse
     from ..commands.graphcmd import finish
     from ..graphics.model import Graph, Layer, Panel
     from ..graphics.opts import axis_label, graph_options, split_layer_graph
     from ..graphics.twoway import layer_spec
     from ..lang.syntax import parse_standard
-    from ..commands._util import touse
     p = parse_standard(args)
     lopts, graw = split_layer_graph(p.options, {**layer_spec(), "by": 2, "failure": 1, "na": 2,
                                                 "cumhaz": 4, "ci": 2, "noshow": 6, "level": 1,

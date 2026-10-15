@@ -23,12 +23,16 @@ import time
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import find_top, match_options
+from ..lazy import lazy
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..core.dataset import Dataset

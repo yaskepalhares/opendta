@@ -7,16 +7,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
-from ..core.stats import chi2_tail as _chi2_tail
 from ..core.errors import StataError
 from ..core.formats import format_value
+from ..core.stats import chi2_tail as _chi2_tail
+from ..lazy import lazy
 from . import fvars
 from .ml import maximize, print_log
 from .regress import Sample, cmdline, comma, wexp_macros
 from .results import CoefRow, Estimates, coef_table, crit, post, rows_from_columns
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

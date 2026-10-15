@@ -7,14 +7,17 @@ import re
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_standard
+from ..lazy import lazy
 from . import fvars
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

@@ -23,16 +23,19 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
 
 from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top
+from ..lazy import lazy
 from . import fvars
 from .ml import maximize, print_log
 from .results import Estimates, coef_table, post, rows_from_columns
+
+# imported on first use (start-up time; see opendta/lazy.py)
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session

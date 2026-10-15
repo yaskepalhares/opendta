@@ -21,6 +21,7 @@ included in the bundle, in its `*.dist-info` folder inside `Contents/Resources`
 | packaging | Apache-2.0 / BSD-2-Clause | https://github.com/pypa/packaging |
 | openpyxl, et-xmlfile | MIT | https://openpyxl.readthedocs.io |
 | pyreadstat | Apache-2.0 | https://github.com/Roche/pyreadstat |
+| certifi (Mozilla CA bundle) | MPL-2.0 | https://github.com/certifi/python-certifi |
 | ReadStat | MIT | https://github.com/WizardMac/ReadStat |
 | pandas | BSD-3-Clause | https://pandas.pydata.org |
 | PyInstaller bootloader | GPL-2.0 with a bootloader exception | https://pyinstaller.org |

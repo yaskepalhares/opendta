@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 
@@ -47,5 +48,9 @@ def run_gui(args: list[str] | None = None) -> int:
     app.installEventFilter(opener)
     win.show()
     open_paths(win, args or [])
-    QTimer.singleShot(4000, win.updates.check_at_startup)   # daily check for a new release
+    if os.environ.get("OPENDTA_SMOKE_TEST"):
+        # start-up check of a build (and its timing): quit as soon as the window is shown
+        QTimer.singleShot(0, app.quit)
+    else:
+        QTimer.singleShot(4000, win.updates.check_at_startup)   # daily check for a new release
     return app.exec()

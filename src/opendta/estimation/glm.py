@@ -8,14 +8,27 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st
 
 from ..core import missing as M
-from ..core.stats import chi2_tail as _chi2_tail
 from ..core.errors import StataError
 from ..core.formats import format_value
-from .models2 import _Prep, _bmap, _cluster_note, _expand, _finish, _log, _semap, num_hess
+from ..core.stats import chi2_tail as _chi2_tail
+from ..lazy import lazy
+from .models2 import (
+    _bmap,
+    _cluster_note,
+    _expand,
+    _finish,
+    _log,
+    _Prep,
+    _semap,
+    num_hess,
+)
 from .results import CoefRow, Estimates, coef_table, rows_from_columns
+
+# imported on first use (start-up time; see opendta/lazy.py)
+special = lazy("scipy.special")
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
