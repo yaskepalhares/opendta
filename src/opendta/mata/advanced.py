@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..core.formats import format_value
-from .library import lib
+from .libbase import lib
 from .values import MV, MataError, SYS, empty, real, string
 
 

@@ -25,6 +25,14 @@ class MataError(Exception):
         self.where: list[str] = []      # function stack (for the message)
 
 
+class MataExit(Exception):
+    """exit(rc) ([M-5] exit()): leaves Mata, with an error when rc is not 0."""
+
+    def __init__(self, rc: int):
+        super().__init__(rc)
+        self.rc = rc
+
+
 def conformability() -> MataError:
     return MataError(3200, "conformability error")
 

@@ -403,3 +403,19 @@ end""")
     assert log == ["-5.5451774", "-3.5092587", "-3.4893142", "-3.4893", "-3.4893"]
     assert ".5496009006   2.245395572" in out
     assert out.rstrip().endswith("5")
+
+
+def test_elementwise_functions_match_the_scalar_ones(run):
+    """sqrt(), normal(), substr()... on a matrix give, element by element, what the Stata function
+    gives (the vectorized path of mata/lib_elementwise.py, missing values included)."""
+    from opendta.lang import functions as F
+    mata(run, "X = (4, -1, .5 \\ ., 0, .a)\nA = sqrt(X)\nB = normal(X)\nC = mod(X, 3)\n"
+              "S = substr((\"abc\", \"hello\"), 2, (1 \\ 3))\nR = regexm((\"a1\", \"b\"), \"[0-9]\")")
+    X = val(run, "X").a
+    for name, fn, args in (("A", "sqrt", ()), ("B", "normal", ()), ("C", "mod", (3.0,))):
+        got = val(run, name).a
+        want = np.array([[F.call(fn, [float(x), *args]) for x in row] for row in X])
+        assert np.array_equal(got >= MISS, want >= MISS)
+        assert np.allclose(got[got < MISS], want[want < MISS], rtol=1e-13)
+    assert val(run, "S").a.tolist() == [["b", "e"], ["bc", "ell"]]
+    assert val(run, "R").a.tolist() == [[1.0, 0.0]]

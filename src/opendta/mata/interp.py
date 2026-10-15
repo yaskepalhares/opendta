@@ -19,7 +19,7 @@ from .lexer import MataSyntaxError
 from .parser import (AddrOf, Assign, Binary, Block, Break, Call, ClassDef, Continue, Decl, Deref, DoWhile,
                      Empty, ExprStmt, For, FuncDef, If, IncDec, Member, MethodCall, Name, Num, Parser, RangeSub,
                      Return, Str, StructDef, Subscript, Ternary, Transpose, Unary, While)
-from .values import MV, MataError, Pointer, StructVal, SYS, empty, real, string, truth
+from .values import MV, MataError, MataExit, Pointer, StructVal, SYS, empty, real, string, truth
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -271,13 +271,10 @@ class MataEngine:
             return
         except MataError as e:
             raise StataError(e.code, self._format_error(e))
-        except Exception as e:     # noqa: BLE001
-            from .library import MataExit
-            if isinstance(e, MataExit):
-                if e.rc:
-                    raise StataError(e.rc, "")
-                raise MataLeave()
-            raise
+        except MataExit as e:
+            if e.rc:
+                raise StataError(e.rc, "")
+            raise MataLeave()
 
     @staticmethod
     def _format_error(e: MataError) -> str:

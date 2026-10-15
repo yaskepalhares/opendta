@@ -15,7 +15,7 @@ import numpy as np
 
 from ..core.dataset import Variable, check_name
 from ..core.errors import StataError
-from .library import lib
+from .libbase import lib
 from .values import MV, MataError, SYS, empty, real, string
 
 
