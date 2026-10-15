@@ -1,0 +1,313 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0603_svy_replicas.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:38
+
+. * Phase 6b (continued): BRR with hadamard(), several stages and replicate weights (bootstrap, SDR, jackknife)
+. clear
+
+. estimates clear
+
+. ereturn clear
+
+. set seed 600
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen estrato = ceil(_n/50)
+
+. gen upa = ceil(_n/10)
+
+. gen peso = 50 + mod(_n, 7)*10
+
+. gen sexo = mod(_n, 2)
+
+. label define sexol 0 "masc" 1 "fem"
+
+. label values sexo sexol
+
+. gen idade = 18 + floor(runiform()*60)
+
+. gen ativo = runiform() < invlogit(-1 + .02*idade - .5*sexo)
+
+. gen imc = 22 + .05*idade + 2*sexo + round(runiform()*4, .01)
+
+. mean imc
+
+Mean estimation                   Number of obs   =        200
+
+--------------------------------------------------------------
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |     27.285   .1244698      27.03955    27.53045
+--------------------------------------------------------------
+
+. gen nivel = 1 + (imc > 26) + (imc > 28)
+
+. gen cont = floor(idade/10)
+
+. gen upa2 = mod(_n, 2)
+
+. gen npop = 20
+
+. gen n2 = 10
+
+. svyset upa2 [pweight=peso], strata(estrato) vce(brr)
+
+      pweight: peso
+          VCE: brr
+          MSE: off
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa2
+        FPC 1: <zero>
+
+. matrix h4 = (1, 1, 1, 1 \ 1, -1, 1, -1 \ 1, 1, -1, -1 \ 1, -1, -1, 1)
+
+. svy, hadamard(h4): mean imc
+(running mean on estimation sample)
+
+BRR replications (4)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =       8        Population size =     15,980
+                                  Replications    =          4
+                                  Design df       =          3
+
+--------------------------------------------------------------
+             |                 BRR
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .4680012      25.81708    28.79586
+--------------------------------------------------------------
+
+. svy, hadamard(h4): proportion ativo
+(running proportion on estimation sample)
+
+BRR replications (4)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....
+
+Survey: Proportion estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =       8        Population size =     15,980
+                                  Replications    =          4
+                                  Design df       =          3
+
+--------------------------------------------------------------
+             |                 BRR
+             | Proportion   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+ativo        |
+           0 |   .5757196   .0505653      .4147982    .7366411
+           1 |   .4242804   .0505653      .2633589    .5852018
+--------------------------------------------------------------
+
+. svy, hadamard(h4) mse: mean imc
+(running mean on estimation sample)
+
+BRR replications (4)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+....
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =       8        Population size =     15,980
+                                  Replications    =          4
+                                  Design df       =          3
+
+--------------------------------------------------------------
+             |                BRR *
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .5957826      25.41042    29.20252
+--------------------------------------------------------------
+
+. svyset upa [pweight=peso], strata(estrato) fpc(npop) || _n, fpc(n2)
+
+      pweight: peso
+          VCE: linearized
+  Single unit: missing
+     Strata 1: estrato
+         SU 1: upa
+        FPC 1: npop
+     Strata 2: <one>
+         SU 2: <observations>
+        FPC 2: n2
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Survey: Mean estimation
+
+Number of strata =       4        Number of obs   =        200
+Number of PSUs   =      20        Population size =     15,980
+                                  Design df       =         16
+
+--------------------------------------------------------------
+             |             Linearized
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0874173      27.12115    27.49179
+--------------------------------------------------------------
+
+. forvalues r = 1/10 {
+  2.     gen bw`r' = peso*(1 + .1*sin(_n*`r'))
+  3. }
+
+. svyset [pweight=peso], bsrweight(bw*) vce(bootstrap)
+
+      pweight: peso
+          VCE: bootstrap
+          MSE: off
+    bsrweight: bw1 bw2 bw3 bw4 bw5 bw6 bw7 bw8 bw9 bw10
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: <observations>
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Bootstrap replications (10)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..........
+
+Survey: Mean estimation           Number of obs   =        200
+                                  Population size =     15,980
+                                  Replications    =         10
+
+--------------------------------------------------------------
+             |   Observed   Bootstrap         Normal-based
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0102878      27.28631    27.32663
+--------------------------------------------------------------
+
+. svyset [pweight=peso], sdrweight(bw*) vce(sdr)
+
+      pweight: peso
+          VCE: sdr
+          MSE: off
+    sdrweight: bw1 bw2 bw3 bw4 bw5 bw6 bw7 bw8 bw9 bw10
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: <observations>
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+SDR replications (10)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..........
+
+Survey: Mean estimation           Number of obs   =        200
+                                  Population size =     15,980
+                                  Replications    =         10
+
+--------------------------------------------------------------
+             |                 SDR
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0205756      27.26614     27.3468
+--------------------------------------------------------------
+
+. svyset [pweight=peso], jkrweight(bw*) vce(jackknife)
+
+      pweight: peso
+          VCE: jackknife
+          MSE: off
+    jkrweight: bw1 bw2 bw3 bw4 bw5 bw6 bw7 bw8 bw9 bw10
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: <observations>
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Jackknife replications (10)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..........
+
+Survey: Mean estimation
+
+Number of strata =       1        Number of obs   =        200
+                                  Population size =     15,980
+                                  Replications    =         10
+                                  Design df       =          9
+
+--------------------------------------------------------------
+             |              Jackknife
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0308634      27.23665    27.37629
+--------------------------------------------------------------
+
+. svy, mse: mean imc
+(running mean on estimation sample)
+
+Jackknife replications (10)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..........
+
+Survey: Mean estimation
+
+Number of strata =       1        Number of obs   =        200
+                                  Population size =     15,980
+                                  Replications    =         10
+                                  Design df       =          9
+
+--------------------------------------------------------------
+             |              Jknife *
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0308883       27.2366    27.37634
+--------------------------------------------------------------
+
+. svyset [pweight=peso], bsrweight(bw*) bsn(2) vce(bootstrap)
+
+      pweight: peso
+          VCE: bootstrap
+          MSE: off
+    bsrweight: bw1 bw2 bw3 bw4 bw5 bw6 bw7 bw8 bw9 bw10
+          bsn: 2
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: <observations>
+        FPC 1: <zero>
+
+. svy: mean imc
+(running mean on estimation sample)
+
+Bootstrap replications (10)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..........
+
+Survey: Mean estimation           Number of obs   =        200
+                                  Population size =     15,980
+                                  Replications    =         10
+
+--------------------------------------------------------------
+             |   Observed   Bootstrap         Normal-based
+             |       Mean   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+         imc |   27.30647   .0145491      27.27795    27.33499
+--------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0603_svy_replicas.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:21:39
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

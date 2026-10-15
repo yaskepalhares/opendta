@@ -298,7 +298,15 @@ def _b(v: MV) -> np.ndarray:
 @lib("moptimize_util_xb", 3)
 def _util_xb(eng, v, r):
     S = _st(v[0])
-    return real(S.xb(v[2].int_scalar(), _b(v[1])).reshape(-1, 1))
+    i = v[2].int_scalar()
+    e = S.eq(i)
+    if (e["X"] is None or e["X"].shape[1] == 0) and e["offset"] is None:
+        # a constant-only equation gives a scalar ([M-5] moptimize(); compat 0408)
+        a, z = S.indices(i)
+        b = _b(v[1])
+        if z - a == 1:
+            return real(float(b[a]))
+    return real(S.xb(i, _b(v[1])).reshape(-1, 1))
 
 
 @lib("moptimize_util_depvar", 2)
@@ -609,7 +617,6 @@ def _post(eng, v, r):
 @lib("moptimize_result_display", 1, 3)
 def _display(eng, v, r):
     from ..estimation.results import CoefRow, coef_table
-    from scipy import stats as st
     S = _st(v[0])
     if "coefs" not in S.result:
         raise MataError(3498, "moptimize() has not been run")   # VERIFY
@@ -617,26 +624,11 @@ def _display(eng, v, r):
     V = np.asarray(S.result["V"])
     eqn, coln = S.names()
     out = eng.s.output
-    # header in ml's layout (VERIFY)
     neq = S.neq()
-    a, z = S.indices(1)
-    slopes = [j for j in range(a, z) if coln[j] != "_cons"]
-    try:
-        chi2 = float(b[slopes] @ np.linalg.solve(V[np.ix_(slopes, slopes)], b[slopes])) if slopes else 0.0
-    except np.linalg.LinAlgError:
-        chi2 = SYS
-    p = float(st.chi2.sf(chi2, len(slopes))) if slopes and chi2 < SYS else SYS
-
-    def g(x, fmt):
-        return "." if x >= SYS else format_value(float(x), fmt, pad=False).strip()
-
+    # Stata shows only the number of observations above the table (compat 0408)
     out.write("\n", "text")
-    rows = [("", "Number of obs", f"{S.N:,}"), ("", f"Wald chi2({len(slopes)})", g(chi2, "%10.2f")),
-            (f"Log likelihood = {g(S.result['value'], '%10.0g'):>10}", "Prob > chi2", g(p, "%10.4f"))]
-    for left, lab, val in rows:
-        out.write(f"{left:<48}{lab:<18}= ", "text")
-        out.write(f"{val:>10}\n", "result")
-    out.write("\n", "text")
+    out.write(f"{'':<48}{'Number of obs':<18}= ", "text")
+    out.write(f"{S.N:>10,}\n\n", "result")
     se = np.sqrt(np.maximum(np.diag(V), 0))
     trows = []
     for i in range(1, neq + 1):
@@ -649,5 +641,9 @@ def _display(eng, v, r):
             trows.append(CoefRow("sep"))
     level = float(eng.s.settings.get("level", "95"))
     vlab = {"robust": "Robust", "opg": "OPG"}.get(S.vce, "")
-    coef_table(eng.s, "", trows, stat="z", df=None, level=level, vcetype=vlab)
+    # the first dependent variable heads the table with one equation (VERIFY: several equations)
+    dep = ""
+    if neq == 1 and S.depnames.get(1):
+        dep = S.depnames[1][0]
+    coef_table(eng.s, dep, trows, stat="z", df=None, level=level, vcetype=vlab)
     return None

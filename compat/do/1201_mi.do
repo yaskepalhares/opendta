@@ -4,9 +4,9 @@ set seed 1201
 set obs 200
 gen age = 20 + floor(50*runiform())
 gen female = runiform() < .5
-gen bmi = 22 + .08*age + 1.5*female + rnormal()*3
+gen bmi = 22 + .08*age + 1.5*female + invnormal(runiform())*3
 gen smoke = runiform() < invlogit(-1 + .02*age)
-gen y = 5 + .3*bmi - .5*female + rnormal()*2
+gen y = 5 + .3*bmi - .5*female + invnormal(runiform())*2
 replace bmi = . if runiform() < .2
 replace smoke = . if runiform() < .15
 mi set mlong

@@ -399,6 +399,7 @@ def cmd_me(s: "Session", args: str, kind: str, cmdname: str) -> None:
     est.display = display_me
     est.predict = _predict_me
     est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2}
+    est.predict_multi = {"reffects": _reffects_me}
     est.estat = {"icc": (3, estat_icc), "recovariance": (5, estat_recov)}
     est.eform_default = "Odds Ratio" if (kind == "logit" and o.get("or")) else \
         ("IRR" if (kind == "poisson" and o.get("irr")) else "")
@@ -439,11 +440,23 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
     G = est.glmm
     lv = G["levels"][0]
     from .mixed import _vc_rows
+    vc = _vc_rows(lv, G["theta"], G["Vth"], False, z)
     rows.append(CoefRow("sep"))
     rows.append(CoefRow("eq", lv.var))
-    for lab, v, se, lo, hi in _vc_rows(lv, G["theta"], G["Vth"], False, z):
-        rows.append(CoefRow("aux", lab, v, se, eq=f"{float(lo)!r} {float(hi)!r}", noeform=True,
-                            tight=True))
+    for lab, v, se, lo, hi in vc:
+        if not lab.startswith("cov("):
+            rows.append(CoefRow("aux", lab, v, se, eq=f"{float(lo)!r} {float(hi)!r}", noeform=True,
+                                tight=True))
+    covs = [r_ for r_ in vc if r_[0].startswith("cov(")]
+    if covs:
+        # covariances: a section of their own, with z tests, and the pair written in reverse
+        # order of e(revars) (compat 1002: cov(_cons,x) after var(x) and var(_cons))
+        rows.append(CoefRow("sep"))
+        rows.append(CoefRow("eq", lv.var))
+        for lab, v, se, _lo, _hi in covs:
+            a, b_ = lab[4:-1].split(",", 1) if "," in lab else (lab[4:-1], "")
+            lab2 = f"cov({b_},{a})" if b_ else lab
+            rows.append(CoefRow("coef", lab2, v, se, noeform=True, tight=True))
     coef_table(s, est.depvar, rows, stat="z", df=None, level=lev,
                coef_title=ef or "Coef.", eform=bool(ef))
     if lrtest:
@@ -473,9 +486,7 @@ def _predict_me(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         key_of[var[i]] = g
     gidx = np.array([key_of.get(v, -1) for v in var])
     re_all = np.where(gidx[:, None] >= 0, model.mu[np.maximum(gidx, 0)], np.nan)
-    if stat == "reffects":
-        vals = re_all[:, -1]
-        return np.where(np.isfinite(vals), vals, SYS), ""
+
     # Z for all observations
     Zcols = []
     for nm in lv.names:
@@ -493,8 +504,38 @@ def _predict_me(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         mu = st.norm.cdf(eta)
     else:
         mu = np.exp(eta)
-    note = "" if stat else "(predictions based on fixed effects and posterior means of random effects)"
+    note = "" if stat == "fixedonly" else \
+        "(predictions based on fixed effects and posterior means of random effects)"
+    if not stat:
+        note += "\n(option mu assumed)"
+    if stat != "fixedonly":
+        note += f"\n(using {int(est.extra['npts'])} quadrature points)"
     return np.where(ok, mu, SYS), note
+
+
+def _reffects_me(s: "Session", est: Estimates):
+    """predict newvarlist, reffects: posterior means, one variable per random effect in the
+    order of the level's effects (VERIFY: the order for random slopes)."""
+    G = est.glmm
+    lv = G["levels"][0]
+    s.output.write("(calculating posterior means of random effects)\n", "text")
+
+    def fn(mask):
+        ds = s.data
+        model = G["model"]
+        model.adapt(np.concatenate([G["beta"], G["theta"]]), steps=50)
+        rows = np.nonzero(G["mask"])[0]
+        var = ds.get(lv.var).data
+        key_of = {var[i]: g for i, g in zip(rows, lv.gid)}
+        gidx = np.array([key_of.get(v, -1) for v in var])
+        out = []
+        for j in range(lv.q):
+            vals = np.where(gidx >= 0, model.mu[np.maximum(gidx, 0), j], SYS)
+            out.append(np.where(np.isfinite(vals), vals, SYS))
+        s.output.write(f"(using {int(est.extra['npts'])} quadrature points)\n", "text")
+        return out
+    # Stata's message here has a single line (compat 1002)
+    return lv.q, fn, "too few variables specified"
 
 
 def cmd_melogit(s, args):

@@ -85,7 +85,8 @@ def km_ci(S: np.ndarray, gw: np.ndarray, level: float) -> tuple[np.ndarray, np.n
         lo = S ** np.exp(z * sig)
         hi = S ** np.exp(-z * sig)
     ok = (S > 0) & (S < 1) & np.isfinite(gw)
-    return (np.where(np.isfinite(se) & (S > 0), se, SYS), np.where(ok, lo, SYS), np.where(ok, hi, SYS))
+    # before the first failure (S = 1) the standard error is shown as missing (compat 0901)
+    return (np.where(np.isfinite(se) & (S > 0) & (S < 1), se, SYS), np.where(ok, lo, SYS), np.where(ok, hi, SYS))
 
 
 def quantile_time(k: KM, p: float) -> float:
@@ -158,14 +159,18 @@ def sts_list(s: "Session", args: str) -> None:
     out = s.output
     lv = f"{level:g}"
     func = "Failure" if fail else "Survivor"
-    out.write(f"{'':11}Beg.          Net{'':12}{func:>8}      Std.\n", "text")
-    out.write(f"  Time    Total   Fail   Lost{'':11}Function     Error     [{lv}% Conf. Int.]\n", "text")
-    out.write("-" * 79 + "\n", "text")
-    groups = _by_groups(s, mask, byv)
     at = None
     if o.get("at"):
         from ..lang.words import parse_numlist
         at = np.array(parse_numlist(str(o["at"])), dtype=float)
+    if at is None:
+        out.write(f"{'':11}Beg.          Net{'':12}{func:>8}      Std.\n", "text")
+        out.write(f"  Time    Total   Fail   Lost{'':11}Function     Error     [{lv}% Conf. Int.]\n", "text")
+    else:
+        out.write(f"{'':14}Beg.{'':22}{func:<8}      Std.\n", "text")
+        out.write(f"    Time     Total     Fail{'':13}Function     Error     [{lv}% Conf. Int.]\n", "text")
+    out.write("-" * 79 + "\n", "text")
+    groups = _by_groups(s, mask, byv)
     for lab, sd in groups:
         if lab:
             out.write(f"{lab.replace(' = ', '=')} \n", "text")    # VERIFY
@@ -183,16 +188,30 @@ def sts_list(s: "Session", args: str) -> None:
             prev = -np.inf
             for x in at:
                 sel = (k.times > prev) & (k.times <= x)
-                nb = float(k.n[sel][0]) if sel.any() else float(at_risk(sd, x))
+                # Beg. Total is the number at risk at the last listed time on or before x
+                # (compat 0901)
                 j = np.searchsorted(k.times, x, "right") - 1
+                nb = float(k.n[j]) if j >= 0 else at_risk(sd, x)
                 S = float(k.S[j]) if j >= 0 else 1.0
                 sev = float(se[j]) if j >= 0 else SYS
                 a, b = (float(lo[j]), float(hi[j])) if j >= 0 else (SYS, SYS)
                 if fail:
                     S, a, b = 1 - S, (1 - b if b < SYS else SYS), (1 - a if a < SYS else SYS)
-                _list_row(out, x, nb, float(k.d[sel].sum()), float((k.c - k.e)[sel].sum()), S, sev, a, b)
+                _at_row(out, x, nb, float(k.d[sel].sum()), S, sev, a, b)
                 prev = x
     out.write("-" * 79 + "\n", "text")
+    if at is not None:
+        out.write(f"Note: {func} function is calculated over full data and evaluated at indicated times; "
+                  "it is not calculated from aggregates shown at left.\n", "text")
+
+
+def _fmt4(v: float) -> str:
+    return f"{v:.4f}" if v < SYS else "."
+
+
+def _at_row(out, t, n, d, S, se, lo, hi) -> None:
+    out.write(f"{_g(t, '%8.0g'):>8}{_g(n, '%9.0g'):>10}{_g(d, '%8.0g'):>9}", "result")
+    out.write(f"{_fmt4(S):>20}{_fmt4(se):>10}{_fmt4(lo):>11}{_fmt4(hi):>10}\n", "result")
 
 
 def at_risk(sd: STData, x: float) -> float:
@@ -201,11 +220,7 @@ def at_risk(sd: STData, x: float) -> float:
 
 def _list_row(out, t, n, d, lost, S, se, lo, hi) -> None:
     out.write(f"{_g(t, '%6.0g'):>6} {_g(n, '%8.0g'):>8} {_g(d, '%6.0g'):>6} {_g(lost, '%6.0g'):>6}", "result")
-    sv = f"{S:.4f}" if S < SYS else "."
-    sev = f"{se:.4f}" if se < SYS else "."
-    los = f"{lo:.4f}" if lo < SYS else "."
-    his = f"{hi:.4f}" if hi < SYS else "."
-    out.write(f"{sv:>19} {sev:>9} {los:>10} {his:>9}\n", "result")
+    out.write(f"{_fmt4(S):>19} {_fmt4(se):>9} {_fmt4(lo):>10} {_fmt4(hi):>9}\n", "result")
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +263,9 @@ def sts_generate(s: "Session", args: str) -> None:
         x = sd.t
         S = at_times(k, x, "S")
         gw = at_times(k, x, "gw")
+        # the Greenwood sum goes through a float temporary, as Stata's ado-file appears to do:
+        # with a double sum lb(s) differs in the last displayed digit (VERIFY, compat 0901)
+        gw = np.where(np.isfinite(gw), gw.astype(np.float32).astype(np.float64), gw)
         H = at_times(k, x, "H")
         hv = at_times(k, x, "hv")
         se, lo, hi = km_ci(S, gw, level)
@@ -315,6 +333,7 @@ def sts_test(s: "Session", args: str) -> None:
     G = len(levels)
     grp = np.array([levels.index(kk) if good else -1 for kk, good in zip(keys, ok)])
     strat = np.zeros(len(sd.t), dtype=int)
+    svars: list[str] = []
     if isinstance(o.get("strata"), str):
         svars = [resolve_name(ds, v) for v in s.expand_varlist(o["strata"])]
         sk = [tuple(ds.get(v).data[sd.mask][i] for v in svars) for i in range(len(sd.t))]
@@ -369,24 +388,39 @@ def sts_test(s: "Session", args: str) -> None:
              "wilcoxon": "Wilcoxon (Breslow) test for equality of survivor functions",
              "tware": "Tarone-Ware test for equality of survivor functions",
              "peto": "Peto-Peto test for equality of survivor functions"}[test]
-    out.write(f"\n{title}\n\n", "text")
+    nstrata = len(np.unique(strat))
+    if nstrata > 1 or isinstance(o.get("strata"), str):
+        title = "Stratified " + title[0].lower() + title[1:]
+    out.write(f"\n{title}\n", "text")
+    if isinstance(o.get("strata"), str):
+        nofail = sum(1 for h in np.unique(strat) if not np.any(sd.d[(strat == h) & (grp >= 0)] > 0))
+        if nofail:
+            out.write(f"Note: {nofail} strat{'um' if nofail == 1 else 'a'} omitted because of no failures\n",
+                      "text")   # VERIFY: singular form
+    out.write("\n", "text")
+    stratified = isinstance(o.get("strata"), str)
     labs = [", ".join(_level_label(s, v, kv) for v, kv in zip(names, kk)) for kk in levels]
     head = " ".join(names)
     L = max(len(head), len("Total"), *(len(x) for x in labs)) + 1
     extra = test != "logrank"
     out.write(f"{'':<{L}}|   Events         Events" + ("        Sum of" if extra else "") + "\n", "text")
-    out.write(f"{head:<{L}}|  observed       expected" + ("         ranks" if extra else "") + "\n", "text")
-    width = 25 + (14 if extra else 0)
+    out.write(f"{head:<{L}}|  observed    expected(*)" if stratified else f"{head:<{L}}|  observed       expected",
+              "text")
+    out.write(("        ranks" if extra else "") + "\n", "text")
+    width = 25 + (13 if extra else 0)
     out.write("-" * L + "+" + "-" * width + "\n", "text")
     for i, lab in enumerate(labs):
         out.write(f"{lab:<{L}}|", "text")
         out.write(f"{_g(O_disp[i], '%9.0g'):>10}{E_disp[i]:>15.2f}" +
-                  (f"{_g(R[i], '%12.0g'):>14}" if extra else "") + "\n", "result")
+                  (f"{_g(R[i], '%12.0g'):>13}" if extra else "") + "\n", "result")
     out.write("-" * L + "+" + "-" * width + "\n", "text")
     out.write(f"{'Total':<{L}}|", "text")
     out.write(f"{_g(O_disp.sum(), '%9.0g'):>10}{E_disp.sum():>15.2f}" +
-              (f"{_g(R.sum() if abs(R.sum()) > 1e-9 else 0.0, '%12.0g'):>14}" if extra else "") + "\n", "result")
+              (f"{_g(R.sum() if abs(R.sum()) > 1e-9 else 0.0, '%12.0g'):>13}" if extra else "") + "\n", "result")
     out.write("\n", "text")
+    if stratified:
+        svl = " ".join(svars)
+        out.write(f"(*) sum over calculations within {svl}\n\n", "text")
     out.write(f"{'chi2(' + str(k) + ') =':>21}", "text")
     out.write(f"{chi2:>11.2f}\n", "result")
     out.write(f"{'Pr>chi2 =':>21}", "text")

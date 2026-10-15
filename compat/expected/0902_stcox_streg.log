@@ -1,0 +1,732 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0902_stcox_streg.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:48
+
+. * Phase 10: stcox, estat phtest, predict after stcox and streg
+. clear
+
+. set seed 902
+
+. set obs 120
+number of observations (_N) was 0, now 120
+
+. gen id = _n
+
+. gen drug = 1 + (runiform() < .5)
+
+. gen age = 40 + floor(20*runiform())
+
+. gen sex = runiform() < .5
+
+. gen double tt = ceil(-ln(runiform())/(0.03*exp(0.7*(drug==1) + 0.04*(age-50))))
+
+. gen died = runiform() < .8
+
+. replace tt = 30 if tt > 30
+(33 real changes made)
+
+. replace died = 0 if tt == 30
+(23 real changes made)
+
+. stset tt, failure(died)
+
+     failure event:  died != 0 & died < .
+obs. time interval:  (0, tt]
+ exit on or before:  failure
+
+------------------------------------------------------------------------------
+        120  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+        120  observations remaining, representing
+         72  failures in single-record/single-failure data
+       2154  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =        30
+
+. 
+. stcox drug age
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -310.15602
+Iteration 1:   log likelihood = -303.04101
+Iteration 2:   log likelihood = -303.02528
+Iteration 3:   log likelihood = -303.02528
+Refining estimates:
+Iteration 0:   log likelihood = -303.02528
+
+Cox regression -- Breslow method for ties
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       14.26
+Log likelihood  =   -303.02528                  Prob > chi2      =      0.0008
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |     .47865   .1163304    -3.03   0.002     .2972647    .7707132
+         age |   1.047653   .0226327     2.15   0.031      1.00422    1.092965
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  120
+               e(ll_0) =  -310.1560207009605
+                 e(ll) =  -303.0252770560204
+               e(chi2) =  14.26148728988017
+               e(r2_p) =  .022990827741549
+          e(converged) =  1
+               e(rank) =  2
+               e(df_m) =  2
+              e(N_sub) =  120
+             e(N_fail) =  72
+               e(risk) =  2154
+
+macros:
+            e(cmdline) : "stcox drug age"
+  e(datasignaturevars) : "_t _t0 _d drug age"
+      e(datasignature) : "120:5:1794248898:2302741281"
+               e(cmd2) : "stcox"
+       e(marginsnotok) : "CSNell DEViance DFBeta ESR LDisplace LMax MGale SCAledsch SCHoenfeld SCores"
+           e(footnote) : "stcox_footnote"
+            e(predict) : "stcox_p"
+          e(estat_cmd) : "stcox_estat"
+                e(vce) : "oim"
+           e(chi2type) : "LR"
+             e(method) : "breslow"
+               e(ties) : "breslow"
+                 e(t0) : "_t0"
+             e(depvar) : "_t"
+                e(cmd) : "cox"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+
+functions:
+             e(sample)   
+
+. stcox drug age, nohr
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -310.15602
+Iteration 1:   log likelihood = -303.04101
+Iteration 2:   log likelihood = -303.02528
+Iteration 3:   log likelihood = -303.02528
+Refining estimates:
+Iteration 0:   log likelihood = -303.02528
+
+Cox regression -- Breslow method for ties
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       14.26
+Log likelihood  =   -303.02528                  Prob > chi2      =      0.0008
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |  -.7367856   .2430385    -3.03   0.002    -1.213132    -.260439
+         age |   .0465524   .0216032     2.15   0.031     .0042109    .0888939
+------------------------------------------------------------------------------
+
+. stcox drug age, efron
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -308.73027
+Iteration 1:   log likelihood =  -301.2448
+Iteration 2:   log likelihood = -301.22799
+Iteration 3:   log likelihood = -301.22799
+Refining estimates:
+Iteration 0:   log likelihood = -301.22799
+
+Cox regression -- Efron method for ties
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       15.00
+Log likelihood  =   -301.22799                  Prob > chi2      =      0.0006
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4695329    .114168    -3.11   0.002     .2915375    .7562016
+         age |   1.049023   .0226025     2.22   0.026     1.005645    1.094272
+------------------------------------------------------------------------------
+
+. stcox drug age i.sex, vce(robust)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log pseudolikelihood = -310.15602
+Iteration 1:   log pseudolikelihood = -303.05803
+Iteration 2:   log pseudolikelihood = -303.01655
+Iteration 3:   log pseudolikelihood = -303.01654
+Refining estimates:
+Iteration 0:   log pseudolikelihood = -303.01654
+
+Cox regression -- Breslow method for ties
+
+No. of subjects      =          120             Number of obs    =         120
+No. of failures      =           72
+Time at risk         =         2154
+                                                Wald chi2(3)     =       15.03
+Log pseudolikelihood =   -303.01654             Prob > chi2      =      0.0018
+
+------------------------------------------------------------------------------
+             |               Robust
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4781386   .1097966    -3.21   0.001     .3048523    .7499256
+         age |    1.04815   .0237042     2.08   0.038     1.002706    1.095655
+       1.sex |   1.032654   .2428564     0.14   0.891     .6512865    1.637336
+------------------------------------------------------------------------------
+
+. stcox drug age, strata(sex)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -261.49756
+Iteration 1:   log likelihood = -254.54484
+Iteration 2:   log likelihood = -254.54182
+Refining estimates:
+Iteration 0:   log likelihood = -254.54182
+
+Stratified Cox regr. -- Breslow method for ties
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       13.91
+Log likelihood  =   -254.54182                  Prob > chi2      =      0.0010
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4763288   .1161351    -3.04   0.002     .2953744    .7681408
+         age |    1.04757   .0229351     2.12   0.034     1.003569      1.0935
+------------------------------------------------------------------------------
+                                                             Stratified by sex
+
+. stcox drug age
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -310.15602
+Iteration 1:   log likelihood = -303.04101
+Iteration 2:   log likelihood = -303.02528
+Iteration 3:   log likelihood = -303.02528
+Refining estimates:
+Iteration 0:   log likelihood = -303.02528
+
+Cox regression -- Breslow method for ties
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       14.26
+Log likelihood  =   -303.02528                  Prob > chi2      =      0.0008
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |     .47865   .1163304    -3.03   0.002     .2972647    .7707132
+         age |   1.047653   .0226327     2.15   0.031      1.00422    1.092965
+------------------------------------------------------------------------------
+
+. estat phtest
+
+      Test of proportional-hazards assumption
+
+      Time:  Time
+      ----------------------------------------------------------------
+                  |                      chi2       df       Prob>chi2
+      ------------+---------------------------------------------------
+      global test |                      3.05        2         0.2174
+      ----------------------------------------------------------------
+
+. estat phtest, detail
+
+      Test of proportional-hazards assumption
+
+      Time:  Time
+      ----------------------------------------------------------------
+                  |       rho            chi2       df       Prob>chi2
+      ------------+---------------------------------------------------
+      drug        |      0.05371         0.20        1         0.6524
+      age         |      0.21031         2.82        1         0.0931
+      ------------+---------------------------------------------------
+      global test |                      3.05        2         0.2174
+      ----------------------------------------------------------------
+
+. estat phtest, log detail
+
+      Test of proportional-hazards assumption
+
+      Time:  Log(t)
+      ----------------------------------------------------------------
+                  |       rho            chi2       df       Prob>chi2
+      ------------+---------------------------------------------------
+      drug        |      0.05131         0.19        1         0.6669
+      age         |      0.07706         0.38        1         0.5383
+      ------------+---------------------------------------------------
+      global test |                      0.57        2         0.7506
+      ----------------------------------------------------------------
+
+. predict hr
+(option hr assumed; relative hazard)
+
+. predict xb, xb
+
+. predict s0, basesurv
+
+. predict H0, basechazard
+
+. predict cs, csnell
+
+. predict mg, mgale
+
+. summarize hr xb s0 H0 cs mg
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          hr |        120    3.826699     1.69396   1.474803   7.461869
+          xb |        120    1.240607    .4607252   .3885247   2.009806
+          s0 |        120    .8433083    .0962559   .7325068   .9911803
+          H0 |        120    .1707243      .10964   .0087107    .298973
+          cs |        120          .6    .4497887   .0235296   2.230897
+-------------+---------------------------------------------------------
+          mg |        120   -1.09e-10    .7410599  -2.230897   .9764704
+
+. 
+. streg drug age, distribution(exponential)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -151.93865  
+Iteration 1:   log likelihood = -145.56736  
+Iteration 2:   log likelihood = -145.24867  
+Iteration 3:   log likelihood = -145.24794  
+Iteration 4:   log likelihood = -145.24794  
+
+Exponential regression -- log relative-hazard form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       13.38
+Log likelihood  =   -145.24794                  Prob > chi2      =      0.0012
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .5004431   .1202515    -2.88   0.004      .312478    .8014748
+         age |   1.046822     .02247     2.13   0.033     1.003695    1.091801
+       _cons |   .0092305    .010689    -4.05   0.000      .000954    .0893149
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(exponential) time
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Iteration 0:   log likelihood = -151.93865  
+Iteration 1:   log likelihood = -145.56736  
+Iteration 2:   log likelihood = -145.24867  
+Iteration 3:   log likelihood = -145.24794  
+Iteration 4:   log likelihood = -145.24794  
+
+Exponential regression -- accelerated failure-time form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       13.38
+Log likelihood  =   -145.24794                  Prob > chi2      =      0.0012
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .6922615     .24029     2.88   0.004     .2213017    1.163221
+         age |  -.0457584    .021465    -2.13   0.033     -.087829   -.0036879
+       _cons |    4.68524   1.158007     4.05   0.000     2.415587    6.954893
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(weibull)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -151.93865
+Iteration 1:   log likelihood = -150.66781
+Iteration 2:   log likelihood = -150.66143
+Iteration 3:   log likelihood = -150.66143
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -150.66143  
+Iteration 1:   log likelihood = -143.53543  
+Iteration 2:   log likelihood = -143.12951  
+Iteration 3:   log likelihood = -143.12836  
+Iteration 4:   log likelihood = -143.12836  
+
+Weibull regression -- log relative-hazard form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       15.07
+Log likelihood  =   -143.12836                  Prob > chi2      =      0.0005
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4700157   .1138544    -3.12   0.002     .2923622      .75562
+         age |   1.048493   .0224601     2.21   0.027     1.005383    1.093451
+       _cons |   .0043554   .0053086    -4.46   0.000     .0003995    .0474806
+-------------+----------------------------------------------------------------
+       /ln_p |   .2209125   .1028242     2.15   0.032     .0193807    .4224443
+-------------+----------------------------------------------------------------
+           p |   1.247214   .1282439                       1.01957    1.525686
+         1/p |   .8017868   .0824431                      .6554428    .9808059
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  4
+                  e(N) =  120
+                 e(ic) =  4
+                  e(k) =  4
+               e(k_eq) =  2
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -143.1283557363853
+         e(k_eq_model) =  1
+               e(ll_0) =  -150.6614314398778
+               e(df_m) =  2
+               e(chi2) =  15.06615140698494
+                  e(p) =  .0005350899451131
+              e(aux_p) =  1.247214272247924
+              e(k_aux) =  1
+              e(N_sub) =  120
+             e(N_fail) =  72
+               e(risk) =  2154
+
+macros:
+            e(cmdline) : "streg drug age, distribution(weibull)"
+            e(predict) : "streg_p"
+        e(predict_sub) : "weibul_p"
+               e(cmd2) : "streg"
+              e(title) : "Weibull regression"
+             e(title2) : "log relative-hazard form"
+                e(cmd) : "weibull"
+               e(dead) : "_d"
+               e(frm2) : "hazard"
+            e(stcurve) : "stcurve"
+                 e(t0) : "_t0"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "weib_lf0"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "_t"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 4
+
+functions:
+             e(sample)   
+
+. streg drug age, distribution(weibull) time
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -151.93865
+Iteration 1:   log likelihood = -150.66781
+Iteration 2:   log likelihood = -150.66143
+Iteration 3:   log likelihood = -150.66143
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -150.66143  
+Iteration 1:   log likelihood = -143.53543  
+Iteration 2:   log likelihood = -143.12951  
+Iteration 3:   log likelihood = -143.12836  
+Iteration 4:   log likelihood = -143.12836  
+
+Weibull regression -- accelerated failure-time form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       15.07
+Log likelihood  =   -143.12836                  Prob > chi2      =      0.0005
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .6053404   .1963354     3.08   0.002     .2205301    .9901507
+         age |  -.0379676   .0174664    -2.17   0.030    -.0722011   -.0037341
+       _cons |   4.358789   .9335324     4.67   0.000     2.529099    6.188478
+-------------+----------------------------------------------------------------
+       /ln_p |   .2209125   .1028242     2.15   0.032     .0193807    .4224443
+-------------+----------------------------------------------------------------
+           p |   1.247214   .1282439                       1.01957    1.525686
+         1/p |   .8017868   .0824431                      .6554428    .9808059
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(weibull) nohr
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -151.93865
+Iteration 1:   log likelihood = -150.66781
+Iteration 2:   log likelihood = -150.66143
+Iteration 3:   log likelihood = -150.66143
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -150.66143  
+Iteration 1:   log likelihood = -143.53543  
+Iteration 2:   log likelihood = -143.12951  
+Iteration 3:   log likelihood = -143.12836  
+Iteration 4:   log likelihood = -143.12836  
+
+Weibull regression -- log relative-hazard form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       15.07
+Log likelihood  =   -143.12836                  Prob > chi2      =      0.0005
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |  -.7549892   .2422353    -3.12   0.002    -1.229762   -.2802167
+         age |   .0473537   .0214213     2.21   0.027     .0053687    .0893387
+       _cons |  -5.436343   1.218854    -4.46   0.000    -7.825252   -3.047434
+-------------+----------------------------------------------------------------
+       /ln_p |   .2209125   .1028242     2.15   0.032     .0193807    .4224443
+-------------+----------------------------------------------------------------
+           p |   1.247214   .1282439                       1.01957    1.525686
+         1/p |   .8017868   .0824431                      .6554428    .9808059
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(gompertz)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -151.93865  
+Iteration 1:   log likelihood = -150.93777  
+Iteration 2:   log likelihood =  -150.9292  
+Iteration 3:   log likelihood =  -150.9292  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -150.9292  
+Iteration 1:   log likelihood = -143.66132  
+Iteration 2:   log likelihood = -143.23594  
+Iteration 3:   log likelihood = -143.23467  
+Iteration 4:   log likelihood = -143.23467  
+
+Gompertz regression -- log relative-hazard form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       15.39
+Log likelihood  =   -143.23467                  Prob > chi2      =      0.0005
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4640814   .1129879    -3.15   0.002     .2879756    .7478811
+         age |   1.049458   .0225038     2.25   0.024     1.006266    1.094505
+       _cons |   .0062963   .0073694    -4.33   0.000     .0006351    .0624254
+-------------+----------------------------------------------------------------
+      /gamma |   .0288809   .0142608     2.03   0.043     .0009303    .0568314
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(lognormal)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood =  -199.8191  
+Iteration 1:   log likelihood = -176.79583  
+Iteration 2:   log likelihood = -152.68883  
+Iteration 3:   log likelihood = -152.07708  
+Iteration 4:   log likelihood = -152.06386  
+Iteration 5:   log likelihood = -152.06385  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -152.06385  
+Iteration 1:   log likelihood =   -148.417  
+Iteration 2:   log likelihood = -145.56951  
+Iteration 3:   log likelihood = -145.55027  
+Iteration 4:   log likelihood = -145.55026  
+
+Lognormal regression -- accelerated failure-time form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       13.03
+Log likelihood  =   -145.55026                  Prob > chi2      =      0.0015
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .6986156   .2363702     2.96   0.003     .2353386    1.161893
+         age |  -.0422669   .0213124    -1.98   0.047    -.0840385   -.0004953
+       _cons |   4.091512   1.149515     3.56   0.000     1.838504     6.34452
+-------------+----------------------------------------------------------------
+     /ln_sig |   .1612831   .0882316     1.83   0.068    -.0116478    .3342139
+-------------+----------------------------------------------------------------
+       sigma |   1.175018   .1036737                      .9884198    1.396842
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(loglogistic)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood =  -171.3327  (not concave)
+Iteration 1:   log likelihood = -153.03133  
+Iteration 2:   log likelihood = -151.48859  
+Iteration 3:   log likelihood = -151.45373  
+Iteration 4:   log likelihood =  -151.4537  
+Iteration 5:   log likelihood =  -151.4537  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -151.4537  
+Iteration 1:   log likelihood = -147.31924  
+Iteration 2:   log likelihood = -145.26746  
+Iteration 3:   log likelihood =  -145.2621  
+Iteration 4:   log likelihood =  -145.2621  
+
+Loglogistic regression -- accelerated failure-time form 
+
+No. of subjects =          120                  Number of obs    =         120
+No. of failures =           72
+Time at risk    =         2154
+                                                LR chi2(2)       =       12.38
+Log likelihood  =    -145.2621                  Prob > chi2      =      0.0020
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .6779899   .2246341     3.02   0.003     .2377151    1.118265
+         age |  -.0331773   .0206668    -1.61   0.108    -.0736834    .0073289
+       _cons |   3.685588   1.115568     3.30   0.001     1.499116     5.87206
+-------------+----------------------------------------------------------------
+     /ln_gam |  -.4150703   .1003033    -4.14   0.000    -.6116611   -.2184794
+-------------+----------------------------------------------------------------
+       gamma |   .6602939   .0662297                       .542449      .80374
+------------------------------------------------------------------------------
+
+. streg drug age, distribution(weibull) vce(robust)
+
+         failure _d:  died
+   analysis time _t:  tt
+
+Fitting constant-only model:
+
+Iteration 0:   log pseudolikelihood = -151.93865
+Iteration 1:   log pseudolikelihood = -150.66781
+Iteration 2:   log pseudolikelihood = -150.66143
+Iteration 3:   log pseudolikelihood = -150.66143
+
+Fitting full model:
+
+Iteration 0:   log pseudolikelihood = -150.66143  
+Iteration 1:   log pseudolikelihood = -143.53543  
+Iteration 2:   log pseudolikelihood = -143.12951  
+Iteration 3:   log pseudolikelihood = -143.12836  
+Iteration 4:   log pseudolikelihood = -143.12836  
+
+Weibull regression -- log relative-hazard form 
+
+No. of subjects      =          120             Number of obs    =         120
+No. of failures      =           72
+Time at risk         =         2154
+                                                Wald chi2(2)     =       15.53
+Log pseudolikelihood =   -143.12836             Prob > chi2      =      0.0004
+
+------------------------------------------------------------------------------
+             |               Robust
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        drug |   .4700157   .1101089    -3.22   0.001     .2969644    .7439099
+         age |   1.048493   .0233701     2.12   0.034     1.003674    1.095313
+       _cons |   .0043554   .0054705    -4.33   0.000     .0003714    .0510706
+-------------+----------------------------------------------------------------
+       /ln_p |   .2209125   .0975391     2.26   0.024     .0297394    .4120856
+-------------+----------------------------------------------------------------
+           p |   1.247214   .1216521                      1.030186    1.509964
+         1/p |   .8017868   .0782056                      .6622676    .9706985
+------------------------------------------------------------------------------
+
+. predict med, median time
+
+. predict cs2, csnell
+
+. summarize med cs2
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         med |        120    22.89106    8.809726   11.36088   42.81552
+         cs2 |        120          .6    .4623639   .0118364   2.230613
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0902_stcox_streg.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:21:49
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

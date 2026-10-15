@@ -1,0 +1,229 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1201_mi.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:42
+
+. * Phase 10: multiple imputation (mi set, register, impute, estimate, passive, xeq)
+. clear
+
+. set seed 1201
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen age = 20 + floor(50*runiform())
+
+. gen female = runiform() < .5
+
+. gen bmi = 22 + .08*age + 1.5*female + rnormal()*3
+
+. gen smoke = runiform() < invlogit(-1 + .02*age)
+
+. gen y = 5 + .3*bmi - .5*female + rnormal()*2
+
+. replace bmi = . if runiform() < .2
+(45 real changes made, 45 to missing)
+
+. replace smoke = . if runiform() < .15
+(34 real changes made, 34 to missing)
+
+. mi set mlong
+
+. mi register imputed bmi smoke
+(73 m=0 obs. now marked as incomplete)
+
+. mi describe
+
+  Style:  mlong
+          last mi update 15oct2026 11:21:42, 0 seconds ago
+
+  Obs.:   complete          127
+          incomplete         73  (M = 0 imputations)
+          ---------------------
+          total             200
+
+  Vars.:  imputed:  2; bmi(45) smoke(34)
+
+          passive:  0
+
+          regular:  0
+
+          system:   3; _mi_m _mi_id _mi_miss
+
+         (there are 3 unregistered variables; age female y)
+
+. mi impute regress bmi = age female y, add(5) rseed(1234)
+
+Univariate imputation                       Imputations =        5
+Linear regression                                 added =        5
+Imputed: m=1 through m=5                        updated =        0
+
+------------------------------------------------------------------
+                   |               Observations per m             
+                   |----------------------------------------------
+          Variable |   Complete   Incomplete   Imputed |     Total
+-------------------+-----------------------------------+----------
+               bmi |        155           45        45 |       200
+------------------------------------------------------------------
+(complete + incomplete = total; imputed is the minimum across m
+ of the number of filled-in observations.)
+
+. mi describe
+
+  Style:  mlong
+          last mi update 15oct2026 11:21:42, 0 seconds ago
+
+  Obs.:   complete          127
+          incomplete         73  (M = 5 imputations)
+          ---------------------
+          total             200
+
+  Vars.:  imputed:  2; bmi(45) smoke(34)
+
+          passive:  0
+
+          regular:  0
+
+          system:   3; _mi_m _mi_id _mi_miss
+
+         (there are 3 unregistered variables; age female y)
+
+. mi estimate: regress y bmi female
+
+Multiple-imputation estimates                   Imputations       =          5
+Linear regression                               Number of obs     =        200
+                                                Average RVI       =     0.0875
+                                                Largest FMI       =     0.1667
+                                                Complete DF       =        197
+DF adjustment:   Small sample                   DF:     min       =      82.65
+                                                        avg       =      99.69
+                                                        max       =     123.47
+Model F test:       Equal FMI                   F(   2,  103.5)   =      20.29
+Within VCE type:          OLS                   Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         bmi |   .3182903   .0516511     6.16   0.000      .215552    .4210286
+      female |  -.4947595   .3283761    -1.51   0.134    -1.144735     .155216
+       _cons |    4.65843   1.331147     3.50   0.001     2.015013    7.301848
+------------------------------------------------------------------------------
+
+. mi impute chained (regress) bmi (logit) smoke = age female y, replace rseed(99)
+
+Conditional models:
+             smoke: logit smoke bmi age female y
+               bmi: regress bmi i.smoke age female y
+
+Performing chained iterations ...
+
+Multivariate imputation                     Imputations =        5
+Chained equations                                 added =        0
+Imputed: m=1 through m=5                        updated =        5
+
+Initialization: monotone                     Iterations =       50
+                                                burn-in =       10
+
+               bmi: linear regression
+             smoke: logistic regression
+
+------------------------------------------------------------------
+                   |               Observations per m             
+                   |----------------------------------------------
+          Variable |   Complete   Incomplete   Imputed |     Total
+-------------------+-----------------------------------+----------
+               bmi |        155           45        45 |       200
+             smoke |        166           34        34 |       200
+------------------------------------------------------------------
+(complete + incomplete = total; imputed is the minimum across m
+ of the number of filled-in observations.)
+
+. mi estimate: regress y bmi female smoke
+
+Multiple-imputation estimates                   Imputations       =          5
+Linear regression                               Number of obs     =        200
+                                                Average RVI       =     0.2306
+                                                Largest FMI       =     0.3850
+                                                Complete DF       =        196
+DF adjustment:   Small sample                   DF:     min       =      26.36
+                                                        avg       =      69.65
+                                                        max       =     177.15
+Model F test:       Equal FMI                   F(   3,   70.2)   =       8.80
+Within VCE type:          OLS                   Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         bmi |    .284721   .0588003     4.84   0.000     .1653873    .4040548
+      female |  -.4258272   .3270781    -1.30   0.195    -1.071298    .2196435
+       smoke |   .0687745   .3802661     0.18   0.858     -.712361    .8499101
+       _cons |   5.467606   1.496216     3.65   0.001     2.443156    8.492056
+------------------------------------------------------------------------------
+
+. mi estimate: logit smoke bmi age
+
+Multiple-imputation estimates                   Imputations       =          5
+Logistic regression                             Number of obs     =        200
+                                                Average RVI       =     0.2758
+                                                Largest FMI       =     0.3379
+DF adjustment:   Large sample                   DF:     min       =      42.34
+                                                        avg       =      67.88
+                                                        max       =     103.28
+Model F test:       Equal FMI                   F(   2,   50.4)   =       2.41
+Within VCE type:          OIM                   Prob > F          =     0.1000
+
+------------------------------------------------------------------------------
+       smoke |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         bmi |     .04299   .0567772     0.76   0.453    -.0715637    .1575438
+         age |   .0213074   .0122699     1.74   0.085    -.0030263     .045641
+       _cons |  -2.158728   1.411068    -1.53   0.131    -4.983284    .6658278
+------------------------------------------------------------------------------
+
+. mi passive: generate bmi2 = bmi^2
+m=0:
+(45 missing values generated)
+m=1:
+m=2:
+m=3:
+m=4:
+m=5:
+
+. mi xeq 0 1: summarize bmi
+
+m=0 data:
+-> summarize bmi
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         bmi |        155    26.65943     3.30114   16.68184   34.53371
+
+m=1 data:
+-> summarize bmi
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         bmi |        200    26.76221    3.192956   16.68184   34.69302
+
+. mi extract 2, clear
+
+. describe, short
+
+Contains data
+  obs:           200                          
+ vars:             6                          15 Oct 2026 11:21
+ size:         4,200                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. count
+  200
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1201_mi.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:21:44
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

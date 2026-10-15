@@ -303,7 +303,23 @@ def cmd_stcox(s: "Session", args: str) -> None:
     res = maximize(fun, np.zeros(k), maxiter=maxiter,
                    tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
                    ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
-                   nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
+                   nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5,
+                   # VERIFY: stcox stops one iteration earlier than ml when g H^-1 g' is already
+                   # tiny (stratified model in compat 0902: 1.9e-8 stops, 7.4e-7 does not)
+                   nr_stop=1e-7)
+    # "Refining estimates": Newton steps from the converged point, outside the iteration log
+    for _ in range(5):
+        try:
+            bn = res.b - np.linalg.solve(res.H, res.g)
+        except np.linalg.LinAlgError:
+            break
+        lln, gn, Hn = fun(bn, 2)
+        if not np.isfinite(lln) or lln < res.ll - 1e-12 * max(1.0, abs(res.ll)):
+            break
+        done = np.max(np.abs(bn - res.b) / (np.abs(res.b) + 1)) < 1e-12
+        res.b, res.ll, res.g, res.H = bn, lln, gn, Hn
+        if done:
+            break
     ll0 = res.log[0][1]
     clusters, clustvar = _cluster_ids(stx)
     robust = stx.smp.vce in ("robust", "cluster") or stx.wtype == "pweight"
@@ -328,11 +344,14 @@ def cmd_stcox(s: "Session", args: str) -> None:
             n_clust = len(uq)
             G = np.zeros((n_clust, k))
             np.add.at(G, inv, wU)
-            meat = G.T @ G
+            meat = G.T @ G * n_clust / (n_clust - 1)
         elif stx.wtype == "fweight":
-            meat = (U * stx.w[:, None]).T @ U
+            nn = float(stx.w.sum())
+            meat = (U * stx.w[:, None]).T @ U * nn / (nn - 1)
         else:
-            meat = wU.T @ wU
+            # the small-sample factor n/(n-1) (compat 0902: the ratio of the standard errors to the
+            # unadjusted sandwich is sqrt(120/119))
+            meat = wU.T @ wU * stx.n / (stx.n - 1)
         V = V @ meat @ V
         V = (V + V.T) / 2
     b = res.b
@@ -378,23 +397,28 @@ def cmd_stcox(s: "Session", args: str) -> None:
                         "mgale": 2, "schoenfeld": 3, "scaledsch": 3, "esr": 3, "partial": 4}
     est.estat = {"phtest": (3, _phtest)}
     est.cox = {"strata": strata_obs, "sgrp": sgrp, "mask": stx.mask.copy()}
-    from ..commands.matrix import Matrix
-    scalars = [("N", x["N"]), ("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"]),
-               ("ll", res.ll), ("ll_0", ll0), ("chi2", chi2), ("df_m", float(df_m)), ("p", pval),
-               ("rank", float(k)),
-               ("converged", 1.0 if res.converged else 0.0), ("ic", float(res.iterations))]
+    # e() in the order Stata lists it (compat 0902)
+    scalars = [("N", x["N"]), ("ll_0", ll0), ("ll", res.ll), ("chi2", chi2),
+               ("r2_p", 1 - res.ll / ll0 if ll0 else SYS),
+               ("converged", 1.0 if res.converged else 0.0), ("rank", float(k)), ("df_m", float(df_m))]
     if n_clust is not None:
-        scalars.append(("N_clust", float(n_clust)))
+        scalars.append(("N_clust", float(n_clust)))   # VERIFY: position
+    scalars += [("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"])]
     from .regress import cmdline
-    macros = [("cmdline", cmdline("stcox", args)), ("cmd", "cox"), ("cmd2", "stcox"), ("depvar", "_t"),
-              ("t0", "_t0"), ("ties", "breslow" if ties == "breslow" else "efron"),
-              ("chi2type", chi2type), ("vce", "robust" if clusters is None and robust else
-                                       "cluster" if robust else "oim"),
-              ("vcetype", "Robust" if robust else ""), ("clustvar", clustvar),
-              ("strata", " ".join(strata_var)), ("predict", "stcox_p"), ("estat_cmd", "stcox_estat"),
-              ("properties", "b V"), ("crittype", "log pseudolikelihood" if robust else "log likelihood")]
-    post(s, est, scalars, macros, stx.mask,
-         extra_mats=[("gradient", Matrix(res.g.reshape(1, -1), ["r1"], [names[i] for i in pos]))])
+    from .results import datasignature
+    sigvars = ["_t", "_t0", "_d"] + fvars.base_vars(smp.terms)
+    macros = [("cmdline", cmdline("stcox", args)), ("datasignaturevars", " ".join(sigvars)),
+              ("datasignature", datasignature(s, sigvars, stx.mask)), ("cmd2", "stcox"),
+              ("marginsnotok", "CSNell DEViance DFBeta ESR LDisplace LMax MGale SCAledsch SCHoenfeld "
+                               "SCores"),
+              ("footnote", "stcox_footnote"), ("predict", "stcox_p"), ("estat_cmd", "stcox_estat"),
+              # VERIFY: position of clustvar and vcetype
+              ("clustvar", clustvar), ("vcetype", "Robust" if robust else ""),
+              ("vce", "robust" if clusters is None and robust else "cluster" if robust else "oim"),
+              ("chi2type", chi2type), ("method", ties), ("ties", ties),
+              ("strata", " ".join(strata_var)),   # VERIFY: position
+              ("t0", "_t0"), ("depvar", "_t"), ("cmd", "cox"), ("properties", "b V")]
+    post(s, est, scalars, macros, stx.mask)
     _stcox_basevars(s, est, o)
     _display_cox(s, est, header=not o.get("noheader"))
 
@@ -422,7 +446,7 @@ def _display_cox(s: "Session", est: Estimates, *, header: bool = True, table: bo
         else:
             title = f"Cox regression -- {'Breslow' if est.ties == 'breslow' else 'Efron'} method for ties"
         if est.strata_vars:
-            title = title   # VERIFY: Stata adds "Stratified" to the title?
+            title = "Stratified Cox regr." + title[len("Cox regression"):]
         _st_header_block(s, title, est)
     if not table:
         return
@@ -439,12 +463,13 @@ def _display_cox(s: "Session", est: Estimates, *, header: bool = True, table: bo
 
 def _baseline(s, est):
     """Baseline cumulative hazard (covariates at zero) at each observation's _t and _t0,
-    and the hazard contribution at failure times, by stratum."""
+    the hazard contribution at failure times and the baseline survivor at _t, by stratum."""
     ds = s.data
     info = require_st(s)
     n = ds.nobs
     H_t = np.full(n, SYS)
     H_t0 = np.full(n, SYS)
+    S_t = np.full(n, SYS)
     h_c = np.full(n, SYS)
     sgrp_all = np.full(n, -1)
     cox = est.cox
@@ -475,7 +500,29 @@ def _baseline(s, est):
         else:
             haz = sr.D / S0
         ch = np.concatenate([[0.0], np.cumsum(haz)])
+        # baseline survivor: Kalbfleisch-Prentice product of the conditional survival
+        # probabilities alpha_j, which solve sum_D r/(1 - alpha^r) = sum_R r ([ST] stcox
+        # postestimation, Methods and formulas)
+        alpha = np.ones(len(sr.ft))
+        fr = r[sr.fail]
+        fw = sr.w[sr.fail]
+        for j in range(len(sr.ft)):
+            rj, wj = fr[sr.fidx == j], fw[sr.fidx == j]
+            if len(rj) == 1 and wj[0] == 1:
+                alpha[j] = max(1 - rj[0] / S0[j], 0.0) ** (1 / rj[0])
+                continue
+            lo_, hi_ = 0.0, 1.0
+            for _ in range(200):
+                mid = (lo_ + hi_) / 2
+                f_ = np.sum(wj * rj / (1 - mid ** rj)) - S0[j]
+                if f_ > 0:
+                    hi_ = mid
+                else:
+                    lo_ = mid
+            alpha[j] = (lo_ + hi_) / 2
+        cs_ = np.concatenate([[1.0], np.cumprod(alpha)])
         m = st_ok & (sgrp_all == h) & (t_all < SYS)
+        S_t[m] = cs_[np.searchsorted(sr.ft, t_all[m], "right")]
         H_t[m] = ch[np.searchsorted(sr.ft, t_all[m], "right")]
         H_t0[m] = ch[np.searchsorted(sr.ft, t0_all[m], "right")]
         mf = m & (d_all == 1)
@@ -483,7 +530,7 @@ def _baseline(s, est):
         okj = (j < len(sr.ft)) & (sr.ft[np.minimum(j, len(sr.ft) - 1)] == t_all[mf])
         vals = np.where(okj, haz[np.minimum(j, len(haz) - 1)], SYS)
         h_c[mf] = vals
-    return H_t, H_t0, h_c, info
+    return H_t, H_t0, h_c, S_t, info
 
 
 def _predict_cox(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
@@ -491,18 +538,18 @@ def _predict_cox(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     xb, ok = xb_all(s, est)
     ds = s.data
     if stat in ("", "hr"):
-        return np.where(ok, np.exp(xb), SYS), ""
+        return np.where(ok, np.exp(xb), SYS), ("" if stat else "(option hr assumed; relative hazard)")
     if stat == "xb":
         return np.where(ok, xb, SYS), ""
     if stat == "stdp":
         X, _ = design_all(s, est)
         sp = np.sqrt(np.maximum(np.einsum("ij,jk,ik->i", X, est.V, X), 0))
         return np.where(ok, sp, SYS), ""
-    H_t, H_t0, h_c, info = _baseline(s, est)
+    H_t, H_t0, h_c, S_t, info = _baseline(s, est)
     if stat == "basechazard":
         return H_t, ""
     if stat == "basesurv":
-        return np.where(H_t < SYS, np.exp(-H_t), SYS), ""
+        return S_t, ""
     if stat == "basehc":
         return h_c, ""
     if stat in ("csnell", "mgale"):
@@ -591,17 +638,17 @@ def _phtest(s: "Session", est: Estimates, rest: str) -> None:
             rho = float(np.corrcoef(xx, r2[:, j])[0, 1])
             p = float(chi2_tail(z, 1))
             out.write(f"      {nm[:11]:<11} |", "text")
-            out.write(f"  {rho:>9.5f}      {z:>10.2f}{1:>9}{p:>16.4f}\n", "result")
+            out.write(f"{rho:>13.5f}{z:>13.2f}{1:>9}{p:>15.4f}\n", "result")
         out.write("      " + "-" * 12 + "+" + "-" * 51 + "\n", "text")
     else:
-        out.write("                  |                   chi2       df       Prob>chi2\n", "text")
+        out.write("                  |                      chi2       df       Prob>chi2\n", "text")
         out.write("      " + "-" * 12 + "+" + "-" * 51 + "\n", "text")
     test = xx @ R
     zg = float(test @ V @ test) * nd / float(xx @ xx)
     df = len(names)
     pg = float(chi2_tail(zg, df))
     out.write(f"      {'global test':<11} |", "text")
-    out.write(f"{'':>17}{zg:>10.2f}{df:>9}{pg:>16.4f}\n", "result")
+    out.write(f"{zg:>26.2f}{df:>9}{pg:>15.4f}\n", "result")
     out.write("      " + "-" * 64 + "\n", "text")
     s.r = {"chi2": zg, "df": float(df), "p": pg}
 
@@ -762,8 +809,15 @@ def cmd_streg(s: "Session", args: str) -> None:
         raise StataError(498, "failures at time 0")   # VERIFY
     X = np.column_stack([stx.X, np.ones(stx.n)]) if stx.X.size else np.ones((stx.n, 1))
     kx = X.shape[1]
-    lf, npar = _lf(dist, aft, t, t0, d)
+    # the Weibull model is fitted in the hazard metric and transformed to the time metric
+    # afterwards: Stata's iteration log is the same in both metrics (compat 0902)
+    fit_aft = aft and dist != "weibull"
+    lf, npar = _lf(dist, fit_aft, t, t0, d)
     k = kx + (npar - 1)
+
+    # Stata reports the log likelihood of ln t rather than of t: the densities are multiplied by
+    # t, which adds sum(d ln t) (compat 0902: the same constant in every distribution)
+    lnt_c = float(np.sum(w * d * np.log(np.where(t > 0, t, 1.0))))
 
     def fun_of(Xm):
         kk = Xm.shape[1] + (npar - 1)
@@ -772,7 +826,7 @@ def cmd_streg(s: "Session", args: str) -> None:
             u = Xm @ b[:Xm.shape[1]]
             if npar == 1:
                 l, l1, l11 = lf(u)
-                ll = float(np.sum(w * l))
+                ll = float(np.sum(w * l)) + lnt_c
                 if not np.isfinite(ll):
                     return -np.inf, None, None
                 if todo == 0:
@@ -783,7 +837,7 @@ def cmd_streg(s: "Session", args: str) -> None:
             th = b[-1]
             with np.errstate(all="ignore"):
                 l, le, lt_, lee, let, ltt = lf(u, th)
-            ll = float(np.sum(w * l))
+            ll = float(np.sum(w * l)) + lnt_c
             if not np.isfinite(ll):
                 return -np.inf, None, None
             if todo == 0:
@@ -801,7 +855,7 @@ def cmd_streg(s: "Session", args: str) -> None:
     if dist == "exponential":
         c0 = np.array([np.log(rate) * (-1 if aft else 1)])
     elif dist == "weibull":
-        c0 = np.array([np.log(rate) * (-1 if aft else 1), 0.0])
+        c0 = np.array([np.log(rate), 0.0])
     elif dist == "gompertz":
         c0 = np.array([np.log(rate), 0.0])
     else:
@@ -820,9 +874,11 @@ def cmd_streg(s: "Session", args: str) -> None:
         b0[-1] = res0.b[1]
     res = maximize(fun_of(X), b0, **kw)
     if not o.get("nolog"):
-        out.write("Fitting constant-only model:\n\n", "text")
-        print_log(out, res0, lab)
-        out.write("\nFitting full model:\n\n", "text")
+        # the exponential constant-only model has a closed form: Stata does not show its fit
+        if dist != "exponential":
+            out.write("Fitting constant-only model:\n\n", "text")
+            print_log(out, res0, lab)
+            out.write("\nFitting full model:\n\n", "text")
         print_log(out, res, lab)
     try:
         V = np.linalg.inv(-res.H)
@@ -850,6 +906,17 @@ def cmd_streg(s: "Session", args: str) -> None:
         else:
             meat = (S * (w[:, None] if stx.wtype == "fweight" else 1)).T @ S * stx.n / (stx.n - 1)
         V = V @ meat @ V
+        V = (V + V.T) / 2
+    if aft and not fit_aft:
+        # gamma = -beta / p, ln_p unchanged (delta method for V)
+        p_ = float(np.exp(res.b[-1]))
+        beta = res.b[:kx].copy()
+        J = np.zeros((k, k))
+        J[:kx, :kx] = -np.eye(kx) / p_
+        J[:kx, -1] = beta / p_
+        J[-1, -1] = 1.0
+        res.b = np.concatenate([-beta / p_, res.b[-1:]])
+        V = J @ V @ J.T
         V = (V + V.T) / 2
     nslope = kx - 1
     if robust:
@@ -891,30 +958,49 @@ def cmd_streg(s: "Session", args: str) -> None:
     est.predict_opts = {"median": 3, "mean": 4, "time": 4, "lntime": 3, "hazard": 3, "hr": 2,
                         "surv": 4, "csurv": 5, "csnell": 3, "mgale": 2}
     from .regress import cmdline
-    scalars = [("N", x["N"]), ("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"]),
-               ("ll", res.ll), ("ll_0", res0.ll), ("chi2", chi2), ("df_m", float(nslope)), ("p", pval),
-               ("k_eq", float(npar)), ("k_aux", float(npar - 1)), ("rank", float(k)),
-               ("converged", 1.0 if res.converged else 0.0), ("ic", float(res.iterations))]
-    if dist == "weibull":
-        scalars.append(("aux_p", float(np.exp(bf[-1]))))
-    elif dist == "gompertz":
-        scalars.append(("gamma", float(bf[-1])))
-    elif dist == "lognormal":
-        scalars.append(("sigma", float(np.exp(bf[-1]))))
-    elif dist == "loglogistic":
-        scalars.append(("gamma", float(np.exp(bf[-1]))))
+    # e() in the order Stata lists it after streg, distribution(weibull) (compat 0902); the other
+    # distributions follow the same pattern (VERIFY)
+    from ..commands.matrix import Matrix
+    aux_sc = {"weibull": ("aux_p", float(np.exp(bf[-1]))), "gompertz": ("gamma", float(bf[-1])),
+              "lognormal": ("sigma", float(np.exp(bf[-1]))),
+              "loglogistic": ("gamma", float(np.exp(bf[-1])))}.get(dist)
+    scalars = [("rank", float(k)), ("N", x["N"])]
     if n_clust is not None:
-        scalars.append(("N_clust", float(n_clust)))
+        scalars.append(("N_clust", float(n_clust)))   # VERIFY: position
+    scalars += [("ic", float(res.iterations)), ("k", float(k)), ("k_eq", float(npar)), ("k_dv", 1.0),
+                ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0), ("ll", res.ll),
+                ("k_eq_model", 1.0), ("ll_0", res0.ll), ("df_m", float(nslope)), ("chi2", chi2),
+                ("p", pval)]
+    if aux_sc is not None:
+        scalars += [aux_sc, ("k_aux", float(npar - 1))]
+    scalars += [("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"])]
     cmd_map = {"exponential": "ereg", "weibull": "weibull", "gompertz": "gompertz",
                "lognormal": "lnormal", "loglogistic": "llogistic"}
-    macros = [("cmdline", cmdline("streg", args)), ("cmd", cmd_map[dist]), ("cmd2", "streg"),
-              ("depvar", "_t"), ("t0", "_t0"), ("distribution", dist),
-              ("frm2", "time" if aft else "hazard"), ("title", _TITLE[dist] + " regression"),
-              ("chi2type", chi2type), ("vce", "robust" if robust else "oim"),
-              ("vcetype", "Robust" if robust else ""), ("clustvar", clustvar),
-              ("predict", "streg_p"), ("properties", "b V")]
+    # VERIFY: predict_sub and user for distributions other than weibull
+    sub_map = {"exponential": "ereg_p", "weibull": "weibul_p", "gompertz": "gomper_p",
+               "lognormal": "lnorma_p", "loglogistic": "llogis_p"}
+    user_map = {"exponential": "ereg_lf0", "weibull": "weib_lf0", "gompertz": "gomp_lf0",
+                "lognormal": "lnorm_lf0", "loglogistic": "llog_lf0"}
+    macros = [("cmdline", cmdline("streg", args)), ("predict", "streg_p"),
+              ("predict_sub", sub_map[dist]), ("cmd2", "streg"), ("title", _TITLE[dist] + " regression"),
+              ("title2", "accelerated failure-time form" if aft else "log relative-hazard form"),
+              ("cmd", cmd_map[dist]), ("dead", "_d"), ("frm2", "time" if aft else "hazard"),
+              ("stcurve", "stcurve"), ("t0", "_t0"), ("chi2type", chi2type), ("opt", "moptimize"),
+              ("clustvar", clustvar), ("vcetype", "Robust" if robust else ""),
+              ("vce", "cluster" if n_clust is not None else "robust" if robust else "oim"),
+              ("user", user_map[dist]), ("ml_method", "e2"), ("technique", "nr"), ("which", "max"),
+              ("depvar", "_t"), ("properties", "b V")]
+    ilog = np.zeros((1, 20))
+    for i_, (_it, llv, _f) in enumerate(res.log[:20]):
+        ilog[0, i_] = llv
+    gnames = names
+    grad = np.zeros((1, kk))
+    if res.g is not None:
+        grad[0, full_pos] = res.g
+    extra_mats = [("ilog", Matrix(ilog, ["r1"], [f"c{i + 1}" for i in range(20)])),
+                  ("gradient", Matrix(grad, ["r1"], list(gnames)))]
     est.cmd = "streg"
-    post(s, est, scalars, macros, stx.mask)
+    post(s, est, scalars, macros, stx.mask, extra_mats=extra_mats)
     _display_streg(s, est, header=not o.get("noheader"))
 
 

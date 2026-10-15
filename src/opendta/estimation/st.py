@@ -35,10 +35,26 @@ def _g(x: float, fmt: str = "%9.0g") -> str:
 
 
 def _count(x: float) -> str:
-    """Counts and totals in the stset report: integers with commas, otherwise %11.0g."""
+    """Counts and totals in the stset report: integers without commas, otherwise about six
+    significant digits (192.286). VERIFY: the exact format Stata uses for non-integer totals."""
     if float(x).is_integer():
-        return f"{int(x):,}"
-    return format_value(float(x), "%11.0gc", pad=False).strip()
+        return f"{int(x)}"
+    return format_value(float(x), "%8.0g", pad=False).strip()
+
+
+def _plural(k: int, one: str, many: str) -> str:
+    return one if k == 1 else many
+
+
+# exclusion reasons: (singular, plural, probable error, continuation line)
+_EXCL = {
+    "begins_after_fail": ("observation begins on or after (first) failure",
+                          "observations begin on or after (first) failure", False, ""),
+    "ends_before_enter": ("observation ends on or before enter()",
+                          "observations end on or before enter()", False, ""),
+    "begins_after_exit": ("observation begins on or after exit",
+                          "observations begin on or after exit", False, ""),   # VERIFY
+}
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +106,10 @@ def _fail_text(info: STInfo) -> str:
     return f"{info.failvar} == {' '.join(_g(v) for v in info.failvals)}"
 
 
-def _analysis_text(info: STInfo) -> str:
-    t = info.timevar
+def _analysis_text(info: STInfo, word: str = "") -> str:
+    """The analysis-time expression; the stset report writes the literal word "time" and the st
+    header the variable name (tt/7 against time/7)."""
+    t = word or info.timevar
     if info.origin:
         t = f"({t}-origin)"
     if info.scale != 1:
@@ -106,8 +124,6 @@ def header(s: "Session", info: STInfo | None = None, *, force: bool = False) -> 
         return
     out = s.output
     out.write("\n", "text")
-    if info.idvar:
-        out.write(f"{'id':>19}:  {info.idvar}\n", "text")
     ft = _fail_text(info)
     out.write(f"{'failure _d':>19}:  {ft if ft else '1 (meaning all fail)'}\n", "text")
     out.write(f"{'analysis time _t':>19}:  {_analysis_text(info)}\n", "text")
@@ -115,8 +131,10 @@ def header(s: "Session", info: STInfo | None = None, *, force: bool = False) -> 
         out.write(f"{'origin':>19}:  time {info.origin}\n", "text")
     if info.enter:
         out.write(f"{'enter on or after':>19}:  time {info.enter}\n", "text")
-    if info.exit and info.exit != "failure" and not (info.exit == "time ." and info.idvar):
+    if info.exit and info.exit != "failure":
         out.write(f"{'exit on or before':>19}:  {info.exit}\n", "text")
+    if info.idvar:
+        out.write(f"{'id':>19}:  {info.idvar}\n", "text")
     if info.ifexp:
         out.write(f"{'keep if exp':>19}:  {info.ifexp}\n", "text")   # VERIFY
     if info.wtype:
@@ -255,23 +273,29 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
             dfail = np.isin(fv, failvals)
     else:
         dfail = np.ones(n, dtype=bool)
-    # exclusions, in the order they are reported
-    excl: list[tuple[int, str]] = []
+    # exclusions, in the order they are reported: [count, singular, plural, probable error,
+    # continuation line]
+    excl: list[list] = []
     keep = np.ones(n, dtype=bool)
 
-    def drop(mask: np.ndarray, why: str) -> None:
+    def drop(mask: np.ndarray, why, error: bool = False, cont: str = "") -> None:
         nonlocal keep
+        one, many = (why, why) if isinstance(why, str) else why
         m = keep & mask
         if m.any():
-            for j, (k_, w_) in enumerate(excl):
-                if w_ == why:
-                    excl[j] = (k_ + int(m.sum()), why)
+            for e in excl:
+                if e[1] == one:
+                    e[0] += int(m.sum())
                     break
             else:
-                excl.append((int(m.sum()), why))
+                excl.append([int(m.sum()), one, many, error, cont])
         keep &= ~mask
 
-    drop(t_raw >= SYS, f"event time missing ({tvar}>=.)" + " " * max(1, 48 - len(f"event time missing ({tvar}>=.)")) + "PROBABLE ERROR")
+    def reason(key: str):
+        one, many, _err, _c = _EXCL[key]
+        return (one, many)
+
+    drop(t_raw >= SYS, f"event time missing ({tvar}>=.)", True)
     if ifexp:
         iv = num(ifexp)
         drop(~((iv != 0) & (iv < SYS)), "ignored per if()")   # VERIFY
@@ -289,7 +313,7 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
     t0_raw = np.full(n, np.nan)
     if time0:
         t0_raw = ds.get(time0).data.astype(np.float64)
-        drop(t0_raw >= SYS, f"entry time missing ({time0}>=.)  PROBABLE ERROR")   # VERIFY
+        drop(t0_raw >= SYS, f"entry time missing ({time0}>=.)", True)   # VERIFY
     ids = ds.get(idvar).data if idvar else None
     if idvar:
         miss_id = (ids == "") if ds.get(idvar).is_string else (ids.astype(np.float64) >= SYS)
@@ -298,10 +322,11 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
     begin = np.where(np.isnan(t0_raw), org, t0_raw) if time0 else org.copy()
     order = np.arange(n)
     if idvar and not time0:
-        # records of a subject are consecutive spells: each begins where the previous ended
+        # records of a subject are consecutive spells: each begins where the previous ended;
+        # Stata excludes both records that end at the same instant (compat 0901)
         key_id = np.array([str(v) for v in ids]) if ds.get(idvar).is_string else ids.astype(np.float64)
         order = np.lexsort((t_raw, key_id))
-        prev_id, prev_t = None, None
+        prev_i, prev_id, prev_t = None, None, None
         same = np.zeros(n, dtype=bool)
         for i in order:
             if not keep[i]:
@@ -309,12 +334,18 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
             if prev_id is not None and key_id[i] == prev_id:
                 if t_raw[i] == prev_t:
                     same[i] = True
+                    same[prev_i] = True
                 begin[i] = prev_t
-            prev_id, prev_t = key_id[i], t_raw[i]
-        drop(same, f"multiple records at same instant ({tvar}[_n-1]=={tvar})  PROBABLE ERROR")
+            prev_i, prev_id, prev_t = i, key_id[i], t_raw[i]
+        drop(same, "multiple records at same instant", True, f"({tvar}[_n-1]=={tvar})")
     elif idvar and time0:
         key_id = np.array([str(v) for v in ids]) if ds.get(idvar).is_string else ids.astype(np.float64)
         order = np.lexsort((t_raw, key_id))
+    else:
+        key_id = None
+    if time0:
+        drop(t0_raw >= t_raw, f"entry on or after exit ({time0}>{tvar})", True)
+    if idvar and time0:
         overl = np.zeros(n, dtype=bool)
         prev_id, prev_t = None, None
         for i in order:
@@ -323,18 +354,14 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
             if prev_id is not None and key_id[i] == prev_id and begin[i] < prev_t:
                 overl[i] = True
             prev_id, prev_t = key_id[i], t_raw[i]
-        drop(overl, f"overlapping records ({tvar}[_n-1]>entry time)  PROBABLE ERROR")
-    else:
-        key_id = None
+        drop(overl, "overlapping records", True, f"({tvar}[_n-1]>{time0})")   # VERIFY
+    # origin and enter() exclusions share one line (compat 0901: 4 + 6 reported as 10)
     if origin:
-        drop(t_raw <= org, "obs. end on or before origin()")
-    drop(t_raw <= begin, "obs. end on or before enter()")
+        drop(t_raw <= org, reason("ends_before_enter"))
+    drop(t_raw <= begin, reason("ends_before_enter"))
     if enter:
         ent = num(enter)
-        if idvar:
-            # the subject's entry time applies to all of its records
-            pass
-        drop(keep & (t_raw <= ent), "obs. end on or before enter()")
+        drop(keep & (t_raw <= ent), reason("ends_before_enter"))
         begin = np.where(keep & (ent < SYS) & (ent > begin), ent, begin)
     tend = t_raw.copy()
     d = dfail.copy()
@@ -343,7 +370,7 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
         etxt = exit_[5:].strip()
         if etxt != ".":
             ex = num(etxt)
-            drop(keep & (begin >= ex), "obs. begin on or after exit")
+            drop(keep & (begin >= ex), reason("begins_after_exit"))
             cut = keep & (tend > ex)
             tend = np.where(cut, ex, tend)
             d = np.where(cut, False, d)
@@ -357,7 +384,7 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
                     fail_t[k] = t_raw[i]
         after = np.array([keep[i] and key_id[i] in fail_t and begin[i] >= fail_t[key_id[i]]
                           for i in range(n)], dtype=bool)
-        drop(after, "obs. begin on or after (first) failure")
+        drop(after, reason("begins_after_fail"))
     _t = (tend - org) / scale
     _t0 = np.maximum((begin - org) / scale, 0.0)
     # store
@@ -393,6 +420,12 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
 
 def _report(s: "Session", info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -> None:
     out = s.output
+    _report_head(out, info)
+    out.write("\n" + LINE + "\n", "text")
+    _report_body(out, info, keep, excl, n, key_id, dd, tt, tt0, w)
+
+
+def _report_head(out, info: STInfo) -> None:
     out.write("\n", "text")
     if info.idvar:
         out.write(f"{'id':>18}:  {info.idvar}\n", "text")
@@ -412,23 +445,29 @@ def _report(s: "Session", info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -
         out.write(f"{'enter on or after':>18}:  time {info.enter}\n", "text")
     out.write(f"{'exit on or before':>18}:  {info.exit if info.exit != 'failure' else 'failure'}\n", "text")
     if info.origin or info.scale != 1:
-        out.write(f"{'t for analysis':>18}:  {_analysis_text(info)}\n", "text")
+        out.write(f"{'t for analysis':>18}:  {_analysis_text(info, 'time')}\n", "text")
     if info.origin:
         out.write(f"{'origin':>18}:  time {info.origin}\n", "text")
     if info.ifexp:
         out.write(f"{'keep if exp':>18}:  {info.ifexp}\n", "text")   # VERIFY
     if info.wtype:
         out.write(f"{'weight':>18}:  [{info.wtype}={info.wvar}]\n", "text")   # VERIFY
-    out.write("\n" + LINE + "\n", "text")
 
+
+def _report_body(out, info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -> None:
     def line(v, txt, style="result"):
         out.write(f"{_count(v):>11}", style)
         out.write(f"  {txt}\n", "text")
 
     line(n, "total observations")
     if excl:
-        for k, why in excl:
-            line(k, why)
+        for k, one, many, err, cont in excl:
+            txt = _plural(k, one, many)
+            if err:
+                txt = f"{txt:<51}PROBABLE ERROR"
+            line(k, txt)
+            if cont:
+                out.write(f"{'':13}{cont}\n", "text")
     else:
         line(0, "exclusions")
     out.write(LINE + "\n", "text")
@@ -454,10 +493,11 @@ def _report(s: "Session", info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -
 
 
 def cmd_st(s: "Session", args: str) -> None:
+    """st shows the stset command and the first lines of its report ([ST] st_is)."""
     info = require_st(s)
     out = s.output
     out.write(f"-> stset {info.args}\n", "text")
-    header(s, info, force=True)
+    _report_head(out, info)
 
 
 def cmd_streset(s: "Session", args: str) -> None:
@@ -554,8 +594,10 @@ def cmd_stdescribe(s: "Session", args: str) -> None:
 
     def row(lab, total, vals=None):
         out.write(f"{lab:<22}", "text")
-        out.write(f"{_g(total, '%11.0g') if total is not None else '':>11}", "result")
-        if vals is not None and len(vals):
+        out.write(f"{_g(total, '%10.0g') if total is not None else '':>10}", "result")
+        if vals is not None and not len(vals):
+            out.write(f" {'.':>11} {'.':>11} {'.':>10} {'.':>10}", "result")
+        elif vals is not None:
             out.write(f" {_g(float(np.mean(vals))):>11} {_g(float(np.min(vals))):>11}"
                       f" {_g(float(np.median(vals))):>10} {_g(float(np.max(vals))):>10}", "result")
         out.write("\n", "text")
@@ -567,7 +609,10 @@ def cmd_stdescribe(s: "Session", args: str) -> None:
     row("(final) exit time", None, exitt)
     out.write("\n", "text")
     row("subjects with gap", float(has_gap.sum()))
-    row("time on gap if gap", float(gap[has_gap].sum()), gap[has_gap] if has_gap.any() else None)
+    # with multiple-record data the row shows "." statistics when no subject has a gap
+    # (compat 0901); with one record per subject it shows only the total
+    row("time on gap if gap", float(gap[has_gap].sum()),
+        gap[has_gap] if has_gap.any() or sd.ids is not None else None)
     row("time at risk", float(risk.sum()), risk)
     out.write("\n", "text")
     row("failures", float(fails.sum()), fails)

@@ -41,6 +41,9 @@ _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
 # absolute path of the case's temporary files (graph export to PDF shows the full path, which
 # changes from machine to machine): absolute path of odta_* files (macOS/Linux "/..."; Windows
 # "C:\\...")
+# e(datasignature): Stata's checksum algorithm is undocumented; N and k are compared, the two
+# checksums are not
+_DATASIG = re.compile(r'(e\(datasignature\) : "\d+:\d+):\d+:\d+"')
 _ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 
 
@@ -49,6 +52,7 @@ def normalize(text: str) -> list[str]:
     lines = text.splitlines()
     for k, raw in enumerate(lines):
         line = _ABSPATH.sub(r"<folder>/\1", _STAMP.sub("<date>", raw.rstrip()))
+        line = _DATASIG.sub(r'\1:<checksum>"', line)
         if not line or _HEADER.match(line) or _SKIP.match(line):
             continue
         if set(line) <= {"-"}:
@@ -122,15 +126,24 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     return outdir / (dofile.stem + ".log")
 
 
-def _known_differences() -> dict[str, str]:
-    """compat/known_differences.txt: cases that may differ (with the reason)."""
+_IGNORE = re.compile(r"^ignore\(/(.*?)/\)\s*(.*)$")
+
+
+def _known_differences() -> dict[str, tuple[str, re.Pattern | None]]:
+    """compat/known_differences.txt: cases that may differ, with the reason. A reason that starts
+    with ignore(/REGEX/) limits the tolerance to the lines matching REGEX: they are dropped from
+    both logs and the rest must still be equal."""
     path = COMPAT / "known_differences.txt"
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str, re.Pattern | None]] = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.lstrip().startswith("#"):
                 name, _, why = line.strip().partition(" ")
-                out[name] = why.strip()
+                m = _IGNORE.match(why.strip())
+                if m:
+                    out[name] = (m.group(2).strip(), re.compile(m.group(1)))
+                else:
+                    out[name] = (why.strip(), None)
     return out
 
 
@@ -166,8 +179,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ok {f.stem}")
             passed += 1
         else:
-            if f.stem in known:
-                print(f"  ~~ {f.stem:<32} known difference: {known[f.stem]}")
+            why, pat = known.get(f.stem, ("", None))
+            ok_known = f.stem in known and (
+                pat is None or same_logs([x for x in a if not pat.search(x)],
+                                         [x for x in b if not pat.search(x)]))
+            if ok_known:
+                print(f"  ~~ {f.stem:<32} known difference: {why}")
                 tolerated += 1
             else:
                 print(f"  XX {f.stem}")

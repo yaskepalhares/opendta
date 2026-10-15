@@ -5,8 +5,9 @@ corrgram and newey ([TS] arima, [TS] var, [TS] varsoc, [TS] vargranger,
 arima: exact maximum likelihood with the Kalman filter (Harvey's state
 space form, stationary initial covariance), ar() and ma() lag lists or
 arima(p,d,q); OPG variance by default, as in Stata. Stata optimizes with
-BHHH and then BFGS; OpenDTA uses Newton-Raphson, so the iteration log
-differs, but the maximum is the same (VERIFY: compat/do/1101_ts.do).
+BHHH and then BFGS (technique(bhhh 5 bfgs 10)), as OpenDTA does; the step
+sizes are undocumented, so the iteration values may differ, but the maximum
+is the same (VERIFY: compat/do/1101_ts.do).
 
 var: OLS equation by equation with the ML covariance of the residuals.
 dfuller: Fuller (1976) critical values interpolated in the number of
@@ -27,7 +28,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options
 from . import fvars
-from .ml import maximize, print_log
+from .ml import maximize_switching, print_log
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
 from .tsops import _fmt_time, require_ts
 
@@ -75,6 +76,24 @@ def _numderiv(f, x, h=None):
 # ---------------------------------------------------------------------------
 # arima
 # ---------------------------------------------------------------------------
+
+def _scores(contrib, b: np.ndarray) -> np.ndarray:
+    """Observation scores by central differences of the log-likelihood contributions."""
+    kk = b.size
+    c0 = contrib(b)
+    S = np.zeros((len(c0) if c0 is not None else 0, kk))
+    for j in range(kk):
+        h = 1e-6 * (abs(b[j]) + 1)
+        e = np.zeros(kk)
+        e[j] = h
+        cp, cm = contrib(b + e), contrib(b - e)
+        if cp is None or cm is None:
+            cp = contrib(b + e / 100)
+            cm = contrib(b - e / 100)
+            h = h / 100
+        S[:, j] = (cp - cm) / (2 * h)
+    return S
+
 
 def _lags(text) -> list[int]:
     if not isinstance(text, str):
@@ -126,6 +145,29 @@ class _ARMA:
             Pm = T @ Pm @ T.T - np.outer(K, K) * F + RR
         self.pred = pred
         return out
+
+
+def _hr_start(e: np.ndarray, ar: list[int], ma: list[int]) -> np.ndarray:
+    """Starting values of the ARMA coefficients by the Hannan-Rissanen regressions: a long
+    autoregression gives the innovations, then e is regressed on its lags and the lagged
+    innovations. VERIFY: Stata's starting values are undocumented."""
+    na, nm = len(ar), len(ma)
+    if not na and not nm:
+        return np.zeros(0)
+    n = len(e)
+    m = min(max(8, (max(ar) if ar else 0) + (max(ma) if ma else 0)), max(n // 4, 1))
+    a = np.zeros(n)
+    if nm:
+        Z = np.column_stack([e[m - j:n - j] for j in range(1, m + 1)])
+        c, *_ = np.linalg.lstsq(Z, e[m:], rcond=None)
+        a[m:] = e[m:] - Z @ c
+    start = max([m if nm else 0] + [lg for lg in ar] + [m + lg for lg in ma])
+    if start >= n - (na + nm) - 2:
+        return np.zeros(na + nm)
+    cols = [e[start - lg:n - lg] for lg in ar] + [a[start - lg:n - lg] for lg in ma]
+    c, *_ = np.linalg.lstsq(np.column_stack(cols), e[start:], rcond=None)
+    # keep the start inside the stationary and invertible region
+    return np.clip(c, -0.95, 0.95)
 
 
 def cmd_arima(s: "Session", args: str) -> None:
@@ -196,12 +238,30 @@ def cmd_arima(s: "Session", args: str) -> None:
 
     beta0 = np.linalg.lstsq(X, y, rcond=None)[0] if k else np.zeros(0)
     res0 = y - X @ beta0
-    b0 = np.concatenate([beta0, np.zeros(na + nm), [float(np.std(res0)) or 1.0]])
+    b0 = np.concatenate([beta0, _hr_start(res0, ar, ma), [float(np.std(res0)) or 1.0]])
+    if not np.isfinite(ll(b0)):
+        b0 = np.concatenate([beta0, np.zeros(na + nm), [float(np.std(res0)) or 1.0]])
     kw = dict(maxiter=int(o["iterate"]) if o.get("iterate") else 16000,
               tol=float(o["tolerance"]) if o.get("tolerance") else 1e-6,
               ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
               nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
-    r = maximize(fun, b0, **kw)
+    r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **kw)
+    # Newton steps outside the log take the estimates to the maximum (the BFGS approximation
+    # stops up to 1e-4 away from it); the variance needs the Hessian there
+    _llm, gm, Hm = _numderiv(ll, r.b)
+    for _ in range(5):
+        try:
+            bn = r.b - np.linalg.solve(Hm, gm)
+        except np.linalg.LinAlgError:
+            break
+        lln = ll(bn)
+        if not np.isfinite(lln) or lln < r.ll:
+            break
+        r.b, r.ll = bn, lln
+        _llm, gm, Hm = _numderiv(ll, r.b)
+        if abs(float(gm @ np.linalg.solve(Hm, gm))) < 1e-14:
+            break
+    r.H = Hm
     out = s.output
     vce = str(o.get("vce") or ("robust" if o.get("robust") else "opg")).strip().lower()
     vce = "robust" if vce.startswith("r") else ("oim" if vce == "oim" else "opg")
@@ -210,13 +270,7 @@ def cmd_arima(s: "Session", args: str) -> None:
         print_log(out, r, "log likelihood")
     b = r.b
     kk = b.size
-    # observation scores by central differences of the contributions
-    S = np.zeros((n, kk))
-    for j in range(kk):
-        h = 1e-6 * (abs(b[j]) + 1)
-        e = np.zeros(kk)
-        e[j] = h
-        S[:, j] = (contrib(b + e) - contrib(b - e)) / (2 * h)
+    S = _scores(contrib, b)
     try:
         Hinv = np.linalg.inv(-r.H)
     except np.linalg.LinAlgError:
@@ -270,7 +324,7 @@ def cmd_arima(s: "Session", args: str) -> None:
     est.rows = rows
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = float(o["level"]) if o.get("level") else smp.level
-    est.vcetype = {"opg": "OPG", "robust": "Semirobust", "oim": ""}[vce]
+    est.vcetype = {"opg": "OPG", "robust": "Semirobust", "oim": "OIM"}[vce]
     est.robust = vce == "robust"
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx),
                  "sample": _sample_text(s, t0, t1)}
@@ -708,28 +762,45 @@ def cmd_dfuller(s: "Session", args: str) -> None:
     else:
         crit = _fuller_crit(kind, n)
         head = "Interpolated Dickey-Fuller"
-    out.write(f"{'':31}{'-' * 10} {head} {'-' * (78 - 31 - 12 - len(head))}\n", "text")
+    nd = 47 - len(head) - 2          # the title is centred over the three critical values
+    out.write(f"{'':31}{'-' * ((nd + 1) // 2)} {head} {'-' * (nd // 2)}\n", "text")
     out.write("                  Test         1% Critical       5% Critical      10% Critical\n", "text")
     out.write("               Statistic           Value             Value             Value\n", "text")
     out.write("-" * 78 + "\n", "text")
     out.write(" Z(t)", "text")
     out.write(f"{tau:>19.3f}{crit[0]:>18.3f}{crit[1]:>18.3f}{crit[2]:>18.3f}\n", "result")
-    out.write("-" * 78 + "\n", "text")
     pval = None
-    if not o.get("drift"):
+    if kind == "n" and not o.get("drift"):
+        # noconstant: Stata stops after the statistic, without the closing line and the
+        # MacKinnon p-value (compat 1101)
+        pass
+    elif not o.get("drift"):
+        out.write("-" * 78 + "\n", "text")
         pval = mackinnon_p(tau, kind)
         out.write("MacKinnon approximate p-value for Z(t) = ", "text")
         out.write(f"{pval:.4f}\n", "result")
     else:
+        out.write("-" * 78 + "\n", "text")
         pval = float(st.t.cdf(tau, n - k))
         out.write("p-value for Z(t) = ", "text")
         out.write(f"{pval:.4f}\n", "result")
     if o.get("regress"):
         se = np.sqrt(np.diag(V))
-        rows = [CoefRow("coef", nm, b[i], se[i]) for i, nm in enumerate(cn)]
+        # the lags are grouped under the variable name (L1., LD., L2D.)
+        rows = [CoefRow("header", names[0])]
+        for i, nm in enumerate(cn):
+            lab = nm
+            if nm.endswith("." + names[0]):
+                lab = nm[:-len(names[0])]
+                lab = {"L1D.": "LD."}.get(lab, lab)
+            rows.append(CoefRow("coef", lab, b[i], se[i]))
         out.write("\n", "text")
-        coef_table(s, f"D.{names[0]}", rows, stat="t", df=n - k, level=float(s.settings.get("level", "95")))
-    s.r = {"N": float(n), "lags": float(lags), "Zt": tau, "p": pval}
+        coef_table(s, f"D.{names[0]}", rows, stat="t", df=n - k, level=float(s.settings.get("level", "95")),
+                   depvar_left=True)
+    s.r = {"N": float(n), "lags": float(lags), "Zt": tau}
+    if pval is not None:
+        # r(p) only with a constant or trend in the model ([TS] dfuller, Stored results)
+        s.r["p"] = pval
 
 
 # ---------------------------------------------------------------------------
@@ -860,11 +931,12 @@ def cmd_newey(s: "Session", args: str) -> None:
     est.vcetype = "Newey-West"
     est.extra = {"N": n, "lag": L, "F": F, "pF": pF, "df_m": len(sl), "df_r": df_r}
     est.display = display_newey
-    scalars = [("N", float(n)), ("df_m", float(len(sl))), ("df_r", float(df_r)), ("F", F), ("lag", float(L)),
+    # e() in the order Stata lists it (compat 1101)
+    scalars = [("df_m", float(len(sl))), ("df_r", float(df_r)), ("F", F), ("N", float(n)), ("lag", float(L)),
                ("rank", float(k))]
-    macros = [("cmd", "newey"), ("cmdline", cmdline("newey", args)), ("depvar", smp.depname),
-              ("vcetype", "Newey-West"), ("title", "Regression with Newey-West standard errors"),
-              ("predict", "newey_p"), ("properties", "b V")]
+    macros = [("title", "Regression with Newey-West standard errors"), ("cmd", "newey"),
+              ("cmdline", cmdline("newey", args)), ("estat_cmd", "newey_estat"), ("predict", "newey_p"),
+              ("vcetype", "Newey-West"), ("depvar", smp.depname), ("properties", "b V")]
     post(s, est, scalars, macros, smp.mask)
     display_newey(s, est)
 
@@ -876,7 +948,8 @@ def display_newey(s: "Session", est: Estimates, *, header: bool = True, table: b
     if header:
         out.write("\n", "text")
         _right(out, "Regression with Newey-West standard errors", "Number of obs", f"{int(x['N']):,}")
-        _right(out, f"maximum lag: {x['lag']}", f"F({x['df_m']}, {x['df_r']})", _g(x["F"], "%10.2f"))
+        _right(out, f"maximum lag: {x['lag']}", f"F({int(x['df_m']):>3},{int(x['df_r']):>10})",
+               _g(x["F"], "%10.2f"))
         _right(out, "", "Prob > F", _g(x["pF"], "%10.4f"))
         out.write("\n", "text")
     if table:

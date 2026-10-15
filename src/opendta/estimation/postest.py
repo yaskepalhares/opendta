@@ -120,13 +120,6 @@ def cmd_predict(s: "Session", args: str) -> None:
     vtype = "float"
     if words[0] in ("byte", "int", "long", "float", "double"):
         vtype = words.pop(0)
-    if len(words) != 1:
-        raise StataError(103, "too many variables specified")
-    name = words[0]
-    ds = s.data
-    if ds.has(name):
-        raise StataError(110, f"{name} already defined")
-    mask = touse(s, p)
     stats = [k for k in ("xb", "residuals", "stdp", "stdf", "stdr", "hat", "leverage", "rstandard",
                          "rstudent", "cooksd", "pr", "p", "n", "ir") if o.get(k)]
     stats += [k for k in extra if o.get(k) and k not in stats and k != "partial"]
@@ -135,6 +128,38 @@ def cmd_predict(s: "Session", args: str) -> None:
     est._partial = bool(o.get("partial"))
     if len(stats) > 1:
         raise StataError(198, "only one statistic may be specified")   # VERIFY
+    multi = (getattr(est, "predict_multi", None) or {}).get(stats[0] if stats else "")
+    if multi is not None:
+        # statistics with one new variable per item (mixed: reffects)
+        nreq, fn, *msg = multi(s, est)
+        if len(words) < nreq:
+            raise StataError(102, msg[0] if msg else
+                             f"too few variables specified\nyou must specify {nreq} new variable(s)")
+        if len(words) > nreq:
+            raise StataError(103, "too many variables specified")
+        ds = s.data
+        for name in words:
+            if ds.has(name):
+                raise StataError(110, f"{name} already defined")
+        mask = touse(s, p)
+        from ..core.dataset import Variable
+        for name, values in zip(words, fn(mask)):
+            values = np.where(mask & (values < SYS) & np.isfinite(values), values, SYS)
+            var = Variable(name, vtype, np.full(ds.nobs, SYS))
+            var.data = values
+            ds.add(var)
+            nmiss = int(np.sum(var.data >= SYS))
+            if nmiss:
+                s.output.write(f"({nmiss:,} missing value{'s' if nmiss != 1 else ''} generated)\n", "text")
+        s.notify_state()
+        return
+    if len(words) != 1:
+        raise StataError(103, "too many variables specified")
+    name = words[0]
+    ds = s.data
+    if ds.has(name):
+        raise StataError(110, f"{name} already defined")
+    mask = touse(s, p)
     out = s.output
     pred = getattr(est, "predict", None)
     if pred is not None:

@@ -34,7 +34,8 @@ def _g10(x: float) -> str:
 
 def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter: int = 16000,
              tol: float = 1e-6, ltol: float = 1e-7, nrtol: float = 1e-5, start_iter: int = 0,
-             first_ll: float | None = None, stop_at_zero: bool = False) -> MLResult:
+             first_ll: float | None = None, stop_at_zero: bool = False,
+             nr_stop: float | None = None) -> MLResult:
     """fun(b, todo) -> (ll, g, H) with todo 0 (ll only) or 2 (ll, g and H).
     Returns the iterations for the log ("Iteration k:   log likelihood = ...")."""
     b = np.asarray(b0, dtype=np.float64).copy()
@@ -99,7 +100,10 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
             concave_now = True
         except np.linalg.LinAlgError:
             nr, concave_now = np.inf, False
-        if (dp < tol or dv < ltol) and nr < nrtol and concave_now:
+        # nr_stop: the iteration is final when g H^-1 g' falls below it, whatever the change since
+        # the previous iteration (stcox; compat 0902)
+        if ((dp < tol or dv < ltol) and nr < nrtol or nr_stop is not None and nr < nr_stop) \
+                and concave_now:
             converged = True
             log.append((it, ll, ""))
             break
@@ -121,8 +125,93 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
     return MLResult(b, ll, g, H, it, converged, log)
 
 
+def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.ndarray], np.ndarray],
+                       b0: np.ndarray, *, plan=(("bhhh", 5), ("bfgs", 10)), maxiter: int = 16000,
+                       tol: float = 1e-6, ltol: float = 1e-7, nrtol: float = 1e-5) -> MLResult:
+    """technique(bhhh 5 bfgs 10), the default of arima ([R] maximize): BHHH steps with the outer
+    product of the scores, then BFGS updates, alternating until convergence. The log carries the
+    "(setting optimization to ...)" and "(switching optimization to ...)" lines as notes with
+    iteration number -1. VERIFY: Stata's step-size rules are undocumented; the maximum is the same
+    but the iteration values may differ."""
+    b = np.asarray(b0, dtype=np.float64).copy()
+    k = b.size
+    ll = llf(b)
+    if not np.isfinite(ll):
+        raise StataError(430, "initial values not feasible")   # VERIFY
+
+    def grad(x):
+        S_ = scores(x)
+        return S_.sum(axis=0), S_
+
+    g, S = grad(b)
+    log: list[tuple[int, float, str]] = []
+    it = 0
+    converged = False
+    stage = 0
+    tech, left = plan[0]
+    log.append((-1, 0.0, f"(setting optimization to {tech.upper()})"))
+    W = None            # BFGS approximation of the inverse of -H
+    while True:
+        log.append((it, ll, ""))
+        if it >= maxiter:
+            break
+        if tech == "bhhh" or W is None:
+            B = S.T @ S
+            try:
+                W = np.linalg.inv(B)
+            except np.linalg.LinAlgError:
+                W = np.linalg.pinv(B)
+        step = W @ g
+        t = 1.0
+        backed = False
+        for _ in range(60):
+            bn = b + t * step
+            fn = llf(bn)
+            if np.isfinite(fn) and fn >= ll - 1e-12 * max(1.0, abs(ll)):
+                break
+            t /= 2
+            backed = True
+        else:
+            break
+        if backed:
+            log[-1] = (log[-1][0], log[-1][1], "  (backed up)")
+        gn, Sn = grad(bn)
+        dp = float(np.max(np.abs(bn - b) / (np.abs(b) + 1))) if k else 0.0
+        dv = abs(fn - ll) / (abs(ll) + 1)
+        if tech == "bfgs":
+            sv, yv = bn - b, -(gn - g)          # y: change of the gradient of -ll
+            sy = float(sv @ yv)
+            if sy > 1e-12:
+                rho = 1.0 / sy
+                I = np.eye(k)
+                W = (I - rho * np.outer(sv, yv)) @ W @ (I - rho * np.outer(yv, sv)) + rho * np.outer(sv, sv)
+        b, ll, g, S = bn, fn, gn, Sn
+        it += 1
+        left -= 1
+        if tech == "bhhh":
+            B = S.T @ S
+            try:
+                nr = float(g @ np.linalg.solve(B, g))
+            except np.linalg.LinAlgError:
+                nr = np.inf
+        else:
+            nr = float(g @ W @ g)
+        if (dp < tol or dv < ltol) and abs(nr) < nrtol:
+            converged = True
+            log.append((it, ll, ""))
+            break
+        if left == 0:
+            stage = (stage + 1) % len(plan)
+            tech, left = plan[stage]
+            log.append((-1, 0.0, f"(switching optimization to {tech.upper()})"))
+    return MLResult(b, ll, g, np.zeros((k, k)), it, converged, log)
+
+
 def print_log(out, res: MLResult, label: str = "log likelihood") -> None:
     for it, ll, note in res.log:
+        if it < 0:
+            out.write(note + "\n", "text")
+            continue
         lead = f"Iteration {it}:"
         out.write(f"{lead:<14} {label} = {_g10(ll):>10}{note}  \n", "text")
     if not res.converged and res.log:
@@ -132,6 +221,6 @@ def print_log(out, res: MLResult, label: str = "log likelihood") -> None:
 def ilog(res: MLResult) -> np.ndarray:
     """e(ilog): log likelihood of the first 20 iterations (zeros afterward)."""
     v = np.zeros((1, 20))
-    vals = [ll for _, ll, _ in res.log][:20]
+    vals = [ll for it, ll, _ in res.log if it >= 0][:20]
     v[0, :len(vals)] = vals
     return v

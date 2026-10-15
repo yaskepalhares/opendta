@@ -59,7 +59,8 @@ def test_dfuller_and_mackinnon():
     assert abs(s.r["Zt"] - (-1.8964210254268725)) < 1e-9
     assert abs(s.r["p"] - 0.6565217400546705) < 1e-6
     s.run_command("dfuller y, noconstant")
-    assert abs(s.r["p"] - 0.001502077546075481) < 1e-6
+    # no MacKinnon p-value without a constant (as Stata: neither displayed nor stored)
+    assert "p" not in s.r
 
 
 def test_dfuller_interpolated_critical_values():

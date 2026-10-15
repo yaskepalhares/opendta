@@ -1,0 +1,203 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0408_mata_moptimize.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:21:42
+
+. * Mata: moptimize() with lf, d2 and lf2 evaluators, vce(robust), display and results
+. clear
+
+. set seed 408
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen x1 = rnormal()
+
+. gen x2 = runiform()
+
+. gen y = runiform() < invlogit(-.5 + x1 - 2*x2)
+
+. gen yc = 1 + 2*x1 - x2 + rnormal()*1.5
+
+. logit y x1 x2
+
+Iteration 0:   log likelihood = -113.55237  
+Iteration 1:   log likelihood = -88.373896  
+Iteration 2:   log likelihood = -86.268978  
+Iteration 3:   log likelihood = -86.254553  
+Iteration 4:   log likelihood = -86.254547  
+
+Logistic regression                             Number of obs     =        200
+                                                LR chi2(2)        =      54.60
+                                                Prob > chi2       =     0.0000
+Log likelihood = -86.254547                     Pseudo R2         =     0.2404
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.062827   .2231247     4.76   0.000     .6255104    1.500143
+          x2 |  -3.675877   .7620138    -4.82   0.000    -5.169396   -2.182357
+       _cons |   .2996216   .3456563     0.87   0.386    -.3778523    .9770955
+------------------------------------------------------------------------------
+
+. regress yc x1 x2
+
+      Source |       SS           df       MS      Number of obs   =       200
+-------------+----------------------------------   F(2, 197)       =    208.54
+       Model |  787.010382         2  393.505191   Prob > F        =    0.0000
+    Residual |  371.737805       197  1.88699393   R-squared       =    0.6792
+-------------+----------------------------------   Adj R-squared   =    0.6759
+       Total |  1158.74819       199  5.82285521   Root MSE        =    1.3737
+
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.853156   .0915158    20.25   0.000      1.67268    2.033632
+          x2 |  -.9333048   .3369626    -2.77   0.006    -1.597822    -.268788
+       _cons |   1.028189   .1914848     5.37   0.000     .6505658    1.405812
+------------------------------------------------------------------------------
+
+. mata:
+------------------------------------------------- mata (type end to exit) -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+: void lflogit(transmorphic M, real rowvector b, real colvector lnfj) {
+>     real colvector xb, y
+>     xb = moptimize_util_xb(M, b, 1)
+>     y = moptimize_util_depvar(M, 1)
+>     lnfj = y:*ln(invlogit(xb)) + (1:-y):*ln(invlogit(-xb))
+> }
+
+: M = moptimize_init()
+
+: moptimize_init_evaluator(M, &lflogit())
+
+: moptimize_init_evaluatortype(M, "lf")
+
+: moptimize_init_depvar(M, 1, "y")
+
+: moptimize_init_eq_indepvars(M, 1, "x1 x2")
+
+: moptimize(M)
+initial:       f(p) = -138.62944
+alternative:   f(p) =  -120.3154
+rescale:       f(p) = -113.65234
+Iteration 0:   f(p) = -113.65234  
+Iteration 1:   f(p) =   -88.3567  
+Iteration 2:   f(p) = -86.273982  
+Iteration 3:   f(p) =  -86.25455  
+Iteration 4:   f(p) = -86.254547  
+
+: moptimize_result_display(M)
+
+                                                Number of obs     =        200
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.062827   .2231247     4.76   0.000     .6255105    1.500143
+          x2 |  -3.675877   .7620138    -4.82   0.000    -5.169397   -2.182357
+       _cons |   .2996216   .3456563     0.87   0.386    -.3778523    .9770956
+------------------------------------------------------------------------------
+
+: moptimize_result_coefs(M)
+                  1              2              3
+    +----------------------------------------------+
+  1 |   1.062826886   -3.675876964     .299621645  |
+    +----------------------------------------------+
+
+: void d2logit(transmorphic M, real scalar todo, real rowvector b, lnf, g, H) {
+>     real colvector xb, y, p
+>     xb = moptimize_util_xb(M, b, 1)
+>     y = moptimize_util_depvar(M, 1)
+>     p = invlogit(xb)
+>     lnf = moptimize_util_sum(M, y:*ln(p) + (1:-y):*ln(1:-p))
+>     if (todo >= 1) {
+>         g = moptimize_util_vecsum(M, 1, y - p, lnf)
+>         if (todo == 2) H = -moptimize_util_matsum(M, 1, 1, p:*(1:-p), lnf)
+>     }
+> }
+
+: M2 = moptimize_init()
+
+: moptimize_init_evaluator(M2, &d2logit())
+
+: moptimize_init_evaluatortype(M2, "d2")
+
+: moptimize_init_depvar(M2, 1, "y")
+
+: moptimize_init_eq_indepvars(M2, 1, "x1 x2")
+
+: moptimize_init_tracelevel(M2, "none")
+
+: moptimize(M2)
+
+: moptimize_result_coefs(M2)
+                  1              2              3
+    +----------------------------------------------+
+  1 |   1.062826884   -3.675876954    .2996216454  |
+    +----------------------------------------------+
+
+: sqrt(diagonal(moptimize_result_V(M2)))'
+                 1             2             3
+    +-------------------------------------------+
+  1 |   .223124684   .7620138223   .3456563262  |
+    +-------------------------------------------+
+
+: void lf2norm(transmorphic M, real scalar todo, real rowvector b, lnfj, S, H) {
+>     real colvector mu, lns, y, z, s
+>     mu = moptimize_util_xb(M, b, 1)
+>     lns = moptimize_util_xb(M, b, 2)
+>     y = moptimize_util_depvar(M, 1)
+>     s = exp(lns)
+>     z = (y - mu):/s
+>     lnfj = ln(normalden(z)) - lns
+>     if (todo >= 1) {
+>         S = (z:/s, z:*z :- 1)
+>         if (todo == 2) {
+>             real matrix h11, h12, h22
+>             h11 = -moptimize_util_matsum(M, 1, 1, 1:/(s:^2), lnfj)
+>             h12 = -moptimize_util_matsum(M, 1, 2, 2*z:/s, lnfj)
+>             h22 = -moptimize_util_matsum(M, 2, 2, 2*z:*z, lnfj)
+>             H = (h11, h12 \ h12', h22)
+>         }
+>     }
+> }
+
+: M3 = moptimize_init()
+
+: moptimize_init_evaluator(M3, &lf2norm())
+
+: moptimize_init_evaluatortype(M3, "lf2")
+
+: moptimize_init_depvar(M3, 1, "yc")
+
+: moptimize_init_eq_indepvars(M3, 1, "x1 x2")
+
+: moptimize_init_eq_name(M3, 1, "mu")
+
+: moptimize_init_eq_name(M3, 2, "lnsigma")
+
+: moptimize_init_vcetype(M3, "robust")
+
+: moptimize(M3)
+               lf2norm():  3200  conformability error
+    mopt__calluser_lf2():     -  function returned error
+      opt__eval_nr_lf2():     -  function returned error
+             opt__eval():     -  function returned error
+    _optimize_evaluate():     -  function returned error
+       _mopt__evaluate():     -  function returned error
+   _moptimize_evaluate():     -  function returned error
+     _moptimize_search():     -  function returned error
+      moptimize_search():     -  function returned error
+             moptimize():     -  function returned error
+                 <istmt>:     -  function returned error
+(1 line skipped)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+r(3200);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/0408_mata_moptimize.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:21:42
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

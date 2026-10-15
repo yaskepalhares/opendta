@@ -1,0 +1,322 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
+  log type:  text
+ opened on:  15 Oct 2026, 11:22:11
+
+. * Phase 10: mixed (ML, REML, random slopes, covariances, nested levels),
+. * estat icc/group, predict
+. clear
+
+. set seed 1001
+
+. set obs 30
+number of observations (_N) was 0, now 30
+
+. gen id = _n
+
+. gen u0 = rnormal()*2
+
+. gen u1 = rnormal()*.5
+
+. expand 8
+(210 observations created)
+
+. bysort id: gen week = _n
+
+. gen x = runiform()
+
+. gen y = 10 + u0 + (1 + u1)*week + 2*x + rnormal()*1.5
+
+. mixed y week x || id:
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -553.44341  
+Iteration 1:   log likelihood = -553.44341  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        240
+Group variable: id                              Number of groups  =         30
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =     242.80
+Log likelihood = -553.44341                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        week |    .905594   .0584429    15.50   0.000     .7910481     1.02014
+           x |   1.351292   .4920872     2.75   0.006     .3868188    2.315765
+       _cons |   10.16175    .601409    16.90   0.000     8.983014    11.34049
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+id: Identity                 |
+                  var(_cons) |   6.378027   1.786462      3.683562    11.04345
+-----------------------------+------------------------------------------------
+               var(Residual) |   4.281627   .4178672      3.536189    5.184206
+------------------------------------------------------------------------------
+LR test vs. linear model: chibar2(01) = 141.57        Prob >= chibar2 = 0.0000
+
+. mixed y week x || id:, reml
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log restricted-likelihood =  -554.9585  
+Iteration 1:   log restricted-likelihood =  -554.9585  
+
+Computing standard errors:
+
+Mixed-effects REML regression                   Number of obs     =        240
+Group variable: id                              Number of groups  =         30
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =     240.49
+Log restricted-likelihood =  -554.9585          Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        week |    .905583   .0587216    15.42   0.000     .7904907    1.020675
+           x |   1.349992   .4945007     2.73   0.006     .3807886    2.319196
+       _cons |   10.16241   .6091009    16.68   0.000     8.968598    11.35623
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+id: Identity                 |
+                  var(_cons) |   6.614089   1.880311      3.788637    11.54668
+-----------------------------+------------------------------------------------
+               var(Residual) |   4.322562   .4238626       3.56676    5.238519
+------------------------------------------------------------------------------
+LR test vs. linear model: chibar2(01) = 141.53        Prob >= chibar2 = 0.0000
+
+. estat icc
+
+Residual intraclass correlation
+
+------------------------------------------------------------------------------
+                       Level |        ICC   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+                          id |   .6047637   .0725055      .4578056    .7349507
+------------------------------------------------------------------------------
+
+. mixed y week x || id: week
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -511.13867  
+Iteration 1:   log likelihood = -511.13867  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        240
+Group variable: id                              Number of groups  =         30
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =      93.38
+Log likelihood = -511.13867                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        week |   .9096962   .1062156     8.56   0.000     .7015174    1.117875
+           x |   1.834479   .3871913     4.74   0.000     1.075598     2.59336
+       _cons |   9.916394   .4141028    23.95   0.000     9.104767    10.72802
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+id: Independent              |
+                   var(week) |   .2804485   .0834461      .1565244    .5024861
+                  var(_cons) |   2.513881   .9962249      1.156172    5.465967
+-----------------------------+------------------------------------------------
+               var(Residual) |   2.422558   .2583017      1.965694    2.985604
+------------------------------------------------------------------------------
+LR test vs. linear model: chi2(2) = 226.18                Prob > chi2 = 0.0000
+
+Note: LR test is conservative and provided only for reference.
+
+. mixed y week x || id: week, covariance(unstructured)
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -510.09183  
+Iteration 1:   log likelihood = -510.09183  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        240
+Group variable: id                              Number of groups  =         30
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =      86.43
+Log likelihood = -510.09183                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        week |    .909881   .1123945     8.10   0.000     .6895918     1.13017
+           x |   1.856244   .3862536     4.81   0.000     1.099201    2.613287
+       _cons |   9.905342   .4323834    22.91   0.000     9.057886     10.7528
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+id: Unstructured             |
+                   var(week) |   .3221125   .0980983      .1773279    .5851108
+                  var(_cons) |   3.012775   1.162597      1.414155     6.41854
+             cov(week,_cons) |   -.329725   .2614931      -.842242    .1827919
+-----------------------------+------------------------------------------------
+               var(Residual) |   2.374703   .2503435      1.931412    2.919738
+------------------------------------------------------------------------------
+LR test vs. linear model: chi2(3) = 228.27                Prob > chi2 = 0.0000
+
+Note: LR test is conservative and provided only for reference.
+
+. mixed y week x || id: week, covariance(unstructured) stddeviations
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -510.09183  
+Iteration 1:   log likelihood = -510.09183  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        240
+Group variable: id                              Number of groups  =         30
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =      86.43
+Log likelihood = -510.09183                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        week |    .909881   .1123945     8.10   0.000     .6895918     1.13017
+           x |   1.856244   .3862536     4.81   0.000     1.099201    2.613287
+       _cons |   9.905342   .4323834    22.91   0.000     9.057886     10.7528
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+id: Unstructured             |
+                    sd(week) |   .5675495   .0864226      .4211032    .7649253
+                   sd(_cons) |   1.735735   .3349007      1.189183    2.533484
+            corr(week,_cons) |   -.334707   .2069922     -.6668233    .1083346
+-----------------------------+------------------------------------------------
+                sd(Residual) |   1.541007   .0812272      1.389752    1.708724
+------------------------------------------------------------------------------
+LR test vs. linear model: chi2(3) = 228.27                Prob > chi2 = 0.0000
+
+Note: LR test is conservative and provided only for reference.
+
+. ereturn list
+
+scalars:
+               e(rank) =  7
+                e(k_f) =  3
+                e(k_r) =  4
+                  e(k) =  7
+               e(k_rs) =  3
+               e(k_rc) =  1
+              e(k_res) =  0
+          e(converged) =  1
+                 e(ll) =  -510.0918342855911
+               e(ll_c) =  -624.2271150819402
+               e(df_c) =  3
+             e(chi2_c) =  228.2705615926981
+                e(p_c) =  3.27139187497e-49
+                  e(N) =  240
+           e(nrgroups) =  1
+                 e(rc) =  0
+               e(df_m) =  2
+               e(chi2) =  86.43466239048877
+                  e(p) =  1.70196858391e-19
+              e(small) =  0
+
+macros:
+            e(cmdline) : "mixed y week x || id: week, covariance(unstructured) stddeviations"
+  e(datasignaturevars) : "y week x id"
+      e(datasignature) : "240:4:4231369698:639746382"
+           e(chi2type) : "Wald"
+         e(rstructlab) : "Independent"
+         e(rstructure) : "independent"
+          e(estat_cmd) : "mixed_estat"
+            e(predict) : "mixed_p"
+              e(redim) : "2"
+              e(ivars) : "id"
+           e(vartypes) : "Unstructured"
+             e(revars) : "week _cons"
+                e(cmd) : "mixed"
+              e(title) : "Mixed-effects ML regression"
+          e(technique) : "nr"
+          e(ml_method) : "d0"
+                e(opt) : "moptimize"
+             e(method) : "ML"
+          e(optmetric) : "matsqrt"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 7
+                  e(V) :  7 x 7
+              e(g_max) :  1 x 1
+              e(g_avg) :  1 x 1
+              e(g_min) :  1 x 1
+                e(N_g) :  1 x 1
+
+functions:
+             e(sample)   
+
+. predict yf, fitted
+
+. predict re, reffects
+too few variables specified
+you must specify 2 new variable(s)
+r(102);
+
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
+  log type:  text
+ closed on:  15 Oct 2026, 11:22:12
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

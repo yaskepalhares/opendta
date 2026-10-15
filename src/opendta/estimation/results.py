@@ -94,6 +94,22 @@ def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
     s._estimates = est
 
 
+def datasignature(s: "Session", varnames: list[str], sample: np.ndarray) -> str:
+    """e(datasignature): "N:k:checksum1:checksum2". Stata's checksum algorithm is undocumented;
+    OpenDTA uses two CRC-32 sums of the values (tools/compare.py ignores the checksums)."""
+    import zlib
+    m = np.asarray(sample, dtype=bool)
+    c1 = c2 = 0
+    for name in varnames:
+        v = s.data.get(name)
+        vals = v.data[m]
+        raw = "\x00".join(vals.tolist()).encode() if v.is_string else \
+            np.ascontiguousarray(vals, dtype=np.float64).tobytes()
+        c1 = zlib.crc32(name.encode() + raw, c1)
+        c2 = zlib.adler32(raw, c2)
+    return f"{int(m.sum())}:{len(varnames)}:{c1}:{c2}"
+
+
 def current(s: "Session") -> Estimates:
     from ..core.errors import StataError
     est = getattr(s, "_estimates", None)
@@ -128,7 +144,7 @@ def level_text(level: float) -> str:
 def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df: float | None,
                level: float, vcetype: str = "", coef_title: str = "Coef.",
                footer: bool = True, eq_headers: bool = False, eform: bool = False,
-               top_line: str | None = None) -> None:
+               top_line: str | None = None, depvar_left: bool = False) -> None:
     out = s.output
     lv = level_text(level)
     ci = f"[{lv}% Conf. Interval]"
@@ -142,7 +158,9 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."
         out.write(f"{'':>12} |" + " " * max(start - 14, 1) + lab + "\n", "text")
     stat_h = "t    P>|t|" if stat == "t" else "z    P>|z|"
-    out.write(f"{abbrev(depvar):>12} | {coef_title:>10}   Std. Err.      {stat_h}     {ci:>20}\n", "text")
+    # depvar_left: dfuller, regress writes "D.w          |" (compat 1101)
+    dep = f"{abbrev(depvar):<13}|" if depvar_left else f"{abbrev(depvar):>12} |"
+    out.write(f"{dep} {coef_title:>10}   Std. Err.      {stat_h}     {ci:>20}\n", "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     c = crit(stat, level, df)
     for r in rows:

@@ -335,8 +335,23 @@ class DesignData:
         self.u_inv = self.u_inv.ravel()
         self.n_strata = len(self.h_ids)
         self.n_psu = int(self.u_inv.max()) + 1 if self.n else 0
+        # design degrees of freedom (compat 0603): replicate weights without a design, number of
+        # replicates - 1; BRR, also number of replicates - 1 (4 Hadamard replicates: df 3);
+        # bootstrap and SDR replicate weights: no design df (normal-based intervals)
+        self.normal = bool(self.rep is not None and self.vce in ("bootstrap", "sdr"))
         if self.rep is not None and not d.psu and not d.strata:
-            self.df = self.rep.shape[1] - 1     # VERIFY: df with replicate weights
+            self.df = self.rep.shape[1] - 1
+        elif self.vce == "brr":
+            nrep = None
+            if self.rep is not None:
+                nrep = self.rep.shape[1]
+            elif self.hadamard:
+                from ..commands.matrix import get_matrix
+                try:
+                    nrep = np.asarray(get_matrix(s, str(self.hadamard).strip()).data).shape[0]
+                except StataError:
+                    nrep = None
+            self.df = (nrep - 1) if nrep else self.n_psu - self.n_strata     # VERIFY with brrweight()
         else:
             self.df = self.n_psu - self.n_strata
         if d.dof:
@@ -592,7 +607,10 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
     width = 62
     crit = st.t.ppf(1 - (1 - level / 100) / 2, df) if df and df > 0 else st.norm.ppf(1 - (1 - level / 100) / 2)
     out.write("-" * width + "\n", "text")
-    if vcetype:
+    if vcetype == "Bootstrap" and not (df and df > 0):
+        # bootstrap replicate weights: observed value and normal-based interval (compat 0603)
+        out.write(f"{'':>12} |   Observed   Bootstrap         Normal-based\n", "text")
+    elif vcetype:
         start = 28 + (9 - len(vcetype)) // 2
         out.write(f"{'':>12} |" + " " * (start - 14) + vcetype + "\n", "text")
     head = "Over" if over_names else ""
@@ -615,7 +633,7 @@ def _summary_table(s, stat_title: str, labels, vals, se, df, level, vcetype: str
         if e is None or not np.isfinite(e):
             out.write(f"  {g9(b):>9}  {'.':>9}     {'.':>9}   {'.':>9}\n", "result")
             continue
-        if stat_title == "Proportion" and 0 < b < 1:
+        if stat_title == "Proportion" and 0 < b < 1 and vcetype in ("Linearized", ""):
             # CI on the logit scale (proportion's default in Stata 14, VERIFY)
             from scipy.special import expit, logit
             half = crit * e / (b * (1 - b))
@@ -735,7 +753,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
             V, n_rep = dd.rep_variance(lambda ww: compute(ww * inside)[0], vals)
         else:
             V = dd.variance(Z)
-        df = dd.df
+        df = None if dd.normal else dd.df
         vcetype = dd.vcetype
         # variances under SRS for estat effects ([SVY] estat, Methods and formulas)
         _srs = _srs_variances(Z, w, dd, int(est_mask[full].sum()))
@@ -772,14 +790,25 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         if svy:
             pop = float(dd.w[est_mask[full]].sum())
             out.write("\n", "text")
-            out.write(f"Survey: {_TITLES[stat]}\n\n", "text")
             right = [("Number of obs", f"{int(est_mask[full].sum()):,}"), ("Population size", _num(pop))]
             if subpop is not None:
                 right += [("Subpop. no. obs", f"{n_obs:,}"), ("Subpop. size", _num(float(w.sum())))]
             if n_rep:
-                right.append(("Replications", f"{n_rep:,}"))   # VERIFY position
-            right.append(("Design df", f"{df:,}"))
-            left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
+                right.append(("Replications", f"{n_rep:,}"))
+            if df is not None:
+                right.append(("Design df", f"{df:,}"))
+            # replicate weights (compat 0603): jackknife shows the strata but not the PSUs;
+            # bootstrap and SDR show neither, and the title shares the line with Number of obs
+            if dd.rep is not None and dd.normal:
+                left = []
+            elif dd.rep is not None:
+                left = [f"Number of strata = {dd.n_strata:>7,}", ""]
+            else:
+                left = [f"Number of strata = {dd.n_strata:>7,}", f"Number of PSUs   = {dd.n_psu:>7,}"]
+            if left:
+                out.write(f"Survey: {_TITLES[stat]}\n\n", "text")
+            else:
+                left = [f"Survey: {_TITLES[stat]}"]
             for i, (rl, rv) in enumerate(right):
                 lft = left[i] if i < len(left) else ""
                 out.write(f"{lft:<34}{rl:<16}= ", "text")
@@ -816,7 +845,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
         # e() of svy in Stata 14, in ereturn list order (compat 0601)
         k = len(vals)
         n_over = len(groups) if over else 1
-        scalars = [("df_r", float(df))]
+        scalars = [("df_r", float(df) if df is not None else SYS)]
         if subpop is not None:
             scalars += [("N_subpop", float(w.sum())), ("N_sub", float(n_obs))]
         scalars += [("N_strata_omit", 0.0), ("singleton", 0.0), ("census", 0.0),
@@ -858,7 +887,7 @@ def summary_stat(s: "Session", stat: str, args: str, *, svy: bool = False, svyop
                 ("error", Matrix(np.zeros((1, k)), ["r1"], list(cn)))]
         post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx), extra_mats=mats)
         return
-    scalars = [("N", float(n_obs)), ("df_r", float(df))]
+    scalars = [("N", float(n_obs)), ("df_r", float(df) if df is not None else SYS)]
     macros = [("cmd", stat), ("cmdline", f"{stat} {args.strip()}".strip()), ("properties", "b V"),
               ("varlist", " ".join(allv))]
     post(s, est, scalars, macros, np.isin(np.arange(ds.nobs), rows_idx))
