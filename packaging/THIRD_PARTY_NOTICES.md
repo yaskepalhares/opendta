@@ -24,12 +24,13 @@ included in the bundle, in its `*.dist-info` folder inside `Contents/Resources`
 | ReadStat | MIT | https://github.com/WizardMac/ReadStat |
 | pandas | BSD-3-Clause | https://pandas.pydata.org |
 | PyInstaller bootloader | GPL-2.0 with a bootloader exception | https://pyinstaller.org |
+| Inno Setup (Windows installer only) | Inno Setup License | https://jrsoftware.org/isinfo.php |
 
 ## Qt and the LGPL
 
 Qt and PySide6 are used under the GNU Lesser General Public License v3. They are
 shipped as separate, unmodified shared libraries inside the application folder
-(`Contents/Frameworks` on macOS), so they can be replaced by other compatible
+(`Contents/Frameworks` on macOS, `_internal\PySide6` on Windows), so they can be replaced by other compatible
 builds. The source code of Qt is available at https://download.qt.io and the
 source of PySide6 at https://code.qt.io/cgit/pyside/pyside-setup.git. The LGPL
 text is at https://www.gnu.org/licenses/lgpl-3.0.html.

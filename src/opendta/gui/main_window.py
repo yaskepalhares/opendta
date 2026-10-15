@@ -1022,13 +1022,13 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, tr("About OpenDTA"),
                           f"<b>OpenDTA {__version__}</b><br>" + i18n.L(
                               "Do-file interpreter with syntax compatible with Stata 14.<br>"
-                              "© 2026 Yaske Palhares — MIT License.<br>"
+                              "© 2026 OpenDTA contributors — MIT License.<br>"
                               "Stata is a registered trademark of StataCorp LLC;<br>"
                               "OpenDTA is not affiliated with StataCorp.<br>"
                               '<a href="https://github.com/yaskepalhares/opendta">'
                               "github.com/yaskepalhares/opendta</a>",
                               "Interpretador de do-files com sintaxe compatível com o Stata 14.<br>"
-                              "© 2026 Yaske Palhares — licença MIT.<br>"
+                              "© 2026 colaboradores do OpenDTA — licença MIT.<br>"
                               "Stata é marca registrada da StataCorp LLC;<br>"
                               "o OpenDTA não é afiliado à StataCorp.<br>"
                               '<a href="https://github.com/yaskepalhares/opendta">'
