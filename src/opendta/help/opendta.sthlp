@@ -7,6 +7,15 @@ datasets and keeps every change as a command. Type {cmd:help} followed by
 a command name, or click a topic below.
 {p_end}
 
+{title:Basics}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help operators}}=, ==, &, | and the other operators{p_end}
+{p2col :{help functions}}functions for expressions (ln, substr, cond...){p_end}
+{p2col :{help missing}}missing values and how commands use them{p_end}
+{p2col :{help by}}repeat a command for each group ({cmd:bysort}){p_end}
+{p2colreset}{...}
+
 {title:Data files}
 
 {p2colset 5 24 26 2}{...}

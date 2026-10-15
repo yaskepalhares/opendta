@@ -155,6 +155,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 ## Improvements over Stata (throughout the phases)
 
 - [x] Error explanations: after the message and before r(#), one line says what went wrong in the context of the command and another suggests how to fix it (similar names, similar files in the folder, number of observations…). In English or Portuguese, following the interface language; `set hints off` turns them off
+- [x] Explanations for beginners: what went wrong with the data at hand (missing values per variable, string or numeric variables, values of the outcome, contradictions of assert, matrix sizes), why the rule exists, the corrected command (= for ==, egen functions in generate, quotes for text and value labels, bysort, names without spaces or accents...) and a clickable help link; new help pages for operators, functions, missing values and by
 - [x] `set numerics precise`: QR in `regress`, `D.`/`S.` in double, a final Newton step in `ml`/`optimize()`, Richardson extrapolation for numerical derivatives and new variables in double (the default `stata` reproduces Stata's rounding)
 - [ ] Statistical options beyond Stata: `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap*, `logit, firth`
 - [x] Superscript exponents in displayed scientific notation (`1.0000×10¹⁰`, `2.5×10⁻⁵`), keeping the format width; `set superscript off` (or Help → Superscript Exponents) restores Stata's `e+10`. `string()`, macros, `file write`, exports and Mata's `sprintf()`/`strofreal()` always use Stata's form

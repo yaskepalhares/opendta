@@ -11,12 +11,15 @@ from __future__ import annotations
 class StataError(Exception):
     """Error that ends a command and sets _rc."""
 
-    def __init__(self, rc: int, message: str = "", *, hint: str | None = None):
+    def __init__(self, rc: int, message: str = "", *, explain: bool = True, **detail):
         super().__init__(message)
         self.rc = int(rc)
         self.message = message
-        # OpenDTA's own explanation (several lines); without it, core/hints.py tries one
-        self.hint = hint
+        # explain=False: no OpenDTA explanation (errors raised on purpose with `error #`)
+        self.explain = explain
+        # facts the raising code knows and the message does not say (the options a command
+        # accepts...), for the explanation in core/hints
+        self.detail = detail
         # (command name, command text), attached by the interpreter
         self.context: tuple[str, str] | None = None
 

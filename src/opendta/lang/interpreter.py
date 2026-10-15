@@ -482,7 +482,14 @@ class Interpreter:
             out.write(f"{pad}- {raw.strip()}\n", "text", force=True)
             if text.strip() != raw.strip():
                 out.write(f"{pad}= {text.strip()}\n", "text", force=True)
-        self._execute_expanded(text)
+        try:
+            self._execute_expanded(text)
+        except StataError as err:
+            # errors raised before a command runs (prefixes such as by) keep the whole line, for
+            # the explanation
+            if err.context is None:
+                err.context = ("", text.strip())
+            raise
 
     def _tracing(self) -> bool:
         return (self.s.settings.get("trace", "off") == "on"

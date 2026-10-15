@@ -361,15 +361,17 @@ class Session:
 
     def report_error(self, e: StataError, *, show_rc: bool = True) -> None:
         """Error message (as in Stata), OpenDTA's explanation and r(#)."""
-        lines: list[str] = []
+        hint: list[tuple[str, str]] = []
         if self.settings.get("hints", "on") == "on":
-            from .core.hints import explain
+            from .core.hints import explain, render
             try:
-                lines = explain(e, self)
+                expl = explain(e, self)
+                if expl is not None:
+                    hint = render(expl, int(float(self.settings.get("linesize", 80))) - 1)
             except Exception:  # noqa: BLE001 - an explanation never brings down the original error
-                lines = []
+                hint = []
         from .i18n import translate_error
-        self.output.error(translate_error(e.message), e.rc, show_rc=show_rc, hints=lines)
+        self.output.error(translate_error(e.message), e.rc, show_rc=show_rc, hint=hint)
 
     def run_command(self, line: str) -> int:
         """Command typed in the Command window: echo '. line' and run."""

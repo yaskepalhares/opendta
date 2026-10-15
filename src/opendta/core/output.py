@@ -64,15 +64,14 @@ class Output:
             self.newline(force=force)
 
     def error(self, message: str, rc: int, *, show_rc: bool = True,
-              hints: list[str] | None = None) -> None:
+              hint: list[tuple[str, str]] = ()) -> None:
         """Error message and r(#); — shown even under quietly (but not
-        under capture). `hints`: OpenDTA's explanation, between the two."""
+        under capture). `hint`: OpenDTA's explanation as (text, style) pieces, between the two."""
         self.ensure_line_start(force=True)
         if message:
             self.write(message + "\n", "error", force=True)
-        for k, line in enumerate(hints or []):
-            prefix = "  \u2192 " if k == 0 else "    "
-            self.write(prefix + line + "\n", "hint", force=True)
+        for text, style in hint:
+            self.write(text, style, force=True)
         if show_rc:
             self.write(f"r({rc});\n", "error", force=True)
 

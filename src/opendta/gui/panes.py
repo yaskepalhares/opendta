@@ -34,10 +34,15 @@ def monospace_font(prefs: Preferences | None = None) -> QFont:
 # ---------------------------------------------------------------------------
 
 class ResultsView(QPlainTextEdit):
+    """Results window. Text in the "hint_link" style (the "help topic" of an error explanation)
+    is a link: clicking it emits linkActivated with that command."""
+
     MAX_SEGMENTS = 200_000
+    linkActivated = Signal(str)
 
     def __init__(self, scheme: ResultsScheme = STANDARD):
         super().__init__()
+        self.viewport().setMouseTracking(True)
         self.setReadOnly(True)
         self.setUndoRedoEnabled(False)
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
@@ -56,6 +61,9 @@ class ResultsView(QPlainTextEdit):
             fmt.setForeground(QColor(color))
             if style in scheme.bold:
                 fmt.setFontWeight(QFont.Weight.Bold)
+            if style == "hint_link":
+                fmt.setFontUnderline(True)
+                fmt.setAnchor(True)
             self._formats[style] = fmt
         if self._segments:
             segments, self._segments = self._segments, []
@@ -73,9 +81,24 @@ class ResultsView(QPlainTextEdit):
             del self._segments[: len(self._segments) // 2]
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(text, self._formats.get(style, self._formats["text"]))
+        fmt = self._formats.get(style, self._formats["text"])
+        if style == "hint_link":
+            fmt = QTextCharFormat(fmt)
+            fmt.setAnchorHref(text)
+        cursor.insertText(text, fmt)
         self.setTextCursor(cursor)
         self.ensureCursorVisible()
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        over = bool(self.anchorAt(event.position().toPoint()))
+        self.viewport().setCursor(Qt.CursorShape.PointingHandCursor if over else Qt.CursorShape.IBeamCursor)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        super().mouseReleaseEvent(event)
+        href = self.anchorAt(event.position().toPoint())
+        if href and event.button() == Qt.MouseButton.LeftButton and not self.textCursor().hasSelection():
+            self.linkActivated.emit(href)
 
 
 # ---------------------------------------------------------------------------
