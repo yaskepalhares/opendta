@@ -718,11 +718,11 @@ def cmd_dfuller(s: "Session", args: str) -> None:
     pval = None
     if not o.get("drift"):
         pval = mackinnon_p(tau, kind)
-        out.write(f"MacKinnon approximate p-value for Z(t) = ", "text")
+        out.write("MacKinnon approximate p-value for Z(t) = ", "text")
         out.write(f"{pval:.4f}\n", "result")
     else:
         pval = float(st.t.cdf(tau, n - k))
-        out.write(f"p-value for Z(t) = ", "text")
+        out.write("p-value for Z(t) = ", "text")
         out.write(f"{pval:.4f}\n", "result")
     if o.get("regress"):
         se = np.sqrt(np.diag(V))

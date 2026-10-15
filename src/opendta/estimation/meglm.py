@@ -30,7 +30,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top
 from . import fvars
-from .mixed import (_cov_kind, Level, _p_chibar, build_levels, estat_icc, estat_recov, group_header,
+from .mixed import (Level, _p_chibar, build_levels, estat_icc, estat_recov, group_header,
                     lr_line, split_levels)
 from .ml import maximize, print_log
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
