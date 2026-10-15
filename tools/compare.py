@@ -26,6 +26,7 @@ import difflib
 import os
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,24 +127,65 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     return outdir / (dofile.stem + ".log")
 
 
-_IGNORE = re.compile(r"^ignore\(/(.*?)/\)\s*(.*)$")
+_LIMIT = re.compile(r"^(ignore\(/(.*?)/\)|tolerance\(([0-9.eE+-]+)\))\s*")
 
 
-def _known_differences() -> dict[str, tuple[str, re.Pattern | None]]:
-    """compat/known_differences.txt: cases that may differ, with the reason. A reason that starts
-    with ignore(/REGEX/) limits the tolerance to the lines matching REGEX: they are dropped from
-    both logs and the rest must still be equal."""
+@dataclass
+class Known:
+    """A known difference: the reason and, optionally, its limits. ignore(/REGEX/) drops the
+    lines matching REGEX from both logs; tolerance(REL) accepts numbers that differ by at most
+    REL relative to the larger of |a|, |b| and 1. With limits, the rest of the log must still be
+    equal, so layout regressions are still caught."""
+    why: str
+    ignore: re.Pattern | None = None
+    tol: float | None = None
+
+    def limited(self) -> bool:
+        return self.ignore is not None or self.tol is not None
+
+    def accepts(self, a: list[str], b: list[str]) -> bool:
+        if not self.limited():
+            return True
+        if self.ignore is not None:
+            a = [x for x in a if not self.ignore.search(x)]
+            b = [x for x in b if not self.ignore.search(x)]
+        if len(a) != len(b):
+            return False
+        return all(x == y or _close_line(x, y) or (self.tol is not None and _within(x, y, self.tol))
+                   for x, y in zip(a, b))
+
+
+def _within(a: str, b: str, tol: float) -> bool:
+    # numbers with fewer digits shift the columns: spacing is not compared here
+    if " ".join(_NUM.sub("#", a).split()) != " ".join(_NUM.sub("#", b).split()):
+        return False
+    for x, y in zip(_NUM.findall(a), _NUM.findall(b)):
+        fx, fy = float(x), float(y)
+        if abs(fx - fy) > tol * max(abs(fx), abs(fy), 1.0):
+            return False
+    return True
+
+
+def _known_differences() -> dict[str, Known]:
+    """compat/known_differences.txt: cases that may differ, with the reason. The reason may
+    start with ignore(/REGEX/) and/or tolerance(REL) (see Known)."""
     path = COMPAT / "known_differences.txt"
-    out: dict[str, tuple[str, re.Pattern | None]] = {}
+    out: dict[str, Known] = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.lstrip().startswith("#"):
                 name, _, why = line.strip().partition(" ")
-                m = _IGNORE.match(why.strip())
-                if m:
-                    out[name] = (m.group(2).strip(), re.compile(m.group(1)))
-                else:
-                    out[name] = (why.strip(), None)
+                k = Known(why.strip())
+                while True:
+                    m = _LIMIT.match(k.why)
+                    if not m:
+                        break
+                    if m.group(2) is not None:
+                        k.ignore = re.compile(m.group(2))
+                    else:
+                        k.tol = float(m.group(3))
+                    k.why = k.why[m.end():]
+                out[name] = k
     return out
 
 
@@ -179,12 +221,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  ok {f.stem}")
             passed += 1
         else:
-            why, pat = known.get(f.stem, ("", None))
-            ok_known = f.stem in known and (
-                pat is None or same_logs([x for x in a if not pat.search(x)],
-                                         [x for x in b if not pat.search(x)]))
-            if ok_known:
-                print(f"  ~~ {f.stem:<32} known difference: {why}")
+            k = known.get(f.stem)
+            if k is not None and k.accepts(a, b):
+                print(f"  ~~ {f.stem:<32} known difference: {k.why}")
                 tolerated += 1
             else:
                 print(f"  XX {f.stem}")

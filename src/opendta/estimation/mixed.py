@@ -540,12 +540,15 @@ def _right(out, left: str, lab: str, val: str) -> None:
     out.write(f"{val:>10}\n", "result")
 
 
-def group_header(out, title: str, ginfo, N: float, extra_right=()) -> None:
+def group_header(out, title: str, ginfo, N: float, extra_right=(), *, gv_right: bool = False) -> None:
+    """gv_right: the me commands right-align the group variable ("Group variable:   g",
+    compat 1002); mixed writes it after one space."""
     out.write("\n", "text")
     _right(out, title, "Number of obs", f"{int(N):,}")
     if len(ginfo) == 1:
         var, ng, mn, av, mx = ginfo[0]
-        _right(out, f"Group variable: {var}", "Number of groups", f"{ng:,}")
+        gv = f"Group variable:{var:>16}" if gv_right else f"Group variable: {var}"
+        _right(out, gv, "Number of groups", f"{ng:,}")
         out.write("\n", "text")
         out.write(f"{'':48}Obs per group:\n", "text")
         for lab, val in (("min", f"{mn:,}"), ("avg", f"{av:.1f}"), ("max", f"{mx:,}")):
@@ -799,7 +802,8 @@ def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
         lg = math.log(f0 / (1 - f0))
         lse = se / (f0 * (1 - f0))
         lo, hi = 1 / (1 + math.exp(-(lg - z * lse))), 1 / (1 + math.exp(-(lg + z * lse)))
-        lab = "|".join(lv.var for lv in levels[:k + 1])
+        # the innermost level first: class|school (compat 1001)
+        lab = "|".join(lv.var for lv in reversed(levels[:k + 1]))
         _re_row(out, lab, f0, se, lo, hi)
         res[k] = (f0, se)
     out.write("-" * 78 + "\n", "text")

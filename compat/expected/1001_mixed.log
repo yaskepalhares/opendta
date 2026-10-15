@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
   log type:  text
- opened on:  15 Oct 2026, 11:22:11
+ opened on:  15 Oct 2026, 12:09:54
 
 . * Phase 10: mixed (ML, REML, random slopes, covariances, nested levels),
 . * estat icc/group, predict
@@ -15,9 +15,9 @@ number of observations (_N) was 0, now 30
 
 . gen id = _n
 
-. gen u0 = rnormal()*2
+. gen u0 = invnormal(runiform())*2
 
-. gen u1 = rnormal()*.5
+. gen u1 = invnormal(runiform())*.5
 
 . expand 8
 (210 observations created)
@@ -26,7 +26,7 @@ number of observations (_N) was 0, now 30
 
 . gen x = runiform()
 
-. gen y = 10 + u0 + (1 + u1)*week + 2*x + rnormal()*1.5
+. gen y = 10 + u0 + (1 + u1)*week + 2*x + invnormal(runiform())*1.5
 
 . mixed y week x || id:
 
@@ -34,8 +34,8 @@ Performing EM optimization:
 
 Performing gradient-based optimization: 
 
-Iteration 0:   log likelihood = -553.44341  
-Iteration 1:   log likelihood = -553.44341  
+Iteration 0:   log likelihood = -534.75233  
+Iteration 1:   log likelihood = -534.75233  
 
 Computing standard errors:
 
@@ -47,26 +47,26 @@ Group variable: id                              Number of groups  =         30
                                                               avg =        8.0
                                                               max =          8
 
-                                                Wald chi2(2)      =     242.80
-Log likelihood = -553.44341                     Prob > chi2       =     0.0000
+                                                Wald chi2(2)      =     427.15
+Log likelihood = -534.75233                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-        week |    .905594   .0584429    15.50   0.000     .7910481     1.02014
-           x |   1.351292   .4920872     2.75   0.006     .3868188    2.315765
-       _cons |   10.16175    .601409    16.90   0.000     8.983014    11.34049
+        week |   1.029685   .0528046    19.50   0.000     .9261898     1.13318
+           x |   2.343297   .4368143     5.36   0.000     1.487157    3.199437
+       _cons |   10.12385   .6077607    16.66   0.000      8.93266    11.31504
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
   Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
 id: Identity                 |
-                  var(_cons) |   6.378027   1.786462      3.683562    11.04345
+                  var(_cons) |   7.823389   2.133206      4.584558    13.35034
 -----------------------------+------------------------------------------------
-               var(Residual) |   4.281627   .4178672      3.536189    5.184206
+               var(Residual) |   3.493468   .3409284      2.885279    4.229857
 ------------------------------------------------------------------------------
-LR test vs. linear model: chibar2(01) = 141.57        Prob >= chibar2 = 0.0000
+LR test vs. linear model: chibar2(01) = 193.85        Prob >= chibar2 = 0.0000
 
 . mixed y week x || id:, reml
 
@@ -74,8 +74,8 @@ Performing EM optimization:
 
 Performing gradient-based optimization: 
 
-Iteration 0:   log restricted-likelihood =  -554.9585  
-Iteration 1:   log restricted-likelihood =  -554.9585  
+Iteration 0:   log restricted-likelihood = -536.39934  
+Iteration 1:   log restricted-likelihood = -536.39934  
 
 Computing standard errors:
 
@@ -87,26 +87,26 @@ Group variable: id                              Number of groups  =         30
                                                               avg =        8.0
                                                               max =          8
 
-                                                Wald chi2(2)      =     240.49
-Log restricted-likelihood =  -554.9585          Prob > chi2       =     0.0000
+                                                Wald chi2(2)      =     423.10
+Log restricted-likelihood = -536.39934          Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-        week |    .905583   .0587216    15.42   0.000     .7904907    1.020675
-           x |   1.349992   .4945007     2.73   0.006     .3807886    2.319196
-       _cons |   10.16241   .6091009    16.68   0.000     8.968598    11.35623
+        week |   1.029683   .0530571    19.41   0.000     .9256928    1.133673
+           x |    2.34354   .4389372     5.34   0.000     1.483239    3.203841
+       _cons |   10.12374   .6163093    16.43   0.000     8.915797    11.33169
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
   Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
 id: Identity                 |
-                  var(_cons) |   6.614089   1.880311      3.788637    11.54668
+                  var(_cons) |   8.105906   2.244947      4.710419    13.94902
 -----------------------------+------------------------------------------------
-               var(Residual) |   4.322562   .4238626       3.56676    5.238519
+               var(Residual) |   3.526951   .3458363      2.910279    4.274293
 ------------------------------------------------------------------------------
-LR test vs. linear model: chibar2(01) = 141.53        Prob >= chibar2 = 0.0000
+LR test vs. linear model: chibar2(01) = 193.38        Prob >= chibar2 = 0.0000
 
 . estat icc
 
@@ -115,7 +115,7 @@ Residual intraclass correlation
 ------------------------------------------------------------------------------
                        Level |        ICC   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
-                          id |   .6047637   .0725055      .4578056    .7349507
+                          id |   .6968113   .0624429      .5628803    .8039959
 ------------------------------------------------------------------------------
 
 . mixed y week x || id: week
@@ -124,8 +124,8 @@ Performing EM optimization:
 
 Performing gradient-based optimization: 
 
-Iteration 0:   log likelihood = -511.13867  
-Iteration 1:   log likelihood = -511.13867  
+Iteration 0:   log likelihood = -503.74239  
+Iteration 1:   log likelihood = -503.74239  
 
 Computing standard errors:
 
@@ -137,27 +137,27 @@ Group variable: id                              Number of groups  =         30
                                                               avg =        8.0
                                                               max =          8
 
-                                                Wald chi2(2)      =      93.38
-Log likelihood = -511.13867                     Prob > chi2       =     0.0000
+                                                Wald chi2(2)      =     166.03
+Log likelihood = -503.74239                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-        week |   .9096962   .1062156     8.56   0.000     .7015174    1.117875
-           x |   1.834479   .3871913     4.74   0.000     1.075598     2.59336
-       _cons |   9.916394   .4141028    23.95   0.000     9.104767    10.72802
+        week |    1.02985   .0940182    10.95   0.000     .8455773    1.214122
+           x |   2.325151   .3634711     6.40   0.000     1.612761    3.037541
+       _cons |   10.13194    .428705    23.63   0.000      9.29169    10.97218
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
   Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
 id: Independent              |
-                   var(week) |   .2804485   .0834461      .1565244    .5024861
-                  var(_cons) |   2.513881   .9962249      1.156172    5.465967
+                   var(week) |   .2111026   .0654005      .1150238    .3874357
+                  var(_cons) |   3.355847   1.169809      1.694663    6.645397
 -----------------------------+------------------------------------------------
-               var(Residual) |   2.422558   .2583017      1.965694    2.985604
+               var(Residual) |   2.257646   .2354348      1.840305    2.769631
 ------------------------------------------------------------------------------
-LR test vs. linear model: chi2(2) = 226.18                Prob > chi2 = 0.0000
+LR test vs. linear model: chi2(2) = 255.87                Prob > chi2 = 0.0000
 
 Note: LR test is conservative and provided only for reference.
 
@@ -167,8 +167,8 @@ Performing EM optimization:
 
 Performing gradient-based optimization: 
 
-Iteration 0:   log likelihood = -510.09183  
-Iteration 1:   log likelihood = -510.09183  
+Iteration 0:   log likelihood =  -503.6909  
+Iteration 1:   log likelihood =  -503.6909  
 
 Computing standard errors:
 
@@ -180,28 +180,28 @@ Group variable: id                              Number of groups  =         30
                                                               avg =        8.0
                                                               max =          8
 
-                                                Wald chi2(2)      =      86.43
-Log likelihood = -510.09183                     Prob > chi2       =     0.0000
+                                                Wald chi2(2)      =     169.22
+Log likelihood =  -503.6909                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-        week |    .909881   .1123945     8.10   0.000     .6895918     1.13017
-           x |   1.856244   .3862536     4.81   0.000     1.099201    2.613287
-       _cons |   9.905342   .4323834    22.91   0.000     9.057886     10.7528
+        week |   1.029815   .0928708    11.09   0.000     .8477918    1.211839
+           x |   2.328936   .3637312     6.40   0.000     1.616036    3.041837
+       _cons |   10.13025   .4242543    23.88   0.000     9.298726    10.96177
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
   Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
 id: Unstructured             |
-                   var(week) |   .3221125   .0980983      .1773279    .5851108
-                  var(_cons) |   3.012775   1.162597      1.414155     6.41854
-             cov(week,_cons) |   -.329725   .2614931      -.842242    .1827919
+                   var(week) |    .204451   .0669708      .1075886    .3885189
+                  var(_cons) |   3.235271   1.199968      1.563862    6.693033
+             cov(week,_cons) |   .0667669   .2036077     -.3322968    .4658305
 -----------------------------+------------------------------------------------
-               var(Residual) |   2.374703   .2503435      1.931412    2.919738
+               var(Residual) |   2.266806   .2389608      1.843668    2.787056
 ------------------------------------------------------------------------------
-LR test vs. linear model: chi2(3) = 228.27                Prob > chi2 = 0.0000
+LR test vs. linear model: chi2(3) = 255.97                Prob > chi2 = 0.0000
 
 Note: LR test is conservative and provided only for reference.
 
@@ -211,8 +211,8 @@ Performing EM optimization:
 
 Performing gradient-based optimization: 
 
-Iteration 0:   log likelihood = -510.09183  
-Iteration 1:   log likelihood = -510.09183  
+Iteration 0:   log likelihood =  -503.6909  
+Iteration 1:   log likelihood =  -503.6909  
 
 Computing standard errors:
 
@@ -224,28 +224,28 @@ Group variable: id                              Number of groups  =         30
                                                               avg =        8.0
                                                               max =          8
 
-                                                Wald chi2(2)      =      86.43
-Log likelihood = -510.09183                     Prob > chi2       =     0.0000
+                                                Wald chi2(2)      =     169.22
+Log likelihood =  -503.6909                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
            y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-        week |    .909881   .1123945     8.10   0.000     .6895918     1.13017
-           x |   1.856244   .3862536     4.81   0.000     1.099201    2.613287
-       _cons |   9.905342   .4323834    22.91   0.000     9.057886     10.7528
+        week |   1.029815   .0928708    11.09   0.000     .8477918    1.211839
+           x |   2.328936   .3637312     6.40   0.000     1.616036    3.041837
+       _cons |   10.13025   .4242543    23.88   0.000     9.298726    10.96177
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
   Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
 -----------------------------+------------------------------------------------
 id: Unstructured             |
-                    sd(week) |   .5675495   .0864226      .4211032    .7649253
-                   sd(_cons) |   1.735735   .3349007      1.189183    2.533484
-            corr(week,_cons) |   -.334707   .2069922     -.6668233    .1083346
+                    sd(week) |   .4521626   .0740561       .328007    .6233129
+                   sd(_cons) |   1.798686    .333568      1.250545     2.58709
+            corr(week,_cons) |   .0820939   .2578482     -.4024115    .5306728
 -----------------------------+------------------------------------------------
-                sd(Residual) |   1.541007   .0812272      1.389752    1.708724
+                sd(Residual) |   1.505591   .0793578      1.357818    1.669448
 ------------------------------------------------------------------------------
-LR test vs. linear model: chi2(3) = 228.27                Prob > chi2 = 0.0000
+LR test vs. linear model: chi2(3) = 255.97                Prob > chi2 = 0.0000
 
 Note: LR test is conservative and provided only for reference.
 
@@ -260,23 +260,23 @@ scalars:
                e(k_rc) =  1
               e(k_res) =  0
           e(converged) =  1
-                 e(ll) =  -510.0918342855911
-               e(ll_c) =  -624.2271150819402
+                 e(ll) =  -503.690900551034
+               e(ll_c) =  -631.6770811680905
                e(df_c) =  3
-             e(chi2_c) =  228.2705615926981
-                e(p_c) =  3.27139187497e-49
+             e(chi2_c) =  255.9723612341129
+                e(p_c) =  3.34219211937e-55
                   e(N) =  240
            e(nrgroups) =  1
                  e(rc) =  0
                e(df_m) =  2
-               e(chi2) =  86.43466239048877
-                  e(p) =  1.70196858391e-19
+               e(chi2) =  169.2198317584644
+                  e(p) =  1.79630640877e-37
               e(small) =  0
 
 macros:
             e(cmdline) : "mixed y week x || id: week, covariance(unstructured) stddeviations"
   e(datasignaturevars) : "y week x id"
-      e(datasignature) : "240:4:4231369698:639746382"
+      e(datasignature) : "240:4:1312431275:45403066"
            e(chi2type) : "Wald"
          e(rstructlab) : "Independent"
          e(rstructure) : "independent"
@@ -309,14 +309,180 @@ functions:
 
 . predict yf, fitted
 
-. predict re, reffects
+. capture noisily predict re, reffects
 too few variables specified
 you must specify 2 new variable(s)
-r(102);
 
+. predict re1 re0, reffects
+
+. summarize yf re1 re0
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          yf |        240    15.89743    3.856717   7.582098   27.25019
+         re1 |        240    1.49e-09    .4146373   -.847739   .8036433
+         re0 |        240   -8.44e-09    1.556834  -2.850913    2.73841
+
+. 
+. clear
+
+. set seed 1002
+
+. set obs 20
+number of observations (_N) was 0, now 20
+
+. gen school = _n
+
+. gen us = invnormal(runiform())*1.5
+
+. expand 4
+(60 observations created)
+
+. bysort school: gen class = _n
+
+. gen uc = invnormal(runiform())*.8
+
+. expand 6
+(400 observations created)
+
+. gen x = invnormal(runiform())
+
+. gen y = 5 + us + uc + 0.7*x + invnormal(runiform())
+
+. mixed y x || school: || class:
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -753.65484  
+Iteration 1:   log likelihood = -753.65483  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        480
+
+-------------------------------------------------------------
+                |     No. of       Observations per Group
+ Group Variable |     Groups    Minimum    Average    Maximum
+----------------+--------------------------------------------
+         school |         20         24       24.0         24
+          class |         80          6        6.0          6
+-------------------------------------------------------------
+
+                                                Wald chi2(1)      =     215.60
+Log likelihood = -753.65483                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7162221   .0487775    14.68   0.000     .6206201    .8118242
+       _cons |   5.342967   .2239599    23.86   0.000     4.904013     5.78192
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+school: Identity             |
+                  var(_cons) |   .8618976    .318278       .417953    1.777395
+-----------------------------+------------------------------------------------
+class: Identity              |
+                  var(_cons) |   .3947732   .1038419       .235747    .6610728
+-----------------------------+------------------------------------------------
+               var(Residual) |   1.020875   .0721868      .8887578    1.172631
+------------------------------------------------------------------------------
+LR test vs. linear model: chi2(2) = 249.83                Prob > chi2 = 0.0000
+
+Note: LR test is conservative and provided only for reference.
+
+. estat icc
+
+Residual intraclass correlation
+
+------------------------------------------------------------------------------
+                       Level |        ICC   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+                      school |   .3784326    .090443       .222732    .5639979
+                class|school |   .5517654   .0672588      .4194074    .6771748
+------------------------------------------------------------------------------
+
+. estat group
+
+-------------------------------------------------------------
+                |     No. of       Observations per Group
+ Group Variable |     Groups    Minimum    Average    Maximum
+----------------+--------------------------------------------
+         school |         20         24       24.0         24
+          class |         80          6        6.0          6
+-------------------------------------------------------------
+
+. mixed y x || school:
+
+Performing EM optimization: 
+
+Performing gradient-based optimization: 
+
+Iteration 0:   log likelihood = -778.46097  
+Iteration 1:   log likelihood = -778.46097  
+
+Computing standard errors:
+
+Mixed-effects ML regression                     Number of obs     =        480
+Group variable: school                          Number of groups  =         20
+
+                                                Obs per group:
+                                                              min =         24
+                                                              avg =       24.0
+                                                              max =         24
+
+                                                Wald chi2(1)      =     173.69
+Log likelihood = -778.46097                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7122984    .054047    13.18   0.000     .6063683    .8182285
+       _cons |   5.342862   .2239868    23.85   0.000     4.903856    5.781868
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+  Random-effects Parameters  |   Estimate   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+school: Identity             |
+                  var(_cons) |   .9479522    .317328      .4918649    1.826952
+-----------------------------+------------------------------------------------
+               var(Residual) |   1.329799   .0876845      1.168582    1.513257
+------------------------------------------------------------------------------
+LR test vs. linear model: chibar2(01) = 200.22        Prob >= chibar2 = 0.0000
+
+. estat icc
+
+Residual intraclass correlation
+
+------------------------------------------------------------------------------
+                       Level |        ICC   Std. Err.     [95% Conf. Interval]
+-----------------------------+------------------------------------------------
+                      school |    .416179   .0830798      .2672447    .5821703
+------------------------------------------------------------------------------
+
+. predict re, reffects
+
+. predict yf, fitted
+
+. predict r, residuals
+
+. summarize re yf r
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          re |        480   -8.94e-09    .9473501  -1.687963   2.109335
+          yf |        480    5.323881    1.198813   2.389377   8.589589
+           r |        480   -1.68e-09    1.131423  -2.973394   3.513038
+
+. 
 end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/1001_mixed.log
   log type:  text
- closed on:  15 Oct 2026, 11:22:12
+ closed on:  15 Oct 2026, 12:09:55
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

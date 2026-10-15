@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0507_poisson.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:37
+ opened on:  15 Oct 2026, 12:09:39
 
 . * Phase 5b: poisson (offset, exposure, irr, vce) and predict.
 . clear
@@ -215,5 +215,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0507_poisson.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:37
+ closed on:  15 Oct 2026, 12:09:39
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

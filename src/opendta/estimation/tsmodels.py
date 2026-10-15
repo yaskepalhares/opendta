@@ -6,8 +6,7 @@ arima: exact maximum likelihood with the Kalman filter (Harvey's state
 space form, stationary initial covariance), ar() and ma() lag lists or
 arima(p,d,q); OPG variance by default, as in Stata. Stata optimizes with
 BHHH and then BFGS (technique(bhhh 5 bfgs 10)), as OpenDTA does; the step
-sizes are undocumented, so the iteration values may differ, but the maximum
-is the same (VERIFY: compat/do/1101_ts.do).
+sizes are documented only in outline (VERIFY: compat/do/1101_ts.do).
 
 var: OLS equation by equation with the ML covariance of the residuals.
 dfuller: Fuller (1976) critical values interpolated in the number of
@@ -152,12 +151,12 @@ class _ARMA:
 
 
 def _hr_start(e: np.ndarray, ar: list[int], ma: list[int]) -> np.ndarray:
-    """Starting values of the ARMA coefficients by the Hannan-Rissanen regressions: a long
-    autoregression gives the innovations, then e is regressed on its lags and the lagged
-    innovations. VERIFY: Stata's starting values are undocumented."""
+    """Starting values of the ARMA coefficients and of sigma by the Hannan-Rissanen regressions:
+    a long autoregression gives the innovations, then e is regressed on its lags and the lagged
+    innovations. VERIFY: Stata's starting values are undocumented (they match for pure AR)."""
     na, nm = len(ar), len(ma)
     if not na and not nm:
-        return np.zeros(0)
+        return np.zeros(0), float(np.sqrt(np.mean(e * e)))
     n = len(e)
     m = min(max(8, (max(ar) if ar else 0) + (max(ma) if ma else 0)), max(n // 4, 1))
     a = np.zeros(n)
@@ -167,11 +166,14 @@ def _hr_start(e: np.ndarray, ar: list[int], ma: list[int]) -> np.ndarray:
         a[m:] = e[m:] - Z @ c
     start = max([m if nm else 0] + [lg for lg in ar] + [m + lg for lg in ma])
     if start >= n - (na + nm) - 2:
-        return np.zeros(na + nm)
-    cols = [e[start - lg:n - lg] for lg in ar] + [a[start - lg:n - lg] for lg in ma]
-    c, *_ = np.linalg.lstsq(np.column_stack(cols), e[start:], rcond=None)
+        return np.zeros(na + nm), float(np.sqrt(np.mean(e * e)))
+    Z = np.column_stack([e[start - lg:n - lg] for lg in ar] + [a[start - lg:n - lg] for lg in ma])
+    c, *_ = np.linalg.lstsq(Z, e[start:], rcond=None)
+    u = e[start:] - Z @ c
+    # sigma: root mean square of the residuals of that regression (compat 1101: with it, the
+    # iteration 0 of arima y, ar(1 2) is Stata's)
     # keep the start inside the stationary and invertible region
-    return np.clip(c, -0.95, 0.95)
+    return np.clip(c, -0.95, 0.95), float(np.sqrt(np.mean(u * u)))
 
 
 def cmd_arima(s: "Session", args: str) -> None:
@@ -242,7 +244,8 @@ def cmd_arima(s: "Session", args: str) -> None:
 
     beta0 = np.linalg.lstsq(X, y, rcond=None)[0] if k else np.zeros(0)
     res0 = y - X @ beta0
-    b0 = np.concatenate([beta0, _hr_start(res0, ar, ma), [float(np.std(res0)) or 1.0]])
+    arma0, sig0 = _hr_start(res0, ar, ma)
+    b0 = np.concatenate([beta0, arma0, [sig0 or float(np.std(res0)) or 1.0]])
     if not np.isfinite(ll(b0)):
         b0 = np.concatenate([beta0, np.zeros(na + nm), [float(np.std(res0)) or 1.0]])
     kw = dict(maxiter=int(o["iterate"]) if o.get("iterate") else 16000,
@@ -250,21 +253,9 @@ def cmd_arima(s: "Session", args: str) -> None:
               ltol=float(o["ltolerance"]) if o.get("ltolerance") else 1e-7,
               nrtol=float(o["nrtolerance"]) if o.get("nrtolerance") else 1e-5)
     r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **kw)
-    # Newton steps outside the log take the estimates to the maximum (the BFGS approximation
-    # stops up to 1e-4 away from it); the variance needs the Hessian there
-    _llm, gm, Hm = _numderiv(ll, r.b)
-    for _ in range(5):
-        try:
-            bn = r.b - np.linalg.solve(Hm, gm)
-        except np.linalg.LinAlgError:
-            break
-        lln = ll(bn)
-        if not np.isfinite(lln) or lln < r.ll:
-            break
-        r.b, r.ll = bn, lln
-        _llm, gm, Hm = _numderiv(ll, r.b)
-        if abs(float(gm @ np.linalg.solve(Hm, gm))) < 1e-14:
-            break
+    # the estimates are those of the last iteration, as in Stata (compat 1101: with the same
+    # starting values the BHHH log and the estimates match); the variance needs the Hessian there
+    _llm, _gm, Hm = _numderiv(ll, r.b)
     r.H = Hm
     out = s.output
     vce = str(o.get("vce") or ("robust" if o.get("robust") else "opg")).strip().lower()
@@ -569,7 +560,7 @@ def display_var(s: "Session", est: Estimates, *, header: bool = True, table: boo
         _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
         for lab, v, rl, rv in (("Log likelihood", x["ll"], "AIC", x["aic"]), ("FPE", x["fpe"], "HQIC", x["hqic"]),
                                ("Det(Sigma_ml)", x["det"], "SBIC", x["sbic"])):
-            left = f"{lab:<15}= {_g(v, '%9.0g'):>9}"
+            left = f"{lab:<15}= {_g(v, '%9.0g'):>10}"
             _right(out, left, rl, _g(rv, "%9.0g"))
         out.write("\n", "text")
         stat_h = "F" if x["small"] else "chi2"
@@ -577,7 +568,7 @@ def display_var(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("-" * 64 + "\n", "text")
         for dv, mp, rmse, r2, stat, pv in x["eqstats"]:
             out.write(f"{dv[:15]:<15}", "text")
-            out.write(f"{mp:>9}{_g(rmse, '%9.0g'):>12}{r2:>9.4f}{_g(stat, '%9.0g'):>11}{pv:>9.4f}\n", "result")
+            out.write(f"{mp:>8}{_g(rmse, '%8.0g'):>12}{r2:>9.4f}{_g(stat, '%9.0g'):>11}{pv:>9.4f}\n", "result")
         out.write("-" * 64 + "\n\n", "text")
     if table:
         coef_table(s, "", est.rows, stat=est.stat, df=est.df_r, level=level or est.level)
@@ -625,19 +616,19 @@ def cmd_varsoc(s: "Session", args: str) -> None:
     def star(key, i):
         return "*" if best.get(key) == i else " "
     for i, r_ in enumerate(res):
-        line = f"  |{i:>3} | {r_[3]:>8.3f}"
+        # widths and digits from compat 1101 (six significant digits for FPE and the criteria),
+        # each followed by its column for the asterisk
+        line = f"  |{i:>3} | {_g(r_[3], '%8.0g'):>8}"
         if i:
-            lr = f"{LR[i]:.5g}"
-            lr = lr[1:] if lr.startswith("0.") else lr
-            line += f"  {lr:>6}{'*' if lr_best == i else ' '}{K * K:>4}  {pv[i]:5.3f}"
+            line += f"{_g(LR[i], '%7.0g'):>8}{'*' if lr_best == i else ' '}{K * K:>4}{pv[i]:>7.3f}"
         else:
-            line += " " * 22
-        line += f"  {r_[7]:>7.2g}{star('fpe', i)} {r_[4]:>8.4f}{star('aic', i)} " \
-                f"{r_[5]:>8.4f}{star('hqic', i)} {r_[6]:>8.4f}{star('sbic', i)}"   # VERIFY widths
-        out.write(f"{line:<78}|\n", "result")
+            line += " " * 20
+        line += f"{_g(r_[7], '%8.0g'):>9}{star('fpe', i)}{_g(r_[4], '%8.0g'):>9}{star('aic', i)}" \
+                f"{_g(r_[5], '%8.0g'):>9}{star('hqic', i)}{_g(r_[6], '%8.0g'):>9}{star('sbic', i)}"
+        out.write(f"{line} |\n", "result")
     out.write("  +" + "-" * 75 + "+\n", "text")
-    out.write(f"{'Endogenous:':>15}  {' '.join(deps)}\n", "text")
-    out.write(f"{'Exogenous:':>15}  {' '.join(exog + (['_cons'] if constant else []))}\n", "text")
+    out.write(f"{'Endogenous:':>14}  {' '.join(deps)}\n", "text")
+    out.write(f"{'Exogenous:':>14}  {' '.join(exog + (['_cons'] if constant else []))}\n", "text")
     s.r = {"N": float(T), "mlag": float(maxlag)}
 
 
@@ -739,7 +730,12 @@ def cmd_dfuller(s: "Session", args: str) -> None:
         cn.append(f"L{k}D.{names[0]}")
     info = require_ts(ds)
     if o.get("trend"):
-        cols.append(ds.get(info.tvar).data.astype(float))
+        # the trend counts periods from the first observation of the series (compat 1101: with
+        # t = 1, 2, ... Stata's _trend is t - 1; VERIFY when the series starts later)
+        tv = ds.get(info.tvar).data.astype(float)
+        have = touse(s, p) & (yv < SYS)
+        t_first = float(tv[have].min()) if have.any() else 0.0
+        cols.append((tv - t_first) / (info.delta or 1.0))
         cn.append("_trend")
     X = np.column_stack(cols)
     ok = touse(s, p) & (dy < SYS) & np.all(X < SYS, axis=1)

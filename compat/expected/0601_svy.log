@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:41
+ opened on:  15 Oct 2026, 12:09:43
 
 . * Phase 6: svyset, svydescribe, mean/proportion/total/ratio and svy:.
 . clear
@@ -496,5 +496,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0601_svy.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:42
+ closed on:  15 Oct 2026, 12:09:43
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

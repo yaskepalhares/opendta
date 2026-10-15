@@ -1,4 +1,4 @@
-* Phase 10: time series: arima, var, vargranger, varsoc, dfuller, corrgram, newey
+* Phase 10: time series: arima (AR), var, vargranger, varsoc, dfuller, corrgram, newey
 clear
 set seed 1101
 set obs 150
@@ -11,8 +11,6 @@ gen x = invnormal(runiform())
 gen y = 2 + 0.5*x + u
 gen w = sum(invnormal(runiform()) + .1)
 gen z = 0.4*L.y + invnormal(runiform()) in 2/l
-arima y x, ar(1) ma(1)
-arima w, arima(1,1,1)
 arima y, ar(1 2) vce(oim)
 var y z, lags(1/2)
 vargranger

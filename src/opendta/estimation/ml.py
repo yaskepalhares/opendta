@@ -188,6 +188,12 @@ def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.
         b, ll, g, S = bn, fn, gn, Sn
         it += 1
         left -= 1
+        if left == 0:
+            # the switch is announced before the next iteration, even when that iteration is the
+            # last one (compat 1101)
+            stage = (stage + 1) % len(plan)
+            tech, left = plan[stage]
+            log.append((-1, 0.0, f"(switching optimization to {tech.upper()})"))
         if tech == "bhhh":
             B = S.T @ S
             try:
@@ -200,10 +206,6 @@ def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.
             converged = True
             log.append((it, ll, ""))
             break
-        if left == 0:
-            stage = (stage + 1) % len(plan)
-            tech, left = plan[stage]
-            log.append((-1, 0.0, f"(switching optimization to {tech.upper()})"))
     return MLResult(b, ll, g, np.zeros((k, k)), it, converged, log)
 
 

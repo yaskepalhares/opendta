@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0701_graficos.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:44
+ opened on:  15 Oct 2026, 12:09:45
 
 . * Graphics: histogram messages, kdensity with generate(), graph
 . * memory (graph dir/drop/rename), graph export/save/use and errors
@@ -180,5 +180,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0701_graficos.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:48
+ closed on:  15 Oct 2026, 12:09:52
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

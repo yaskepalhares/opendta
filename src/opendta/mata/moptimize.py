@@ -45,6 +45,9 @@ class MoptState:
         self.result: dict = {}
         self.b: np.ndarray | None = None
         self.N = 0
+        # shifts added to the linear indexes while the derivatives of an lf evaluator are taken
+        # with respect to them (see _lf_derivs)
+        self.theta_shift: dict[int, float] = {}
 
     # layout ----------------------------------------------------------------
     def neq(self) -> int:
@@ -85,7 +88,7 @@ class MoptState:
 
     def xb(self, i: int, b: np.ndarray) -> np.ndarray:
         a, z = self.indices(i)
-        v = self.design(i) @ b[a:z]
+        v = self.design(i) @ b[a:z] + self.theta_shift.get(i, 0.0)
         off = self.eq(i)["offset"]
         return v + off if off is not None else v
 
@@ -305,7 +308,7 @@ def _util_xb(eng, v, r):
         a, z = S.indices(i)
         b = _b(v[1])
         if z - a == 1:
-            return real(float(b[a]))
+            return real(float(b[a]) + S.theta_shift.get(i, 0.0))
     return real(S.xb(i, _b(v[1])).reshape(-1, 1))
 
 
@@ -417,11 +420,62 @@ def _evaluate(eng, S: MoptState, M: MV, b: np.ndarray, todo: int):
     return ll, gg, HH, scores
 
 
+def _lf_derivs(eng, S: MoptState, M: MV, b: np.ndarray):
+    """Gradient and Hessian of an lf evaluator from derivatives of each observation's log
+    likelihood with respect to the linear indexes, by central differences, as ml does for
+    linear-form evaluators ([R] ml, Methods and formulas): g = sum_i X_i' dl/dtheta_i and
+    H_ij = X_i' diag(d2l/dtheta_i dtheta_j) X_j. Much more precise than differences of the
+    total log likelihood with respect to b (compat 0408)."""
+    w = S.w()
+    neq = S.neq()
+
+    def lnfj(shift: dict) -> np.ndarray:
+        S.theta_shift = shift
+        try:
+            (x,) = _call(eng, S, M, [real(b.reshape(1, -1)), real(SYS)], 1)
+        finally:
+            S.theta_shift = {}
+        return x.a.astype(np.float64).ravel()
+
+    l0 = lnfj({})
+    hs = {}
+    for i in range(1, neq + 1):
+        th = S.xb(i, b)
+        hs[i] = 1e-4 * (float(np.mean(np.abs(th))) + 1.0)
+    d1, d2 = {}, {}
+    plus, minus = {}, {}
+    for i in range(1, neq + 1):
+        h = hs[i]
+        plus[i], minus[i] = lnfj({i: h}), lnfj({i: -h})
+        d1[i] = (plus[i] - minus[i]) / (2 * h)
+        d2[(i, i)] = (plus[i] - 2 * l0 + minus[i]) / h ** 2
+    for i in range(1, neq + 1):
+        for j in range(i + 1, neq + 1):
+            hi, hj = hs[i], hs[j]
+            v = (lnfj({i: hi, j: hj}) - lnfj({i: hi, j: -hj}) - lnfj({i: -hi, j: hj})
+                 + lnfj({i: -hi, j: -hj})) / (4 * hi * hj)
+            d2[(i, j)] = d2[(j, i)] = v
+    k = b.size
+    g = np.zeros(k)
+    H = np.zeros((k, k))
+    for i in range(1, neq + 1):
+        ai, zi = S.indices(i)
+        Xi = S.design(i)
+        g[ai:zi] = Xi.T @ (w * d1[i])
+        for j in range(1, neq + 1):
+            aj, zj = S.indices(j)
+            H[ai:zi, aj:zj] = (Xi * (w * d2[(i, j)])[:, None]).T @ S.design(j)
+    scores = np.column_stack([S.design(i) * d1[i][:, None] for i in range(1, neq + 1)])
+    return g, (H + H.T) / 2, scores
+
+
 def _obs_scores(eng, S, M, b) -> np.ndarray | None:
     et = S.evaltype.lower().replace("debug", "")
     if et.startswith(("lf1", "lf2", "gf1", "gf2")):
         return _evaluate(eng, S, M, b, 1)[3]
-    if et in ("lf", "lf0", "gf0"):
+    if et == "lf":
+        return _lf_derivs(eng, S, M, b)[2]
+    if et in ("lf0", "gf0"):
         # numerical observation-level scores
         k = b.size
         out = np.zeros((S.N, k))
@@ -463,6 +517,9 @@ def _moptimize(eng, v, r):
         ll = sign * ll
         if todo == 0 or not np.isfinite(ll):
             return ll, None, None
+        if et == "lf":
+            g, H, _sc = _lf_derivs(eng, S, M, b)
+            return ll, sign * g, sign * H
         g = sign * g if g is not None else _num_grad(fval, b, ll)
         if H is not None:
             H = sign * H

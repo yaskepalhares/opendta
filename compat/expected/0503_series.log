@@ -2,7 +2,7 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
   log type:  text
- opened on:  15 Oct 2026, 11:21:42
+ opened on:  15 Oct 2026, 12:09:44
 
 . * Phase 5a: tsset, xtset and time-series operators.
 . clear
@@ -329,5 +329,5 @@ end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/expected/0503_series.log
   log type:  text
- closed on:  15 Oct 2026, 11:21:42
+ closed on:  15 Oct 2026, 12:09:44
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

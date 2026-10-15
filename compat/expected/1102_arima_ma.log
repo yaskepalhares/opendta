@@ -1,0 +1,118 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1102_arima_ma.log
+  log type:  text
+ opened on:  15 Oct 2026, 12:09:39
+
+. * Phase 10: arima with MA terms (Stata's starting values for MA terms are undocumented)
+. clear
+
+. set seed 1101
+
+. set obs 150
+number of observations (_N) was 0, now 150
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 150
+                delta:  1 unit
+
+. gen e = invnormal(runiform())
+
+. gen u = e
+
+. replace u = 0.6*u[_n-1] + e + 0.3*e[_n-1] in 2/l
+(149 real changes made)
+
+. gen x = invnormal(runiform())
+
+. gen y = 2 + 0.5*x + u
+
+. gen w = sum(invnormal(runiform()) + .1)
+
+. gen z = 0.4*L.y + invnormal(runiform()) in 2/l
+(1 missing value generated)
+
+. arima y x, ar(1) ma(1)
+
+(setting optimization to BHHH)
+Iteration 0:   log likelihood = -204.23424  
+Iteration 1:   log likelihood = -202.85132  
+Iteration 2:   log likelihood = -202.66563  
+Iteration 3:   log likelihood = -202.65654  
+Iteration 4:   log likelihood = -202.65591  
+(switching optimization to BFGS)
+Iteration 5:   log likelihood = -202.65586  
+Iteration 6:   log likelihood = -202.65586  
+
+ARIMA regression
+
+Sample:  1 - 150                                Number of obs     =        150
+                                                Wald chi2(3)      =     144.09
+Log likelihood = -202.6559                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           x |   .4699399   .0595824     7.89   0.000     .3531606    .5867192
+       _cons |    2.08972   .1575879    13.26   0.000     1.780854    2.398587
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .3508362   .1390957     2.52   0.012     .0782137    .6234588
+             |
+          ma |
+         L1. |   .3223458   .1517159     2.12   0.034     .0249881    .6197036
+-------------+----------------------------------------------------------------
+      /sigma |   .9329419    .055811    16.72   0.000     .8235543     1.04233
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. arima w, arima(1,1,1)
+
+(setting optimization to BHHH)
+Iteration 0:   log likelihood = -194.83093  
+Iteration 1:   log likelihood = -193.61456  
+Iteration 2:   log likelihood = -193.43961  
+Iteration 3:   log likelihood = -193.42769  
+Iteration 4:   log likelihood = -193.42595  
+(switching optimization to BFGS)
+Iteration 5:   log likelihood = -193.42579  
+Iteration 6:   log likelihood = -193.42577  
+
+ARIMA regression
+
+Sample:  2 - 150                                Number of obs     =        149
+                                                Wald chi2(2)      =       3.38
+Log likelihood = -193.4258                      Prob > chi2       =     0.1845
+
+------------------------------------------------------------------------------
+             |                 OPG
+         D.w |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+w            |
+       _cons |   .0296373   .0917421     0.32   0.747    -.1501738    .2094485
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .6073008   .4919857     1.23   0.217    -.3569735    1.571575
+             |
+          ma |
+         L1. |   -.519023   .5066225    -1.02   0.306    -1.511985    .4739389
+-------------+----------------------------------------------------------------
+      /sigma |   .8861558   .0438751    20.20   0.000     .8001622    .9721493
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/expected/1102_arima_ma.log
+  log type:  text
+ closed on:  15 Oct 2026, 12:09:40
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
