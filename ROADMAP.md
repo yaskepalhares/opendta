@@ -67,6 +67,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 
 **3c ✅**
 - [x] `duplicates` (report/examples/list/tag/drop), `isid`, `levelsof`
+- [x] `sample` (percentage or `count`, `if`/`in`, `by()` and the by prefix)
 - [x] `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`
 - `distinct` is not an official command: it is an SSC package and runs through the adopath (phase 2).
 

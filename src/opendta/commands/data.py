@@ -222,6 +222,71 @@ def cmd_keep(s: "Session", args: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# sample
+# ---------------------------------------------------------------------------
+
+@command("sample", byable=True)
+def cmd_sample(s: "Session", args: str) -> None:
+    """sample # [if] [in] [, count by(groupvars)] ([D] sample): simple random sampling without
+    replacement. # is the percentage of observations to keep or, with count, their number.
+    Observations outside if/in are kept; with by() or the by prefix, each group is sampled
+    separately.
+
+    One uniform draw per observation, in the current order; in each group the observations
+    with the smallest draws are kept, and the data keep their order. VERIFY: this order of
+    draws, the rounding of the percentage (to the nearest integer) and the messages are
+    checked in compat/do/0310_sample.do."""
+    from ..core import rng
+    from ..core.grouping import group_ids
+    p = parse_standard(args)
+    if p.weight is not None or p.using is not None:
+        raise StataError(101, "weights not allowed" if p.weight is not None else "using not allowed")
+    text = p.varlist.strip()
+    if not text:
+        raise StataError(198, "invalid syntax")
+    try:
+        num = float(s.eval(text))
+    except StataError:
+        raise StataError(198, "invalid syntax") from None
+    o = match_options(p.options, {"count": 5, "by": 2}) if p.options.strip() else {}
+    count = bool(o.get("count"))
+    if num >= M.SYSMISS:
+        raise StataError(198, "invalid syntax")   # VERIFY
+    if count:
+        if num < 0 or num != int(num):
+            raise StataError(198, f"{text} invalid observation count")   # VERIFY
+    elif not 0 <= num <= 100:
+        raise StataError(198, "percentage must be between 0 and 100")   # VERIFY
+    ds = s.data
+    n = ds.nobs
+    mask = touse(s, p)
+    if isinstance(o.get("by"), str):
+        if s.by_groups is not None:
+            raise StataError(190, "option by() may not be combined with by prefix")   # VERIFY
+        names = unique(expand(ds, str(o["by"])))
+        ids = group_ids(ds, names)[0]
+    elif s.by_groups is not None:
+        ids = np.asarray(s.by_groups.ids, dtype=np.int64)
+    else:
+        ids = np.zeros(n, dtype=np.int64)
+    u = rng.RNG.uniform(n) if n else np.zeros(0)
+    keep = np.ones(n, dtype=bool)
+    cand = np.flatnonzero(mask & (ids >= 0))
+    if len(cand):
+        # within each group, the candidates in increasing order of their draw
+        order = cand[np.lexsort((u[cand], ids[cand]))]
+        g = ids[order]
+        starts = np.flatnonzero(np.r_[True, g[1:] != g[:-1]])
+        sizes = np.diff(np.r_[starts, len(order)])
+        for a, size in zip(starts, sizes):
+            want = min(int(num), size) if count else int(np.floor(num * size / 100 + 0.5))
+            keep[order[a + want:a + size]] = False
+    removed = ds.keep_obs(keep)
+    _note(s, f"({plural(removed, 'observation')} deleted)")
+    s.notify_state()
+
+
+# ---------------------------------------------------------------------------
 # count
 # ---------------------------------------------------------------------------
 
