@@ -163,25 +163,25 @@ def cmd_svydescribe(s: "Session", args: str) -> None:
 
 @command("mean", "mean")
 def cmd_mean(s: "Session", args: str) -> None:
-    from ..estimation.svy import cmd_mean as run
+    from ..estimation.summaries import cmd_mean as run
     run(s, args)
 
 
 @command("proportion", "proportion")
 def cmd_proportion(s: "Session", args: str) -> None:
-    from ..estimation.svy import cmd_proportion as run
+    from ..estimation.summaries import cmd_proportion as run
     run(s, args)
 
 
 @command("total", "total")
 def cmd_total(s: "Session", args: str) -> None:
-    from ..estimation.svy import cmd_total as run
+    from ..estimation.summaries import cmd_total as run
     run(s, args)
 
 
 @command("ratio", "ratio")
 def cmd_ratio(s: "Session", args: str) -> None:
-    from ..estimation.svy import cmd_ratio as run
+    from ..estimation.summaries import cmd_ratio as run
     run(s, args)
 
 
