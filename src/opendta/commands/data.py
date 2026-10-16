@@ -394,7 +394,21 @@ def cmd_sort(s: "Session", args: str) -> None:
     names = unique(expand(ds, p.varlist, allow_empty=False))
     match_options(p.options, {"stable": 6})
     if p.in_:
-        raise StataError(198, "sort ... in is not supported yet")
+        # [D] sort: only the observations in the range are sorted; the dataset is then not
+        # marked as sorted (VERIFY: c(sortlist) after sort ... in)
+        from ..lang.syntax import parse_in
+        lo, hi = parse_in(p.in_, ds.nobs)
+        order = sorting.sort_order(ds, names)
+        sub = np.arange(lo, hi)
+        rank = np.empty(ds.nobs, dtype=np.int64)
+        rank[order] = np.arange(ds.nobs)
+        full = np.arange(ds.nobs)
+        full[sub] = sub[np.argsort(rank[sub], kind="stable")]
+        if not np.all(full == np.arange(ds.nobs)):
+            ds.reorder_obs(full)
+        ds.sortlist = []
+        s.notify_state()
+        return
     sorting.sort(ds, names)
     s.notify_state()
 

@@ -248,8 +248,8 @@ def test_merge_errors(run, files, tmp_path):
     assert run.rc == 9
     run(f'use "{files}/m", clear\nmerge 1:1 nome using "{files}/u"')
     assert run.rc == 111
-    run(f'merge id using "{files}/u"')
-    assert run.rc == 198
+    run(f'merge id using "{files}/u"')       # old syntax: accepted, the data must be sorted
+    assert run.rc in (0, 5)
     run(f'merge 1:1 id using "{d}/nada"')
     assert run.rc == 601
 

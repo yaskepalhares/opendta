@@ -57,10 +57,9 @@ class _Panel:
         from .tsops import panel_info
         self.s = s
         self.pr = _Prep(s, args, {"fe": 2, "re": 2, "pa": 2, "i": 1, "or": 2, "irr": 3, "exposure": 3,
-                                  "offset": 3, "normal": 4, "intpoints": 4, "intmethod": 4})
+                                  "offset": 3, "normal": 4, "intpoints": 4, "intmethod": 4,
+                                  "mle": 3})
         o = self.pr.o
-        if o.get("pa"):
-            raise StataError(198, f"{cmd}, pa not implemented")   # VERIFY
         ds = s.data
         pvar = str(o["i"]).strip() if isinstance(o.get("i"), str) else panel_info(ds)
         if not pvar:
@@ -196,6 +195,91 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
 
 
 # ---------------------------------------------------------------------------
+# xtreg, mle
+# ---------------------------------------------------------------------------
+
+def cmd_xtreg_mle(s: "Session", args: str) -> None:
+    """Random-effects linear model by maximum likelihood ([XT] xtreg, mle): y_it = x_it b + u_i +
+    e_it, u_i ~ N(0, s_u^2), e_it ~ N(0, s_e^2); parameters b, ln s_u and ln s_e."""
+    P = _Panel(s, "xtreg", args)
+    pr = P.pr
+    y, X, inv = P.y, pr.X, P.inv
+    Xc = np.column_stack([X, np.ones(len(y))]) if pr.constant else X
+    k = Xc.shape[1]
+    G = int(inv.max()) + 1
+    T = np.bincount(inv, minlength=G).astype(float)
+
+    def ll_of(Z):
+        kz = Z.shape[1]
+
+        def ll(par):
+            b, lsu, lse = par[:kz], par[kz], par[kz + 1]
+            su2, se2 = math.exp(2 * lsu), math.exp(2 * lse)
+            e = y - Z @ b
+            s1 = np.bincount(inv, weights=e, minlength=G)
+            s2 = np.bincount(inv, weights=e * e, minlength=G)
+            a = su2 / (se2 * (se2 + T * su2))
+            return float(-0.5 * (s2 / se2 - a * s1 * s1 + np.log1p(T * su2 / se2)
+                                 + T * math.log(2 * math.pi * se2)).sum())
+
+        def fun(par, todo):
+            v = ll(par)
+            if todo == 0:
+                return v, None, None
+            g = _num_grad(ll, par)
+            return v, g, num_hess(lambda q: _num_grad(ll, q), par)
+        return fun
+
+    def start(Z):
+        b0, *_ = np.linalg.lstsq(Z, y, rcond=None)
+        e = y - Z @ b0
+        sd = float(np.std(e)) or 1.0
+        return np.concatenate([b0, [math.log(sd / 2), math.log(sd)]])
+
+    out = s.output
+    from .ml import print_log
+    one = np.ones((len(y), 1))
+    r0 = pr.maximize(ll_of(one), start(one)) if pr.constant else None
+    res = pr.maximize(ll_of(Xc), start(Xc))
+    if not pr.o.get("nolog"):
+        if r0 is not None:
+            out.write("\nFitting constant-only model:\n", "text")
+            print_log(out, r0, "log likelihood")
+        out.write("\nFitting full model:\n", "text")
+        print_log(out, res, "log likelihood")
+    V = np.linalg.inv(-res.H)
+    from .results import crit
+    c = crit("z", pr.smp.level, None)
+    lsu, lse = float(res.b[k]), float(res.b[k + 1])
+    se_su, se_se = float(np.sqrt(V[k, k])), float(np.sqrt(V[k + 1, k + 1]))
+    su, se_ = math.exp(lsu), math.exp(lse)
+    rho = su ** 2 / (su ** 2 + se_ ** 2)
+    # rho: delta method from (ln s_u, ln s_e); interval on the logit scale (VERIFY)
+    grad = np.array([2 * rho * (1 - rho), -2 * rho * (1 - rho)])
+    se_rho = float(math.sqrt(grad @ V[k:k + 2, k:k + 2] @ grad))
+    lr = math.log(rho / (1 - rho)) if 0 < rho < 1 else 0.0
+    se_lr = se_rho / (rho * (1 - rho)) if 0 < rho < 1 else 0.0
+    aux = [CoefRow("sep"),
+           CoefRow("aux", "/sigma_u", su, su * se_su, eq=f"{math.exp(lsu - c * se_su)} {math.exp(lsu + c * se_su)}"),
+           CoefRow("aux", "/sigma_e", se_, se_ * se_se, eq=f"{math.exp(lse - c * se_se)} {math.exp(lse + c * se_se)}"),
+           CoefRow("aux", "rho", rho, se_rho,
+                   eq=f"{1 / (1 + math.exp(-(lr - c * se_lr)))} {1 / (1 + math.exp(-(lr + c * se_lr)))}")]
+    # LR test of sigma_u = 0 against the pooled regression
+    b_ols, *_ = np.linalg.lstsq(Xc, y, rcond=None)
+    rss = float(((y - Xc @ b_ols) ** 2).sum())
+    n = len(y)
+    ll_ols = -0.5 * n * (math.log(2 * math.pi * rss / n) + 1)
+    chib = max(2 * (res.ll - ll_ols), 0.0)
+    pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
+    lr0 = r0.ll if r0 is not None else None
+    _finish(s, P, "xtreg", args, res.b, V, res, ["/sigma_u", "/sigma_e"], "Random-effects ML regression",
+            "Random effects u_i ~ Gaussian", np.ones(len(y), bool),
+            chibar=("LR test of sigma_u=0", chib, pchib), aux_rows=aux, lr0=lr0)
+    s.e["model"] = "ml"
+    s.e["sigma_u"], s.e["sigma_e"], s.e["rho"] = su, se_, rho
+
+
+# ---------------------------------------------------------------------------
 # xtpoisson
 # ---------------------------------------------------------------------------
 
@@ -203,6 +287,9 @@ def cmd_xtpoisson(s: "Session", args: str) -> None:
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
         replay(s, "xtpoisson", args)
+        return
+    from .xtgee import run_pa
+    if run_pa(s, "xtpoisson", args):
         return
     P = _Panel(s, "xtpoisson", args)
     pr = P.pr
@@ -330,6 +417,9 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
         replay(s, "xtlogit", args)
+        return
+    from .xtgee import run_pa
+    if run_pa(s, "xtlogit", args):
         return
     P = _Panel(s, "xtlogit", args)
     pr = P.pr

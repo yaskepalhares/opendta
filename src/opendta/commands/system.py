@@ -76,14 +76,14 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
     from ..core import rng
     v = value.strip()
     if name == "rng":
-        # VERIFY: kiss32 (generator of Stata 13 and earlier) not implemented
-        if v not in ("default", "mt64"):
-            raise StataError(198, f"rng {v} not available")
+        if v not in ("default", "mt64", "kiss32"):
+            raise StataError(198, f"rng {v} not available")   # VERIFY message
         s.settings["rng"] = v
+        rng.use("kiss32" if v == "kiss32" else "mt64")
         return
-    if v.startswith("X"):
+    if v.startswith(("X", "K")):
         try:
-            rng.RNG.set_state(v)
+            rng._GENERATORS["kiss32" if v.startswith("K") else "mt64"].set_state(v)
         except ValueError:
             raise StataError(198, "invalid seed state")   # VERIFY
         return

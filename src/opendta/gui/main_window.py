@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
     def __init__(self, session: Session | None = None):
         super().__init__()
         self.session = session or Session()
+        self.session.input_provider = self._request_input
         self.prefs = Preferences()
         from .update_dialog import UpdateController
         self.updates = UpdateController(self)
@@ -428,6 +429,12 @@ class MainWindow(QMainWindow):
             QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
         """)
+
+    def _request_input(self) -> str | None:
+        """display ..., _request(): the typed line, or None if cancelled."""
+        from PySide6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(self, "OpenDTA", tr("Input requested by display:"))
+        return text if ok else None
 
     # -- actions ---------------------------------------------------------------
     def run_commands(self, text: str) -> None:

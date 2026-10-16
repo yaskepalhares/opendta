@@ -3,6 +3,8 @@ and instrumental variables: ivregress 2sls ([R] ivregress)."""
 
 from __future__ import annotations
 
+import math
+
 import re
 from typing import TYPE_CHECKING
 
@@ -96,7 +98,15 @@ def cmd_xtreg(s: "Session", args: str) -> None:
     if not args.strip() or args.strip().startswith(","):
         replay(s, "xtreg", args)
         return
-    smp = Sample(s, args, opts_spec={"fe": 2, "re": 2, "be": 2, "mle": 3, "i": 1, "sa": 2},
+    from .xtgee import run_pa
+    if run_pa(s, "xtreg", args):
+        return
+    from .xtgee import has_option
+    if has_option(args, "mle"):
+        from .panel2 import cmd_xtreg_mle
+        cmd_xtreg_mle(s, args)
+        return
+    smp = Sample(s, args, opts_spec={"fe": 2, "re": 2, "be": 2, "mle": 3, "i": 1, "sa": 2, "wls": 3},
                  weights=("aweight", "fweight", "pweight"))
     o = smp.o
     ds = s.data
@@ -125,7 +135,63 @@ def cmd_xtreg(s: "Session", args: str) -> None:
     elif model == "re":
         _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar)
     else:
-        raise StataError(198, "xtreg, be not yet supported by OpenDTA")   # VERIFY
+        _xtreg_be(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar)
+
+
+def _xtreg_be(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
+    """Between estimator: OLS of the panel means of y on the panel means of x ([XT] xtreg;
+    wls weights each panel by its number of observations)."""
+    if smp.vce in ("robust", "cluster"):
+        raise StataError(198, "option vce() not allowed")   # VERIFY
+    yb = _group_means(y, inv, counts)
+    Xb = np.column_stack([_group_means(Xs[:, j], inv, counts) for j in range(k)] + [np.ones(G)])
+    wg = counts.astype(float) if smp.o.get("wls") else np.ones(G)
+    sw = np.sqrt(wg)
+    A = np.linalg.pinv((Xb * wg[:, None]).T @ Xb)
+    b = A @ ((Xb * wg[:, None]).T @ yb)
+    e = (yb - Xb @ b) * sw
+    df_r = G - (k + 1)
+    if df_r <= 0:
+        raise StataError(2001, "insufficient observations")
+    rss = float(e @ e)
+    s2 = rss / df_r
+    if smp.o.get("wls"):
+        s2 = s2 * G / wg.sum()        # VERIFY: scale of the wls variance
+    V = s2 * A
+    V = (V + V.T) / 2
+    F = float(b[:k] @ np.linalg.solve(V[:k, :k], b[:k])) / k if k else SYS
+    pF = float(st.f.sf(F, k, df_r)) if F < SYS else SYS
+    xb_all = Xs @ b[:k]
+    yw = _demean(y, ids, inv, counts)
+    r2_w = float(np.corrcoef(_demean(xb_all, ids, inv, counts), yw)[0, 1] ** 2) if k else 0.0
+    r2_b = float(np.corrcoef(_group_means(xb_all, inv, counts), yb)[0, 1] ** 2) if k else 0.0
+    r2_o = float(np.corrcoef(xb_all, y)[0, 1] ** 2) if k else 0.0
+    names, bf, Vf = _full(smp.cols, True, b, V)
+    bmap, semap = _maps(smp.cols, b, V, True)
+    rows = rows_from_columns(smp.cols, bmap, semap, s.data, constant=True)
+    est = Estimates("xtreg", smp.depname, names, bf, Vf, N, "t", df_r)
+    est.rows = rows
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, True, smp.terms, smp.depcomp
+    est.level = smp.level
+    est.vcetype, est.clustvar, est.n_clust = "", "", None
+    est.model = "be"
+    sd = math.sqrt(s2)
+    est.extra = dict(N=N, G=G, tmin=int(counts.min()), tmax=int(counts.max()), tbar=N / G, r2_w=r2_w,
+                     r2_b=r2_b, r2_o=r2_o, F=F, pF=pF, df_m=k, df_r=df_r, pvar=pvar, sd_ue=sd)
+    est.display = display_xtreg
+    est.predict = _predict_xt
+    est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
+    est.panel = (pvar, ids)
+    scalars = [("N", float(N)), ("N_g", float(G)), ("mss", float(((Xb @ b - yb.mean()) ** 2 * wg).sum())),
+               ("df_m", float(k)), ("rss", rss), ("df_r", float(df_r)), ("r2", r2_b), ("r2_a", SYS),
+               ("F", F), ("rmse", sd), ("r2_w", r2_w), ("r2_o", r2_o), ("r2_b", r2_b),
+               ("g_min", float(counts.min())), ("g_avg", N / G), ("g_max", float(counts.max())),
+               ("Tbar", N / G), ("rank", float(k + 1))]
+    macros = [("cmdline", cmdline("xtreg", args)), ("cmd", "xtreg"), ("depvar", smp.depname),
+              ("ivar", pvar), ("model", "be"), ("title", "Between regression"),
+              ("predict", "xtrefe_p"), ("properties", "b V")]
+    post(s, est, scalars, macros, smp.mask)
+    display_xtreg(s, est)
 
 
 def _drop_within_collinear(smp, Xw, est_cols, out):
@@ -215,6 +281,7 @@ def _xtreg_fe(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
                      sigma_e=sigma_e, rho=rho, F_f=F_f, p_f=p_f, pvar=pvar)
     est.display = display_xtreg
     est.predict = _predict_xt
+    est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
     # e(): names and order observed in Stata 14 (compat 0510)
     tss_w = float(yw @ yw)
     ll = -0.5 * N * (np.log(2 * np.pi) + np.log(rss / N) + 1)
@@ -292,6 +359,7 @@ def _xtreg_re(s, smp, args, y, Xs, est_cols, ids, inv, counts, G, N, k, pvar):
                      pvar=pvar, theta=float(theta_i[0]) if counts.min() == counts.max() else None)
     est.display = display_xtreg
     est.predict = _predict_xt
+    est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
     scalars = [("N", float(N)), ("N_g", float(G)), ("df_m", float(k)), ("sigma_u", sigma_u), ("sigma_e", sigma_e),
                ("r2_w", r2_w), ("r2_o", r2_o), ("r2_b", r2_b), ("chi2", chi2), ("rho", rho),
                ("Tbar", Tbar), ("g_min", float(counts.min())), ("g_avg", N / G), ("g_max", float(counts.max())),
@@ -309,7 +377,8 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
     x = est.extra
     if header:
         out.write("\n", "text")
-        title = "Fixed-effects (within) regression" if est.model == "fe" else "Random-effects GLS regression"
+        title = {"fe": "Fixed-effects (within) regression", "re": "Random-effects GLS regression",
+                 "be": "Between regression (regression on group means)"}[est.model]
         right_top = [("Number of obs", comma(x["N"])), ("Number of groups", comma(x["G"]))]
         left = [title, f"Group variable: {x['pvar']}"]
         for lft, (rl, rv) in zip(left, right_top):
@@ -325,11 +394,13 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
             out.write(" " * (62 - 21) + f"{gl} = ", "text")      # compat 0510
             out.write(f"{gv:>10}\n", "result")
         out.write("\n", "text")
-        if est.model == "fe":
+        if est.model in ("fe", "be"):
             fl = f"F({int(x['df_m'])},{int(x['df_r'])})"
             out.write(f"{'':<48}{fl:<18}= ", "text")
             out.write(f"{g(x['F'], '%10.2f'):>10}\n", "result")
-            out.write(f"{'corr(u_i, Xb)  = ' + format(x['corr'], '.4f'):<48}{'Prob > F':<18}= ", "text")
+            left = ('corr(u_i, Xb)  = ' + format(x['corr'], '.4f')) if est.model == "fe" else \
+                ("sd(u_i + avg(e_i.))= " + format_value(x["sd_ue"], "%9.0g"))
+            out.write(f"{left:<48}{'Prob > F':<18}= ", "text")
             out.write(f"{g(x['pF'], '%10.4f'):>10}\n", "result")
         else:
             fl = f"Wald chi2({int(x['df_m'])})"
@@ -343,6 +414,9 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
     if est.vcetype and est.clustvar:
         out.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                   "text")
+    if est.model == "be":
+        coef_table(s, est.depvar, est.rows, stat=est.stat, df=est.df_r, level=level or est.level)
+        return
     coef_table(s, est.depvar, est.rows, stat=est.stat, df=est.df_r, level=level or est.level,
                vcetype=est.vcetype, footer=False)
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
@@ -360,12 +434,45 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
 
 
 def _predict_xt(s, est, stat, mask):
-    from .postest import xb_all
+    """predict after xtreg: xb, stdp, ue (u_i + e_it), u, e and xbu ([XT] xtreg postestimation).
+    u_i: mean residual of the panel (fe and be) or its shrunken estimate T s_u^2 / (T s_u^2 + s_e^2)
+    times the mean residual (re; VERIFY)."""
+    from .postest import design_all, xb_all
     xb, ok = xb_all(s, est)
     if stat in ("", "xb"):
         note = "(option xb assumed; fitted values)" if not stat else ""
         return np.where(ok, xb, SYS), note
-    raise StataError(198, f"option {stat} not yet supported by OpenDTA")
+    if stat == "stdp":
+        X, _ = design_all(s, est)
+        return np.where(ok, np.sqrt(np.maximum(np.einsum("ij,jk,ik->i", X, est.V, X), 0)), SYS), ""
+    if stat not in ("ue", "u", "e", "xbu"):
+        raise StataError(198, f"option {stat} not allowed")
+    ds = s.data
+    yv = fvars.comp_values(ds, est.depcomp)
+    pvar = est.extra["pvar"]
+    ids = ds.get(pvar).data
+    smp = ds.esample if getattr(ds, "esample", None) is not None and len(ds.esample) == ds.nobs \
+        else np.ones(ds.nobs, bool)
+    good = ok & (yv < SYS) & (ids < SYS)
+    res = np.where(good, yv - xb, 0.0)
+    use = good & smp
+    uniq, inv = np.unique(np.where(ids < SYS, ids, -1e300), return_inverse=True)
+    tot = np.bincount(inv, weights=np.where(use, res, 0.0), minlength=len(uniq))
+    cnt = np.bincount(inv, weights=use.astype(float), minlength=len(uniq))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        u = np.where(cnt > 0, tot / cnt, 0.0)
+    if est.model == "re":
+        su2, se2 = est.extra["sigma_u"] ** 2, est.extra["sigma_e"] ** 2
+        with np.errstate(invalid="ignore", divide="ignore"):
+            u = u * (cnt * su2 / (cnt * su2 + se2))
+    ui = u[inv]
+    if stat == "ue":
+        return np.where(good, yv - xb, SYS), ""
+    if stat == "u":
+        return np.where(ok & (ids < SYS) & (cnt[inv] > 0), ui, SYS), ""
+    if stat == "e":
+        return np.where(good & (cnt[inv] > 0), yv - xb - ui, SYS), ""
+    return np.where(ok & (ids < SYS) & (cnt[inv] > 0), xb + ui, SYS), ""
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +551,7 @@ def cmd_areg(s: "Session", args: str) -> None:
                      F_abs=F_abs, p_abs=p_abs, avar=avar)
     est.display = display_areg
     est.predict = _predict_xt
+    est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
     scalars = [("N", float(N)), ("tss", tss), ("df_m", float(k)), ("rss", rss), ("df_r", float(df_r)),
                ("r2", r2), ("r2_a", r2_a), ("F", F), ("rmse", np.sqrt(s2)), ("df_a", float(G - 1)),
                ("F_absorb", F_abs), ("rank", float(k + 1))]
@@ -568,6 +676,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
                      insts=" ".join([c.name for c in ex_cols] + [c.name for c in Zc]))
     est.display = display_iv
     est.predict = _predict_xt
+    est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
     r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
     est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
     # e(): order observed in Stata 14 with small (compat 0510); without small, VERIFY

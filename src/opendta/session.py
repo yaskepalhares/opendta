@@ -165,6 +165,9 @@ class Session:
         self.rc = 0
         self.settings: dict[str, str] = dict(DEFAULT_SETTINGS)
         self.version = 14.0
+        # display ..., _request(): who supplies the typed line (the window sets a dialog; the
+        # console and batch mode read standard input)
+        self.input_provider = None
         self.data = Dataset()
         from .core import rng
         rng.reset(int(self.settings["seed"]))
@@ -305,7 +308,7 @@ class Session:
             "seed": _rng_state(),
             "rngstate": _rng_state(),
             "rng": self.settings.get("rng", "default"),
-            "rng_current": "mt64",
+            "rng_current": __import__("opendta.core.rng", fromlist=["current"]).current(),
             "alpha": "a b c d e f g h i j k l m n o p q r s t u v w x y z",
             "ALPHA": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z",
             "Mons": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
@@ -358,6 +361,18 @@ class Session:
             self.set_rc(e.rc)
             return e.rc
         return 0
+
+    def request_line(self) -> str:
+        """A line typed by the user, for display _request()."""
+        if self.input_provider is not None:
+            text = self.input_provider()
+            if text is None:
+                raise StataError(1, "--Break--")   # cancelled: like Break
+            return str(text)
+        try:
+            return input()
+        except EOFError:
+            return ""
 
     def report_error(self, e: StataError, *, show_rc: bool = True) -> None:
         """Error message (as in Stata), OpenDTA's explanation and r(#)."""

@@ -9,7 +9,7 @@
 
 {p 8 16 2}{cmd:xtset} {it:panelvar} [{it:timevar}] [{cmd:,} {opt delta(#)}]{p_end}
 {p 8 16 2}{cmd:tsset} {it:timevar} [{cmd:,} {opt delta(#)}]{p_end}
-{p 8 16 2}{cmd:xtreg} {it:depvar} [{it:indepvars}] [{it:if}] [{it:in}] [{cmd:,} {cmd:re}|{cmd:fe}|{cmd:be}|{cmd:mle} {it:options}]{p_end}
+{p 8 16 2}{cmd:xtreg} {it:depvar} [{it:indepvars}] [{it:if}] [{it:in}] [{cmd:,} {cmd:re}|{cmd:fe}|{cmd:be}|{cmd:mle}|{cmd:pa} {it:options}]{p_end}
 
 {title:Description}
 
@@ -18,13 +18,13 @@
 {p_end}
 
 {pstd}
-{cmd:xtreg} fits random-effects (GLS, the default), fixed-effects (within), between-effects and maximum-likelihood random-effects models. See also {help xtsum}, {help xtdescribe}, {help xtlogit} and {help xtpoisson}.
+{cmd:xtreg} fits random-effects (GLS, the default), fixed-effects (within), between-effects (regression on the panel means; {cmd:wls} weights each panel by its size), maximum-likelihood random-effects and population-averaged ({cmd:pa}, GEE with an exchangeable correlation; see {help xtgee}) models. After {cmd:fe}, {cmd:re} and {cmd:be}, {cmd:predict} offers {cmd:xb}, {cmd:stdp}, {cmd:ue}, {cmd:u}, {cmd:e} and {cmd:xbu}. See also {help xtgee}, {help xtsum}, {help xtdescribe}, {help xtlogit} and {help xtpoisson}.
 {p_end}
 
 {title:Options}
 
 {phang}
-{opt re} {opt fe} {opt be} {opt mle} the estimator.
+{opt re} {opt fe} {opt be} {opt mle} {opt pa} the estimator.
 {p_end}
 
 {phang}
