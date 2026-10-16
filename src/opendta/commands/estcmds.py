@@ -131,6 +131,18 @@ def cmd_xtgee(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("sem", "sem")
+def cmd_sem(s: "Session", args: str) -> None:
+    from ..estimation.sem import cmd_sem as run
+    run(s, args)
+
+
+@command("irf", "irf")
+def cmd_irf(s: "Session", args: str) -> None:
+    from ..estimation.irf import cmd_irf as run
+    run(s, args)
+
+
 @command("areg", "areg")
 def cmd_areg(s: "Session", args: str) -> None:
     from ..estimation.panel import cmd_areg as run
