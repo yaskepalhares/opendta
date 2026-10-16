@@ -48,6 +48,7 @@ a command name, or click a topic below.
 {p2col :{help recode}}recode and convert ({cmd:encode}, {cmd:destring}, {cmd:split}...){p_end}
 {p2col :{help duplicates}}duplicates, {cmd:isid}, {cmd:levelsof}{p_end}
 {p2col :{help set_seed:set seed}}random numbers{p_end}
+{p2col :{help power}}power and sample size{p_end}
 {p2colreset}{...}
 
 {title:More data management}
@@ -71,6 +72,7 @@ a command name, or click a topic below.
 {p2col :{help glm}}generalized linear models{p_end}
 {p2col :{help tobit}}censored outcomes{p_end}
 {p2col :{help qreg}}quantile regression{p_end}
+{p2col :{help sem}}structural equation models ({cmd:estat gof}){p_end}
 {p2col :{help xtreg}}panel data ({cmd:xtset}, {help xtsum}, {help xtlogit}, {help xtpoisson}, {help xtgee}){p_end}
 {p2col :{help mean}}{cmd:mean}, {cmd:proportion}, {cmd:ratio}, {cmd:total}{p_end}
 {p2col :{help nptests:ranksum}}nonparametric and normality tests{p_end}
@@ -92,6 +94,17 @@ a command name, or click a topic below.
 
 {p2colset 5 24 26 2}{...}
 {p2col :{help svy}}{cmd:svyset}, {cmd:svydescribe} and the {cmd:svy:} prefix{p_end}
+{p2colreset}{...}
+
+{title:Time series, survival, multilevel models and imputation}
+
+{p2colset 5 24 26 2}{...}
+{p2col :{help arima}}ARIMA models; {help newey}, {help dfuller}, {help corrgram}{p_end}
+{p2col :{help var}}vector autoregressions ({cmd:varsoc}, {cmd:vargranger}); {help irf}{p_end}
+{p2col :{help stset}}survival data ({help sts}, {help stsum}, {help stdescribe}){p_end}
+{p2col :{help stcox}}Cox regression; {help streg} parametric models{p_end}
+{p2col :{help mixed}}multilevel linear models; {help melogit}{p_end}
+{p2col :{help mi}}multiple imputation{p_end}
 {p2colreset}{...}
 
 {title:Graphics}

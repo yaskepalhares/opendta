@@ -10,7 +10,7 @@ import numpy as np
 from ..core import missing as M
 from ..core.errors import StataError
 from ..lang import functions as F
-from ..lang.expr import Node, Subscript, Unary, Binary, Call, parse
+from ..lang.expr import Node, Name, Subscript, Unary, Binary, Call, parse
 from ..lang.syntax import Parsed, parse_in
 from ..lang.vexpr import Groups, VectorContext, broadcast, evaluate_vec, is_str, truth
 
@@ -86,7 +86,11 @@ def plural(n: int, word: str, plural_word: str | None = None) -> str:
 
 
 def references_subscript(node: Node, name: str) -> bool:
-    """Does the expression use name[...]? (replace then has to be sequential)."""
+    """Does the expression use name[...] or a time-series operator on name (L.name, D.name...)?
+    replace then has to be sequential: Stata replaces observation by observation, so
+    replace y = 2*L.y uses the values already replaced."""
+    if isinstance(node, Name):
+        return "." in node.name and node.name.rsplit(".", 1)[1] == name
     if isinstance(node, Subscript):
         return node.name == name or (not isinstance(node.index, str) and references_subscript(node.index, name))
     if isinstance(node, Unary):
@@ -110,6 +114,8 @@ class ObsContext:
         ds = self.s.data
         if ds.has(name):
             return ds.get(name).value(self.i)
+        if "." in name:
+            return self._ts_value(name)
         if name in self.s.scalars:
             return self.s.scalars[name]
         if name == "_n":
@@ -117,6 +123,49 @@ class ObsContext:
         if name == "_N":
             return float(self.g.size[self.i])
         return self.s.context.resolve_name(name)
+
+    def _ts_value(self, name: str) -> Any:
+        """L.y, D.y, S12.y... at the current observation, from the current values: the
+        operators are a polynomial in the lag operator (D = 1 - L, S#= 1 - L#, F# = L-#)."""
+        cache = self.__dict__.setdefault("_ts_cache", {})
+        hit = cache.get(name)
+        ds = self.s.data
+        if hit is None:
+            from ..estimation.fvars import _component_alts
+            from ..estimation.tsops import _TSIndex, require_ts
+            comps = _component_alts(ds, name, False)
+            if not comps or len(comps) != 1 or not comps[0].ts:
+                return self.s.context.resolve_name(name)
+            poly = {0: 1.0}
+            for op, k in comps[0].ts:
+                terms = {"L": {k: 1.0}, "F": {-k: 1.0}, "S": {0: 1.0, k: -1.0}}.get(op)
+                reps = 1
+                if op == "D":
+                    terms, reps = {0: 1.0, 1: -1.0}, k
+                if terms is None:
+                    raise StataError(198, f"{op}: unknown operator")
+                for _ in range(reps):
+                    new: dict[int, float] = {}
+                    for a, ca in poly.items():
+                        for b, cb in terms.items():
+                            new[a + b] = new.get(a + b, 0.0) + ca * cb
+                    poly = {o: c for o, c in new.items() if c != 0}
+            info = require_ts(ds)
+            index = _TSIndex(ds, info)
+            srcs = {o: (index.source(o * info.delta) if o else None) for o in poly}
+            hit = cache[name] = (comps[0].var, poly, srcs)
+        var_name, poly, srcs = hit
+        var = ds.get(var_name)
+        total = 0.0
+        for o, c in poly.items():
+            j = self.i if srcs[o] is None else int(srcs[o][self.i])
+            if j < 0:
+                return M.SYSMISS
+            v = var.value(j)
+            if M.is_missing(v):
+                return M.SYSMISS
+            total += c * float(v)
+        return total
 
     def resolve_subscript(self, name: str, index: Any) -> Any:
         ds = self.s.data

@@ -128,6 +128,7 @@ def cmd_predict(s: "Session", args: str) -> None:
     if "time" in stats and len(stats) > 1:
         stats.remove("time")      # "median time", "mean time" (streg)
     est._partial = bool(o.get("partial"))
+    est._pred_opts = o
     if len(stats) > 1:
         raise StataError(198, "only one statistic may be specified")   # VERIFY
     multi = (getattr(est, "predict_multi", None) or {}).get(stats[0] if stats else "")
