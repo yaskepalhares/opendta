@@ -40,9 +40,9 @@ set obs 200
 gen id = ceil(_n/5)
 gen t = mod(_n-1, 5) + 1
 xtset id t
-gen x = round(rnormal(), .01)
+gen x = round(invnormal(runiform()), .01)
 gen u = (mod(id, 7) - 3)/3
-gen y = 1 + .5*x + u + round(rnormal(), .01)
+gen y = 1 + .5*x + u + round(invnormal(runiform()), .01)
 gen yb = runiform() < invlogit(-.3 + .8*x + u)
 gen yc = floor(exp(.2 + .3*x + .5*u) * runiform()*2)
 xtgee y x
