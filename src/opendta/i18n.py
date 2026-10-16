@@ -76,6 +76,7 @@ PT: dict[str, str] = {
     "Copy": "Copiar", "Copy table": "Copiar tabela", "Find...": "Localizar...", "Find": "Localizar",
     "Clear Results": "Limpar Results", "Preferences...": "Preferências...", "Preferences": "Preferências",
     "Find in Results:": "Localizar em Results:",
+    "Input requested by display:": "Entrada pedida pelo display:",
     # Data
     "Describe data": "Descrever os dados", "Data Editor": "Editor de dados",
     "Create or change data": "Criar ou mudar dados", "Create new variable": "Criar variável",

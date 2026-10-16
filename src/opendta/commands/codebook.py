@@ -322,8 +322,94 @@ def cmd_misstable(s: "Session", args: str) -> None:
         _miss_summarize(s, names, mask, o)
     elif full == "patterns":
         _miss_patterns(s, names, mask, o)
+    elif full == "tree":
+        _miss_tree(s, names, mask, o)
     else:
-        raise StataError(198, f"misstable {full} not implemented")   # VERIFY
+        _miss_nested(s, names, mask, o)
+
+
+def _miss_cols(s: "Session", names: list[str], mask: np.ndarray) -> list[tuple[str, np.ndarray]]:
+    """Variables with missing values and their missing masks, most missing first."""
+    ds = s.data
+    cols = [(n, ds.get(n).data[mask] >= SYS) for n in names]
+    cols = [(n, m) for n, m in cols if m.any()]
+    cols.sort(key=lambda c: -int(c[1].sum()))
+    return cols
+
+
+def _miss_tree(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:
+    """misstable tree: the nested pattern of missing values. Each variable splits the
+    observations of the column on its left into missing (first) and not missing (layout
+    VERIFY, case compat 0805)."""
+    out = s.output
+    cols = _miss_cols(s, names, mask)
+    if not cols:
+        out.write("(no missing values)\n", "text")   # VERIFY
+        return
+    N = int(mask.sum())
+    freq = bool(o.get("frequency"))
+    k = len(cols)
+    widths = [max(len(n), 7) for n, _ in cols]
+    rows: list[list[str]] = []
+
+    def walk(sel: np.ndarray, depth: int, row: list[str]) -> None:
+        for missing in (True, False):
+            here = sel & (cols[depth][1] if missing else ~cols[depth][1])
+            c = int(here.sum())
+            txt = f"{c:,}" if freq else f"{100 * c / N:.0f}"
+            row[depth] = txt
+            if depth + 1 < k:
+                walk(here, depth + 1, row)
+            else:
+                rows.append(list(row))
+            row[:] = [""] * k
+
+    walk(np.ones(N, dtype=bool), 0, [""] * k)
+    if not freq and rows:
+        rows[0] = [x + "%" if x else x for x in rows[0]]
+    total = sum(widths) + 3 * k + 4
+    out.write("\n" + " " * 4 + "Nested pattern of missing values\n", "text")
+    out.write(" " * 4 + "".join(f"{n:>{w}}   " for (n, _), w in zip(cols, widths)).rstrip() + "\n", "text")
+    out.write("-" * total + "\n", "text")
+    for r in rows:
+        out.write(" " * 4 + "".join(f"{x:>{w}}   " for x, w in zip(r, widths)).rstrip() + "\n", "result")
+    out.write("-" * total + "\n", "text")
+    out.write("(number missing listed first)\n" if freq else "(percent missing listed first)\n", "text")
+
+
+def _miss_nested(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:
+    """misstable nested: chains A -> B meaning "whenever A is missing, B is missing too"
+    (wording VERIFY, case compat 0805)."""
+    out = s.output
+    cols = _miss_cols(s, names, mask)
+    if not cols:
+        out.write("(no missing values)\n", "text")   # VERIFY
+        return
+    cols = cols[::-1]                         # fewest missing first
+    k = len(cols)
+    sub = [[i != j and not np.any(cols[i][1] & ~cols[j][1]) for j in range(k)] for i in range(k)]
+    # direct successors only (transitive reduction)
+    nxt = [[j for j in range(k) if sub[i][j] and not sub[j][i]
+            and not any(sub[i][m] and sub[m][j] and not sub[m][i] and not sub[j][m]
+                        for m in range(k) if m not in (i, j))] for i in range(k)]
+    has_pred = {j for i in range(k) for j in nxt[i]}
+    chains: list[list[int]] = []
+
+    def extend(path: list[int]) -> None:
+        if not nxt[path[-1]]:
+            chains.append(path)
+            return
+        for j in nxt[path[-1]]:
+            extend(path + [j])
+
+    for i in range(k):
+        if i not in has_pred:
+            extend([i])
+    for no, chain in enumerate(chains, start=1):
+        text = " -> ".join(f"{cols[i][0]}({int(cols[i][1].sum()):,})" for i in chain)
+        out.write(f"{no:>6}.  ", "text")
+        out.write(text + "\n", "result")
+    s.r = {"K": float(len(chains))}
 
 
 def _miss_summarize(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:

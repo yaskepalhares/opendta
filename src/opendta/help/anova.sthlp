@@ -12,12 +12,14 @@
 [{cmd:,} {cmd:tabulate} {cmd:means} {cmd:standard} {cmd:freq} {cmd:obs} {cmd:noanova}]
 
 {p 8 16 2}
-{cmd:anova} {it:depvar} {it:termlist} [{it:if}] [{it:in}] [{it:weight}]
-[{cmd:,} {cmd:continuous(}{it:varlist}{cmd:)}]
+{cmd:anova} {it:depvar} {it:termlist} [{cmd:/}] [{it:termlist} {cmd:/} ...] [{it:if}] [{it:in}] [{it:weight}]
+[{cmd:,} {cmd:partial} {cmd:sequential} {cmd:continuous(}{it:varlist}{cmd:)}
+{cmd:repeated(}{it:varlist}{cmd:)} {cmd:bse(}{it:term}{cmd:)} {cmd:bseunit(}{it:varname}{cmd:)}
+{cmd:grouping(}{it:varlist}{cmd:)}]
 
 {p 8 16 2}
-{cmd:tabulate} {it:var1} [{it:if}] [{it:in}] [{it:weight}]{cmd:,}
-{cmd:summarize(}{it:var2}{cmd:)} [{cmd:means} {cmd:standard} {cmd:freq} {cmd:obs}]
+{cmd:tabulate} {it:var1} [{it:var2}] [{it:if}] [{it:in}] [{it:weight}]{cmd:,}
+{cmd:summarize(}{it:var3}{cmd:)} [{cmd:means} {cmd:standard} {cmd:freq} {cmd:obs}]
 
 {title:Description}
 
@@ -30,15 +32,33 @@ frequencies by group comes first.
 {cmd:anova} fits the model with the terms of {it:termlist}. Terms are
 variables (categorical by default; {cmd:c.} or {cmd:continuous()} make them
 continuous), interactions {cmd:a#b} and factorial expansions {cmd:a##b}.
-The table shows partial sums of squares: each term is tested with all the
-others in the model. Coefficients are stored in {cmd:e(b)} and {cmd:e(V)} as
-in {cmd:regress}, so {cmd:predict}, {cmd:test} and {cmd:margins} work
-afterwards.
-
-{title:OpenDTA notes}
+{cmd:a|b} is {cmd:a} nested within {cmd:b}. The table shows partial sums of
+squares (each term tested with all the others in the model) or, with
+{cmd:sequential}, sequential sums of squares (each term added in the order
+written). Coefficients are stored in {cmd:e(b)} and {cmd:e(V)} as in
+{cmd:regress}, so {cmd:predict}, {cmd:test} and {cmd:margins} work afterwards.
 
 {pstd}
-{cmd:anova, sequential} and {cmd:repeated()} are not implemented yet.
+A slash names an error term: in {cmd:anova y t / c|t}, {cmd:t} is tested
+against {cmd:c|t} instead of the residual. A slash at the end,
+{cmd:anova y t / c|t /}, also tests the error term against the residual.
+
+{pstd}
+{cmd:repeated(}{it:varlist}{cmd:)} declares repeated-measures variables. After
+the table, {cmd:anova} shows the between-subjects error term and, for each
+repeated variable, the Huynh-Feldt, Greenhouse-Geisser and Box conservative
+corrections, with the p-values of the terms that contain it. {cmd:bse()} names
+the between-subjects error term when it cannot be found automatically.
+
+{pstd}
+{cmd:tabulate} {it:var1} {it:var2}{cmd:, summarize(}{it:var3}{cmd:)} shows the
+mean, standard deviation and frequency of {it:var3} in each cell of the
+two-way table.
+
+{title:Example}
+
+{phang2}{cmd:. anova score person drug, repeated(drug)}{p_end}
+{phang2}{cmd:. anova output machine / operator|machine /}{p_end}
 
 {title:Stored results}
 

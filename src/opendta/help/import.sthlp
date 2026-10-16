@@ -33,6 +33,7 @@
 {cmd:import delimited} reads comma- or tab-separated text, choosing the
 smallest storage type that holds each column. {cmd:import excel} reads
 {cmd:.xlsx} workbooks (and {cmd:.xls} with the optional {cmd:xlrd}
+package; {cmd:export excel} writes {cmd:.xls} with the optional {cmd:xlwt}
 package); Excel dates become {cmd:%td} or {cmd:%tc} variables.
 The older {cmd:insheet} and {cmd:outsheet} are also available.
 {p_end}

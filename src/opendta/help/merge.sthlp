@@ -10,6 +10,9 @@
 {p 8 16 2}
 {cmd:merge} {c -(}{cmd:1:1}|{cmd:m:1}|{cmd:1:m}|{cmd:m:m}{c )-} {it:varlist} {cmd:using} {it:filename} [{cmd:,} {it:options}]
 
+{p 8 16 2}
+{cmd:merge} [{it:varlist}] {cmd:using} {it:filename} [{cmd:,} {opt unique} {opt uniqm:aster} {opt uniqu:sing} {opt sort} {opt nokeep} {opt _merge(name)} {opt keep(varlist)} {opt upd:ate} {opt rep:lace}]  (old syntax){p_end}
+
 {p 8 16 2}{cmd:append using} {it:filename} [{it:filename} ...] [{cmd:,} {opt gen:erate(newvar)} {opt keep(varlist)} {opt nol:abel} {opt force}]{p_end}
 {p 8 16 2}{cmd:joinby} [{it:varlist}] {cmd:using} {it:filename} [{cmd:,} {opt un:matched(none|both|master|using)} {opt update} {opt replace}]{p_end}
 {p 8 16 2}{cmd:cross using} {it:filename}{p_end}
@@ -30,6 +33,9 @@
 {cmd:merge} matches observations by key variables (or by {cmd:_n}) and
 reports how many came from each side in {cmd:_merge}: 1 master only,
 2 using only, 3 matched, 4 missing updated, 5 nonmissing conflict.
+The old syntax of Stata 10 and earlier is still accepted: the data must be
+sorted by {it:varlist} (or use {opt sort}), {opt unique} requires unique keys
+on both sides and, without {it:varlist}, observations are matched by position.
 {cmd:append} adds observations, {cmd:joinby} forms all pairs within
 groups and {cmd:cross} forms all pairs.
 {p_end}

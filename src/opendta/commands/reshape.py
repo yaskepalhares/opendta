@@ -4,6 +4,11 @@
     reshape wide stubnames, i(varlist) j(varname [values]) [string]
     reshape long | reshape wide       (repeats the last specification)
 
+Advanced syntax ([D] reshape, "Remarks: advanced syntax"): the specification can also be
+given piece by piece with reshape i varlist, reshape j varname [values] [, string],
+reshape xij stubnames, reshape xi [varlist], shown with reshape (or reshape query) and erased
+with reshape clear; reshape error lists the observations that stopped the last reshape.
+
 In stubnames, `@` marks where the value of j goes (inc@r → inc80r). The
 printed table follows Stata; column positions and the order of variables
 in the result are marked VERIFY (case compat/do/0305_reshape.do).
@@ -126,15 +131,21 @@ def _parse(s: "Session", args: str):
 
 @command("reshape")
 def cmd_reshape(s: "Session", args: str) -> None:
+    if not args.strip():
+        _query(s)
+        return
     sub, stubs, opts = _parse(s, args)
     if sub not in ("long", "wide"):
-        # VERIFY: reshape error, reshape i/j/xij and reshape clear not implemented
-        raise StataError(198, "invalid syntax")
+        _advanced(s, sub, args)
+        return
     state = getattr(s, "_reshape", None)
     if not stubs:
-        if not state:
+        if not state or not state.get("stubs") or not state.get("i"):
             raise StataError(198, "reshape:  i(), j(), and stubnames not specified")   # VERIFY
-        stubs, i_text, j_spec, string = state["stubs"], state["i"], state["j"], state["string"]
+        stubs, i_text, string = state["stubs"], state["i"], state.get("string", False)
+        j_spec = state.get("j") or ("_j" if sub == "long" else None)
+        if j_spec is None:
+            raise StataError(198, "option j() required")
     else:
         if not opts.get("i"):
             raise StataError(198, "option i() required")
@@ -147,12 +158,136 @@ def cmd_reshape(s: "Session", args: str) -> None:
     jname = j_words[0]
     j_values_spec = " ".join(j_words[1:])
     ivars = s.expand_varlist(i_text)
-    s._reshape = {"stubs": stubs, "i": i_text, "j": j_spec, "string": string}
+    s._reshape = {**(state or {}), "stubs": stubs, "i": i_text, "j": j_spec, "string": string}
+    s._reshape_failed = {"to": sub, "stubs": stubs, "ivars": ivars, "jname": jname,
+                         "string": string}
     if sub == "long":
         _to_long(s, stubs, ivars, jname, j_values_spec, string)
     else:
         _to_wide(s, stubs, ivars, jname, j_values_spec, string)
+    s._reshape_failed = None
     s.notify_state()
+
+
+_ADV = (("i", 1), ("j", 1), ("xij", 3), ("xi", 2), ("clear", 5), ("query", 1), ("error", 3))
+
+
+def _advanced(s: "Session", sub: str, args: str) -> None:
+    full = next((name for name, m in _ADV if len(sub) >= m and name.startswith(sub) and
+                 (name != "xi" or sub == "xi")), None)
+    if full is None:
+        raise StataError(198, "invalid syntax")
+    rest = args.strip()[len(sub):].strip()
+    comma = rest.find(",")
+    body, opt = (rest, "") if comma == -1 else (rest[:comma].strip(), rest[comma + 1:])
+    opts = {n.lower(): a for n, a in parse_options(opt)} if opt.strip() else {}
+    state = dict(getattr(s, "_reshape", None) or {})
+    if full == "clear":
+        s._reshape = None
+        return
+    if full == "query":
+        _query(s)
+        return
+    if full == "error":
+        _error_report(s)
+        return
+    if full == "i":
+        if not body:
+            raise StataError(100, "varlist required")
+        s.expand_varlist(body)
+        state["i"] = body
+    elif full == "j":
+        if not body:
+            raise StataError(100, "varname required")
+        for k in opts:
+            if k != "string":
+                raise StataError(198, f"option {k} not allowed")
+        state["j"] = body
+        state["string"] = "string" in opts
+    elif full == "xij":
+        if not body:
+            raise StataError(198, "invalid syntax")
+        state["stubs"] = split_words(body)
+    else:                                        # xi: documentation only
+        state["xi"] = body
+    s._reshape = state
+
+
+def _query(s: "Session") -> None:
+    """reshape and reshape query: the current definitions (VERIFY: layout)."""
+    st_ = getattr(s, "_reshape", None) or {}
+    w = s.output.write
+    j = st_.get("j") or ""
+    if j and st_.get("string"):
+        j += ", string"
+    rows = [("i", st_.get("i") or "(not defined)"), ("j", j or "(not defined)"),
+            ("xij", " ".join(st_.get("stubs") or []) or "(not defined)"),
+            ("xi", st_.get("xi") or "(all other variables)")]
+    w("\n", "text")
+    for name, val in rows:
+        w(f" {name:<5}", "text")
+        w(f"{val}\n", "result")
+
+
+def _error_report(s: "Session") -> None:
+    """reshape error: lists the observations that made the last reshape fail (VERIFY: the
+    wording of the summary lines)."""
+    f = getattr(s, "_reshape_failed", None)
+    w = s.output.write
+    if not f:
+        w("(no reshape error to report)\n", "text")
+        return
+    ds = s.data
+    ivars, jname = f["ivars"], f["jname"]
+    ilist = " ".join(ivars)
+    if f["to"] == "long":
+        sorting.sort(ds, ivars)
+        ids, k = group_ids(ds, ivars)
+        bad = np.bincount(ids, minlength=k)[ids] > 1
+        w(f"(data now sorted by {ilist})\n", "text")
+        _list(s, bad, ivars)
+        w(f"\n{int(bad.sum())} of {ds.nobs} observations have duplicate {ilist} values\n", "text")
+        return
+    keys = ivars + [jname]
+    sorting.sort(ds, keys)
+    ids, k = group_ids(ds, keys)
+    counts = np.bincount(ids, minlength=k)
+    bad = counts[ids] > 1
+    w(f"(data now sorted by {' '.join(keys)})\n", "text")
+    if bad.any():
+        _list(s, bad, keys)
+        w(f"\n{int(bad.sum())} of {ds.nobs} observations have repeated {jname} values\n", "text")
+        return
+    longs = [_long_name(st_) for st_ in f["stubs"]]
+    gid, _g = group_ids(ds, ivars)
+    from ..core.grouping import first_index
+    first = first_index(gid, _g)
+    for v in ds.vars:
+        if v.name in keys or v.name in longs:
+            continue
+        col = v.raw
+        same = np.array([col[i] == col[first[gid[i]]] for i in range(ds.nobs)], dtype=bool)
+        groups_bad = np.zeros(_g, dtype=bool)
+        groups_bad[gid[~same]] = True
+        if groups_bad.any():
+            sel = groups_bad[gid]
+            _list(s, sel, keys + [v.name])
+            w(f"\n{int(sel.sum())} of {ds.nobs} observations have {v.name} not constant within "
+              f"{ilist}\n", "text")
+            return
+    w(f"\n{ilist} and {jname} uniquely identify the observations\n", "text")
+
+
+def _list(s: "Session", sel: np.ndarray, names: list[str]) -> None:
+    if not sel.any():
+        return
+    ds = s.data
+    tmp = "__000rse"
+    ds.add(Variable(tmp, "byte", sel.astype(np.float64)))
+    try:
+        s.interp._execute_expanded(f"list {' '.join(names)} if {tmp}, sepby({names[0]})")
+    finally:
+        ds.drop_vars([tmp])
 
 
 def _to_long(s: "Session", stubs: list[str], ivars: list[str], jname: str,

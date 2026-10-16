@@ -17,6 +17,12 @@
 {p 8 16 2}
 {cmd:misstable} {cmd:patterns} [{it:varlist}] [{it:if}] [{it:in}] [{cmd:,} {cmd:frequency}]
 
+{p 8 16 2}
+{cmd:misstable} {cmd:tree} [{it:varlist}] [{it:if}] [{it:in}] [{cmd:,} {cmd:frequency}]
+
+{p 8 16 2}
+{cmd:misstable} {cmd:nested} [{it:varlist}] [{it:if}] [{it:in}]
+
 {title:Description}
 
 {pstd}
@@ -32,4 +38,9 @@ embedded blanks.
 {cmd:misstable summarize} counts, for each numeric variable with missing
 values, the observations equal to {cmd:.}, greater than {cmd:.} (extended
 missing) and nonmissing. {cmd:misstable patterns} shows the patterns of
-missing values (1 means complete).
+missing values (1 means complete). {cmd:misstable tree} shows the nested
+pattern: the variable with the most missing values splits the observations
+into missing and not missing, the next one splits each part, and so on
+(percentages, or counts with {cmd:frequency}). {cmd:misstable nested} lists
+chains such as {cmd:a(10) -> b(20)}: whenever {cmd:a} is missing, {cmd:b} is
+missing too.

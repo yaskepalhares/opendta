@@ -50,7 +50,7 @@ def cmd_list(s: "Session", args: str) -> None:
     opts = match_options(p.options, {
         "noobs": 5, "clean": 5, "separator": 3, "nolabel": 5, "noheader": 6,
         "abbreviate": 2, "table": 3, "divider": 3, "string": 3, "compress": 3,
-        "fast": 4, "constant": 4,
+        "fast": 4, "constant": 4, "sepby": 5,
     })
     mask = touse(s, p)
     rows = np.flatnonzero(mask)
@@ -63,6 +63,10 @@ def cmd_list(s: "Session", args: str) -> None:
     clean = bool(opts.get("clean"))
     sep = int(opts["separator"]) if isinstance(opts.get("separator"), str) else (0 if clean else 5)
     divider = bool(opts.get("divider"))
+    sepby = expand(ds, str(opts["sepby"])) if isinstance(opts.get("sepby"), str) else []
+    if sepby:
+        sep = 0
+        keys = [ds.get(n).raw for n in sepby]
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
     # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
@@ -109,6 +113,8 @@ def cmd_list(s: "Session", args: str) -> None:
         out.write(pad + "|" + "-" * inner + "|\n", "text")
     for k, (i, r) in enumerate(zip(rows, cells)):
         if sep and k and k % sep == 0:
+            out.write(pad + "|" + "-" * inner + "|\n", "text")
+        elif sepby and k and any(c[i] != c[rows[k - 1]] for c in keys):
             out.write(pad + "|" + "-" * inner + "|\n", "text")
         label = f"{int(i) + 1:>{obs_w}}. " if show_obs else "  "
         out.write(label + "| ", "text")

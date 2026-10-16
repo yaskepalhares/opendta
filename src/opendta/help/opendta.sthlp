@@ -71,7 +71,7 @@ a command name, or click a topic below.
 {p2col :{help glm}}generalized linear models{p_end}
 {p2col :{help tobit}}censored outcomes{p_end}
 {p2col :{help qreg}}quantile regression{p_end}
-{p2col :{help xtreg}}panel data ({cmd:xtset}, {help xtsum}, {help xtlogit}, {help xtpoisson}){p_end}
+{p2col :{help xtreg}}panel data ({cmd:xtset}, {help xtsum}, {help xtlogit}, {help xtpoisson}, {help xtgee}){p_end}
 {p2col :{help mean}}{cmd:mean}, {cmd:proportion}, {cmd:ratio}, {cmd:total}{p_end}
 {p2col :{help nptests:ranksum}}nonparametric and normality tests{p_end}
 {p2col :{help immediate:cii}}immediate commands ({cmd:cii}, {cmd:tabi}, {cmd:ttesti}){p_end}

@@ -2,7 +2,7 @@
 
 Supported directives: "string", `"string"', expressions, %fmt, as text|txt,
 as result|res, as error|err, as input|inp, in smcl, _newline[(#)] (_n),
-_column(#) (_col), _skip(#), _dup(#), _char(#), _continue (_c).
+_column(#) (_col), _skip(#), _dup(#), _char(#), _continue (_c), _request(macname).
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ def cmd_display(s: "Session", args: str) -> None:
     fmt = None
     dup = 1
     cont = False
+    requested = False
     i = 0
     text = args
     n = len(text)
@@ -77,6 +78,25 @@ def cmd_display(s: "Session", args: str) -> None:
             continue
 
         m = _DIRECTIVE.match(rest)
+        if m and m.group(1) == "request":
+            # _request(macname): shows what came before as the prompt, reads a line from the
+            # console and stores it in the global macname (local when it starts with "_")
+            target = (m.group(3) or "").strip()
+            if not re.fullmatch(r"_?[A-Za-z_]\w*", target):
+                raise StataError(198, "invalid syntax")
+            i += m.end()
+            for piece, st in pending:
+                out.write(piece, st)
+            pending.clear()
+            answer = s.request_line()
+            out.write(answer + "\n", "input")      # VERIFY: echo of the typed text
+            col = 0
+            requested = True
+            if target.startswith("_"):
+                s.macros.set_local(target[1:], answer)
+            else:
+                s.macros.set_global(target, answer)
+            continue
         if m:
             name, arg = m.group(1), m.group(3)
             num = None
@@ -100,8 +120,6 @@ def cmd_display(s: "Session", args: str) -> None:
                 emit(chr(num or 0))
             elif name in ("continue", "c"):
                 cont = True
-            elif name == "request":
-                raise StataError(198, "_request() is not supported yet")
             continue
 
         m = _FORMAT.match(rest)
@@ -148,7 +166,7 @@ def cmd_display(s: "Session", args: str) -> None:
         fmt = None
         emit(piece)
 
-    if not cont:
+    if not cont and not (requested and not pending):
         put("\n", style)
     for piece, st in pending:
         out.write(piece, st)

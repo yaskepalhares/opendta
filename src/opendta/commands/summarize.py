@@ -203,40 +203,68 @@ def _level(s: "Session", o: dict) -> float:
 
 @command("ci", "ci", byable=True)
 def cmd_ci(s: "Session", args: str) -> None:
+    """ci [means|proportions|variances] varlist ([R] ci, syntax of Stata 14.1; ci varlist alone
+    means ci means)."""
+    from .immediate import _prop_ci, variance_row, variance_table_head
     t = args.strip()
     kind = "means"
+    head = t.split(" ", 1)[0].split(",", 1)[0]
     for k in ("means", "proportions", "variances"):
-        if t.split(" ", 1)[0] in (k, k[:4], k[:-1]):
+        if len(head) >= 4 and k.startswith(head) or head == k[:-1]:
             kind = k
-            t = t.split(" ", 1)[1] if " " in t else ""
+            t = t[len(head):].strip()
             break
     p = parse_standard(t)
     o = match_options(p.options, {"level": 1, "binomial": 1, "poisson": 1, "exact": 2,
                                   "wald": 2, "wilson": 2, "agresti": 2, "jeffreys": 2,
-                                  "exposure": 3, "separator": 3}) if p.options.strip() else {}
+                                  "exposure": 3, "separator": 3, "total": 3, "sd": 2,
+                                  "bonett": 3}) if p.options.strip() else {}
     if o.get("binomial"):
         kind = "proportions"
     level = _level(s, o)
     vars_ = numeric_vars(s, p.varlist, allow_string=False)
     base = touse(s, p)
-    w, wtype, base = weights(s, p, base, ("aweight", "fweight"))
+    w, wtype, base = weights(s, p, base, ("aweight", "fweight") if kind == "means" else ("fweight",))
     out = s.output
-    head_se = "Std. Err." if kind == "means" else "Std. Err."
+    method = next((m for m in ("wald", "wilson", "agresti", "jeffreys") if o.get(m)), "exact")
+    titles = {"exact": "-- Binomial Exact --", "wald": "-- Binomial Wald ---",
+              "wilson": "------ Wilson ------", "agresti": "-- Agresti-Coull ---",
+              "jeffreys": "----- Jeffreys -----"}
+    poisson = kind == "means" and bool(o.get("poisson"))
+    expo = s.data.get(s.expand_varlist(o["exposure"])[0]) if isinstance(o.get("exposure"), str) else None
     for group, first in by_groups(s):
         if first is not None:
             _by_header(s, first)
         mask = base & group
+        if kind == "variances":
+            variance_table_head(s, level, bool(o.get("sd")), bool(o.get("bonett")))
+            for v in vars_:
+                sel = mask & S.valid(v.data)
+                xs = v.data[sel]
+                m = S.moments(xs, w[sel] if w is not None else None, wtype)
+                n = int(m.N)
+                if n < 2:
+                    raise StataError(2001, "insufficient observations")
+                xb = None
+                if o.get("bonett"):
+                    xb = np.repeat(xs, w[sel].astype(int)) if w is not None else xs
+                variance_row(s, v.name, n, m.var, level, bool(o.get("sd")), xb)
+            continue
         lv = f"[{level:g}% Conf. Interval]"
-        extra = "" if kind == "means" else ("          -- Binomial Exact --" if kind == "proportions" else "")
-        if extra:
-            out.write("\n" + " " * 48 + extra.strip().rjust(30) + "\n", "text")
+        if kind == "proportions":
+            out.write("\n" + " " * 48 + titles[method].rjust(30) + "\n", "text")
+        elif poisson:
+            out.write("\n" + " " * 48 + "-- Poisson  Exact --".rjust(30) + "\n", "text")   # VERIFY
         else:
             out.write("\n", "text")
-        out.write(f"    Variable |        Obs        Mean    {head_se}       {lv}\n", "text")
+        obs = "Exposure" if poisson else "Obs"
+        out.write(f"    Variable |{obs:>11}        Mean    Std. Err.       {lv}\n", "text")
         out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
         for v in vars_:
             x = v.data
             sel = mask & S.valid(x)
+            if expo is not None:
+                sel &= S.valid(expo.data)
             xs = x[sel]
             ws = w[sel] if w is not None else None
             m = S.moments(xs, ws, wtype)
@@ -245,10 +273,20 @@ def cmd_ci(s: "Session", args: str) -> None:
                 if not np.all((xs == 0) | (xs == 1)):
                     raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFY
                 k = float((xs * (ws if ws is not None else 1)).sum())
-                phat = k / n if n else M.SYSMISS
-                se = math.sqrt(phat * (1 - phat) / n) if n else M.SYSMISS
-                lo, hi = _clopper(k, n, level)
-                mean = phat
+                mean = k / n if n else M.SYSMISS
+                se = math.sqrt(mean * (1 - mean) / n) if n else M.SYSMISS
+                lo, hi = _prop_ci(k, n, level, method) if n else (M.SYSMISS, M.SYSMISS)
+            elif poisson:
+                # exact Poisson interval for the count per unit of exposure ([R] ci)
+                k = float((xs * (ws if ws is not None else 1)).sum())
+                E = float((expo.data[sel] * (ws if ws is not None else 1)).sum()) if expo is not None else n
+                n = E
+                mean = k / E if E else M.SYSMISS
+                se = math.sqrt(k) / E if E else M.SYSMISS
+                a = (100 - level) / 200
+                from scipy import stats as st
+                lo = float(st.chi2.ppf(a, 2 * k)) / 2 / E if k > 0 else 0.0
+                hi = float(st.chi2.ppf(1 - a, 2 * (k + 1))) / 2 / E
             else:
                 mean = m.mean
                 se = m.sd / math.sqrt(n) if n > 0 and m.sd < M.SYSMISS else M.SYSMISS
@@ -257,6 +295,8 @@ def cmd_ci(s: "Session", args: str) -> None:
             out.write(f" {n:>10,.0f}" + "   " + g9(mean) + "   " + g9(se) + "    " + g9(lo).rjust(12)
                       + "   " + g9(hi).rjust(9) + "\n", "result")
             s.r = {"N": float(n), "mean": mean, "se": se, "lb": lo, "ub": hi, "level": level}
+            if kind == "proportions":
+                s.r["proportion"] = s.r.pop("mean")
 
 
 def _clopper(k: float, n: float, level: float) -> tuple[float, float]:
@@ -489,6 +529,7 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
 
 @command("prtest", byable=True)
 def cmd_prtest(s: "Session", args: str) -> None:
+    """prtest varname == #p, prtest varname1 == varname2 and prtest varname, by(groupvar)."""
     p = parse_standard(args)
     o = match_options(p.options, {"by": 2, "level": 1}) if p.options.strip() else {}
     level = _level(s, o)
@@ -497,15 +538,94 @@ def cmd_prtest(s: "Session", args: str) -> None:
         left, _, right = p.varlist.partition("==")
         p.varlist, p.exp = left.strip(), right.strip()
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
-    x = v.data[mask & S.valid(v.data)]
-    if not np.all((x == 0) | (x == 1)):
-        raise StataError(2000, f"{v.name} is not a 0/1 variable")   # VERIFY
+
+    def zero_one(x, name):
+        if not np.all((x == 0) | (x == 1)):
+            raise StataError(2000, f"{name} is not a 0/1 variable")   # VERIFY
+
+    if isinstance(o.get("by"), str):
+        if p.exp is not None:
+            raise StataError(198, "invalid syntax")
+        g = s.data.get(s.expand_varlist(o["by"])[0])
+        sel = mask & S.valid(v.data) & (S.valid(g.data) if not g.is_string
+                                         else np.array([x != "" for x in g.raw]))
+        groups = sorted(set(g.data[sel].tolist()) if not g.is_string else set(np.asarray(g.raw)[sel]))
+        if len(groups) != 2:
+            raise StataError(420, "more than 2 groups found, only 2 allowed")   # VERIFY
+        from .inspect import cell_text
+        col = g.data if not g.is_string else np.asarray(g.raw)
+        xs, names = [], []
+        for gv in groups:
+            idx = np.flatnonzero(sel & (col == gv))
+            names.append(cell_text(s.data, g, int(idx[0])))
+            xs.append(v.data[idx])
+            zero_one(v.data[idx], v.name)
+        _prtest_two(s, names, xs[0], xs[1], level, by=g.name)
+        return
     if p.exp is None:
         raise StataError(198, "invalid syntax")
+    other = _try_var(s, p.exp.strip())
+    if other is not None:                       # prtest x == y: two variables
+        w2 = s.data.get(other)
+        x1 = v.data[mask & S.valid(v.data)]
+        x2 = w2.data[mask & S.valid(w2.data)]
+        zero_one(x1, v.name)
+        zero_one(x2, w2.name)
+        _prtest_two(s, [v.name, w2.name], x1, x2, level)
+        return
+    x = v.data[mask & S.valid(v.data)]
+    zero_one(x, v.name)
     p0 = float(s.eval(p.exp))
     n = len(x)
     ph = float(x.mean()) if n else M.SYSMISS
     _prtest_one(s, v.name, n, ph, p0, level)
+
+
+def _prtest_two(s: "Session", names, x1, x2, level: float, *, by: str | None = None,
+                stats: tuple | None = None) -> None:
+    """Two-sample test of proportions ([R] prtest; layout VERIFY, case compat 0805)."""
+    if stats is None:
+        n1, n2 = len(x1), len(x2)
+        p1, p2 = float(np.mean(x1)), float(np.mean(x2))
+    else:
+        n1, p1, n2, p2 = stats
+    if n1 == 0 or n2 == 0:
+        raise StataError(2000, "no observations")
+    zc = S.z_crit(level)
+    se1, se2 = math.sqrt(p1 * (1 - p1) / n1), math.sqrt(p2 * (1 - p2) / n2)
+    diff = p1 - p2
+    se = math.sqrt(se1 ** 2 + se2 ** 2)
+    pp = (p1 * n1 + p2 * n2) / (n1 + n2)
+    se0 = math.sqrt(pp * (1 - pp) * (1 / n1 + 1 / n2))
+    z = diff / se0 if se0 > 0 else M.SYSMISS
+    out = s.output
+    a, b = str(names[0]), str(names[1])
+    title = "Two-sample test of proportions"
+    out.write("\n" + title + f"{name12(a)}: Number of obs = {n1:>8,}".rjust(78 - len(title)) + "\n", "text")
+    out.write(f"{name12(b)}: Number of obs = {n2:>8,}".rjust(78) + "\n", "text")
+    head = "Group" if by else "Variable"
+    out.write("-" * 78 + "\n", "text")
+    out.write(f"{head:>12} |       Mean   Std. Err.      z    P>|z|     [{level:g}% Conf. Interval]\n",
+              "text")
+    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+    for nm, ph, se_ in ((a, p1, se1), (b, p2, se2)):
+        out.write(f"{name12(nm):>12} |", "text")
+        out.write("  " + g9(ph) + "  " + g9(se_) + " " * 21 + g9(ph - zc * se_) + "   "
+                  + g9(ph + zc * se_) + "\n", "result")
+    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+    out.write(f"{'diff':>12} |", "text")
+    out.write("  " + g9(diff) + "  " + g9(se) + " " * 21 + g9(diff - zc * se) + "   "
+              + g9(diff + zc * se) + "\n", "result")
+    lo_p, two, up = _pvals(z, None)
+    out.write(" " * 12 + " |  under Ho:  ", "text")
+    out.write(g9(se0) + f"{z:>8.2f}" + f"{two:>9.3f}" + "\n", "result")
+    out.write("-" * 78 + "\n", "text")
+    lab = f"        diff = prop({a}) - prop({b})"
+    out.write(lab.ljust(66) + f"z = {z:>8.4f}\n", "text")
+    out.write("    Ho: diff = 0\n", "text")
+    _ha_lines(s, "diff", "0", "z", z, None)
+    s.r = {"N_1": float(n1), "N_2": float(n2), "P_1": p1, "P_2": p2, "z": z, "p": two,
+           "p_l": lo_p, "p_u": up}
 
 
 def _prtest_one(s: "Session", name: str, n: int, ph: float, p0: float, level: float) -> None:

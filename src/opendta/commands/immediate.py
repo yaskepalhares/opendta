@@ -15,7 +15,7 @@ from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
 from .registry import command
-from .summarize import _clopper, _level, _prtest_one, _ttest_one, _ttest_two, g9
+from .summarize import _clopper, _level, _prtest_one, _ttest_one, _ttest_two, g9, name12
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -65,7 +65,7 @@ def cmd_cii(s: "Session", args: str) -> None:
     if kind is None:   # old syntax: 3 numbers = mean; 2 = proportion
         kind = "means" if len(vals) == 3 else "proportions"
     o = match_options(opt, {"level": 1, "exact": 2, "wald": 2, "wilson": 2, "agresti": 2,
-                            "jeffreys": 2, "poisson": 1, "exposure": 3})
+                            "jeffreys": 2, "poisson": 1, "exposure": 3, "sd": 2})
     level = _level(s, o)
     out = s.output
     if kind == "means":
@@ -121,7 +121,68 @@ def cmd_cii(s: "Session", args: str) -> None:
         out.write(f" {n:>10,.0f}   {g9(ph)}   {g9(se)}    {g9(lo).rjust(12)}   {g9(hi).rjust(9)}\n", "result")
         s.r = {"ub": hi, "lb": lo, "se": se, "proportion": ph, "N": n, "level": level}
         return
-    raise StataError(198, "cii variances not implemented")   # VERIFY
+    if kind == "variances":
+        # cii variances #obs #variance (or #sd with the sd option)
+        if len(vals) != 2:
+            raise StataError(198, "invalid syntax")
+        n, v = vals
+        if n < 2 or n != int(n):
+            raise StataError(198, "n must be an integer greater than 1")   # VERIFY
+        if o.get("sd"):
+            v = v * v
+        variance_table_head(s, level, bool(o.get("sd")), False)
+        variance_row(s, "", int(n), v, level, bool(o.get("sd")))
+        return
+    raise StataError(198, "invalid syntax")
+
+
+# ---------------------------------------------------------------------------
+# variances: ci variances and cii variances ([R] ci, Stata 14.1)
+# ---------------------------------------------------------------------------
+
+def variance_ci(n: int, var: float, level: float, x=None) -> tuple[float, float]:
+    """Interval for the variance: chi-squared (normal data) or, with the data x, Bonett's
+    (2006) interval, robust to non-normality ([R] ci, Methods and formulas)."""
+    a = (100 - level) / 100
+    if x is None:
+        lo = (n - 1) * var / float(st.chi2.ppf(1 - a / 2, n - 1))
+        hi = (n - 1) * var / float(st.chi2.ppf(a / 2, n - 1))
+        return lo, hi
+    z = float(st.norm.ppf(1 - a / 2))
+    x = np.sort(np.asarray(x, dtype=float))
+    # trimmed mean with trimming proportion 1 / (2 sqrt(n - 4)) (VERIFY: rounding of the count)
+    trim = 1 / (2 * math.sqrt(n - 4)) if n > 4 else 0.0
+    k = int(math.floor(n * trim))
+    m = float(x[k:n - k].mean()) if n - 2 * k > 0 else float(x.mean())
+    d = x - x.mean()
+    g4 = n * float(((x - m) ** 4).sum()) / float((d ** 2).sum()) ** 2
+    c = n / (n - z)
+    se = c * math.sqrt(max(g4 - (n - 3) / n, 0.0) / (n - 1))
+    return math.exp(math.log(c * var) - z * se), math.exp(math.log(c * var) + z * se)
+
+
+def variance_table_head(s: "Session", level: float, sd: bool, bonett: bool) -> None:
+    out = s.output
+    if bonett:
+        out.write("\n" + " " * 48 + "-- Bonett --".rjust(30) + "\n", "text")   # VERIFY title
+    else:
+        out.write("\n", "text")
+    stat = "Std. Dev." if sd else "Variance"
+    out.write(f"    Variable |        Obs{stat:>13}       [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 13 + "+" + "-" * 52 + "\n", "text")
+
+
+def variance_row(s: "Session", name: str, n: int, var: float, level: float, sd: bool,
+                 x=None) -> None:
+    lo, hi = variance_ci(n, var, level, x)
+    if sd:
+        stat, lo, hi = math.sqrt(var), math.sqrt(lo), math.sqrt(hi)
+    else:
+        stat = var
+    out = s.output
+    out.write(f"{name12(name):>12} |", "text")
+    out.write(f" {n:>10,.0f}    {g9(stat)}    {g9(lo).rjust(12)}   {g9(hi).rjust(9)}\n", "result")
+    s.r = {"N": float(n), ("sd" if sd else "Var"): stat, "lb": lo, "ub": hi, "level": level}
 
 
 def _isnum(t: str) -> bool:
@@ -193,7 +254,14 @@ def cmd_prtesti(s: "Session", args: str) -> None:
             p1 = p1 / n
         _prtest_one(s, "x", int(n), p1, p0, level)
         return
-    raise StataError(198, "two-sample prtesti not implemented")   # VERIFY
+    if len(vals) == 4:
+        n1, p1, n2, p2 = vals
+        if o.get("count"):
+            p1, p2 = p1 / n1, p2 / n2
+        from .summarize import _prtest_two
+        _prtest_two(s, ["x", "y"], None, None, level, stats=(int(n1), p1, int(n2), p2))
+        return
+    raise StataError(198, "invalid syntax")
 
 
 # ---------------------------------------------------------------------------

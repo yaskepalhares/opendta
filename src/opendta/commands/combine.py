@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ..core import missing as M
+from ..core import sorting
 from ..core.dataset import (TYPE_ORDER, Dataset, Variable, check_name, default_format,
                             is_string_type, str_len, str_type_for)
 from ..core.errors import StataError
@@ -323,12 +324,71 @@ def _report(s: "Session", codes: np.ndarray, genname: str | None, update: bool) 
     w("    " + "-" * 41 + "\n", "text")
 
 
+def _merge_old(s: "Session", args: str) -> None:
+    """Syntax of Stata 10 and earlier, still accepted ([D] merge, "Remarks: old syntax"):
+    merge [varlist] using filename [, unique uniqmaster uniqusing sort nokeep _merge(name)
+    keep(varlist) update replace nolabel nonotes nosummary]. Without varlist, observations are
+    matched one to one by position."""
+    p = parse_standard(args)
+    if p.using is None:
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"unique": 4, "uniqmaster": 6, "uniqusing": 6, "sort": 4,
+                                  "nokeep": 6, "_merge": 6, "keep": 4, "update": 3, "replace": 3,
+                                  "nolabel": 5, "nonotes": 5, "nosummary": 5})
+    if len(_split_using(p.using)) > 1:
+        raise StataError(198, "only one using file is supported")   # VERIFY: several files
+    s.output.write("(note: you are using old merge syntax; see [D] merge for new syntax)\n",
+                   "text")   # VERIFY
+    keys = s.expand_varlist(p.varlist) if p.varlist.strip() else []
+    if keys:
+        U = load_using(p.using)
+        if o.get("sort"):
+            sorting.sort(s.data, keys)
+        else:
+            if not sorting.is_sorted(s.data, keys):
+                raise StataError(5, "master data not sorted")
+            for k in keys:
+                if not U.has(k):
+                    raise StataError(111, f"variable {k} not found")
+            if not sorting.is_sorted(U, keys):
+                raise StataError(5, "using data not sorted")
+        um, uu = o.get("unique") or o.get("uniqmaster"), o.get("unique") or o.get("uniqusing")
+        kind = {(True, True): "1:1", (True, False): "1:m", (False, True): "m:1"}.get(
+            (bool(um), bool(uu)), "m:m")
+        target = " ".join(keys)
+    else:
+        kind, target = "1:1", "_n"
+    opts = ["noreport"]
+    name = o.get("_merge")
+    opts.append(f"generate({name})" if isinstance(name, str) else "")
+    if isinstance(o.get("keep"), str):
+        opts.append(f"keepusing({o['keep']})")
+    if o.get("nokeep"):
+        opts.append("keep(master match)")
+    for flag in ("update", "replace", "nolabel", "nonotes"):
+        if o.get(flag):
+            opts.append(flag)
+    cmd_merge(s, f"{kind} {target} using {p.using}, {' '.join(x for x in opts if x)}")
+    gen = s.data.get(name if isinstance(name, str) else "_merge")
+    gen.value_label = ""          # VERIFY: the old syntax creates _merge without a value label
+    if keys:
+        sorting.sort(s.data, keys)
+
+
+def _split_using(text: str) -> list[str]:
+    import shlex
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return [text]
+
+
 @command("merge", "mer")
 def cmd_merge(s: "Session", args: str) -> None:
     m = re.match(r"^\s*(1:1|m:1|1:m|m:m)\s+(.*)$", args, re.S)
     if not m:
-        # VERIFY: old syntax (merge varlist using) not implemented
-        raise StataError(198, "invalid syntax")
+        _merge_old(s, args)
+        return
     kind = m.group(1)
     p = parse_standard(m.group(2))
     if p.using is None:

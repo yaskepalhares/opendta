@@ -54,8 +54,10 @@ def test_seed_errors(run):
     assert run.rc == 198
     run("set seed X123")
     assert run.rc == 198
-    run("set rng kiss32")
+    run("set rng kiss99")
     assert run.rc == 198
+    run("set rng kiss32")
+    assert run.rc == 0
     run("set rng mt64")
     assert run.rc == 0
 

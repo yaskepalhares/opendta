@@ -1,4 +1,5 @@
-"""Random-number generator: 64-bit Mersenne Twister (MT19937-64).
+"""Random-number generators: 64-bit Mersenne Twister (MT19937-64, the default) and the 32-bit
+KISS of Stata 13 and earlier (`set rng kiss32`).
 
 The Stata 14 manual ([R] set seed) says the default generator is the 64-bit
 Mersenne Twister (mt64). Here it follows the algorithm published by
@@ -101,11 +102,73 @@ class MT64:
         return ((x >> np.uint64(12)).astype(np.float64) + 0.5) * (1.0 / 4503599627370496.0)
 
 
-RNG = MT64()
+class KISS32:
+    """KISS of Marsaglia (1999): multiply-with-carry, shift register and congruential
+    generators combined, 32 bits per draw. Stata 13 and earlier used a 32-bit KISS ([R] set rng,
+    `set rng kiss32`). How Stata turns the seed into the four states and the integer into a
+    double is undocumented (VERIFY): here the seed fills the states through a 64-bit
+    congruential step, and u = (k + 0.5) / 2^32."""
+
+    def __init__(self, seed: int = 123456789) -> None:
+        self.seed(seed)
+
+    def seed(self, seed: int) -> None:
+        x = seed & _MASK64
+        st = []
+        for _ in range(4):
+            x = (6364136223846793005 * x + 1442695040888963407) & _MASK64
+            st.append((x >> 32) & 0xFFFFFFFF)
+        z, w, jsr, jcong = st
+        self.z, self.w = z or 362436069, w or 521288629
+        self.jsr, self.jcong = jsr or 123456789, jcong
+
+    def state(self) -> str:
+        return "K" + "".join(format(v, "08x") for v in (self.z, self.w, self.jsr, self.jcong))
+
+    def set_state(self, text: str) -> None:
+        body = text[1:]
+        if len(body) != 32:
+            raise ValueError("invalid state")
+        self.z, self.w, self.jsr, self.jcong = (int(body[8 * i:8 * i + 8], 16) for i in range(4))
+
+    def uint32(self, n: int) -> np.ndarray:
+        out = np.empty(n, dtype=np.float64)
+        z, w, jsr, jcong = self.z, self.w, self.jsr, self.jcong
+        M32 = 0xFFFFFFFF
+        for k in range(n):
+            z = (36969 * (z & 65535) + (z >> 16)) & M32
+            w = (18000 * (w & 65535) + (w >> 16)) & M32
+            mwc = ((z << 16) + w) & M32
+            jsr ^= (jsr << 17) & M32
+            jsr ^= jsr >> 13
+            jsr ^= (jsr << 5) & M32
+            jcong = (69069 * jcong + 1234567) & M32
+            out[k] = ((mwc ^ jcong) + jsr) & M32
+        self.z, self.w, self.jsr, self.jcong = z, w, jsr, jcong
+        return out
+
+    def uniform(self, n: int) -> np.ndarray:
+        return (self.uint32(n) + 0.5) * (1.0 / 4294967296.0)
+
+
+_GENERATORS = {"mt64": MT64(), "kiss32": KISS32()}
+RNG = _GENERATORS["mt64"]
+
+
+def use(name: str) -> None:
+    """set rng: the generator used from now on (its state is kept while it is not in use)."""
+    global RNG
+    RNG = _GENERATORS[name]
+
+
+def current() -> str:
+    return "kiss32" if isinstance(RNG, KISS32) else "mt64"
 
 
 def reset(seed: int = 123456789) -> None:
-    RNG.seed(seed)
+    for g in _GENERATORS.values():
+        g.seed(seed)
+    use("mt64")
 
 
 # ---------------------------------------------------------------------------

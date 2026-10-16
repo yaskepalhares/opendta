@@ -8,7 +8,7 @@
 {title:Syntax}
 
 {p 8 16 2}{cmd:set seed} {it:#}  |  {cmd:set seed} {it:statecode}{p_end}
-{p 8 16 2}{cmd:set rng} {c -(}{cmd:default}|{cmd:mt64}{c )-}{p_end}
+{p 8 16 2}{cmd:set rng} {c -(}{cmd:default}|{cmd:mt64}|{cmd:kiss32}{c )-}{p_end}
 
 {title:Functions}
 
@@ -25,7 +25,9 @@
 {title:Description}
 
 {pstd}
-OpenDTA uses the 64-bit Mersenne Twister. The same seed always gives the
+OpenDTA uses the 64-bit Mersenne Twister; {cmd:set rng kiss32} switches to
+the 32-bit KISS generator of Stata 13 and earlier ({cmd:c(rng_current)} shows
+which one is in use). The same seed always gives the
 same numbers in OpenDTA, but the sequences are not guaranteed to match
 other programs. {cmd:c(seed)} holds the current state; {cmd:set seed}
 accepts it back, so a sequence can be resumed exactly.

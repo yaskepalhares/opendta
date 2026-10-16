@@ -7,9 +7,9 @@
 {title:Syntax}
 
 {p 8 16 2}
-{cmd:xtlogit} depvar indepvars [if] [in] [, fe re or]
+{cmd:xtlogit} depvar indepvars [if] [in] [, fe re pa or]
 
 {title:Description}
 
 {pstd}
-{cmd:fe} fits the conditional (fixed-effects) logit model; groups with all-positive or all-negative outcomes are dropped. {cmd:re} (default) integrates a normal random effect by adaptive Gauss-Hermite quadrature with 12 points and reports sigma_u, rho and the LR test of rho=0.
+{cmd:fe} fits the conditional (fixed-effects) logit model; groups with all-positive or all-negative outcomes are dropped. {cmd:re} (default) integrates a normal random effect by adaptive Gauss-Hermite quadrature with 12 points and reports sigma_u, rho and the LR test of rho=0. {cmd:pa} fits the population-averaged model by GEE with an exchangeable correlation ({help xtgee} options such as {cmd:corr()} and {cmd:vce(robust)} are accepted).

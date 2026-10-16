@@ -125,6 +125,12 @@ def cmd_xtreg(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtgee", "xtgee")
+def cmd_xtgee(s: "Session", args: str) -> None:
+    from ..estimation.xtgee import cmd_xtgee as run
+    run(s, args)
+
+
 @command("areg", "areg")
 def cmd_areg(s: "Session", args: str) -> None:
     from ..estimation.panel import cmd_areg as run

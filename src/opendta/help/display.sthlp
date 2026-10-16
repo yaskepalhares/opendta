@@ -12,7 +12,7 @@
 {title:Description}
 
 {pstd}
-Evaluates expressions and shows the results. Directives: {cmd:"}{it:text}{cmd:"}, {it:exp}, {it:%fmt} {it:exp}, {cmd:_skip(#)}, {cmd:_column(#)}, {cmd:_newline}[{cmd:(#)}], {cmd:_continue}, {cmd:_dup(#)}, {cmd:as text}|{cmd:result}|{cmd:error}|{cmd:input}.
+Evaluates expressions and shows the results. Directives: {cmd:"}{it:text}{cmd:"}, {it:exp}, {it:%fmt} {it:exp}, {cmd:_skip(#)}, {cmd:_column(#)}, {cmd:_newline}[{cmd:(#)}], {cmd:_continue}, {cmd:_dup(#)}, {cmd:as text}|{cmd:result}|{cmd:error}|{cmd:input}, {cmd:_request(}{it:macname}{cmd:)} (reads a line typed by the user into the global {it:macname}, or into a local when the name starts with {cmd:_}).
 {p_end}
 
 {title:Examples}

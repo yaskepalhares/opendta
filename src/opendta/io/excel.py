@@ -1,4 +1,5 @@
-"""Excel spreadsheets: reading (.xlsx, and .xls with xlrd) and writing (.xlsx).
+"""Excel spreadsheets: reading (.xlsx, and .xls with xlrd) and writing (.xlsx, and .xls with
+xlwt).
 
 Used by import excel / export excel. The rules follow Stata 14's
 [D] import excel manual; undocumented points are marked
@@ -305,7 +306,8 @@ def write_excel(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarra
     opts = opts or ExcelWriteOptions()
     path = Path(path)
     if path.suffix.lower() == ".xls":
-        raise StataError(198, "export to .xls is not supported by OpenDTA; use .xlsx")
+        _write_xls(ds, path, names, np.asarray(rows), opts)
+        return
     vars_ = [ds.get(n) for n in names]
     kinds = [_date_kind(v) for v in vars_]
     r0, c0 = parse_cell(opts.cell)
@@ -361,6 +363,71 @@ def write_excel(ds: Dataset, path: str | Path, names: list[str], rows: np.ndarra
                 else:
                     row.append(x)
             ws.append(row)
+    tmp = path.with_name(path.name + ".opendta-tmp")
+    try:
+        book.save(str(tmp))
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    tmp.replace(path)
+
+
+def _write_xls(ds: Dataset, path: Path, names: list[str], rows: np.ndarray,
+               opts: ExcelWriteOptions) -> None:
+    """Excel 97-2003 workbook (.xls) through xlwt. With sheetmodify/sheetreplace the other
+    sheets of an existing file are copied cell by cell (values only, through xlrd)."""
+    try:
+        import xlwt
+    except ImportError:
+        raise StataError(603, "writing .xls files requires the xlwt package (pip install xlwt)")
+    vars_ = [ds.get(n) for n in names]
+    kinds = [_date_kind(v) for v in vars_]
+    r0, c0 = parse_cell(opts.cell)
+    nrows = len(rows) + (1 if opts.firstrow else 0) + r0 - 1
+    if nrows > 65536 or len(vars_) + c0 - 1 > 256:
+        # VERIFY: Stata's message for the limits of the .xls format
+        raise StataError(198, "too many rows or columns for an .xls file (65,536 rows, 256 columns)")
+    book = xlwt.Workbook(encoding="utf-8")
+    styles = {k: xlwt.easyxf(num_format_str=f) for k, f in _NUMBER_FORMAT.items()}
+    old: dict[str, list[list]] = {}
+    order: list[str] = []
+    if path.exists() and opts.mode in ("modify", "sheetreplace"):
+        try:
+            import xlrd
+        except ImportError:
+            raise StataError(603, "reading .xls files requires the xlrd package (pip install xlrd)")
+        rb = xlrd.open_workbook(str(path))
+        for sh in rb.sheets():
+            order.append(sh.name)
+            old[sh.name] = [[sh.cell(i, j) for j in range(sh.ncols)] for i in range(sh.nrows)]
+    if opts.sheet not in order:
+        order.append(opts.sheet)
+    for name in order:
+        ws = book.add_sheet(name, cell_overwrite_ok=True)
+        if name in old and not (name == opts.sheet and opts.mode == "sheetreplace"):
+            import xlrd
+            for i, line in enumerate(old[name]):
+                for j, cell in enumerate(line):
+                    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                        continue
+                    ws.write(i, j, cell.value)
+        if name != opts.sheet:
+            continue
+        r = r0 - 1
+        if opts.firstrow:
+            for j, v in enumerate(vars_):
+                ws.write(r, c0 - 1 + j, (v.label or v.name) if opts.firstrow == "varlabels" else v.name)
+            r += 1
+        cols = [_excel_values(ds, v, rows, opts.nolabel) for v in vars_]
+        for i in range(len(rows)):
+            for j, col in enumerate(cols):
+                x = col[i]
+                if x is None:
+                    continue
+                if kinds[j]:
+                    ws.write(r + i, c0 - 1 + j, x, styles[kinds[j]])
+                else:
+                    ws.write(r + i, c0 - 1 + j, x)
     tmp = path.with_name(path.name + ".opendta-tmp")
     try:
         book.save(str(tmp))

@@ -255,6 +255,84 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
     _store_mats(s, o, cell=T, rows=rcats, v=rv, cols=ccats if not cv.is_string else None)
 
 
+def _twoway_summarize(s: "Session", rv: Variable, cv: Variable, yname: str, mask, w, o: dict) -> None:
+    """tabulate var1 var2, summarize(var3): mean, standard deviation and frequency of var3 in
+    each cell ([R] tabulate, summarize(); layout VERIFY, case compat 0805)."""
+    from ..estimation.anova import _g
+    out = s.output
+    yv = s.data.get(yname)
+    if yv.is_string:
+        raise StataError(109, "type mismatch")
+    mask = mask & (yv.data < M.SYSMISS)
+    miss, nolab = bool(o.get("missing")), bool(o.get("nolabel"))
+    rcats, rlabels, rok = _categories(s, rv, mask, missing=miss, nolabel=nolab)
+    ccats, clabels, cok = _categories(s, cv, mask, missing=miss, nolabel=nolab)
+    rc, cc = _codes(rv, rcats), _codes(cv, ccats)
+    sel = mask & rok & cok & (rc >= 0) & (cc >= 0)
+    if not sel.any():
+        out.write("no observations\n", "text")
+        return
+    y = yv.data.astype(float)
+    ww = w if w is not None else np.ones(s.data.nobs)
+    show = [k for k in ("means", "standard", "freq", "obs") if o.get(k)] or ["means", "standard", "freq"]
+    for k in ("means", "standard", "freq", "obs"):
+        if o.get("no" + k) and k in show:
+            show.remove(k)
+    names = {"means": "Means", "standard": "Standard Deviations", "freq": "Frequencies",
+             "obs": "Number of Observations"}
+    parts = [names[k] for k in show]
+    what = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    title = f"{what} of {yv.label or yv.name}"
+
+    def values(rmask, cmask) -> list[str]:
+        m_ = sel & rmask & cmask
+        x, wx = y[m_], ww[m_]
+        n = float(wx.sum())
+        mean = float((wx * x).sum() / n) if n else M.SYSMISS
+        sd = math.sqrt(float((wx * (x - mean) ** 2).sum()) / (n - 1)) if n > 1 else M.SYSMISS
+        v = {"means": _g(mean), "standard": _g(sd), "freq": _fmt_freq(n), "obs": f"{int(m_.sum()):,}"}
+        return [v[k] for k in show]
+
+    every = np.ones(s.data.nobs, dtype=bool)
+    W = min(30, max([10] + [len(x) for x in rlabels]))
+    rtitle, ctitle = rv.label or rv.name, cv.label or cv.name
+    per_panel = max(1, (79 - (W + 2) - 11) // 11)   # VERIFY: splitting into panels
+    ncol = len(ccats)
+    out.write("\n", "text")
+    total_w = W + 2 + 11 * min(ncol, per_panel) + 11
+    for line in _header_lines(title, 60):
+        out.write(" " * max(0, (total_w - len(line)) // 2) + line + "\n", "text")
+    for start in range(0, ncol, per_panel):
+        cols = list(range(start, min(ncol, start + per_panel)))
+        last_panel = cols[-1] == ncol - 1
+        block = 11 * len(cols)
+        out.write("\n", "text")
+        rhead = _header_lines(rtitle, W)
+        above = rhead[:-1] if len(rhead) > 1 else [""]
+        for k, left in enumerate(above):
+            mid = ctitle.center(block).rstrip() if k == len(above) - 1 else ""
+            out.write(f"{left:>{W}} |{mid}\n", "text")
+        lab = "".join(f"{clabels[j][:10]:>10} " for j in cols)
+        out.write(f"{rhead[-1]:>{W}} |" + lab + ("|     Total" if last_panel else "") + "\n", "text")
+        sep = "-" * (W + 1) + "+" + "-" * block + ("+" + "-" * 10 if last_panel else "") + "\n"
+        out.write(sep, "text")
+        groups = [(rlabels[i], rc == i) for i in range(len(rcats))] + [("Total", every)]
+        for gi, (rlab, rmask) in enumerate(groups):
+            if gi == len(groups) - 1:
+                out.write(sep, "text")
+            cells = [values(rmask, cc == j) for j in cols]
+            tot = values(rmask, every)
+            for line in range(len(show)):
+                out.write(f"{(rlab[:W] if line == 0 else ''):>{W}} |", "text")
+                out.write("".join(f"{c[line]:>10} " for c in cells), "result")
+                if last_panel:
+                    out.write("|", "text")
+                    out.write(f"{tot[line]:>10} ", "result")
+                out.write("\n", "text")
+            if len(show) > 1 and gi < len(groups) - 2:
+                out.write(f"{'':>{W}} |" + " " * block + ("|" if last_panel else "") + "\n", "text")
+
+
 def _tests(s: "Session", T: np.ndarray, E: np.ndarray, N: float, o: dict) -> None:
     from scipy import stats as st
     out = s.output
@@ -447,10 +525,12 @@ def cmd_tabulate(s: "Session", args: str) -> None:
             _by_header(s, first)
         mask = base & group
         if isinstance(o.get("summarize"), str):
-            if len(vs) != 1:
-                raise StataError(198, "two-way tabulate, summarize() not implemented")   # VERIFY
-            from ..estimation.anova import tab_summarize
-            tab_summarize(s, vs[0], s.expand_varlist(o["summarize"])[0], mask, w, o)
+            yname = s.expand_varlist(o["summarize"])[0]
+            if len(vs) == 2:
+                _twoway_summarize(s, vs[0], vs[1], yname, mask, w, o)
+            else:
+                from ..estimation.anova import tab_summarize
+                tab_summarize(s, vs[0], yname, mask, w, o)
         elif len(vs) == 1:
             _oneway(s, vs[0], mask, w, wtype, o)
         else:
