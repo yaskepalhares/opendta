@@ -1,0 +1,55 @@
+# What OpenDTA does
+
+**English** | [Português](features.pt-BR.md)
+
+OpenDTA 1.0 covers the core of Stata 14: the do-file language, data management, descriptive statistics, the main estimation commands, complex surveys, survival analysis, multilevel models, time series, multiple imputation, Mata and graphics. The Stata 14 commands that are not in OpenDTA yet are listed in the [ROADMAP](../ROADMAP.md#after-10); they will be added over time.
+
+## Commands and features
+
+- do-file reading: `*`, `//` and `/* */` comments (nested), `///` continuation and `#delimit ;`;
+- local and global macros, including nesting (``` ``i'' ```), `` `=exp' ``, `` `++i' ``, `local ++i` and extended functions (`word count`, `word # of`, `display`, `list`, `piece`, `env`);
+- expressions with Stata's operator precedence and missing-value rules (`.`, `.a`–`.z`);
+- 123 function names (counting synonyms such as `trim`/`strtrim`): mathematical, string, logical, distribution, date and random-number functions;
+- `display` with formats (`%9.2f`, `%10.3e`, `%-12s`, `%td`…) and directives (`_col`, `_skip`, `_dup`, `_n`, `_continue`, `as`…);
+- `forvalues`, `foreach`, `while`, `if`/`else if`/`else`, `continue` and `continue, break`;
+- the `quietly`, `noisily` and `capture` prefixes (also on `{ }` blocks);
+- `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` and `error`;
+- errors with Stata's messages and `r(#)` return codes, followed by an OpenDTA explanation written for people learning Stata: what went wrong in that command, looking at the data (which variable is missing in how many observations, which one is text, which values the outcome takes), why the rule exists, the corrected command and a clickable link to the help page (turn it off with `set hints off`, or with Help → Explain Errors);
+- `set numerics precise`: the same estimates with more exact arithmetic (QR in `regress`, `D.`/`S.` differences in double, a final Newton step in `ml` and `optimize()`, numerical derivatives with Richardson extrapolation, new variables in double); the default `set numerics stata` reproduces Stata's rounding;
+- scientific notation with superscript exponents on screen (`1.0000×10¹⁰` instead of `1.00000e+10`); `set superscript off` restores Stata's form, and text that can be read back (`string()`, macros, `file write`, exports) always uses Stata's form;
+- graphical interface with the Results, Command, Review, Variables and Properties windows, menus, a toolbar with OpenDTA's own icons and a Settings window (Ctrl+, / ⌘,) with search, light, dark or system theme, app icon, font, language, results options and updates, applied at once;
+- text console and batch mode (`opendta -b do file.do`, which writes `file.log` like `stata -b`);
+- programming: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, extended macro functions, `matrix`, third-party `.ado` files on the adopath, `log`/`cmdlog`, `assert`, `set trace` and `timer`;
+- Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
+- data in memory with Stata's storage types (including `float` precision), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` and subscripts;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` and `recast`;
+- `.dta` files: OpenDTA's own reader for formats 113 to 119 (Stata 8 onward) and writer for formats 114, 115, 117, 118 and 119, with labels, notes and characteristics; older formats are read through ReadStat when the `pyreadstat` package is installed;
+- `use` (with varlist, `if` and `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
+- delimited text: `import delimited`, `export delimited`, `insheet` and `outsheet`;
+- spreadsheets: `import excel` and `export excel`;
+- free-format and fixed-column text: `infile` (including `.dct` dictionaries) and `infix`; `file open/write/read/close`;
+- File > Open/Save/Save as, dropping a `.dta` on the window, Data Editor (`browse` and `edit`, with every edit recorded as a command) and Variables Manager (`varmanage`);
+- descriptive statistics: `summarize`, `tabstat`, `tabulate` (with `chi2`, `exact`, `gamma`, `taub`…, and `summarize()` in one- and two-way tables), `tab1`, `tab2`, `table`, `ci` (means, proportions and variances), `ttest`, `prtest` (one and two samples), `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, with `fweight`, `aweight` and `iweight`;
+- data management: `egen` (group and row functions), `collapse`, `contract`, `expand`, `fillin`, `merge` (also the old syntax), `append`, `joinby`, `cross`, `reshape` (also `reshape i/j/xij` and `reshape error`), `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
+- random numbers: 64-bit Mersenne Twister (and the 32-bit KISS of Stata 13 with `set rng kiss32`), `set seed` and `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` and other distributions;
+- Mata: `mata ... end` blocks, user functions, structs, classes (inheritance, virtual methods) and pointers, `optimize()` and `moptimize()`, about 150 library functions and the link to the data (`st_data`, `st_store`, `st_local`, `st_matrix`…);
+- estimation: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg` (`fe`, `re`, `be`, `mle`, `pa`), `xtgee`, `xtlogit`, `xtpoisson`, `areg`, `ivregress`, `qreg`, `anova` (partial and sequential sums of squares, nested terms, error terms and repeated measures) and `oneway`, with factor variables, time-series operators, weights and robust, cluster and bootstrap standard errors;
+- postestimation: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `lrtest`, `hausman`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
+- complex surveys: `svyset` (several stages, replicate weights), `svydescribe`, `estat effects` and the `svy:` prefix with `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` and `tobit` (Taylor linearization, BRR, jackknife, bootstrap and SDR);
+- multiple imputation: `mi set`, `mi register`, `mi impute` (regress, pmm, logit, ologit, mlogit, poisson, chained), `mi estimate` with Rubin's rules, `mi passive`, `mi xeq`, `mi extract`;
+- time series: `arima`, `var` (with `varsoc`, `vargranger` and `irf`: impulse responses and variance decompositions), `dfuller`, `corrgram` and `newey`;
+- structural equation models: `sem` (path models, confirmatory factor analysis and latent variables by ML), `estat gof` and the standardized solution;
+- multilevel models: `mixed` (ML and REML, nested levels, random slopes and covariance structures) and `melogit`, `meprobit` and `mepoisson` (adaptive quadrature), with `estat icc`;
+- survival analysis: `stset` (single and multiple records, delayed entry, origin and scale), `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank and Wilcoxon tests), `stcox` (Breslow and Efron ties, strata, robust variance), `estat phtest` and `streg` (exponential, Weibull, Gompertz, lognormal and loglogistic);
+- tests: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` and the immediate commands `cii`, `ttesti`, `prtesti` and `tabi`; power and sample size with `power` (means, proportions and correlations);
+- describing data: `codebook` and `misstable` (`summarize`, `patterns`, `tree` and `nested`); results to Excel with `putexcel`; `export excel` to `.xlsx` and `.xls`;
+- graphics with OpenDTA's own look: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` and a Graph window with a simple Graph Editor;
+- Do-file Editor with tabs, syntax highlighting and execution of the selection (Ctrl+D) or of the whole file;
+- dialog boxes in the Statistics and Graphics menus, which show the command before running it;
+- interface in English or Portuguese (**Settings** (Ctrl+, / ⌘,) or `set language pt`); output and Stata-style error messages stay in English unless translation is requested (`set messages translated`).
+
+## How it is checked
+
+Each group of commands has automated tests (`pytest`) and verification do-files in `compat/do/`, whose output is compared line by line with logs produced by Stata 14 (`python tools/compare.py`; see [testing.md](testing.md)). Differences with a known cause, such as Stata's undocumented starting values or random-number algorithms, are listed in `compat/known_differences.txt`. Estimators without a Stata log yet are checked against independent implementations (statsmodels, closed-form results) until the reference arrives.
+
+Details that the manuals do not define are marked `VERIFY` in the code and have a case in `compat/do/`; the behavior is fixed by the Stata log ([development policy](clean-room-policy.md)).

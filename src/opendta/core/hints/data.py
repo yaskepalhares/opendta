@@ -255,6 +255,16 @@ def _type_mismatch_detail(ctx: Ctx) -> Explanation | None:
                                  if re.fullmatch(r"-?\d+(\.\d*)?", m.group(3)) else m.group(0), 1)
             what = L(f'{var} is numeric, but "{m.group(3)}" is text in quotes.',
                      f'{var} é numérica, mas "{m.group(3)}" é texto entre aspas.')
+            # the text is the value label of a code: compare with the code
+            lab = ctx.ds.get(var).value_label
+            codes = [k for k, v in ctx.ds.value_labels.get(lab, {}).items() if v == m.group(3)] if lab else []
+            if codes:
+                fixed = text.replace(m.group(0), f"{m.group(1)} {m.group(2)} {codes[0]}", 1)
+                what = L(f'{var} is numeric: "{m.group(3)}" is the value label of code {codes[0]}.',
+                         f'{var} é numérica: "{m.group(3)}" é o rótulo de valor do código {codes[0]}.')
+                fix = L(f'{fixed}  (or {m.group(1)} {m.group(2)} "{m.group(3)}":{lab})',
+                        f'{fixed}  (ou {m.group(1)} {m.group(2)} "{m.group(3)}":{lab})')
+                return Explanation(what, L(*_WHY_TYPES), fix, "operators")
             fix = (fixed if fixed != text else
                    L(f'compare {var} with a number; if it has value labels, use "label":labelname.',
                      f'compare {var} com um número; se ela tiver rótulos de valor, use '

@@ -54,6 +54,8 @@ CASES = [
     ("generate t = idade + s", ["mixes numeric variables (idade) with string variables (s)"]),
     ("count if s == 1", ['count if s == "1"']),
     ('count if y == "1"', ['y is numeric, but "1" is text in quotes', "How to fix: count if y == 1"]),
+    ('count if y == "fem"', ['"fem" is the value label of code 1', 'How to fix: count if y == 1',
+                             '"fem":sl']),
     ("x = 1", ["must start with replace", "How to fix: replace x = 1"]),
     ("novavar = 1", ["must start with generate", "How to fix: generate novavar = 1"]),
     ("summary idade", ["Stata's equivalent is summarize"]),

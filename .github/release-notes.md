@@ -1,5 +1,16 @@
 **English** · [Português](#português)
 
+## What's new in 1.0
+
+OpenDTA 1.0 covers the core of Stata 14. New in this version:
+
+- `sem` (path models, confirmatory factor analysis and latent variables, `estat gof`), `power` (means, proportions and correlations) and `irf` after `var`;
+- `xtgee` and `xtreg, pa`/`be`/`mle`; `anova` with sequential sums of squares, nested terms, error terms and repeated measures; two-way `tabulate, summarize()`; `ci variances`; two-sample `prtest`; `misstable tree` and `nested`; `reshape error`; the old `merge` syntax; `export excel` to `.xls`;
+- error explanations for beginners, with a diagnosis from the data and a clickable link to the help;
+- `replace y = 2*L.y` is now sequential, as in Stata.
+
+The Stata 14 commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#after-10).
+
 ## Download
 
 | Your Mac | File |
@@ -41,6 +52,17 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 1.0
+
+O OpenDTA 1.0 cobre o núcleo do Stata 14. Novo nesta versão:
+
+- `sem` (modelos de caminhos, análise fatorial confirmatória e variáveis latentes, `estat gof`), `power` (médias, proporções e correlações) e `irf` depois do `var`;
+- `xtgee` e `xtreg, pa`/`be`/`mle`; `anova` com somas de quadrados sequenciais, termos aninhados, termos de erro e medidas repetidas; `tabulate, summarize()` de duas entradas; `ci variances`; `prtest` de duas amostras; `misstable tree` e `nested`; `reshape error`; a sintaxe antiga do `merge`; `export excel` para `.xls`;
+- explicações de erro para iniciantes, com diagnóstico a partir dos dados e link clicável para a ajuda;
+- `replace y = 2*L.y` agora é sequencial, como no Stata.
+
+Os comandos do Stata 14 que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#depois-da-10).
 
 ### Download
 

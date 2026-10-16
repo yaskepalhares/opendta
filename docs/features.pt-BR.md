@@ -1,0 +1,55 @@
+# O que o OpenDTA faz
+
+[English](features.md) | **Português**
+
+O OpenDTA 1.0 cobre o núcleo do Stata 14: a linguagem dos do-files, a manipulação de dados, a estatística descritiva, os principais comandos de estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, Mata e gráficos. Os comandos do Stata 14 que ainda não estão no OpenDTA estão listados no [ROADMAP](../ROADMAP.pt-BR.md#depois-da-10); eles serão acrescentados aos poucos.
+
+## Comandos e recursos
+
+- leitura de do-files: comentários `*`, `//` e `/* */` (aninhados), continuação `///` e `#delimit ;`;
+- macros locais e globais, incluindo aninhamento (``` ``i'' ```), `` `=exp' ``, `` `++i' ``, `local ++i` e funções estendidas (`word count`, `word # of`, `display`, `list`, `piece`, `env`);
+- expressões com a precedência do Stata e as regras de missing (`.`, `.a`–`.z`);
+- 123 nomes de função (contando sinônimos como `trim`/`strtrim`): matemáticas, de string, lógicas, distribuições, datas e números aleatórios;
+- `display` com formatos (`%9.2f`, `%10.3e`, `%-12s`, `%td`…) e diretivas (`_col`, `_skip`, `_dup`, `_n`, `_continue`, `as`…);
+- `forvalues`, `foreach`, `while`, `if`/`else if`/`else`, `continue` e `continue, break`;
+- os prefixos `quietly`, `noisily` e `capture` (também em blocos `{ }`);
+- `do`, `run`, `include`, `args`, `tokenize`, `confirm`, `scalar`, `macro`, `set`, `version`, `cd`, `pwd`, `exit` e `error`;
+- erros com as mensagens e os códigos `r(#)` do Stata, seguidos de uma explicação do OpenDTA escrita para quem está aprendendo: o que deu errado naquele comando, olhando os dados (qual variável falta em quantas observações, qual é texto, que valores o desfecho tem), por que a regra existe, o comando corrigido e um link clicável para a página de ajuda (desligue com `set hints off`, ou pelo menu Help → Explain Errors);
+- `set numerics precise`: as mesmas estimativas com contas mais exatas (QR no `regress`, diferenças `D.`/`S.` em double, passo final de Newton no `ml` e no `optimize()`, derivadas numéricas com extrapolação de Richardson, variáveis novas em double); o padrão `set numerics stata` reproduz os arredondamentos do Stata;
+- notação científica com expoente sobrescrito na exibição (`1.0000×10¹⁰` em vez de `1.00000e+10`); `set superscript off` volta à forma do Stata, e texto que pode ser lido de volta (`string()`, macros, `file write`, exportação) sempre usa a forma do Stata;
+- interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios e uma janela Settings (Ctrl+, / ⌘,) com busca, tema claro, escuro ou do sistema, ícone do app, fonte, idioma, opções dos resultados e atualizações, aplicados na hora;
+- console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
+- programação: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, funções estendidas de macro, `matrix`, `.ado` de terceiros no adopath, `log`/`cmdlog`, `assert`, `set trace` e `timer`;
+- Viewer com `help` em SMCL (páginas próprias e as de pacotes instalados);
+- dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
+- arquivos `.dta`: leitura própria dos formatos 113 a 119 (Stata 8 em diante) e gravação nos formatos 114, 115, 117, 118 e 119, com rótulos, notas e características; formatos ainda mais antigos são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
+- `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
+- texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
+- planilhas: `import excel` e `export excel`;
+- texto em formato livre e em colunas fixas: `infile` (inclusive com dicionário `.dct`) e `infix`; `file open/write/read/close`;
+- File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`);
+- estatística descritiva: `summarize`, `tabstat`, `tabulate` (com `chi2`, `exact`, `gamma`, `taub`…, e `summarize()` em tabelas de uma e duas entradas), `tab1`, `tab2`, `table`, `ci` (médias, proporções e variâncias), `ttest`, `prtest` (uma e duas amostras), `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, com `fweight`, `aweight` e `iweight`;
+- manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge` (também a sintaxe antiga), `append`, `joinby`, `cross`, `reshape` (também `reshape i/j/xij` e `reshape error`), `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;
+- números aleatórios: Mersenne Twister de 64 bits (e o KISS de 32 bits do Stata 13 com `set rng kiss32`), `set seed` e `runiform()`, `rnormal()`, `rbinomial()`, `rpoisson()` e outras distribuições;
+- Mata: blocos `mata ... end`, funções do usuário, structs, classes (herança, métodos virtuais) e ponteiros, `optimize()` e `moptimize()`, cerca de 150 funções da biblioteca e a ligação com os dados (`st_data`, `st_store`, `st_local`, `st_matrix`…).
+- estimação: `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `tobit`, `glm`, `xtreg` (`fe`, `re`, `be`, `mle`, `pa`), `xtgee`, `xtlogit`, `xtpoisson`, `areg`, `ivregress`, `qreg`, `anova` (somas de quadrados parciais e sequenciais, termos aninhados, termos de erro e medidas repetidas) e `oneway`, com variáveis de fator, operadores de séries temporais, pesos e erros-padrão robustos, por cluster e bootstrap;
+- pós-estimação: `predict`, `test`, `testparm`, `lincom`, `nlcom`, `margins`, `estimates`, `estat` (`ic`, `vce`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`…);
+- amostras complexas: `svyset` (vários estágios, pesos replicados), `svydescribe`, `estat effects` e o prefixo `svy:` com `mean`, `proportion`, `total`, `ratio`, `tabulate`, `regress`, `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm` e `tobit` (linearização de Taylor, BRR, jackknife, bootstrap e SDR);
+- imputação múltipla: `mi set`, `mi register`, `mi impute` (regress, pmm, logit, ologit, mlogit, poisson, chained), `mi estimate` com as regras de Rubin, `mi passive`, `mi xeq`, `mi extract`;
+- séries temporais: `arima`, `var` (com `varsoc`, `vargranger` e `irf`: respostas a impulso e decomposição da variância), `dfuller`, `corrgram` e `newey`;
+- modelos de equações estruturais: `sem` (modelos de caminhos, análise fatorial confirmatória e variáveis latentes por ML), `estat gof` e a solução padronizada;
+- modelos multinível: `mixed` (ML e REML, níveis aninhados, inclinações aleatórias e estruturas de covariância) e `melogit`, `meprobit` e `mepoisson` (quadratura adaptativa), com `estat icc`;
+- análise de sobrevivência: `stset` (registros simples e múltiplos, entrada atrasada, origem e escala), `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, testes log-rank e de Wilcoxon), `stcox` (empates de Breslow e Efron, estratos, variância robusta), `estat phtest` e `streg` (exponencial, Weibull, Gompertz, lognormal e loglogística);
+- testes: `ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest` e os comandos imediatos `cii`, `ttesti`, `prtesti` e `tabi`; poder e tamanho de amostra com `power` (médias, proporções e correlações);
+- descrição dos dados: `codebook` e `misstable` (`summarize`, `patterns`, `tree` e `nested`); resultados para o Excel com `putexcel`; `export excel` para `.xlsx` e `.xls`;
+- gráficos com visual próprio: `twoway` (`scatter`, `line`, `lfit`, `qfit`, `function`…), `histogram`, `kdensity`, `graph bar`, `graph box`, `graph pie`, `graph matrix`, `graph combine`, `by()`, `graph export` (PNG, PDF, SVG…), `lowess`, `qnorm`, `rvfplot`, `marginsplot` e janela Graph com um Graph Editor simples;
+- Do-file Editor com abas, realce de sintaxe e execução da seleção (Ctrl+D) ou do arquivo;
+- caixas de diálogo nos menus Statistics e Graphics, que mostram o comando antes de rodar;
+- interface em inglês ou português (**Settings** (Ctrl+, / ⌘,) ou `set language pt`); as saídas e as mensagens de erro no formato do Stata continuam em inglês, a menos que se peça a tradução (`set messages translated`).
+
+## Como é conferido
+
+Cada grupo de comandos tem testes automáticos (`pytest`) e do-files de verificação em `compat/do/`, cuja saída é comparada linha a linha com logs gerados pelo Stata 14 (`python tools/compare.py`; veja [testing.pt-BR.md](testing.pt-BR.md)). As diferenças com causa conhecida, como valores iniciais ou algoritmos de números aleatórios que o Stata não documenta, estão em `compat/known_differences.txt`. Os estimadores que ainda não têm log do Stata são conferidos com implementações independentes (statsmodels, resultados em forma fechada) até a referência chegar.
+
+Os detalhes que os manuais não definem levam a marca `VERIFY` no código e têm um caso em `compat/do/`; o comportamento é fixado pelo log do Stata ([política de desenvolvimento](clean-room-policy.pt-BR.md)).

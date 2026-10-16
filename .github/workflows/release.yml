@@ -2,7 +2,7 @@ name: download release
 
 # Builds the macOS installers (Apple Silicon and Intel) and the Windows
 # installer and portable .zip (x64), and publishes a Release on GitHub. Runs
-# when a v* tag is pushed (e.g. git tag v0.2.0 && git push origin v0.2.0). In
+# when a v* tag is pushed (e.g. git tag v1.0.0 && git push origin v1.0.0). In
 # pull requests that touch the packaging, and from the Actions tab
 # ("Run workflow"), it only builds and tests the files, without publishing.
 
@@ -22,7 +22,24 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    # a tag must match the version inside the app: otherwise the installed copy keeps offering
+    # the same update (tags v0.2.1 and v0.2.2 were built with __version__ = "0.2.0")
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that the tag, __init__.py and pyproject.toml agree
+        run: |
+          code=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/opendta/__init__.py)
+          proj=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+          echo "__init__.py: $code  pyproject.toml: $proj  ref: $GITHUB_REF_NAME"
+          test "$code" = "$proj" || { echo "::error::__version__ ($code) differs from pyproject.toml ($proj)"; exit 1; }
+          case "$GITHUB_REF" in
+            refs/tags/v*) test "$GITHUB_REF_NAME" = "v$code" || { echo "::error::tag $GITHUB_REF_NAME does not match version $code"; exit 1; } ;;
+          esac
+
   macos:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +74,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    needs: version
     runs-on: windows-latest            # x64 (Intel/AMD)
     steps:
       - uses: actions/checkout@v4
