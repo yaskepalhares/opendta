@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: What OpenDTA does
+    url: https://github.com/yaskepalhares/opendta/blob/main/docs/features.md
+    about: The commands and features already available.
+  - name: Roadmap
+    url: https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md
+    about: What comes next, including the Stata 14 commands still missing.

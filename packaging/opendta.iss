@@ -1,7 +1,7 @@
 ; Inno Setup script for the OpenDTA Windows installer (64-bit, Intel/AMD).
 ;
 ;   pyinstaller packaging/opendta.spec --noconfirm
-;   iscc /DMyAppVersion=0.2.0 packaging/opendta.iss
+;   iscc /DMyAppVersion=1.0.0 packaging/opendta.iss
 ;
 ; Builds dist/OpenDTA-windows-x64-setup.exe from the dist/OpenDTA folder made by
 ; PyInstaller. tools/build_windows.ps1 runs the whole process. The installer

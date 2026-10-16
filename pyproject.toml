@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opendta"
-version = "0.2.0"
+version = "1.0.0"
 description = "Do-file interpreter with a Stata 14-style interface (personal study project)"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yaske Palhares" }]
 license = { text = "MIT" }
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Operating System :: MacOS",
