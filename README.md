@@ -17,11 +17,22 @@ OpenDTA runs do-files written for Stata 14, reads and writes `.dta` datasets and
 
 ## Install
 
-- **macOS** 12 or later: [Apple Silicon](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg) · [Intel](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg)
-- **Windows** 10 or 11, 64-bit: [installer](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-setup.exe) · [portable .zip](https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-portable.zip)
-- **Linux and other systems**: [from source](docs/getting-started.md#from-source)
+<table>
+<tr><th>macOS 12 or later</th><th>Windows 10 or 11, 64-bit</th><th>Linux and other systems</th></tr>
+<tr>
+<td align="center"><a href="https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-apple-silicon.dmg"><img src="assets/download/macos-apple-silicon.svg" alt="Download for macOS, Apple Silicon (.dmg)" width="264"></a><br><a href="https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-macos-intel.dmg"><img src="assets/download/macos-intel.svg" alt="Download for macOS, Intel (.dmg)" width="264"></a></td>
+<td align="center"><a href="https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-setup.exe"><img src="assets/download/windows-installer.svg" alt="Download the Windows installer (.exe)" width="264"></a><br><a href="https://github.com/yaskepalhares/opendta/releases/latest/download/OpenDTA-windows-x64-portable.zip"><img src="assets/download/windows-portable.svg" alt="Download the portable Windows version (.zip)" width="264"></a></td>
+<td align="center" valign="top"><a href="docs/getting-started.md#from-source"><img src="assets/download/source.svg" alt="Install from source on Linux and other systems" width="264"></a></td>
+</tr>
+</table>
 
-The apps are not signed, so the first launch needs one confirmation; see [Getting started](docs/getting-started.md#install). Installed copies check for updates by themselves. All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page.
+Not sure which Mac you have? Apple menu → **About This Mac**: "Apple M…" is Apple Silicon, "Intel" is Intel. The apps are not signed, so the first launch needs one confirmation; see [Getting started](docs/getting-started.md#install). Installed copies check for updates by themselves. All versions are on the [Releases](https://github.com/yaskepalhares/opendta/releases) page.
+
+## Progress
+
+[![Commands implemented per area](https://yaskepalhares.github.io/opendta/roadmap-coverage.svg)](https://yaskepalhares.github.io/opendta/)
+
+Each tile is an area of commands, sized by how many it has and coloured by the share already implemented; it is redrawn on every change. **[Open the interactive map](https://yaskepalhares.github.io/opendta/)** to see every command and search for one, or read the [roadmap](ROADMAP.md).
 
 ## Contributing
 
