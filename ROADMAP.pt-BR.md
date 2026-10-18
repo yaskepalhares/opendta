@@ -151,6 +151,15 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 - [x] Seletor de idioma em Settings: inglês (padrão) ou português, valendo para menus, janelas, diálogos, explicações de erro e mensagens do OpenDTA
 - [x] Com o português ligado, as mensagens no formato do Stata podem continuar em inglês (para quem compara com logs e manuais) ou ser traduzidas, à escolha do usuário (`set language`, `set messages`)
 
+## Fase 10: epidemiologia ✅
+
+- [x] Tabelas para epidemiologistas: `cs`/`csi` (diferença e razão de riscos, frações atribuíveis ou prevenidas), `cc`/`cci` (razão de chances com limites exatos, de Cornfield, de Woolf ou baseados no teste; teste exato de Fisher), `ir`/`iri` (diferença e razão de taxas, limites exatos, mid-p), `mcc`/`mcci` (teste de McNemar e comparações pareadas), com estratificação `by()`: estimativas brutas e de Mantel-Haenszel e testes de homogeneidade
+- [x] `tabodds` (chances por nível de exposição, testes de homogeneidade e de tendência, razões de chances ajustadas por Mantel-Haenszel, gráfico) e `mhodds` (razão de chances de Mantel-Haenszel, teste de escore para tendência)
+- [x] `symmetry` (Bowker, Stuart-Maxwell, Bickenboller, significância exata), `dstdize` (padronização direta) e `istdize` (padronização indireta, SMR com limites exatos)
+- [x] Concordância entre avaliadores: `kap` (kappa de Cohen, kappa ponderado; kappa de Fleiss para vários avaliadores) e `kappa` (formato de frequências)
+- [x] Análise ROC: `roctab` (área com erros de DeLong ou de Hanley-McNeil, relatório detalhado, curva), `roccomp` (igualdade de áreas, correlacionadas ou independentes), `rocfit` (modelo binormal), `lroc` e `lsens` depois de `logit`, `logistic` e `probit`
+- Os casos `1401` e `1402` aguardam a rodada no Stata
+
 ## Distribuição e documentação
 
 - [x] Licença MIT e avisos de licença dos componentes de terceiros
@@ -173,7 +182,7 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
 - **Manipulação de dados**: `clonevar`, `ds`, `lookfor`, `sysuse`/`webuse`, `xpose`, `stack`, `separate`, `ipolate`, `range`, `drawnorm`, `corr2data`, `expandcl`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `checksum`, `snapshot`, `statsby`, `outfile`, `insobs`, `putmata`, `icd9`/`icd10`, `bcal`, `unicode`, `odbc`, `filefilter`, `zipfile`, `mkdir`, `rmdir`, `copy`, `shell`, `dir`; `table` com três ou mais variáveis; `import sas`, `spss`, `sasxport` e `haver`; leitura e gravação binária com `file`; `infile, byvariable()`; `putexcel` para `.xls`; opções de `list` e `describe` que ainda faltam.
-- **Epidemiologia**: `cs`/`csi`, `cc`/`cci`, `ir`/`iri`, `mcc`/`mcci`, `tabodds`, `mhodds`, `dstdize`/`istdize`, `symmetry`, `kappa`/`kap`, `roctab`, `roccomp`, `rocreg`, `rocfit`, `lroc`, `lsens`.
+- **Epidemiologia**: `rocreg`; `cs`, `cc` e `ir` com as opções `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`.
 - **Estatística básica**: o comando `ml` (o motor já existe), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Modelos**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` e `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Dados em painel**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.

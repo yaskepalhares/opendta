@@ -1,0 +1,518 @@
+"""Receiver operating characteristic analysis ([R] roc, [R] rocfit, [R] lroc,
+[R] lsens): roctab (nonparametric ROC curve of one classifier), roccomp
+(comparison of the areas of several classifiers), rocfit (binormal model fit by
+maximum likelihood), and lroc/lsens after logit, logistic or probit.
+
+The area is the Mann-Whitney statistic; its standard error is DeLong, DeLong and
+Clarke-Pearson's (1988) by default, or Hanley and McNeil's (1982). roccomp tests
+the equality of areas with DeLong's covariance (correlated classifiers) or with
+independent variances (by()). Layout details are marked VERIFY and checked in
+compat/do/1402_kappa_roc.do."""
+
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from ..core import missing as M
+from ..core.errors import StataError
+from ..lang.syntax import match_options, parse_standard
+from ..lazy import lazy
+from ._util import touse
+from .epitab import _set_r, _strata
+from .registry import command
+from .summarize import _level, name12, weights
+
+st = lazy("scipy.stats")
+
+if TYPE_CHECKING:
+    from ..session import Session
+
+NAN = float("nan")
+SYS = M.SYSMISS
+
+
+# ---------------------------------------------------------------------------
+# area and its variance
+# ---------------------------------------------------------------------------
+
+def placements(pos: np.ndarray, neg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """V10 (one per positive) and V01 (one per negative): the share of the other group a
+    score beats, ties counting one half."""
+    ns = np.sort(neg)
+    ps = np.sort(pos)
+    v10 = (np.searchsorted(ns, pos, "left") + np.searchsorted(ns, pos, "right")) / (2 * len(neg))
+    v01 = 1 - (np.searchsorted(ps, neg, "left") + np.searchsorted(ps, neg, "right")) / (2 * len(pos))
+    return v10, v01
+
+
+def auc_delong(pos: np.ndarray, neg: np.ndarray) -> tuple[float, float]:
+    v10, v01 = placements(pos, neg)
+    a = float(v10.mean())
+    m, n = len(pos), len(neg)
+    var = (v10.var(ddof=1) if m > 1 else 0.0) / m + (v01.var(ddof=1) if n > 1 else 0.0) / n
+    return a, math.sqrt(var)
+
+
+def se_hanley(a: float, m: int, n: int) -> float:
+    q1, q2 = a / (2 - a), 2 * a * a / (1 + a)
+    var = (a * (1 - a) + (m - 1) * (q1 - a * a) + (n - 1) * (q2 - a * a)) / (m * n)
+    return math.sqrt(max(var, 0.0))
+
+
+def delong_cov(pos_list, neg_list) -> tuple[np.ndarray, np.ndarray]:
+    """Areas and DeLong covariance matrix of classifiers scored on the same subjects."""
+    V10 = []
+    V01 = []
+    for pos, neg in zip(pos_list, neg_list):
+        v10, v01 = placements(pos, neg)
+        V10.append(v10)
+        V01.append(v01)
+    V10, V01 = np.array(V10), np.array(V01)
+    m, n = V10.shape[1], V01.shape[1]
+    areas = V10.mean(1)
+    S = np.cov(V10) / m + np.cov(V01) / n
+    return areas, np.atleast_2d(S)
+
+
+def roc_points(pos: np.ndarray, neg: np.ndarray):
+    """Cutpoints (each distinct score, classified + if score >= cutpoint) with sensitivity
+    and specificity, plus the final 'greater than the maximum' row."""
+    cuts = np.unique(np.concatenate([pos, neg]))
+    rows = []
+    for c in cuts:
+        rows.append((c, float((pos >= c).mean()), float((neg < c).mean()), ">="))
+    rows.append((cuts[-1], 0.0, 1.0, ">"))
+    return rows
+
+
+def _expand(x: np.ndarray, w: np.ndarray | None) -> np.ndarray:
+    return x if w is None else np.repeat(x, w.astype(int))
+
+
+def _ci(a: float, se: float, level: float) -> tuple[float, float]:
+    z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
+    return a - z * se, a + z * se
+
+
+def _f(x, spec) -> str:
+    return "." if x is None or (isinstance(x, float) and math.isnan(x)) else format(x, spec)
+
+
+# ---------------------------------------------------------------------------
+# roctab
+# ---------------------------------------------------------------------------
+
+def _pos_neg(s: "Session", p, ref: str, cls: list[str], extra_mask=None):
+    ds = s.data
+    rv = ds.get(s.expand_varlist(ref)[0])
+    cv = [ds.get(s.expand_varlist(c)[0]) for c in cls]
+    mask = touse(s, p) & (rv.data < SYS)
+    for c in cv:
+        if c.is_string:
+            raise StataError(109, "type mismatch")
+        mask &= c.data < SYS
+    if extra_mask is not None:
+        mask &= extra_mask
+    w, _, mask = weights(s, p, mask, ("fweight",))
+    vals = set(rv.data[mask].tolist())
+    if not vals <= {0.0, 1.0}:
+        # Stata: the reference variable must be 0/1 (VERIFY: rc and message)
+        raise StataError(450, f"{rv.name} not a 0/1 variable")
+    return rv, cv, mask, w
+
+
+@command("roctab", "roctab")
+def cmd_roctab(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    names = p.varlist.split()
+    if len(names) != 2:
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"detail": 1, "lorenz": 3, "binomial": 3, "nolabel": 5, "table": 3,
+                                  "bamber": 3, "hanley": 3, "graph": 2, "norefline": 5, "summary": 3,
+                                  "specificity": 4, "level": 1})
+    if o.get("binomial") or o.get("bamber") or o.get("lorenz"):
+        raise StataError(198, "options binomial, bamber and lorenz of roctab are not available yet in OpenDTA")
+    level = _level(s, o)
+    rv, (cv,), mask, w = _pos_neg(s, p, names[0], [names[1]])
+    wm = None if w is None else w[mask]
+    y = _expand(rv.data[mask], wm)
+    x = _expand(cv.data[mask], wm)
+    pos, neg = x[y == 1], x[y == 0]
+    if not len(pos) or not len(neg):
+        raise StataError(2000, "no observations")   # VERIFY
+    a, se = auc_delong(pos, neg)
+    if o.get("hanley"):
+        se = se_hanley(a, len(pos), len(neg))
+    lo, hi = _ci(a, se, level)
+    out = s.output
+    rows = roc_points(pos, neg)
+    if o.get("table"):
+        _roctab_table(s, rv, cv, pos, neg)
+    if o.get("detail"):
+        out.write("\nDetailed report of sensitivity and specificity\n", "text")
+        out.write("-" * 78 + "\n", "text")
+        out.write(" " * 43 + "Correctly\n", "text")
+        out.write("Cutpoint      Sensitivity   Specificity   Classified          LR+          LR-\n", "text")
+        out.write("-" * 78 + "\n", "text")
+        N = len(pos) + len(neg)
+        for c, se_, sp, op in rows:
+            cc = (se_ * len(pos) + sp * len(neg)) / N
+            lrp = se_ / (1 - sp) if sp < 1 else NAN
+            lrn = (1 - se_) / sp if sp > 0 else NAN
+            cut = f"( {op:<2} {c:g} )"
+            out.write(f"{cut:<14}", "text")
+            out.write(f"{100 * se_:>11.2f}%{100 * sp:>13.2f}%{100 * cc:>12.2f}%"
+                      f"{_f(lrp, '>13.4f') if not math.isnan(lrp) else ' ' * 13}"
+                      f"{_f(lrn, '>13.4f') if not math.isnan(lrn) else ''}\n", "result")
+        out.write("-" * 78 + "\n", "text")
+    if not o.get("graph") or o.get("summary") or o.get("detail") or o.get("table"):
+        title = "-Hanley & McNeil-" if o.get("hanley") else "-Asymptotic Normal--"   # VERIFY title
+        out.write("\n" + " " * 22 + "ROC" + " " * 20 + f"{title:>21}\n", "text")
+        out.write(f"{'Obs':>14}{'Area':>11}     Std. Err.      [{level:g}% Conf. Interval]\n", "text")
+        out.write(" " * 5 + "-" * 60 + "\n", "text")
+        out.write(f"{len(pos) + len(neg):>14,}{a:>11.4f}{se:>13.4f}{lo:>15.5f}{hi:>12.5f}\n", "result")
+    if o.get("graph"):
+        _roc_graph(s, [(cv.name, rows, a)], refline=not o.get("norefline"),
+                   title=f"Area under ROC curve = {a:.4f}")
+    _set_r(s, [("ub", hi), ("lb", lo), ("se", se), ("area", a), ("N", float(len(pos) + len(neg)))])
+
+
+def _roctab_table(s: "Session", rv, cv, pos, neg) -> None:
+    out = s.output
+    cuts = np.unique(np.concatenate([pos, neg]))
+    K = len(cuts)
+    out.write(f"\n{name12(rv.name):>12} |{name12(cv.name):^{8 * K}}|\n", "text")
+    out.write(" " * 13 + "|" + "".join(f"{c:>8g}" for c in cuts) + f"|{'Total':>8}\n", "text")
+    out.write("-" * 13 + "+" + "-" * (8 * K) + "+" + "-" * 8 + "\n", "text")
+    for lab, grp in (("0", neg), ("1", pos)):
+        out.write(f"{lab:>12} |", "text")
+        out.write("".join(f"{int((grp == c).sum()):>8}" for c in cuts) + f"|{len(grp):>8}\n", "result")
+    out.write("-" * 13 + "+" + "-" * (8 * K) + "+" + "-" * 8 + "\n", "text")
+    out.write(f"{'Total':>12} |", "text")
+    out.write("".join(f"{int((pos == c).sum() + (neg == c).sum()):>8}" for c in cuts)
+              + f"|{len(pos) + len(neg):>8}\n", "result")
+
+
+def _roc_graph(s: "Session", curves, refline: bool, title: str = "", legend: bool = False) -> None:
+    from ..graphics.model import Graph, Layer, Panel
+    from .graphcmd import finish
+    layers = []
+    for name, rows, a in curves:
+        pts = sorted({(1 - sp, se_) for _, se_, sp, _ in rows} | {(0.0, 0.0), (1.0, 1.0)})
+        label = f"{name} ROC area: {a:.4f}" if legend else name
+        layers.append(Layer("connected", [q[0] for q in pts], [q[1] for q in pts], {}, {}, label))
+    if refline:
+        layers.append(Layer("line", [0.0, 1.0], [0.0, 1.0], {}, {"lcolor": "gs8"}, "Reference"))
+    opts = {"_xtitle": "1 - Specificity", "_ytitle": "Sensitivity", "aspectratio": 1.0}
+    if title:
+        opts["note"] = {"lines": [title]}
+    if not legend:
+        opts["legend"] = {"off": True}
+    finish(s, Graph(family="twoway", opts=opts, panels=[Panel("", layers)]), {})
+
+
+# ---------------------------------------------------------------------------
+# roccomp
+# ---------------------------------------------------------------------------
+
+@command("roccomp", "roccomp")
+def cmd_roccomp(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    names = p.varlist.split()
+    if len(names) < 2:
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"by": 2, "test": 1, "graph": 2, "norefline": 5, "separate": 3,
+                                  "summary": 3, "binormal": 3, "line": 4, "level": 1})
+    if o.get("binormal"):
+        raise StataError(198, "option binormal of roccomp is not available yet in OpenDTA")
+    level = _level(s, o)
+    out = s.output
+    if isinstance(o.get("by"), str):
+        if len(names) != 2:
+            raise StataError(198, "only one classifier allowed with by()")   # VERIFY
+        rv, (cv,), mask, w = _pos_neg(s, p, names[0], [names[1]])
+        byname, groups = _strata(s, str(o["by"]), mask)
+        items = []
+        for lab, sel in groups:
+            ws = None if w is None else w[sel]
+            y, x = _expand(rv.data[sel], ws), _expand(cv.data[sel], ws)
+            pos, neg = x[y == 1], x[y == 0]
+            a, se = auc_delong(pos, neg)
+            items.append((lab, len(pos) + len(neg), a, se, roc_points(pos, neg)))
+        areas = np.array([i[2] for i in items])
+        S = np.diag([i[3] ** 2 for i in items])
+    else:
+        rv, cvs, mask, w = _pos_neg(s, p, names[0], names[1:])
+        wm = None if w is None else w[mask]
+        y = _expand(rv.data[mask], wm)
+        xs = [_expand(c.data[mask], wm) for c in cvs]
+        pos_l = [x[y == 1] for x in xs]
+        neg_l = [x[y == 0] for x in xs]
+        areas, S = delong_cov(pos_l, neg_l)
+        items = [(c.name, len(y), areas[k], math.sqrt(S[k, k]), roc_points(pos_l[k], neg_l[k]))
+                 for k, c in enumerate(cvs)]
+    out.write("\n" + " " * 30 + "ROC" + " " * 20 + "-Asymptotic Normal--\n", "text")
+    out.write(f"{'':17}{'Obs':>5}{'Area':>11}     Std. Err.      [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 73 + "\n", "text")
+    for lab, n, a, se, _ in items:
+        lo, hi = _ci(a, se, level)
+        out.write(f"{name12(str(lab)):<17}", "text")
+        out.write(f"{n:>5}{a:>11.4f}{se:>13.4f}{lo:>15.5f}{hi:>12.5f}\n", "result")
+    out.write("-" * 73 + "\n", "text")
+    k = len(items)
+    L = np.zeros((k - 1, k))
+    for i in range(k - 1):
+        L[i, i], L[i, i + 1] = 1, -1
+    if isinstance(o.get("test"), str):
+        m = getattr(s, "matrices", {}).get(str(o["test"]))
+        if m is None:
+            raise StataError(111, f"matrix {o['test']} not found")
+        L = np.asarray(m.data, float)
+    d = L @ areas
+    try:
+        chi2 = float(d @ np.linalg.solve(L @ S @ L.T, d))
+    except np.linalg.LinAlgError:
+        chi2 = NAN
+    df = L.shape[0]
+    pv = float(st.chi2.sf(chi2, df)) if not math.isnan(chi2) else NAN
+    labs = [str(i[0]) for i in items]
+    ho = " = ".join(f"area({lab})" for lab in labs) if not isinstance(o.get("test"), str) else "Comparison as defined by contrast matrix: " + str(o["test"])
+    out.write(f"Ho: {ho}\n", "text")
+    out.write(f"    chi2({df}) = ", "text")
+    out.write(f"{_f(chi2, '>8.2f')}", "result")
+    out.write("       Prob>chi2 = ", "text")
+    out.write(f"{_f(pv, '>8.4f')}\n", "result")
+    if o.get("graph"):
+        _roc_graph(s, [(str(i[0]), i[4], i[2]) for i in items], refline=not o.get("norefline"), legend=True)
+    from .matrix import Matrix
+    s.r = {"df": float(df), "p": pv if not math.isnan(pv) else SYS, "chi2": chi2 if not math.isnan(chi2) else SYS,
+           "N_g": float(k), "V": Matrix(S, labs, labs), "cov": Matrix(S, labs, labs)}
+
+
+# ---------------------------------------------------------------------------
+# lroc, lsens (after logit, logistic, probit)
+# ---------------------------------------------------------------------------
+
+def _fitted(s: "Session", varlist: str):
+    from ..estimation.estat import _binary
+    from ..estimation.results import current
+    est = current(s)
+    y, pr, mask = _binary(s, est)
+    if varlist.strip():
+        dv = s.data.get(s.expand_varlist(varlist)[0])
+        y = dv.data[mask] != 0
+    return est, y, pr, mask
+
+
+@command("lroc", "lroc")
+def cmd_lroc(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    o = match_options(p.options, {"nograph": 3, "all": 3, "beta": 4})
+    for k in ("all", "beta"):
+        if o.get(k):
+            raise StataError(198, f"option {k} of lroc is not available yet in OpenDTA")
+    est, y, pr, mask = _fitted(s, p.varlist)
+    pos, neg = pr[y], pr[~y]
+    a, _ = auc_delong(pos, neg)
+    title = ("Probit" if est.cmd == "probit" else "Logistic") + f" model for {est.depvar}"
+    out = s.output
+    out.write(f"\n{title}\n\n", "text")
+    out.write("number of observations = ", "text")
+    out.write(f"{len(y):>8}\n", "result")
+    out.write("area under ROC curve   = ", "text")
+    out.write(f"{a:>10.4f}\n", "result")
+    if not o.get("nograph"):
+        _roc_graph(s, [("", roc_points(pos, neg), a)], refline=True, title=f"Area under ROC curve = {a:.4f}")
+    _set_r(s, [("area", a), ("N", float(len(y)))])
+
+
+@command("lsens", "lsens")
+def cmd_lsens(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    o = match_options(p.options, {"all": 3, "genprob": 4, "gensens": 4, "genspec": 4, "replace": 3,
+                                  "nograph": 3})
+    if o.get("all"):
+        raise StataError(198, "option all of lsens is not available yet in OpenDTA")
+    est, y, pr, mask = _fitted(s, p.varlist)
+    pos, neg = pr[y], pr[~y]
+    cuts = np.unique(pr)
+    sens = np.array([(pos >= c).mean() for c in cuts])
+    spec = np.array([(neg < c).mean() for c in cuts])
+    ds = s.data
+    # the variables hold one row per observed cutoff; the graph adds the ends 0 and 1
+    new = [(o.get("genprob"), cuts), (o.get("gensens"), sens), (o.get("genspec"), spec)]
+    cuts = np.concatenate([[0.0], cuts, [1.0]])
+    sens = np.concatenate([[1.0], sens, [0.0]])
+    spec = np.concatenate([[0.0], spec, [1.0]])
+    for name, vals in new:
+        if isinstance(name, str):
+            # one row per cutoff, in the first observations (VERIFY: Stata's layout)
+            if ds.has(name):
+                if not o.get("replace"):
+                    raise StataError(110, f"{name} already defined")
+                ds.drop_vars([name])
+            if len(vals) > ds.nobs:
+                raise StataError(198, "too few observations to store the cutoffs")   # VERIFY
+            col = np.full(ds.nobs, SYS)
+            col[:len(vals)] = vals
+            from ..core.dataset import Variable
+            ds.add(Variable(name, "float", col))
+    if any(isinstance(n, str) for n, _ in new):
+        s.notify_state()
+    if not o.get("nograph"):
+        from ..graphics.model import Graph, Layer, Panel
+        from .graphcmd import finish
+        layers = [Layer("connected", cuts.tolist(), sens.tolist(), {}, {}, "Sensitivity"),
+                  Layer("connected", cuts.tolist(), spec.tolist(), {}, {}, "Specificity")]
+        opts = {"_xtitle": "Probability cutoff", "_ytitle": "Sensitivity/Specificity"}
+        finish(s, Graph(family="twoway", opts=opts, panels=[Panel("", layers)]), {})
+
+
+# ---------------------------------------------------------------------------
+# rocfit (binormal model)
+# ---------------------------------------------------------------------------
+
+@command("rocfit", "rocfit")
+def cmd_rocfit(s: "Session", args: str) -> None:
+    from ..estimation import ml
+    from ..estimation.results import CoefRow, Estimates, coef_table, post
+    p = parse_standard(args)
+    names = p.varlist.split()
+    if len(names) != 2:
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"continuous": 4, "generate": 3, "level": 1, "iterate": 4,
+                                  "tolerance": 3, "ltolerance": 4, "nolog": 3, "log": 3})
+    level = _level(s, o)
+    rv, (cv,), mask, w = _pos_neg(s, p, names[0], [names[1]])
+    x = cv.data[mask]
+    if isinstance(o.get("continuous"), str):
+        G = int(o["continuous"])
+        qs = np.quantile(x, np.linspace(0, 1, G + 1)[1:-1])
+        x = np.searchsorted(qs, x, side="right").astype(float)
+    cats = np.unique(x)
+    K = len(cats)
+    if K < 3:
+        raise StataError(459, "classvar must have at least 3 categories for the binormal fit")   # VERIFY
+    wv = np.ones(mask.sum()) if w is None else w[mask]
+    k_idx = np.searchsorted(cats, x)
+    y = rv.data[mask] == 1
+    n0 = np.bincount(k_idx[~y], weights=wv[~y], minlength=K)
+    n1 = np.bincount(k_idx[y], weights=wv[y], minlength=K)
+    Phi = st.norm.cdf
+
+    def probs(theta):
+        c = np.cumsum(np.concatenate([[theta[0]], np.exp(theta[1:K - 1])]))   # increasing cuts
+        mu, sig = theta[K - 1], math.exp(theta[K])
+        c0 = np.concatenate([[-np.inf], c, [np.inf]])
+        p0 = np.diff(Phi(c0))
+        p1 = np.diff(Phi((c0 - mu) / sig))
+        return c, p0, p1
+
+    def ll(theta):
+        _, p0, p1 = probs(theta)
+        if np.any(p0[n0 > 0] <= 0) or np.any(p1[n1 > 0] <= 0):
+            return -np.inf
+        return float((n0[n0 > 0] * np.log(p0[n0 > 0])).sum() + (n1[n1 > 0] * np.log(p1[n1 > 0])).sum())
+
+    def num_grad_hess(f, t):
+        k = len(t)
+        h = 1e-4 * np.maximum(1.0, np.abs(t))
+        g = np.zeros(k)
+        H = np.zeros((k, k))
+        f0 = f(t)
+        for i in range(k):
+            e = np.zeros(k)
+            e[i] = h[i]
+            g[i] = (f(t + e) - f(t - e)) / (2 * h[i])
+            H[i, i] = (f(t + e) - 2 * f0 + f(t - e)) / h[i] ** 2
+            for j in range(i):
+                e2 = np.zeros(k)
+                e2[j] = h[j]
+                H[i, j] = H[j, i] = (f(t + e + e2) - f(t + e - e2) - f(t - e + e2) + f(t - e - e2)) / (4 * h[i] * h[j])
+        return f0, g, H
+
+    # start: cuts from the negatives' cumulative shares, mu from the mean shift
+    cum0 = np.clip(np.cumsum(n0)[:-1] / n0.sum(), 0.02, 0.98)
+    c_start = np.maximum.accumulate(st.norm.ppf(cum0) + np.arange(K - 1) * 1e-3)
+    cum1 = np.clip(np.cumsum(n1)[:-1] / n1.sum(), 0.02, 0.98)
+    mu0 = float(np.mean(c_start - st.norm.ppf(cum1)))
+    theta0 = np.concatenate([[c_start[0]], np.log(np.maximum(np.diff(c_start), 1e-2)), [mu0, 0.0]])
+
+    def fun(t, todo):
+        f0, g, H = num_grad_hess(ll, t)
+        return f0, g, H
+    out = s.output
+    res = ml.maximize(fun, theta0, maxiter=int(o["iterate"]) if isinstance(o.get("iterate"), str) else 16000)
+    if not o.get("nolog"):
+        out.write("\nFitting binormal model:\n\n", "text")
+        ml.print_log(out, res)
+    # natural parameters (cuts, mu, sigma) and their covariance by the delta method
+    t = res.b
+    c, p0, p1 = probs(t)
+    mu, sig = t[K - 1], math.exp(t[K])
+    J = np.zeros((K + 1, K + 1))
+    for i in range(K - 1):
+        J[i, 0] = 1.0
+        for j in range(1, i + 1):
+            J[i, j] = math.exp(t[j])
+    J[K - 1, K - 1] = 1.0
+    J[K, K] = 1.0              # lnsigma kept on the log scale, as reported
+    Vt = np.linalg.inv(-res.H)
+    b_nat = np.concatenate([c, [mu, t[K]]])
+    V = J @ Vt @ J.T
+    # Pearson goodness of fit over the 2 x K table (df = K - 3; VERIFY)
+    e0, e1 = n0.sum() * p0, n1.sum() * p1
+    gof = float(((n0 - e0) ** 2 / e0).sum() + ((n1 - e1) ** 2 / e1).sum())
+    df_gof = K - 3
+    p_gof = float(st.chi2.sf(gof, df_gof)) if df_gof > 0 else NAN
+    N = int(n0.sum() + n1.sum())
+    out.write(f"\nBinormal model of {rv.name} on {cv.name}{'Number of obs':>{max(1, 48 - len(rv.name) - len(cv.name))}}"
+              f"     = {N:>10,}\n", "text")
+    out.write(f"Goodness-of-fit chi2({df_gof}) = ", "text")
+    out.write(f"{gof:>10.2f}\n", "result")
+    out.write("Prob > chi2             = ", "text")
+    out.write(f"{_f(p_gof, '>10.4f')}\n", "result")
+    out.write("Log likelihood          = ", "text")
+    out.write(f"{res.ll:>10.8g}\n", "result")
+    out.write("\n", "text")
+    names_b = [f"_cut{i + 1}" for i in range(K - 1)] + ["mu", "lnsigma"]
+    eqs = ["intercepts"] * (K - 1) + ["mu", "lnsigma"]
+    rows = [CoefRow("header", "intercepts")]
+    rows += [CoefRow("coef", f"_cut{i + 1}", float(b_nat[i]), math.sqrt(V[i, i]), eq="intercepts", name=f"_cut{i + 1}")
+             for i in range(K - 1)]
+    rows += [CoefRow("sep"), CoefRow("header", f"{rv.name}==1"),
+             CoefRow("coef", "/mu", float(mu), math.sqrt(V[K - 1, K - 1]), name="mu"),
+             CoefRow("coef", "/lnsigma", float(t[K]), math.sqrt(V[K, K]), name="lnsigma")]
+    coef_table(s, "", rows, stat="z", df=None, level=level)
+    # indices of the binormal ROC curve: a = mu/sigma (intercept), b = 1/sigma (slope)
+    def indices(v):
+        m_, ls = v[0], v[1]
+        sg = math.exp(ls)
+        a_, b_ = m_ / sg, 1 / sg
+        return np.array([float(Phi(a_ / math.sqrt(1 + b_ * b_))), m_, 2 * a_ / (1 + b_),
+                         math.sqrt(2) * a_ / math.sqrt(1 + b_ * b_)])
+    v0 = np.array([mu, t[K]])
+    Vml = V[K - 1:, K - 1:]
+    est_i = indices(v0)
+    G = np.zeros((4, 2))
+    for j in range(2):
+        e = np.zeros(2)
+        e[j] = 1e-6
+        G[:, j] = (indices(v0 + e) - indices(v0 - e)) / 2e-6
+    se_i = np.sqrt(np.diag(G @ Vml @ G.T))
+    z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
+    out.write("\n" + " " * 34 + "Indices from binormal fit\n", "text")
+    out.write(f"{'Index':>10}   |  Estimate   Std. Err.       [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 13 + "+" + "-" * 58 + "\n", "text")
+    for lab, e_, s_ in zip(("ROC area", "delta(m)", "d(e)", "d(a)"), est_i, se_i):
+        out.write(f"{lab:<12} |", "text")
+        out.write(f"{e_:>10.6g}{s_:>12.6g}{e_ - z * s_:>17.6g}{e_ + z * s_:>12.6g}\n", "result")
+    out.write("-" * 72 + "\n", "text")
+    est = Estimates("rocfit", rv.name, names_b, b_nat, V, N, stat="z", rows=rows, eqnames=eqs)
+    post(s, est, [("N", N), ("ll", res.ll), ("chi2_gf", gof), ("df_gf", df_gof), ("p_gf", p_gof),
+                  ("area", est_i[0]), ("se_area", se_i[0]), ("deltam", est_i[1]), ("se_delm", se_i[1]),
+                  ("de", est_i[2]), ("se_de", se_i[2]), ("da", est_i[3]), ("se_da", se_i[3])],
+         [("cmd", "rocfit"), ("depvar", rv.name), ("classvar", cv.name)], mask)

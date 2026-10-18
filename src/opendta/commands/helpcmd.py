@@ -79,6 +79,9 @@ ALIASES = {
     "search": "interface", "view": "interface", "about": "interface", "creturn": "interface",
     "clear": "interface", "file": "filecmd", "misstable": "codebook", "svyset": "svy",
     "svydescribe": "svy",
+    "cs": "epitab", "csi": "epitab", "cc": "epitab", "cci": "epitab", "ir": "epitab", "iri": "epitab",
+    "mcc": "epitab", "mcci": "epitab", "tabodds": "epitab", "mhodds": "epitab", "istdize": "dstdize",
+    "kap": "kappa", "roctab": "roc", "roccomp": "roc", "rocfit": "roc", "lroc": "roc", "lsens": "roc",
 }
 
 
