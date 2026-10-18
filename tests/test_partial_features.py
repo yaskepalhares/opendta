@@ -167,7 +167,7 @@ def test_anova_repeated(run):
 
 
 def test_anova_sequential_and_error_terms(run):
-    import statsmodels.formula.api as smf
+    smf = pytest.importorskip("statsmodels.formula.api")
     from statsmodels.stats.anova import anova_lm
     import pandas as pd
     rng = np.random.default_rng(3)
