@@ -1,6 +1,6 @@
 ---
 name: Difference from Stata
-about: A do-file that gives a different result in OpenDTA and in Stata 14 (Diferença com o Stata)
+about: A do-file that gives a different result in OpenDTA and in Stata (Diferença com o Stata)
 labels: difference
 ---
 
@@ -12,7 +12,7 @@ labels: difference
 
 ```
 
-**Output in Stata 14**
+**Output in Stata**
 
 ```
 

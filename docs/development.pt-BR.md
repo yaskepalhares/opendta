@@ -22,7 +22,7 @@ src/opendta/
   cli.py      linha de comando: interface, console e batch
 compat/
   do/         do-files de verificação
-  expected/   logs de referência gerados no Stata 14
+  expected/   logs de referência gerados no Stata
 packaging/    especificação do PyInstaller, script do instalador do Windows e avisos de terceiros
 tools/
   compare.py         roda compat/do no OpenDTA e compara com compat/expected
@@ -39,7 +39,7 @@ pytest
 python tools/compare.py
 ```
 
-O `pytest` confere o comportamento interno e roda no GitHub a cada mudança (Linux, Windows e macOS). O `tools/compare.py` roda cada do-file de `compat/do/` e compara o log com a referência do Stata 14 em `compat/expected/`; as diferenças conhecidas estão em `compat/known_differences.txt`. O passo a passo, inclusive como gerar novas referências no Stata, está em [testing.pt-BR.md](testing.pt-BR.md).
+O `pytest` confere o comportamento interno e roda no GitHub a cada mudança (Linux, Windows e macOS). O `tools/compare.py` roda cada do-file de `compat/do/` e compara o log com a referência do Stata em `compat/expected/`; as diferenças conhecidas estão em `compat/known_differences.txt`. O passo a passo, inclusive como gerar novas referências no Stata, está em [testing.pt-BR.md](testing.pt-BR.md).
 
 ## Ícone
 

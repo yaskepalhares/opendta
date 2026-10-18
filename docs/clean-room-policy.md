@@ -9,7 +9,7 @@ OpenDTA reimplements Stata's behavior from public sources. It uses no StataCorp 
 - The Stata manuals (PDFs), the help files (`help`) and the public FAQs
 - The public specification of the `.dta` format
 - Papers, books and teaching materials about Stata and about the statistical methods
-- Observation of behavior: running a do-file in Stata 14 and comparing its output with OpenDTA's
+- Observation of behavior: running a do-file in Stata and comparing its output with OpenDTA's
 - Open libraries with a compatible license (for example, ReadStat for `.dta`)
 
 ## May not be used
@@ -22,4 +22,4 @@ OpenDTA reimplements Stata's behavior from public sources. It uses no StataCorp 
 
 - Each command is written from the manual. When the manual does not define a detail (for example, when `%g` switches from fixed to exponential notation), the code gets a `VERIFY` mark and a case in `compat/do/`. The actual behavior is fixed by the log produced in Stata.
 - SSC packages and users' do-files may be used as test cases, respecting their licenses.
-- The interface reproduces the layout and workflow of Stata 14, but the icons and visual identity are OpenDTA's own.
+- The interface reproduces Stata's layout and workflow, but the icons and visual identity are OpenDTA's own.

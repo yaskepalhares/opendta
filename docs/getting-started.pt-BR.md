@@ -43,7 +43,7 @@ No Windows, ative o ambiente com `.venv\Scripts\activate`. Extras opcionais: `pi
 
 ## Primeiros passos
 
-A janela tem as mesmas partes do Stata 14: Results, Command, Review, Variables e Properties, além do Data Editor (`browse`, `edit`), do Do-file Editor (`doedit`), do Viewer (`help`) e da janela de gráficos. Digite os comandos na janela Command, ou abra um do-file e rode com Ctrl+D (⌘+D).
+A janela tem as partes conhecidas: Results, Command, Review, Variables e Properties, além do Data Editor (`browse`, `edit`), do Do-file Editor (`doedit`), do Viewer (`help`) e da janela de gráficos. Digite os comandos na janela Command, ou abra um do-file e rode com Ctrl+D (⌘+D).
 
 ```stata
 use meusdados, clear
