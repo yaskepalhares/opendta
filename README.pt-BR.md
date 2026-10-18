@@ -2,7 +2,7 @@
 
 [English](README.md) | **Português**
 
-**Do-files do Stata 14 e dados `.dta`, num programa livre e aberto.**
+**Do-files e dados `.dta`, num programa livre e aberto.**
 
 O OpenDTA roda do-files escritos para o Stata 14, lê e grava bases `.dta` e tem a interface de desktop que as pessoas já conhecem: as janelas Results, Command, Review, Variables e Properties, o Data Editor, o Do-file Editor, o Viewer e a janela de gráficos. Ele cobre manipulação de dados, estatística descritiva, estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, modelos de equações estruturais, Mata e gráficos. Quando um comando falha, ele explica o erro para quem está começando, olhando os dados em memória, em português ou em inglês.
 
@@ -10,8 +10,8 @@ O OpenDTA roda do-files escritos para o Stata 14, lê e grava bases `.dta` e tem
 
 - [Primeiros passos](docs/getting-started.pt-BR.md)
 - [O que o OpenDTA faz](docs/features.pt-BR.md)
-- [Roadmap e os comandos do Stata 14 que ainda faltam](ROADMAP.pt-BR.md)
-- [Testar e comparar com o Stata 14](docs/testing.pt-BR.md)
+- [Roadmap e os comandos que ainda faltam](ROADMAP.pt-BR.md)
+- [Testar e comparar com o Stata](docs/testing.pt-BR.md)
 - [Desenvolvimento](docs/development.pt-BR.md)
 - [Política de desenvolvimento (sala limpa)](docs/clean-room-policy.pt-BR.md)
 
@@ -25,7 +25,7 @@ Os aplicativos não têm assinatura digital, então a primeira abertura pede uma
 
 ## Como contribuir
 
-Leia o [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) antes de abrir uma issue ou um pull request. O relato mais útil é uma diferença em relação ao Stata 14: abra uma issue com o modelo [Difference from Stata](https://github.com/yaskepalhares/opendta/issues/new?template=difference-from-stata.md) e um do-file curto. As traduções da interface ficam em `src/opendta/i18n.py`, e o empacotamento está descrito em [docs/development.pt-BR.md](docs/development.pt-BR.md#publicar-uma-versão).
+Leia o [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) antes de abrir uma issue ou um pull request. O relato mais útil é uma diferença em relação ao Stata: abra uma issue com o modelo [Difference from Stata](https://github.com/yaskepalhares/opendta/issues/new?template=difference-from-stata.md) e um do-file curto. As traduções da interface ficam em `src/opendta/i18n.py`, e o empacotamento está descrito em [docs/development.pt-BR.md](docs/development.pt-BR.md#publicar-uma-versão).
 
 ## Agradecimentos
 

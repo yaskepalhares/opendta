@@ -1,6 +1,6 @@
 ---
 name: Command request
-about: A Stata 14 command or option that OpenDTA does not have yet (Comando ou opção que ainda falta)
+about: A command or option that OpenDTA does not have yet (Comando ou opção que ainda falta)
 labels: command request
 ---
 

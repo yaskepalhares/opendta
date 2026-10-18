@@ -9,7 +9,7 @@ O OpenDTA reimplementa o comportamento do Stata a partir de fontes públicas. N�
 - Os manuais do Stata (PDFs), a ajuda (`help`) e os FAQs públicos
 - A especificação pública do formato `.dta`
 - Artigos, livros e materiais didáticos sobre o Stata e sobre os métodos estatísticos
-- A observação do comportamento: rodar um do-file no Stata 14 e comparar a saída com a do OpenDTA
+- A observação do comportamento: rodar um do-file no Stata e comparar a saída com a do OpenDTA
 - Bibliotecas abertas com licença compatível (por exemplo, ReadStat para `.dta`)
 
 ## Não pode ser usado
@@ -22,4 +22,4 @@ O OpenDTA reimplementa o comportamento do Stata a partir de fontes públicas. N�
 
 - Cada comando é escrito a partir do manual. Quando o manual não define um detalhe (por exemplo, quando o `%g` troca a notação fixa pela exponencial), o código recebe a marca `VERIFY` e um caso em `compat/do/`. O comportamento real é fixado pelo log gerado no Stata.
 - Pacotes do SSC e do-files de usuários podem ser usados como casos de teste, respeitando suas licenças.
-- A interface reproduz o layout e o fluxo de trabalho do Stata 14, mas os ícones e a identidade visual são próprios.
+- A interface reproduz o layout e o fluxo de trabalho do Stata, mas os ícones e a identidade visual são próprios.

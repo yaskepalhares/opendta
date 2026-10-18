@@ -4,9 +4,13 @@
 
 Goal: cover the commands of Stata 14, including graphics, with an interface as close as possible to the original.
 
-**Version 1.0** closes phases 0 to 9: the core of Stata 14 is in place. The Stata 14 commands still missing are listed in [After 1.0](#after-10) and will be added over time.
+**Version 1.0** closes phases 0 to 9: the core is in place. The commands still missing are listed in [After 1.0](#after-10) and will be added over time.
 
-The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata 14 (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
+The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
+
+![Commands implemented per area](docs/roadmap-coverage.svg)
+
+One tile per area of [After 1.0](#after-10): its size is the number of commands and its colour the share already implemented. Options of existing commands are not counted. Redraw it with `python tools/roadmap_coverage.py` when commands are added.
 
 ## Phase 0: foundation ✅
 
@@ -74,10 +78,10 @@ The phases are in dependency order. Each one ends with something that can be ope
 - `distinct` is not an official command: it is an SSC package and runs through the adopath (phase 2).
 
 **3d ✅**
-- [x] 64-bit Mersenne Twister generator (Stata 14's mt64), `set seed` (number or state), `c(seed)`, `set rng`
+- [x] 64-bit Mersenne Twister generator (mt64), `set seed` (number or state), `c(seed)`, `set rng`
 - [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. The seed conversion and the algorithm of each distribution are not documented: results are statistically equivalent but not identical to Stata's (cases in `compat/do/0307_aleatorios.do`).
 
-**Checked against Stata 14**: the 28 cases in `compat/do/` have references produced in Stata/SE 14.0; 25 match line by line. The known differences are listed in `compat/known_differences.txt`: the progress of the network algorithm of `tabulate, exact` (tables larger than 2×2) and, for random numbers, `rnormal()`, `runiformint()`, `rpoisson()` and `rt()` (`runiform()`, `rbinomial()`, `rexponential()` and `rchi2(2)` already reproduce Stata's exact sequence).
+**Checked against Stata**: the 28 cases in `compat/do/` have Stata references; 25 match line by line. The known differences are listed in `compat/known_differences.txt`: the progress of the network algorithm of `tabulate, exact` (tables larger than 2×2) and, for random numbers, `rnormal()`, `runiformint()`, `rpoisson()` and `rt()` (`runiform()`, `rbinomial()`, `rexponential()` and `rchi2(2)` already reproduce Stata's exact sequence).
 
 ## Phase 4: Mata ✅
 
@@ -90,7 +94,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 - [x] Link to the data: `st_data`, `st_sdata`, `st_view` (copy), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
 
 **4d ✅**
-- [x] Display, messages and errors checked against Stata 14 (cases `compat/do/0401`–`0405`): numbers in `%12.0g`, single-width columns, block header, compile and run-time errors, skipped lines in `mata:`
+- [x] Display, messages and errors checked against Stata (cases `compat/do/0401`–`0405`): numbers in `%12.0g`, single-width columns, block header, compile and run-time errors, skipped lines in `mata:`
 - [x] `st_view` that writes to the data when elements are assigned; associative arrays (`asarray`); `optimize()` with d0/d1/d2 evaluators and nr/bfgs techniques
 - [x] Check `optimize()`, `st_view` and `asarray` (cases `0406` and `0407`; in d0 `optimize()` only the noise of numerical derivatives differs)
 - `moptimize()` moved to phase 5, together with `ml`; Mata classes, to phase 8
@@ -123,7 +127,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 - [x] Simple Graph Editor (titles, legend, scheme, size, grid, log scales), with undo
 - Checked against the Stata logs: case `0701` (text messages only; the drawing is OpenDTA's own)
 
-## Phase 8: the rest of Stata 14 and interface tools ✅
+## Phase 8: the remaining core commands and interface tools ✅
 
 - [x] Do-file Editor with tabs, syntax highlighting, find/replace and execution of the selection (`doedit`); Data, Graphics and Statistics menus; printing
 - [x] Nonparametric and normality tests (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) and immediate commands (`cii`, `ttesti`, `prtesti`, `tabi`)
@@ -166,7 +170,7 @@ The phases are in dependency order. Each one ends with something that can be ope
 
 ## After 1.0
 
-Stata 14 commands and options that OpenDTA does not have yet, by area. They will be added over time; the order follows use and the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
+Commands and options that OpenDTA does not have yet, by area. They will be added over time; the order follows use and the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
 - **Data management**: `clonevar`, `ds`, `lookfor`, `sysuse`/`webuse`, `xpose`, `stack`, `separate`, `ipolate`, `range`, `drawnorm`, `corr2data`, `expandcl`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `checksum`, `snapshot`, `statsby`, `outfile`, `insobs`, `putmata`, `icd9`/`icd10`, `bcal`, `unicode`, `odbc`, `filefilter`, `zipfile`, `mkdir`, `rmdir`, `copy`, `shell`, `dir`; `table` with three or more variables; `import sas`, `spss`, `sasxport` and `haver`; binary `file` read/write; `infile, byvariable()`; `putexcel` to `.xls`; options of `list` and `describe` that are still missing.
 - **Epidemiology**: `cs`/`csi`, `cc`/`cci`, `ir`/`iri`, `mcc`/`mcci`, `tabodds`, `mhodds`, `dstdize`/`istdize`, `symmetry`, `kappa`/`kap`, `roctab`, `roccomp`, `rocreg`, `rocfit`, `lroc`, `lsens`.

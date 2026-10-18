@@ -1,8 +1,8 @@
-# How to test and compare with Stata 14 (macOS)
+# How to test and compare with Stata (macOS)
 
 **English** | [Português](testing.pt-BR.md)
 
-These instructions are for macOS, with the Terminal (zsh) and Stata 14 for Mac. The repository is in `~/opendta`. If it is in another folder, change the path in the commands.
+These instructions are for macOS, with the Terminal (zsh) and Stata for Mac, in the version that OpenDTA targets (see the goal in the [ROADMAP](../ROADMAP.md)). The repository is in `~/opendta`. If it is in another folder, change the path in the commands.
 
 > **Careful when pasting commands into the Terminal.** In interactive zsh, `#` does not start a comment: a line such as `pytest  # run everything` fails. The blocks below have no comments and can be pasted as they are.
 
@@ -75,13 +75,13 @@ opendta -b do file.do
 
 The first opens the text console (prompt `. `). The second runs a do-file in batch mode and writes `file.log` in the current folder, like `stata -b`.
 
-## 3. Comparison with Stata 14
+## 3. Comparison with Stata
 
-The `compat/` folder holds verification do-files (`compat/do/`) and the reference output produced by Stata 14 (`compat/expected/`). This comparison is what decides whether OpenDTA is faithful.
+The `compat/` folder holds verification do-files (`compat/do/`) and the reference output produced by Stata (`compat/expected/`). This comparison is what decides whether OpenDTA is faithful.
 
 ### Produce the references in Stata (for each new batch of do-files)
 
-1. Open Stata 14.
+1. Open Stata.
 2. In the Command window, go to the repository's `compat` folder and run the generator:
    ```stata
    cd "~/opendta/compat"
@@ -94,7 +94,7 @@ The `compat/` folder holds verification do-files (`compat/do/`) and the referenc
    git checkout -b stata-references
    cp compat/stata/*.log compat/expected/
    git add compat/expected
-   git commit -m "Stata 14 reference logs"
+   git commit -m "Stata reference logs"
    git push -u origin stata-references
    ```
 
@@ -151,4 +151,4 @@ The do-files `compat/do/0104_arquivos.do` to `0107_infile_infix.do` create and d
 
 ## Reporting a difference found in use
 
-Open an *issue* with the **Difference from Stata** template: a minimal do-file, the Stata 14 output and the OpenDTA output. Each confirmed difference becomes a case in `compat/do/`, so that it does not happen again.
+Open an *issue* with the **Difference from Stata** template: a minimal do-file, the Stata output and the OpenDTA output. Each confirmed difference becomes a case in `compat/do/`, so that it does not happen again.

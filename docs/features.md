@@ -2,7 +2,7 @@
 
 **English** | [Português](features.pt-BR.md)
 
-OpenDTA 1.0 covers the core of Stata 14: the do-file language, data management, descriptive statistics, the main estimation commands, complex surveys, survival analysis, multilevel models, time series, multiple imputation, Mata and graphics. The Stata 14 commands that are not in OpenDTA yet are listed in the [ROADMAP](../ROADMAP.md#after-10); they will be added over time.
+OpenDTA 1.0 covers the core commands: the do-file language, data management, descriptive statistics, the main estimation commands, complex surveys, survival analysis, multilevel models, time series, multiple imputation, Mata and graphics. The commands that are not in OpenDTA yet are listed in the [ROADMAP](../ROADMAP.md#after-10); they will be added over time.
 
 ## Commands and features
 
@@ -50,6 +50,6 @@ OpenDTA 1.0 covers the core of Stata 14: the do-file language, data management, 
 
 ## How it is checked
 
-Each group of commands has automated tests (`pytest`) and verification do-files in `compat/do/`, whose output is compared line by line with logs produced by Stata 14 (`python tools/compare.py`; see [testing.md](testing.md)). Differences with a known cause, such as Stata's undocumented starting values or random-number algorithms, are listed in `compat/known_differences.txt`. Estimators without a Stata log yet are checked against independent implementations (statsmodels, closed-form results) until the reference arrives.
+Each group of commands has automated tests (`pytest`) and verification do-files in `compat/do/`, whose output is compared line by line with Stata logs (`python tools/compare.py`; see [testing.md](testing.md)). Differences with a known cause, such as Stata's undocumented starting values or random-number algorithms, are listed in `compat/known_differences.txt`. Estimators without a Stata log yet are checked against independent implementations (statsmodels, closed-form results) until the reference arrives.
 
 Details that the manuals do not define are marked `VERIFY` in the code and have a case in `compat/do/`; the behavior is fixed by the Stata log ([development policy](clean-room-policy.md)).

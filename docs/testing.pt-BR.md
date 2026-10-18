@@ -1,8 +1,8 @@
-# Como testar e comparar com o Stata 14 (macOS)
+# Como testar e comparar com o Stata (macOS)
 
 [English](testing.md) | **Português**
 
-As instruções valem para o macOS, com o Terminal (zsh) e o Stata 14 for Mac. O repositório fica em `~/opendta`. Se estiver em outra pasta, troque o caminho nos comandos.
+As instruções valem para o macOS, com o Terminal (zsh) e o Stata for Mac, na versão que o OpenDTA tem como alvo (veja a meta no [ROADMAP](../ROADMAP.pt-BR.md)). O repositório fica em `~/opendta`. Se estiver em outra pasta, troque o caminho nos comandos.
 
 > **Atenção ao colar comandos no Terminal.** No zsh interativo, `#` não marca comentário: uma linha como `pytest  # roda tudo` dá erro. Os blocos abaixo não têm comentários e podem ser colados como estão.
 
@@ -75,13 +75,13 @@ opendta -b do arquivo.do
 
 A primeira abre o console de texto (prompt `. `). A segunda roda um do-file em modo batch e grava `arquivo.log` na pasta atual, como o `stata -b`.
 
-## 3. Comparação com o Stata 14
+## 3. Comparação com o Stata
 
-A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas de referência geradas no Stata 14 (`compat/expected/`). É essa comparação que define se o OpenDTA está fiel.
+A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas de referência geradas no Stata (`compat/expected/`). É essa comparação que define se o OpenDTA está fiel.
 
 ### Gerar as referências no Stata (a cada lote novo de do-files)
 
-1. Abra o Stata 14.
+1. Abra o Stata.
 2. Na janela Command, vá até a pasta `compat` do repositório e rode o gerador:
    ```stata
    cd "~/opendta/compat"
@@ -94,7 +94,7 @@ A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas d
    git checkout -b stata-references
    cp compat/stata/*.log compat/expected/
    git add compat/expected
-   git commit -m "Stata 14 reference logs"
+   git commit -m "Stata reference logs"
    git push -u origin stata-references
    ```
 
@@ -151,4 +151,4 @@ Os do-files `compat/do/0104_arquivos.do` a `0107_infile_infix.do` criam e apagam
 
 ## Reportar uma divergência encontrada no uso
 
-Abra uma *issue* com o modelo **Difference from Stata**: um do-file mínimo, a saída do Stata 14 e a saída do OpenDTA. Cada divergência confirmada vira um caso em `compat/do/`, para não voltar a acontecer.
+Abra uma *issue* com o modelo **Difference from Stata**: um do-file mínimo, a saída do Stata e a saída do OpenDTA. Cada divergência confirmada vira um caso em `compat/do/`, para não voltar a acontecer.
