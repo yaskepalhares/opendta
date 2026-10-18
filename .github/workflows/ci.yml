@@ -27,7 +27,7 @@ jobs:
         run: pip install -e ".[dev]"
       - name: pytest
         run: pytest -q
-      - name: Comparison with Stata 14
+      - name: Comparison with Stata
         run: python tools/compare.py --show-diff
       # TEMPORARY diagnostic (to be removed before merging): the lines of 1001_mixed outside the tolerance
       - name: Windows comparison details
