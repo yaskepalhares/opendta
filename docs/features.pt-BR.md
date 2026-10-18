@@ -2,7 +2,7 @@
 
 [English](features.md) | **Português**
 
-O OpenDTA 1.0 cobre o núcleo do Stata 14: a linguagem dos do-files, a manipulação de dados, a estatística descritiva, os principais comandos de estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, Mata e gráficos. Os comandos do Stata 14 que ainda não estão no OpenDTA estão listados no [ROADMAP](../ROADMAP.pt-BR.md#depois-da-10); eles serão acrescentados aos poucos.
+O OpenDTA 1.0 cobre o núcleo dos comandos: a linguagem dos do-files, a manipulação de dados, a estatística descritiva, os principais comandos de estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, Mata e gráficos. Os comandos que ainda não estão no OpenDTA estão listados no [ROADMAP](../ROADMAP.pt-BR.md#depois-da-10); eles serão acrescentados aos poucos.
 
 ## Comandos e recursos
 
@@ -50,6 +50,6 @@ O OpenDTA 1.0 cobre o núcleo do Stata 14: a linguagem dos do-files, a manipula�
 
 ## Como é conferido
 
-Cada grupo de comandos tem testes automáticos (`pytest`) e do-files de verificação em `compat/do/`, cuja saída é comparada linha a linha com logs gerados pelo Stata 14 (`python tools/compare.py`; veja [testing.pt-BR.md](testing.pt-BR.md)). As diferenças com causa conhecida, como valores iniciais ou algoritmos de números aleatórios que o Stata não documenta, estão em `compat/known_differences.txt`. Os estimadores que ainda não têm log do Stata são conferidos com implementações independentes (statsmodels, resultados em forma fechada) até a referência chegar.
+Cada grupo de comandos tem testes automáticos (`pytest`) e do-files de verificação em `compat/do/`, cuja saída é comparada linha a linha com logs do Stata (`python tools/compare.py`; veja [testing.pt-BR.md](testing.pt-BR.md)). As diferenças com causa conhecida, como valores iniciais ou algoritmos de números aleatórios que o Stata não documenta, estão em `compat/known_differences.txt`. Os estimadores que ainda não têm log do Stata são conferidos com implementações independentes (statsmodels, resultados em forma fechada) até a referência chegar.
 
 Os detalhes que os manuais não definem levam a marca `VERIFY` no código e têm um caso em `compat/do/`; o comportamento é fixado pelo log do Stata ([política de desenvolvimento](clean-room-policy.pt-BR.md)).

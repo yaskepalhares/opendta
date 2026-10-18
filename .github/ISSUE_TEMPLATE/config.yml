@@ -5,4 +5,4 @@ contact_links:
     about: The commands and features already available.
   - name: Roadmap
     url: https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md
-    about: What comes next, including the Stata 14 commands still missing.
+    about: What comes next, including the commands still missing.

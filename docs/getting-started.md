@@ -43,7 +43,7 @@ On Windows, activate the environment with `.venv\Scripts\activate`. Optional ext
 
 ## First steps
 
-The window has the same parts as Stata 14: Results, Command, Review, Variables and Properties, plus the Data Editor (`browse`, `edit`), the Do-file Editor (`doedit`), the Viewer (`help`) and the Graph window. Type commands in the Command window, or open a do-file and run it with Ctrl+D (⌘+D).
+The window has the familiar parts: Results, Command, Review, Variables and Properties, plus the Data Editor (`browse`, `edit`), the Do-file Editor (`doedit`), the Viewer (`help`) and the Graph window. Type commands in the Command window, or open a do-file and run it with Ctrl+D (⌘+D).
 
 ```stata
 use mydata, clear

@@ -4,9 +4,13 @@
 
 Meta: cobrir os comandos do Stata 14, incluindo gráficos, com a interface o mais próxima possível da original.
 
-**A versão 1.0** fecha as fases 0 a 9: o núcleo do Stata 14 está pronto. Os comandos do Stata 14 que ainda faltam estão listados em [Depois da 1.0](#depois-da-10) e serão acrescentados aos poucos.
+**A versão 1.0** fecha as fases 0 a 9: o núcleo está pronto. Os comandos que ainda faltam estão listados em [Depois da 1.0](#depois-da-10) e serão acrescentados aos poucos.
 
-As fases estão em ordem de dependência. Cada uma termina com algo que dá para abrir, testar e comparar com o Stata 14 (ver [docs/testing.pt-BR.md](docs/testing.pt-BR.md)). Os prazos não são estimados de antemão. Cada fase é dividida em pull requests revisáveis.
+As fases estão em ordem de dependência. Cada uma termina com algo que dá para abrir, testar e comparar com o Stata (ver [docs/testing.pt-BR.md](docs/testing.pt-BR.md)). Os prazos não são estimados de antemão. Cada fase é dividida em pull requests revisáveis.
+
+![Comandos implementados por área](docs/roadmap-coverage.pt-BR.svg)
+
+Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de comandos e a cor, a parcela já implementada. Opções de comandos existentes não entram na conta. Redesenhe com `python tools/roadmap_coverage.py` quando houver comandos novos.
 
 ## Fase 0: fundação ✅
 
@@ -74,10 +78,10 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - O `distinct` não é comando oficial: é um pacote do SSC e roda pelo adopath (fase 2).
 
 **3d ✅**
-- [x] Gerador Mersenne Twister de 64 bits (o mt64 do Stata 14), `set seed` (número ou estado), `c(seed)`, `set rng`
+- [x] Gerador Mersenne Twister de 64 bits (mt64), `set seed` (número ou estado), `c(seed)`, `set rng`
 - [x] `runiform()`, `runiformint()`, `rnormal()`, `rbinomial()`, `rpoisson()`, `rchi2()`, `rt()`, `rbeta()`, `rgamma()`, `rexponential()`, `rlogistic()`, `rweibull()`, `rnbinomial()`, `rhypergeometric()`. A conversão da semente e os algoritmos de cada distribuição não são documentados: os resultados são estatisticamente equivalentes, mas não idênticos aos do Stata (casos em `compat/do/0307_aleatorios.do`).
 
-**Conferência com o Stata 14**: os 28 casos de `compat/do/` têm referência gerada no Stata/SE 14.0; 25 batem linha a linha. As diferenças conhecidas estão em `compat/known_differences.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
+**Conferência com o Stata**: os 28 casos de `compat/do/` têm referência gerada no Stata; 25 batem linha a linha. As diferenças conhecidas estão em `compat/known_differences.txt`: o progresso do algoritmo de rede do `tabulate, exact` (tabelas maiores que 2×2) e, nos números aleatórios, `rnormal()`, `runiformint()`, `rpoisson()` e `rt()` (`runiform()`, `rbinomial()`, `rexponential()` e `rchi2(2)` já reproduzem a sequência exata do Stata).
 
 ## Fase 4: Mata ✅
 
@@ -90,7 +94,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Integração com os dados: `st_data`, `st_sdata`, `st_view` (cópia), `st_store`, `st_addvar`, `st_local`, `st_global`, `st_numscalar`, `st_matrix`, `stata()`
 
 **4d ✅**
-- [x] Exibição, mensagens e erros conferidos com o Stata 14 (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
+- [x] Exibição, mensagens e erros conferidos com o Stata (casos `compat/do/0401`–`0405`): números em `%12.0g`, colunas de largura única, cabeçalho do bloco, erros de compilação e de execução, linhas puladas no `mata:`
 - [x] `st_view` que grava nos dados ao atribuir a elementos; arrays associativos (`asarray`); `optimize()` com avaliadores d0/d1/d2 e técnicas nr/bfgs
 - [x] Conferir `optimize()`, `st_view` e `asarray` (casos `0406` e `0407`; no `optimize()` d0, só o ruído das derivadas numéricas difere)
 - `moptimize()` passou para a fase 5, junto com o `ml`; classes do Mata, para a fase 8
@@ -123,7 +127,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 - [x] Graph Editor simples (títulos, legenda, esquema, tamanho, grade, escalas logarítmicas), com desfazer
 - Conferência com os logs do Stata: caso `0701` (só as mensagens de texto; o desenho é próprio)
 
-## Fase 8: restante do Stata 14 e ferramentas da interface ✅
+## Fase 8: restante dos comandos do núcleo e ferramentas da interface ✅
 
 - [x] Do-file Editor com abas, realce de sintaxe, localizar/substituir e execução de seleção (`doedit`); menus Data, Graphics e Statistics; impressão
 - [x] Testes não paramétricos e de normalidade (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) e comandos imediatos (`cii`, `ttesti`, `prtesti`, `tabi`)
@@ -166,7 +170,7 @@ As fases estão em ordem de dependência. Cada uma termina com algo que dá para
 
 ## Depois da 1.0
 
-Comandos e opções do Stata 14 que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
+Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
 - **Manipulação de dados**: `clonevar`, `ds`, `lookfor`, `sysuse`/`webuse`, `xpose`, `stack`, `separate`, `ipolate`, `range`, `drawnorm`, `corr2data`, `expandcl`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `checksum`, `snapshot`, `statsby`, `outfile`, `insobs`, `putmata`, `icd9`/`icd10`, `bcal`, `unicode`, `odbc`, `filefilter`, `zipfile`, `mkdir`, `rmdir`, `copy`, `shell`, `dir`; `table` com três ou mais variáveis; `import sas`, `spss`, `sasxport` e `haver`; leitura e gravação binária com `file`; `infile, byvariable()`; `putexcel` para `.xls`; opções de `list` e `describe` que ainda faltam.
 - **Epidemiologia**: `cs`/`csi`, `cc`/`cci`, `ir`/`iri`, `mcc`/`mcci`, `tabodds`, `mhodds`, `dstdize`/`istdize`, `symmetry`, `kappa`/`kap`, `roctab`, `roccomp`, `rocreg`, `rocfit`, `lroc`, `lsens`.
