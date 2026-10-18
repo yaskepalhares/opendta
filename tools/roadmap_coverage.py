@@ -47,6 +47,8 @@ MODULE_AREA = {
     "bootstrap": "Models",
     "graphcmd": "Graphics",
     "power": "Other suites",
+    "epitab": "Epidemiology", "epiodds": "Epidemiology", "stdize": "Epidemiology",
+    "kappa": "Epidemiology", "roc": "Epidemiology",
 }
 AREA_OF = {
     "preserve": "Data management", "restore": "Data management",
@@ -95,7 +97,13 @@ def implemented() -> dict[str, str]:
     from opendta.commands.registry import REGISTRY
     out = dict(INTERPRETER)
     for name, spec in REGISTRY.items():
-        out[name] = AREA_OF.get(name) or MODULE_AREA[spec.fn.__module__.rsplit(".", 1)[-1]]
+        module = spec.fn.__module__.rsplit(".", 1)[-1]
+        area = AREA_OF.get(name) or MODULE_AREA.get(module)
+        if area is None:
+            # a new module: counted under Other suites until MODULE_AREA names its area
+            print(f"warning: no area for module {module} (command {name})", file=sys.stderr)
+            area = "Other suites"
+        out[name] = area
     return out
 
 
