@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenDTA coverage</title>
+<style>
+  :root {
+    --bg: #fcfcfb; --ink: #1a1a19; --muted: #5f5f5b; --line: #e3e2de; --chip: #f0efec;
+    --done: #2e8b4e; --todo: #b83b34; --focus: #1a1a19;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1a1a19; --ink: #f0efec; --muted: #a8a8a3; --line: #383835; --chip: #262624;
+            --focus: #f0efec; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 32px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  input[type=search] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+                       background: var(--bg); color: var(--ink); width: 220px; max-width: 60vw; }
+  button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--chip); color: var(--ink); cursor: pointer; }
+  button:focus-visible, input:focus-visible, .tile:focus-visible, .cmd:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .crumb { display: flex; gap: 8px; align-items: center; min-height: 34px; margin-bottom: 8px; }
+  .crumb[hidden] { display: none; }
+  #map { position: relative; width: 100%; height: min(62vh, 560px); min-height: 320px; }
+  .tile { position: absolute; border-radius: 4px; color: #fff; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; text-align: center; overflow: hidden;
+          cursor: pointer; transition: filter .12s; padding: 4px; }
+  .tile:hover { filter: brightness(1.12); }
+  .tile .n { font-weight: 600; font-size: clamp(10px, 1.3vw, 15px); line-height: 1.15; }
+  .tile .p { font-weight: 700; font-size: clamp(14px, 2.4vw, 26px); line-height: 1.1; }
+  .tile .c { opacity: .85; font-size: 12px; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 3px; }
+  #grid[hidden], #map[hidden] { display: none; }
+  .cmd { border-radius: 4px; color: #fff; padding: 10px 6px; text-align: center;
+         font: 600 13px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+  .cmd.done { background: var(--done); } .cmd.todo { background: var(--todo); }
+  .cmd.dim, .tile.dim { opacity: .18; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 12px; align-items: center; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+  .ramp { display: inline-block; width: 120px; height: 10px; border-radius: 3px; vertical-align: 0;
+          background: linear-gradient(90deg, #b83b34, #5f6368, #2e8b4e); margin: 0 6px; }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px;
+         border-radius: 6px; font-size: 13px; max-width: 280px; z-index: 5; display: none; }
+  #found { color: var(--muted); font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 18px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <div class="controls">
+      <input type="search" id="q" aria-label="Search">
+      <button id="lang" type="button"></button>
+    </div>
+  </header>
+  <p class="sub" id="sub"></p>
+  <div class="crumb" id="crumb" hidden>
+    <button id="back" type="button"></button><strong id="area"></strong><span class="sub" id="areaSub" style="margin:0"></span>
+  </div>
+  <div id="map" role="list"></div>
+  <div id="grid" role="list" hidden></div>
+  <p id="found" aria-live="polite"></p>
+  <div class="legend" id="legend"></div>
+  <footer id="foot"></footer>
+</main>
+<div id="tip" role="tooltip"></div>
+<script>
+const DATA = /*DATA*/;
+const T = {
+  en: { title: (d, t) => `Commands implemented: ${d} of ${t} (${Math.round(100 * d / t)}%)`,
+        sub: "Each tile is an area, sized by its number of commands and coloured by the share implemented. Click an area to see its commands.",
+        search: "Find a command", back: "← All areas", lang: "Português", none: "No command matches.",
+        found: (n, a) => `${n} match${n === 1 ? "" : "es"}${a ? " in " + a : ""}.`, done: "implemented",
+        todo: "not yet", share: "share implemented", foot: (c, d) => `Updated from commit <a href="https://github.com/yaskepalhares/opendta/commit/${c}">${c.slice(0, 7)}</a> on ${d}. Options of existing commands are not counted.` },
+  pt: { title: (d, t) => `Comandos implementados: ${d} de ${t} (${Math.round(100 * d / t)}%)`,
+        sub: "Cada bloco é uma área, com tamanho pelo número de comandos e cor pela parcela implementada. Clique numa área para ver os comandos.",
+        search: "Procurar um comando", back: "← Todas as áreas", lang: "English", none: "Nenhum comando encontrado.",
+        found: (n, a) => `${n} resultado${n === 1 ? "" : "s"}${a ? " em " + a : ""}.`, done: "implementado",
+        todo: "ainda não", share: "parcela implementada", foot: (c, d) => `Atualizado a partir do commit <a href="https://github.com/yaskepalhares/opendta/commit/${c}">${c.slice(0, 7)}</a> em ${d}. Opções de comandos existentes não entram na conta.` },
+};
+let lang = new URLSearchParams(location.search).get("lang") === "pt" ||
+           (!location.search.includes("lang=") && (navigator.language || "").startsWith("pt")) ? "pt" : "en";
+let open = null;
+const $ = id => document.getElementById(id);
+const name = a => lang === "pt" ? a.pt : a.en;
+
+function colour(s) {
+  const st = [[0, [0xb8, 0x3b, 0x34]], [0.5, [0x5f, 0x63, 0x68]], [1, [0x2e, 0x8b, 0x4e]]];
+  for (let i = 0; i < 2; i++) {
+    const [p0, c0] = st[i], [p1, c1] = st[i + 1];
+    if (s <= p1) { const t = (s - p0) / (p1 - p0); return `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * t))})`; }
+  }
+}
+
+function squarify(items, x, y, w, h) {
+  items = [...items].sort((a, b) => b.v - a.v);
+  const total = items.reduce((s, i) => s + i.v, 0), out = [];
+  let rest = items.map(i => ({ ...i, sz: i.v * w * h / total }));
+  while (rest.length) {
+    const short = Math.min(w, h), row = [rest.shift()];
+    const worst = r => { const s = r.reduce((t, i) => t + i.sz, 0);
+      return Math.max(...r.map(i => Math.max(short * short * i.sz / (s * s), s * s / (short * short * i.sz)))); };
+    while (rest.length && worst([...row, rest[0]]) <= worst(row)) row.push(rest.shift());
+    const s = row.reduce((t, i) => t + i.sz, 0);
+    if (w >= h) { const cw = s / h; let cy = y; for (const i of row) { out.push({ ...i, x, y: cy, w: cw, h: i.sz / cw }); cy += i.sz / cw; } x += cw; w -= cw; }
+    else { const ch = s / w; let cx = x; for (const i of row) { out.push({ ...i, x: cx, y, w: i.sz / ch, h: ch }); cx += i.sz / ch; } y += ch; h -= ch; }
+  }
+  return out;
+}
+
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block";
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px"; tip.style.top = (e.clientY + 16) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+
+function drawMap() {
+  const map = $("map"); map.innerHTML = "";
+  const W = map.clientWidth, H = map.clientHeight, gap = 2;
+  for (const t of squarify(DATA.areas.map(a => ({ a, v: a.done.length + a.todo.length })), 0, 0, W, H)) {
+    const a = t.a, d = a.done.length, n = d + a.todo.length, share = d / n;
+    const el = document.createElement("div");
+    el.className = "tile"; el.tabIndex = 0; el.setAttribute("role", "listitem");
+    el.dataset.area = a.en;
+    Object.assign(el.style, { left: t.x + gap / 2 + "px", top: t.y + gap / 2 + "px",
+      width: t.w - gap + "px", height: t.h - gap + "px", background: colour(share) });
+    el.setAttribute("aria-label", `${name(a)}: ${d}/${n}`);
+    if (t.w > 64 && t.h > 48) el.innerHTML = `<span class="n">${name(a)}</span><span class="p">${Math.round(100 * share)}%</span><span class="c">${d}/${n}</span>`;
+    el.onmousemove = e => showTip(e, `<b>${name(a)}</b><br>${d} ${T[lang].done} · ${n - d} ${T[lang].todo}<br>${Math.round(100 * share)}% ${T[lang].share}`);
+    el.onmouseleave = hideTip;
+    el.onclick = () => openArea(a);
+    el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openArea(a); } };
+    map.appendChild(el);
+  }
+  filter();
+}
+
+function openArea(a) {
+  open = a; hideTip();
+  $("map").hidden = true; $("grid").hidden = false; $("crumb").hidden = false;
+  const d = a.done.length, n = d + a.todo.length;
+  $("area").textContent = name(a);
+  $("areaSub").textContent = `${d}/${n} · ${Math.round(100 * d / n)}%`;
+  const grid = $("grid"); grid.innerHTML = "";
+  for (const [list, cls] of [[a.done, "done"], [a.todo, "todo"]])
+    for (const c of list) {
+      const el = document.createElement("div");
+      el.className = "cmd " + cls; el.textContent = c; el.setAttribute("role", "listitem");
+      el.title = `${c}: ${cls === "done" ? T[lang].done : T[lang].todo}`;
+      grid.appendChild(el);
+    }
+  filter();
+  $("back").focus();
+}
+
+function closeArea() { open = null; $("map").hidden = false; $("grid").hidden = true; $("crumb").hidden = true; drawMap(); }
+
+function filter() {
+  const q = $("q").value.trim().toLowerCase(), found = $("found");
+  if (!q) { document.querySelectorAll(".dim").forEach(e => e.classList.remove("dim")); found.textContent = ""; return; }
+  const hit = c => c.toLowerCase().includes(q);
+  if (open) {
+    let n = 0;
+    document.querySelectorAll(".cmd").forEach(e => { const m = hit(e.textContent); e.classList.toggle("dim", !m); n += m; });
+    found.textContent = n ? T[lang].found(n, name(open)) : T[lang].none;
+  } else {
+    let n = 0;
+    document.querySelectorAll(".tile").forEach(e => {
+      const a = DATA.areas.find(x => x.en === e.dataset.area);
+      const k = [...a.done, ...a.todo].filter(hit).length;
+      e.classList.toggle("dim", !k); n += k;
+    });
+    found.textContent = n ? T[lang].found(n) : T[lang].none;
+  }
+}
+
+function render() {
+  const t = T[lang];
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
+  const d = DATA.areas.reduce((s, a) => s + a.done.length, 0), n = DATA.areas.reduce((s, a) => s + a.done.length + a.todo.length, 0);
+  $("title").textContent = t.title(d, n); $("sub").textContent = t.sub;
+  $("q").placeholder = t.search; $("back").textContent = t.back; $("lang").textContent = t.lang;
+  $("legend").innerHTML = `<span><span class="sw" style="background:var(--done)"></span>${t.done}</span>` +
+    `<span><span class="sw" style="background:var(--todo)"></span>${t.todo}</span>` +
+    `<span>0%<span class="ramp"></span>100% ${t.share}</span>`;
+  $("foot").innerHTML = t.foot(DATA.commit, DATA.date);
+  if (open) openArea(open); else drawMap();
+}
+
+$("lang").onclick = () => { lang = lang === "pt" ? "en" : "pt"; render(); };
+$("back").onclick = closeArea;
+$("q").oninput = filter;
+addEventListener("keydown", e => { if (e.key === "Escape" && open) closeArea(); });
+addEventListener("resize", () => { if (!open) drawMap(); });
+render();
+</script>
+</body>
+</html>

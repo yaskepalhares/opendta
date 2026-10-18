@@ -7,15 +7,23 @@ command (so options of existing commands, such as `ivregress liml`, are left
 out). Each tile is an area, sized by its number of commands and coloured by the
 share already implemented.
 
-    python tools/roadmap_coverage.py
+    python tools/roadmap_coverage.py [--out DIR]
 
-writes docs/roadmap-coverage.svg and docs/roadmap-coverage.pt-BR.svg.
+writes, in DIR (default _site): roadmap-coverage.svg and roadmap-coverage.pt-BR.svg
+(the images in ROADMAP.md) and index.html, an interactive page (hover, click an
+area to see its commands, search). The coverage workflow runs it on every push
+to main and publishes DIR on GitHub Pages.
 """
 
 from __future__ import annotations
 
+import argparse
+import datetime
 import html
+import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -188,18 +196,30 @@ def svg(rows: list[tuple[str, int, int]], lang: str) -> str:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="_site")
+    out = Path(ap.parse_args().out)
     done = implemented()
     miss = missing(done)
     areas = sorted(set(done.values()) | set(miss))
-    unknown = set(miss) - set(PT)
+    unknown = set(areas) - set(PT)
     if unknown:
         raise SystemExit(f"areas without a Portuguese name: {sorted(unknown)}")
-    rows = []
+    rows, data = [], []
     for a in areas:
-        d = sum(1 for v in done.values() if v == a)
-        rows.append((a, d, d + len(miss.get(a, ()))))
+        mine = sorted(c for c, v in done.items() if v == a)
+        todo = sorted(miss.get(a, ()))
+        rows.append((a, len(mine), len(mine) + len(todo)))
+        data.append({"en": a, "pt": PT[a], "done": mine, "todo": todo})
+    out.mkdir(parents=True, exist_ok=True)
     for lang, name in (("en", "roadmap-coverage.svg"), ("pt", "roadmap-coverage.pt-BR.svg")):
-        (ROOT / "docs" / name).write_text(svg(rows, lang), encoding="utf-8")
+        (out / name).write_text(svg(rows, lang), encoding="utf-8")
+    commit = os.environ.get("GITHUB_SHA") or subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    payload = json.dumps({"areas": data, "commit": commit or "unknown",
+                          "date": datetime.date.today().isoformat()}, ensure_ascii=False)
+    page = (ROOT / "tools" / "coverage_page.html").read_text(encoding="utf-8")
+    (out / "index.html").write_text(page.replace("/*DATA*/", payload.replace("</", "<\\/")), encoding="utf-8")
     for a, d, t in sorted(rows, key=lambda r: -r[2]):
         print(f"{a:25} {d:4} / {t:4}  {100 * d / t:3.0f}%")
 

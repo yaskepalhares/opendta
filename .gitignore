@@ -19,3 +19,4 @@ compat/stata/
 
 # review images produced by icon-creator (the SVG sources are versioned)
 assets/icons/icon-work/*.png
+_site/

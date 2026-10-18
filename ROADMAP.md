@@ -8,9 +8,9 @@ Goal: cover the commands of Stata 14, including graphics, with an interface as c
 
 The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
 
-![Commands implemented per area](docs/roadmap-coverage.svg)
+[![Commands implemented per area](https://yaskepalhares.github.io/opendta/roadmap-coverage.svg)](https://yaskepalhares.github.io/opendta/)
 
-One tile per area of [After 1.0](#after-10): its size is the number of commands and its colour the share already implemented. Options of existing commands are not counted. Redraw it with `python tools/roadmap_coverage.py` when commands are added.
+One tile per area of [After 1.0](#after-10): its size is the number of commands and its colour the share already implemented (options of existing commands are not counted). It is redrawn on every merge into `main`. **[Open the interactive version](https://yaskepalhares.github.io/opendta/)** to see the commands of each area and search for one.
 
 ## Phase 0: foundation ✅
 
