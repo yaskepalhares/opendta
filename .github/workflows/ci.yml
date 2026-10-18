@@ -29,3 +29,12 @@ jobs:
         run: pytest -q
       - name: Comparison with Stata 14
         run: python tools/compare.py --show-diff
+      # TEMPORARY diagnostic (to be removed before merging): the full Windows diff as one annotation
+      - name: Windows comparison details
+        if: always() && runner.os == 'Windows'
+        shell: bash
+        run: |
+          python tools/compare.py > summary.txt || true
+          grep -E '^  XX ' summary.txt > failing.txt || true
+          { cat failing.txt; for c in $(awk '{print $2}' failing.txt); do python tools/compare.py --show-diff "$c" || true; done; } > details.txt
+          python -c "import sys; t=open('details.txt',encoding='utf-8',errors='replace').read(); print('::error title=windows-diff::'+t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))"
