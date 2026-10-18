@@ -79,11 +79,13 @@ const T = {
   en: { title: (d, t) => `Commands implemented: ${d} of ${t} (${Math.round(100 * d / t)}%)`,
         sub: "Each tile is an area, sized by its number of commands and coloured by the share implemented. Click an area to see its commands.",
         search: "Find a command", back: "← All areas", lang: "Português", none: "No command matches.",
+        elsewhere: n => `None in this area; ${n} in other areas (← All areas).`,
         found: (n, a) => `${n} match${n === 1 ? "" : "es"}${a ? " in " + a : ""}.`, done: "implemented",
         todo: "not yet", share: "share implemented", foot: (c, d) => `Updated from commit <a href="https://github.com/yaskepalhares/opendta/commit/${c}">${c.slice(0, 7)}</a> on ${d}. Options of existing commands are not counted.` },
   pt: { title: (d, t) => `Comandos implementados: ${d} de ${t} (${Math.round(100 * d / t)}%)`,
         sub: "Cada bloco é uma área, com tamanho pelo número de comandos e cor pela parcela implementada. Clique numa área para ver os comandos.",
         search: "Procurar um comando", back: "← Todas as áreas", lang: "English", none: "Nenhum comando encontrado.",
+        elsewhere: n => `Nenhum nesta área; ${n} em outras áreas (← Todas as áreas).`,
         found: (n, a) => `${n} resultado${n === 1 ? "" : "s"}${a ? " em " + a : ""}.`, done: "implementado",
         todo: "ainda não", share: "parcela implementada", foot: (c, d) => `Atualizado a partir do commit <a href="https://github.com/yaskepalhares/opendta/commit/${c}">${c.slice(0, 7)}</a> em ${d}. Opções de comandos existentes não entram na conta.` },
 };
@@ -171,7 +173,8 @@ function filter() {
   if (open) {
     let n = 0;
     document.querySelectorAll(".cmd").forEach(e => { const m = hit(e.textContent); e.classList.toggle("dim", !m); n += m; });
-    found.textContent = n ? T[lang].found(n, name(open)) : T[lang].none;
+    const all = DATA.areas.reduce((t, a) => t + [...a.done, ...a.todo].filter(hit).length, 0);
+    found.textContent = n ? T[lang].found(n, name(open)) : all ? T[lang].elsewhere(all) : T[lang].none;
   } else {
     let n = 0;
     document.querySelectorAll(".tile").forEach(e => {

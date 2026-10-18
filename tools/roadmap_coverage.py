@@ -99,14 +99,25 @@ def implemented() -> dict[str, str]:
     return out
 
 
+# items that the "After 1.0" text names but that are options, not commands
+NOT_COMMANDS = {"exactm", "exactp"}     # ties options of stcox
+
+
 def missing(done: dict[str, str]) -> dict[str, set[str]]:
+    """Commands listed in "After 1.0". Each bullet is a list of commands followed by clauses
+    (after ";") about options of existing commands: a clause whose first item is an
+    implemented command (`arima` with `sarima()`...) is about options and is skipped."""
     text = (ROOT / "ROADMAP.md").read_text(encoding="utf-8").split("## After 1.0", 1)[1]
+    head = lambda item: item.split()[0].rstrip(",:")
     out: dict[str, set[str]] = {}
     for area, items in re.findall(r"^- \*\*(.+?)\*\*: (.+)$", text, re.M):
-        for item in re.findall(r"`([^`]+)`", items):
-            for name in item.split("/"):
-                name = name.strip()
-                if name and name.split()[0].rstrip(",") not in done:
+        for clause in items.split(";"):
+            names = [n.strip() for item in re.findall(r"`([^`]+)`", clause) for n in item.split("/")]
+            names = [n for n in names if n]
+            if not names or head(names[0]) in done:
+                continue
+            for name in names:
+                if head(name) not in done and "(" not in name and name not in NOT_COMMANDS:
                     out.setdefault(area, set()).add(name)
     return out
 
