@@ -236,7 +236,7 @@ def cmd_sample(s: "Session", args: str) -> None:
     order (the first set orders the observations, the second breaks ties; VERIFY), also with
     by (VERIFY); the data end up sorted by group, then the observations in if/in, then the
     draws, with no sort order recorded; in each group the first n candidates are kept, n being
-    # or round(# x size/100). sample 100 draws nothing."""
+    # or round(# x size/100). sample 100 and sample #, count with # >= _N draw nothing."""
     from ..core import rng
     from ..core.grouping import group_ids
     p = parse_standard(args)
@@ -278,9 +278,10 @@ def cmd_sample(s: "Session", args: str) -> None:
         ids = np.asarray(s.by_groups.ids, dtype=np.int64)
     else:
         ids = np.zeros(n, dtype=np.int64)
-    if not count and num == 100:
+    if (not count and num == 100) or (count and num >= n):
         # nothing to drop: Stata does not draw (compat 0310: the stream advances by 2N for
-        # sample 0 but not for sample 100; VERIFY count >= N)
+        # sample 0 but not for sample 100 nor for sample #, count with # >= _N; VERIFY with
+        # if/in or by, when # covers every group but not _N)
         return
     u1 = rng.RNG.uniform(n) if n else np.zeros(0)
     u2 = rng.RNG.uniform(n) if n else np.zeros(0)

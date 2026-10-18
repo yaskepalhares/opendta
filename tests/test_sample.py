@@ -69,3 +69,11 @@ def test_sample_100_draws_nothing():
     assert "deleted" not in out
     t, out2, _ = _run("display runiform()")
     assert out.strip().splitlines()[-1] == out2.strip().splitlines()[-1]
+
+
+def test_count_at_least_n_draws_nothing():
+    # Stata 14 (compat 0310): sample 50, count with 40 observations leaves the stream alone
+    s, out, _ = _run("sample 50, count\ndisplay runiform()")
+    assert "deleted" not in out and s.data.nobs == 40
+    t, out2, _ = _run("display runiform()")
+    assert out.strip().splitlines()[-1] == out2.strip().splitlines()[-1]
