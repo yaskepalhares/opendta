@@ -8,6 +8,10 @@ Meta: cobrir os comandos do Stata 14, incluindo gráficos, com a interface o mai
 
 As fases estão em ordem de dependência. Cada uma termina com algo que dá para abrir, testar e comparar com o Stata 14 (ver [docs/testing.pt-BR.md](docs/testing.pt-BR.md)). Os prazos não são estimados de antemão. Cada fase é dividida em pull requests revisáveis.
 
+![Comandos implementados por área](docs/roadmap-coverage.pt-BR.svg)
+
+Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de comandos e a cor, a parcela já implementada. Opções de comandos existentes não entram na conta. Redesenhe com `python tools/roadmap_coverage.py` quando houver comandos novos.
+
 ## Fase 0: fundação ✅
 
 - [x] Lexer de do-files: comentários, `///`, `#delimit`

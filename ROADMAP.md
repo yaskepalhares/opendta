@@ -8,6 +8,10 @@ Goal: cover the commands of Stata 14, including graphics, with an interface as c
 
 The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata 14 (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
 
+![Commands implemented per area](docs/roadmap-coverage.svg)
+
+One tile per area of [After 1.0](#after-10): its size is the number of commands and its colour the share already implemented. Options of existing commands are not counted. Redraw it with `python tools/roadmap_coverage.py` when commands are added.
+
 ## Phase 0: foundation ✅
 
 - [x] Do-file lexer: comments, `///`, `#delimit`
