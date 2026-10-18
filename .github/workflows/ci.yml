@@ -29,25 +29,3 @@ jobs:
         run: pytest -q
       - name: Comparison with Stata
         run: python tools/compare.py --show-diff
-      # TEMPORARY diagnostic (to be removed before merging): the lines of 1001_mixed outside the tolerance
-      - name: Windows comparison details
-        if: always() && runner.os == 'Windows'
-        shell: bash
-        run: |
-          python - <<'PY'
-          import sys, tempfile
-          from pathlib import Path
-          sys.path[:0] = ["src", "tools"]
-          import compare as c
-          log = c.run_opendta(Path("compat/do/1001_mixed.do"), Path(tempfile.mkdtemp()))
-          a = c.normalize(Path("compat/expected/1001_mixed.log").read_text(encoding="utf-8", errors="replace"))
-          b = c.normalize(log.read_text(encoding="utf-8", errors="replace"))
-          out = [f"lines: stata {len(a)}, opendta {len(b)}"]
-          for i, (x, y) in enumerate(zip(a, b)):
-              if x == y or c._close_line(x, y) or c._within(x, y, 1e-5):
-                  continue
-              rel = [abs(float(p) - float(q)) / max(abs(float(p)), abs(float(q)), 1.0)
-                     for p, q in zip(c._NUM.findall(x), c._NUM.findall(y))]
-              out += [f"line {i}: max rel {max(rel or [0]):.2e}", "  S: " + x, "  O: " + y]
-          print("::error title=mixed-lines::" + "%0A".join(s.replace("%", "%25") for s in out[:80]))
-          PY
