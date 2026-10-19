@@ -14,7 +14,7 @@ Todo bloco segue os mesmos passos:
 
 1. Branch a partir do `main` (`block-<nome>`).
 2. Para cada comando: a estatística em `src/opendta/core/` (veja a próxima seção), o comando em `src/opendta/commands/` (módulo novo registrado em `commands/__init__.py`), a página de ajuda e os testes.
-3. Um caso de comparação `compat/do/NNNN_<bloco>.do` com os comandos e `return list`/`ereturn list`; ele fica sem referência até a rodada no Stata. Rode sob `capture noisily` todo comando cujo comportamento no Stata o manual não documenta (e faça o mesmo em qualquer caso antigo que você alterar), para que uma única rodada no Stata mostre o caso inteiro em vez de parar no primeiro erro.
+3. Um caso de comparação `compat/do/NNNN_<bloco>.do` com os comandos e `return list`/`ereturn list`; ele fica sem referência até a rodada no Stata. Rode sob `capture noisily` todo comando cujo comportamento no Stata o manual não documenta (e faça o mesmo em qualquer caso antigo que você alterar), para que uma única rodada no Stata mostre o caso inteiro em vez de parar no primeiro erro. O Stata de referência é a versão 14.0: um caso com `version 14.1` para com erro na rodada; escreva `version 14` ou nenhuma linha `version`.
 4. `ROADMAP.md` e `ROADMAP.pt-BR.md`: uma fase nova listando o que foi feito; em *Depois da 1.0*, só o que falta. Cada trecho de uma linha de *Depois da 1.0* que lista opções deve começar pelo comando a que elas pertencem (`` `cs` com a opção `pool` ``), para o mapa de cobertura não contar opções como comandos.
 5. `tools/roadmap_coverage.py`: acrescentar o módulo novo em `MODULE_AREA`.
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
