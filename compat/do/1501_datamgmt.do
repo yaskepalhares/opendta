@@ -17,7 +17,9 @@ clonevar xc = x if id < 4
 describe x xc
 ds
 return list
-ds, has(type numeric) not(varlabel)
+capture noisily ds, has(type numeric) not(varlabel)
+ds, has(type numeric)
+ds, not(varlabel)
 lookfor dose
 return list
 inspect x

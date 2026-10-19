@@ -120,6 +120,8 @@ def cmd_ds(s: "Session", args: str) -> None:
     has, nothas = None, None
     if isinstance(o.get("has"), str):
         has = str(o["has"])
+    if has is not None and isinstance(o.get("not"), str):
+        raise StataError(198, "may not combine options has() and not()")   # compat 1501
     if isinstance(o.get("not"), str):
         nothas = str(o["not"])
     elif o.get("not") is True:
@@ -142,7 +144,8 @@ def cmd_ds(s: "Session", args: str) -> None:
         w = int(o["varwidth"]) if isinstance(o.get("varwidth"), str) else 12   # VERIFY default
         skip = int(o["skip"]) if isinstance(o.get("skip"), str) else 2
         indent = int(o["indent"]) if isinstance(o.get("indent"), str) else 0
-        col = w + skip
+        # columns as wide as the longest name shown, plus the skip (compat 1501)
+        col = min(w, max(len(n) for n in names)) + skip
         per = max(1, (79 - indent) // col)
         shown = [_abbrev(n, w) for n in names]
         out = s.output
