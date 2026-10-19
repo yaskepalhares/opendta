@@ -160,6 +160,16 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] ROC analysis: `roctab` (area with DeLong or Hanley-McNeil errors, detailed report, curve), `roccomp` (equality of areas, correlated or independent), `rocfit` (binormal model), `lroc` and `lsens` after `logit`, `logistic` and `probit`
 - Cases `1401` and `1402` await the Stata run
 
+## Phase 11: data management ✅
+
+- [x] Variables and observations: `clonevar`, `insobs`, `range`, `separate`, `ipolate`, `expandcl`, `stack`, `xpose`, `drawnorm`, `corr2data`
+- [x] Describing and comparing data: `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `snapshot`
+- [x] Files and the system: `copy`, `mkdir`, `rmdir`, `dir`/`ls`, `shell` (and `!`), `filefilter`, `zipfile`, `unzipfile`, `checksum`, `outfile`, `unicode`
+- [x] `statsby`, `putmata`; `sysuse` (OpenDTA's own example datasets) and `webuse` (downloads on demand)
+- [x] `icd9` and `icd10` with the public-domain ICD-9-CM and ICD-10-CM code lists of the U.S. CMS (check, clean, generate, lookup, search); `icd9p` by format
+- [x] `odbc` through the optional `pyodbc` package; business calendars (`bcal`, the `%tb` format, `bofd()` and `dofb()`)
+- Case `1501` awaits the Stata run
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -181,7 +191,7 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 
 Commands and options that OpenDTA does not have yet, by area. They will be added over time; the order follows use and the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
-- **Data management**: `clonevar`, `ds`, `lookfor`, `sysuse`/`webuse`, `xpose`, `stack`, `separate`, `ipolate`, `range`, `drawnorm`, `corr2data`, `expandcl`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `checksum`, `snapshot`, `statsby`, `outfile`, `insobs`, `putmata`, `icd9`/`icd10`, `bcal`, `unicode`, `odbc`, `filefilter`, `zipfile`, `mkdir`, `rmdir`, `copy`, `shell`, `dir`; `table` with three or more variables; `import sas`, `spss`, `sasxport` and `haver`; binary `file` read/write; `infile, byvariable()`; `putexcel` to `.xls`; options of `list` and `describe` that are still missing.
+- **Data management**: `table` with three or more variables; `import sas`, `spss`, `sasxport` and `haver`; `file` with binary read/write; `infile` with `byvariable()`; `putexcel` to `.xls`; `list` and `describe` with the options that are still missing; `icd9p` with the ICD-9-CM procedure code list.
 - **Epidemiology**: `rocreg`; `cs`, `cc` and `ir` with the `estandard`, `istandard`, `standard()`, `binomial` and `pool` options; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`.
 - **Base statistics**: the `ml` command (the engine exists), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` after more commands, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Models**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` and `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` and `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.

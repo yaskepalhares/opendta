@@ -160,6 +160,16 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 - [x] Análise ROC: `roctab` (área com erros de DeLong ou de Hanley-McNeil, relatório detalhado, curva), `roccomp` (igualdade de áreas, correlacionadas ou independentes), `rocfit` (modelo binormal), `lroc` e `lsens` depois de `logit`, `logistic` e `probit`
 - Os casos `1401` e `1402` aguardam a rodada no Stata
 
+## Fase 11: manipulação de dados ✅
+
+- [x] Variáveis e observações: `clonevar`, `insobs`, `range`, `separate`, `ipolate`, `expandcl`, `stack`, `xpose`, `drawnorm`, `corr2data`
+- [x] Descrever e comparar dados: `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `snapshot`
+- [x] Arquivos e sistema: `copy`, `mkdir`, `rmdir`, `dir`/`ls`, `shell` (e `!`), `filefilter`, `zipfile`, `unzipfile`, `checksum`, `outfile`, `unicode`
+- [x] `statsby`, `putmata`; `sysuse` (dados de exemplo próprios do OpenDTA) e `webuse` (baixa sob demanda)
+- [x] `icd9` e `icd10` com as listas de códigos de domínio público ICD-9-CM e ICD-10-CM do CMS americano (check, clean, generate, lookup, search); `icd9p` pelo formato
+- [x] `odbc` pelo pacote opcional `pyodbc`; calendários de dias úteis (`bcal`, o formato `%tb`, `bofd()` e `dofb()`)
+- O caso `1501` aguarda a rodada no Stata
+
 ## Distribuição e documentação
 
 - [x] Licença MIT e avisos de licença dos componentes de terceiros
@@ -181,7 +191,7 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 
 Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
-- **Manipulação de dados**: `clonevar`, `ds`, `lookfor`, `sysuse`/`webuse`, `xpose`, `stack`, `separate`, `ipolate`, `range`, `drawnorm`, `corr2data`, `expandcl`, `inspect`, `labelbook`, `compare`, `cf`, `datasignature`, `checksum`, `snapshot`, `statsby`, `outfile`, `insobs`, `putmata`, `icd9`/`icd10`, `bcal`, `unicode`, `odbc`, `filefilter`, `zipfile`, `mkdir`, `rmdir`, `copy`, `shell`, `dir`; `table` com três ou mais variáveis; `import sas`, `spss`, `sasxport` e `haver`; leitura e gravação binária com `file`; `infile, byvariable()`; `putexcel` para `.xls`; opções de `list` e `describe` que ainda faltam.
+- **Manipulação de dados**: `table` com três variáveis ou mais; `import sas`, `spss`, `sasxport` e `haver`; `file` com leitura e gravação binária; `infile` com `byvariable()`; `putexcel` para `.xls`; `list` e `describe` com as opções que ainda faltam; `icd9p` com a lista de procedimentos da ICD-9-CM.
 - **Epidemiologia**: `rocreg`; `cs`, `cc` e `ir` com as opções `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`.
 - **Estatística básica**: o comando `ml` (o motor já existe), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Modelos**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` e `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.

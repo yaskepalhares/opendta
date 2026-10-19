@@ -82,6 +82,13 @@ ALIASES = {
     "cs": "epitab", "csi": "epitab", "cc": "epitab", "cci": "epitab", "ir": "epitab", "iri": "epitab",
     "mcc": "epitab", "mcci": "epitab", "tabodds": "epitab", "mhodds": "epitab", "istdize": "dstdize",
     "kap": "kappa", "roctab": "roc", "roccomp": "roc", "rocfit": "roc", "lroc": "roc", "lsens": "roc",
+    "copy": "filesys", "mkdir": "filesys", "rmdir": "filesys", "dir": "filesys", "ls": "filesys",
+    "shell": "filesys", "filefilter": "filesys", "zipfile": "filesys", "unzipfile": "filesys",
+    "checksum": "filesys", "clonevar": "datautil", "insobs": "datautil", "range": "datautil",
+    "separate": "datautil", "ipolate": "datautil", "expandcl": "datautil", "stack": "datautil",
+    "xpose": "datautil", "lookfor": "ds", "inspect": "ds", "labelbook": "ds", "cf": "compare",
+    "datasignature": "compare", "snapshot": "compare", "corr2data": "drawnorm", "webuse": "sysuse",
+    "icd9": "icd", "icd9p": "icd", "icd10": "icd",
 }
 
 
