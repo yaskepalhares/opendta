@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def _lazy(module: str, name: str):
     def run(s: "Session", args: str) -> None:
         import importlib
-        pkg = "opendta.estimation" if module in ("stcrreg",) else "opendta.commands"
+        pkg = "opendta.estimation" if module in ("stcrreg", "stcurve") else "opendta.commands"
         getattr(importlib.import_module(f"{pkg}.{module}"), name)(s, args)
     return run
 
@@ -31,5 +31,6 @@ for _cmd, _mod, _fn in (
     ("ltable", "strates", "cmd_ltable"),
     ("ctset", "ctdata", "cmd_ctset"), ("ct", "ctdata", "cmd_ct"), ("cttost", "ctdata", "cmd_cttost"),
     ("sttoct", "ctdata", "cmd_sttoct"), ("sttocc", "ctdata", "cmd_sttocc"),
+    ("stcrreg", "stcrreg", "cmd_stcrreg"), ("stcurve", "stcurve", "cmd_stcurve"),
 ):
     command(_cmd, _cmd)(_lazy(_mod, _fn))
