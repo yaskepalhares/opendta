@@ -15,7 +15,7 @@
 {title:Description}
 
 {pstd}
-Sets the target .xlsx file.
+Sets the target .xlsx or .xls file (.xls needs the optional xlrd and xlwt packages; only the values of the other sheets are kept when an .xls is modified).
 
 {pstd}
 Writes text, the value of an expression or a matrix starting at {it:cell}. The Stata 14.0 form {cmd:putexcel} {it:cell=...} {cmd:using} {it:filename} is also accepted.

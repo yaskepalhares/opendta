@@ -1,0 +1,608 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1701_datamgmt_options.log
+  log type:  text
+ opened on:  19 Oct 2026, 14:07:56
+
+. * Data management options: file with binary read/write, seek and set byteorder; infile with
+. * byvariable(); putexcel to .xls; describe numbers, varlist, replace and using; list header(#) and
+. * nodotz; import and export sasxport (import sas and import spss are newer than Stata 14 and have
+. * pytest cases instead). Every command whose behavior the manual does not settle runs under
+. * capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. capture erase odta_b.bin
+
+. capture noisily file open h using odta_b.bin, write binary
+
+. capture noisily file write h %14s "mymatout 1.0.1" %1b (byteorder())
+
+. capture noisily file write h %2b (3) %4b (-5) %8z (3.14159) %4z (.) %1b (.a)
+
+. capture noisily file write h %1b (2137) %1bs (2137) %1bu (2137) %2b (124.75) %3s "abcdef" %8s "ab"
+
+. capture noisily file seek h query
+
+. capture noisily return list
+
+scalars:
+                r(loc) =  50
+
+. capture noisily file close h
+
+. capture noisily file open h using odta_b.bin, read binary
+
+. capture noisily file read h %14s sig
+
+. capture noisily display "`sig'"
+mymatout 1.0.1
+
+. capture noisily file read h %1b bo
+
+. local border = bo
+
+. capture noisily file set h byteorder `border'
+
+. capture noisily file read h %2b v
+
+. capture noisily display v
+3
+
+. capture noisily file read h %4b v
+
+. capture noisily display v
+-5
+
+. capture noisily file read h %8z v
+
+. capture noisily display %9.5f v
+  3.14159
+
+. capture noisily file read h %4z v
+
+. capture noisily display v
+.
+
+. capture noisily file read h %1b v
+
+. capture noisily display v == .a
+1
+
+. capture noisily file read h %1b v
+
+. capture noisily display v == .
+1
+
+. capture noisily file read h %1bs v
+
+. capture noisily display v
+127
+
+. capture noisily file read h %1bu v
+
+. capture noisily display v
+255
+
+. capture noisily file read h %2b v
+
+. capture noisily display v
+124
+
+. capture noisily file read h %3s t
+
+. capture noisily display "`t'"
+abc
+
+. capture noisily file read h %8s t
+
+. capture noisily display "`t'"
+ab
+
+. capture noisily return list
+
+scalars:
+                r(eof) =  0
+
+. capture noisily file read h %2b v
+
+. capture noisily return list
+
+scalars:
+                r(eof) =  1
+
+. capture noisily file seek h tof
+
+. capture noisily file read h %2s t
+
+. capture noisily display "`t'"
+my
+
+. capture noisily file seek h 3
+
+. capture noisily file seek h eof
+
+. capture noisily file query
+binary read  h
+
+. capture noisily file close h
+
+. capture noisily file read h %2b v
+file handle h not found
+
+. capture erase odta_b.bin
+
+. capture erase odta_rw.bin
+
+. capture noisily file open h using odta_rw.bin, read write binary
+
+. capture noisily file write h %4b (7) %2b (9)
+
+. capture noisily file seek h tof
+
+. capture noisily file read h %4b v
+
+. capture noisily display v
+7
+
+. capture noisily file close h
+
+. capture erase odta_rw.bin
+
+. 
+. * infile with byvariable(): the file holds all the values of a variable, then of the next one
+. capture erase odta_time.raw
+
+. capture erase odta_time2.raw
+
+. capture noisily file open h using odta_time.raw, write text
+
+. capture noisily file write h "1980 1981 1982 1983" _n "14 17 25 30" _n "120 135 150" _n "180" _n
+
+. capture noisily file close h
+
+. capture noisily file open h using odta_time2.raw, write text
+
+. capture noisily file write h "1980 1981 1982 1983;" _n "14 17 25 ;" _n "120 135 150 180;" _n
+
+. capture noisily file close h
+
+. capture noisily infile year amount cost using odta_time, byvariable(4) clear
+(4 observations read)
+
+. capture noisily list
+
+     +----------------------+
+     | year   amount   cost |
+     |----------------------|
+  1. | 1980       14    120 |
+  2. | 1981       17    135 |
+  3. | 1982       25    150 |
+  4. | 1983       30    180 |
+     +----------------------+
+
+. capture noisily infile year amount cost using odta_time2, byvariable(100) clear
+'1983;' cannot be read as a number for year[4]
+'180;' cannot be read as a number for amount[4]
+(eof not at end of obs)
+(7 observations read)
+
+. capture noisily list
+
+     +----------------------+
+     | year   amount   cost |
+     |----------------------|
+  1. | 1980      120      . |
+  2. | 1981      135      . |
+  3. | 1982      150      . |
+  4. |    .        .      . |
+  5. |   14        .      . |
+     |----------------------|
+  6. |   17        .      . |
+  7. |   25        .      . |
+     +----------------------+
+
+. capture noisily infile year amount cost using odta_time, byvariable(x) clear
+option byvariable() incorrectly specified
+
+. capture noisily infile year amount cost using odta_time, byvariable(2) clear
+(2 observations read)
+
+. capture noisily list
+
+     +----------------------+
+     | year   amount   cost |
+     |----------------------|
+  1. | 1980     1982     14 |
+  2. | 1981     1983     17 |
+     +----------------------+
+
+. capture erase odta_time.raw
+
+. capture erase odta_time2.raw
+
+. 
+. * describe: numbers, varlist, replace and using
+. clear
+
+. input str8 make price mpg
+
+          make      price        mpg
+  1. "AMC" 4099 22
+  2. "Buick" 5788 18
+  3. "Cad" 7827 .
+  4. end
+
+. label variable price "Price (USD)"
+
+. label define yn 1 "one"
+
+. label values mpg yn
+
+. sort price
+
+. capture noisily describe, numbers
+
+Contains data
+  obs:             3                          
+ vars:             3                          
+ size:            48                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    variable  storage   display    value
+      name      type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    1. make      str8    %9s                   
+    2. price     float   %9.0g                 Price (USD)
+    3. mpg       float   %9.0g      yn         
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: price
+     Note: Dataset has changed since last saved.
+
+. capture noisily describe price mpg, numbers
+
+    variable  storage   display    value
+      name      type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    2. price     float   %9.0g                 Price (USD)
+    3. mpg       float   %9.0g      yn         
+
+. capture noisily describe, varlist
+
+Contains data
+  obs:             3                          
+ vars:             3                          
+ size:            48                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+make            str8    %9s                   
+price           float   %9.0g                 Price (USD)
+mpg             float   %9.0g      yn         
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: price
+     Note: Dataset has changed since last saved.
+
+. capture noisily return list
+
+scalars:
+            r(changed) =  1
+              r(width) =  16
+                  r(k) =  3
+                  r(N) =  3
+
+macros:
+           r(sortlist) : "price"
+            r(varlist) : "make price mpg"
+
+. capture erase odta_d.dta
+
+. save odta_d, replace
+(note: file odta_d.dta not found)
+file odta_d.dta saved
+
+. clear
+
+. capture noisily describe using odta_d
+
+Contains data                                 
+  obs:             3                          19 Oct 2026 14:07
+ vars:             3                          
+ size:            60                          
+-------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+make            str8    %9s                   
+price           float   %9.0g                 Price (USD)
+mpg             float   %9.0g      yn         
+-------------------------------------------------------------------------------
+Sorted by: price  
+
+. capture noisily describe using odta_d, short
+
+Contains data                                 
+  obs:             3                          19 Oct 2026 14:07
+ vars:             3                          
+ size:            60                          
+Sorted by: price  
+
+. capture noisily describe using odta_d, simple
+make   price  mpg
+
+. capture noisily describe make using odta_d, varlist
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+make            str8    %9s                   
+
+. capture noisily return list
+
+scalars:
+              r(width) =  16
+                  r(k) =  3
+                  r(N) =  3
+
+macros:
+           r(sortlist) : "price"
+            r(varlist) : "make price mpg"
+
+. use odta_d, clear
+
+. capture noisily describe, clear
+option clear not allowed
+
+. capture noisily describe, replace
+
+. capture noisily list
+
+     +---------------------------------------------------------------------+
+     | position    name    type   isnume~c   format   vallab        varlab |
+     |---------------------------------------------------------------------|
+  1. |        1    make    str8          0      %9s                        |
+  2. |        2   price   float          1    %9.0g            Price (USD) |
+  3. |        3     mpg   float          1    %9.0g       yn               |
+     +---------------------------------------------------------------------+
+
+. capture noisily char list _dta[]
+  _dta[d_filename]:           odta_d.dta
+  _dta[d_filedate]:           19 Oct 2026 14:07
+  _dta[d_N]:                  3
+  _dta[d_sortedby]:           price
+
+. capture noisily return list
+
+. capture noisily describe, replace
+no; data in memory would be lost
+    Specify describe ..., replace clear to perform the command anyway.
+
+. use odta_d, clear
+
+. capture noisily describe make price, replace
+
+. capture noisily list
+
+     +---------------------------------------------------------------------+
+     | position    name    type   isnume~c   format   vallab        varlab |
+     |---------------------------------------------------------------------|
+  1. |        1    make    str8          0      %9s                        |
+  2. |        2   price   float          1    %9.0g            Price (USD) |
+     +---------------------------------------------------------------------+
+
+. 
+. * list: header(#) and nodotz
+. clear
+
+. input x y
+
+             x          y
+  1. 1 2
+  2. 3 .a
+  3. 5 .
+  4. 7 8
+  5. end
+
+. capture noisily list, header(2)
+
+     +--------+
+     | x    y |
+     |--------|
+  1. | 1    2 |
+  2. | 3   .a |
+     +--------+
+
+     +--------+
+     | x    y |
+     |--------|
+  3. | 5    . |
+  4. | 7    8 |
+     +--------+
+
+. capture noisily list, clean header(2)
+
+       x    y  
+  1.   1    2  
+  2.   3   .a  
+
+       x    y  
+  3.   5    .  
+  4.   7    8  
+
+. capture noisily list, nodotz
+
+     +--------+
+     | x    y |
+     |--------|
+  1. | 1    2 |
+  2. | 3   .a |
+  3. | 5    . |
+  4. | 7    8 |
+     +--------+
+
+. capture noisily list, header
+
+     +--------+
+     | x    y |
+     |--------|
+  1. | 1    2 |
+  2. | 3   .a |
+  3. | 5    . |
+  4. | 7    8 |
+     +--------+
+
+. capture noisily list, noheader header
+option noheader not allowed
+
+. capture noisily list, mean
+
+      +--------+
+      | x    y |
+      |--------|
+   1. | 1    2 |
+   2. | 3   .a |
+   3. | 5    . |
+   4. | 7    8 |
+      |--------|
+ Mean | 4    5 |
+      +--------+
+
+. capture noisily list, sum(x) N labvar(y)
+
+     +----------+
+     |  x     y |
+     |----------|
+  1. |  1     2 |
+  2. |  3    .a |
+  3. |  5     . |
+  4. |  7     8 |
+     |----------|
+     | 16   Sum |
+     |  4     N |
+     +----------+
+
+. capture noisily list, clean mean noobs
+
+        x    y  
+        1    2  
+        3   .a  
+        5    .  
+        7    8  
+ Mean   4    5  
+
+. capture noisily list, nocompress
+
+     +-----------------------+
+     |         x           y |
+     |-----------------------|
+  1. |         1           2 |
+  2. |         3          .a |
+  3. |         5           . |
+  4. |         7           8 |
+     +-----------------------+
+
+. capture noisily list, labvar(zz) sum
+variable zz not found
+option labvar() incorrectly specified
+
+. 
+. * putexcel to .xls
+. capture erase odta_p.xls
+
+. capture noisily putexcel A1=("id") B1=("score") A2=(1) B2=(2.5) using odta_p.xls, replace
+file odta_p.xls saved
+
+. capture noisily putexcel set odta_p.xls, modify
+
+. capture noisily putexcel C1=("n") C2=(3)
+file odta_p.xls saved
+
+. capture noisily import excel using odta_p.xls, clear
+
+. capture noisily list
+
+     +----------------+
+     |  A       B   C |
+     |----------------|
+  1. | id   score   n |
+  2. |  1     2.5   3 |
+     +----------------+
+
+. capture erase odta_p.xls
+
+. 
+. * import and export sasxport
+. clear
+
+. input id str6 name weight
+
+            id       name     weight
+  1. 1 "ana" 60.5
+  2. 2 "bruno" .
+  3. 3 "carla" 72
+  4. end
+
+. label variable weight "Weight (kg)"
+
+. capture erase odta_x.xpt
+
+. capture noisily export sasxport odta_x
+file odta_x.xpt saved
+
+. capture noisily export sasxport odta_x
+file odta_x.xpt already exists
+
+. capture noisily export sasxport odta_x, replace
+file odta_x.xpt saved
+
+. clear
+
+. capture noisily import sasxport odta_x
+
+. capture noisily import sasxport odta_x, clear
+
+. capture noisily describe
+
+Contains data
+  obs:             3                          
+ vars:             3                          
+ size:            66                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              double  %10.0g                
+name            str6    %9s                   
+weight          double  %10.0g                Weight (kg)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily list
+
+     +---------------------+
+     | id    name   weight |
+     |---------------------|
+  1. |  1     ana     60.5 |
+  2. |  2   bruno        . |
+  3. |  3   carla       72 |
+     +---------------------+
+
+. capture noisily return list
+
+scalars:
+            r(changed) =  1
+              r(width) =  22
+                  r(k) =  3
+                  r(N) =  3
+
+. capture erase odta_x.xpt
+
+. capture erase odta_d.dta
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1701_datamgmt_options.log
+  log type:  text
+ closed on:  19 Oct 2026, 14:07:56
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

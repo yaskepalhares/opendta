@@ -1,3 +1,5 @@
+* Every command that Stata 14 may not have, or whose behavior the manual does not settle, runs under
+* capture noisily, so that one Stata run shows the whole case.
 * Data management: clonevar, ds, lookfor, insobs, range, separate, ipolate,
 * expandcl, stack, xpose, corr2data, inspect, labelbook, compare, cf, snapshot,
 * filefilter, outfile, statsby, putmata, icd9 and bcal (layouts, messages, r())
@@ -13,70 +15,70 @@ end
 label variable x "Dose given"
 label define yn 1 "one" 2 "two"
 label values grp yn
-clonevar xc = x if id < 4
-describe x xc
-ds
-return list
+capture noisily clonevar xc = x if id < 4
+capture noisily describe x xc
+capture noisily ds
+capture noisily return list
 capture noisily ds, has(type numeric) not(varlabel)
 ds, has(type numeric)
 ds, not(varlabel)
-lookfor dose
-return list
-inspect x
-inspect y
-return list
-labelbook yn
+capture noisily lookfor dose
+capture noisily return list
+capture noisily inspect x
+capture noisily inspect y
+capture noisily return list
+capture noisily labelbook yn
 labelbook, problems
-compare x xc
+capture noisily compare x xc
 capture noisily by grp: ipolate y x, gen(yi)
-bysort grp: ipolate y x, gen(yi)
-list
-separate x, by(grp)
-describe x1 x2
-separate y, by(grp) generate(yy) shortlabel
+capture noisily bysort grp: ipolate y x, gen(yi)
+capture noisily list
+capture noisily separate x, by(grp)
+capture noisily describe x1 x2
+capture noisily separate y, by(grp) generate(yy) shortlabel
 preserve
-expandcl 2, cluster(grp) generate(newcl)
-sort grp id newcl
-list id grp newcl
+capture noisily expandcl 2, cluster(grp) generate(newcl)
+capture noisily sort grp id newcl
+capture noisily list id grp newcl
 restore
 capture snapshot erase _all
-snapshot save, label("first")
-snapshot list
-drop if grp == 2
-snapshot restore 1
-count
+capture noisily snapshot save, label("first")
+capture noisily snapshot list
+capture noisily drop if grp == 2
+capture noisily snapshot restore 1
+capture noisily count
 capture erase odta_a.dta
-save odta_a, replace
+capture noisily save odta_a, replace
 replace x = 99 in 2
 capture noisily cf _all using odta_a
 capture noisily cf x y using odta_a, verbose
-statsby m=r(mean) n=r(N), by(grp) clear nodots: summarize x
-list
-putmata X=(grp m), replace
-mata: X
+capture noisily statsby m=r(mean) n=r(N), by(grp) clear nodots: summarize x
+capture noisily list
+capture noisily putmata X=(grp m), replace
+capture noisily mata: X
 clear
 set obs 3
-insobs 2, before(2)
-count
-range t 0 1 5
-list
+capture noisily insobs 2, before(2)
+capture noisily count
+capture noisily range t 0 1 5
+capture noisily list
 clear
 set obs 3
 gen a = _n
 gen b = 10*_n
-stack a b, into(z) clear
-list
+capture noisily stack a b, into(z) clear
+capture noisily list
 clear
 set obs 2
 gen a = _n
 gen b = 10*_n
 xpose, clear varname
-list
+capture noisily list
 clear
 matrix C = (1, .3 \ .3, 1)
-corr2data u v, n(100) corr(C) means(5 10) sds(2 3)
-tabstat u v, statistics(mean sd)
-correlate u v
+capture noisily corr2data u v, n(100) corr(C) means(5 10) sds(2 3)
+capture noisily tabstat u v, statistics(mean sd)
+capture noisily correlate u v
 clear
 input id x
 1 1.5
@@ -84,12 +86,12 @@ input id x
 end
 capture erase odta_out.raw
 capture erase odta_f.raw
-outfile using odta_out.raw, replace
-type odta_out.raw
-outfile using odta_out.raw, comma replace
-type odta_out.raw
-filefilter odta_out.raw odta_f.raw, from(",") to(";") replace
-type odta_f.raw
+capture noisily outfile using odta_out.raw, replace
+capture noisily type odta_out.raw
+capture noisily outfile using odta_out.raw, comma replace
+capture noisily type odta_out.raw
+capture noisily filefilter odta_out.raw odta_f.raw, from(",") to(";") replace
+capture noisily type odta_f.raw
 clear
 input str8 dx
 "250.00"
@@ -100,16 +102,16 @@ input str8 dx
 "bad!"
 "999.99"
 end
-icd9 check dx
-return list
-icd9 check dx, list
+capture noisily icd9 check dx
+capture noisily return list
+capture noisily icd9 check dx, list
 capture noisily icd9 clean dx, dots generate(c)
 gen c = dx
 capture noisily icd9 clean c, dots
-drop if dx == "bad!"
-icd9 clean c, dots
+capture noisily drop if dx == "bad!"
+capture noisily icd9 clean c, dots
 capture noisily icd9 generate cat = c, category
-list
+capture noisily list
 erase odta_a.dta
 erase odta_out.raw
 erase odta_f.raw

@@ -1,5 +1,5 @@
 """putexcel ([P] putexcel): writes text, expressions and matrices to
-cells of an .xlsx spreadsheet (openpyxl).
+cells of an .xlsx spreadsheet (openpyxl) or of an .xls one (xlrd and xlwt, io/excel.py).
 
 Accepts both Stata 14 syntaxes:
     putexcel set file [, sheet(name) replace modify]
@@ -40,8 +40,6 @@ def _path(text: str) -> Path:
     p = Path(t).expanduser()
     if p.suffix == "":
         p = p.with_suffix(".xlsx")
-    if p.suffix.lower() == ".xls":
-        raise StataError(198, ".xls files not supported by OpenDTA; use .xlsx")   # VERIFY
     return p
 
 
@@ -141,13 +139,17 @@ def cmd_putexcel(s: "Session", args: str) -> None:
     items = _split_cells(cells_txt)
     if not items:
         raise StataError(198, "invalid syntax")
-    import openpyxl
-    if path.exists() and not fresh:
-        wb = openpyxl.load_workbook(path)
+    if path.suffix.lower() == ".xls":
+        from ..io.excel import XlsBook
+        wb = XlsBook(path if path.exists() and not fresh else None)
     else:
-        wb = openpyxl.Workbook()
-        if sheet:
-            wb.active.title = sheet
+        import openpyxl
+        if path.exists() and not fresh:
+            wb = openpyxl.load_workbook(path)
+        else:
+            wb = openpyxl.Workbook()
+            if sheet:
+                wb.active.title = sheet
     ws = wb[sheet] if sheet and sheet in wb.sheetnames else (wb.create_sheet(sheet) if sheet else wb.active)
     for cell, val in items:
         mm = _CELL.match(cell)

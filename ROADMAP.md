@@ -178,6 +178,14 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] `rocreg`: nonparametric ROC estimation with covariate-adjusted controls (stratified or linear, empirical or normal percentile values) and its summaries (AUC, ROC(t), inverse ROC, partial AUC), and the parametric probit GLM model with ROC covariates; bootstrap standard errors with normal, percentile and bias-corrected intervals
 - Case `1601` awaits the Stata run
 
+## Phase 13: data management, options ✅
+
+- [x] `file` with binary read and write (`%1b`, `%2b`, `%4b`, their signed and unsigned forms, `%4z`, `%8z`, `%#s`), `file seek`, `file set byteorder`, `file query`, `read write` and the `byteorder()` function
+- [x] `infile` with `byvariable()`; `putexcel` to `.xls`
+- [x] `import sas` (with `bcat()`), `import spss` and `import sasxport`, and a basic `export sasxport`, through the optional `pyreadstat` package
+- [x] `describe` with `numbers`, `varlist`, `replace` and `using`; `list` with `header()`, `nodotz`, `mean`, `sum`, `N`, `labvar()` and `nocompress`
+- Case `1701` awaits the Stata run
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -199,7 +207,7 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 
 Commands and options that OpenDTA does not have yet, by area. They will be added over time; the order follows use and the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
-- **Data management**: `table` with three or more variables; `import sas`, `spss`, `sasxport` and `haver`; `file` with binary read/write; `infile` with `byvariable()`; `putexcel` to `.xls`; `list` and `describe` with the options that are still missing; `icd9p` with the ICD-9-CM procedure code list.
+- **Data management**: `table` with three or more variables; `import haver`; `import sasxport` with `describe`, `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`; `list` with `string()` and `display`; `icd9p` with the ICD-9-CM procedure code list.
 - **Epidemiology**: `rocreg` with the `ml` and `cluster()` options.
 - **Base statistics**: the `ml` command (the engine exists), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` after more commands, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Models**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` and `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` and `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.

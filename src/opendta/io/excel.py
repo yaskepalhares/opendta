@@ -435,3 +435,74 @@ def _write_xls(ds: Dataset, path: Path, names: list[str], rows: np.ndarray,
         tmp.unlink(missing_ok=True)
         raise
     tmp.replace(path)
+
+
+class XlsSheet:
+    """Cells of one sheet of an .xls workbook; `cell(row=, column=, value=)` as in openpyxl."""
+
+    def __init__(self, title: str):
+        self.title = title
+        self.cells: dict[tuple[int, int], object] = {}
+
+    def cell(self, row: int, column: int, value=None):
+        if value is None:
+            self.cells.pop((row, column), None)
+        else:
+            self.cells[(row, column)] = value
+
+
+class XlsBook:
+    """An .xls workbook kept in memory (xlrd to read, xlwt to write); putexcel changes cells and
+    saves the whole book. Only the values of the other sheets survive, not their formats."""
+
+    def __init__(self, path: Path | None = None):
+        self.sheets: dict[str, XlsSheet] = {}
+        if path is not None:
+            try:
+                import xlrd
+            except ImportError:
+                raise StataError(603, "reading .xls files requires the xlrd package (pip install xlrd)")
+            book = xlrd.open_workbook(str(path))
+            for sh in book.sheets():
+                xs = self.create_sheet(sh.name)
+                for i in range(sh.nrows):
+                    for j in range(sh.ncols):
+                        c = sh.cell(i, j)
+                        if c.ctype not in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                            xs.cells[(i + 1, j + 1)] = c.value
+
+    @property
+    def sheetnames(self) -> list[str]:
+        return list(self.sheets)
+
+    @property
+    def active(self) -> XlsSheet:
+        return next(iter(self.sheets.values())) if self.sheets else self.create_sheet("Sheet1")
+
+    def __getitem__(self, name: str) -> XlsSheet:
+        return self.sheets[name]
+
+    def create_sheet(self, title: str) -> XlsSheet:
+        self.sheets[title] = XlsSheet(title)
+        return self.sheets[title]
+
+    def save(self, path: Path) -> None:
+        try:
+            import xlwt
+        except ImportError:
+            raise StataError(603, "writing .xls files requires the xlwt package (pip install xlwt)")
+        book = xlwt.Workbook(encoding="utf-8")
+        for name, sh in (self.sheets or {"Sheet1": XlsSheet("Sheet1")}).items():
+            ws = book.add_sheet(name, cell_overwrite_ok=True)
+            for (r, c), v in sh.cells.items():
+                if r > 65536 or c > 256:
+                    # VERIFY: Stata's message for the limits of the .xls format
+                    raise StataError(198, "too many rows or columns for an .xls file (65,536 rows, 256 columns)")
+                ws.write(r - 1, c - 1, v)
+        tmp = path.with_name(path.name + ".opendta-tmp")
+        try:
+            book.save(str(tmp))
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        tmp.replace(path)
