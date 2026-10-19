@@ -1,7 +1,7 @@
 """Draws the command-coverage heatmap shown in ROADMAP.md.
 
 Implemented commands come from the command registry (plus the few that the
-interpreter handles itself); missing ones come from the "After 1.0" section of
+interpreter handles itself); missing ones come from the "Missing for 1.0" section of
 ROADMAP.md, where an item counts only when its first word is not an implemented
 command (so options of existing commands, such as `ivregress liml`, are left
 out). Each tile is an area, sized by its number of commands and coloured by the
@@ -110,15 +110,15 @@ def implemented() -> dict[str, str]:
     return out
 
 
-# items that the "After 1.0" text names but that are options, not commands
+# items that the "Missing for 1.0" text names but that are options, not commands
 NOT_COMMANDS = {"exactm", "exactp"}     # ties options of stcox
 
 
 def missing(done: dict[str, str]) -> dict[str, set[str]]:
-    """Commands listed in "After 1.0". Each bullet is a list of commands followed by clauses
+    """Commands listed in "Missing for 1.0". Each bullet is a list of commands followed by clauses
     (after ";") about options of existing commands: a clause whose first item is an
     implemented command (`arima` with `sarima()`...) is about options and is skipped."""
-    text = (ROOT / "ROADMAP.md").read_text(encoding="utf-8").split("## After 1.0", 1)[1]
+    text = (ROOT / "ROADMAP.md").read_text(encoding="utf-8").split("## Missing for 1.0", 1)[1]
     head = lambda item: item.split()[0].rstrip(",:")
     out: dict[str, set[str]] = {}
     for area, items in re.findall(r"^- \*\*(.+?)\*\*: (.+)$", text, re.M):

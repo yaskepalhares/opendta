@@ -8,7 +8,7 @@ Thank you for helping. OpenDTA is a personal study project, but reports and pull
 
 - **A result differs from Stata**: open an issue with the [Difference from Stata](https://github.com/yaskepalhares/opendta/issues/new?template=difference-from-stata.md) template. A short do-file that reproduces it, with the output of both programs, is the most useful report there is.
 - **Something breaks or the window misbehaves**: use the [Bug report](https://github.com/yaskepalhares/opendta/issues/new?template=bug-report.md) template.
-- **A command you need is missing**: check the list in the [ROADMAP](ROADMAP.md#after-10) and use the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template. Requests help decide the order.
+- **A command you need is missing**: check the list in the [ROADMAP](ROADMAP.md#missing-for-10) and use the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template. Requests help decide the order.
 
 ## Rules of the project
 
