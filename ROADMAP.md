@@ -203,4 +203,12 @@ Commands and options that OpenDTA does not have yet, by area. They will be added
 - **Other suites**: `gsem`; `sem` with the `mlmv` and `adf` methods, `group()` and the other `estat` subcommands; the other `power` methods (variances, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), the `lrchi2` and `fisher` tests and graphs; `bayesmh` and the `bayes` commands; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with more estimators.
 - **Programming**: `postfile`/`post`, `unab`, `tsunab`, `fvunab`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve`, `signestimationsample`, `makecns`, `pause`, `sleep`, `window`, `plugin`, `viewsource`, `unabcmd`, Stata's class system (Mata classes already work).
 
+## Long term
+
+For the record, the order after 1.0:
+
+1. Finish every command of the target version (the blocks in [docs/next-steps.md](docs/next-steps.md)) and release 1.0.
+2. Add the commands and changes of each later Stata version, one version at a time, up to Stata 19.
+3. A version that runs in the web browser, without installing anything: the statistical core (Python, NumPy and SciPy) runs in WebAssembly through Pyodide. It builds on the separation between the statistical core and the Stata layer that new commands already follow.
+
 Out of scope: reading the `.gph` files saved by Stata, whose format has no public specification ([development policy](docs/clean-room-policy.md)); OpenDTA saves graphs in its own `.gph` format.
