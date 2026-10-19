@@ -148,13 +148,13 @@ def _dashed(label: str, width: int) -> str:
     if len(inner) >= width:
         return label[:width].ljust(width)
     dashes = width - len(inner)
-    left = dashes // 2            # VERIFY: which side gets the extra dash
+    left = dashes - dashes // 2   # the extra dash goes on the left (compat 1801)
     return "-" * left + inner + "-" * (dashes - left)
 
 
 def render_tabdisp(*, stub_title: str, body: list, heads: list[str], groups: list[str] | None,
                    group_title: str, super_title: str, width: int, csep: int, scsep: int,
-                   stub: int, center: bool, left: bool) -> list[str]:
+                   stub: int, center: bool, left: bool, block: int = 0) -> list[str]:
     """The lines of a tabdisp table.
 
     `body` has, in order, ("group", title) for the heading of a superrow combination and
@@ -170,19 +170,23 @@ def render_tabdisp(*, stub_title: str, body: list, heads: list[str], groups: lis
     def gap(k: int) -> int:
         if k == 0:
             return 1
-        return csep + (scsep if k % per == 0 else 0)
+        return scsep if k % per == 0 else csep
 
-    def cells(texts: list[str], heading: bool = False) -> str:
+    def cells(texts: list[str], heading: bool = True) -> str:
         out = []
         for k, t in enumerate(texts):
+            # numbers are right-aligned in a block as wide as the longest one, and the block is
+            # centered (compat 1801: cellwidth(12) center)
+            if center and not heading and block and t:
+                t = t.rjust(block)
             out.append(" " * gap(k) + (center_text(t, width) if center else t.rjust(width)))
         return "".join(out)
 
-    block = len(cells([""] * ncols))
+    total = len(cells([""] * ncols))
     # heading rows to the right of the stub
     header: list[str] = []
     if groups:
-        header.append(center_text(super_title, block).rstrip())
+        header.append(center_text(super_title, total).rstrip())
         line, pos = "", 0
         for gi, label in enumerate(groups):
             start = pos + gap(gi * per)
@@ -191,7 +195,7 @@ def render_tabdisp(*, stub_title: str, body: list, heads: list[str], groups: lis
             pos = start + span
         header.append(line)
     elif group_title:
-        header.append(center_text(group_title, block).rstrip())
+        header.append(center_text(group_title, total).rstrip())
     heads_text = [h for _ in range(ng) for h in heads]
     header.append(cells(heads_text))
     stub_lines = wrap_words(stub_title, stub)
@@ -199,8 +203,8 @@ def render_tabdisp(*, stub_title: str, body: list, heads: list[str], groups: lis
     n = max(len(header), len(stub_lines))
     header = [""] * (n - len(header)) + header
     stub_lines = [""] * (n - len(stub_lines)) + stub_lines
-    top = "-" * (stub + 2 + block)
-    rule = "-" * (stub + 1) + "+" + "-" * block
+    top = "-" * (stub + 2 + total)
+    rule = "-" * (stub + 1) + "+" + "-" * total
     lines = [top]
     for k in range(n):
         st = stub_lines[k]
@@ -222,6 +226,6 @@ def render_tabdisp(*, stub_title: str, body: list, heads: list[str], groups: lis
         for j, texts in enumerate(rows):
             lab = label if j == 0 else ""
             lab = lab.ljust(stub) if left else lab.rjust(stub)
-            lines.append(f"{lab} |{cells(texts)}")
+            lines.append(f"{lab} |{cells(texts, False)}")
     lines.append(top)
     return lines

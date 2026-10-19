@@ -557,7 +557,7 @@ def cmd_markout(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     marker = s.data.get(words[0])
     if marker.vtype != "byte":
-        raise StataError(109, f"{marker.name} not byte")        # VERIFY: return code
+        raise StataError(198, f"{marker.name} not byte")
     rest = " ".join(words[1:])
     names = rest.split() if fvars.has_fv_or_ts(rest) else s.expand_varlist(rest) if rest else []
     o = {n.lower() for n, _ in (parse_options(opts) if opts.strip() else [])}

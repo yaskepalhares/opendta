@@ -195,7 +195,7 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] `program, sortpreserve`; `program name, plugin` (explains that Stata plugins cannot be loaded)
 - [x] `pause`, `sleep`, `window` (in batch mode the dialogs act as cancelled) and `viewsource` (shows OpenDTA's own source)
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` with a constraint matrix and `matcproc`
-- Case `1801` awaits the Stata run
+- Checked against the Stata log: case `1801`
 
 ## Distribution and documentation
 

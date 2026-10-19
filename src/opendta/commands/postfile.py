@@ -104,7 +104,7 @@ def cmd_postfile(s: "Session", args: str) -> None:
     if postname in posts:
         raise StataError(110, f"postfile {postname} already exists")      # VERIFY: return code
     if re.search(r"(^|\s)_all(\s|$)", decl):
-        raise StataError(198, "_all not allowed")                        # VERIFY: return code
+        raise StataError(101, "_all not allowed")
     names, types = _declare(s, decl)
     path = dta_path(p.using)
     if path.exists() and not o.get("replace"):
@@ -160,20 +160,25 @@ def cmd_post(s: "Session", args: str) -> None:
     try:
         exps = _groups(rest)
         if len(exps) != len(post.names):
-            found = f"only {len(exps)}" if len(exps) < len(post.names) else str(len(exps))
+            found = (f"only {len(exps)}" if len(exps) < len(post.names)
+                     else f"more than {len(post.names)}")
             raise StataError(198, f"post:  {len(post.names)} expressions expected and "
-                                  f"{found} found")                      # VERIFY: rc, too many
+                                  f"{found} found")                      
         row = []
-        for vtype, text in zip(post.types, exps):
-            v = s.eval(text)
-            if vtype.startswith("str"):
-                if not isinstance(v, str):
-                    raise StataError(109, "type mismatch")
-                row.append(v if vtype == "strL" else v[:int(vtype[3:])])
-            else:
-                if isinstance(v, str):
-                    raise StataError(109, "type mismatch")
-                row.append(float(v))
+        for k, (name, vtype, text) in enumerate(zip(post.names, post.types, exps), 1):
+            try:
+                v = s.eval(text)
+                if vtype.startswith("str"):
+                    if not isinstance(v, str):
+                        raise StataError(109, "type mismatch")
+                    row.append(v if vtype == "strL" else v[:int(vtype[3:])])
+                else:
+                    if isinstance(v, str):
+                        raise StataError(109, "type mismatch")
+                    row.append(float(v))
+            except StataError as e:
+                raise StataError(e.rc, f"{e.message}\npost:  above message corresponds to "
+                                       f"expression {k}, variable {name}")
     except StataError:
         # an error in post closes the postfile (the rows posted so far are saved)
         _close(s, postname)
@@ -202,9 +207,8 @@ def cmd_postutil(s: "Session", args: str) -> None:
     sub = args.strip()
     posts = _posts(s)
     if sub == "dir":
-        # VERIFY: layout of postutil dir
-        for name, post in posts.items():
-            s.output.write(f"  {name}: {post.path}\n", "text")
+        for name in posts:
+            s.output.write(f"{name}\n", "text")
     elif sub == "clear":
         for name in list(posts):
             _close(s, name)

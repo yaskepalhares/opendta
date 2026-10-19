@@ -195,7 +195,7 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 - [x] `program, sortpreserve`; `program nome, plugin` (explica que os plugins do Stata não podem ser carregados)
 - [x] `pause`, `sleep`, `window` (no modo lote as caixas de diálogo agem como canceladas) e `viewsource` (mostra o código-fonte do próprio OpenDTA)
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` com matriz de restrições e `matcproc`
-- Caso `1801` aguarda a rodada no Stata
+- Conferido com o log do Stata: caso `1801`
 
 ## Distribuição e documentação
 

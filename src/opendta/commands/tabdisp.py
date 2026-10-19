@@ -17,7 +17,7 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value, parse_format
+from ..core.formats import format_value
 from ..core.layout import render_tabdisp
 from ..lang.syntax import match_options, parse_standard
 from ._util import touse
@@ -76,7 +76,7 @@ def cmd_tabdisp(s: "Session", args: str) -> None:
     byvars = s.expand_varlist(str(o["by"])) if o.get("by") not in (None, True) else []
     if len(byvars) > 4:
         raise StataError(198, "option by() incorrectly specified")
-    fmt = str(o.get("format", "%9.0g")).strip()
+    fmt = str(o.get("format", "%10.0g")).strip()   # VERIFY: the default (1.235e+08, compat 1801)
     if not re.fullmatch(r"%[-0,~+]*\d*(\.\d+)?[a-zA-Z]+", fmt):
         raise StataError(198, "option format() incorrectly specified")
     ds = s.data
@@ -84,7 +84,7 @@ def cmd_tabdisp(s: "Session", args: str) -> None:
     if not base.any():
         raise StataError(2000, "no observations")
     for sel, _ in by_groups(s):
-        _table(s, o, names, cellvars, byvars, fmt, base & sel, "format" in o)
+        _table(s, o, names, cellvars, byvars, fmt, base & sel)
 
 
 def _cell(s: "Session", name: str, i: int, fmt: str, show_missing: bool) -> str:
@@ -98,7 +98,7 @@ def _cell(s: "Session", name: str, i: int, fmt: str, show_missing: bool) -> str:
 
 
 def _table(s: "Session", o: dict, names: list[str], cellvars: list[str], byvars: list[str],
-           fmt: str, mask: np.ndarray, fmt_given: bool = True) -> None:
+           fmt: str, mask: np.ndarray) -> None:
     ds, out = s.data, s.output
     n = ds.nobs
     rv = ds.get(names[0])
@@ -120,7 +120,7 @@ def _table(s: "Session", o: dict, names: list[str], cellvars: list[str], byvars:
     # the columns: with no column variable, the cell variables are the columns
     if cv is None:
         columns = [(0, k) for k in range(ncell)]
-        heads = [c for c in cellvars]
+        heads = [ds.get(c).label or c for c in cellvars]
     else:
         columns = [(c, None) for c in range(len(ccats))]
         heads = list(clabels)
@@ -163,13 +163,11 @@ def _table(s: "Session", o: dict, names: list[str], cellvars: list[str], byvars:
     longest = max([1] + [len(x) for x in contents + heads])
     if cw is not None:
         width = cw
-    elif fmt_given:
-        width = max(longest, parse_format(fmt).width)
     else:
-        # VERIFY: the default width of a cell when there is no format() or cellwidth()
+        # VERIFY: the minimum width of a cell
         width = max(longest, 4 if cv is not None else 10)
     csep = _number(s, o, "csepwidth", 2)
-    scsep = _number(s, o, "scsepwidth", 2)
+    scsep = _number(s, o, "scsepwidth", 4)
     # titles of the stub: the labels of the by variables and of the row variable
     rtitle = " and ".join([b.label or b.name for b in bvs] + [rv.label or rv.name])
     stub = max([9] + [len(item[1]) for item in body if item[0] != "blank"])
@@ -181,5 +179,6 @@ def _table(s: "Session", o: dict, names: list[str], cellvars: list[str], byvars:
                                groups=slabels if sv is not None else None,
                                group_title=group_title, super_title=super_title, width=width,
                                csep=csep, scsep=scsep, stub=stub, center=bool(o.get("center")),
-                               left=bool(o.get("left"))):
+                               left=bool(o.get("left")),
+                               block=0 if any(ds.get(c).is_string for c in cellvars) else max([0] + [len(x) for x in contents])):
         out.write(line + "\n", "text")

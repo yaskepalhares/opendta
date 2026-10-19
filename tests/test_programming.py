@@ -69,7 +69,7 @@ def test_mark_markin_markout(run):
     assert run("count if mk2").strip() == "9"
     assert "already defined" in run("capture noisily mark m1")
     run("gen mkf = 1\nmarkout mkf x")
-    assert run.rc == 109
+    assert run.rc == 198
 
 
 def test_mark_weights(run):

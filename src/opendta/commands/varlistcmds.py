@@ -39,16 +39,15 @@ _INTERPRETER_WORDS = ("if", "else", "foreach", "forvalues", "while", "by", "byso
 def _count_error(n: int, lo: int, hi: int, name: str, named: bool) -> StataError:
     if lo == hi:
         need = f"{lo} variable{'' if lo == 1 else 's'}"
-    elif hi - lo == 1:
-        need = f"{lo} or {hi} variables"      # VERIFY: plural of the 2-value range
+    elif hi >= 32000:
+        need = f"{lo} or more variables"
     else:
         need = f"{lo} - {hi} variables"
     msg = "too many variables specified" if n > hi else "too few variables specified"
-    rc = 103 if n > hi else 102                # VERIFY: return codes
+    rc = 103 if n > hi else 102
     if named:
-        # VERIFY: the second line when n is too few
         return StataError(rc, f"{name}:  {msg}\n{' ' * (len(name) + 3)}{need} required")
-    return StataError(rc, f"{name}:\n{msg}")   # VERIFY: the layout without name() for max
+    return StataError(rc, f"{name}:\n{msg}")
 
 
 def _unab(s: "Session", args: str, kind: str) -> None:
@@ -72,7 +71,7 @@ def _unab(s: "Session", args: str, kind: str) -> None:
     else:
         names = fvars.unabbreviate(ds, text, abbrev, fv=kind == "fvunab")
     if not lo <= len(names) <= hi:
-        raise _count_error(len(names), lo, hi, label, named)
+        raise _count_error(len(names), lo, hi, label if named else " ".join(names), named)
     s.macros.set_local(lname, " ".join(names))
 
 
@@ -133,6 +132,8 @@ def cmd_fvexpand(s: "Session", args: str) -> None:
     s.r = {"varlist": " ".join(c.name for c in cols)}
     if any(t.is_interaction or t.has_factor or t.comps[0].explicit_c for t in terms):
         s.r["fvops"] = "true"            # VERIFY: r(fvops) and r(tsops) when there are none
+    if any(c.ts for t in terms for c in t.comps):
+        s.r["tsops"] = "true"
 
 
 def _indicator(ds, term: fvars.Term, cell: tuple) -> np.ndarray:
@@ -193,7 +194,14 @@ def _revar(s: "Session", args: str, command_name: str) -> None:
                                          for t in terms):
         raise StataError(101, "factor variables not allowed")      # VERIFY
     if o.get("list"):
-        names = sorted(fvars.base_vars(terms))      # VERIFY: the order
+        # the variables that are not factors, then the factor variables (VERIFY: with interactions)
+        # the time-series ones come first (VERIFY: only seen with tsrevar)
+        fac = {c.var for t in terms for c in t.comps if c.factor}
+        tsv = {c.var for t in terms for c in t.comps if c.ts}
+        allv = fvars.base_vars(terms)
+        names = ([v for v in allv if v in tsv and v not in fac]
+                 + [v for v in allv if v not in tsv and v not in fac]
+                 + [v for v in allv if v in fac])
         s.r = {"varlist": " ".join(names)}
         return
     stub = str(o.get("stub", "")) if o.get("stub") not in (None, True) else ""
