@@ -12,8 +12,8 @@ For each compat/do/NAME.do:
 Before comparing, the log header and footer, `. do ...`/`. log close` lines
 and trailing spaces are dropped; blank lines are ignored.
 
-Numbers written with 15 or more characters (return list, ereturn list)
-may differ in the last digit: the order of floating-point sums is not
+Numbers written with 15 or more characters on either side (return list,
+ereturn list) may differ in the last digit: the order of floating-point sums is not
 the same as Stata's. These lines count as equal when the rest of the text is
 identical and the relative difference is below 1e-11 (Wald statistics and
 computations with numerical Hessians accumulate error in the last two digits).
@@ -88,8 +88,9 @@ def _close_line(a: str, b: str) -> bool:
     for x, y in zip(na, nb):
         if x == y:
             continue
-        # long numbers (%18.0g): 15+ characters, such as .0032959009263453
-        if min(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
+        # long numbers (%18.0g): 15+ characters, such as .0032959009263453, on either side
+        # (112.8 against 112.8000000000001)
+        if max(len(x.lstrip("-")), len(y.lstrip("-"))) < 15:
             return False
         fx, fy = float(x), float(y)
         if abs(fx - fy) > 1e-11 * max(abs(fx), abs(fy)):

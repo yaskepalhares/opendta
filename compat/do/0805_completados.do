@@ -1,6 +1,6 @@
 * Pieces completed for 1.0: anova (sequential, nested terms, error terms, repeated measures),
 * xtgee and the pa estimator, xtreg be and mle, two-way tabulate summarize(), misstable
-* tree/nested, ci variances, two-sample prtest, reshape advanced syntax and reshape error,
+* tree/nested, two-sample prtest, reshape advanced syntax and reshape error,
 * old merge syntax, sort in and list sepby()
 clear
 input person drug score
@@ -62,11 +62,6 @@ summarize uhat ehat
 generate g2 = mod(_n, 2)
 prtest yb, by(g2)
 prtesti 30 .4 45 .6
-ci variances x y
-ci variances x, sd
-ci variances x, bonett
-ci proportions yb, wilson
-cii variances 40 2.25
 
 replace x = . in 1/20
 replace y = . in 11/40

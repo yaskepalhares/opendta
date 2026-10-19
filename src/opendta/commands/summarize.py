@@ -340,14 +340,15 @@ def _pvals(t: float, df: float | None) -> tuple[float, float, float]:
     return lower, two, upper
 
 
-def _ha_lines(s: "Session", diff_name: str, hyp: str, stat: str, t: float, df: float | None) -> None:
+def _ha_lines(s: "Session", diff_name: str, hyp: str, stat: str, t: float, df: float | None,
+              two_op: str = ">") -> None:
     """The three alternative hypotheses: the probabilities start at columns
     1, 28 and 60; each "Ha:" is centered over its probability."""
     # VERIFY: positions checked against a single Stata 14 example
     out = s.output
     lo, two, up = _pvals(t, df)
     T = stat.upper()
-    probs = [f"Pr({T} < {stat}) = {lo:.4f}", f"Pr(|{T}| > |{stat}|) = {two:.4f}",
+    probs = [f"Pr({T} < {stat}) = {lo:.4f}", f"Pr(|{T}| {two_op} |{stat}|) = {two:.4f}",
              f"Pr({T} > {stat}) = {up:.4f}"]
     has = [f"Ha: {diff_name} < {hyp}", f"Ha: {diff_name} != {hyp}", f"Ha: {diff_name} > {hyp}"]
     starts = [1, 28, 60]
@@ -560,7 +561,7 @@ def cmd_prtest(s: "Session", args: str) -> None:
             names.append(cell_text(s.data, g, int(idx[0])))
             xs.append(v.data[idx])
             zero_one(v.data[idx], v.name)
-        _prtest_two(s, names, xs[0], xs[1], level, by=g.name)
+        _prtest_two(s, names, xs[0], xs[1], level)
         return
     if p.exp is None:
         raise StataError(198, "invalid syntax")
@@ -581,8 +582,7 @@ def cmd_prtest(s: "Session", args: str) -> None:
     _prtest_one(s, v.name, n, ph, p0, level)
 
 
-def _prtest_two(s: "Session", names, x1, x2, level: float, *, by: str | None = None,
-                stats: tuple | None = None) -> None:
+def _prtest_two(s: "Session", names, x1, x2, level: float, *, stats: tuple | None = None) -> None:
     """Two-sample test of proportions ([R] prtest; layout VERIFY, case compat 0805)."""
     if stats is None:
         n1, n2 = len(x1), len(x2)
@@ -603,9 +603,8 @@ def _prtest_two(s: "Session", names, x1, x2, level: float, *, by: str | None = N
     title = "Two-sample test of proportions"
     out.write("\n" + title + f"{name12(a)}: Number of obs = {n1:>8,}".rjust(78 - len(title)) + "\n", "text")
     out.write(f"{name12(b)}: Number of obs = {n2:>8,}".rjust(78) + "\n", "text")
-    head = "Group" if by else "Variable"
     out.write("-" * 78 + "\n", "text")
-    out.write(f"{head:>12} |       Mean   Std. Err.      z    P>|z|     [{level:g}% Conf. Interval]\n",
+    out.write(f"{'Variable':>12} |       Mean   Std. Err.      z    P>|z|     [{level:g}% Conf. Interval]\n",
               "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     for nm, ph, se_ in ((a, p1, se1), (b, p2, se2)):
@@ -618,12 +617,13 @@ def _prtest_two(s: "Session", names, x1, x2, level: float, *, by: str | None = N
               + g9(diff + zc * se) + "\n", "result")
     lo_p, two, up = _pvals(z, None)
     out.write(" " * 12 + " |  under Ho:  ", "text")
-    out.write(g9(se0) + f"{z:>8.2f}" + f"{two:>9.3f}" + "\n", "result")
+    out.write(g9(se0) + f"{z:>9.2f}" + f"{two:>8.3f}" + "\n", "result")
     out.write("-" * 78 + "\n", "text")
     lab = f"        diff = prop({a}) - prop({b})"
     out.write(lab.ljust(66) + f"z = {z:>8.4f}\n", "text")
     out.write("    Ho: diff = 0\n", "text")
-    _ha_lines(s, "diff", "0", "z", z, None)
+    # Stata 14 labels the two-sided p of the two-sample test "Pr(|Z| < |z|)" (compat 0805)
+    _ha_lines(s, "diff", "0", "z", z, None, two_op="<")
     s.r = {"N_1": float(n1), "N_2": float(n2), "P_1": p1, "P_2": p2, "z": z, "p": two,
            "p_l": lo_p, "p_u": up}
 

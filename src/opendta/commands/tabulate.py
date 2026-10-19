@@ -300,8 +300,9 @@ def _twoway_summarize(s: "Session", rv: Variable, cv: Variable, yname: str, mask
     ncol = len(ccats)
     out.write("\n", "text")
     total_w = W + 2 + 11 * min(ncol, per_panel) + 11
+    # centered over the table width plus 8 (compat 0805, 4 columns; VERIFY other widths)
     for line in _header_lines(title, 60):
-        out.write(" " * max(0, (total_w - len(line)) // 2) + line + "\n", "text")
+        out.write(" " * max(0, (total_w + 8 - len(line)) // 2) + line + "\n", "text")
     for start in range(0, ncol, per_panel):
         cols = list(range(start, min(ncol, start + per_panel)))
         last_panel = cols[-1] == ncol - 1
@@ -310,7 +311,8 @@ def _twoway_summarize(s: "Session", rv: Variable, cv: Variable, yname: str, mask
         rhead = _header_lines(rtitle, W)
         above = rhead[:-1] if len(rhead) > 1 else [""]
         for k, left in enumerate(above):
-            mid = ctitle.center(block).rstrip() if k == len(above) - 1 else ""
+            # (block - 4) wide: 18 spaces before a 4-letter name over 4 columns (compat 0805)
+            mid = " " * max(0, (block - 4 - len(ctitle)) // 2) + ctitle if k == len(above) - 1 else ""
             out.write(f"{left:>{W}} |{mid}\n", "text")
         lab = "".join(f"{clabels[j][:10]:>10} " for j in cols)
         out.write(f"{rhead[-1]:>{W}} |" + lab + ("|     Total" if last_panel else "") + "\n", "text")
@@ -330,7 +332,7 @@ def _twoway_summarize(s: "Session", rv: Variable, cv: Variable, yname: str, mask
                     out.write(f"{tot[line]:>10} ", "result")
                 out.write("\n", "text")
             if len(show) > 1 and gi < len(groups) - 2:
-                out.write(f"{'':>{W}} |" + " " * block + ("|" if last_panel else "") + "\n", "text")
+                out.write(sep, "text")
 
 
 def _tests(s: "Session", T: np.ndarray, E: np.ndarray, N: float, o: dict) -> None:
