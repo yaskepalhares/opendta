@@ -473,8 +473,12 @@ def _report_body(out, info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -> No
     out.write(LINE + "\n", "text")
     nk = int(keep.sum())
     wk = w[keep] if w is not None and info.wtype == "fweight" else None
-    nobs = float(wk.sum()) if wk is not None else nk
-    line(nobs, "observations remaining, representing")
+    if wk is not None:
+        # frequency weights: physical observations first, then their weighted count (cttost manual)
+        line(nk, "physical observations remaining, equal to")
+        line(float(wk.sum()), "weighted observations, representing")
+    else:
+        line(nk, "observations remaining, representing")
     if info.idvar:
         line(len(set(key_id[keep].tolist())), "subjects")
     nfail = float(np.sum(dd[keep] * (wk if wk is not None else 1)))

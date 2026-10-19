@@ -29,5 +29,7 @@ for _cmd, _mod, _fn in (
     ("stci", "strates", "cmd_stci"), ("stir", "strates", "cmd_stir"),
     ("stmh", "strates", "cmd_stmh"), ("stmc", "strates", "cmd_stmc"),
     ("ltable", "strates", "cmd_ltable"),
+    ("ctset", "ctdata", "cmd_ctset"), ("ct", "ctdata", "cmd_ct"), ("cttost", "ctdata", "cmd_cttost"),
+    ("sttoct", "ctdata", "cmd_sttoct"), ("sttocc", "ctdata", "cmd_sttocc"),
 ):
     command(_cmd, _cmd)(_lazy(_mod, _fn))
