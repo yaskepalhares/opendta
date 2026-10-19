@@ -717,7 +717,8 @@ def cmd_ir(s: "Session", args: str) -> None:
         byname, strata = _strata(s, str(o["by"]), mask)
         _ir_by(s, byname, [(lab, cells(sel)) for lab, sel in strata], o, _std_spec(s, o, strata))
         return
-    _ir_table(s, cells(mask), o, ev.name)
+    # with variables, the rows are named after the case and time variables (compat 1401)
+    _ir_table(s, cells(mask), o, ev.name, (cv.name, tv.name))
 
 
 @command("iri", "iri")
@@ -729,14 +730,14 @@ def cmd_iri(s: "Session", args: str) -> None:
     _ir_table(s, (a, b, t1, t0), o, "")
 
 
-def _ir_table(s: "Session", cells, o, expname: str) -> None:
+def _ir_table(s: "Session", cells, o, expname: str, labels=("Cases", "Person-time")) -> None:
     a, b, t1, t0 = cells
     level = _level(s, o)
     out = s.output
     _head(s, expname)
     _sep(s)
-    _row(s, "Cases", a, b, a + b)
-    _row(s, "Person-time", t1, t0, t1 + t0)
+    _row(s, labels[0], a, b, a + b)
+    _row(s, labels[1], t1, t0, t1 + t0)
     _sep(s)
     _blank(s)
     i1, i0, it = E._div(a, t1), E._div(b, t0), E._div(a + b, t1 + t0)
@@ -928,9 +929,6 @@ def _mcc_table(s: "Session", cells, o) -> None:
     ratio = E._div(p1, p2)
     se_lr = math.sqrt((b + c) / ((a + b) * (a + c))) if (a + b) and (a + c) else NAN
     rd_ = E._div(b - c, b + d)
-    # relative difference (b - c)/(b + d); variance from Fleiss (VERIFY against Stata)
-    se_rel = math.sqrt(((b + c + d) * (b * c + b * d + c * d) - b * c * d) / ((b + d) ** 3 * (b + c + d))) \
-        if b + d and b + c + d else NAN
     orr = E._div(b, c)
     if o.get("tb"):
         or_lo, or_hi = E.ci_test_based(orr, chi2, level)
@@ -941,24 +939,31 @@ def _mcc_table(s: "Session", cells, o) -> None:
         or_lo = lo_p / (1 - lo_p) if lo_p < 1 else math.inf
         or_hi = hi_p / (1 - hi_p) if hi_p < 1 else math.inf
         note = "(exact)"
-    out.write("\nProportion with factor\n", "text")
-    out.write(f"{'Cases':>14}       ", "text")
-    out.write(f"{_g(p1)}\n", "result")
-    out.write(f"{'Controls':>17}    ", "text")
-    out.write(f"{_g(p2)}", "result")
-    out.write(f"     [{level:g}% Conf. Interval]\n", "text")
-    out.write(" " * 21 + "---------    --------------------\n", "text")
-    # ratio: log limits with var = (b + c)/((a + b)(a + c)) (VERIFY: Stata's limits are narrower)
+    # relative difference (b - c)/(b + d), standard error (b + c)/(b + d)^(3/2) (compat 1401)
+    se_rel = (b + c) / (b + d) ** 1.5 if b + d else NAN
     rows = [("difference", diff, diff - z * se_d - cc_d, diff + z * se_d + cc_d),
             ("ratio", ratio, ratio * math.exp(-z * se_lr), ratio * math.exp(z * se_lr)),
             ("rel. diff.", rd_, rd_ - z * se_rel, rd_ + z * se_rel)]
+
+    def line(label, est, lo=None, hi=None, tail=""):
+        out.write(f"        {label:<11}", "text")
+        out.write(_g(est), "result")
+        if lo is not None:
+            out.write(f"{'':5}{_g(lo)}  {_g(hi)}", "result")
+        out.write(tail + "\n", "text")
+    # layout of compat 1401
+    out.write("\nProportion with factor\n", "text")
+    line("Cases", p1)
+    out.write(f"        {'Controls':<11}", "text")
+    out.write(_g(p2), "result")
+    out.write(f"     [{level:g}% Conf. Interval]\n", "text")
+    out.write(" " * 19 + "---------     --------------------\n", "text")
     for label, est, lo, hi in rows:
-        out.write(f"{label:>19}  ", "text")
-        out.write(f"{_g(est)}    {_g(lo)}   {_g(hi)}\n", "result")
-    out.write(f"\n{'odds ratio':>19}  ", "text")
-    out.write(f"{_g(orr)}    {_g(or_lo)}   {_g(or_hi)}", "result")
-    out.write(f"   {note}\n", "text")
-    _set_r(s, [("p_exact", pex), ("or", orr), ("lb_or", or_lo), ("ub_or", or_hi),
+        line(label, est, lo, hi)
+    out.write("\n", "text")
+    line("odds ratio", orr, or_lo, or_hi, f"   {note}")
+    # return list order of Stata 14 (compat 1401)
+    _set_r(s, [("chi2", chi2), ("or", orr), ("lb_or", or_lo), ("ub_or", or_hi),
                ("D_f", diff), ("lb_D_f", rows[0][2]), ("ub_D_f", rows[0][3]),
                ("R_f", ratio), ("lb_R_f", rows[1][2]), ("ub_R_f", rows[1][3]),
-               ("RD_f", rd_), ("lb_RD_f", rows[2][2]), ("ub_RD_f", rows[2][3]), ("chi2", chi2)])
+               ("RD_f", rd_), ("lb_RD_f", rows[2][2]), ("ub_RD_f", rows[2][3]), ("p_exact", pex)])
