@@ -30,6 +30,8 @@ tools/
   build_windows.ps1  builds the Windows installer and the portable .zip
 ```
 
+The plan for the commands still missing, block by block, is in [next-steps.md](next-steps.md).
+
 ## Tests
 
 `pip install -e ".[dev]"` installs pytest, ReadStat (`pyreadstat`) and pandas. Then:

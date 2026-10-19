@@ -1,0 +1,96 @@
+# Próximos passos: fechando o roadmap
+
+[English](next-steps.md) | **Português**
+
+Um plano de trabalho para os comandos que ainda faltam em [Depois da 1.0](../ROADMAP.pt-BR.md#depois-da-10), escrito para que cada bloco possa ser feito numa sessão nova sem redescobrir o código. A versão 1.0 sai quando todos os blocos estiverem prontos; depois vêm as melhorias do que já existe e as versões mais recentes do Stata.
+
+## Como executar um bloco
+
+Comece uma sessão nova (uma conversa longa custa mais a cada passo) com uma instrução como:
+
+> Implemente o bloco **Programação** conforme docs/next-steps.md. Abra um pull request e faça o merge quando o CI passar.
+
+Todo bloco segue os mesmos passos:
+
+1. Branch a partir do `main` (`block-<nome>`).
+2. Para cada comando: a estatística em `src/opendta/core/` (veja a próxima seção), o comando em `src/opendta/commands/` (módulo novo registrado em `commands/__init__.py`), a página de ajuda e os testes.
+3. Um caso de comparação `compat/do/NNNN_<bloco>.do` com os comandos e `return list`/`ereturn list`; ele fica sem referência até a rodada no Stata (`compat/gerar_esperados.do`).
+4. `ROADMAP.md` e `ROADMAP.pt-BR.md`: uma fase nova listando o que foi feito; em *Depois da 1.0*, só o que falta. Cada trecho de uma linha de *Depois da 1.0* que lista opções deve começar pelo comando a que elas pertencem (`` `cs` com a opção `pool` ``), para o mapa de cobertura não contar opções como comandos.
+5. `tools/roadmap_coverage.py`: acrescentar o módulo novo em `MODULE_AREA`.
+6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
+7. `python tools/compare.py` sem diferenças novas; abrir o PR; merge quando os testes passarem no Linux, no macOS e no Windows. A página de cobertura se atualiza sozinha depois do merge.
+
+Próximos números livres: casos de comparação a partir de **1601**, fases do roadmap a partir de **12**.
+
+## Regra: a estatística no núcleo, o Stata no comando
+
+O cálculo vai em funções simples em `src/opendta/core/` (ou em `src/opendta/estimation/`, para modelos): recebem arrays e números e devolvem números, arrays ou pequenos objetos de resultado, sem `Session`, sem ler variáveis e sem imprimir. O módulo do comando interpreta a sintaxe, lê os dados, chama essas funções, escreve a saída do Stata e guarda `r()`/`e()`. Exemplo: `core/epi.py` (fórmulas) e `commands/epitab.py` (tabelas). Os testes conferem as funções do núcleo contra fórmulas fechadas ou o SciPy, e o comando contra a saída.
+
+## O que reaproveitar
+
+| Necessidade | Onde |
+|---|---|
+| sintaxe: varlist, if/in, pesos, opções | `lang/syntax.py` (`parse_standard`, `match_options`, `find_top`), `commands/_util.py` (`touse`, `eval_vector`, `plural`), `commands/summarize.py` (`weights`, `_level`, `g9`, `name12`) |
+| grupos de `by()` e estratos | `commands/epitab.py` (`_strata`), `core/grouping.py` (`group_ids`) |
+| `r()` e matrizes | `s.r = {...}` (a ordem de inserção é a do `return list`, invertida onde indicado), `commands/matrix.py` (`Matrix`, `evaluate_matrix`) |
+| resultados e tabela de estimação | `estimation/results.py` (`Estimates`, `post`, `coef_table`, `CoefRow`) |
+| máxima verossimilhança | `estimation/ml.py` (`maximize`, `print_log`): os passos de Newton e o log de iterações do Stata |
+| previsões depois de um modelo | `estimation/postest.py` (`xb_all`, `esample`), `estimation/estat.py` (`_binary`) |
+| prefixos (como o bootstrap) | `estimation/bootstrap.py` |
+| gráficos | `graphics/model.py` (`Graph`, `Layer`, `Panel`), `commands/graphcmd.py` (`finish`), `graphics/opts.py` (`graph_options`) |
+| páginas de ajuda | `src/opendta/help/*.sthlp`, `ALIASES` em `commands/helpcmd.py`; `tests/test_i18n.py` confere que todo comando tem uma |
+| erros | `core/errors.py` (`StataError(rc, mensagem)`); uma opção ainda não implementada dá `StataError(198, "option X is not available yet in OpenDTA")` em vez de ser ignorada |
+
+Os testes usam a fixture `run` de `tests/conftest.py` (`run("comandos")` devolve a saída; `run.session.r`, `run.session.e`). O ambiente na nuvem pode não instalar o pytest: nesse caso, o CI roda os testes.
+
+## Blocos
+
+Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tokens gerados; uma sessão relê o contexto a cada passo, então o consumo total fica entre 100 e 150 vezes os tokens gerados. A ordem é uma sugestão: primeiro os blocos baratos que fecham uma área, depois os mais usados em pesquisa em saúde.
+
+### 1. Epidemiologia: completar (30–45 min, ~25 mil tokens)
+
+`rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
+
+### 2. Manipulação de dados: opções (30–45 min, ~25 mil tokens)
+
+`import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
+
+### 3. Programação (40–60 min, ~35 mil tokens)
+
+`unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
+
+### 4. Análise de sobrevivência (1,5–2,5 h, ~90 mil tokens)
+
+`stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `ltable`, `sttocc`, `sttoct`, `snapspan`, `ct`, `stcurve` (gráfico depois de `stcox`/`streg`), `stcrreg` (riscos competitivos de Fine-Gray, ML); `streg, distribution(ggamma)` e `frailty()`; os empates `exactm` e `exactp` do `stcox`. Reaproveitar `estimation/st.py`, `km.py`, `stcox.py`, `streg.py`, `stfit.py`.
+
+### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
+
+`meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
+
+### 6. Dados em painel (2–3 h, ~100 mil tokens)
+
+Modelos de efeitos aleatórios por quadratura: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `quadchk`; painéis dinâmicos (GMM): `xtabond`, `xtdpd`, `xtdpdsys`; `xtivreg`, `xthtaylor`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtfrontier`, `xtunitroot`; descrição: `xtline`, `xttab`, `xtdata`. Reaproveitar `estimation/panel.py`, `panel2.py`, `xtgee.py` e a quadratura de `meglm.py`.
+
+### 7. Estatística básica (3–4 h, ~135 mil tokens)
+
+Prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+
+### 8. Estatística multivariada (2–3 h, ~90 mil tokens)
+
+`pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
+
+### 9. Séries temporais (3–4 h, ~150 mil tokens)
+
+`arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+
+### 10. Modelos (6–8 h, ~285 mil tokens; pode ser dividido)
+
+Binários e de contagem: `cloglog`, `scobit`, `hetprobit`, `glogit`, `binreg`, `fracreg`, `gnbreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`; censura e seleção: `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; variáveis instrumentais: `ivprobit`, `ivtobit`, `ivpoisson`, `ivregress liml` e `gmm`; modelos de escolha: `clogit`, `mprobit`, `rologit`, `slogit`, `asclogit`, `asmprobit`, `asroprobit`; exatos: `exlogistic`, `expoisson`; sistemas e outros: `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; efeitos de tratamento: `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`. Reaproveitar `estimation/models.py`, `models2.py`, `glm.py`, `ml.py`. Divisão sugerida: 10a binários/contagem/censura, 10b instrumentais/escolha/exatos, 10c sistemas e efeitos de tratamento.
+
+### 11. Outras suítes (3–4 h, ~130 mil tokens)
+
+`gsem`, `bayesmh` e o prefixo `bayes`, `irt`; `sem` com `mlmv`, `adf`, `group()` e os outros subcomandos de `estat` (`estimation/sem.py`); os outros métodos do `power`, os testes `lrchi2` e `fisher` e os gráficos (`commands/power.py`); `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg` (`estimation/mi.py`); `svy:` com mais estimadores (`estimation/svy.py`).
+
+## Antes da 1.0
+
+Quando todos os blocos estiverem prontos: a rodada no Stata de todos os casos de comparação sem referência, as diferenças corrigidas, a versão 1.0.0 em `src/opendta/__init__.py` e `pyproject.toml`, as notas de lançamento escritas e a tag `v1.0.0` enviada (veja [development.pt-BR.md](development.pt-BR.md#publicar-uma-versão)).
