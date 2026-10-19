@@ -297,9 +297,10 @@ def test_import_export_sasxport(run, tmp_path, monkeypatch):
     assert run.rc == 0
     run("clear")
     out = run("import sasxport odta_x")
-    assert "(3 vars, 3 obs)" in out
+    assert out.strip() == ""                    # import sasxport is silent in Stata 14 (compat 1701)
     d = run.session.data
     assert d.names == ["id", "name", "weight"]
+    assert [v.vtype for v in d.vars] == ["double", "str6", "double"]
     assert list(d.get("id").data) == [1, 2, 3] and d.get("weight").data[1] == M.SYSMISS
     assert d.get("weight").label == "Weight (kg)" and list(d.get("name").raw) == ["ana", "bruno", "carla"]
     run("clear\ninput averylongname\n1\nend")

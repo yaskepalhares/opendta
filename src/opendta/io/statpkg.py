@@ -70,9 +70,11 @@ def _date(values) -> tuple[str, str, np.ndarray] | None:
     return None
 
 
-def dataset_from_columns(cols: dict, meta, *, case: str = "preserve", label_max: int = 80) -> Dataset:
+def dataset_from_columns(cols: dict, meta, *, case: str = "preserve", label_max: int = 80,
+                         xport: bool = False) -> Dataset:
     """cols: name -> list of values; meta: the object of pyreadstat (column_names,
-    column_labels, variable_value_labels, file_label)."""
+    column_labels, variable_value_labels, file_label). xport: Stata 14 keeps what the XPORT file
+    declares (every number is a double, a string has the width of the file; compat 1701, VERIFY)."""
     raw_names = list(meta.column_names)
     names, original = legal_names(raw_names, case)
     labels = list(getattr(meta, "column_labels", None) or [None] * len(raw_names))
@@ -87,6 +89,9 @@ def dataset_from_columns(cols: dict, meta, *, case: str = "preserve", label_max:
         if any(isinstance(x, str) for x in col):
             col = ["" if (x is None or x != x) else str(x) for x in col]
             vtype = str_type_for(max([len(x.encode("utf-8")) for x in col] + [1]))
+            width = (getattr(meta, "variable_storage_width", None) or {}).get(raw) if xport else None
+            if width and 0 < int(width) <= 2045:
+                vtype = f"str{int(width)}"
             ds.vars.append(Variable(name, vtype, col, label=label))
         else:
             dated = _date(col)
@@ -95,6 +100,8 @@ def dataset_from_columns(cols: dict, meta, *, case: str = "preserve", label_max:
                 ds.vars.append(Variable(name, vtype, arr, fmt=fmt, label=label))
             else:
                 vtype, arr = _numeric(col)
+                if xport:
+                    vtype = "double"
                 var = Variable(name, vtype, arr, label=label)
                 vl = value_labels.get(raw)
                 if vl and all(float(k) == int(k) for k in vl):
@@ -159,7 +166,9 @@ def write_xport(ds: Dataset, path: Path, names: list[str], rows: np.ndarray) -> 
     for n in names:
         v = ds.get(n)
         if v.is_string:
-            frame[n] = [str(v.value(int(i))) for i in rows]
+            # the file keeps the width of the variable (str6 comes back as str6)
+            w = int(v.vtype[3:]) if v.vtype[3:].isdigit() else 0
+            frame[n] = [str(v.value(int(i))).ljust(w) for i in rows]
         else:
             x = v.data[rows].astype(float)
             frame[n] = np.where(x >= M.SYSMISS, np.nan, x)

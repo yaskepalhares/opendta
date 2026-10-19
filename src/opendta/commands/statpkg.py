@@ -36,7 +36,7 @@ def _file(text: str, ext: str, *, must_exist: bool = True) -> Path:
     return p
 
 
-def _install(s: "Session", new: Dataset, p: Parsed, namelist: list[str]) -> None:
+def _install(s: "Session", new: Dataset, p: Parsed, namelist: list[str], quiet: bool = False) -> None:
     if namelist:
         statpkg.select(new, namelist)
     old = s.data
@@ -48,7 +48,8 @@ def _install(s: "Session", new: Dataset, p: Parsed, namelist: list[str]) -> None
         s.data = old
         raise
     s.r = {"N": float(new.nobs), "k": float(new.nvars)}
-    s.output.write(f"({new.nvars} vars, {new.nobs} obs)\n", "text")
+    if not quiet:
+        s.output.write(f"({new.nvars} vars, {new.nobs} obs)\n", "text")    # import sasxport is silent (compat 1701)
     s.notify_state()
 
 
@@ -106,7 +107,7 @@ def import_sasxport(s: "Session", args: str) -> None:
             if (path.parent / f).exists():
                 raise StataError(198, f"value labels in {f} are not available yet in OpenDTA; use novallabels")
     cols, meta = statpkg.read_xport(path)
-    _install(s, statpkg.dataset_from_columns(cols, meta, case="lower"), Parsed(), [])
+    _install(s, statpkg.dataset_from_columns(cols, meta, case="lower", xport=True), Parsed(), [], quiet=True)
 
 
 def export_sasxport(s: "Session", args: str) -> None:
