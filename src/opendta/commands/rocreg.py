@@ -90,7 +90,13 @@ def cmd_rocreg(s: "Session", args: str) -> None:
                     else np.zeros((int(ok.sum()), 0))
                 t = np.unique(1 - pv[ok]) if o.get("ctrlfprall") else RR.fpr_points(_fprpts(o))
                 t = t[(t > 0) & (t < 1)]
-                out.append(RR.probit_glm(pv[ok], Z, t))
+                g = RR.probit_glm(pv[ok], Z, t)
+                # i_cons, the ROC covariates, s_cons; and the AUC without covariates
+                kz = Z.shape[1]
+                b = np.concatenate([[g[kz]], g[:kz], [g[kz + 1]]])
+                if not kz:
+                    b = np.append(b, st.norm.cdf(b[0] / math.sqrt(1 + b[-1] ** 2)))
+                out.append(b)
             else:
                 out.append(RR.summaries(pv[ok], spec))
         return np.concatenate(out)
@@ -99,9 +105,14 @@ def cmd_rocreg(s: "Session", args: str) -> None:
     observed = statistic(np.arange(n))
     colnames, eqs = [], []
     for c in classes:
-        labels = roccov + ["i_cons", "s_cons"] if probit else [_colname(k, j, spec) for j, k in enumerate(spec)]
-        colnames += labels
-        eqs += [c] * len(labels)
+        if probit:
+            # VERIFY: names of e(b) after probit
+            colnames += ["_cons"] + roccov + ["_cons"] + ([] if roccov else ["auc"])
+            eqs += [c] * (1 + len(roccov)) + ["probit"] + ([] if roccov else [c])
+        else:
+            labels = [_colname(k, j, spec) for j, k in enumerate(spec)]
+            colnames += labels
+            eqs += [c] * len(labels)
     k = len(observed)
     boot = None
     if not o.get("nobootstrap"):
@@ -110,9 +121,9 @@ def cmd_rocreg(s: "Session", args: str) -> None:
     else:
         V = np.zeros((k, k))
     _display(s, o, refname, classes, spec, colnames, observed, boot, level, n, probit, ctrlcov, roccov,
-             model, pvc)
-    _post(s, o, refname, classes, ctrlcov, roccov, colnames, eqs, observed, V, boot, n, mask, probit,
-          model, pvc)
+             model, pvc, mask)
+    _post(s, o, args, refname, classes, ctrlcov, roccov, colnames, eqs, observed, V, boot, n, mask, probit,
+          model, pvc, spec)
 
 
 def _fprpts(o) -> int:
@@ -123,16 +134,18 @@ def _fprpts(o) -> int:
 
 
 def _summary_spec(o) -> list[tuple[str, float | None]]:
+    """The summaries in Stata's order: ROC(t), inverse ROC, partial AUC, then the AUC
+    (compat 1601)."""
     spec: list[tuple[str, float | None]] = []
-    if o.get("auc"):
-        spec.append(("auc", None))
     for kind in ("roc", "invroc", "pauc"):
         if isinstance(o.get(kind), str):
             for x in parse_numlist(str(o[kind])):
                 if not 0 < x < 1 and not (kind == "pauc" and x == 1):
                     raise StataError(125, f"{kind}() values must be between 0 and 1")   # VERIFY
                 spec.append((kind, float(x)))
-    return spec or [("auc", None)]
+    if o.get("auc") or not spec:
+        spec.append(("auc", None))
+    return spec
 
 
 def _colname(kind: str, j: int, spec) -> str:
@@ -203,14 +216,15 @@ def _bootstrap(s: "Session", o, statistic, ref, observed, level) -> dict:
     z0 = st.norm.ppf(prop)
     bc = [(np.percentile(good[:, j], st.norm.cdf(2 * z0[j] - z) * 100),
            np.percentile(good[:, j], st.norm.cdf(2 * z0[j] + z) * 100)) for j in range(len(observed))]
-    return {"reps": good, "n": len(good), "se": se, "bias": good.mean(axis=0) - observed,
+    return {"reps": good, "n": len(good), "se": se, "bias": good.mean(axis=0) - observed, "z0": z0,
+            "b_bs": good.mean(axis=0),
             "normal": (observed - z * se, observed + z * se),
             "percentile": (np.percentile(good, a, axis=0), np.percentile(good, 100 - a, axis=0)),
             "bc": (np.array([x[0] for x in bc]), np.array([x[1] for x in bc]))}
 
 
 # ---------------------------------------------------------------------------
-# display and e()
+# display and e() (layout and names from compat 1601)
 # ---------------------------------------------------------------------------
 
 _TITLES = {"auc": "Area under the ROC curve", "roc": "ROC curve", "invroc": "False-positive rate",
@@ -218,102 +232,123 @@ _TITLES = {"auc": "Area under the ROC curve", "roc": "ROC curve", "invroc": "Fal
 _HEAD = {"auc": "AUC", "roc": "ROC", "invroc": "invROC", "pauc": "pAUC"}
 
 
-def _f(x: float) -> str:
+def _f(x) -> str:
     return "." if x is None or not math.isfinite(x) else _g9(x)
 
 
 def _g9(x: float) -> str:
     from .summarize import g9
-    return g9(float(x))
-
-
-def _header(s: "Session", title: str, n: int, boot) -> None:
-    out = s.output
-    out.write("\n", "text")
-    items = [("Number of obs", f"{n:,}")]
-    if boot is not None:
-        items.append(("Replications", f"{boot['n']:,}"))
-    for j, (lab, val) in enumerate(items):
-        out.write(f"{(title if j == 0 else ''):<48}{lab:<18}= ", "text")
-        out.write(f"{val:>10}\n", "result")
+    return g9(float(x)).strip()
 
 
 def _display(s: "Session", o, refname, classes, spec, colnames, observed, boot, level, n, probit,
-             ctrlcov, roccov, model, pvc) -> None:
+             ctrlcov, roccov, model, pvc, mask) -> None:
     out = s.output
-    _header(s, "Bootstrap results" if boot is not None else "", n, boot)
-    out.write("\n" + ("Parametric ROC estimation" if probit else "Nonparametric ROC estimation") + "\n\n", "text")
+    title = "Parametric ROC estimation" if probit else "Nonparametric ROC estimation"
+    out.write("\n", "text")
+    out.write(f"{(title if boot is None else 'Bootstrap results'):<48}Number of obs     = ", "text")
+    out.write(f"{n:>10,}\n", "result")
+    if boot is not None:
+        out.write(f"{'':<48}Replications      = ", "text")
+        out.write(f"{boot['n']:>10,}\n", "result")
+        out.write(f"\n{title}\n", "text")
+    out.write("\n", "text")
     if ctrlcov:
-        out.write(f"Covariate control       : {'stratification' if model == 'strata' else 'linear regression'}\n", "text")
-        out.write(f"Control variables       : {' '.join(ctrlcov)}\n", "text")
-    out.write(f"Control standardization : {pvc}\n", "text")
-    out.write(f"ROC method              : {'GLM' if probit else 'empirical'}\n", "text")
+        out.write(f"Covariate control      : {'stratification' if model == 'strata' else 'linear regression'}\n",
+                  "text")
+        out.write(f"Control variables      : {' '.join(ctrlcov)}\n", "text")
+    tie = ", corrected for ties" if o.get("tiecorrected") else ""
+    out.write(f"Control standardization: {pvc}{tie}\n", "text")
     if probit:
-        out.write("ROC link                : probit\n", "text")
-        if roccov:
-            out.write(f"ROC covariates          : {' '.join(roccov)}\n", "text")
-    per = len(colnames) // len(classes)
-    for ci, c in enumerate(classes):
-        sl = slice(ci * per, (ci + 1) * per)
-        groups = [("coef", list(range(per)))] if probit else _groups(spec)
-        for kind, js in groups:
-            out.write("\n" + ("" if probit else _TITLES[kind] + "\n\n"), "text")
-            out.write(f"   Status    : {refname}\n   Classifier: {c}\n\n", "text")
-            _table(s, kind, [(colnames[sl][j], spec[j][1] if not probit else None, observed[sl][j],
-                              None if boot is None else ci * per + j) for j in js], boot, level, probit)
-
-
-def _groups(spec):
-    order, out = [], {}
-    for j, (kind, _) in enumerate(spec):
-        if kind not in out:
-            order.append(kind)
-            out[kind] = []
-        out[kind].append(j)
-    return [(k, out[k]) for k in order]
-
-
-def _table(s: "Session", kind: str, items, boot, level: float, probit: bool) -> None:
-    """Observed values with the bootstrap bias, standard error and the normal (N), percentile
-    (P) and bias-corrected (BC) intervals (VERIFY: layout)."""
-    out = s.output
-    head = "" if probit else _HEAD[kind]
-    out.write("-" * 13 + "-" * 66 + "\n", "text")
-    if boot is None:
-        out.write(f"{head:>12} |      Coef.\n", "text")
+        out.write(f"ROC method             : {'parametric':<25}Link: probit\n", "text")
     else:
-        out.write(f"{'':>12} |   Observed{'Bootstrap':>23}\n", "text")
-        out.write(f"{head:>12} |      Coef.       Bias    Std. Err.     [{level:g}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
-    for k, (name, x, obs, j) in enumerate(items):
-        if probit:
-            label = name
-        elif kind == "auc":
-            label = ""
-        else:
-            label = _g9(x).strip()
-        out.write(f"{label:>12} |", "text")
-        if j is None:
-            out.write(f" {_f(obs):>10}\n", "result")
-            continue
+        out.write("ROC method             : empirical\n", "text")
+    if ctrlcov and model == "linear":
+        # the regression of each classifier on the control covariates among the controls
+        from ..core.dataset import Variable
+        ds = s.data
+        tmp = "__rocreg_ctrl"
+        flag = np.zeros(ds.nobs)
+        flag[mask & (ds.get(refname).data == 0)] = 1
+        ds.add(Variable(tmp, "byte", flag))
+        try:
+            for c in classes:
+                out.write(f"\nStatus    : {refname}\nClassifier: {c}\nCovariate control adjustment model:\n",
+                          "text")
+                s.interp._execute_expanded(f"regress {c} {' '.join(ctrlcov)} if {tmp}")
+        finally:
+            ds.drop_vars([tmp])
+    per = len(colnames) // len(classes)
+    if probit:
+        for ci, c in enumerate(classes):
+            base = ci * per
+            out.write(f"\n   Status    : {refname}\n   Classifier: {c}\n   ROC Model : \n", "text")
+            _table_head(out, c, level)
+            rows = [("_cons", base)] + [(v, base + 1 + j) for j, v in enumerate(roccov)]
+            for lab, j in rows:
+                _row(out, lab, observed[j], boot, j, level, tags=False)
+            out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+            out.write(f"{'probit':>12} |\n", "text")
+            out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+            j = base + 1 + len(roccov)
+            _row(out, "_cons", observed[j], boot, j, level, tags=False)
+            out.write("-" * 78 + "\n", "text")
+            if not roccov:
+                out.write("\n", "text")
+                _table_head(out, "AUC", level)
+                _row(out, "", observed[j + 1], boot, j + 1, level)
+                out.write("-" * 78 + "\n", "text")
+        return
+    kinds = list(dict.fromkeys(k for k, _ in spec))
+    for kind in kinds:
+        out.write(f"\n{_TITLES[kind]}\n", "text")
+        for ci, c in enumerate(classes):
+            out.write(f"\n   Status    : {refname}\n   Classifier: {c}\n", "text")
+            _table_head(out, _HEAD[kind], level)
+            for j, (k, x) in enumerate(spec):
+                if k == kind:
+                    _row(out, "" if kind == "auc" else _g9(x), observed[ci * per + j], boot, ci * per + j, level)
+            out.write("-" * 78 + "\n", "text")
+
+
+def _table_head(out, head: str, level: float) -> None:
+    out.write("-" * 78 + "\n", "text")
+    out.write(f"{'':>12} |    Observed               Bootstrap\n", "text")
+    out.write(f"{head[:12]:>12} |       Coef.       Bias    Std. Err.     [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+
+
+def _row(out, label, obs, boot, j, level, tags: bool = True) -> None:
+    """Observed value, bootstrap bias and standard error, and the normal (N), percentile (P)
+    and bias-corrected (BC) intervals; missing without the bootstrap."""
+    if boot is None:
+        bias = se = None
+        cis = [(None, None)] * 3
+    else:
         bias, se = boot["bias"][j], boot["se"][j]
-        rows = [("N", boot["normal"]), ("P", boot["percentile"]), ("BC", boot["bc"])]
-        for r, (tag, (lo, hi)) in enumerate(rows):
-            if r == 0:
-                out.write(f" {_f(obs):>10} {_f(bias):>10}   {_f(se):>10}   ", "result")
-            else:
-                out.write(f"{'':>12} |{'':>38}", "text")
-            out.write(f"{_f(lo[j]):>10}  {_f(hi[j]):>10}", "result")
-            out.write(f"  ({tag})\n" if tag != "BC" else f" ({tag})\n", "text")
-    out.write("-" * 79 + "\n", "text")
+        cis = [(boot[k][0][j], boot[k][1][j]) for k in ("normal", "percentile", "bc")]
+    out.write(f"{label:>12} |", "text")
+    out.write(f"{_f(obs):>12}{_f(bias):>11}{_f(se):>12}{_f(cis[0][0]):>13}{_f(cis[0][1]):>11}", "result")
+    if not tags:
+        # VERIFY: the bootstrap rows of the probit model
+        out.write("\n", "text")
+        return
+    out.write("  (N)\n", "text")
+    for tag, (lo, hi) in zip(("  (P)", " (BC)"), cis[1:]):
+        out.write(f"{'':>12} |{'':>35}", "text")
+        out.write(f"{_f(lo):>13}{_f(hi):>11}", "result")
+        out.write(tag + "\n", "text")
 
 
-def _post(s: "Session", o, refname, classes, ctrlcov, roccov, colnames, eqs, observed, V, boot, n, mask,
-          probit, model, pvc) -> None:
+def _post(s: "Session", o, args, refname, classes, ctrlcov, roccov, colnames, eqs, observed, V, boot, n, mask,
+          probit, model, pvc, spec) -> None:
+    """e() in Stata 14's ereturn list order (compat 1601; VERIFY the names with ctrlcov(),
+    roc(), invroc() and pauc())."""
     from ..estimation.results import Estimates, post
     from .matrix import Matrix
     est = Estimates("rocreg", refname, colnames, np.asarray(observed, float), V, n, stat="z", eqnames=eqs)
     est.title = "Parametric ROC estimation" if probit else "Nonparametric ROC estimation"
+    level = _level(s, o)
 
     def mat(row, rown="y1"):
         m = Matrix(np.asarray(row, float).reshape(1, -1), [rown], list(colnames))
@@ -324,16 +359,34 @@ def _post(s: "Session", o, refname, classes, ctrlcov, roccov, colnames, eqs, obs
         m = Matrix(np.vstack(pair), ["ll", "ul"], list(colnames))
         m.coleq = list(eqs)
         return m
-
-    extra = []
-    scalars = [("N", float(n))]
-    if boot is not None:
-        extra = [("bias", mat(boot["bias"])), ("se", mat(boot["se"])), ("ci_normal", ci(boot["normal"])),
-                 ("ci_percentile", ci(boot["percentile"])), ("ci_bc", ci(boot["bc"]))]
-        scalars.append(("breps", float(boot["n"])))
-    # VERIFY: names and order of the e() results
-    macros = [("cmd", "rocreg"), ("refvar", refname), ("classvars", " ".join(classes)),
-              ("ctrlcov", " ".join(ctrlcov)), ("ctrlmodel", model if ctrlcov else ""),
-              ("pvc", pvc), ("roccov", " ".join(roccov)), ("roccmd", "glm" if probit else ""),
-              ("vce", "bootstrap" if boot is not None else ""), ("title", est.title), ("properties", "b V")]
+    stats = {"auc": "auc" if any(k == "auc" for k, _ in spec) else ""}
+    for kind in ("roc", "invroc", "pauc"):
+        vals = [x for k, x in spec if k == kind]
+        stats[kind] = " ".join(_g9(x) for x in vals)
+    common = [("pvc", pvc), ("ctrlcov", " ".join(ctrlcov)), ("ctrlmodel", model if ctrlcov else "")]
+    if boot is None:
+        scalars = [("N", float(n))] if probit else [("level", level), ("N", float(n))]
+        macros = [("title", est.title), ("nobootstrap", "nobootstrap"), ("cmdline", f"rocreg {args.strip()}"),
+                  ("refvar", refname), ("classvars", " ".join(classes)), ("cmd", "rocreg")] + common
+        if probit:
+            macros += [("fprpts", str(_fprpts(o))), ("predict", "rocreg_p"), ("probit", "probit"),
+                       ("roccov", " ".join(roccov))]
+        else:
+            macros += [(k, stats[k]) for k in ("auc", "roc", "invroc", "pauc")]
+        macros += [("np", str(len(colnames))), ("properties", "b")]
+        post(s, est, scalars, macros, mask)
+        s.e.pop("V", None)
+        return
+    scalars = [("N", float(n)), ("rank", float(np.linalg.matrix_rank(V))), ("level", level)]
+    exps = " ".join(f"[{e}]_b[{c}]" for e, c in zip(eqs, colnames))
+    macros = [("properties", "b V"), ("exp1", exps), ("vce", "bootstrap")]
+    macros += [(k, stats[k]) for k in ("auc", "roc", "invroc", "pauc")] if not probit else \
+        [("probit", "probit"), ("roccov", " ".join(roccov))]
+    macros += [("pvc", pvc), ("ctrlcov", " ".join(ctrlcov)), ("ctrlmodel", model if ctrlcov else ""),
+               ("cmdline", f"rocreg {args.strip()}"), ("classvars", " ".join(classes)), ("refvar", refname),
+               ("breps", str(boot["n"])), ("cmd", "rocreg"), ("title", est.title)]
+    extra = [("ci_bc", ci(boot["bc"])), ("ci_percentile", ci(boot["percentile"])),
+             ("ci_normal", ci(boot["normal"])), ("se", mat(boot["se"])), ("z0", mat(boot["z0"])),
+             ("bias", mat(boot["bias"])), ("reps", mat(np.full(len(colnames), float(boot["n"])))),
+             ("b_bs", mat(boot["b_bs"]))]
     post(s, est, scalars, macros, mask, extra_mats=extra)

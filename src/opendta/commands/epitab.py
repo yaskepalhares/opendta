@@ -53,17 +53,21 @@ def _not_yet(o) -> None:
 
 
 def _check_by(o, immediate: bool = False) -> None:
-    """Standardization, pooling and the homogeneity options need by() (VERIFY: rc and message);
-    the immediate forms take neither them nor binomial()."""
-    bad = _BY_ONLY + (("binomial",) if immediate else ())
-    for k in bad:
-        if o.get(k) and (immediate or not o.get("by")):
-            raise StataError(198, f"option {k} not allowed" if immediate else f"option {k} requires by()")
+    """The immediate forms take neither the stratified options nor binomial(); without by(),
+    the stratified options are ignored, as Stata does with pool (compat 1601; VERIFY the
+    others); with by(), rd and ird need a standardization ("invalid syntax", compat 1601)."""
+    if immediate:
+        for k in _BY_ONLY + ("binomial",):
+            if o.get(k):
+                raise StataError(198, f"option {k} not allowed")
+        return
+    if not o.get("by"):
+        return
     if sum(bool(o.get(k)) for k in ("estandard", "istandard", "standard")) > 1:
-        raise StataError(198, "only one of estandard, istandard, or standard() is allowed")
-    for k, measure in (("rd", "cs"), ("ird", "ir")):
+        raise StataError(198, "only one of estandard, istandard, or standard() is allowed")   # VERIFY
+    for k in ("rd", "ird"):
         if o.get(k) and not any(o.get(x) for x in ("estandard", "istandard", "standard")):
-            raise StataError(198, f"option {k} requires estandard, istandard, or standard()")
+            raise StataError(198, "invalid syntax")
 
 
 def _std_spec(s: "Session", o, strata):
@@ -251,35 +255,66 @@ def _fisher_lines(s: "Session", a, b, c, d) -> tuple[float, float]:
     return p1, p2
 
 
-def _strat_table(s: "Session", byname: str, measure: str, level: float, rows, crude, combined,
+# widths of the estimate and lower-limit columns of the stratified tables (compat 1601)
+_COLW = {"cs": (12, 13), "cc": (11, 14), "ir": (11, 14)}
+
+
+def _strat_table(s: "Session", cmd: str, byname: str, measure: str, level: float, rows, crude, combined,
                  wlabel: str = "M-H Weight", note: str = "") -> None:
     """Stratified summary: one line per stratum, then Crude and the combined estimates
-    ([(label, (est, lb, ub))]: M-H, directly pooled or standardized)."""
+    ([(label, (est, lb, ub), note)]: M-H, directly pooled or standardized)."""
+    ew, lw = _COLW[cmd]
     out = s.output
     out.write("\n", "text")
     out.write(f"{name12(byname):>{LBL}} |{measure:>9}       [{level:g}% Conf. Interval]{wlabel:>13}\n", "text")
     out.write("-" * (LBL + 1) + "+" + "-" * 49 + "\n", "text")
     for label, est, lo, hi, w in rows:
         out.write(f"{name12(label):>{LBL}} |", "text")
-        out.write(f" {_g(est):>9}    {_g(lo):>9}   {_g(hi):>9}    {_g(w):>9}", "result")
+        out.write(f"{_g(est):>{ew}}{_g(lo):>{lw}}{_g(hi):>11}{_g(w):>13}", "result")
         out.write(f" {note}\n" if note else "\n", "text")
     out.write("-" * (LBL + 1) + "+" + "-" * 49 + "\n", "text")
     if crude is not None:
         out.write(f"{'Crude':>{LBL}} |", "text")
-        out.write(f" {_g(crude[0]):>9}    {_g(crude[1]):>9}   {_g(crude[2]):>9}", "result")
+        out.write(f"{_g(crude[0]):>{ew}}{_g(crude[1]):>{lw}}{_g(crude[2]):>11}", "result")
         out.write(f"{'':13} {note}\n" if note else "\n", "text")
-    for label, (est, lo, hi) in combined:
+    for label, (est, lo, hi), rnote in combined:
         out.write(f"{label:>{LBL}} |", "text")
-        out.write(f" {_g(est):>9}    {_g(lo):>9}   {_g(hi):>9}\n", "result")
-    out.write("-" * (LBL + 1) + "+" + "-" * 49 + "\n", "text")
+        out.write(f"{_g(est):>{ew}}{_g(lo):>{lw}}{_g(hi):>11}", "result")
+        out.write(f"{'':13} {rnote}\n" if rnote else "\n", "text")
 
 
-def _homog(s: "Session", label: str, chi2: float, p: float, df: int) -> None:
+def _homog_lines(s: "Session", cmd: str, tests) -> None:
+    """The tests of homogeneity under a closing rule, each command with its own layout
+    (compat 1601): tests = [(name, chi2, p, df)]."""
+    if not tests:
+        return
     out = s.output
-    out.write(f"{label:<31}chi2({df}) =", "text")
-    out.write(f"{_r(chi2):>9.2f}" if not math.isnan(chi2) else f"{'.':>9}", "result")
-    out.write("  Pr>chi2 = ", "text")
-    out.write(f"{_p4(p)}\n", "result")
+    out.write("-" * 67 + "\n", "text")
+    for name, chi2, p, df in tests:
+        label = f"Test of homogeneity ({name})"
+        if cmd == "ir":
+            out.write(f" {label:<29}chi2({df}) =", "text")
+            out.write(f"{_r(chi2):>10.2f}" if not math.isnan(chi2) else f"{'.':>10}", "result")
+        else:
+            out.write(f"{label:<31}chi2({df}) =", "text")
+            fmt = ">9.3f" if cmd == "cs" else ">9.2f"
+            out.write(format(_r(chi2), fmt) if not math.isnan(chi2) else f"{'.':>9}", "result")
+        out.write("  Pr>chi2 = ", "text")
+        out.write(f"{_p4(p)}\n", "result")
+
+
+class _R(dict):
+    """r() under construction: setting a result again moves it to the top of return list,
+    as Stata does (compat 1601)."""
+
+    def put(self, key, value) -> None:
+        self.pop(key, None)
+        self[key] = value
+
+
+def _f32(x: float) -> float:
+    """Stata stores these test statistics in single precision (compat 1601)."""
+    return float(np.float32(x)) if x is not None and not math.isnan(x) else x
 
 
 def _tb_chi2(a, b, c, d) -> float:
@@ -403,24 +438,21 @@ def _cs_table(s: "Session", cells, o, expname: str, casename: str) -> None:
               ("ub_rr", rr_hi)] + pairs + [("afe", af), ("lb_afe", af_lo), ("ub_afe", af_hi), ("afp", afp)])
 
 
-def _summary(s: "Session", o, byname: str, measure: str, level: float, rows, crude, mh, direct, std,
-             note: str = "") -> tuple[float, float, float]:
-    """Draws the stratified table with the combined rows: "Pooled (direct)" with pool, the
-    standardized estimate with estandard/istandard/standard(), "M-H combined" otherwise (VERIFY:
-    the manual's examples show pool and standardization replacing the M-H row), and the test
-    of homogeneity of the directly pooled estimate. Returns the main combined estimate."""
+def _summary(s: "Session", cmd: str, o, byname: str, measure: str, level: float, rows, crude, mh, direct,
+             std, note: str = "", mh_note: str = "") -> list:
+    """Draws the stratified table with its combined rows: "Pooled (direct)" with pool, then the
+    standardized estimate with estandard/istandard/standard() or else "M-H combined" (compat
+    1601). Returns the combined rows shown."""
     combined = []
     if direct is not None:
-        combined.append(("Pooled (direct)", direct[:3]))
+        combined.append(("Pooled (direct)", direct[:3], ""))
     if std is not None:
-        combined.append(std)
-    if not combined:
-        combined.append(("M-H combined", mh))
-    _strat_table(s, byname, measure, level, rows, None if o.get("nocrude") else crude, combined,
+        combined.append((std[0], std[1], ""))
+    else:
+        combined.append(("M-H combined", mh, mh_note))
+    _strat_table(s, cmd, byname, measure, level, rows, None if o.get("nocrude") else crude, combined,
                  wlabel="Weight" if std is not None else "M-H Weight", note=note)
-    if direct is not None and not o.get("nohom"):
-        _homog(s, "Test of homogeneity (direct)", direct[3], direct[4], direct[5])
-    return combined[-1][1]
+    return combined
 
 
 def _std_weights(spec, inside, outside):
@@ -459,18 +491,34 @@ def _cs_by(s: "Session", byname: str, strata, o, spec=None) -> None:
         for r, wi in zip(rows, w):
             r[4] = wi
         std = (label, E.standardized(m1, v1, m0, v0, w, level, difference=rd))
-    main = _summary(s, o, byname, "RD" if rd else "RR", level, rows, crude, mh, direct, std)
-    key = "rd" if rd else "rr"
-    res = []
-    if direct is None and std is None:
+    combined = _summary(s, "cs", o, byname, "RD" if rd else "RR", level, rows, crude, mh, direct, std)
+    main = combined[-1][1]
+    tests = []
+    if direct is not None:
+        tests.append(("direct", *direct[3:6]))
+    if std is None:
         chi2, ph, df = E.homogeneity_log([r[1] for r in rows], var, mh[0])
-        if not o.get("nohom"):
-            _homog(s, "Test of homogeneity (M-H)", chi2, ph, df)
-        res = [("df", df), ("chi2_mh", chi2)]
-    elif direct is not None:
-        res = [("df", direct[5]), ("chi2_p", direct[3])]   # VERIFY: names in r()
-    _set_r(s, res + [(key, main[0]), ("lb_" + key, main[1]), ("ub_" + key, main[2]),
-                     ("crude", crude[0]), ("lb_crude", crude[1]), ("ub_crude", crude[2])])
+        tests.append(("M-H", chi2, ph, df))
+    if not o.get("nohom"):
+        _homog_lines(s, "cs", tests)
+    # r(): the population attributable fraction of the crude table, the combined estimate and
+    # the tests (compat 1601; VERIFY the M-H test's names)
+    a_, b_, c_, d_ = tot
+    rt, r0 = E._div(a_ + b_, a_ + b_ + c_ + d_), E._div(b_, b_ + d_)
+    r = _R()
+    r.put("afp", E._div(rt - r0, rt))
+    key = "rd" if rd else "rr"
+    r.put(key, main[0])
+    r.put("lb_" + key, main[1])
+    r.put("ub_" + key, main[2])
+    for name, chi2, _p, df in tests:
+        if name == "direct":
+            r.put("df", df)
+            r.put("chi2_p", _f32(chi2))
+        else:
+            r.put("chi2_mh", _f32(chi2))
+            r.put("df", df)
+    _set_r(s, list(r.items()))
 
 
 # ---------------------------------------------------------------------------
@@ -575,6 +623,12 @@ def _cc_by(s: "Session", byname: str, strata, o, spec=None) -> None:
     tot = tuple(sum(t[i] for t in tables) for i in range(4))
     crude = (E.odds_ratio(*tot), *E.or_ci(*tot, level, method, _tb_chi2(*tot)))
     mh = E.mh_or(tables, level)
+    mhc, pmh = E.mh_chi2(tables)
+    mh_note = ""
+    if method == "tb":
+        # test-based limits from the Mantel-Haenszel chi2 of the combined odds ratio (compat 1601)
+        mh = (mh[0], *E.ci_test_based(mh[0], mhc, level))
+        mh_note = "(tb)"
     direct = E.pooled([r[1] for r in rows], var, level) if o.get("pool") else None
     std = None
     if spec is not None:
@@ -582,34 +636,49 @@ def _cc_by(s: "Session", byname: str, strata, o, spec=None) -> None:
         label, w = _std_weights(spec, [t[2] for t in tables], [t[3] for t in tables])
         for r, wi in zip(rows, w):
             r[4] = wi
-        std = (label, E.standardized(m1, v1, m0, v0, w, level))
+        std = (label, E.standardized(m1, v1, m0, v0, w, level))   # VERIFY: Stata's limits are wider
     note = {"exact": "(exact)", "cornfield": "(Cornfield)", "woolf": "(Woolf)", "tb": "(tb)"}[method]
-    main = _summary(s, o, byname, "OR", level, rows, crude, mh, direct, std, note=note)
-    res = []
+    combined = _summary(s, "cc", o, byname, "OR", level, rows, crude, mh, direct, std, note=note,
+                        mh_note=mh_note)
+    main = combined[-1][1]
+    tests = []
     if direct is not None:
-        res = [("df", direct[5]), ("chi2_p", direct[3])]   # VERIFY: names in r()
-    hom = []
+        tests.append(("direct", *direct[3:6]))
+    if std is None:
+        # the M-H test uses the logs of the stratum odds ratios around the M-H estimate
+        tests.append(("M-H", *E.homogeneity_log([r[1] for r in rows], var, mh[0])))
+    extra = []
     if o.get("bd"):
-        hom.append(("B-D", "chi2_bd", *E.breslow_day(tables, mh[0])))
+        extra.append(("B-D", *E.breslow_day(tables, mh[0])))
     if o.get("tarone"):
-        hom.append(("Tarone", "chi2_t", *E.tarone(tables, mh[0])))
-    if direct is None and std is None and not hom:
-        hom.append(("M-H", "chi2_mh", *E.breslow_day(tables, mh[0])))
-    for label, key, chi2, ph, df in hom:
-        if not o.get("nohom"):
-            _homog(s, f"Test of homogeneity ({label})", chi2, ph, df)
-        res += [("df", df), (key, chi2)]
-    if direct is None and std is None:
-        mhc, pmh = E.mh_chi2(tables)
+        extra.append(("Tarone", *E.tarone(tables, mh[0])))
+    if not o.get("nohom"):
+        _homog_lines(s, "cc", tests + extra)
+    if std is None:
         out = s.output
         out.write("\n" + " " * 19 + "Test that combined OR = 1:\n", "text")
-        out.write(f"{'Mantel-Haenszel chi2(1) =':>56}", "text")
+        out.write(f"{'Mantel-Haenszel chi2(1) =':>57}", "text")
         out.write(f"{_r(mhc):>10.2f}\n", "result")
-        out.write(f"{'Pr>chi2 =':>56}", "text")
+        out.write(f"{'Pr>chi2 =':>57}", "text")
         out.write(f"{pmh:>10.4f}\n", "result")
-        res += [("chi2_p", mhc), ("p", pmh)]
-    _set_r(s, res + [("or", main[0]), ("lb_or", main[1]), ("ub_or", main[2]),
-                     ("crude", crude[0]), ("lb_crude", crude[1]), ("ub_crude", crude[2])])
+    # r() in Stata 14's order (compat 1601)
+    a_, b_, c_, d_ = tot
+    oc = E.odds_ratio(*tot)
+    af = (oc - 1) / oc if oc > 0 and not math.isinf(oc) else NAN
+    r = _R()
+    r.put("afp", af * E._div(a_, a_ + b_))   # VERIFY: protective exposure
+    r.put("chi2", mhc if std is None else NAN)
+    for name, chi2, _p, df in tests:
+        r.put("df", df)
+        r.put("chi2_p", _f32(chi2))
+    for name, chi2, _p, df in extra:
+        k = "bd" if name == "B-D" else "t"
+        r.put(f"chi2_{k}", chi2)
+        r.put(f"df_{k}", df)
+    r.put("or", main[0])
+    r.put("lb_or", main[1])
+    r.put("ub_or", main[2])
+    _set_r(s, list(r.items()))
 
 
 # ---------------------------------------------------------------------------
@@ -760,19 +829,41 @@ def _ir_by(s: "Session", byname: str, strata, o, spec=None) -> None:
         for r, wi in zip(rows, w):
             r[4] = wi
         std = (label, E.standardized(m1, v1, m0, v0, w, level, difference=ird))
-    main = _summary(s, o, byname, "IRD" if ird else "IRR", level, rows, crude, mh, direct, std,
-                    note="" if ird else "(exact)")
-    key = "ird" if ird else "irr"
-    res = []
-    if direct is None and std is None:
-        chi2, ph, df = E.homogeneity_log([r[1] for r in rows], var, mh[0])
-        if not o.get("nohom"):
-            _homog(s, "Test of homogeneity (M-H)", chi2, ph, df)
-        res = [("df", df), ("chi2_mh", chi2)]
-    elif direct is not None:
-        res = [("df", direct[5]), ("chi2_p", direct[3])]   # VERIFY: names in r()
-    _set_r(s, res + [(key, main[0]), ("lb_" + key, main[1]), ("ub_" + key, main[2]),
-                     ("crude", crude[0]), ("lb_crude", crude[1]), ("ub_crude", crude[2])])
+    combined = _summary(s, "ir", o, byname, "IRD" if ird else "IRR", level, rows, crude, mh, direct, std,
+                        note="" if ird else "(exact)")
+    main = combined[-1][1]
+    tests = []
+    if direct is not None:
+        tests.append(("direct", *direct[3:6]))
+    if std is None:
+        tests.append(("M-H", *E.homogeneity_log([r[1] for r in rows], var, mh[0])))
+    if not o.get("nohom"):
+        _homog_lines(s, "ir", tests)
+    # r(): the one-sided mid-p and the attributable fractions of the crude table, the combined
+    # estimate (the other measure missing) and the tests (compat 1601)
+    a_, b_, t1_, t0_ = tot
+    irr_c = E._div(E._div(a_, t1_), E._div(b_, t0_))
+    lo_c, hi_c = E.irr_exact_ci(int(a_), int(b_), t1_, t0_, level)
+    af, af_lo, af_hi = E.af_from_ratio(irr_c, lo_c, hi_c)   # VERIFY: protective exposure
+    r = _R()
+    r.put("p", E.irr_midp(int(a_), int(b_), t1_, t0_)[0])
+    r.put("afe", af)
+    r.put("lb_afe", af_lo)
+    r.put("ub_afe", af_hi)
+    r.put("afp", af * E._div(a_, a_ + b_))
+    for key in ("ird", "irr"):
+        on = (key == "ird") == ird
+        r.put(key, main[0] if on else NAN)
+        r.put("lb_" + key, main[1] if on else NAN)
+        r.put("ub_" + key, main[2] if on else NAN)
+    for name, chi2, _p, df in tests:
+        if name == "direct":
+            r.put("df", df)
+            r.put("chi2_p", _f32(chi2))
+        else:
+            r.put("chi2_mh", _f32(chi2))
+            r.put("df", df)
+    _set_r(s, list(r.items()))
 
 
 # ---------------------------------------------------------------------------

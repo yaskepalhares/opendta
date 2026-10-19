@@ -281,7 +281,8 @@ def cmd_mhodds(s: "Session", args: str) -> None:
                 chi2, pv, b1, 1 / V if V else NAN)
 
     if binary:
-        title = "Mantel-Haenszel estimate of the odds ratio" if adj or byv else "Maximum likelihood estimate of the odds ratio"   # VERIFY
+        # with by(), the title stays "Maximum likelihood" (compat 1601)
+        title = "Mantel-Haenszel estimate of the odds ratio" if adj else "Maximum likelihood estimate of the odds ratio"   # VERIFY
         out.write(f"\n{title}\n", "text")
         out.write(f"Comparing {ev.name}=={_num(hi_v)} vs. {ev.name}=={_num(lo_v)}\n", "text")
     else:
@@ -289,55 +290,62 @@ def cmd_mhodds(s: "Session", args: str) -> None:
     if adj:
         out.write(f"controlling for {' '.join(adj)}\n", "text")
     if byv:
+        out.write(f"by {' '.join(byv)}\n", "text")
+    if not binary:
+        # two lines, the first ending in a space (compat 1601)
+        out.write("\n(The Odds Ratio estimate is an approximation to the odds ratio \n"
+                  f"for a one unit increase in {ev.name})\n", "text")
+    if byv:
         _mhodds_by(s, o, estimate, mask, adj, byv, level)
         return
-    if not binary:
-        out.write("(The Odds Ratio estimate is an approximation to the odds ratio for a one unit increase in "
-                  f"{ev.name})\n", "text")
     est, lo, hi, chi2, pv, _, _ = estimate(mask, adj)
     _mhodds_row(s, level, est, chi2, pv, lo, hi)
     _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est)])
 
 
-def _mhodds_row(s: "Session", level: float, est, chi2, pv, lo, hi, indent: str = "", lead: str = "\n") -> None:
+def _mhodds_row(s: "Session", level: float, est, chi2, pv, lo, hi, indent: str = "", lead: str = "\n",
+                wide: bool = False) -> None:
     out = s.output
     out.write(lead + indent + "-" * 64 + "\n", "text")
     out.write(indent + f" Odds Ratio    chi2(1)        P>chi2        [{level:g}% Conf. Interval]\n", "text")
     out.write(indent + "-" * 64 + "\n", "text")
-    out.write(indent + f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}{_f5(lo):>16}{_f5(hi):>10}\n", "result")
+    # after by(), the limits have six decimals (compat 1601)
+    ci = f"{_f6(lo):>17}{_f6(hi):>11}" if wide else f"{_f5(lo):>16}{_f5(hi):>10}"
+    out.write(indent + f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}" + ci + "\n", "result")
     out.write(indent + "-" * 64 + "\n", "text")
 
 
 def _mhodds_by(s: "Session", o, estimate, mask, adj, byv, level) -> None:
     """by(): the estimate within each group of the by() variables, the estimate controlling
     for them, and a test of homogeneity of the group estimates,
-    sum (b_j - b)^2 / var(b_j) on the log odds ratios (VERIFY: layout and Stata's test)."""
+    sum (b_j - b)^2 / var(b_j) on the log odds ratios (layout: compat 1601; VERIFY: Stata's
+    limits and test for a two-level comparison differ)."""
     out = s.output
     byname, groups = _strata(s, " ".join(byv), mask)
-    out.write(f"by {byname}\n", "text")
     out.write("\n" + "-" * 79 + "\n", "text")
-    out.write(f"{name12(byname):>12} |  Odds Ratio    chi2(1)       P>chi2       [{level:g}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
+    out.write(f"{name12(byname):>9} | Odds Ratio        chi2(1)         P>chi2       [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 10 + "+" + "-" * 68 + "\n", "text")
     parts = []
     for lab, sel in groups:
         est, lo, hi, chi2, pv, b, vb = estimate(sel, adj)
         parts.append((b, vb))
-        out.write(f"{name12(lab):>12} |", "text")
-        out.write(f"{_f6(est):>12}{_f2(chi2):>11}{_p4(pv):>13}{_f6(lo):>15}{_f6(hi):>12}\n", "result")
+        out.write(f"{name12(lab):>9} |", "text")
+        out.write(f"{_f6(est):>11}{_f2(chi2):>15}{_p4(pv):>15}{_f5(lo):>16}{_f5(hi):>11}\n", "result")
     out.write("-" * 79 + "\n", "text")
     est, lo, hi, chi2, pv, b, _ = estimate(mask, adj + byv)
     out.write(f"\n    Mantel-Haenszel estimate controlling for {' '.join(adj + byv)}\n", "text")
-    _mhodds_row(s, level, est, chi2, pv, lo, hi, indent="    ", lead="")
+    _mhodds_row(s, level, est, chi2, pv, lo, hi, indent="    ", lead="", wide=True)
     ok = [(bj, vj) for bj, vj in parts if not math.isnan(bj) and vj > 0 and not math.isinf(vj)]
     chi_h = sum((bj - b) ** 2 / vj for bj, vj in ok) if not math.isnan(b) else NAN
     df_h = len(ok) - 1
     ph = float(st.chi2.sf(chi_h, df_h)) if df_h > 0 and not math.isnan(chi_h) else NAN
-    out.write(f"\nTest of homogeneity of ORs (approx): chi2({df_h})   = ", "text")
+    out.write(f"\nTest of homogeneity of ORs (approx): chi2({df_h})   =", "text")
     out.write(f"{_f2(chi_h):>8}\n", "result")
-    out.write(f"{'Pr>chi2   = ':>49}", "text")
+    out.write(f"{'Pr>chi2   =':>48}", "text")
     out.write(f"{_p4(ph):>8}\n", "result")
-    _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est),
-               ("df_hom", float(df_h)), ("chi2_hom", chi_h), ("p_hom", ph)])
+    # return list order of Stata 14 (compat 1601)
+    _set_r(s, [("chi2_hom", chi_h), ("df_hom", float(df_h)), ("p", pv), ("chi2", chi2),
+               ("ub_or", hi), ("lb_or", lo), ("or", est)])
 
 
 def _num(v: float) -> str:

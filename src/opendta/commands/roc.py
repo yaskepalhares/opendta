@@ -175,7 +175,10 @@ def cmd_roctab(s: "Session", args: str) -> None:
                       f"{_f(lrp, '>13.4f') if not math.isnan(lrp) else ' ' * 13}"
                       f"{_f(lrn, '>13.4f') if not math.isnan(lrn) else ''}\n", "result")
         out.write("-" * 78 + "\n", "text")
-    if not o.get("graph") or o.get("summary") or o.get("detail") or o.get("table"):
+    show_area = not o.get("graph") or o.get("summary") or o.get("detail") or o.get("table")
+    if o.get("lorenz") and not o.get("summary"):
+        show_area = False   # lorenz reports the indices instead (compat 1601)
+    if show_area:
         # the standard error's method above its column, the interval's above the limits
         # (VERIFY: exact placement and dashes)
         se_label = "Hanley" if o.get("hanley") else "Bamber" if o.get("bamber") else ""
@@ -185,23 +188,23 @@ def cmd_roctab(s: "Session", args: str) -> None:
         out.write(f"{'Obs':>14}{'Area':>11}     Std. Err.      [{level:g}% Conf. Interval]\n", "text")
         out.write(" " * 5 + "-" * 60 + "\n", "text")
         out.write(f"{len(pos) + len(neg):>14,}{a:>11.4f}{se:>13.4f}{lo:>15.5f}{hi:>12.5f}\n", "result")
-    lz = []
     if o.get("lorenz"):
         lx, ly, gini, pietra = R.lorenz(pos, neg)
-        # VERIFY: layout of the Lorenz report
-        out.write("\nLorenz curve\n", "text")
-        out.write("Pietra index =  ", "text")
-        out.write(f"{pietra:>8.4f}\n", "result")
-        out.write("Gini index   =  ", "text")
-        out.write(f"{gini:>8.4f}\n", "result")
-        lz = [("pietra", pietra), ("gini", gini)]
+        out.write("\n Lorenz curve \n" + "-" * 27 + "\n", "text")
+        out.write("  Pietra index =  ", "text")
+        out.write(f"{pietra:>7.4f}\n", "result")
+        out.write("  Gini index   =  ", "text")
+        out.write(f"{gini:>7.4f}\n", "result")
     if o.get("graph"):
         if o.get("lorenz"):
             _lorenz_graph(s, rv.name, lx, ly, refline=not o.get("norefline"))
         else:
             _roc_graph(s, [(cv.name, rows, a)], refline=not o.get("norefline"),
                        title=f"Area under ROC curve = {a:.4f}")
-    _set_r(s, lz + [("ub", hi), ("lb", lo), ("se", se), ("area", a), ("N", float(N))])
+    if o.get("lorenz") and not show_area:
+        _set_r(s, [("gini", gini), ("pietra", pietra)])   # only these (compat 1601)
+    else:
+        _set_r(s, [("ub", hi), ("lb", lo), ("se", se), ("area", a), ("N", float(N))])
 
 
 def _lorenz_graph(s: "Session", refname: str, x, y, refline: bool) -> None:
@@ -255,6 +258,8 @@ def cmd_roccomp(s: "Session", args: str) -> None:
         byname, groups = _strata(s, str(o["by"]), mask)
         items = []
         for lab, sel in groups:
+            if binorm:
+                out.write(f"Fitting binormal model for: {byname}=={lab}\n", "text")
             ws = None if w is None else w[sel]
             y, x = _expand(rv.data[sel], ws), _expand(cv.data[sel], ws)
             pos, neg = x[y == 1], x[y == 0]
@@ -273,15 +278,20 @@ def cmd_roccomp(s: "Session", args: str) -> None:
         neg_l = [x[y == 0] for x in xs]
         areas, S = delong_cov(pos_l, neg_l)
         areas = np.array([R.area_trapezoid(pp, nn) for pp, nn in zip(pos_l, neg_l)])
+        ses = np.sqrt(np.diag(S))
         if binorm:
-            # binormal areas, compared as independent estimates (VERIFY: Stata's covariance for
-            # correlated classifiers with binormal)
-            fits = [_binormal_area(pp, nn) for pp, nn in zip(pos_l, neg_l)]
+            # binormal areas and standard errors; the test uses DeLong's covariance of the
+            # correlated classifiers (VERIFY)
+            fits = []
+            for c, pp, nn in zip(cvs, pos_l, neg_l):
+                out.write(f"Fitting binormal model for: {c.name}\n", "text")
+                fits.append(_binormal_area(pp, nn))
             areas = np.array([f[0] for f in fits])
-            S = np.diag([f[1] ** 2 for f in fits])
-        items = [(c.name, len(y), areas[k], math.sqrt(S[k, k]), roc_points(pos_l[k], neg_l[k]))
+            ses = np.array([f[1] for f in fits])
+        items = [(c.name, len(y), areas[k], ses[k], roc_points(pos_l[k], neg_l[k]))
                  for k, c in enumerate(cvs)]
-    out.write("\n" + " " * 30 + "ROC" + " " * 20 + "-Asymptotic Normal--\n", "text")
+    # binormal fits show no interval title (compat 1601)
+    out.write("\n" + " " * 30 + "ROC" + ("" if binorm else " " * 20 + "-Asymptotic Normal--") + "\n", "text")
     byname = name12(str(o["by"]).split()[0]) if isinstance(o.get("by"), str) else ""
     out.write(f"{byname:<17}{'Obs':>5}{'Area':>11}     Std. Err.      [{level:g}% Conf. Interval]\n", "text")
     out.write("-" * 73 + "\n", "text")

@@ -57,6 +57,9 @@ def lorenz(pos: np.ndarray, neg: np.ndarray) -> tuple[np.ndarray, np.ndarray, fl
     cuts = np.unique(np.concatenate([pos, neg]))
     x = np.concatenate([[0.0], np.searchsorted(np.sort(neg), cuts, "right") / len(neg)])
     y = np.concatenate([[0.0], np.searchsorted(np.sort(pos), cuts, "right") / len(pos)])
+    # cumulative shares in single precision, as Stata stores them (compat 1601)
+    x = x.astype(np.float32).astype(float)
+    y = y.astype(np.float32).astype(float)
     under = float(((x[1:] - x[:-1]) * (y[1:] + y[:-1]) / 2).sum())
     return x, y, 2 * (0.5 - under), float((x - y).max())
 
