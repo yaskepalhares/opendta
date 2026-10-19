@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 _AT = {f"at{i}": 3 for i in range(1, 11)}
-_NOT_YET = ("outfile", "width", "kernel", "noboundary", "alpha1", "fixedonly", "unconditional",
+_NOT_YET = ("outfile", "width", "kernel", "noboundary", "fixedonly", "unconditional",
             "marginal", "addplot")
 
 
@@ -164,7 +164,8 @@ def _curve(est, kind: str, what: str, xb: float, base, lo: float, hi: float):
     if kind == "streg":
         from .streg import DISTS
         dist, aft = DISTS[est.dist], est.aft
-        th = est.aux[0] if est.aux else 0.0
+        th = est.th if dist.name == "ggamma" else (est.aux[0] if est.aux else 0.0)
+        # after frailty(): the curves are conditional on a frailty of one (alpha1; VERIFY default)
         t = np.linspace(lo, hi, 200)
         t = np.where(t > 0, t, 1e-8) if what == "hazard" else t
         xbv = np.full_like(t, xb)
