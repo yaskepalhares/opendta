@@ -36,7 +36,7 @@ MODULE_AREA = {
     "datatools": "Data management", "files": "Data management", "inspect": "Data management",
     "delimited": "Data management", "infile": "Data management", "filecmd": "Data management",
     "reshape": "Data management", "label": "Data management", "codebook": "Data management",
-    "putexcel": "Data management", "egen": "Data management",
+    "putexcel": "Data management", "egen": "Data management", "statpkg": "Data management",
     "program": "Programming", "progcmd": "Programming", "syntaxcmd": "Programming",
     "macro": "Programming", "scalar": "Programming", "matrix": "Programming",
     "adocmd": "Programming", "logcmd": "Programming", "system": "Programming",

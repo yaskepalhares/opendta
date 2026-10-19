@@ -14,13 +14,14 @@ Each block follows the same steps:
 
 1. Branch from `main` (`block-<name>`).
 2. For each command: the statistics in `src/opendta/core/` (see the next section), the command in `src/opendta/commands/` (new module registered in `commands/__init__.py`), its help page, its tests.
-3. A compat case `compat/do/NNNN_<block>.do` with the commands and `return list`/`ereturn list`; it has no reference until the Stata run (`compat/gerar_esperados.do`).
+3. A compat case `compat/do/NNNN_<block>.do` with the commands and `return list`/`ereturn list`; it has no reference until the Stata run. Run under `capture noisily` every command whose behavior in Stata the manual does not document (and do the same in any old case you change), so that a single Stata run shows the whole case instead of stopping at the first error.
 4. `ROADMAP.md` and `ROADMAP.pt-BR.md`: a new phase listing what was done; in *After 1.0*, leave only what is missing. Each clause of an *After 1.0* line that lists options must start with the command they belong to (`` `cs` with the `pool` option``), so the coverage map does not count options as commands.
 5. `tools/roadmap_coverage.py`: add the new module to `MODULE_AREA`.
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
-7. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
+7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another.
+8. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
 
-Next free numbers: compat cases from **1701**, roadmap phases from **13**.
+Next free numbers: compat cases from **1801**, roadmap phases from **14**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -53,7 +54,9 @@ Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, 
 
 `rocreg` (nonparametric and parametric ROC regression; bootstrap standard errors); `cs`, `cc` and `ir` with `estandard`, `istandard`, `standard()`, `binomial` and `pool`; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`. Reuse `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; remove the matching "not available yet" errors.
 
-### 2. Data management: options (30–45 min, ~25k tokens)
+### 2. Data management: options ✅
+
+Done in phase 13 (compat case 1701), except `import haver` (a proprietary format), `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), `import sasxport, describe` and `member()`, the value labels of `formats.xpf`, `export sasxport` with `rename` and `vallabfile()`, and `list` with `string()` and `display`, which stay in *After 1.0*. The original plan:
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 

@@ -50,7 +50,8 @@ def cmd_list(s: "Session", args: str) -> None:
     opts = match_options(p.options, {
         "noobs": 5, "clean": 5, "separator": 3, "nolabel": 5, "noheader": 6,
         "abbreviate": 2, "table": 3, "divider": 3, "string": 3, "compress": 3,
-        "fast": 4, "constant": 4, "sepby": 5, "header": 6, "nodotz": 6,
+        "fast": 4, "constant": 4, "sepby": 5, "header": 6, "nodotz": 6, "nocompress": 3,
+        "mean": 4, "sum": 3, "N": 1, "labvar": 6,
     })
     if opts.get("noheader") and opts.get("header") is True:
         raise StataError(198, "options header and noheader may not be combined")
@@ -75,6 +76,30 @@ def cmd_list(s: "Session", args: str) -> None:
         # extended missing values (.a-.z) are shown as "."
         cells = [[("." if (len(c) == 2 and c[0] == "." and c[1].isalpha() and not v.is_string) else c)
                   for c, v in zip(r, vars_)] for r in cells]
+    # mean/sum/N: one summary row each, below the observations; the label goes in the observation-number
+    # position, or in the column of labvar(); VERIFY: layout of the summary rows (compat 1701)
+    labvar = str(opts["labvar"]).strip() if isinstance(opts.get("labvar"), str) else ""
+    if labvar and labvar not in names:
+        raise StataError(111, f"variable {labvar} not found")
+    summaries: list[tuple[str, list[str]]] = []
+    for key, label in (("mean", "Mean"), ("sum", "Sum"), ("N", "N")):
+        if not opts.get(key):
+            continue
+        pick = expand(ds, str(opts[key])) if isinstance(opts[key], str) else \
+            [n for n in names if not ds.get(n).is_string]
+        row = []
+        for n, v in zip(names, vars_):
+            if n not in pick or v.is_string:
+                row.append("")
+                continue
+            x = np.asarray(v.raw, dtype=float)[rows]
+            x = x[x < 1e300]
+            val = float(len(x)) if key == "N" else (float(x.sum()) if key == "sum" else
+                                                    float(x.mean()) if len(x) else 1e300)
+            row.append(f"{int(val)}" if key == "N" else format_value(val, v.fmt, pad=False).strip())
+        if labvar:
+            row[names.index(labvar)] = label
+        summaries.append((label, row))
     every = int(opts["header"]) if isinstance(opts.get("header"), str) and opts["header"].strip().isdigit() else 0
     # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
     # default is ab(8) ("Rendamensal" → "Rendam~l")
@@ -83,7 +108,7 @@ def cmd_list(s: "Session", args: str) -> None:
     titles = []
     widths = []
     for j, v in enumerate(vars_):
-        data_w = max([len(r[j]) for r in cells], default=0)
+        data_w = max([len(r[j]) for r in cells + [sm[1] for sm in summaries]], default=0)
         title = v.name if len(v.name) <= max(ab, data_w) else _abbrev(v.name, float(max(ab, data_w)))
         titles.append(title)
         widths.append(max([len(title), data_w]))
@@ -98,6 +123,8 @@ def cmd_list(s: "Session", args: str) -> None:
     # layout observed in the Stata logs: 3 spaces between columns, observation label "  1."
     # followed by " | " (table) or by 3 spaces (clean)
     obs_w = max(3, len(str(int(rows[-1]) + 1))) if len(rows) else 3
+    if summaries and not labvar:
+        obs_w = max(obs_w, max(len(lb) for lb, _ in summaries))
     header = fmt_row(titles)
     inner = len(header) + 2
 
@@ -113,6 +140,9 @@ def cmd_list(s: "Session", args: str) -> None:
             label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else ""
             out.write(label, "text")
             out.write(fmt_row(r) + "  \n", "result")
+        for label, r in summaries:
+            out.write((" " * (obs_w + 1 + 3) if show_obs and labvar else (label.rjust(obs_w) + "    " if show_obs else ""))
+                      + fmt_row(r) + "  \n", "result")
         return
 
     pad = " " * (obs_w + 2) if show_obs else "  "
@@ -132,6 +162,13 @@ def cmd_list(s: "Session", args: str) -> None:
             out.write(pad + "|" + "-" * inner + "|\n", "text")
         label = f"{int(i) + 1:>{obs_w}}. " if show_obs else "  "
         out.write(label + "| ", "text")
+        out.write(fmt_row(r), "result")
+        out.write(" |\n", "text")
+    for k, (label, r) in enumerate(summaries):
+        if not k:
+            out.write(pad + "|" + "-" * inner + "|\n", "text")
+        lead = (" " * obs_w + "  ") if labvar else (label.rjust(obs_w) + "  ")
+        out.write((lead if show_obs else "  ") + "| ", "text")
         out.write(fmt_row(r), "result")
         out.write(" |\n", "text")
     out.write(pad + "+" + "-" * inner + "+\n", "text")

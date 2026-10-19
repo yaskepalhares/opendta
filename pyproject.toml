@@ -39,9 +39,10 @@ legacy = ["pyreadstat>=1.3"]
 # old .xls spreadsheets (import excel with xlrd, export excel with xlwt); .xlsx uses openpyxl,
 # already included
 xls = ["xlrd>=2.0", "xlwt>=1.3"]
-# pyreadstat also serves as an independent checker in the .dta tests;
-# pandas is only used in the tests, to write files through ReadStat
-dev = ["pytest>=8", "pyreadstat>=1.3", "pandas>=2"]
+# pyreadstat also serves as an independent checker in the .dta tests and reads SAS, SPSS and XPORT files;
+# pandas is only used in the tests (and by export sasxport), to write files through ReadStat; xlrd and
+# xlwt are in the dev extra so that the .xls tests run
+dev = ["pytest>=8", "pyreadstat>=1.3", "pandas>=2", "xlrd>=2.0", "xlwt>=1.3"]
 
 [project.scripts]
 opendta = "opendta.cli:main"

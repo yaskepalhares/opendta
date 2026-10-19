@@ -178,6 +178,14 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 - [x] `rocreg`: estimação ROC não paramétrica com controles ajustados por covariáveis (estratificados ou por regressão linear, valores percentis empíricos ou normais) e os seus resumos (AUC, ROC(t), ROC inversa, AUC parcial), e o modelo paramétrico GLM probit com covariáveis da ROC; erros padrão por bootstrap com intervalos normal, percentil e com correção de viés
 - O caso `1601` aguarda a rodada no Stata
 
+## Fase 13: manipulação de dados, opções ✅
+
+- [x] `file` com leitura e gravação binária (`%1b`, `%2b`, `%4b`, suas formas com e sem sinal, `%4z`, `%8z`, `%#s`), `file seek`, `file set byteorder`, `file query`, `read write` e a função `byteorder()`
+- [x] `infile` com `byvariable()`; `putexcel` para `.xls`
+- [x] `import sas` (com `bcat()`), `import spss` e `import sasxport`, e um `export sasxport` básico, pelo pacote opcional `pyreadstat`
+- [x] `describe` com `numbers`, `varlist`, `replace` e `using`; `list` com `header()`, `nodotz`, `mean`, `sum`, `N`, `labvar()` e `nocompress`
+- O caso `1701` aguarda a rodada no Stata
+
 ## Distribuição e documentação
 
 - [x] Licença MIT e avisos de licença dos componentes de terceiros
@@ -199,7 +207,7 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 
 Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
-- **Manipulação de dados**: `table` com três variáveis ou mais; `import sas`, `spss`, `sasxport` e `haver`; `file` com leitura e gravação binária; `infile` com `byvariable()`; `putexcel` para `.xls`; `list` e `describe` com as opções que ainda faltam; `icd9p` com a lista de procedimentos da ICD-9-CM.
+- **Manipulação de dados**: `table` com três variáveis ou mais; `import haver`; `import sasxport` com `describe`, `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`; `list` com `string()` e `display`; `icd9p` com a lista de procedimentos da ICD-9-CM.
 - **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
 - **Estatística básica**: o comando `ml` (o motor já existe), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Modelos**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` e `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.

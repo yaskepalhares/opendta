@@ -64,12 +64,12 @@ capture erase odta_rw.bin
 * infile with byvariable(): the file holds all the values of a variable, then of the next one
 capture erase odta_time.raw
 capture erase odta_time2.raw
-file open h using odta_time.raw, write text
-file write h "1980 1981 1982 1983" _n "14 17 25 30" _n "120 135 150" _n "180" _n
-file close h
-file open h using odta_time2.raw, write text
-file write h "1980 1981 1982 1983;" _n "14 17 25 ;" _n "120 135 150 180;" _n
-file close h
+capture noisily file open h using odta_time.raw, write text
+capture noisily file write h "1980 1981 1982 1983" _n "14 17 25 30" _n "120 135 150" _n "180" _n
+capture noisily file close h
+capture noisily file open h using odta_time2.raw, write text
+capture noisily file write h "1980 1981 1982 1983;" _n "14 17 25 ;" _n "120 135 150 180;" _n
+capture noisily file close h
 capture noisily infile year amount cost using odta_time, byvariable(4) clear
 capture noisily list
 capture noisily infile year amount cost using odta_time2, byvariable(100) clear
@@ -127,6 +127,11 @@ capture noisily list, clean header(2)
 capture noisily list, nodotz
 capture noisily list, header
 capture noisily list, noheader header
+capture noisily list, mean
+capture noisily list, sum(x) N labvar(y)
+capture noisily list, clean mean noobs
+capture noisily list, nocompress
+capture noisily list, labvar(zz) sum
 
 * putexcel to .xls
 capture erase odta_p.xls
