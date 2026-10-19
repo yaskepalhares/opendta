@@ -300,7 +300,8 @@ def _dist(text: str) -> Dist:
                     ("lnormal", 2), ("loglogistic", 4), ("llogistic", 2), ("ggamma", 2)):
         if len(t) >= k and full.startswith(t):
             if full == "ggamma":
-                raise StataError(198, "distribution(ggamma) is not available in OpenDTA")   # OpenDTA
+                from .streg_ext import GGAMMA
+                return GGAMMA
             return DISTS[{"lnormal": "lognormal", "llogistic": "loglogistic"}.get(full, full)]
     raise StataError(198, f"distribution({text}) invalid")   # VERIFY
 
@@ -340,15 +341,15 @@ def _scores(lf, X, b, k_aux: int) -> np.ndarray:
 
 
 def _to_time_metric(b: np.ndarray, V: np.ndarray, kx: int):
-    """Weibull: gamma = -beta/p, ln_p unchanged (delta method for V)."""
-    p = float(np.exp(b[-1]))
+    """Weibull: gamma = -beta/p, with ln_p right after the coefficients and the parameters that
+    follow it unchanged (delta method for V)."""
+    p = float(np.exp(b[kx]))
     beta = b[:kx]
-    J = np.zeros((kx + 1, kx + 1))
+    J = np.eye(len(b))
     J[:kx, :kx] = -np.eye(kx) / p
-    J[:kx, -1] = beta / p
-    J[-1, -1] = 1.0
+    J[:kx, kx] = beta / p
     V = J @ V @ J.T
-    return np.concatenate([-beta / p, b[-1:]]), (V + V.T) / 2
+    return np.concatenate([-beta / p, b[kx:]]), (V + V.T) / 2
 
 
 def cmd_streg(s: "Session", args: str) -> None:
@@ -358,7 +359,7 @@ def cmd_streg(s: "Session", args: str) -> None:
         return
     spec = {"distribution": 1, "time": 4, "nohr": 4, "tr": 2, "noshow": 6, "nolog": 4, "log": 3,
             "iterate": 4, "tolerance": 3, "ltolerance": 4, "nrtolerance": 4, "noheader": 6,
-            "nolrtest": 5}
+            "nolrtest": 5, "frailty": 3, "shared": 2}
     stx = STSample(s, args, spec)
     o = stx.o
     if not isinstance(o.get("distribution"), str):
@@ -367,10 +368,16 @@ def cmd_streg(s: "Session", args: str) -> None:
     aft = bool(o.get("time")) or dist.metrics == ("time",)
     if aft and "time" not in dist.metrics:
         raise StataError(198, f"{dist.title} has no accelerated failure-time form")   # VERIFY
+    if dist.name == "ggamma" and o.get("nohr"):
+        raise StataError(198, "option nohr not allowed")   # VERIFY: before the header in Stata's log
     stx.notes_and_header(s)
     t, t0, d, w = stx.t, stx.t0, stx.d, stx.w
     if np.any((t <= 0) & (d > 0)):
         raise StataError(498, "failures at time 0")   # VERIFY
+    if dist.name == "ggamma" or o.get("frailty") or o.get("shared"):
+        from .streg_ext import fit_extended
+        fit_extended(s, stx, dist, o, args, aft)
+        return
     X = np.column_stack([stx.X, np.ones(stx.n)])
     kx = X.shape[1]
     k_aux = 1 if dist.aux else 0

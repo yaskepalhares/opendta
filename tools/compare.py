@@ -232,8 +232,19 @@ def main(argv: list[str] | None = None) -> int:
                 if os.environ.get("GITHUB_ACTIONS"):
                     # GitHub annotation with the first differing lines, to read the difference
                     # without opening the whole CI log
-                    diff = [ln for ln in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=0)
-                            if ln[:1] in "+-" and not ln.startswith(("---", "+++"))][:12]
+                    # with a known difference that did not cover everything, only the lines it
+                    # does not accept
+                    fa, fb = (a, b) if k is None or k.ignore is None else (
+                        [x for x in a if not k.ignore.search(x)], [x for x in b if not k.ignore.search(x)])
+                    ok = (lambda x, y: x == y or _close_line(x, y)
+                          or (k is not None and k.tol is not None and _within(x, y, k.tol)))
+                    diff = []
+                    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, fa, fb, autojunk=False).get_opcodes():
+                        if tag == "equal" or (i2 - i1 == j2 - j1 and all(ok(x, y) for x, y in
+                                                                          zip(fa[i1:i2], fb[j1:j2]))):
+                            continue
+                        diff += ["-" + x for x in fa[i1:i2]] + ["+" + y for y in fb[j1:j2]]
+                    diff = diff[:12]
                     body = "%0A".join(ln.replace("%", "%25") for ln in diff)
                     print(f"::error title=compat {f.stem}::{body}")
             if ns.show_diff:

@@ -32,6 +32,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 # area of each implemented command, by the module that registers it; AREA_OF overrides it
 MODULE_AREA = {
+    "stcmds": "Survival analysis",
+    "stdata": "Survival analysis",
+    "strates": "Survival analysis",
+    "ctdata": "Survival analysis",
+    "stcrreg": "Survival analysis",
+    "stcurve": "Survival analysis",
+    "streg_ext": "Survival analysis",
     "data": "Data management", "combine": "Data management", "collapse": "Data management",
     "datatools": "Data management", "files": "Data management", "inspect": "Data management",
     "delimited": "Data management", "infile": "Data management", "filecmd": "Data management",
