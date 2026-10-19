@@ -48,7 +48,7 @@ def test_irf_table_graph_describe(varfit):
     out = run("irf table coirf, irf(a) noci stderror")
     assert "S.E." in out and "Lower" not in out
     out = run("irf describe")
-    assert "y2 y1 *" in out
+    assert "| var      y2 y1" in out and "(*) order is relevant" in out
     run("irf graph oirf, impulse(y1) response(y2) nodraw")
     assert run.rc == 0
     run("irf rename b c\nirf drop c")
