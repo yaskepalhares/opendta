@@ -8,7 +8,7 @@ Obrigado pela ajuda. O OpenDTA é um projeto pessoal de estudo, mas relatos e pu
 
 - **Um resultado difere do Stata**: abra uma issue com o modelo [Difference from Stata](https://github.com/yaskepalhares/opendta/issues/new?template=difference-from-stata.md). Um do-file curto que reproduza a diferença, com a saída dos dois programas, é o relato mais útil que existe.
 - **Algo quebra ou a janela se comporta mal**: use o modelo [Bug report](https://github.com/yaskepalhares/opendta/issues/new?template=bug-report.md).
-- **Falta um comando de que você precisa**: confira a lista no [ROADMAP](ROADMAP.pt-BR.md#depois-da-10) e use o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md). Os pedidos ajudam a decidir a ordem.
+- **Falta um comando de que você precisa**: confira a lista no [ROADMAP](ROADMAP.pt-BR.md#faltam-para-a-10) e use o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md). Os pedidos ajudam a decidir a ordem.
 
 ## Regras do projeto
 

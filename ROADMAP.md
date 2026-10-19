@@ -4,13 +4,13 @@
 
 Goal: cover the commands of Stata 14, including graphics, with an interface as close as possible to the original.
 
-**Version 1.0** closes phases 0 to 9: the core is in place. The commands still missing are listed in [After 1.0](#after-10) and will be added over time.
+**Version 1.0** is released when every command of Stata 14 is covered. The commands still missing are listed in [Missing for 1.0](#missing-for-10); what comes afterwards is in [After 1.0](#after-10).
 
 The phases are in dependency order. Each one ends with something that can be opened, tested and compared with Stata (see [docs/testing.md](docs/testing.md)). Deadlines are not estimated in advance. Each phase is split into reviewable pull requests.
 
 [![Commands implemented per area](https://yaskepalhares.github.io/opendta/roadmap-coverage.svg)](https://yaskepalhares.github.io/opendta/)
 
-One tile per area of [After 1.0](#after-10): its size is the number of commands and its colour the share already implemented (options of existing commands are not counted). It is redrawn on every merge into `main`. **[Open the interactive version](https://yaskepalhares.github.io/opendta/)** to see the commands of each area and search for one.
+One tile per area of [Missing for 1.0](#missing-for-10): its size is the number of commands and its colour the share already implemented (options of existing commands are not counted). It is redrawn on every merge into `main`. **[Open the interactive version](https://yaskepalhares.github.io/opendta/)** to see the commands of each area and search for one.
 
 ## Phase 0: foundation ✅
 
@@ -195,7 +195,7 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] `program, sortpreserve`; `program name, plugin` (explains that Stata plugins cannot be loaded)
 - [x] `pause`, `sleep`, `window` (in batch mode the dialogs act as cancelled) and `viewsource` (shows OpenDTA's own source)
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` with a constraint matrix and `matcproc`
-- Checked against the Stata log: case `1801`
+- Case `1801` awaits the Stata run
 
 ## Distribution and documentation
 
@@ -214,9 +214,9 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [ ] Statistical options beyond Stata: `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap*, `logit, firth`
 - [x] Superscript exponents in displayed scientific notation (`1.0000×10¹⁰`, `2.5×10⁻⁵`), keeping the format width; `set superscript off` (or Help → Superscript Exponents) restores Stata's `e+10`. `string()`, macros, `file write`, exports and Mata's `sprintf()`/`strofreal()` always use Stata's form
 
-## After 1.0
+## Missing for 1.0
 
-Commands and options that OpenDTA does not have yet, by area. They will be added over time; the order follows use and the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
+Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of them are needed for 1.0; the order is the one of the blocks in [docs/next-steps.md](docs/next-steps.md), adjusted by the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
 - **Data management**: `table` with three or more variables; `import haver`; `import sasxport` with `describe`, `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`; `list` with `string()` and `display`; `icd9p` with the ICD-9-CM procedure code list.
 - **Epidemiology**: `rocreg` with the `ml` and `cluster()` options.
@@ -230,12 +230,47 @@ Commands and options that OpenDTA does not have yet, by area. They will be added
 - **Other suites**: `gsem`; `sem` with the `mlmv` and `adf` methods, `group()` and the other `estat` subcommands; the other `power` methods (variances, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), the `lrchi2` and `fisher` tests and graphs; `bayesmh` and the `bayes` commands; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with more estimators.
 - **Programming**: `makecns` with a constraint list and `displaycns` (they need `constraint`, from the Models area); `matlist` with the equation options; `window` dialogs and menus in the graphical interface; `plugin` loading (compiled Stata plugins cannot run in OpenDTA); Stata's class system (Mata classes already work).
 
+## After 1.0
+
+What comes once every command of Stata 14 is covered, in priority order. These are improvements over Stata for population-based health surveys and epidemiology, plus later Stata versions. Most of them have no Stata 14 counterpart, so their reference is the literature or R (`survey`) rather than a Stata log; each one states how it is validated. The statistics go in `core/`, apart from the syntax (see [docs/next-steps.md](docs/next-steps.md)).
+
+**P0: complex surveys and epidemiology**
+
+1. Weight calibration: post-stratification, raking, linear and logit calibration, trimming, and weight diagnostics (Kish effective sample size, variability of weights).
+2. Prevalence confidence intervals for rare or extreme estimates (Clopper-Pearson and Wilson with effective sample size) and a reliability report (CV, degrees of freedom, effective sample size, PSUs per domain), as a warning in the `svy:` output.
+3. Ready-made results tables in one command: a weighted Table 1 (`n`, `%`, CI, p-value, `by()`), regressions side by side (`esttab`-like) with prevalence ratios and CIs in English or Portuguese, exported to Word, Excel and LaTeX (reusing `putexcel`).
+4. Prevalence ratios and adjusted prevalence: `binreg` (block 10) with `svy:`, and `margins`/`predict` with CI for adjusted prevalence after `poisson`, `glm` and `binreg`.
+5. The options already listed under [Improvements over Stata](#improvements-over-stata-throughout-the-phases): `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap* and `logit, firth`.
+6. Pre-run checks and hints for `svy:`: single-PSU strata, `if` used instead of `subpop()`, missing `svyset` or weights (extends `core/hints.py`).
+
+**P1: survey workflow**
+
+7. Importer for the survey dictionaries of IBGE (PNS, POF, PNAD) and Vigitel layouts: generates the `infile` and the value labels.
+8. Sample size for surveys: design effect, non-response, optimal allocation by stratum, clusters (ICC).
+9. Health inequality indices (slope and relative index of inequality, concentration index) with `svy:`.
+10. Non-response: inverse probability weighting, and `mi` consistent with `svyset`.
+11. Scales and indices with weights: Cronbach's alpha and omega, weighted factor analysis and IRT (after blocks 8 and 11), and food-security and diet scores (EBIA, NOVA, diet adequacy).
+12. Direct and indirect standardization with the survey design, and trends across surveys (joinpoint/APC), with tests of differences between domains and multiple-comparison corrections.
+
+**P2: reporting, graphics and tools**
+
+13. Reproducible reports: a do-file that writes a Markdown/HTML/docx document with commands, tables and graphs.
+14. Graphs: export and import of Plotly JSON (a documented subset of graph types); integrity tests for the SVG, PNG, JPEG and PDF exports; SVG with editable text. OpenDTA keeps its own `.gph` format: reading Stata's `.gph` stays out of scope (see below).
+15. Python inside do-files (`python:` blocks, with pandas and scikit-learn).
+16. Parallel bootstrap, jackknife and replicate weights; the environment and the seed recorded with each result.
+
+**P3: later**
+
+17. Small-area estimation (Fay-Herriot area models).
+18. The commands and changes of each later Stata version, one at a time, up to Stata 19.
+19. A version that runs in the web browser (see Long term).
+
 ## Long term
 
 For the record, the order after 1.0:
 
-1. Finish every command of the target version (the blocks in [docs/next-steps.md](docs/next-steps.md)) and release 1.0.
-2. Add the commands and changes of each later Stata version, one version at a time, up to Stata 19.
+1. Finish every command of the target version (the blocks in [docs/next-steps.md](docs/next-steps.md)) and release 1.0. Nothing from [After 1.0](#after-10) comes first.
+2. The priorities of [After 1.0](#after-10), then the commands and changes of each later Stata version, one version at a time, up to Stata 19.
 3. A version that runs in the web browser, without installing anything: the statistical core (Python, NumPy and SciPy) runs in WebAssembly through Pyodide. It builds on the separation between the statistical core and the Stata layer that new commands already follow.
 
 Out of scope: reading the `.gph` files saved by Stata, whose format has no public specification ([development policy](docs/clean-room-policy.md)); OpenDTA saves graphs in its own `.gph` format.

@@ -2,7 +2,7 @@
 
 **English** | [Português](features.pt-BR.md)
 
-OpenDTA covers the core commands: the do-file language, data management, descriptive statistics, the main estimation commands, complex surveys, survival analysis, multilevel models, time series, multiple imputation, Mata and graphics. The commands that are not in OpenDTA yet are listed in the [ROADMAP](../ROADMAP.md#after-10); they will be added over time.
+OpenDTA covers the core commands: the do-file language, data management, descriptive statistics, the main estimation commands, complex surveys, survival analysis, multilevel models, time series, multiple imputation, Mata and graphics. The commands that are not in OpenDTA yet are listed in the [ROADMAP](../ROADMAP.md#missing-for-10); they will be added over time.
 
 ## Commands and features
 

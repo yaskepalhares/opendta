@@ -13,7 +13,7 @@ New since 0.2:
 - error explanations for beginners, with a diagnosis from the data and a clickable link to the help;
 - `replace y = 2*L.y` is now sequential, as in Stata; `sample #, count` with # at least the number of observations no longer draws random numbers, as in Stata.
 
-The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#after-10), and the [coverage map](https://yaskepalhares.github.io/opendta/) shows the progress.
+The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10), and the [coverage map](https://yaskepalhares.github.io/opendta/) shows the progress.
 
 ## Download
 
@@ -70,7 +70,7 @@ Novo desde a 0.2:
 - explicações de erro para iniciantes, com diagnóstico a partir dos dados e link clicável para a ajuda;
 - `replace y = 2*L.y` agora é sequencial, como no Stata; `sample #, count` com # maior ou igual ao número de observações não sorteia mais números aleatórios, como no Stata.
 
-Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#depois-da-10), e o [mapa de cobertura](https://yaskepalhares.github.io/opendta/?lang=pt) mostra o progresso.
+Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10), e o [mapa de cobertura](https://yaskepalhares.github.io/opendta/?lang=pt) mostra o progresso.
 
 ### Download
 

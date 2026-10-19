@@ -5,7 +5,7 @@ labels: command request
 ---
 
 <!-- Pode escrever em português ou em inglês. You may write in English or Portuguese.
-     Check the list in ROADMAP.md ("After 1.0") first. -->
+     Check the list in ROADMAP.md ("Missing for 1.0") first. -->
 
 **Command or option**
 

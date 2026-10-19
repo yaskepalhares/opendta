@@ -2,7 +2,7 @@
 
 **English** | [Português](next-steps.pt-BR.md)
 
-A working plan for the commands still missing in [After 1.0](../ROADMAP.md#after-10), written so that each block can be done in a fresh session without rediscovering the code. Version 1.0 is released when every block is done; after that come improvements to what exists and newer Stata versions.
+A working plan for the commands still missing in [Missing for 1.0](../ROADMAP.md#missing-for-10), written so that each block can be done in a fresh session without rediscovering the code. Version 1.0 is released when every block is done; after that come the improvements listed in [After 1.0](../ROADMAP.md#after-10) and newer Stata versions.
 
 ## How to run a block
 
@@ -15,7 +15,7 @@ Each block follows the same steps:
 1. Branch from `main` (`block-<name>`).
 2. For each command: the statistics in `src/opendta/core/` (see the next section), the command in `src/opendta/commands/` (new module registered in `commands/__init__.py`), its help page, its tests.
 3. A compat case `compat/do/NNNN_<block>.do` with the commands and `return list`/`ereturn list`; it has no reference until the Stata run. Run under `capture noisily` every command whose behavior in Stata the manual does not document (and do the same in any old case you change), so that a single Stata run shows the whole case instead of stopping at the first error.
-4. `ROADMAP.md` and `ROADMAP.pt-BR.md`: a new phase listing what was done; in *After 1.0*, leave only what is missing. Each clause of an *After 1.0* line that lists options must start with the command they belong to (`` `cs` with the `pool` option``), so the coverage map does not count options as commands.
+4. `ROADMAP.md` and `ROADMAP.pt-BR.md`: a new phase listing what was done; in *Missing for 1.0*, leave only what is missing. Each clause of an *Missing for 1.0* line that lists options must start with the command they belong to (`` `cs` with the `pool` option``), so the coverage map does not count options as commands.
 5. `tools/roadmap_coverage.py`: add the new module to `MODULE_AREA`.
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
 7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another.
@@ -57,19 +57,19 @@ Estimates from the work so far (±50%): session time and tokens generated; a ses
 
 ### 1. Epidemiology: finish ✅
 
-Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, which stay in *After 1.0*. The original plan:
+Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, which stay in *Missing for 1.0*. The original plan:
 
 `rocreg` (nonparametric and parametric ROC regression; bootstrap standard errors); `cs`, `cc` and `ir` with `estandard`, `istandard`, `standard()`, `binomial` and `pool`; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`. Reuse `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; remove the matching "not available yet" errors.
 
 ### 2. Data management: options ✅
 
-Done in phase 13 (compat case 1701), except `import haver` (a proprietary format), `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), `import sasxport, describe` and `member()`, the value labels of `formats.xpf`, `export sasxport` with `rename` and `vallabfile()`, and `list` with `string()` and `display`, which stay in *After 1.0*. The original plan:
+Done in phase 13 (compat case 1701), except `import haver` (a proprietary format), `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), `import sasxport, describe` and `member()`, the value labels of `formats.xpf`, `export sasxport` with `rename` and `vallabfile()`, and `list` with `string()` and `display`, which stay in *Missing for 1.0*. The original plan:
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 
 ### 3. Programming ✅
 
-Done in phase 14 (compat case 1801), except `makecns` with a constraint list and `displaycns` (they need `constraint`, from block 10), `matlist` with the equation options, the `window` dialogs and menus of the graphical interface, and loading plugins, which stay in *After 1.0*. The original plan:
+Done in phase 14 (compat case 1801), except `makecns` with a constraint list and `displaycns` (they need `constraint`, from block 10), `matlist` with the equation options, the `window` dialogs and menus of the graphical interface, and loading plugins, which stay in *Missing for 1.0*. The original plan:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 
