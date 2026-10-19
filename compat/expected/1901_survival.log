@@ -1,0 +1,1611 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1901_survival.log
+  log type:  text
+ opened on:  19 Oct 2026, 19:42:31
+
+. * Survival analysis, the remaining commands: strate, stptime, stci, stir, stmh, stmc, ltable,
+. * stsplit, stjoin, stfill, stgen, stvary, stbase, snapspan, ctset, ct, cttost, sttoct, sttocc,
+. * stcrreg, stcurve, streg with distribution(ggamma) and frailty()/shared(), stcox with the exactm
+. * and exactp ties. Every command whose output the manual does not settle runs under capture
+. * noisily, so that one Stata run shows the whole case. The data are built without random numbers.
+. clear
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen id = _n
+
+. gen g = ceil(_n/4)
+
+. gen x = mod(_n*7,11)/5 - 1
+
+. gen byte grp = 1 + mod(_n,3)
+
+. gen byte trt = mod(_n,2)
+
+. gen double t = 1 + round(2*12*(-ln((mod(_n*37,61)+.5)/61))*exp(.4*x))/2
+
+. gen byte ev = mod(_n,5) != 0
+
+. replace ev = 2 if ev == 1 & mod(_n,7) == 0
+(7 real changes made)
+
+. gen double pop = 10 + mod(_n,5)
+
+. stset t, failure(ev==1) id(id)
+
+                id:  id
+     failure event:  ev == 1
+obs. time interval:  (t[_n-1], t]
+ exit on or before:  failure
+
+------------------------------------------------------------------------------
+         60  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+         60  observations remaining, representing
+         60  subjects
+         41  failures in single-failure-per-subject data
+      734.5  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =      32.5
+
+. 
+. * rates, person-time, intervals
+. capture noisily strate
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Estimated rates and lower/upper bounds of 95% confidence intervals
+(60 records included in the analysis)
+
+  +------------------------------------------------+
+  |  D          Y       Rate      Lower      Upper |
+  |------------------------------------------------|
+  | 41   734.5000   0.055820   0.041101   0.075810 |
+  +------------------------------------------------+
+
+
+. capture noisily strate grp
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Estimated rates and lower/upper bounds of 95% confidence intervals
+(60 records included in the analysis)
+
+  +------------------------------------------------------+
+  | grp    D          Y       Rate      Lower      Upper |
+  |------------------------------------------------------|
+  |   1   14   234.0000   0.059829   0.035434   0.101020 |
+  |   2   13   242.0000   0.053719   0.031192   0.092514 |
+  |   3   14   258.5000   0.054159   0.032076   0.091445 |
+  +------------------------------------------------------+
+
+
+. capture noisily strate grp, per(100)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Estimated rates (per 100) and lower/upper bounds of 95% confidence intervals
+(60 records included in the analysis)
+
+  +-----------------------------------------------+
+  | grp    D        Y     Rate    Lower     Upper |
+  |-----------------------------------------------|
+  |   1   14   2.3400   5.9829   3.5434   10.1020 |
+  |   2   13   2.4200   5.3719   3.1192    9.2514 |
+  |   3   14   2.5850   5.4159   3.2076    9.1445 |
+  +-----------------------------------------------+
+
+
+. capture noisily strate grp trt, jackknife
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Estimated rates and lower/upper bounds of 95% confidence intervals
+(60 records included in the analysis)
+The jackknife was used to calculate confidence intervals
+60     total clusters identified by id and the strata variables
+
+  +-----------------------------------------------------------+
+  | grp   trt   D          Y       Rate      Lower      Upper |
+  |-----------------------------------------------------------|
+  |   1     0   7   108.0000   0.064815   0.033291   0.124726 |
+  |   1     1   7   126.0000   0.055556   0.025167   0.119204 |
+  |   2     0   7   119.5000   0.058577   0.025714   0.127975 |
+  |   2     1   6   122.5000   0.048980   0.020544   0.116235 |
+  |   3     0   6   131.0000   0.045802   0.020162   0.104620 |
+  |-----------------------------------------------------------|
+  |   3     1   8   127.5000   0.062745   0.028495   0.131106 |
+  +-----------------------------------------------------------+
+
+
+. capture noisily strate grp, output(odta_rates, replace)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Estimated rates and lower/upper bounds of 95% confidence intervals
+(60 records included in the analysis)
+
+  +------------------------------------------------------+
+  | grp    D          Y       Rate      Lower      Upper |
+  |------------------------------------------------------|
+  |   1   14   234.0000   0.059829   0.035434   0.101020 |
+  |   2   13   242.0000   0.053719   0.031192   0.092514 |
+  |   3   14   258.5000   0.054159   0.032076   0.091445 |
+  +------------------------------------------------------+
+
+
+. capture noisily describe using odta_rates
+
+Contains data                                 
+  obs:             3                          19 Oct 2026 19:42
+ vars:             6                          
+ size:           114                          
+-------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+grp             byte    %8.0g                 
+_D              byte    %4.0f                 # Failures
+_Y              double  %8.2f                 Person-time observation
+_Rate           double  %8.6f                 Rate estimate
+_Lower          double  %8.6f                 Lower 95% confidence limit
+_Upper          double  %8.6f                 Upper 95% confidence limit
+-------------------------------------------------------------------------------
+Sorted by: 
+
+. capture noisily stptime
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Cohort     |  person-time   failures        rate   [95% Conf. Interval]
+-----------+-----------------------------------------------------------
+     total |        734.5         41   .05582029   .0411014    .0758102
+
+. capture noisily stptime, by(grp) per(100) title(Person-years)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+       grp | Person-years   failures        rate   [95% Conf. Interval]
+-----------+-----------------------------------------------------------
+         1 |          234         14    5.982906    3.54339    10.10195
+         2 |          242         13   5.3719008   3.119228    9.251429
+         3 |        258.5         14   5.4158607   3.207556    9.144515
+-----------+-----------------------------------------------------------
+     total |        734.5         41   5.5820286   4.110141    7.581016
+
+. capture noisily stptime, by(grp) at(5 10 20)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+grp        |  person-time   failures        rate   [95% Conf. Interval]
+-----------+-----------------------------------------------------------
+1          |
+(0   -   5]|           90          5   .05555556   .0231238    .1334739
+(5   -  10]|           59          5   .08474576   .0352735    .2036043
+(10  -  20]|           56          2   .03571429   .0089321    .1428014
+     >  20 |           29          2   .06896552   .0172481    .2757544
+-----------+-----------------------------------------------------------
+2          |
+(0   -   5]|           87          4   .04597701    .017256    .1225015
+(5   -  10]|         56.5          5   .08849558   .0368343    .2126133
+(10  -  20]|         57.5          2   .03478261    .008699    .1390761
+     >  20 |           41          2   .04878049   .0121999    .1950458
+-----------+-----------------------------------------------------------
+3          |
+(0   -   5]|           84          7   .08333333   .0397278    .1748005
+(5   -  10]|           57          1   .01754386   .0024713    .1245451
+(10  -  20]|           78          4   .05128205   .0192471    .1366363
+     >  20 |         39.5          2   .05063291   .0126632    .2024526
+-----------+-----------------------------------------------------------
+     total |        734.5         41   .05582029   .0411014    .0758102
+
+. capture noisily display r(rate)
+.05582029
+
+. capture noisily stci
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+             |    no. of 
+             |  subjects         50%     Std. Err.     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+       total |        60        11.5       2.02549            7         20
+
+. capture noisily stci, by(grp)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+             |    no. of 
+grp          |  subjects         50%     Std. Err.     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+           1 |        20          10      2.727154          4.5         28
+           2 |        20        11.5      2.385921            6         31
+           3 |        20          13      6.276966            4         28
+-------------+-------------------------------------------------------------
+       total |        60        11.5       2.02549            7         20
+
+. capture noisily stci, p(25) by(grp)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+             |    no. of 
+grp          |  subjects         25%     Std. Err.     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+           1 |        20         4.5       2.29923          1.5          8
+           2 |        20           6      2.114296            2        9.5
+           3 |        20           4      1.006957          1.5       10.5
+-------------+-------------------------------------------------------------
+       total |        60         4.5      1.117362            4          7
+
+. capture noisily stci, rmean
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+             |    no. of  restricted
+             |  subjects        mean      Std. Err.    [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+       total |        60    15.54105(*)   1.602795      12.3996    18.6825
+
+(*) largest observed analysis time is censored, mean is underestimated
+
+. capture noisily stci, emean
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+             |    no. of    extended
+             |  subjects        mean
+-------------+----------------------
+       total |        60    17.61431
+
+. capture noisily stir trt
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+note:  Exposed <-> trt==1 and Unexposed <-> trt==0
+
+                 | trt                    |
+                 |   Exposed   Unexposed  |      Total
+-----------------+------------------------+------------
+         Failure |        21          20  |         41
+            Time |       376       358.5  |      734.5
+-----------------+------------------------+------------
+                 |                        |
+  Incidence rate |  .0558511     .055788  |   .0558203
+                 |                        |
+                 |      Point estimate    |    [95% Conf. Interval]
+                 |------------------------+------------------------
+ Inc. rate diff. |         .0000631       |   -.0341188    .0342449 
+ Inc. rate ratio |          1.00113       |    .5164358    1.946537 (exact)
+ Attr. frac. ex. |          .001129       |    -.936349    .4862672 (exact)
+ Attr. frac. pop |         .0005783       |
+                 +-------------------------------------------------
+                     (midp)   Pr(k>=21) =                    0.4991 (exact)
+                     (midp) 2*Pr(k>=21) =                    0.9981 (exact)
+
+. capture noisily stmh trt grp
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Mantel-Haenszel estimate of the rate ratio
+  comparing trt==1 vs. trt==0
+  controlling for grp
+
+RR estimate, and lower and upper 95% confidence limits
+
+        ----------------------------------------------------------
+             RR       chi2        P>chi2      [95% Conf. Interval]
+        ----------------------------------------------------------
+          0.998       0.00        0.9939         0.542      1.838
+        ----------------------------------------------------------
+
+. capture noisily stmc trt grp
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Mantel-Cox comparisons
+
+Mantel-Haenszel estimates of the rate ratio
+   comparing trt==1 vs. trt==0
+   controlling for time (by clicks) and grp
+
+Overall Mantel-Haenszel estimate, controlling for time and
+grp
+
+        ----------------------------------------------------------
+             RR       chi2        P>chi2      [95% Conf. Interval]
+        ----------------------------------------------------------
+          0.957       0.02        0.8957         0.494      1.854
+        ----------------------------------------------------------
+
+. capture noisily ltable t ev
+
+                 Beg.                                 Std.
+   Interval     Total   Deaths   Lost    Survival    Error     [95% Conf. Int.]
+-------------------------------------------------------------------------------
+    1     2        60        4      0     0.9333    0.0322     0.8321    0.9744
+    2     3        56        5      0     0.8500    0.0461     0.7316    0.9190
+    4     5        51       11      0     0.6667    0.0609     0.5324    0.7704
+    6     7        40        3      0     0.6167    0.0628     0.4817    0.7262
+    7     8        37        3      0     0.5667    0.0640     0.4323    0.6806
+    8     9        34        3      0     0.5167    0.0645     0.3842    0.6339
+    9    10        31        1      2     0.4994    0.0646     0.3677    0.6177
+   10    11        28        2      0     0.4638    0.0647     0.3339    0.5838
+   11    12        26        1      0     0.4459    0.0647     0.3172    0.5667
+   12    13        25        3      0     0.3924    0.0639     0.2683    0.5142
+   13    14        22        2      0     0.3567    0.0628     0.2367    0.4784
+   15    16        20        0      2     0.3567    0.0628     0.2367    0.4784
+   16    17        18        1      1     0.3364    0.0625     0.2183    0.4583
+   17    18        16        1      0     0.3153    0.0620     0.1996    0.4376
+   18    19        15        1      1     0.2936    0.0614     0.1804    0.4160
+   19    20        13        0      1     0.2936    0.0614     0.1804    0.4160
+   20    21        12        1      0     0.2691    0.0610     0.1587    0.3923
+   27    28        11        1      0     0.2447    0.0601     0.1377    0.3679
+   28    29        10        2      0     0.1957    0.0572     0.0985    0.3173
+   29    30         8        1      0     0.1713    0.0550     0.0803    0.2909
+   30    31         7        0      2     0.1713    0.0550     0.0803    0.2909
+   31    32         5        2      2     0.0856    0.0509     0.0193    0.2165
+   32    33         1        0      1     0.0856    0.0509     0.0193    0.2165
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, intervals(5)
+
+                 Beg.                                 Std.
+   Interval     Total   Deaths   Lost    Survival    Error     [95% Conf. Int.]
+-------------------------------------------------------------------------------
+    0     5        60       20      0     0.6667    0.0609     0.5324    0.7704
+    5    10        40       10      2     0.4957    0.0650     0.3635    0.6147
+   10    15        28        8      0     0.3541    0.0628     0.2343    0.4758
+   15    20        20        3      5     0.2934    0.0610     0.1809    0.4150
+   20    25        12        1      0     0.2689    0.0607     0.1590    0.3914
+   25    30        11        4      0     0.1711    0.0549     0.0805    0.2904
+   30    35         7        2      5     0.0951    0.0504     0.0258    0.2201
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, by(grp) intervals(5) survival
+
+                 Beg.                                 Std.
+   Interval     Total   Deaths   Lost    Survival    Error     [95% Conf. Int.]
+-------------------------------------------------------------------------------
+grp = 1
+    0     5        20        6      0     0.7000    0.1025     0.4505    0.8525
+    5    10        14        4      1     0.4926    0.1130     0.2629    0.6871
+   10    15         9        3      0     0.3284    0.1080     0.1372    0.5357
+   15    20         6        1      2     0.2627    0.1045     0.0912    0.4742
+   25    30         3        1      0     0.1751    0.0998     0.0366    0.3995
+   30    35         2        1      1     0.0584    0.0752     0.0010    0.3109
+grp = 2
+    0     5        20        6      0     0.7000    0.1025     0.4505    0.8525
+    5    10        14        5      1     0.4407    0.1124     0.2214    0.6407
+   10    15         8        2      0     0.3306    0.1080     0.1389    0.5375
+   15    20         6        1      1     0.2705    0.1037     0.0979    0.4790
+   25    30         4        1      0     0.2028    0.0974     0.0563    0.4129
+   30    35         3        1      2     0.1014    0.0867     0.0086    0.3326
+grp = 3
+    0     5        20        8      0     0.6000    0.1095     0.3573    0.7760
+    5    10        12        1      0     0.5500    0.1112     0.3134    0.7349
+   10    15        11        3      0     0.4000    0.1095     0.1928    0.6005
+   15    20         8        1      2     0.3429    0.1078     0.1491    0.5477
+   20    25         5        1      0     0.2743    0.1058     0.0982    0.4862
+   25    30         4        2      0     0.1371    0.0866     0.0246    0.3445
+   30    35         2        0      2     0.1371    0.0866     0.0246    0.3445
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, intervals(5) failure
+
+                 Beg.                      Cum.       Std.
+   Interval     Total   Deaths   Lost    Failure     Error     [95% Conf. Int.]
+-------------------------------------------------------------------------------
+    0     5        60       20      0     0.3333    0.0609     0.2296    0.4676
+    5    10        40       10      2     0.5043    0.0650     0.3853    0.6365
+   10    15        28        8      0     0.6459    0.0628     0.5242    0.7657
+   15    20        20        3      5     0.7066    0.0610     0.5850    0.8191
+   20    25        12        1      0     0.7311    0.0607     0.6086    0.8410
+   25    30        11        4      0     0.8289    0.0549     0.7096    0.9195
+   30    35         7        2      5     0.9049    0.0504     0.7799    0.9742
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, intervals(5) hazard
+
+                 Beg.     Cum.     Std.                Std.
+   Interval     Total   Failure   Error    Hazard     Error    [95% Conf. Int.]
+-------------------------------------------------------------------------------
+    0     5        60    0.3333  0.0609    0.0800    0.0175    0.0456    0.1144
+    5    10        40    0.5043  0.0650    0.0588    0.0184    0.0228    0.0949
+   10    15        28    0.6459  0.0628    0.0667    0.0232    0.0211    0.1122
+   15    20        20    0.7066  0.0610    0.0375    0.0216    0.0000    0.0797
+   20    25        12    0.7311  0.0607    0.0174    0.0174    0.0000    0.0514
+   25    30        11    0.8289  0.0549    0.0889    0.0433    0.0040    0.1738
+   30    35         7    0.9049  0.0504    0.1143    0.0774    0.0000    0.2661
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, intervals(5) noadjust
+
+                 Beg.                                 Std.
+   Interval     Total   Deaths   Lost    Survival    Error     [95% Conf. Int.]
+-------------------------------------------------------------------------------
+    0     5        60       20      0     0.6667    0.0609     0.5324    0.7704
+    5    10        40       10      2     0.5000    0.0645     0.3684    0.6181
+   10    15        28        8      0     0.3571    0.0628     0.2371    0.4787
+   15    20        20        3      5     0.3036    0.0605     0.1911    0.4236
+   20    25        12        1      0     0.2783    0.0606     0.1677    0.3999
+   25    30        11        4      0     0.1771    0.0558     0.0843    0.2977
+   30    35         7        2      5     0.1265    0.0500     0.0494    0.2414
+-------------------------------------------------------------------------------
+
+. capture noisily ltable t ev, by(grp) intervals(5) test notable
+
+
+Likelihood-ratio test statistic of homogeneity (group=grp):
+chi2( 2 ) = .08251953,   P = .95957983
+ 
+Logrank test of homogeneity (group=grp):
+
+
+Log-rank test for equality of survivor functions
+
+      |   Events         Events
+grp   |  observed       expected
+------+-------------------------
+1     |        16          15.53
+2     |        16          15.60
+3     |        16          16.87
+------+-------------------------
+Total |        48          48.00
+
+            chi2(2) =       0.07
+            Pr>chi2 =     0.9634
+
+. 
+. * manipulation of survival-time records
+. preserve
+
+. capture noisily stsplit per, at(5 10 20)
+(78 observations (episodes) created)
+
+. capture noisily list id _t0 _t _d per in 1/8
+
+     +----------------------------+
+     | id   _t0     _t   _d   per |
+     |----------------------------|
+  1. |  1     0      5    0     0 |
+  2. |  1     5      8    1     5 |
+  3. |  2     0      5    0     0 |
+  4. |  2     5     10    0     5 |
+  5. |  2    10   16.5    1    10 |
+     |----------------------------|
+  6. |  3     0    4.5    1     0 |
+  7. |  4     0      5    0     0 |
+  8. |  4     5     10    0     5 |
+     +----------------------------+
+
+. capture noisily stjoin
+(0 obs. eliminated)
+(perhaps you need to specify stjoin's censored() option)
+
+. capture noisily count
+  138
+
+. restore
+
+. preserve
+
+. capture noisily stsplit, every(7)
+varlist required
+
+. capture noisily count
+  60
+
+. restore
+
+. preserve
+
+. capture noisily stsplit per, at(failures)
+varlist not allowed
+
+. capture noisily count
+  60
+
+. restore
+
+. capture noisily stvary x trt
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+               subjects for whom the variable is
+                                                 never    always   sometimes
+    variable |  constant    varying             missing   missing   missing
+-------------+--------------------------------------------------------------
+           x |        60          0                  60         0         0
+         trt |        60          0                  60         0         0
+
+. capture noisily stfill x, baseline
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+replace all values with value at earliest observed:
+               x:  0 real changes made
+
+. capture noisily stgen nfail = nfailures()
+
+. capture noisily stgen everf = ever(ev==1)
+
+. capture noisily summarize nfail everf
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+       nfail |         60           0           0          0          0
+       everf |         60    .6833333    .4691018          0          1
+
+. preserve
+
+. capture noisily stbase, replace
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+nothing to do; data has one record per id(id) and so is already baseline
+
+. restore
+
+. preserve
+
+. capture noisily snapspan id t x, generate(t0) replace
+note:  60 obs. (100.0%) have only a single record; they will be ignored
+no observations
+
+. restore
+
+. 
+. * count-time data
+. clear
+
+. input byte time byte nfail byte ncens byte nenter
+
+         time     nfail     ncens    nenter
+  1. 0 0 0 11
+  2. 1 1 0 0
+  3. 2 2 1 0
+  4. 3 1 1 0
+  5. 4 2 0 0
+  6. 5 0 3 0
+  7. end
+
+. capture noisily ctset time nfail ncens nenter
+
+            time:  time
+        no. fail:  nfail
+        no. lost:  ncens
+       no. enter:  nenter
+
+. capture noisily ct
+            time:  time
+        no. fail:  nfail
+        no. lost:  ncens
+       no. enter:  nenter
+
+. capture noisily cttost
+no; data in memory would be lost
+
+. capture noisily summarize _t0 _t _d
+variable _t0 not found
+
+. capture noisily stptime
+data not st (data are marked as being ct data)
+
+. capture noisily sttoct nf nc ne
+data not st (data are marked as being ct data)
+
+. capture noisily list
+
+     +-------------------------------+
+     | time   nfail   ncens   nenter |
+     |-------------------------------|
+  1. |    0       0       0       11 |
+  2. |    1       1       0        0 |
+  3. |    2       2       1        0 |
+  4. |    3       1       1        0 |
+  5. |    4       2       0        0 |
+     |-------------------------------|
+  6. |    5       0       3        0 |
+     +-------------------------------+
+
+. 
+. * case-control sampling (distinct failure times, every control is sampled)
+. clear
+
+. set obs 12
+number of observations (_N) was 0, now 12
+
+. gen id = _n
+
+. gen double t = _n
+
+. gen byte d = inlist(_n,2,5,8)
+
+. gen byte sex = mod(_n,2)
+
+. stset t, failure(d) id(id)
+
+                id:  id
+     failure event:  d != 0 & d < .
+obs. time interval:  (t[_n-1], t]
+ exit on or before:  failure
+
+------------------------------------------------------------------------------
+         12  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+         12  observations remaining, representing
+         12  subjects
+          3  failures in single-failure-per-subject data
+         78  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =        12
+
+. preserve
+
+. capture noisily sttocc, number(20) nodots
+
+         failure _d:  d
+   analysis time _t:  t
+                 id:  id
+
+There are 3 cases
+Sampling 20 controls for each case 
+ Warning: sample requested greater than population. Only 10 controls selected
+ Warning: sample requested greater than population. Only 7 controls selected
+ Warning: sample requested greater than population. Only 4 controls selected
+
+
+. capture noisily describe
+
+Contains data
+  obs:            24                          
+ vars:             7                          
+ size:           480                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              float   %9.0g                 
+t               double  %10.0g                
+d               byte    %8.0g                 
+sex             byte    %8.0g                 
+_case           byte    %8.0g                 0 for controls; 1 for cases
+_set            long    %12.0g                case-control ID
+_time           byte    %8.0g                 analysis time of the case's failure
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: _set  _case
+     Note: Dataset has changed since last saved.
+
+. capture noisily sort _set id
+
+. capture noisily list _set _case _time id, sepby(_set)
+
+     +---------------------------+
+     | _set   _case   _time   id |
+     |---------------------------|
+  1. |    1       1       2    2 |
+  2. |    1       0       2    3 |
+  3. |    1       0       2    4 |
+  4. |    1       0       2    5 |
+  5. |    1       0       2    6 |
+  6. |    1       0       2    7 |
+  7. |    1       0       2    8 |
+  8. |    1       0       2    9 |
+  9. |    1       0       2   10 |
+ 10. |    1       0       2   11 |
+ 11. |    1       0       2   12 |
+     |---------------------------|
+ 12. |    2       1       5    5 |
+ 13. |    2       0       5    6 |
+ 14. |    2       0       5    7 |
+ 15. |    2       0       5    8 |
+ 16. |    2       0       5    9 |
+ 17. |    2       0       5   10 |
+ 18. |    2       0       5   11 |
+ 19. |    2       0       5   12 |
+     |---------------------------|
+ 20. |    3       1       8    8 |
+ 21. |    3       0       8    9 |
+ 22. |    3       0       8   10 |
+ 23. |    3       0       8   11 |
+ 24. |    3       0       8   12 |
+     +---------------------------+
+
+. restore
+
+. preserve
+
+. capture noisily sttocc, match(sex) number(20) nodots
+
+         failure _d:  d
+   analysis time _t:  t
+                 id:  id
+       matching for:  sex
+
+There are 3 cases
+Sampling 20 controls for each case 
+ Warning: sample requested greater than population. Only 5 controls selected
+ Warning: sample requested greater than population. Only 3 controls selected
+ Warning: sample requested greater than population. Only 2 controls selected
+
+
+. capture noisily sort _set id
+
+. capture noisily list _set _case _time id sex, sepby(_set)
+
+     +---------------------------------+
+     | _set   _case   _time   id   sex |
+     |---------------------------------|
+  1. |    1       1       2    2     0 |
+  2. |    1       0       2    4     0 |
+  3. |    1       0       2    6     0 |
+  4. |    1       0       2    8     0 |
+  5. |    1       0       2   10     0 |
+  6. |    1       0       2   12     0 |
+     |---------------------------------|
+  7. |    2       1       5    5     1 |
+  8. |    2       0       5    7     1 |
+  9. |    2       0       5    9     1 |
+ 10. |    2       0       5   11     1 |
+     |---------------------------------|
+ 11. |    3       1       8    8     0 |
+ 12. |    3       0       8   10     0 |
+ 13. |    3       0       8   12     0 |
+     +---------------------------------+
+
+. restore
+
+. 
+. * competing risks
+. clear
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen id = _n
+
+. gen x = mod(_n*7,11)/5 - 1
+
+. gen byte grp = 1 + mod(_n,3)
+
+. gen double t = 1 + round(2*12*(-ln((mod(_n*37,61)+.5)/61))*exp(.4*x))/2
+
+. gen byte ev = mod(_n,5) != 0
+
+. replace ev = 2 if ev == 1 & mod(_n,7) == 0
+(7 real changes made)
+
+. stset t, failure(ev==1) id(id)
+
+                id:  id
+     failure event:  ev == 1
+obs. time interval:  (t[_n-1], t]
+ exit on or before:  failure
+
+------------------------------------------------------------------------------
+         60  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+         60  observations remaining, representing
+         60  subjects
+         41  failures in single-failure-per-subject data
+      734.5  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =      32.5
+
+. capture noisily stcrreg x, compete(ev==2)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Iteration 0:   log pseudolikelihood = -144.13078  
+Iteration 1:   log pseudolikelihood = -144.10879  
+Iteration 2:   log pseudolikelihood = -144.10879  
+
+Competing-risks regression                       No. of obs       =         60
+                                                 No. of subjects  =         60
+Failure event  : ev == 1                         No. failed       =         41
+Competing event: ev == 2                         No. competing    =          7
+                                                 No. censored     =         12
+
+                                                 Wald chi2(1)     =       2.07
+Log pseudolikelihood = -144.10879                Prob > chi2      =     0.1500
+
+                                    (Std. Err. adjusted for 60 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+          _t |        SHR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7215627   .1635769    -1.44   0.150     .4627094    1.125226
+------------------------------------------------------------------------------
+
+. capture noisily stcrreg x i.grp, compete(ev==2) noshr
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Iteration 0:   log pseudolikelihood =  -144.1119  
+Iteration 1:   log pseudolikelihood = -144.04302  
+Iteration 2:   log pseudolikelihood = -144.04301  
+
+Competing-risks regression                       No. of obs       =         60
+                                                 No. of subjects  =         60
+Failure event  : ev == 1                         No. failed       =         41
+Competing event: ev == 2                         No. competing    =          7
+                                                 No. censored     =         12
+
+                                                 Wald chi2(3)     =       2.32
+Log pseudolikelihood = -144.04301                Prob > chi2      =     0.5085
+
+                                    (Std. Err. adjusted for 60 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |  -.3252384   .2317792    -1.40   0.161    -.7795173    .1290404
+             |
+         grp |
+          2  |   -.126959   .3718537    -0.34   0.733    -.8557788    .6018609
+          3  |  -.0129832   .3720251    -0.03   0.972     -.742139    .7161726
+------------------------------------------------------------------------------
+
+. capture noisily stcrreg x, compete(ev==2) nolog noheader
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+                                    (Std. Err. adjusted for 60 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+          _t |        SHR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7215627   .1635769    -1.44   0.150     .4627094    1.125226
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  1
+                  e(N) =  60
+                 e(ic) =  2
+                  e(k) =  1
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -144.1087855690954
+         e(k_eq_model) =  1
+            e(N_clust) =  60
+               e(chi2) =  2.072211270659495
+                  e(p) =  .1500038926392086
+               e(df_m) =  1
+              e(fmult) =  0
+             e(crmult) =  0
+                e(fnz) =  0
+               e(crnz) =  0
+              e(N_sub) =  60
+           e(N_censor) =  12
+          e(N_compete) =  7
+             e(N_fail) =  41
+
+macros:
+            e(cmdline) : "stcrreg x, compete(ev==2) nolog noheader"
+              e(title) : "Competing-risks regression"
+           e(mainvars) : "x"
+             e(fevent) : "ev == 1"
+            e(crevent) : "ev == 2"
+            e(compete) : "ev==2"
+            e(predict) : "stcrreg_p"
+       e(marginsnotok) : "SCOres ESR DFBeta SCHoenfeld"
+                e(cmd) : "stcrreg"
+           e(clustvar) : "id"
+                e(vce) : "cluster"
+            e(vcetype) : "Robust"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+               e(user) : "stcrr_lf"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "_t"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 1
+                  e(V) :  1 x 1
+       e(V_modelbased) :  1 x 1
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 1
+
+functions:
+             e(sample)   
+
+. capture noisily predict double xbhat, xb
+
+. capture noisily predict double shrhat, shr
+
+. capture noisily summarize xbhat shrhat
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+       xbhat |         60   -.0032634    .2068909   -.326336    .326336
+      shrhat |         60    1.017843    .2095803   .7215627   1.385881
+
+. capture noisily stcurve, cif at(x=0) nodraw
+
+. capture noisily stcurve, cif at1(x=-1) at2(x=1) nodraw
+
+. 
+. * ties in stcox
+. capture noisily stcox x i.grp, exactm
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Iteration 0:   log likelihood = -119.91927
+Iteration 1:   log likelihood = -119.20676
+Iteration 2:   log likelihood = -119.20671
+Refining estimates:
+Iteration 0:   log likelihood = -119.20671
+
+Cox regression -- exact marginal likelihood
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(3)       =        1.43
+Log likelihood  =   -119.20671                  Prob > chi2      =      0.6997
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7527967   .1847573    -1.16   0.247     .4653386    1.217829
+             |
+         grp |
+          2  |   .9419533   .3658739    -0.15   0.878     .4399519    2.016757
+          3  |   .9425077   .3605752    -0.15   0.877     .4452877    1.994937
+------------------------------------------------------------------------------
+
+. capture noisily stcox x i.grp, exactp
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Iteration 0:   log likelihood = -119.91927
+Iteration 1:   log likelihood = -119.22348
+Iteration 2:   log likelihood = -119.22345
+Refining estimates:
+Iteration 0:   log likelihood = -119.22345
+
+Cox regression -- exact partial likelihood
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(3)       =        1.39
+Log likelihood  =   -119.22345                  Prob > chi2      =      0.7075
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .748913   .1884499    -1.15   0.251     .4573435    1.226366
+             |
+         grp |
+          2  |   .9468264   .3768974    -0.14   0.891     .4339481     2.06587
+          3  |   .9485236     .37167    -0.13   0.893      .440061    2.044482
+------------------------------------------------------------------------------
+
+. capture noisily stcox x i.grp, exactm nolog
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Cox regression -- exact marginal likelihood
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(3)       =        1.43
+Log likelihood  =   -119.20671                  Prob > chi2      =      0.6997
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7527967   .1847573    -1.16   0.247     .4653386    1.217829
+             |
+         grp |
+          2  |   .9419533   .3658739    -0.15   0.878     .4399519    2.016757
+          3  |   .9425077   .3605752    -0.15   0.877     .4452877    1.994937
+------------------------------------------------------------------------------
+
+. capture noisily stcox x, efron nolog
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Cox regression -- Efron method for ties
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.38
+Log likelihood  =   -136.88286                  Prob > chi2      =      0.2400
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7516997   .1826281    -1.17   0.240     .4669195    1.210171
+------------------------------------------------------------------------------
+
+. capture noisily stcox x, exactm vce(robust)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+may not specify both exactm and robust options
+
+. 
+. * streg
+. stset t, failure(ev==1) id(id)
+
+                id:  id
+     failure event:  ev == 1
+obs. time interval:  (t[_n-1], t]
+ exit on or before:  failure
+
+------------------------------------------------------------------------------
+         60  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+         60  observations remaining, representing
+         60  subjects
+         41  failures in single-failure-per-subject data
+      734.5  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =      32.5
+
+. capture noisily streg x, distribution(ggamma)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -78.546891  
+Iteration 1:   log likelihood = -76.771258  
+Iteration 2:   log likelihood = -75.655034  
+Iteration 3:   log likelihood =  -75.56071  
+Iteration 4:   log likelihood = -75.553065  
+Iteration 5:   log likelihood =  -75.55305  
+Iteration 6:   log likelihood =  -75.55305  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -75.55305  
+Iteration 1:   log likelihood = -74.735737  
+Iteration 2:   log likelihood = -74.703567  
+Iteration 3:   log likelihood = -74.703515  
+Iteration 4:   log likelihood = -74.703515  
+
+Generalized gamma regression -- accelerated failure-time form 
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.70
+Log likelihood  =   -74.703515                  Prob > chi2      =      0.1924
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .3145732   .2388701     1.32   0.188    -.1536036    .7827499
+       _cons |   2.180662   .3507885     6.22   0.000     1.493129    2.868195
+-------------+----------------------------------------------------------------
+     /ln_sig |   .0993262   .1147203     0.87   0.387    -.1255215    .3241739
+      /kappa |  -.5228355   .6455258    -0.81   0.418    -1.788043    .7423718
+-------------+----------------------------------------------------------------
+       sigma |   1.104426   .1267002                      .8820368    1.382888
+------------------------------------------------------------------------------
+
+. capture noisily streg x, distribution(ggamma) time
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -78.546891  
+Iteration 1:   log likelihood = -76.771258  
+Iteration 2:   log likelihood = -75.655034  
+Iteration 3:   log likelihood =  -75.56071  
+Iteration 4:   log likelihood = -75.553065  
+Iteration 5:   log likelihood =  -75.55305  
+Iteration 6:   log likelihood =  -75.55305  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -75.55305  
+Iteration 1:   log likelihood = -74.735737  
+Iteration 2:   log likelihood = -74.703567  
+Iteration 3:   log likelihood = -74.703515  
+Iteration 4:   log likelihood = -74.703515  
+
+Generalized gamma regression -- accelerated failure-time form 
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.70
+Log likelihood  =   -74.703515                  Prob > chi2      =      0.1924
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .3145732   .2388701     1.32   0.188    -.1536036    .7827499
+       _cons |   2.180662   .3507885     6.22   0.000     1.493129    2.868195
+-------------+----------------------------------------------------------------
+     /ln_sig |   .0993262   .1147203     0.87   0.387    -.1255215    .3241739
+      /kappa |  -.5228355   .6455258    -0.81   0.418    -1.788043    .7423718
+-------------+----------------------------------------------------------------
+       sigma |   1.104426   .1267002                      .8820368    1.382888
+------------------------------------------------------------------------------
+
+. capture noisily streg x, distribution(ggamma) nolog nohr
+option nohr not allowed
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  4
+                  e(N) =  60
+                 e(ic) =  4
+                  e(k) =  4
+               e(k_eq) =  3
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -74.7035152879631
+         e(k_eq_model) =  1
+               e(ll_0) =  -75.55305010054568
+              e(rank0) =  3
+               e(df_m) =  1
+               e(chi2) =  1.699069625165151
+                  e(p) =  .1924096948025934
+              e(k_aux) =  2
+              e(N_sub) =  60
+              e(sigma) =  1.104426493022937
+              e(kappa) =  -.5228355425657384
+               e(risk) =  734.5
+             e(N_fail) =  41
+
+macros:
+            e(cmdline) : "streg x, distribution(ggamma) time"
+            e(stcurve) : "stcurve"
+            e(predict) : "streg_p"
+        e(predict_sub) : "gamma_p"
+               e(cmd2) : "streg"
+               e(frm2) : "time"
+              e(title) : "Generalized gamma regression"
+                e(cmd) : "gamma"
+               e(dead) : "_d"
+                 e(t0) : "_t0"
+             e(title2) : "accelerated failure-time form"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "gamma_d2"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "_t"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 4
+
+functions:
+             e(sample)   
+
+. capture noisily predict double mu, xb
+
+. capture noisily streg x, distribution(weibull) frailty(gamma)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting Weibull model:
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -83.824777  
+Iteration 1:   log likelihood = -77.892036  (not concave)
+Iteration 2:   log likelihood = -77.878758  
+Iteration 3:   log likelihood = -76.940582  
+Iteration 4:   log likelihood = -76.796267  
+Iteration 5:   log likelihood = -76.795185  
+Iteration 6:   log likelihood = -76.795184  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -77.438371  
+Iteration 1:   log likelihood =  -76.13163  (not concave)
+Iteration 2:   log likelihood = -75.960795  
+Iteration 3:   log likelihood = -75.838611  
+Iteration 4:   log likelihood = -75.808464  
+Iteration 5:   log likelihood =  -75.80829  
+Iteration 6:   log likelihood =  -75.80829  
+
+Weibull regression -- log relative-hazard form 
+                      Gamma frailty
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.97
+Log likelihood  =    -75.80829                  Prob > chi2      =      0.1600
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4902001   .2675253    -1.31   0.191     .1682026    1.428611
+       _cons |   .0128475   .0122394    -4.57   0.000     .0019857    .0831247
+-------------+----------------------------------------------------------------
+       /ln_p |   .7418478   .3624111     2.05   0.041      .031535    1.452161
+     /ln_the |   .8733817     .76088     1.15   0.251    -.6179158    2.364679
+-------------+----------------------------------------------------------------
+           p |   2.099812   .7609952                      1.032037    4.272335
+         1/p |   .4762331   .1725922                       .234064    .9689571
+       theta |   2.394996   1.822305                      .5390668    10.64062
+------------------------------------------------------------------------------
+Likelihood-ratio test of theta=0: chibar2(01) =     3.35 Prob>=chibar2 = 0.034
+
+. capture noisily streg x, distribution(weibull) frailty(invgaussian)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting Weibull model:
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -83.209356  (not concave)
+Iteration 1:   log likelihood = -79.177479  
+Iteration 2:   log likelihood = -77.678688  (not concave)
+Iteration 3:   log likelihood = -76.756461  
+Iteration 4:   log likelihood = -76.447517  
+Iteration 5:   log likelihood = -76.417861  
+Iteration 6:   log likelihood = -76.417752  
+Iteration 7:   log likelihood = -76.417752  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -76.721529  
+Iteration 1:   log likelihood = -75.988166  
+Iteration 2:   log likelihood = -75.657187  
+Iteration 3:   log likelihood = -75.649711  
+Iteration 4:   log likelihood = -75.649695  
+Iteration 5:   log likelihood = -75.649695  
+
+Weibull regression -- log relative-hazard form 
+                      Inverse-Gaussian frailty
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.54
+Log likelihood  =   -75.649695                  Prob > chi2      =      0.2152
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .594889   .2512137    -1.23   0.219     .2600069    1.361091
+       _cons |   .0220777   .0130885    -6.43   0.000     .0069076    .0705635
+-------------+----------------------------------------------------------------
+       /ln_p |   .6128479   .2162174     2.83   0.005     .1890697    1.036626
+     /ln_the |   1.854406   1.307229     1.42   0.156    -.7077153    4.416527
+-------------+----------------------------------------------------------------
+           p |    1.84568   .3990681                      1.208125    2.819688
+         1/p |   .5418056   .1171478                      .3546492    .8277288
+       theta |   6.387903    8.35045                      .4927688    82.80821
+------------------------------------------------------------------------------
+Likelihood-ratio test of theta=0: chibar2(01) =     3.66 Prob>=chibar2 = 0.028
+
+. capture noisily gen g = ceil(id/4)
+
+. capture noisily streg x, distribution(weibull) frailty(gamma) shared(g)
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting Weibull model:
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -83.363267  
+Iteration 1:   log likelihood = -78.497071  
+Iteration 2:   log likelihood =  -78.18928  
+Iteration 3:   log likelihood = -78.188207  
+Iteration 4:   log likelihood = -78.188207  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -86.321136  
+Iteration 1:   log likelihood = -78.631532  
+Iteration 2:   log likelihood = -77.655653  
+Iteration 3:   log likelihood = -77.517705  
+Iteration 4:   log likelihood =  -77.48859  
+Iteration 5:   log likelihood =  -77.48266  
+Iteration 6:   log likelihood = -77.481313  
+Iteration 7:   log likelihood = -77.480981  
+Iteration 8:   log likelihood = -77.480914  
+Iteration 9:   log likelihood =   -77.4809  
+Iteration 10:  log likelihood = -77.480896  (not concave)
+Iteration 11:  log likelihood = -77.480895  (not concave)
+Iteration 12:  log likelihood = -77.480894  (backed up)
+
+Weibull regression --
+         log relative-hazard form               Number of obs     =         60
+         Gamma shared frailty                   Number of groups  =         15
+Group variable: g
+                                                Obs per group:
+No. of subjects =           60                                min =          4
+No. of failures =           41                                avg =          4
+Time at risk    =        734.5                                max =          4
+
+                                                LR chi2(1)        =      1.41
+Log likelihood  =   -77.480894                  Prob > chi2       =    0.2343
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .7453782   .1842614    -1.19   0.235     .4591507    1.210036
+       _cons |    .039136   .0169482    -7.48   0.000     .0167478    .0914527
+-------------+----------------------------------------------------------------
+       /ln_p |   .1212141   .1251664     0.97   0.333    -.1241075    .3665356
+     /ln_the |  -18.01189   1913.838    -0.01   0.992    -3769.065    3733.042
+-------------+----------------------------------------------------------------
+           p |   1.128867   .1412961                      .8832849    1.442728
+         1/p |   .8858443   .1108779                      .6931314    1.132138
+       theta |   1.51e-08   .0000288                             0           .
+------------------------------------------------------------------------------
+Likelihood-ratio test of theta=0: chibar2(01) =  2.2e-06 Prob>=chibar2 = 0.499
+
+. capture noisily streg x, distribution(exponential) frailty(invgaussian) shared(g) time
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Fitting exponential model:
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -87.282064  (not concave)
+Iteration 1:   log likelihood =   -82.2529  
+Iteration 2:   log likelihood = -79.435472  
+Iteration 3:   log likelihood = -78.736316  
+Iteration 4:   log likelihood = -78.591612  
+Iteration 5:   log likelihood = -78.556781  
+Iteration 6:   log likelihood = -78.548895  
+Iteration 7:   log likelihood = -78.547242  
+Iteration 8:   log likelihood = -78.546974  
+Iteration 9:   log likelihood = -78.546909  
+Iteration 10:  log likelihood = -78.546895  
+Iteration 11:  log likelihood = -78.546892  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -85.272474  
+Iteration 1:   log likelihood =  -78.83215  
+Iteration 2:   log likelihood =  -78.00651  
+Iteration 3:   log likelihood = -77.942999  
+Iteration 4:   log likelihood = -77.928414  
+Iteration 5:   log likelihood = -77.925054  
+Iteration 6:   log likelihood = -77.924335  
+Iteration 7:   log likelihood =  -77.92422  
+Iteration 8:   log likelihood = -77.924207  
+Iteration 9:   log likelihood = -77.924205  
+
+Exponential regression --
+         accelerated failure-time form          Number of obs     =         60
+         Inverse-Gaussian shared frailty        Number of groups  =         15
+Group variable: g
+                                                Obs per group:
+No. of subjects =           60                                min =          4
+No. of failures =           41                                avg =          4
+Time at risk    =        734.5                                max =          4
+
+                                                LR chi2(1)        =      1.25
+Log likelihood  =   -77.924205                  Prob > chi2       =    0.2644
+
+------------------------------------------------------------------------------
+          _t |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .2750626   .2465906     1.12   0.265    -.2082461    .7583714
+       _cons |   2.875879   .1562543    18.41   0.000     2.569626    3.182132
+-------------+----------------------------------------------------------------
+     /ln_the |  -17.05732   1307.907    -0.01   0.990    -2580.509    2546.394
+-------------+----------------------------------------------------------------
+       theta |   3.91e-08   .0000511                             0           .
+------------------------------------------------------------------------------
+Likelihood-ratio test of theta=0: chibar2(01) =     0.00 Prob>=chibar2 = 1.000
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  60
+                 e(ic) =  9
+                  e(k) =  3
+               e(k_eq) =  2
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -77.92420465933417
+         e(k_eq_model) =  1
+               e(ll_0) =  -78.54689224827656
+              e(rank0) =  2
+               e(df_m) =  1
+               e(chi2) =  1.245375177884796
+                  e(p) =  .2644376350656681
+              e(theta) =  3.90929018694e-08
+                e(N_g) =  15
+              e(g_min) =  4
+              e(g_max) =  4
+               e(risk) =  734.5
+             e(N_fail) =  41
+              e(N_sub) =  60
+              e(k_aux) =  1
+                e(p_c) =  1
+             e(chi2_c) =  0
+               e(ll_c) =  -77.92420393507209
+              e(g_avg) =  4
+
+macros:
+            e(cmdline) : "streg x, distribution(exponential) frailty(invgaussian) shared(g) time"
+            e(predict) : "streg_p"
+        e(predict_sub) : "ereghet_ip"
+               e(cmd2) : "streg"
+              e(title) : "Exponential regression"
+             e(title2) : "accelerated failure-time form"
+                e(cmd) : "ereghet"
+           e(footnote) : "streghet_footnote"
+            e(stcurve) : "stcurve"
+             e(shared) : "g"
+               e(dead) : "_d"
+                 e(t0) : "_t0"
+           e(fr_title) : "Inverse-Gaussian shared frailty"
+               e(frm2) : "time"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "ereghet_ilf_sh"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "_t"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily streg x, distribution(weibull) frailty(gamma) nolog
+
+         failure _d:  ev == 1
+   analysis time _t:  t
+                 id:  id
+
+Weibull regression -- log relative-hazard form 
+                      Gamma frailty
+
+No. of subjects =           60                  Number of obs    =          60
+No. of failures =           41
+Time at risk    =        734.5
+                                                LR chi2(1)       =        1.97
+Log likelihood  =    -75.80829                  Prob > chi2      =      0.1600
+
+------------------------------------------------------------------------------
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4902001   .2675253    -1.31   0.191     .1682026    1.428611
+       _cons |   .0128475   .0122394    -4.57   0.000     .0019857    .0831247
+-------------+----------------------------------------------------------------
+       /ln_p |   .7418478   .3624111     2.05   0.041      .031535    1.452161
+     /ln_the |   .8733817     .76088     1.15   0.251    -.6179158    2.364679
+-------------+----------------------------------------------------------------
+           p |   2.099812   .7609952                      1.032037    4.272335
+         1/p |   .4762331   .1725922                       .234064    .9689571
+       theta |   2.394996   1.822305                      .5390668    10.64062
+------------------------------------------------------------------------------
+Likelihood-ratio test of theta=0: chibar2(01) =     3.35 Prob>=chibar2 = 0.034
+
+. capture noisily stcurve, survival at(x=0) nodraw
+(option unconditional assumed)
+
+. capture noisily stcurve, hazard at1(x=-1) at2(x=1) nodraw
+(option unconditional assumed)
+
+. capture noisily stcurve, cumhaz nodraw
+(option unconditional assumed)
+
+. capture noisily stcurve, survival alpha1 nodraw
+
+. capture noisily stcurve, survival unconditional nodraw
+
+. 
+. erase odta_rates.dta
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1901_survival.log
+  log type:  text
+ closed on:  19 Oct 2026, 19:42:33
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

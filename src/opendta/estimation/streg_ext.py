@@ -210,6 +210,10 @@ def _frailty_fun(dist, X, t, t0, d, gid, kind, lnt_c, fit_aft, k_aux):
     return fun
 
 
+def _fit_name(title: str) -> str:
+    return title if title in ("Weibull", "Gompertz") else title.lower()
+
+
 def _fl_title(kind: str, shared: bool) -> str:
     return ("Gamma" if kind == "gamma" else "Inverse-Gaussian") + (" shared frailty" if shared else " frailty")
 
@@ -295,8 +299,8 @@ def fit_extended(s: "Session", stx: STSample, dist, o, args: str, aft: bool) -> 
         res0 = maximize(f0, np.concatenate([r_nf0.b, [0.0]]), **kw)
         b0 = np.concatenate([r_nf.b, [0.0]])
         if not o.get("nolog"):
-            out.write(f"Fitting {dist.title} model:\n\n", "text")
-            print_log(out, r_nf, lab)
+            out.write(f"Fitting {_fit_name(dist.title)} model:\n\nFitting constant-only model:\n\n", "text")
+            print_log(out, res0, lab)
             out.write("\nFitting full model:\n\n", "text")
         res = maximize(f1, b0, **kw)
         if not o.get("nolog"):
@@ -349,6 +353,7 @@ def fit_extended(s: "Session", stx: STSample, dist, o, args: str, aft: bool) -> 
         lr = 2 * (res.ll - ll_nf)
         est.lr_theta = (max(lr, 0.0), 0.5 * float(chi2_tail(lr, 1)) if lr > 0 else 1.0)
         est.groups = (ng, gmin, gavg, gmax) if shared else None
+        est.k_aux, est.ll_nf = k_aux + 1, ll_nf
     est.tail_rows = tail
     x = stx.scalars()
     x.update({"ll": res.ll, "ll_0": res0.ll, "chi2": chi2, "p": pval, "df_m": nslope, "chi2type": "LR"})
@@ -380,27 +385,42 @@ def _exp_row(label: str, b: float, se: float, z: float) -> CoefRow:
 def _post(s: "Session", est: Estimates, args: str, dist, res, res0, k: int, mask) -> None:
     from .regress import cmdline
     x = est.extra
+    fr = getattr(est, "frailty", "")
     scalars = [("rank", float(k)), ("N", x["N"]), ("ic", float(res.iterations)), ("k", float(k)),
                ("k_eq", float(len(set(est.eqnames)))),
                ("k_dv", 1.0), ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0),
-               ("ll", res.ll), ("k_eq_model", 1.0), ("ll_0", res0.ll), ("df_m", float(x["df_m"])),
-               ("chi2", x["chi2"]), ("p", x["p"])]
-    if getattr(est, "frailty", ""):
+               ("ll", res.ll), ("k_eq_model", 1.0), ("ll_0", res0.ll), ("rank0", float(len(res0.b))),
+               ("df_m", float(x["df_m"])), ("chi2", x["chi2"]), ("p", x["p"])]
+    if fr:
         scalars.append(("theta", est.theta))
         if est.groups is not None:
             ng, gmin, gavg, gmax = est.groups
-            scalars += [("N_g", float(ng)), ("g_min", float(gmin)), ("g_avg", gavg), ("g_max", float(gmax))]
-    scalars += [("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"])]
-    macros = [("cmdline", cmdline("streg", args)), ("predict", "streg_p"), ("predict_sub", dist.predict_sub),
-              ("cmd2", "streg"), ("title", dist.title + " regression"),
-              ("title2", "accelerated failure-time form" if est.aft else "log relative-hazard form"),
-              ("cmd", dist.cmd), ("dead", "_d"), ("frm2", "time" if est.aft else "hazard"),
-              ("stcurve", "stcurve"), ("t0", "_t0"), ("chi2type", "LR"), ("opt", "moptimize"),
-              ("vce", "oim"), ("user", dist.user), ("ml_method", "e2"), ("technique", "nr"),
-              ("which", "max"), ("depvar", "_t"), ("properties", "b V")]   # VERIFY: the e() lists
-    if getattr(est, "frailty", ""):
-        macros += [("shared", est.shared), ("fr_title", _fl_title(est.frailty, bool(est.shared)).replace(
-            " shared frailty", "").replace(" frailty", ""))]
+            scalars += [("N_g", float(ng)), ("g_min", float(gmin)), ("g_max", float(gmax))]
+        lr, pc = est.lr_theta
+        scalars += [("risk", x["risk"]), ("N_fail", x["N_fail"]), ("N_sub", x["N_sub"]),
+                    ("k_aux", float(est.k_aux)), ("p_c", pc), ("chi2_c", lr), ("ll_c", est.ll_nf)]
+        if est.groups is not None:
+            scalars.append(("g_avg", gavg))
+        het = dist.cmd + "het"   # VERIFY: names of the evaluators for the other distributions
+        user = f"{het}_{'i' if fr == 'invgaussian' else 'g'}lf" + ("_sh" if est.shared else "")
+        macros = [("cmdline", cmdline("streg", args)), ("predict", "streg_p"), ("predict_sub", het + "_ip"),
+                  ("cmd2", "streg"), ("title", dist.title + " regression"),
+                  ("title2", "accelerated failure-time form" if est.aft else "log relative-hazard form"),
+                  ("cmd", het), ("footnote", "streghet_footnote"), ("stcurve", "stcurve"),
+                  ("shared", est.shared), ("dead", "_d"), ("t0", "_t0"),
+                  ("fr_title", _fl_title(fr, bool(est.shared))),
+                  ("frm2", "time" if est.aft else "hazard"), ("chi2type", "LR"), ("opt", "moptimize"),
+                  ("vce", "oim"), ("user", user), ("ml_method", "d2"), ("technique", "nr"),
+                  ("which", "max"), ("depvar", "_t"), ("properties", "b V")]
+    else:
+        scalars += [("k_aux", 2.0), ("N_sub", x["N_sub"]), ("sigma", float(np.exp(est.th[0]))),
+                    ("kappa", float(est.th[1])), ("risk", x["risk"]), ("N_fail", x["N_fail"])]
+        macros = [("cmdline", cmdline("streg", args)), ("stcurve", "stcurve"), ("predict", "streg_p"),
+                  ("predict_sub", dist.predict_sub), ("cmd2", "streg"), ("frm2", "time"),
+                  ("title", dist.title + " regression"), ("cmd", dist.cmd), ("dead", "_d"), ("t0", "_t0"),
+                  ("title2", "accelerated failure-time form"), ("chi2type", "LR"), ("opt", "moptimize"),
+                  ("vce", "oim"), ("user", "gamma_d2"), ("ml_method", "e2"), ("technique", "nr"),
+                  ("which", "max"), ("depvar", "_t"), ("properties", "b V")]   # VERIFY: the e() lists
     post(s, est, scalars, macros, mask)
 
 
@@ -410,42 +430,42 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
     x = est.extra
     form = "accelerated failure-time form" if est.aft else "log relative-hazard form"
     if header:
-        out.write(f"\n{est.distobj.title} regression -- {form}\n", "text")
-        if est.frailty:
-            out.write(_fl_title(est.frailty, bool(est.shared)) + "\n", "text")
-        out.write("\n", "text")
-        left = []
-        right = []
-        if est.frailty and est.shared:
+        shared = bool(est.frailty and est.shared)
+        subj = [f"{'No. of subjects':<15} ={fmt(x['N_sub'], '%12.0gc'):>13}",
+                f"{'No. of failures':<15} ={fmt(x['N_fail'], '%12.0gc'):>13}",
+                f"{'Time at risk':<15} ={fmt(x['risk'], '%12.0g'):>13}"]
+        ll = f"{'Log likelihood':<15} ={fmt(x['ll'], '%10.0g'):>13}"
+        lr = (f"LR chi2({int(x['df_m'])})", f"{x['chi2']:.2f}")
+        pr = ("Prob > chi2", f"{x['p']:.4f}" if x["p"] < SYS else ".")
+        if shared:
             ng, gmin, gavg, gmax = est.groups
-            left.append((f"Group variable: {est.shared}", None))
-            right.append(("Number of obs", fmt(x["N"], "%12.0gc")))
-            left.append(("", None))
-            right.append(("Number of groups", fmt(ng, "%12.0gc")))
+            out.write(f"\n{est.distobj.title} regression --\n", "text")
+            for lft, lab, v in ((form, "Number of obs", x["N"]), (_fl_title(est.frailty, True), "Number of groups", ng)):
+                out.write(f"{'':9}{lft:<39}{lab:<18}=", "text")
+                out.write(f"{fmt(v, '%12.0gc'):>11}\n", "result")
+            out.write(f"Group variable: {est.shared}\n{'':48}Obs per group:\n", "text")
+            for line, lab, v in zip(subj, ("min", "avg", "max"), (gmin, gavg, gmax)):
+                out.write(f"{line:<48}", "text")
+                out.write(f"{lab:>17} =" + f"{fmt(v, '%12.0g'):>11}\n", "result")
+            out.write("\n", "text")
+            for line, (lab, v) in ((" ", lr), (ll, pr)):
+                out.write(f"{line.rstrip() if line.strip() else '':<48}{lab:<18}=", "text")
+                out.write(f"{v:>10}\n", "result")
+            out.write("\n", "text")
         else:
-            left.append(("", None))
-            right.append(("Number of obs", fmt(x["N"], "%12.0gc")))
-        for lft, rgt in zip(left, right):
-            out.write(f"{lft[0]:<48}{rgt[0]:<17}=", "text")
-            out.write(f"{rgt[1]:>12}\n", "result")
-        if est.frailty and est.shared:
-            ng, gmin, gavg, gmax = est.groups
-            for lab, v in (("Obs per group: min", gmin), ("avg", gavg), ("max", gmax)):
-                out.write(f"{'':<48}{lab:>17} =", "text")
-                out.write(f"{fmt(v, '%12.0g'):>12}\n", "result")
-        out.write("\n", "text")
-        rows = [("No. of subjects", fmt(x["N_sub"], "%12.0gc")), ("No. of failures", fmt(x["N_fail"], "%12.0gc")),
-                ("Time at risk", fmt(x["risk"], "%12.0g")), None, ("Log likelihood", fmt(x["ll"], "%10.0g"))]
-        rrows = [(f"LR chi2({int(x['df_m'])})", f"{x['chi2']:.2f}"), ("Prob > chi2", f"{x['p']:.4f}" if x["p"] < SYS else ".")]
-        rrows = [None, None, None] + rrows
-        for lft, rgt in zip(rows, rrows):
-            line = f"{lft[0]:<15} ={lft[1]:>13}" if lft is not None else ""
-            if rgt is not None:
-                out.write(f"{line:<48}{rgt[0]:<17}=", "text")
-                out.write(f"{rgt[1]:>12}\n", "result")
-            else:
-                out.write(line + "\n", "text")
-        out.write("\n", "text")
+            out.write(f"\n{est.distobj.title} regression -- {form}\n", "text")
+            if est.frailty:
+                out.write(f"{'':22}{_fl_title(est.frailty, False)}\n", "text")
+            out.write("\n", "text")
+            right = [("Number of obs", fmt(x["N"], "%12.0gc")), None, None, lr, pr]
+            for lft, rgt in zip(subj + [None, ll], right):
+                line = lft if lft is not None else ""
+                if rgt is not None:
+                    out.write(f"{line:<48}{rgt[0]:<17}=", "text")
+                    out.write(f"{rgt[1]:>12}\n", "result")
+                else:
+                    out.write(line + "\n", "text")
+            out.write("\n", "text")
     if not table:
         return
     rows = list(est.rows) + list(est.tail_rows)
@@ -454,7 +474,8 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
                coef_title=title, eform=bool(est.eform_kind))
     if est.frailty and est.lr_theta is not None:
         lr, p = est.lr_theta
-        out.write(f"LR test of theta=0: chibar2(01) = {lr:>8.2f} Prob >= chibar2 = {p:.3f}\n", "text")   # VERIFY
+        lrs = f"{lr:>8.2f}" if lr == 0 or lr >= 0.005 else f"{lr:>8.2g}"   # VERIFY: tiny values
+        out.write(f"Likelihood-ratio test of theta=0: chibar2(01) = {lrs} Prob>=chibar2 = {p:.3f}\n", "text")
 
 
 def _predict(s: "Session", est: Estimates, stat: str, mask: np.ndarray):

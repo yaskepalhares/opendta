@@ -368,6 +368,8 @@ def cmd_streg(s: "Session", args: str) -> None:
     aft = bool(o.get("time")) or dist.metrics == ("time",)
     if aft and "time" not in dist.metrics:
         raise StataError(198, f"{dist.title} has no accelerated failure-time form")   # VERIFY
+    if dist.name == "ggamma" and o.get("nohr"):
+        raise StataError(198, "option nohr not allowed")   # VERIFY: before the header in Stata's log
     stx.notes_and_header(s)
     t, t0, d, w = stx.t, stx.t0, stx.d, stx.w
     if np.any((t <= 0) & (d > 0)):

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import re
+
 import numpy as np
 
 from ..core import missing as M
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 _AT = {f"at{i}": 3 for i in range(1, 11)}
-_NOT_YET = ("outfile", "width", "kernel", "noboundary", "fixedonly", "unconditional",
+_NOT_YET = ("outfile", "width", "kernel", "noboundary", "fixedonly",
             "marginal", "addplot")
 
 
@@ -103,8 +105,12 @@ def cmd_stcurve(s: "Session", args: str) -> None:
         raise StataError(198, "option hazard is not available yet in OpenDTA after stcox")
     if kind == "cox" and getattr(est, "strata_vars", None):
         raise StataError(198, "stcurve after a stratified stcox is not available yet in OpenDTA")
-    if not lopts.get("noshow") and not lopts.get("nodraw"):   # VERIFY: nodraw prints no header
+    nodraw = re.search(r"\bnodraw\b", args) is not None
+    if not lopts.get("noshow") and not nodraw:   # VERIFY: nodraw prints no header
         header(s, info)
+    uncond = bool(getattr(est, "frailty", "")) and not lopts.get("alpha1")
+    if uncond and not lopts.get("unconditional"):
+        s.output.write("(option unconditional assumed)\n", "text")
     ds = s.data
     tt = ds.get("_t").data
     mask = ds.esample if ds.esample is not None else np.ones(ds.nobs, dtype=bool)
@@ -121,7 +127,7 @@ def cmd_stcurve(s: "Session", args: str) -> None:
     layers = []
     for i, (lab, given) in enumerate(curves):
         xb = _xb(s, est, given)
-        xs, ys = _curve(est, kind, what, xb, base, lo, hi)
+        xs, ys = _curve(est, kind, what, xb, base, lo, hi, uncond)
         text = str(lopts[lab]).replace("  ", " ") if lab else ""
         layers.append(Layer("line", xs, ys, {}, {"_pal": i} if len(curves) > 1 else {}, text))
     opts = graph_options(graw)
@@ -160,12 +166,24 @@ def _baseline(s: "Session", est, kind: str):
     return None
 
 
-def _curve(est, kind: str, what: str, xb: float, base, lo: float, hi: float):
+def _unconditional(est, what, dist, t, xbv, th, aft, y):
+    """Integrates the frailty out of the conditional curve y (survival, hazard or cumulative hazard)."""
+    th_f = est.theta
+    H = -np.log(dist.surv(t, xbv, th, aft))
+    if est.frailty == "gamma":
+        g, sc = (1 + th_f * H), 1 / (1 + th_f * H)
+        return {"survival": g ** (-1 / th_f), "hazard": y * sc, "cumhaz": np.log(g) / th_f}[what]
+    r = np.sqrt(1 + 2 * th_f * H)
+    return {"survival": np.exp((1 - r) / th_f), "hazard": y / r, "cumhaz": (r - 1) / th_f}[what]
+
+
+def _curve(est, kind: str, what: str, xb: float, base, lo: float, hi: float, uncond: bool = False):
     if kind == "streg":
         from .streg import DISTS
         dist, aft = DISTS[est.dist], est.aft
         th = est.th if dist.name == "ggamma" else (est.aux[0] if est.aux else 0.0)
-        # after frailty(): the curves are conditional on a frailty of one (alpha1; VERIFY default)
+        # after frailty(): unconditional (population-averaged) curves by default, conditional on a
+        # frailty of one with alpha1 (VERIFY: the numbers; the manual describes the options)
         t = np.linspace(lo, hi, 200)
         t = np.where(t > 0, t, 1e-8) if what == "hazard" else t
         xbv = np.full_like(t, xb)
@@ -175,6 +193,8 @@ def _curve(est, kind: str, what: str, xb: float, base, lo: float, hi: float):
             y = dist.hazard(t, xbv, th, aft)
         else:
             y = -np.log(dist.surv(t, xbv, th, aft))
+        if uncond:
+            y = _unconditional(est, what, dist, t, xbv, th, aft, y)
         return [float(v) for v in t], [float(v) for v in y]
     times, H0, S0 = base
     r = float(np.exp(xb))

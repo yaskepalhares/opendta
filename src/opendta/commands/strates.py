@@ -406,7 +406,7 @@ def cmd_stci(s: "Session", args: str) -> None:
             out.write(f"{fmt(nsub, '%10.0g'):>10}{_sig(est, 7):>12}{star}{_sig(se, 7):>11}"
                       f"{_sig(lb, 6):>13}{_sig(ub, 6):>11}", "result")
         else:
-            out.write(f"{fmt(nsub, '%10.0g'):>10}{_sig(est, 6):>12}", "result")
+            out.write(f"{fmt(nsub, '%10.0g'):>10}{_sig(est, 7):>12}", "result")
         out.write("\n", "result")
     if underestimated:
         out.write("\n(*) largest observed analysis time is censored, mean is underestimated\n", "text")   # VERIFY
@@ -668,7 +668,7 @@ def _ltable_rows(s: "Session", tab, kind: str) -> None:
         if kind == "hazard":
             cum, cse = 1 - r["S"], r["se"]
             out.write(f"{_four(cum):>10}{_four(cse):>8}{_four(r['h']):>10}{_four(r['hse']):>10}"
-                      f"{_four(r['hlb']):>10}{_four(r['hub']):>10}\n", "result")
+                      f"{_four(max(r['hlb'], 0.0) if math.isfinite(r['hlb']) else r['hlb']):>10}{_four(r['hub']):>10}\n", "result")
             continue
         out.write(f"{r['d']:>9g}{r['m']:>7g}", "result")
         if kind == "survival":
