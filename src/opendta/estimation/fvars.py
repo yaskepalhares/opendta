@@ -161,7 +161,8 @@ def _parse_ts(spec: str) -> list[list[tuple[str, int]]]:
     return alts
 
 
-def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Component] | None:
+def _component_alts(ds: "Dataset", text: str, in_interaction: bool,
+                    abbrev: bool = True) -> list[Component] | None:
     """One written factor (e.g. 'ib2.g', 'L.x', 'c.x', 'i.(a b)') -> components."""
     factor = None
     explicit_c = False
@@ -170,12 +171,18 @@ def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Comp
     ts_alts: list[list] = [[]]
     rest = text
     while True:
-        m = re.match(r"^([A-Za-z][A-Za-z0-9]*(?:\([^)]*\))?)\.", rest)
+        m = re.match(r"^([A-Za-z][A-Za-z0-9]*(?:\([^)]*\))?(?:[A-Za-z0-9]+(?:\([^)]*\))?)?)\.", rest)
         if not m:
             break
         op = m.group(1)
         low = op.lower()
-        if low == "i":
+        spec = re.fullmatch(r"i\(([^)]*)\)(?:b(n|\d+))?(?:o\([^)]*\))?", low)
+        if spec:
+            # the specific form of a varlist, i(2,3)bn.g (as _rmcoll returns it)
+            factor = True
+            levels = _numlist(spec.group(1))
+            base = spec.group(2) or ""
+        elif low == "i":
             factor = True
         elif low == "c":
             factor, explicit_c = False, True
@@ -203,11 +210,11 @@ def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Comp
             return None
         rest = rest[m.end():]
     if rest.startswith("(") and rest.endswith(")"):
-        names = expand_names(ds, rest[1:-1], allow_empty=False)
+        names = expand_names(ds, rest[1:-1], abbrev=abbrev, allow_empty=False)
     else:
         if not re.fullmatch(r"[A-Za-z_*?~][\w*?~-]*", rest):
             return None
-        names = expand_names(ds, rest, allow_empty=False)
+        names = expand_names(ds, rest, abbrev=abbrev, allow_empty=False)
     if factor is None:
         factor = in_interaction
     out = []
@@ -217,7 +224,7 @@ def _component_alts(ds: "Dataset", text: str, in_interaction: bool) -> list[Comp
     return out
 
 
-def expand_fv(ds: "Dataset", text: str) -> list[Term]:
+def expand_fv(ds: "Dataset", text: str, abbrev: bool = True) -> list[Term]:
     """Varlist with fv/ts -> terms, in the order they appear."""
     terms: list[Term] = []
     seen: set = set()
@@ -234,7 +241,7 @@ def expand_fv(ds: "Dataset", text: str) -> list[Term]:
         inter = len(parts) > 1
         alts_per_part = []
         for part in parts:
-            comps = _component_alts(ds, part, inter)
+            comps = _component_alts(ds, part, inter, abbrev)
             if comps is None:
                 raise StataError(198, f"{tok} invalid name")   # VERIFY
             alts_per_part.append(comps)
@@ -517,3 +524,78 @@ def omitted_name(name: str) -> str:
         else:
             parts.append("o." + p)
     return "#".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# names of terms: general (unabbreviated) and specific (to a sample)
+# ---------------------------------------------------------------------------
+
+def _factor_op(c: Component) -> str:
+    if c.levels is not None:
+        base = "" if not c.base else ("bn" if c.base == "n" else f"b{c.base}")
+        return "i(" + " ".join(_level_text(lv) for lv in c.levels) + ")" + base
+    if c.base == "n":
+        return "ibn"
+    if c.base in ("first", "last", "freq") or c.base.startswith("#"):
+        return f"ib({c.base})"
+    return f"ib{c.base}" if c.base else "i"
+
+
+def general_name(t: Term) -> str:
+    """The term as a general varlist element, unabbreviated: i.rep78, c.x#i.g, L2.x."""
+    parts = []
+    for c in t.comps:
+        pre = tsops.ops_name(c.ts)
+        if c.factor:
+            parts.append(f"{pre}.{_factor_op(c)}.{c.var}" if pre else f"{_factor_op(c)}.{c.var}")
+        elif t.is_interaction or c.explicit_c:
+            parts.append(f"c{pre}.{c.var}" if pre else f"c.{c.var}")
+        else:
+            parts.append(c.tsname)
+    return "#".join(parts)
+
+
+def specific_name(ds: "Dataset", t: Term, mask: np.ndarray, cols: list[Column]) -> str:
+    """The term as a specific varlist element for the sample `mask`: the levels and the base of
+    each factor, i(1 2 3)b1.g, and for an interaction the cells that are omitted, o(1 1 2).
+    `cols` are the columns of this term (build_design)."""
+    infos = []
+    for c in t.comps:
+        if c.factor:
+            infos.append(_levels(ds, c, comp_values(ds, c)[mask]))
+        else:
+            infos.append(None)
+    omitted = [col.cell for col in cols if col.base or col.omitted or
+               (col.values is None) or not np.any(col.values)] if t.is_interaction else []
+    parts = []
+    k = 0
+    for c, info in zip(t.comps, infos):
+        pre = tsops.ops_name(c.ts)
+        if info is None:
+            if t.is_interaction or c.explicit_c:
+                parts.append(f"c{pre}.{c.var}" if pre else f"c.{c.var}")
+            else:
+                parts.append(c.tsname)
+            continue
+        levels, base = info
+        op = "i(" + " ".join(_level_text(lv) for lv in levels) + ")"
+        op += "bn" if base is None else f"b{_level_text(base)}"
+        if omitted:
+            op += "o(" + " ".join(_level_text(cell[k]) for cell in omitted) + ")"
+        k += 1
+        parts.append(f"{pre}.{op}.{c.var}" if pre else f"{op}.{c.var}")
+    return "#".join(parts)
+
+
+def unabbreviate(ds: "Dataset", text: str, abbrev: bool = True, *, fv: bool = True,
+                 ts: bool = True) -> list[str]:
+    """Unabbreviated varlist elements, with the factor-variable (`fv`) and time-series (`ts`)
+    operators the caller accepts: L(1/2).x -> L.x L2.x."""
+    terms = expand_fv(ds, text, abbrev) if text.strip() else []
+    if not ts and any(c.ts for t in terms for c in t.comps):
+        raise StataError(101, "time-series operators not allowed")    # VERIFY
+    if not fv and any(t.is_interaction or t.has_factor or t.comps[0].explicit_c for t in terms):
+        raise StataError(101, "factor variables not allowed")         # VERIFY
+    if any(c.ts for t in terms for c in t.comps):
+        tsops.require_ts(ds)
+    return [general_name(t) for t in terms]
