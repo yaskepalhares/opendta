@@ -18,7 +18,7 @@ Each block follows the same steps:
 4. `ROADMAP.md` and `ROADMAP.pt-BR.md`: a new phase listing what was done; in *Missing for 1.0*, leave only what is missing. Each clause of an *Missing for 1.0* line that lists options must start with the command they belong to (`` `cs` with the `pool` option``), so the coverage map does not count options as commands.
 5. `tools/roadmap_coverage.py`: add the new module to `MODULE_AREA`.
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
-7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another.
+7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another. Before asking, also check that the case data is final (models converge, tests are not degenerate): changing the data afterwards costs a second run. The user's clone must be on the block's branch (a run from another branch produces no log); if it has local changes, `git stash -u` first.
 8. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
 
 Notes for sessions that run in the cloud:
@@ -27,6 +27,7 @@ Notes for sessions that run in the cloud:
 - `pytest` may not install there (no access to PyPI): the tests that need optional packages (`pyreadstat`, `xlrd`, `xlwt`) run only in CI. Wait for CI and read the result before asking for the Stata run.
 - The CI logs cannot be downloaded from the cloud, but the annotations of each job show the `tools/compare.py` differences (`gh api repos/<owner>/<repo>/check-runs/<id>/annotations`). `gh pr` fails because GraphQL is blocked: open and merge the pull request with `gh api` (REST), using a merge commit.
 - A reference log from the Stata run is never edited by hand: when a case changes, the Stata run is repeated.
+- The CI annotation of a case with a known difference shows only the hunks that the `ignore()` and `tolerance()` limits do not accept. Fits at a boundary (for example a frailty variance at 0) can differ between Linux, macOS and Windows: wait for the three CI jobs before finishing the limits of a known difference, and keep them as narrow as the lines that really differ.
 
 Next free numbers: compat cases from **1902**, roadmap phases from **16**.
 
