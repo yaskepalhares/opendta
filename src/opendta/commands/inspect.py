@@ -13,7 +13,7 @@ import numpy as np
 from ..core.errors import StataError
 from ..core.formats import format_value, parse_format
 from ..core.missing import MISSING_THRESHOLD
-from ..core.varlist import expand, unique
+from ..core.varlist import expand
 from ..lang.syntax import match_options, parse_standard
 from ._util import touse
 from .registry import command
@@ -47,7 +47,7 @@ def _left_aligned(var: "Variable", use_labels: bool) -> bool:
 def cmd_list(s: "Session", args: str) -> None:
     p = parse_standard(args)
     ds = s.data
-    names = unique(expand(ds, p.varlist)) if p.varlist else ds.names
+    names = expand(ds, p.varlist) if p.varlist else ds.names     # duplicates are listed twice (compat 1801)
     opts = match_options(p.options, {
         "noobs": 5, "clean": 5, "separator": 3, "nolabel": 5, "noheader": 6,
         "abbreviate": 2, "table": 3, "divider": 3, "string": 3, "compress": 3,
@@ -135,13 +135,13 @@ def cmd_list(s: "Session", args: str) -> None:
     out.ensure_line_start()
     out.write("\n", "text")
     if clean:
-        lead = " " * (obs_w + 1 + 3) if obs_col else ""
+        lead = " " * (obs_w + 1 + 3) if obs_col else " " * 4     # noobs: 4 spaces (compat 1801)
         if not opts.get("noheader"):
             out.write(lead + header + "  \n", "text")
         for k, (i, r) in enumerate(zip(rows, cells)):
             if every and k and k % every == 0 and not opts.get("noheader"):
                 out.write("\n" + lead + header + "  \n", "text")      # VERIFY: layout of header(#) (compat 1701)
-            label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else (lead if obs_col else "")
+            label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else lead
             out.write(label, "text")
             out.write(fmt_row(r) + "  \n", "result")
         for label, r in summaries:
@@ -201,7 +201,7 @@ def cmd_describe(s: "Session", args: str) -> None:
         _describe_using(s, p, opts)
         return
     ds = s.data
-    names = unique(expand(ds, p.varlist)) if p.varlist else ds.names
+    names = expand(ds, p.varlist) if p.varlist else ds.names     # duplicates are listed twice (compat 1801)
     if opts.get("replace"):
         _describe_replace(s, names, bool(opts.get("clear")))
         return

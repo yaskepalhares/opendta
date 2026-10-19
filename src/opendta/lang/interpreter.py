@@ -126,6 +126,12 @@ class Interpreter:
 
         header = self.s.expand(lines[i].text.strip())
         name, options = parse_definition(split_command(header)[1])
+        if "plugin" in options:
+            # program name, plugin: there is no body and no end
+            from .programs import define_plugin
+            if echo:
+                self.s.output.echo_command(lines[i].echo_lines)
+            define_plugin(self.s, name, options)
         j = i + 1
         while j < end and not (lines[j].kind == "cmd" and lines[j].text.strip() == "end"):
             j += 1

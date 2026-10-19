@@ -152,3 +152,19 @@ def _mata_not_found(ctx: Ctx, _m) -> Explanation:
           f'atribua antes ({name} = ...); para trazer uma variável do Stata, '
           f'{name} = st_data(., "{name}").'),
         "mata")
+
+
+@rule(r"unrecognized command", rc=199)
+def _plugin_call(ctx: Ctx, _m) -> Explanation | None:
+    if ctx.command != "plugin" and not ctx.text.strip().startswith("plugin"):
+        return None
+    return Explanation(
+        L("OpenDTA does not run compiled Stata plugins, so there is no plugin to call.",
+          "O OpenDTA não executa plugins compilados do Stata, então não há plugin para chamar."),
+        L("A plugin is a file of machine code written for Stata (program name, plugin loads it and "
+          "plugin call runs it); OpenDTA cannot load it.",
+          "Um plugin é um arquivo de código de máquina escrito para o Stata (program nome, plugin "
+          "o carrega e plugin call o executa); o OpenDTA não consegue carregá-lo."),
+        L("do the same computation in a do-file, an ado-file or Mata.",
+          "faça o mesmo cálculo em um do-file, um ado-file ou em Mata."),
+        "progutil")

@@ -1,0 +1,1563 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1801_programming.log
+  log type:  text
+ opened on:  19 Oct 2026, 16:36:36
+
+. * Programming: unab, tsunab, fvunab, unabcmd, fvexpand, fvrevar, tsrevar, _rmcoll, mark, markin,
+. * markout, postfile, matlist, tabdisp, program sortpreserve, plugin, pause, sleep,
+. * signestimationsample, makecns and matcproc, viewsource. The dialogs of window (stopbox, fopen,
+. * fsave) and pause on are left out: they wait for someone at the screen. Every command whose
+. * behavior the manual does not settle runs under capture noisily, so that one Stata run shows the
+. * whole case.
+. clear
+
+. set obs 74
+number of observations (_N) was 0, now 74
+
+. gen rep78 = 1+mod(_n,5)
+
+. gen foreign = mod(_n,2)
+
+. gen mpg = _n
+
+. gen turn = 30+_n
+
+. gen trunk = 10 + mod(_n*7,13)
+
+. gen tt = turn + trunk
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 74
+                delta:  1 unit
+
+. 
+. * unab, tsunab, fvunab, unabcmd
+. capture noisily unab x : mp tur, name(myopt())
+
+. capture noisily display "`x'"
+mpg turn
+
+. capture noisily unab x : junk
+variable junk not found
+
+. capture noisily unab x : mpg turn trunk, max(1) name(myopt())
+myopt():  too many variables specified
+          1 variable required
+
+. capture noisily unab x : mpg, min(3)
+mpg:
+too few variables specified
+
+. capture noisily tsunab mylist : l(1/3).mpg
+
+. capture noisily display "`mylist'"
+L.mpg L2.mpg L3.mpg
+
+. capture noisily tsunab mylist : l(1/2).(mpg turn)
+
+. capture noisily display "`mylist'"
+L.mpg L2.mpg L.turn L2.turn
+
+. capture noisily fvunab fl : i.rep78 mpg c.mpg#c.turn rep78#foreign
+
+. capture noisily display "`fl'"
+i.rep78 mpg c.mpg#c.turn i.rep78#i.foreign
+
+. capture noisily unabcmd gen
+
+. capture noisily return list
+
+macros:
+                r(cmd) : "generate"
+
+. capture noisily unabcmd ka
+command ka not found as either built-in or ado-file
+
+. 
+. capture noisily unab x : mp tu, min(5)
+mpg turn:
+too few variables specified
+
+. display _rc
+102
+
+. capture noisily unab x : mpg turn, max(1)
+mpg turn:
+too many variables specified
+
+. display _rc
+103
+
+. capture noisily unab x : mpg, min(3) name(myopt())
+myopt():  too few variables specified
+          3 or more variables required
+
+. capture noisily unab x : mpg, min(2) max(2) name(myopt())
+myopt():  too few variables specified
+          2 variables required
+
+. capture noisily unab x : mpg turn trunk, max(2) name(myopt())
+myopt():  too many variables specified
+          1 - 2 variables required
+
+. capture noisily unab x : mpg turn trunk, min(2) max(2)
+mpg turn trunk:
+too many variables specified
+
+. capture noisily unab x : mpg turn trunk, max(1) name(myopt())
+myopt():  too many variables specified
+          1 variable required
+
+. display _rc
+103
+
+. 
+. * fvexpand, fvrevar, tsrevar
+. capture noisily fvexpand i.rep78 mpg
+
+. capture noisily return list
+
+macros:
+              r(fvops) : "true"
+            r(varlist) : "1b.rep78 2.rep78 3.rep78 4.rep78 5.rep78 mpg"
+
+. capture noisily fvexpand mpg i.foreign
+
+. capture noisily fvexpand c.turn#i(2,3).rep78
+
+. capture noisily fvexpand c.mpg#i.foreign i.rep78#i.foreign
+
+. capture noisily fvrevar i.rep78 mpg turn
+
+. capture noisily display "`r(varlist)'"
+__000000 __000001 __000002 __000003 __000004 mpg turn
+
+. capture noisily describe
+
+Contains data
+  obs:            74                          
+ vars:            12                          
+ size:         2,442                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+rep78           float   %9.0g                 
+foreign         float   %9.0g                 
+mpg             float   %9.0g                 
+turn            float   %9.0g                 
+trunk           float   %9.0g                 
+tt              float   %9.0g                 
+t               float   %9.0g                 
+__000000        byte    %9.0g                 
+__000001        byte    %9.0g                 
+__000002        byte    %9.0g                 
+__000003        byte    %9.0g                 
+__000004        byte    %9.0g                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: t
+     Note: Dataset has changed since last saved.
+
+. capture noisily fvrevar i(2,3)bn.rep78 mpg
+
+. capture noisily display "`r(varlist)'"
+__000005 __000002 mpg
+
+. capture noisily fvrevar i(2,3)bn.rep78 mpg, list
+
+. capture noisily display "`r(varlist)'"
+mpg rep78
+
+. capture noisily fvrevar c.turn#i(2,3).rep78 L.mpg
+
+. capture noisily display "`r(varlist)'"
+__000006 __000007 __000008
+
+. capture noisily fvrevar c.turn#i(2,3).rep78 L.mpg, tsonly
+
+. capture noisily display "`r(varlist)'"
+2b.rep78#c.turn 3.rep78#c.turn __000008
+
+. capture noisily tsrevar l.mpg d.mpg turn
+
+. capture noisily display "`r(varlist)'"
+__000008 __000009 turn
+
+. capture noisily tsrevar l.mpg d.mpg turn, list
+
+. capture noisily display "`r(varlist)'"
+mpg turn
+
+. capture noisily list mpg `=word("`r(varlist)'",1)' in 1/4
+
+     +-----------+
+     | mpg   mpg |
+     |-----------|
+  1. |   1     1 |
+  2. |   2     2 |
+  3. |   3     3 |
+  4. |   4     4 |
+     +-----------+
+
+. 
+. capture noisily fvexpand mpg turn
+
+. capture noisily return list
+
+macros:
+            r(varlist) : "mpg turn"
+
+. capture noisily fvexpand L.mpg
+
+. capture noisily return list
+
+macros:
+              r(tsops) : "true"
+            r(varlist) : "L.mpg"
+
+. capture noisily fvexpand i.foreign L.mpg
+
+. capture noisily return list
+
+macros:
+              r(tsops) : "true"
+              r(fvops) : "true"
+            r(varlist) : "0b.foreign 1.foreign L.mpg"
+
+. capture noisily fvrevar turn i.foreign mpg i.rep78, list
+
+. capture noisily display "`r(varlist)'"
+turn mpg foreign rep78
+
+. capture noisily fvrevar i.foreign mpg trunk i.rep78 turn, list
+
+. capture noisily display "`r(varlist)'"
+mpg trunk turn foreign rep78
+
+. capture noisily fvrevar turn mpg, list
+
+. capture noisily display "`r(varlist)'"
+turn mpg
+
+. capture noisily tsrevar turn mpg l.mpg, list
+
+. capture noisily display "`r(varlist)'"
+mpg turn
+
+. 
+. * _rmcoll
+. capture noisily _rmcoll turn trunk tt
+note: tt omitted because of collinearity
+
+. capture noisily display r(varlist)
+turn trunk o.tt
+
+. capture noisily _rmcoll i.rep78
+
+. capture noisily display r(varlist)
+i(1 2 3 4 5)b1.rep78
+
+. capture noisily _rmcoll i.rep78, expand
+
+. capture noisily display r(varlist)
+1b.rep78 2.rep78 3.rep78 4.rep78 5.rep78
+
+. capture noisily _rmcoll rep78#foreign
+
+. capture noisily display r(varlist)
+i(1 2 3 4 5)b1.rep78#i(0 1)b0.foreign
+
+. capture noisily _rmcoll turn trunk tt if turn > 50
+note: tt omitted because of collinearity
+
+. capture noisily _rmcoll mpg junk
+variable junk not found
+
+. 
+. * mark, markin, markout
+. clear
+
+. set obs 10
+number of observations (_N) was 0, now 10
+
+. gen x = _n
+
+. replace x = . in 3
+(1 real change made, 1 to missing)
+
+. replace x = .a in 4
+(1 real change made, 1 to missing)
+
+. gen w = cond(_n==2, 0, 1)
+
+. capture noisily mark m1 if x > 2
+
+. capture noisily list x m1, noobs
+
+  +---------+
+  |  x   m1 |
+  |---------|
+  |  1    0 |
+  |  2    0 |
+  |  .    1 |
+  | .a    1 |
+  |  5    1 |
+  |---------|
+  |  6    1 |
+  |  7    1 |
+  |  8    1 |
+  |  9    1 |
+  | 10    1 |
+  +---------+
+
+. capture noisily mark m2 [fweight=w]
+
+. capture noisily list w m2 in 1/3, noobs
+
+  +--------+
+  | w   m2 |
+  |--------|
+  | 1    1 |
+  | 0    0 |
+  | 1    1 |
+  +--------+
+
+. capture noisily mark m3 [fweight=w], zeroweight
+
+. capture noisily list w m3 in 1/3, noobs
+
+  +--------+
+  | w   m3 |
+  |--------|
+  | 1    1 |
+  | 0    1 |
+  | 1    1 |
+  +--------+
+
+. capture noisily markin if x>5, name(rng)
+
+. capture noisily display "`rng'"
+in 3/10
+
+. capture noisily markin in 2/6
+
+. capture noisily display "`in'"
+in 2/6
+
+. capture noisily markin if x > 100
+
+. capture noisily display "`in'"
+in 3/4
+
+. gen byte mk = 1
+
+. capture noisily markout mk x
+
+. capture noisily count if mk
+  8
+
+. gen byte mk2 = 1
+
+. capture noisily markout mk2 x, sysmissok
+
+. capture noisily count if mk2
+  9
+
+. gen mkf = 1
+
+. capture noisily markout mkf x
+mkf not byte
+
+. display _rc
+198
+
+. capture noisily mark m1
+variable m1 already defined
+
+. capture noisily mark m4 [pweight=w]
+
+. capture noisily mark m5 [aweight=w] if x > 2, zeroweight
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 10
+                delta:  1 unit
+
+. capture program drop odta_myp
+
+. program define odta_myp
+  1.     syntax [varlist(fv ts)] [if] [in]
+  2.     marksample touse
+  3.     count if `touse'
+  4. end
+
+. capture noisily odta_myp L.x
+  7
+
+. capture noisily odta_myp x
+  8
+
+. capture program drop odta_myp
+
+. 
+. * postfile
+. set seed 12345
+
+. capture program drop odta_lnsim
+
+. program odta_lnsim
+  1.     version 14
+  2.     tempname sim
+  3.     postfile `sim' mean var using odta_results, replace
+  4.     quietly {
+  5.         forvalues i = 1/20 {
+  6.             drop _all
+  7.             set obs 100
+  8.             generate z = exp(rnormal())
+  9.             summarize z
+ 10.             post `sim' (r(mean)) (r(Var))
+ 11.         }
+ 12.     }
+ 13.     postclose `sim'
+ 14. end
+
+. capture noisily odta_lnsim
+(note: file odta_results.dta not found)
+
+. capture noisily use odta_results, clear
+
+. capture noisily describe
+
+Contains data from odta_results.dta
+  obs:            20                          
+ vars:             2                          19 Oct 2026 16:36
+ size:           160                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+mean            float   %9.0g                 
+var             float   %9.0g                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+
+. tempname m
+
+. capture noisily postfile `m' a b str5 c double(d e) using odta_r2, replace
+(note: file odta_r2.dta not found)
+
+. capture noisily post `m' (1) (2) ("abcdefgh") (3.5) (.)
+
+. capture noisily post `m' (1) (2)
+post:  5 expressions expected and only 2 found
+
+. display _rc
+198
+
+. capture noisily post `m' (1) (2) ("a") (3.5) (.)
+post __00000A not found
+
+. display _rc
+111
+
+. capture noisily postutil dir
+
+. capture noisily postclose `m'
+post __00000A not found
+
+. display _rc
+111
+
+. capture noisily use odta_r2, clear
+
+. capture noisily list
+
+     +-------------------------+
+     | a   b       c     d   e |
+     |-------------------------|
+  1. | 1   2   abcde   3.5   . |
+     +-------------------------+
+
+. capture noisily describe
+
+Contains data from odta_r2.dta
+  obs:             1                          
+ vars:             5                          19 Oct 2026 16:36
+ size:            29                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+a               float   %9.0g                 
+b               float   %9.0g                 
+c               str5    %9s                   
+d               double  %10.0g                
+e               double  %10.0g                
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+
+. tempname m2
+
+. capture noisily postfile `m2' a b using odta_r3, replace
+(note: file odta_r3.dta not found)
+
+. capture noisily post `m2' (1) (2) (3)
+post:  2 expressions expected and more than 2 found
+
+. display _rc
+198
+
+. capture noisily postutil dir
+
+. tempname m3
+
+. capture noisily postfile `m3' a str5 b using odta_r4, replace
+(note: file odta_r4.dta not found)
+
+. capture noisily post `m3' (1) (2)
+type mismatch
+post:  above message corresponds to expression 2, variable b
+
+. display _rc
+109
+
+. capture noisily postutil dir
+
+. tempname m4
+
+. capture noisily postfile `m4' a using odta_r5, replace
+(note: file odta_r5.dta not found)
+
+. capture noisily post `m4' (nosuchvar)
+nosuchvar not found
+post:  above message corresponds to expression 1, variable a
+
+. display _rc
+111
+
+. capture noisily postutil dir
+
+. tempname m5
+
+. capture noisily postfile `m5' a using odta_r6, replace
+(note: file odta_r6.dta not found)
+
+. capture noisily postfile `m5' b using odta_r7, replace
+postfile __00000E already exists
+
+. display _rc
+110
+
+. capture noisily postfile `m5' z using odta_r6
+postfile __00000E already exists
+
+. display _rc
+110
+
+. capture noisily postutil dir
+__00000E
+
+. capture noisily postclose `m5'
+
+. capture noisily postfile `m5' z using odta_r6
+file odta_r6.dta already exists
+
+. display _rc
+602
+
+. capture noisily postfile `m5' a a using odta_r8, replace
+postfile: variable a already exists
+
+. display _rc
+110
+
+. capture noisily postfile `m5' _all using odta_r8, replace
+_all not allowed
+
+. display _rc
+101
+
+. capture noisily postfile `m5' using odta_r8, replace
+invalid syntax
+
+. display _rc
+198
+
+. capture noisily postutil clear
+
+. capture noisily postutil dir
+
+. 
+. * matlist
+. matrix A = (1,2 \ 3,4 \ 5,6)
+
+. capture noisily matlist A
+
+             |        c1         c2 
+-------------+----------------------
+          r1 |         1          2 
+          r2 |         3          4 
+          r3 |         5          6 
+
+. capture noisily matlist A, border(rows) rowtitle(rows) left(4)
+
+    ------------------------------------
+            rows |        c1         c2 
+    -------------+----------------------
+              r1 |         1          2 
+              r2 |         3          4 
+              r3 |         5          6 
+    ------------------------------------
+
+. capture noisily matlist 2*A, border(all) lines(none) format(%6.1f) names(rows) twidth(8) left(4) title(Guess what, a title)
+
+Guess what, a title
+
+    +--------------------------+
+    |       r1     2.0     4.0 |
+    |       r2     6.0     8.0 |
+    |       r3    10.0    12.0 |
+    +--------------------------+
+
+. matrix Htest = (12.3, 2, .0004464 \ 2.17, 1, .3533287 \ 8.81, 3, .0402262 \ 20.05, 6, .0010676)
+
+. matrix rownames Htest = trunk length weight overall
+
+. matrix colnames Htest = chi2 df p
+
+. capture noisily matlist Htest
+
+             |      chi2         df          p 
+-------------+---------------------------------
+       trunk |      12.3          2   .0004464 
+      length |      2.17          1   .3533287 
+      weight |      8.81          3   .0402262 
+     overall |     20.05          6   .0010676 
+
+. capture noisily matlist Htest, rowtitle(Variables) title(Test results) cspec(o4& %12s | %8.0g & %5.0f & %8.4f o2&) rspec(&-&&--)
+
+Test results
+
+       Variables |     chi2     df         p  
+    -------------+----------------------------
+           trunk |     12.3      2    0.0004  
+          length |     2.17      1    0.3533  
+          weight |     8.81      3    0.0402  
+    -------------+----------------------------
+         overall |    20.05      6    0.0011  
+    ------------------------------------------
+
+. matrix S = (1,.5 \ .5,1)
+
+. matrix rownames S = a_1 b_2
+
+. matrix colnames S = a_1 b_2
+
+. capture noisily matlist S
+
+             |       a_1        b_2 
+-------------+----------------------
+         a_1 |         1            
+         b_2 |        .5          1 
+
+. capture noisily matlist S, nohalf underscore lines(cells)
+
+             |       a 1 |       b 2 
+-------------+-----------+-----------
+         a 1 |         1 |        .5 
+-------------+-----------+-----------
+         b 2 |        .5 |         1 
+
+. capture noisily matlist Htest, lines(rctotal)
+
+             |      chi2         df |         p 
+-------------+----------------------+-----------
+       trunk |      12.3          2 |  .0004464 
+      length |      2.17          1 |  .3533287 
+      weight |      8.81          3 |  .0402262 
+-------------+----------------------+-----------
+     overall |     20.05          6 |  .0010676 
+
+. capture noisily matlist Htest, nonames
+
+     12.3          2   .0004464 
+     2.17          1   .3533287 
+     8.81          3   .0402262 
+    20.05          6   .0010676 
+
+. capture noisily matlist Htest, noblank
+             |      chi2         df          p 
+-------------+---------------------------------
+       trunk |      12.3          2   .0004464 
+      length |      2.17          1   .3533287 
+      weight |      8.81          3   .0402262 
+     overall |     20.05          6   .0010676 
+
+. capture noisily matlist Htest, aligncolnames(center)
+
+             |   chi2        df          p     
+-------------+---------------------------------
+       trunk |      12.3          2   .0004464 
+      length |      2.17          1   .3533287 
+      weight |      8.81          3   .0402262 
+     overall |     20.05          6   .0010676 
+
+. capture noisily matlist Htest, aligncolnames(right) format(%9.2f)
+option right not allowed
+
+. capture noisily matlist Htest, border(top bottom) lines(oneline)
+
+-----------------------------------------------
+             |      chi2         df          p 
+-------------+---------------------------------
+       trunk |      12.3          2   .0004464 
+      length |      2.17          1   .3533287 
+      weight |      8.81          3   .0402262 
+     overall |     20.05          6   .0010676 
+-----------------------------------------------
+
+. capture noisily matlist Htest, rowtitle(R) coltitle(C)
+option coltitle() not allowed
+
+. matrix N = J(2,2,.)
+
+. capture noisily matlist N
+
+             |        c1         c2 
+-------------+----------------------
+          r1 |         .            
+          r2 |         .          . 
+
+. capture noisily matlist Zzz
+Zzz not found
+
+. capture noisily matlist Htest, bogus
+option bogus not allowed
+
+. 
+. * tabdisp
+. clear
+
+. set obs 40
+number of observations (_N) was 0, now 40
+
+. gen rep78 = 1+mod(_n,5)
+
+. gen foreign = mod(_n,3)==0
+
+. label define fl 0 "Domestic" 1 "Foreign"
+
+. label values foreign fl
+
+. label define rl 1 "Poor" 2 "Fair" 3 "Average" 4 "Good" 5 "Excellent"
+
+. label values rep78 rl
+
+. label var rep78 "Repair Record 1978"
+
+. label var foreign "Car type"
+
+. gen mpg = 15 + _n/3
+
+. collapse (mean) mpg, by(foreign rep78)
+
+. capture noisily list
+
+     +---------------------------------+
+     |     rep78    foreign        mpg |
+     |---------------------------------|
+  1. |      Poor   Domestic       22.5 |
+  2. |      Fair   Domestic   20.66667 |
+  3. |   Average   Domestic       21.5 |
+  4. |      Good   Domestic   22.33333 |
+  5. | Excellent   Domestic   21.66667 |
+     |---------------------------------|
+  6. |      Poor    Foreign       22.5 |
+  7. |      Fair    Foreign         22 |
+  8. |   Average    Foreign       21.5 |
+  9. |      Good    Foreign         21 |
+ 10. | Excellent    Foreign         23 |
+     +---------------------------------+
+
+. capture noisily tabdisp foreign rep78, cell(mpg) format(%9.2f) center
+
+-----------------------------------------------------------------
+          |                  Repair Record 1978                  
+ Car type |    Poor       Fair     Average      Good    Excellent
+----------+------------------------------------------------------
+ Domestic |   22.50      20.67      21.50      22.33      21.67  
+  Foreign |   22.50      22.00      21.50      21.00      23.00  
+-----------------------------------------------------------------
+
+. capture noisily table foreign rep78, c(mean mpg) format(%9.2f) center
+
+-----------------------------------------------------------------
+          |                  Repair Record 1978                  
+ Car type |    Poor       Fair     Average      Good    Excellent
+----------+------------------------------------------------------
+ Domestic |   22.50      20.67      21.50      22.33      21.67  
+  Foreign |   22.50      22.00      21.50      21.00      23.00  
+-----------------------------------------------------------------
+
+. capture noisily tabdisp foreign rep78, cell(mpg) format(%9.2f)
+
+-----------------------------------------------------------------
+          |                  Repair Record 1978                  
+ Car type |      Poor       Fair    Average       Good  Excellent
+----------+------------------------------------------------------
+ Domestic |     22.50      20.67      21.50      22.33      21.67
+  Foreign |     22.50      22.00      21.50      21.00      23.00
+-----------------------------------------------------------------
+
+. capture noisily table foreign rep78, c(mean mpg) format(%9.2f)
+
+-----------------------------------------------------------------
+          |                  Repair Record 1978                  
+ Car type |      Poor       Fair    Average       Good  Excellent
+----------+------------------------------------------------------
+ Domestic |     22.50      20.67      21.50      22.33      21.67
+  Foreign |     22.50      22.00      21.50      21.00      23.00
+-----------------------------------------------------------------
+
+. clear
+
+. input a b c
+
+             a          b          c
+  1. 0 1 15
+  2. 0 2 26
+  3. 0 3 11
+  4. 1 1 14
+  5. 1 2 12
+  6. 1 3 7
+  7. end
+
+. capture noisily tabdisp a b, cell(c)
+
+----------------------------
+          |        b        
+        a |    1     2     3
+----------+-----------------
+        0 |   15    26    11
+        1 |   14    12     7
+----------------------------
+
+. gen str8 make = "car" + string(_n)
+
+. gen mpg = c*2
+
+. capture noisily tabdisp make, cell(mpg c)
+
+----------------------------------
+     make |        mpg           c
+----------+-----------------------
+     car1 |         30          15
+     car2 |         52          26
+     car3 |         22          11
+     car4 |         28          14
+     car5 |         24          12
+     car6 |         14           7
+----------------------------------
+
+. capture noisily tabdisp a, cell(c mpg) totals
+
+----------------------------------
+        a |          c         mpg
+----------+-----------------------
+        0 |         15          30
+        1 |         14          28
+----------------------------------
+
+. capture noisily tabdisp a b, cell(c) concise
+
+----------------------------
+          |        b        
+        a |    1     2     3
+----------+-----------------
+        0 |   15    26    11
+        1 |   14    12     7
+----------------------------
+
+. capture noisily tabdisp a b, cell(c) missing
+
+----------------------------
+          |        b        
+        a |    1     2     3
+----------+-----------------
+        0 |   15    26    11
+        1 |   14    12     7
+----------------------------
+
+. capture noisily tabdisp a b, cell(c) dotz
+
+----------------------------
+          |        b        
+        a |    1     2     3
+----------+-----------------
+        0 |   15    26    11
+        1 |   14    12     7
+----------------------------
+
+. capture noisily tabdisp a b, cell(c mpg) cellwidth(8) csepwidth(3) scsepwidth(2) stubwidth(10)
+
+-------------------------------------------
+           |               b               
+         a |        1          2          3
+-----------+-------------------------------
+         0 |       15         26         11
+           |       30         52         22
+           | 
+         1 |       14         12          7
+           |       28         24         14
+-------------------------------------------
+
+. capture noisily tabdisp a b, cell(c) by(make)
+
+----------------------------
+make and  |        b        
+a         |    1     2     3
+----------+-----------------
+car1      |
+        0 |   15            
+        1 |                 
+----------+-----------------
+car2      |
+        0 |         26      
+        1 |                 
+----------+-----------------
+car3      |
+        0 |               11
+        1 |                 
+----------+-----------------
+car4      |
+        0 |                 
+        1 |   14            
+----------+-----------------
+car5      |
+        0 |                 
+        1 |         12      
+----------+-----------------
+car6      |
+        0 |                 
+        1 |                7
+----------------------------
+
+. capture noisily tabdisp a b, cell(c) format(%5.0f %5.1f)
+option format() incorrectly specified
+
+. capture noisily tabdisp a b
+cellvar() required
+
+. capture noisily tabdisp a b, cell(c mpg c mpg c mpg c mpg)
+too many variables specified
+option cell() incorrectly specified
+
+. capture noisily tabdisp a b if a == 5, cell(c)
+no observations
+
+. clear
+
+. input str6 agecat str6 sex str12 party str12 reaction
+
+        agecat        sex         party      reaction
+  1. "Old" "Female" "Democrat" "Favor"
+  2. "Old" "Male" "Democrat" "Favor"
+  3. "Old" "Female" "Republican" "Indifferent"
+  4. "Old" "Male" "Republican" "Disfavor"
+  5. "Young" "Female" "Democrat" "Strongly"
+  6. "Young" "Male" "Democrat" "Indiff"
+  7. "Young" "Female" "Republican" "Disfavor"
+  8. "Young" "Male" "Republican" "Disfavor"
+  9. end
+
+. label var party "Party Affiliation and Sex"
+
+. label var agecat "Age category"
+
+. capture noisily tabdisp agecat sex party, c(reaction) center
+
+----------------------------------------------------------------
+          |          Party Affiliation and Sex and sex          
+Age       | ------- Democrat -------    ------ Republican ------
+category  |    Female        Male          Female        Male   
+----------+-----------------------------------------------------
+      Old |    Favor        Favor       Indifferent    Disfavor 
+    Young |   Strongly      Indiff        Disfavor     Disfavor 
+----------------------------------------------------------------
+
+. capture noisily tabdisp agecat sex party, c(reaction)
+
+----------------------------------------------------------------
+          |          Party Affiliation and Sex and sex          
+Age       | ------- Democrat -------    ------ Republican ------
+category  |      Female         Male         Female         Male
+----------+-----------------------------------------------------
+      Old |       Favor        Favor    Indifferent     Disfavor
+    Young |    Strongly       Indiff       Disfavor     Disfavor
+----------------------------------------------------------------
+
+. capture noisily tabdisp agecat sex party, c(reaction) by(party)
+
+-----------------------------------------------------------------
+Party      |
+Affiliatio |
+n and Sex  |          Party Affiliation and Sex and sex          
+and Age    | ------- Democrat -------    ------ Republican ------
+category   |      Female         Male         Female         Male
+-----------+-----------------------------------------------------
+Democrat   |
+       Old |       Favor        Favor                            
+     Young |    Strongly       Indiff                            
+-----------+-----------------------------------------------------
+Republican |
+       Old |                             Indifferent     Disfavor
+     Young |                                Disfavor     Disfavor
+-----------------------------------------------------------------
+
+. capture noisily tabdisp agecat sex, c(reaction) left
+
+------------------------------------
+Age       |           sex           
+category  |      Female         Male
+----------+-------------------------
+Old       |       Favor        Favor
+Young     |    Strongly       Indiff
+------------------------------------
+
+. 
+. * tabdisp: widths, titles and separations (probes)
+. clear
+
+. input g h v
+
+             g          h          v
+  1. 1 1 5
+  2. 1 2 123456
+  3. 2 1 1.5
+  4. 2 2 -3
+  5. end
+
+. gen double w = v*1000
+
+. label var v "Value of v"
+
+. gen str2 bb = "ab"
+
+. capture noisily tabdisp g h, cell(v)
+
+--------------------------
+          |       h       
+        g |      1       2
+----------+---------------
+        1 |      5  123456
+        2 |    1.5      -3
+--------------------------
+
+. capture noisily tabdisp g, cell(v)
+
+----------------------
+        g | Value of v
+----------+-----------
+        1 |          5
+        2 |        1.5
+----------------------
+
+. capture noisily tabdisp g, cell(w)
+
+----------------------
+        g |          w
+----------+-----------
+        1 |       5000
+        2 |       1500
+----------------------
+
+. capture noisily tabdisp g, cell(v w)
+
+----------------------------------
+        g | Value of v           w
+----------+-----------------------
+        1 |          5        5000
+        2 |        1.5        1500
+----------------------------------
+
+. capture noisily tabdisp g h, cell(v w)
+
+--------------------------------
+          |          h          
+        g |         1          2
+----------+---------------------
+        1 |         5     123456
+          |      5000  1.235e+08
+          | 
+        2 |       1.5         -3
+          |      1500      -3000
+--------------------------------
+
+. capture noisily tabdisp g h, cell(v) format(%7.1f)
+
+------------------------------
+          |         h         
+        g |        1         2
+----------+-------------------
+        1 |      5.0  123456.0
+        2 |      1.5      -3.0
+------------------------------
+
+. capture noisily tabdisp g h, cell(v) format(%12.2f)
+
+--------------------------------
+          |          h          
+        g |         1          2
+----------+---------------------
+        1 |      5.00  123456.00
+        2 |      1.50      -3.00
+--------------------------------
+
+. capture noisily tabdisp g bb, cell(v)
+
+------------------
+          |   bb  
+        g |     ab
+----------+-------
+        1 |      5
+        2 |    1.5
+------------------
+
+. capture noisily tabdisp g h, cell(v) center
+
+--------------------------
+          |       h       
+        g |    1       2  
+----------+---------------
+        1 |      5  123456
+        2 |    1.5      -3
+--------------------------
+
+. capture noisily tabdisp g h, cell(v) csepwidth(5)
+
+-----------------------------
+          |         h        
+        g |      1          2
+----------+------------------
+        1 |      5     123456
+        2 |    1.5         -3
+-----------------------------
+
+. capture noisily tabdisp g h, cell(v) stubwidth(12)
+
+-----------------------------
+             |       h       
+           g |      1       2
+-------------+---------------
+           1 |      5  123456
+           2 |    1.5      -3
+-----------------------------
+
+. capture noisily tabdisp g h, cell(v) cellwidth(12) center
+
+--------------------------------------
+          |             h             
+        g |       1             2     
+----------+---------------------------
+        1 |         5        123456   
+        2 |       1.5            -3   
+--------------------------------------
+
+. clear
+
+. input str5 r str5 c str5 sc str9 val
+
+             r          c         sc        val
+  1. "x" "p" "Green" "a"
+  2. "x" "q" "Green" "b"
+  3. "y" "p" "Red" "c"
+  4. "y" "q" "Red" "d"
+  5. end
+
+. capture noisily tabdisp r c sc, cell(val)
+
+------------------------------------
+          |         sc and c        
+          | -- Green -    --- Red --
+        r |    p     q       p     q
+----------+-------------------------
+        x |    a     b              
+        y |                  c     d
+------------------------------------
+
+. capture noisily tabdisp r c sc, cell(val) scsepwidth(5) csepwidth(1)
+
+-----------------------------------
+          |        sc and c        
+          | - Green -     -- Red --
+        r |    p    q        p    q
+----------+------------------------
+        x |    a    b              
+        y |                  c    d
+-----------------------------------
+
+. capture noisily tabdisp r c sc, cell(val) center
+
+------------------------------------
+          |         sc and c        
+          | -- Green -    --- Red --
+        r |   p     q       p     q 
+----------+-------------------------
+        x |   a     b               
+        y |                 c     d 
+------------------------------------
+
+. capture noisily tabdisp r c, cell(val) by(sc)
+
+----------------------
+          |     c     
+ sc and r |    p     q
+----------+-----------
+Green     |
+        x |    a     b
+        y |           
+----------+-----------
+Red       |
+        x |           
+        y |    c     d
+----------------------
+
+. 
+. * program, sortpreserve
+. clear
+
+. set obs 6
+number of observations (_N) was 0, now 6
+
+. gen x = 7 - _n
+
+. gen y = _n
+
+. sort y
+
+. capture program drop odta_mysort
+
+. program define odta_mysort, sortpreserve
+  1.     sort x
+  2.     display "inside: `_sortindex'"
+  3.     list y, noobs clean
+  4. end
+
+. capture noisily odta_mysort
+inside: __00000F
+
+    y  
+    6  
+    5  
+    4  
+    3  
+    2  
+    1  
+
+. capture noisily list x y, noobs clean
+
+    x   y  
+    6   1  
+    5   2  
+    4   3  
+    3   4  
+    2   5  
+    1   6  
+
+. capture noisily display "`: sortedby'"
+y
+
+. capture program drop odta_baddrop
+
+. program define odta_baddrop, sortpreserve
+  1.     drop `_sortindex'
+  2. end
+
+. capture noisily odta_baddrop
+could not restore sort order because variables were dropped
+
+. display _rc
+0
+
+. capture program drop odta_errp
+
+. program define odta_errp, sortpreserve
+  1.     sort x
+  2.     error 198
+  3. end
+
+. capture noisily odta_errp
+invalid syntax
+
+. display _rc
+198
+
+. capture noisily list x y, noobs clean
+
+    x   y  
+    6   1  
+    5   2  
+    4   3  
+    3   4  
+    2   5  
+    1   6  
+
+. capture program drop odta_srt
+
+. program define odta_srt, sortpreserve
+  1.     gen z = _n
+  2.     drop in 1
+  3.     expand 2
+  4. end
+
+. capture noisily odta_srt
+(1 observation deleted)
+(5 observations created)
+
+. capture noisily list, noobs clean
+
+    x   y   z  
+    5   2   2  
+    5   2   2  
+    4   3   3  
+    4   3   3  
+    3   4   4  
+    3   4   4  
+    2   5   5  
+    2   5   5  
+    1   6   6  
+    1   6   6  
+
+. 
+. * plugin
+. capture noisily program foo, plugin using(odta_nofile.plugin)
+file odta_nofile.plugin not found
+
+. capture noisily plugin call foo
+unrecognized command
+
+. capture noisily plugin call
+unrecognized command
+
+. 
+. * pause, sleep
+. capture noisily pause off
+
+. capture noisily pause here we are
+
+. capture noisily pause
+
+. capture noisily sleep 50
+
+. capture noisily sleep
+ not found
+
+. capture noisily sleep abc
+abc not found
+
+. capture noisily pause bogus
+
+. 
+. * signestimationsample, checkestimationsample
+. clear
+
+. set obs 30
+number of observations (_N) was 0, now 30
+
+. gen x1 = _n
+
+. gen x2 = mod(_n*7,11)
+
+. gen y = 2*x1 - x2 + mod(_n,3)
+
+. capture noisily regress y x1 x2
+
+      Source |       SS           df       MS      Number of obs   =        30
+-------------+----------------------------------   F(2, 27)        =   6482.02
+       Model |   9550.8087         2  4775.40435   Prob > F        =    0.0000
+    Residual |  19.8913043        27  .736714976   R-squared       =    0.9979
+-------------+----------------------------------   Adj R-squared   =    0.9978
+       Total |      9570.7        29  330.024138   Root MSE        =    .85832
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.995059   .0181814   109.73   0.000     1.957754    2.032364
+          x2 |  -1.014822   .0502096   -20.21   0.000    -1.117844   -.9118005
+       _cons |   1.152174   .4275022     2.70   0.012     .2750118    2.029336
+------------------------------------------------------------------------------
+
+. capture noisily signestimationsample y x1 x2
+
+. capture noisily display e(datasignaturevars)
+y x1 x2
+
+. capture noisily display e(datasignature)
+30:3:1614346768:1073576682
+
+. capture noisily checkestimationsample
+
+. replace x1 = x1 + 1 in 3
+(1 real change made)
+
+. capture noisily checkestimationsample
+data have changed since estimation
+
+. replace x1 = x1 - 1 in 3
+(1 real change made)
+
+. capture noisily checkestimationsample
+
+. capture noisily signestimationsample
+varlist required
+
+. capture noisily signestimationsample junk
+variable junk not found
+
+. capture noisily regress y x1 if x2 > 3
+
+      Source |       SS           df       MS      Number of obs   =        19
+-------------+----------------------------------   F(1, 17)        =   1324.93
+       Model |  5924.50978         1  5924.50978   Prob > F        =    0.0000
+    Residual |  76.0165351        17  4.47156089   R-squared       =    0.9873
+-------------+----------------------------------   Adj R-squared   =    0.9866
+       Total |  6000.52632        18  333.362573   Root MSE        =    2.1146
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   2.056746   .0565046    36.40   0.000     1.937531     2.17596
+       _cons |  -7.018038   .9843385    -7.13   0.000    -9.094811   -4.941266
+------------------------------------------------------------------------------
+
+. capture noisily signestimationsample y x1
+
+. capture noisily display e(datasignature)
+19:2:856994943:607994113
+
+. capture noisily summarize y
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+           y |         30        26.9    18.16657         -4         59
+
+. capture noisily signestimationsample y
+
+. 
+. * makecns, matcproc
+. quietly regress y x1 x2
+
+. matrix C = (1, -1, 0, 0)
+
+. capture noisily makecns C, r
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  1
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "C"
+               r(cns1) : "x1 - x2 = 0"
+
+. capture noisily matrix list e(Cns)
+
+e(Cns)[1,4]
+       x1     x2  _cons     _r
+r1      1     -1      0      0
+
+. capture noisily matcproc T a Cx
+
+. capture noisily matrix list T
+
+T[3,2]
+              c1         c2
+   x1          0  .70710678
+   x2          0  .70710678
+_cons          1          0
+
+. capture noisily matrix list a
+
+a[1,3]
+       x1     x2  _cons
+r1      0      0      0
+
+. capture noisily matrix list Cx
+
+Cx[1,4]
+       x1     x2  _cons     _r
+r1      1     -1      0      0
+
+. capture noisily makecns
+
+. display _rc
+0
+
+. matrix C2 = (2, 0, -3, 5 \ 0, 1, 1, 0)
+
+. capture noisily makecns C2, r
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  2
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "C2"
+               r(cns2) : "x2 + _cons = 0"
+               r(cns1) : "2*x1 - 3*_cons = 5"
+
+. capture noisily makecns Zzz
+(note: constraint matrix 'Zzz' caused error r(111))
+
+. display _rc
+0
+
+. capture noisily makecns Zzz
+(note: constraint matrix 'Zzz' caused error r(111))
+
+. matrix Cbad = (1, -1)
+
+. capture noisily makecns Cbad
+(note: constraint matrix 'Cbad' caused error r(503))
+
+. capture noisily matcproc T a
+namelist:  too few specified
+
+. 
+. * viewsource
+. capture noisily viewsource nothing.ado
+file "nothing.ado" not found
+
+. capture noisily viewsource
+file "" not found
+
+. capture erase odta_results.dta
+
+. capture erase odta_r2.dta
+
+. capture erase odta_r3.dta
+
+. capture erase odta_r4.dta
+
+. capture erase odta_r5.dta
+
+. capture erase odta_r6.dta
+
+. capture erase odta_r7.dta
+
+. capture erase odta_r8.dta
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1801_programming.log
+  log type:  text
+ closed on:  19 Oct 2026, 16:36:36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -186,6 +186,17 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] `describe` with `numbers`, `varlist`, `replace` and `using`; `list` with `header()`, `nodotz`, `mean`, `sum`, `N`, `labvar()` and `nocompress`
 - Case `1701` awaits the Stata run
 
+## Phase 14: programming ✅
+
+- [x] `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar` and `_rmcoll`, with factor-variable and time-series operators (specific forms such as `i(2,3)bn.rep78` included)
+- [x] `mark`, `markin` and `markout` (with `sysmissok`); `marksample` and `syntax varlist(fv ts)` with factor variables and time-series operators
+- [x] `postfile`, `post`, `postclose` and `postutil`
+- [x] `matlist` (column and row specifications, borders, formats, titles) and `tabdisp` (one to three variables, `by()`, totals, `concise`, `dotz`)
+- [x] `program, sortpreserve`; `program name, plugin` (explains that Stata plugins cannot be loaded)
+- [x] `pause`, `sleep`, `window` (in batch mode the dialogs act as cancelled) and `viewsource` (shows OpenDTA's own source)
+- [x] `signestimationsample`, `checkestimationsample`, `makecns` with a constraint matrix and `matcproc`
+- Checked against the Stata log: case `1801`
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -217,7 +228,7 @@ Commands and options that OpenDTA does not have yet, by area. They will be added
 - **Multivariate statistics**: `pca`, `factor`, `rotate`, `alpha`, `cluster`, `discrim`, `manova`, `mvreg`, `mvtest`, `canon`, `ca`/`mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`.
 - **Multilevel models**: `meglm`, `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `meqrlogit`, `meqrpoisson`, `mestreg`; crossed random effects in `mixed`.
 - **Other suites**: `gsem`; `sem` with the `mlmv` and `adf` methods, `group()` and the other `estat` subcommands; the other `power` methods (variances, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), the `lrchi2` and `fisher` tests and graphs; `bayesmh` and the `bayes` commands; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with more estimators.
-- **Programming**: `postfile`/`post`, `unab`, `tsunab`, `fvunab`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve`, `signestimationsample`, `makecns`, `pause`, `sleep`, `window`, `plugin`, `viewsource`, `unabcmd`, Stata's class system (Mata classes already work).
+- **Programming**: `makecns` with a constraint list and `displaycns` (they need `constraint`, from the Models area); `matlist` with the equation options; `window` dialogs and menus in the graphical interface; `plugin` loading (compiled Stata plugins cannot run in OpenDTA); Stata's class system (Mata classes already work).
 
 ## Long term
 

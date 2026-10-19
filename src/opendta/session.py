@@ -221,6 +221,7 @@ class Session:
         for name in scope.tempnames:
             self.scalars.pop(name, None)
             getattr(self, "matrices", {}).pop(name, None)
+            getattr(self, "posts", {}).pop(name, None)
         for path in scope.tempfiles:
             for p in (path, path.with_suffix(".dta")):
                 try:

@@ -20,6 +20,7 @@ O OpenDTA cobre o núcleo dos comandos: a linguagem dos do-files, a manipulaçã
 - interface gráfica com as janelas Results, Command, Review, Variables e Properties, além de menus, barra de ferramentas com ícones próprios e uma janela Settings (Ctrl+, / ⌘,) com busca, tema claro, escuro ou do sistema, ícone do app, fonte, idioma, opções dos resultados e atualizações, aplicados na hora;
 - console de texto e modo batch (`opendta -b do arquivo.do`, que grava `arquivo.log` como o `stata -b`);
 - programação: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, funções estendidas de macro, `matrix`, `.ado` de terceiros no adopath, `log`/`cmdlog`, `assert`, `set trace` e `timer`;
+- utilitários de listas de variáveis e de programação: `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `_rmcoll`, `mark`, `markin`, `markout`; `postfile`, `post` e `postclose`; `matlist` e `tabdisp`; `program, sortpreserve`; `pause`, `sleep`, `window`, `viewsource`; `signestimationsample`, `makecns` e `matcproc`;
 - Viewer com `help` em SMCL (páginas próprias e as de pacotes instalados);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
 - `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;

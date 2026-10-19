@@ -62,6 +62,11 @@ def cmd_program(s: "Session", args: str) -> None:
             for k, ln in enumerate(p.lines, start=1):
                 out.write(f"  {k}.  {ln.text}\n", "text")
         return
+    # a prefix (capture, quietly...) sends `program name, plugin` here
+    from ..lang.programs import define_plugin, parse_definition
+    name, options = parse_definition(args)
+    if "plugin" in options:
+        define_plugin(s, name, options)
     raise StataError(198, "invalid syntax")
 
 

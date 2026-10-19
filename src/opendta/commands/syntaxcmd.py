@@ -18,9 +18,11 @@ from ..core import missing as M
 from ..core.dataset import NAME_RE, Variable
 from ..core.errors import StataError
 from ..core.formats import number_to_macro
-from ..lang.syntax import Parsed, parse_options, parse_standard
+from ..lang.syntax import Parsed, match_options, parse_options, parse_standard
 from ..lang.words import parse_numlist, strip_outer_quotes
+from ..estimation import fvars
 from ._util import touse
+from .summarize import weights
 from .registry import command
 
 if TYPE_CHECKING:
@@ -249,7 +251,11 @@ def _main(s: "Session", spec: Spec, text: str, locs: dict[str, str]) -> None:
         locs[lname] = " ".join(names)
         locs["typlist"] = " ".join(types)
         return
-    names = s.expand_varlist(text)
+    if kind == "varlist" and fvars.has_fv_or_ts(text):
+        names = fvars.unabbreviate(s.data, text, s.settings.get("varabbrev", "on") == "on",
+                                   fv="fv" in sp, ts="ts" in sp)
+    else:
+        names = s.expand_varlist(text)
     if kind == "varname" and len(names) > 1:
         raise StataError(103, "too many variables specified")
     _count(names, sp, kind)
@@ -494,16 +500,22 @@ def _gettoken(text: str, parse_chars: str, keep_quotes: bool, match_paren: bool)
 # marksample / markout
 # ---------------------------------------------------------------------------
 
-def _markout(s: "Session", mask: np.ndarray, names: list[str], strok: bool) -> np.ndarray:
+def _markout(s: "Session", mask: np.ndarray, names: list[str], strok: bool,
+             sysmissok: bool = False) -> np.ndarray:
     ds = s.data
     for n in names:
+        if not ds.has(n):
+            # a factor variable or time-series operator (varlist(fv ts)): its variables decide
+            from ..estimation import fvars
+            mask &= ~fvars.term_missing(ds, fvars.expand_fv(ds, n))
+            continue
         v = ds.get(n)
         if v.is_string:
             if strok:
                 mask &= np.array([x != "" for x in v.raw], dtype=bool)
             # VERIFY: without strok, string variables are ignored
         else:
-            mask &= v.data < M.SYSMISS
+            mask &= (v.data <= M.SYSMISS) if sysmissok else (v.data < M.SYSMISS)
     return mask
 
 
@@ -544,19 +556,48 @@ def cmd_markout(s: "Session", args: str) -> None:
     if not words:
         raise StataError(198, "invalid syntax")
     marker = s.data.get(words[0])
-    names = s.expand_varlist(" ".join(words[1:])) if len(words) > 1 else []
+    if marker.vtype != "byte":
+        raise StataError(198, f"{marker.name} not byte")
+    rest = " ".join(words[1:])
+    names = rest.split() if fvars.has_fv_or_ts(rest) else s.expand_varlist(rest) if rest else []
     o = {n.lower() for n, _ in (parse_options(opts) if opts.strip() else [])}
     mask = marker.data != 0
     mask &= marker.data < M.SYSMISS
-    mask = _markout(s, mask, names, "strok" in o)
+    mask = _markout(s, mask, names, "strok" in o, "sysmissok" in o)
     s.data.set_numeric(marker, mask.astype(np.float64), promote=False)
+
+
+@command("mark")
+def cmd_mark(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    name = p.varlist.strip()
+    if not NAME_RE.match(name):
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"zeroweight": 5, "noby": 4}) if p.options.strip() else {}
+    mask = touse(s, p)
+    w, _, mask = weights(s, p, mask, ("fweight", "aweight", "iweight", "pweight"))
+    if w is not None and o.get("zeroweight"):
+        mask = touse(s, p) & (w >= 0) & (w < M.SYSMISS)
+    s.data.add(Variable(name, "byte", mask.astype(np.float64)))
+
+
+@command("markin")
+def cmd_markin(s: "Session", args: str) -> None:
+    p = parse_standard(args)
+    if p.varlist.strip():
+        raise StataError(198, "invalid syntax")
+    o = match_options(p.options, {"name": 4, "noby": 4}) if p.options.strip() else {}
+    lname = str(o["name"]) if o.get("name") not in (None, True) else "in"
+    rows = np.flatnonzero(touse(s, p))
+    # VERIFY: the macro when no observation is selected
+    s.macros.set_local(lname, f"in {rows[0] + 1}/{rows[-1] + 1}" if len(rows) else "")
 
 
 def _temp_name(s: "Session") -> str:
     """__000000, __000001, ... (nomes livres)."""
     k = getattr(s, "_temp_counter", 0)
     while True:
-        name = f"__{k:06d}"
+        name = f"__{k:06X}"
         k += 1
         if not s.data.has(name) and name not in s.scalars:
             s._temp_counter = k

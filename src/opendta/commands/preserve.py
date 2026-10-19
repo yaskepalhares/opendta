@@ -80,7 +80,7 @@ def cmd_restore(s: "Session", args: str) -> None:
 def _counter(s: "Session") -> str:
     k = getattr(s, "_temp_counter", 0)
     while True:
-        name = f"__{k:06d}"
+        name = f"__{k:06X}"
         k += 1
         if not s.data.has(name) and name not in s.scalars and name not in getattr(s, "matrices", {}):
             s._temp_counter = k
