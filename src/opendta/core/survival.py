@@ -153,3 +153,210 @@ def gaps(t0: np.ndarray, t: np.ndarray, bounds: np.ndarray):
                 tot += t0[k] - t[k - 1]
             ng[k], gl[k] = cnt, tot
     return ng, gl
+
+
+# ---------------------------------------------------------------------------
+# rates: strate, stptime
+# ---------------------------------------------------------------------------
+
+def _z(level: float) -> float:
+    from scipy import stats
+    return float(stats.norm.ppf(1 - (1 - level / 100) / 2))
+
+
+def poisson_rate_ci(d: float, rate: float, level: float) -> tuple[float, float]:
+    """Limits from a quadratic approximation to the Poisson log likelihood of ln(rate): the
+    standard error of ln(rate) is 1/sqrt(failures) ([ST] strate). Missing without failures."""
+    if not d > 0:
+        return float("nan"), float("nan")
+    f = float(np.exp(_z(level) / np.sqrt(d)))
+    return rate / f, rate * f
+
+
+def jackknife_log_ci(num: np.ndarray, den: np.ndarray, cluster: np.ndarray, level: float
+                     ) -> tuple[float, float, float]:
+    """Rate = sum(num)/sum(den) with a delete-one-cluster jackknife on ln(rate): returns
+    (rate, lower, upper). VERIFY: Stata's jackknife intervals."""
+    ids, inv = np.unique(cluster, return_inverse=True)
+    g = len(ids)
+    N, D = float(num.sum()), float(den.sum())
+    rate = N / D
+    if g < 2 or not rate > 0:
+        return rate, float("nan"), float("nan")
+    cn = np.bincount(inv, weights=num, minlength=g)
+    cd = np.bincount(inv, weights=den, minlength=g)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        loo = np.log((N - cn) / (D - cd))
+    theta = np.log(rate)
+    pseudo = g * theta - (g - 1) * loo
+    if not np.all(np.isfinite(pseudo)):
+        return rate, float("nan"), float("nan")
+    se = float(np.sqrt(np.var(pseudo, ddof=1) / g))
+    z = _z(level)
+    return rate, float(np.exp(theta - z * se)), float(np.exp(theta + z * se))
+
+
+# ---------------------------------------------------------------------------
+# stci
+# ---------------------------------------------------------------------------
+
+def km_percentile_se(times: np.ndarray, S: np.ndarray, gw: np.ndarray, tp: float, p: float,
+                     eps: float = 0.05) -> float:
+    """Large-sample standard error of the p-th percentile, sqrt(Var S(tp)) / f(tp), with the
+    density estimated as in Collett (2003): (S(u) - S(l)) / (l - u) with u the largest time with
+    S >= 1 - p + eps and l the smallest time with S <= 1 - p - eps (VERIFY: Stata's epsilon)."""
+    q = 1 - p
+    up = np.flatnonzero(S >= q + eps)
+    lo = np.flatnonzero(S <= q - eps)
+    if not len(lo):
+        return float("nan")
+    u = float(times[up[-1]]) if len(up) else 0.0
+    Su = float(S[up[-1]]) if len(up) else 1.0
+    l_ = float(times[lo[0]])
+    dens = (Su - float(S[lo[0]])) / (l_ - u) if l_ > u else float("nan")
+    j = np.searchsorted(times, tp, "right") - 1
+    var = (S[j] ** 2) * gw[j] if j >= 0 else 0.0
+    return float(np.sqrt(var) / dens) if dens and np.isfinite(dens) else float("nan")
+
+
+def km_rmean(times: np.ndarray, S: np.ndarray, d: np.ndarray, n: np.ndarray, tmax: float,
+             ccorr: bool = False):
+    """Area under the Kaplan-Meier curve up to tmax and its standard error ([ST] stci). Returns
+    (mean, se). The continuity correction multiplies the variance by m/(m-1) (VERIFY)."""
+    keep = times <= tmax
+    t, Sx = times[keep], S[keep]
+    edges = np.concatenate([[0.0], t, [tmax]]) if (len(t) == 0 or t[-1] < tmax) else np.concatenate([[0.0], t])
+    vals = np.concatenate([[1.0], Sx])
+    if len(edges) > len(vals):
+        vals = np.concatenate([vals, [vals[-1]]])
+    seg = np.diff(edges)
+    area_after = np.concatenate([np.cumsum((seg * vals[:len(seg)])[::-1])[::-1], [0.0]])
+    mean = float(area_after[0])
+    # A_i: area from the i-th failure time to tmax
+    idx = np.searchsorted(edges, t) if len(t) else np.array([], dtype=int)
+    A = area_after[np.minimum(idx, len(area_after) - 1)] if len(t) else np.array([])
+    dk, nk = d[keep], n[keep]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        term = np.where((dk > 0) & (nk > dk), dk / (nk * (nk - dk)), 0.0)
+    var = float(np.sum(A * A * term))
+    if ccorr:
+        m = float(dk.sum())
+        var *= m / (m - 1) if m > 1 else 1.0
+    return mean, float(np.sqrt(var))
+
+
+def km_emean(times: np.ndarray, S: np.ndarray, rmean: float, tmax: float) -> float:
+    """Extended mean: the restricted mean plus the area under an exponential tail that starts at
+    the last time with the last survivor value (VERIFY: Stata's extension)."""
+    if not len(S) or S[-1] <= 0:
+        return rmean
+    return rmean + float(S[-1]) * tmax / -float(np.log(S[-1]))
+
+
+# ---------------------------------------------------------------------------
+# ltable
+# ---------------------------------------------------------------------------
+
+
+def life_table(t: np.ndarray, dead: np.ndarray, w: np.ndarray, spec, adjust: bool, level: float):
+    """The rows of [ST] ltable: for each interval with observations, a dict with lo, hi (None for the
+    open last interval), N (beginning total), d, m, n (adjusted at risk), S, se, lb, ub, hazard,
+    hazard se and interval. `spec` is a width or the list of cut points."""
+    if np.isscalar(spec):
+        wd = float(spec)
+        lo_all = np.floor(t / wd) * wd
+        starts = np.unique(lo_all)
+        his = {s_: s_ + wd for s_ in starts}
+        key = lo_all
+    else:
+        cuts = np.asarray(sorted(spec), dtype=float)
+        idx = np.searchsorted(cuts, t, "right") - 1
+        key = np.where(idx >= 0, cuts[np.maximum(idx, 0)], np.nan)
+        starts = np.unique(key[~np.isnan(key)])
+        his = {c: (cuts[i + 1] if i + 1 < len(cuts) else None) for i, c in enumerate(cuts)}
+    z = _z(level)
+    rows = []
+    alive = float(w[~np.isnan(key)].sum())
+    S, gsum = 1.0, 0.0
+    zero = False
+    for c in starts:
+        sel = key == c
+        d = float(w[sel & (dead != 0)].sum())
+        m = float(w[sel & (dead == 0)].sum())
+        N = alive
+        n = N - m / 2 if adjust else N
+        row = {"lo": float(c), "hi": his[c], "N": N, "d": d, "m": m, "n": n}
+        if not zero:
+            q = 1 - d / n if n > 0 else 1.0
+            if n > 0 and n - d > 0:
+                gsum += d / (n * (n - d))
+            S *= q
+            if n > 0 and n - d <= 0:
+                zero = True
+        row["S"] = S
+        if zero or not (S > 0):
+            row.update(se=float("nan"), lb=float("nan"), ub=float("nan"))
+        elif S >= 1:
+            row.update(se=0.0, lb=float("nan"), ub=float("nan"))
+        else:
+            se = S * float(np.sqrt(gsum))
+            sig = float(np.sqrt(gsum)) / abs(float(np.log(S)))
+            row.update(se=se, lb=S ** float(np.exp(z * sig)), ub=S ** float(np.exp(-z * sig)))
+        # hazard
+        if row["hi"] is None:
+            row.update(h=float("nan"), hse=float("nan"), hlb=float("nan"), hub=float("nan"))
+        else:
+            width = row["hi"] - row["lo"]
+            if adjust:
+                f = d / n if n > 0 else float("nan")
+                h = f / ((1 - f / 2) * width)
+                hse = h * float(np.sqrt(max(1 - (width * h / 2) ** 2, 0)) / np.sqrt(d)) if d > 0 else float("nan")
+                hlb, hub = h - z * hse, h + z * hse
+            else:
+                f = d / N if N > 0 else float("nan")
+                h = f / width
+                hse = h / float(np.sqrt(d)) if d > 0 else float("nan")
+                from scipy import stats
+                if d > 0:
+                    hlb = h / (2 * d) * float(stats.chi2.ppf((1 - level / 100) / 2, 2 * d))
+                    hub = h / (2 * d) * float(stats.chi2.ppf(1 - (1 - level / 100) / 2, 2 * d))
+                else:
+                    hlb = hub = float("nan")
+            row.update(h=h, hse=hse, hlb=hlb, hub=hub)
+        rows.append(row)
+        alive -= d + m
+    return rows
+
+
+def lr_exponential(d: np.ndarray, T: np.ndarray) -> tuple[float, int]:
+    """Likelihood-ratio test of equal exponential hazards: 2[sum d_g ln(d_g/T_g) - D ln(D/T)]."""
+    d, T = np.asarray(d, float), np.asarray(T, float)
+    ok = d > 0
+    D, TT = d.sum(), T.sum()
+    stat = 2 * (float(np.sum(d[ok] * np.log(d[ok] / T[ok]))) - D * float(np.log(D / TT)))
+    return stat, len(d) - 1
+
+
+def logrank_chi2(t: np.ndarray, dead: np.ndarray, w: np.ndarray, g: np.ndarray, G: int) -> tuple[float, int]:
+    """Log-rank statistic for G groups (g = 0..G-1) with the hypergeometric variance."""
+    O = np.zeros(G)
+    E = np.zeros(G)
+    V = np.zeros((G, G))
+    for x in np.unique(t[dead != 0]):
+        risk = t >= x
+        nt = float(w[risk].sum())
+        ev = (t == x) & (dead != 0)
+        dt = float(w[ev].sum())
+        ng = np.bincount(g[risk], weights=w[risk], minlength=G)
+        dg = np.bincount(g[ev], weights=w[ev], minlength=G)
+        O += dg
+        E += dt * ng / nt
+        if nt > 1:
+            V += dt * (nt - dt) / (nt - 1) / nt * (np.diag(ng) - np.outer(ng, ng) / nt)
+    k = G - 1
+    diff = (O - E)[:k]
+    try:
+        chi2 = float(diff @ np.linalg.solve(V[:k, :k], diff))
+    except np.linalg.LinAlgError:
+        chi2 = float(diff @ np.linalg.pinv(V[:k, :k]) @ diff)
+    return chi2, k
