@@ -236,13 +236,15 @@ def main(argv: list[str] | None = None) -> int:
                     # does not accept
                     fa, fb = (a, b) if k is None or k.ignore is None else (
                         [x for x in a if not k.ignore.search(x)], [x for x in b if not k.ignore.search(x)])
-                    if k is not None and len(fa) == len(fb):
-                        diff = [pre + ln for x, y in zip(fa, fb)
-                                if not (x == y or _close_line(x, y) or (k.tol is not None and _within(x, y, k.tol)))
-                                for pre, ln in (("-", x), ("+", y))][:12]
-                    else:
-                        diff = [ln for ln in difflib.unified_diff(fa, fb, "Stata 14", "OpenDTA", lineterm="", n=0)
-                                if ln[:1] in "+-" and not ln.startswith(("---", "+++"))][:12]
+                    ok = (lambda x, y: x == y or _close_line(x, y)
+                          or (k is not None and k.tol is not None and _within(x, y, k.tol)))
+                    diff = []
+                    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, fa, fb, autojunk=False).get_opcodes():
+                        if tag == "equal" or (i2 - i1 == j2 - j1 and all(ok(x, y) for x, y in
+                                                                          zip(fa[i1:i2], fb[j1:j2]))):
+                            continue
+                        diff += ["-" + x for x in fa[i1:i2]] + ["+" + y for y in fb[j1:j2]]
+                    diff = diff[:12]
                     body = "%0A".join(ln.replace("%", "%25") for ln in diff)
                     print(f"::error title=compat {f.stem}::{body}")
             if ns.show_diff:
