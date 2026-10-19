@@ -21,6 +21,13 @@ Each block follows the same steps:
 7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another.
 8. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
 
+Notes for sessions that run in the cloud:
+
+- The work is done in a clone in the cloud, which reaches GitHub; the user's computer does not. After each push, tell the user to `git pull` the branch. Use `git push -u origin <branch>` on the first push, so that git knows the remote branch.
+- `pytest` may not install there (no access to PyPI): the tests that need optional packages (`pyreadstat`, `xlrd`, `xlwt`) run only in CI. Wait for CI and read the result before asking for the Stata run.
+- The CI logs cannot be downloaded from the cloud, but the annotations of each job show the `tools/compare.py` differences (`gh api repos/<owner>/<repo>/check-runs/<id>/annotations`). `gh pr` fails because GraphQL is blocked: open and merge the pull request with `gh api` (REST), using a merge commit.
+- A reference log from the Stata run is never edited by hand: when a case changes, the Stata run is repeated.
+
 Next free numbers: compat cases from **1801**, roadmap phases from **14**.
 
 ## Rule: statistics in the core, Stata in the command
