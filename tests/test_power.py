@@ -42,7 +42,8 @@ def test_twomeans_and_paired(run):
 
 def test_proportions_and_correlations(run):
     run("power twoproportions .3 .45")
-    assert run.eval("r(N_per_group)") == 163
+    assert run.eval("r(N1)") == run.eval("r(N2)") == 163
+    assert run.eval("r(init)") == 163       # closed-form size, rounded up (compat 1301)
     run("power oneproportion .3 .4")
     z1, z2 = stats.norm.isf(.025), stats.norm.isf(.2)
     n = ((z1 * math.sqrt(.21) + z2 * math.sqrt(.24)) / .1) ** 2
@@ -51,6 +52,13 @@ def test_proportions_and_correlations(run):
     assert run.eval("r(N)") == 85
     run("power twocorrelations .3 .5, n(400)")
     assert 0 < run.eval("r(power)") < 1
+
+
+def test_binomial_actual_alpha(run):
+    out = run("power oneproportion .3 .4, test(binomial) n(150)")
+    # equal-tailed rejection region {<= 33} U {>= 57} under p0 = .3 (compat 1301)
+    size = stats.binom.cdf(33, 150, .3) + stats.binom.sf(56, 150, .3)
+    assert f"actual alpha = {size:9.4f}" in out
 
 
 def test_table_of_values(run):

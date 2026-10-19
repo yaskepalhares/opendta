@@ -325,7 +325,8 @@ class _OneProportion(_Method):
         sides = _sides(c)
         kind = self.kind()
         if kind == "binomial":
-            return _binom_power(int(round(n)), p0, pa, a, sides, 1 if pa >= p0 else -1)
+            pw, c["actual_alpha"] = _binom_power(int(round(n)), p0, pa, a, sides, 1 if pa >= p0 else -1)
+            return pw
         s0 = math.sqrt(p0 * (1 - p0)) if kind == "score" else math.sqrt(pa * (1 - pa))
         sa = math.sqrt(pa * (1 - pa))
         d = abs(pa - p0)
@@ -343,25 +344,26 @@ class _OneProportion(_Method):
         return [("delta", self.delta(c)), ("p0", c["p0"]), ("pa", c["pa"])]
 
 
-def _binom_power(n: int, p0: float, pa: float, alpha: float, sides: int, direction: int) -> float:
-    """Exact binomial test: rejection region of size <= alpha (equal tails when two-sided)."""
+def _binom_power(n: int, p0: float, pa: float, alpha: float, sides: int,
+                 direction: int) -> tuple[float, float]:
+    """Exact binomial test: rejection region of size <= alpha (equal tails when two-sided);
+    returns the power and the actual size of the region (compat 1301)."""
     if n < 1:
-        return 0.0
+        return 0.0, 0.0
+
+    def prob(lo, hi, p):
+        return ((float(st.binom.cdf(lo, n, p)) if lo >= 0 else 0.0)
+                + (float(st.binom.sf(hi - 1, n, p)) if hi <= n else 0.0))
     ks = range(n + 1)
     if sides == 1:
         if direction > 0:
-            crit = next((k for k in ks if st.binom.sf(k - 1, n, p0) <= alpha), n + 1)
-            return float(st.binom.sf(crit - 1, n, pa)) if crit <= n else 0.0
-        crit = next((k for k in reversed(ks) if st.binom.cdf(k, n, p0) <= alpha), -1)
-        return float(st.binom.cdf(crit, n, pa)) if crit >= 0 else 0.0
-    lo = next((k for k in reversed(ks) if st.binom.cdf(k, n, p0) <= alpha / 2), -1)
-    hi = next((k for k in ks if st.binom.sf(k - 1, n, p0) <= alpha / 2), n + 1)
-    pw = 0.0
-    if lo >= 0:
-        pw += float(st.binom.cdf(lo, n, pa))
-    if hi <= n:
-        pw += float(st.binom.sf(hi - 1, n, pa))
-    return pw
+            lo, hi = -1, next((k for k in ks if st.binom.sf(k - 1, n, p0) <= alpha), n + 1)
+        else:
+            lo, hi = next((k for k in reversed(ks) if st.binom.cdf(k, n, p0) <= alpha), -1), n + 1
+    else:
+        lo = next((k for k in reversed(ks) if st.binom.cdf(k, n, p0) <= alpha / 2), -1)
+        hi = next((k for k in ks if st.binom.sf(k - 1, n, p0) <= alpha / 2), n + 1)
+    return prob(lo, hi, pa), prob(lo, hi, p0)
 
 
 class _TwoProportions(_Method):
@@ -401,8 +403,13 @@ class _TwoProportions(_Method):
     def set_effect(self, c, delta):
         c["p2"] = c["p1"] + _direction(c) * delta
 
+    delta_note = "  (difference)"     # compat 1301
+
     def params(self, c):
-        return [("delta", self.delta(c)), ("p1", c["p1"]), ("p2", c["p2"])]
+        rows = [("delta", self.delta(c)), ("p1", c["p1"]), ("p2", c["p2"])]
+        if c.get("nratio", 1.0) != 1.0:
+            rows.append(("N2/N1", c["nratio"]))   # compat 1301
+        return rows
 
 
 class _OneCorrelation(_Method):
@@ -540,6 +547,9 @@ def _complete(method: str, c: dict) -> str:
             raise StataError(198, f"{b_name} required")   # VERIFY
         if c.get("power") is None:
             # with n() and no power(), Stata 14 computes power and asks for the effect (compat 1301)
+            if method == "twoproportions":
+                raise StataError(198, "one of options diff(), rdiff(), ratio(), rrisk(), or oratio() or the "
+                                      "experimental-group proportion must be specified")
             raise StataError(198, f"{_ALT_TEXT[method]} is required to compute power")
         return "effect"
     if have_n:
@@ -595,6 +605,13 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
                 return M.power(c) - target
             lo = 4.0 if method != "twocorrelations" else 3.0001
             n1 = _solve(f, lo, 1000.0)
+            if method == "twoproportions":
+                # starting value: the closed-form size of the first group, rounded up (compat 1301)
+                z, zb = st.norm.ppf(1 - c["alpha"] / _sides(c)), st.norm.ppf(target)
+                p1, p2 = c["p1"], c["p2"]
+                pb = (p1 + r * p2) / (1 + r)
+                num = z * math.sqrt(pb * (1 - pb) * (1 + 1 / r)) + zb * math.sqrt(p1 * (1 - p1) + p2 * (1 - p2) / r)
+                c["_init"] = float(math.ceil(num ** 2 / M.delta(c) ** 2))
             if method == "twomeans":
                 # starting value: the normal-approximation size of the first group, rounded up
                 # (compat 1301: 63)
@@ -669,7 +686,10 @@ def _f4(x) -> str:
 def _gtab(x) -> str:
     if x is None or (isinstance(x, float) and not math.isfinite(x)):
         return "."
-    return format_value(float(x), "%7.0g", pad=False).strip()
+    x = float(x)
+    if not x.is_integer():
+        x = float(f"{x:.4g}")       # four significant digits (compat 1301)
+    return format_value(x, "%7.0g", pad=False).strip()
 
 
 def _what_title(M: _Method, what: str) -> str:
@@ -728,7 +748,8 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
     params = M.params(c)
     if what == "effect":
         params = [p for p in params if p[0] not in ("delta", M.effect_name)]
-    left += [(name, _f4(val)) for name, val in params]
+    note = getattr(M, "delta_note", "")
+    left += [(name, _f4(val) + (note if name == "delta" else "")) for name, val in params]
     right = [(name, _f4(val)) for name, val in M.right(c)]
     # a second column of parameters beside the first lines (pairedmeans; compat 1301)
     for k, (name, val) in enumerate(left):
@@ -748,14 +769,17 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
                 _line(s, "N1", f"{_nfmt(c['N1']):>9}")
                 _line(s, "N2", f"{_nfmt(c['N2']):>9}")
     elif what == "power":
-        out.write("\nEstimated power:\n\n", "text")
+        binom = "actual_alpha" in c
+        out.write(f"\nEstimated power{' and alpha' if binom else ''}:\n\n", "text")
         _line(s, "power", _f4(c["power_out"]))
+        if binom:
+            _line(s, "actual alpha", _f4(c["actual_alpha"]))     # compat 1301
     else:
         nm = {"ma": "target mean", "m2": "experimental-group mean", "ma2": "target mean",
               "pa": "target proportion", "p2": "experimental-group proportion",
               "ra": "target correlation", "r2": "experimental-group correlation"}[M.effect_name]
         out.write(f"\nEstimated effect size and {nm}:\n\n", "text")
-        _line(s, "delta", _f4(M.delta(c)))
+        _line(s, "delta", _f4(M.delta(c)) + getattr(M, "delta_note", ""))
         _line(s, M.effect_name, _f4(c[M.effect_name]))
 
 
@@ -813,6 +837,11 @@ def _returns(s: "Session", method: str, M: _Method, c: dict, what: str) -> None:
             r.append(("sd", c["sd1"]))
         r += [("diff", c["m2"] - c["m1"]), ("m2", c["m2"]), ("m1", c["m1"]),
               ("nratio", c["N2"] / c["N1"]), ("N2", float(c["N2"])), ("N1", float(c["N1"]))]
+    elif method == "twoproportions":
+        r = [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", M.delta(c))] + flags + solver
+        r += [("N", float(c["N"])), ("continuity", 1.0 if c.get("continuity") else 0.0), ("p2", c["p2"]),
+              ("p1", c["p1"]), ("nratio", c["N2"] / c["N1"]), ("N2", float(c["N2"])), ("N1", float(c["N1"])),
+              ("test", "chi2"), ("effect", "diff")]
     else:
         r = [("N", float(c["N"]))]
         if M.two_sample:

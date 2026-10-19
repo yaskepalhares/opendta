@@ -39,18 +39,20 @@ expandcl 2, cluster(grp) generate(newcl)
 sort grp id newcl
 list id grp newcl
 restore
+capture snapshot erase _all
 snapshot save, label("first")
 snapshot list
 drop if grp == 2
 snapshot restore 1
 count
+capture erase odta_a.dta
 save odta_a, replace
 replace x = 99 in 2
 capture noisily cf _all using odta_a
 capture noisily cf x y using odta_a, verbose
 statsby m=r(mean) n=r(N), by(grp) clear nodots: summarize x
 list
-putmata X=(grp m)
+putmata X=(grp m), replace
 mata: X
 clear
 set obs 3
