@@ -39,3 +39,10 @@ if the program ends without error. {cmd:eclass} programs use
         {cmd:    ...}
         {cmd:    return scalar mean = `m'}
         {cmd:end}
+
+{pstd}
+With {cmd:sortpreserve}, the program may sort the data: the order of the observations (and the
+sort variables) are restored when it ends, even after an error, once any {cmd:preserve}d data have been
+restored. The program finds the variable that keeps the order in the local macro {cmd:_sortindex}; if
+it drops it, the error is {cmd:r(111)}.
+{p_end}

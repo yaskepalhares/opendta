@@ -28,3 +28,13 @@ holds {cmd:nolog}) and {cmd:*} for any other options, collected in
 {cmd:`options'}. {cmd:gettoken}, {cmd:tokenize}, {cmd:marksample} and
 {cmd:markout} complete the toolkit.
 {p_end}
+
+{pstd}
+{cmd:varlist(fv ts)} accepts factor variables and time-series operators, which come back
+unabbreviated in {cmd:`varlist'} ({cmd:varlist(fv)} and {cmd:varlist(ts)} accept one kind).
+{cmd:mark} {it:newmarkvar} [{cmd:if}] [{cmd:in}] [{it:weight}] [{cmd:, zeroweight}] creates a
+0/1 variable for the observations selected; {cmd:markin} [{cmd:if}] [{cmd:in}]
+[{cmd:, name(}{it:lclname}{cmd:)}] stores in a macro (default {cmd:in}) the narrowest {cmd:in}
+range that contains them; {cmd:markout} {it:markvar} [{it:varlist}] [{cmd:, strok sysmissok}]
+accepts {cmd:.} as a value with {cmd:sysmissok}.
+{p_end}

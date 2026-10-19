@@ -89,6 +89,14 @@ ALIASES = {
     "xpose": "datautil", "lookfor": "ds", "inspect": "ds", "labelbook": "ds", "cf": "compare",
     "datasignature": "compare", "snapshot": "compare", "corr2data": "drawnorm", "webuse": "sysuse",
     "icd9": "icd", "icd9p": "icd", "icd10": "icd",
+    "unab": "varlistcmds", "tsunab": "varlistcmds", "fvunab": "varlistcmds",
+    "unabcmd": "varlistcmds", "fvexpand": "varlistcmds", "fvrevar": "varlistcmds",
+    "tsrevar": "varlistcmds", "_rmcoll": "varlistcmds", "rmcoll": "varlistcmds",
+    "post": "postfile", "postclose": "postfile", "postutil": "postfile",
+    "pause": "progutil", "sleep": "progutil", "window": "progutil", "plugin": "progutil",
+    "viewsource": "progutil", "signestimationsample": "estprog", "checkestimationsample": "estprog",
+    "makecns": "estprog", "matcproc": "estprog", "mark": "syntax", "markin": "syntax",
+    "sortpreserve": "program",
 }
 
 
