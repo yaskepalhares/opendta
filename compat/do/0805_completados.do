@@ -107,6 +107,13 @@ input id a
 end
 capture noisily merge id using odta_u
 sort id
+* the using file is in order but not marked as sorted: Stata refuses it
+capture noisily merge id using odta_u
+preserve
+use odta_u, clear
+sort id
+save odta_u, replace
+restore
 merge id using odta_u
 list, sepby(_merge)
 erase odta_u.dta

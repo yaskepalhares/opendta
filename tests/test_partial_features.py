@@ -31,7 +31,8 @@ def test_display_request_cancelled(run):
 
 def test_merge_old_syntax(run, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    run("clear\ninput id b\n1 10\n2 20\n4 40\nend\nsave u")
+    # the using file must be marked as sorted (compat 0805)
+    run("clear\ninput id b\n1 10\n2 20\n4 40\nend\nsort id\nsave u")
     run("clear\ninput id a\n1 1\n2 2\n3 3\nend\nsort id")
     out = run("merge id using u")
     assert "old merge syntax" in out

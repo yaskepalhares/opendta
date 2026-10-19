@@ -375,7 +375,7 @@ def cmd_lroc(s: "Session", args: str) -> None:
     out.write(f"\n{title}\n\n", "text")
     out.write("number of observations = ", "text")
     out.write(f"{len(y):>8}\n", "result")
-    out.write("area under ROC curve   = ", "text")
+    out.write("area under ROC curve   =", "text")
     out.write(f"{a:>9.4f}\n", "result")
     if not o.get("nograph"):
         _roc_graph(s, [("", roc_points(pos, neg), a)], refline=True, title=f"Area under ROC curve = {a:.4f}")

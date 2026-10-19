@@ -260,7 +260,7 @@ def _display(s: "Session", o, refname, classes, spec, colnames, observed, boot, 
     tie = ", corrected for ties" if o.get("tiecorrected") else ""
     out.write(f"Control standardization: {pvc}{tie}\n", "text")
     if probit:
-        out.write(f"ROC method             : {'parametric':<25}Link: probit\n", "text")
+        out.write(f"ROC method             : {'parametric':<23}Link: probit\n", "text")
     else:
         out.write("ROC method             : empirical\n", "text")
     if ctrlcov and model == "linear":

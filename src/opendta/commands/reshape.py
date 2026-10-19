@@ -214,19 +214,44 @@ def _advanced(s: "Session", sub: str, args: str) -> None:
 
 
 def _query(s: "Session") -> None:
-    """reshape and reshape query: the current definitions (VERIFY: layout)."""
+    """reshape and reshape query: the current definitions in Stata's box (compat 0805; VERIFY
+    the rows when j has a range or xi is defined)."""
     st_ = getattr(s, "_reshape", None) or {}
     w = s.output.write
+    ds = s.data
+    stubs = st_.get("stubs") or []
+    if stubs and all(ds.has(x) for x in stubs):
+        form = "long"
+    elif stubs and any(v.name.startswith(x) and v.name != x for x in stubs for v in ds.vars):
+        form = "wide"
+    else:
+        form = ""
+    if form:
+        w(f" (data are {form})\n", "text")
     j = st_.get("j") or ""
     if j and st_.get("string"):
         j += ", string"
-    rows = [("i", st_.get("i") or "(not defined)"), ("j", j or "(not defined)"),
-            ("xij", " ".join(st_.get("stubs") or []) or "(not defined)"),
-            ("xi", st_.get("xi") or "(all other variables)")]
-    w("\n", "text")
-    for name, val in rows:
-        w(f" {name:<5}", "text")
-        w(f"{val}\n", "result")
+
+    def cmd(name, val, empty):
+        return f"reshape {name} {val}" if val else f"reshape {name}  {empty}"   # VERIFY undefined rows
+    rows = [("Xij", "Command/contents"), None, ("Subscript i,j definitions:", ""),
+            (" group id variable(s)", cmd("i", st_.get("i") or "", "<varlist>")),
+            (" within-group variable", cmd("j", j, "<varname>")),
+            ("  and its range", ""), ("", ""), ("Variable X definitions:", ""),
+            (" varying within group", cmd("xij", " ".join(stubs), "<stubnames>")),
+            (" constant within group (opt)", cmd("xi", st_.get("xi") or "", "<varlist>"))]
+    w("\n+" + "-" * 77 + "+\n", "text")
+    for r in rows:
+        if r is None:
+            w("|" + "-" * 30 + "+" + "-" * 46 + "|\n", "text")
+        else:
+            w(f"| {r[0]:<29}| {r[1]:<45}|\n", "text")
+    w("+" + "-" * 77 + "+\n", "text")
+    if not st_.get("xi"):
+        w("Optionally type reshape xi to define variables that are constant within i.\n", "text")
+    if form:
+        to = "long" if form == "wide" else "wide"
+        w(f"Type reshape {to} to convert the data to {to} form.\n", "text")
 
 
 def _error_report(s: "Session") -> None:
@@ -253,11 +278,20 @@ def _error_report(s: "Session") -> None:
     ids, k = group_ids(ds, keys)
     counts = np.bincount(ids, minlength=k)
     bad = counts[ids] > 1
-    w(f"(data now sorted by {' '.join(keys)})\n", "text")
     if bad.any():
+        # Stata's explanation, the list, then the sort note (compat 0805)
+        jcol = ds.get(jname)
+        jv = sorted(set(jcol.raw)) if jcol.is_string else sorted(set(jcol.data.tolist()))
+        w(f"(note: j = {' '.join(_jtext(x) for x in jv)})\n\n", "text")
+        w(f"i ({ilist}) indicates the top-level grouping such as subject id.\n", "text")
+        w(f"j ({jname}) indicates the subgrouping such as time.\n", "text")
+        w("The data are in the long form;  j should be unique within i.\n\n", "text")
+        w(f"There are multiple observations on the same {jname} within {ilist}.\n\n", "text")
+        w(f"The following {int(bad.sum())} of {ds.nobs} observations have repeated {jname} values:\n", "text")
         _list(s, bad, keys)
-        w(f"\n{int(bad.sum())} of {ds.nobs} observations have repeated {jname} values\n", "text")
+        w(f"\n(data now sorted by {' '.join(keys)})\n", "text")
         return
+    w(f"(data now sorted by {' '.join(keys)})\n", "text")
     longs = [_long_name(st_) for st_ in f["stubs"]]
     gid, _g = group_ids(ds, ivars)
     from ..core.grouping import first_index
@@ -442,7 +476,7 @@ def _to_wide(s: "Session", stubs: list[str], ivars: list[str], jname: str,
             f"value of j({jname}).  In the long data, variables i() and j() together must uniquely "
             "identify the observations.",
             "@" + _PICTURE,
-            "Type reshape error for a list of the problem observations."]))   # VERIFY
+            "Type reshape error for a list of the problem variables."]))   # compat 0805
     others = [v for v in ds.vars if v.name not in ivars and v.name != jname and v.name not in longs]
     from ..core.grouping import first_index
     first = first_index(ids, k)
