@@ -20,7 +20,7 @@ Todo bloco segue os mesmos passos:
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
 7. `python tools/compare.py` sem diferenças novas; abrir o PR; merge quando os testes passarem no Linux, no macOS e no Windows. A página de cobertura se atualiza sozinha depois do merge.
 
-Próximos números livres: casos de comparação a partir de **1601**, fases do roadmap a partir de **12**.
+Próximos números livres: casos de comparação a partir de **1701**, fases do roadmap a partir de **13**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -47,7 +47,9 @@ Os testes usam a fixture `run` de `tests/conftest.py` (`run("comandos")` devolve
 
 Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tokens gerados; uma sessão relê o contexto a cada passo, então o consumo total fica entre 100 e 150 vezes os tokens gerados. A ordem é uma sugestão: primeiro os blocos baratos que fecham uma área, depois os mais usados em pesquisa em saúde.
 
-### 1. Epidemiologia: completar (30–45 min, ~25 mil tokens)
+### 1. Epidemiologia: completar ✅
+
+Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Depois da 1.0*. O plano original:
 
 `rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
 

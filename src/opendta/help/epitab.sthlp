@@ -7,16 +7,16 @@
 
 {title:Syntax}
 
-{p 8 16 2}{cmd:cs} {it:casevar} {it:exposedvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt or} {opt tb} {opt w:oolf} {opt ex:act} {opt l:evel(#)} {opt nocrude} {opt nohom}]{p_end}
+{p 8 16 2}{cmd:cs} {it:casevar} {it:exposedvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt est:andard} {opt ist:andard} {opt sta:ndard(varname)} {opt pool} {opt rd} {opt bin:omial(varname)} {opt or} {opt tb} {opt w:oolf} {opt ex:act} {opt l:evel(#)} {opt nocrude} {opt nohom}]{p_end}
 {p 8 16 2}{cmd:csi} {it:#a #b #c #d} [{cmd:,} {opt or} {opt tb} {opt w:oolf} {opt ex:act} {opt l:evel(#)}]{p_end}
-{p 8 16 2}{cmd:cc} {it:casevar} {it:exposedvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt ex:act} {opt corn:field} {opt w:oolf} {opt tb} {opt l:evel(#)} {opt nocrude} {opt nohom}]{p_end}
+{p 8 16 2}{cmd:cc} {it:casevar} {it:exposedvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt est:andard} {opt ist:andard} {opt sta:ndard(varname)} {opt pool} {opt bd} {opt tar:one} {opt bin:omial(varname)} {opt ex:act} {opt corn:field} {opt w:oolf} {opt tb} {opt l:evel(#)} {opt nocrude} {opt nohom}]{p_end}
 {p 8 16 2}{cmd:cci} {it:#a #b #c #d} [{cmd:,} {opt ex:act} {opt corn:field} {opt w:oolf} {opt tb} {opt l:evel(#)}]{p_end}
-{p 8 16 2}{cmd:ir} {it:casevar} {it:exposedvar} {it:timevar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt tb} {opt ex:act} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:ir} {it:casevar} {it:exposedvar} {it:timevar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt est:andard} {opt ist:andard} {opt sta:ndard(varname)} {opt pool} {opt ird} {opt tb} {opt ex:act} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:iri} {it:#a #b #N1 #N2} [{cmd:,} {opt tb} {opt ex:act} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:mcc} {it:var_exposed_case} {it:var_exposed_control} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt tb} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:mcci} {it:#a #b #c #d} [{cmd:,} {opt tb} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:tabodds} {it:casevar} {it:expvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt or} {opt adj:ust(varlist)} {opt ba:se(#)} {opt gr:aph} {opt ci:plot} {opt l:evel(#)}]{p_end}
-{p 8 16 2}{cmd:mhodds} {it:casevar} {it:expvar} [{it:adjvars}] [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt bin:ary} {opt com:pare(v1,v2)} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:mhodds} {it:casevar} {it:expvar} [{it:adjvars}] [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varlist)} {opt bin:ary} {opt com:pare(v1,v2)} {opt l:evel(#)}]{p_end}
 
 {title:Description}
 
@@ -29,13 +29,11 @@ With {opt by()}, the tables are stratified: one estimate per stratum, the crude 
 {p_end}
 
 {pstd}
-{cmd:tabodds} tabulates the odds of being a case by level of the exposure, with the test of homogeneity and the score test for trend; with {opt or}, odds ratios against a base level, adjusted with {opt adjust()} by Mantel-Haenszel. {cmd:mhodds} estimates the Mantel-Haenszel odds ratio controlling for other variables; with an exposure of more than two levels it reports the score test for trend and the approximate odds ratio per unit.
+{opt pool} replaces the Mantel-Haenszel estimate with the directly pooled one (the inverse-variance weighted mean of the stratum estimates, of their logs for ratios) and its test of homogeneity. {opt istandard} and {opt estandard} report the standardized estimate with the weights of the exposed (internal) or of the unexposed (external) group of each stratum: the subjects for {cmd:cs}, the controls for {cmd:cc} and the person-time for {cmd:ir}; {opt standard(varname)} takes the weights from a variable constant within strata. With a standardization, {opt rd} ({cmd:cs}) and {opt ird} ({cmd:ir}) standardize the difference instead of the ratio. {opt bd} and {opt tarone} report the Breslow-Day test of homogeneity of the odds ratios and Tarone's correction of it. {opt binomial(varname)} reads binomial frequency records: the case variable holds the number of cases and {it:varname} the number of subjects.
 {p_end}
 
-{title:Remarks}
-
 {pstd}
-The options {opt estandard}, {opt istandard}, {opt standard()}, {opt binomial} and {opt pool} of {cmd:cs}, {cmd:cc} and {cmd:ir}, and {opt by()} of {cmd:mhodds}, are not available yet.
+{cmd:tabodds} tabulates the odds of being a case by level of the exposure, with the test of homogeneity and the score test for trend; with {opt or}, odds ratios against a base level, adjusted with {opt adjust()} by Mantel-Haenszel. {cmd:mhodds} estimates the Mantel-Haenszel odds ratio controlling for other variables; with an exposure of more than two levels it reports the score test for trend and the approximate odds ratio per unit. With {opt by()}, it reports the estimate within each group of the {opt by()} variables, the estimate controlling for them as well, and an approximate test of homogeneity of the group estimates.
 {p_end}
 
 {title:Examples}
@@ -43,6 +41,7 @@ The options {opt estandard}, {opt istandard}, {opt standard()}, {opt binomial} a
 {phang2}{cmd:. cs case exposed}{p_end}
 {phang2}{cmd:. csi 7 12 9 2}{p_end}
 {phang2}{cmd:. cc case exposed, by(agegrp)}{p_end}
+{phang2}{cmd:. ir deaths smokes pyears, by(agecat) istandard pool}{p_end}
 {phang2}{cmd:. iri 41 15 28010 19017}{p_end}
 {phang2}{cmd:. mcci 8 8 3 8}{p_end}
 {phang2}{cmd:. tabodds case alcohol, or adjust(age)}{p_end}

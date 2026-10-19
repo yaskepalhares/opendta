@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ..core import missing as M
+from ..core import roc as R
 from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
@@ -133,8 +134,6 @@ def cmd_roctab(s: "Session", args: str) -> None:
     o = match_options(p.options, {"detail": 1, "lorenz": 3, "binomial": 3, "nolabel": 5, "table": 3,
                                   "bamber": 3, "hanley": 3, "graph": 2, "norefline": 5, "summary": 3,
                                   "specificity": 4, "level": 1})
-    if o.get("binomial") or o.get("bamber") or o.get("lorenz"):
-        raise StataError(198, "options binomial, bamber and lorenz of roctab are not available yet in OpenDTA")
     level = _level(s, o)
     rv, (cv,), mask, w = _pos_neg(s, p, names[0], [names[1]])
     wm = None if w is None else w[mask]
@@ -144,9 +143,14 @@ def cmd_roctab(s: "Session", args: str) -> None:
     if not len(pos) or not len(neg):
         raise StataError(2000, "no observations")   # VERIFY
     a, se = auc_delong(pos, neg)
+    if o.get("hanley") and o.get("bamber"):
+        raise StataError(198, "options hanley and bamber may not be combined")   # VERIFY
     if o.get("hanley"):
         se = se_hanley(a, len(pos), len(neg))
-    lo, hi = _ci(a, se, level)
+    elif o.get("bamber"):
+        se = R.se_bamber(pos, neg, a)
+    N = len(pos) + len(neg)
+    lo, hi = R.binomial_ci(a, N, level) if o.get("binomial") else _ci(a, se, level)
     out = s.output
     rows = roc_points(pos, neg)
     if o.get("table"):
@@ -169,15 +173,42 @@ def cmd_roctab(s: "Session", args: str) -> None:
                       f"{_f(lrn, '>13.4f') if not math.isnan(lrn) else ''}\n", "result")
         out.write("-" * 78 + "\n", "text")
     if not o.get("graph") or o.get("summary") or o.get("detail") or o.get("table"):
-        title = "-Hanley & McNeil-" if o.get("hanley") else "-Asymptotic Normal--"   # VERIFY title
-        out.write("\n" + " " * 22 + "ROC" + " " * 20 + f"{title:>21}\n", "text")
+        # the standard error's method above its column, the interval's above the limits
+        # (VERIFY: exact placement and dashes)
+        se_label = "Hanley" if o.get("hanley") else "Bamber" if o.get("bamber") else ""
+        title = "-- Binomial Exact --" if o.get("binomial") else "-Asymptotic Normal--"
+        out.write("\n" + " " * 22 + "ROC" + f"{se_label:>14}" + " " * 6 + f"{title:>21}\n", "text")
         out.write(f"{'Obs':>14}{'Area':>11}     Std. Err.      [{level:g}% Conf. Interval]\n", "text")
         out.write(" " * 5 + "-" * 60 + "\n", "text")
         out.write(f"{len(pos) + len(neg):>14,}{a:>11.4f}{se:>13.4f}{lo:>15.5f}{hi:>12.5f}\n", "result")
+    lz = []
+    if o.get("lorenz"):
+        lx, ly, gini, pietra = R.lorenz(pos, neg)
+        # VERIFY: layout of the Lorenz report
+        out.write("\nLorenz curve\n", "text")
+        out.write("Pietra index =  ", "text")
+        out.write(f"{pietra:>8.4f}\n", "result")
+        out.write("Gini index   =  ", "text")
+        out.write(f"{gini:>8.4f}\n", "result")
+        lz = [("pietra", pietra), ("gini", gini)]
     if o.get("graph"):
-        _roc_graph(s, [(cv.name, rows, a)], refline=not o.get("norefline"),
-                   title=f"Area under ROC curve = {a:.4f}")
-    _set_r(s, [("ub", hi), ("lb", lo), ("se", se), ("area", a), ("N", float(len(pos) + len(neg)))])
+        if o.get("lorenz"):
+            _lorenz_graph(s, rv.name, lx, ly, refline=not o.get("norefline"))
+        else:
+            _roc_graph(s, [(cv.name, rows, a)], refline=not o.get("norefline"),
+                       title=f"Area under ROC curve = {a:.4f}")
+    _set_r(s, lz + [("ub", hi), ("lb", lo), ("se", se), ("area", a), ("N", float(N))])
+
+
+def _lorenz_graph(s: "Session", refname: str, x, y, refline: bool) -> None:
+    from ..graphics.model import Graph, Layer, Panel
+    from .graphcmd import finish
+    layers = [Layer("connected", list(map(float, x)), list(map(float, y)), {}, {}, "Lorenz curve")]
+    if refline:
+        layers.append(Layer("line", [0.0, 1.0], [0.0, 1.0], {}, {"lcolor": "gs8"}, "Reference"))
+    opts = {"_xtitle": f"cumulative % of {refname}=0", "_ytitle": f"cumulative % of {refname}=1",
+            "aspectratio": 1.0, "legend": {"off": True}}
+    finish(s, Graph(family="twoway", opts=opts, panels=[Panel("", layers)]), {})
 
 
 def _roctab_table(s: "Session", rv, cv, pos, neg) -> None:
@@ -226,9 +257,8 @@ def cmd_roccomp(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     o = match_options(p.options, {"by": 2, "test": 1, "graph": 2, "norefline": 5, "separate": 3,
                                   "summary": 3, "binormal": 3, "line": 4, "level": 1})
-    if o.get("binormal"):
-        raise StataError(198, "option binormal of roccomp is not available yet in OpenDTA")
     level = _level(s, o)
+    binorm = bool(o.get("binormal"))
     out = s.output
     if isinstance(o.get("by"), str):
         if len(names) != 2:
@@ -240,7 +270,7 @@ def cmd_roccomp(s: "Session", args: str) -> None:
             ws = None if w is None else w[sel]
             y, x = _expand(rv.data[sel], ws), _expand(cv.data[sel], ws)
             pos, neg = x[y == 1], x[y == 0]
-            a, se = auc_delong(pos, neg)
+            a, se = _binormal_area(pos, neg) if binorm else auc_delong(pos, neg)
             items.append((lab, len(pos) + len(neg), a, se, roc_points(pos, neg)))
         areas = np.array([i[2] for i in items])
         S = np.diag([i[3] ** 2 for i in items])
@@ -252,6 +282,12 @@ def cmd_roccomp(s: "Session", args: str) -> None:
         pos_l = [x[y == 1] for x in xs]
         neg_l = [x[y == 0] for x in xs]
         areas, S = delong_cov(pos_l, neg_l)
+        if binorm:
+            # binormal areas, compared as independent estimates (VERIFY: Stata's covariance for
+            # correlated classifiers with binormal)
+            fits = [_binormal_area(pp, nn) for pp, nn in zip(pos_l, neg_l)]
+            areas = np.array([f[0] for f in fits])
+            S = np.diag([f[1] ** 2 for f in fits])
         items = [(c.name, len(y), areas[k], math.sqrt(S[k, k]), roc_points(pos_l[k], neg_l[k]))
                  for k, c in enumerate(cvs)]
     out.write("\n" + " " * 30 + "ROC" + " " * 20 + "-Asymptotic Normal--\n", "text")
@@ -290,6 +326,21 @@ def cmd_roccomp(s: "Session", args: str) -> None:
     from .matrix import Matrix
     s.r = {"df": float(df), "p": pv if not math.isnan(pv) else SYS, "chi2": chi2 if not math.isnan(chi2) else SYS,
            "N_g": float(k), "V": Matrix(S, labs, labs), "cov": Matrix(S, labs, labs)}
+
+
+def _binormal_area(pos: np.ndarray, neg: np.ndarray) -> tuple[float, float]:
+    """Area under the binormal ROC curve fit to the categories of the scores, and its standard
+    error ([R] rocfit)."""
+    from ..estimation import binormal
+    cats = np.unique(np.concatenate([pos, neg]))
+    if len(cats) < 3:
+        raise StataError(459, "classvar must have at least 3 categories for the binormal fit")   # VERIFY
+    n0 = np.bincount(np.searchsorted(cats, neg), minlength=len(cats)).astype(float)
+    n1 = np.bincount(np.searchsorted(cats, pos), minlength=len(cats)).astype(float)
+    bf = binormal.fit(n0, n1)
+    K = len(cats)
+    est, se = binormal.indices(bf.b[K - 1], bf.b[K], bf.V[K - 1:, K - 1:])
+    return float(est[0]), float(se[0])
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +428,7 @@ def cmd_lsens(s: "Session", args: str) -> None:
 
 @command("rocfit", "rocfit")
 def cmd_rocfit(s: "Session", args: str) -> None:
-    from ..estimation import ml
+    from ..estimation import binormal, ml
     from ..estimation.results import CoefRow, Estimates, coef_table, post
     p = parse_standard(args)
     names = p.varlist.split()
@@ -401,68 +452,14 @@ def cmd_rocfit(s: "Session", args: str) -> None:
     y = rv.data[mask] == 1
     n0 = np.bincount(k_idx[~y], weights=wv[~y], minlength=K)
     n1 = np.bincount(k_idx[y], weights=wv[y], minlength=K)
-    Phi = st.norm.cdf
-
-    def probs(theta):
-        c = np.cumsum(np.concatenate([[theta[0]], np.exp(theta[1:K - 1])]))   # increasing cuts
-        mu, sig = theta[K - 1], math.exp(theta[K])
-        c0 = np.concatenate([[-np.inf], c, [np.inf]])
-        p0 = np.diff(Phi(c0))
-        p1 = np.diff(Phi((c0 - mu) / sig))
-        return c, p0, p1
-
-    def ll(theta):
-        _, p0, p1 = probs(theta)
-        if np.any(p0[n0 > 0] <= 0) or np.any(p1[n1 > 0] <= 0):
-            return -np.inf
-        return float((n0[n0 > 0] * np.log(p0[n0 > 0])).sum() + (n1[n1 > 0] * np.log(p1[n1 > 0])).sum())
-
-    def num_grad_hess(f, t):
-        k = len(t)
-        h = 1e-4 * np.maximum(1.0, np.abs(t))
-        g = np.zeros(k)
-        H = np.zeros((k, k))
-        f0 = f(t)
-        for i in range(k):
-            e = np.zeros(k)
-            e[i] = h[i]
-            g[i] = (f(t + e) - f(t - e)) / (2 * h[i])
-            H[i, i] = (f(t + e) - 2 * f0 + f(t - e)) / h[i] ** 2
-            for j in range(i):
-                e2 = np.zeros(k)
-                e2[j] = h[j]
-                H[i, j] = H[j, i] = (f(t + e + e2) - f(t + e - e2) - f(t - e + e2) + f(t - e - e2)) / (4 * h[i] * h[j])
-        return f0, g, H
-
-    # start: cuts from the negatives' cumulative shares, mu from the mean shift
-    cum0 = np.clip(np.cumsum(n0)[:-1] / n0.sum(), 0.02, 0.98)
-    c_start = np.maximum.accumulate(st.norm.ppf(cum0) + np.arange(K - 1) * 1e-3)
-    cum1 = np.clip(np.cumsum(n1)[:-1] / n1.sum(), 0.02, 0.98)
-    mu0 = float(np.mean(c_start - st.norm.ppf(cum1)))
-    theta0 = np.concatenate([[c_start[0]], np.log(np.maximum(np.diff(c_start), 1e-2)), [mu0, 0.0]])
-
-    def fun(t, todo):
-        f0, g, H = num_grad_hess(ll, t)
-        return f0, g, H
     out = s.output
-    res = ml.maximize(fun, theta0, maxiter=int(o["iterate"]) if isinstance(o.get("iterate"), str) else 16000)
+    bf = binormal.fit(n0, n1, maxiter=int(o["iterate"]) if isinstance(o.get("iterate"), str) else 16000)
+    res = bf.res
     if not o.get("nolog"):
         out.write("\nFitting binormal model:\n\n", "text")
         ml.print_log(out, res)
-    # natural parameters (cuts, mu, sigma) and their covariance by the delta method
-    t = res.b
-    c, p0, p1 = probs(t)
-    mu, sig = t[K - 1], math.exp(t[K])
-    J = np.zeros((K + 1, K + 1))
-    for i in range(K - 1):
-        J[i, 0] = 1.0
-        for j in range(1, i + 1):
-            J[i, j] = math.exp(t[j])
-    J[K - 1, K - 1] = 1.0
-    J[K, K] = 1.0              # lnsigma kept on the log scale, as reported
-    Vt = np.linalg.inv(-res.H)
-    b_nat = np.concatenate([c, [mu, t[K]]])
-    V = J @ Vt @ J.T
+    b_nat, V, p0, p1 = bf.b, bf.V, bf.p0, bf.p1
+    mu = b_nat[K - 1]
     # Pearson goodness of fit over the 2 x K table (df = K - 3; VERIFY)
     e0, e1 = n0.sum() * p0, n1.sum() * p1
     gof = float(((n0 - e0) ** 2 / e0).sum() + ((n1 - e1) ** 2 / e1).sum())
@@ -485,24 +482,10 @@ def cmd_rocfit(s: "Session", args: str) -> None:
              for i in range(K - 1)]
     rows += [CoefRow("sep"), CoefRow("header", f"{rv.name}==1"),
              CoefRow("coef", "/mu", float(mu), math.sqrt(V[K - 1, K - 1]), name="mu"),
-             CoefRow("coef", "/lnsigma", float(t[K]), math.sqrt(V[K, K]), name="lnsigma")]
+             CoefRow("coef", "/lnsigma", float(b_nat[K]), math.sqrt(V[K, K]), name="lnsigma")]
     coef_table(s, "", rows, stat="z", df=None, level=level)
     # indices of the binormal ROC curve: a = mu/sigma (intercept), b = 1/sigma (slope)
-    def indices(v):
-        m_, ls = v[0], v[1]
-        sg = math.exp(ls)
-        a_, b_ = m_ / sg, 1 / sg
-        return np.array([float(Phi(a_ / math.sqrt(1 + b_ * b_))), m_, 2 * a_ / (1 + b_),
-                         math.sqrt(2) * a_ / math.sqrt(1 + b_ * b_)])
-    v0 = np.array([mu, t[K]])
-    Vml = V[K - 1:, K - 1:]
-    est_i = indices(v0)
-    G = np.zeros((4, 2))
-    for j in range(2):
-        e = np.zeros(2)
-        e[j] = 1e-6
-        G[:, j] = (indices(v0 + e) - indices(v0 - e)) / 2e-6
-    se_i = np.sqrt(np.diag(G @ Vml @ G.T))
+    est_i, se_i = binormal.indices(mu, b_nat[K], V[K - 1:, K - 1:])
     z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
     out.write("\n" + " " * 34 + "Indices from binormal fit\n", "text")
     out.write(f"{'Index':>10}   |  Estimate   Std. Err.       [{level:g}% Conf. Interval]\n", "text")

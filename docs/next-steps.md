@@ -20,7 +20,7 @@ Each block follows the same steps:
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
 7. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
 
-Next free numbers: compat cases from **1601**, roadmap phases from **12**.
+Next free numbers: compat cases from **1701**, roadmap phases from **13**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -47,7 +47,9 @@ Tests use the `run` fixture of `tests/conftest.py` (`run("commands")` returns th
 
 Estimates from the work so far (±50%): session time and tokens generated; a session reads its context again at every step, so its total use is about 100 to 150 times the tokens generated. The order is a suggestion: cheap blocks that close an area first, then the ones most used in health research.
 
-### 1. Epidemiology: finish (30–45 min, ~25k tokens)
+### 1. Epidemiology: finish ✅
+
+Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, which stay in *After 1.0*. The original plan:
 
 `rocreg` (nonparametric and parametric ROC regression; bootstrap standard errors); `cs`, `cc` and `ir` with `estandard`, `istandard`, `standard()`, `binomial` and `pool`; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`. Reuse `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; remove the matching "not available yet" errors.
 

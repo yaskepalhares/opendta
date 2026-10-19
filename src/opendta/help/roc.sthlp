@@ -7,8 +7,8 @@
 
 {title:Syntax}
 
-{p 8 16 2}{cmd:roctab} {it:refvar} {it:classvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt d:etail} {opt tab:le} {opt han:ley} {opt gr:aph} {opt noref:line} {opt l:evel(#)}]{p_end}
-{p 8 16 2}{cmd:roccomp} {it:refvar} {it:classvar} [{it:classvars}] [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varname)} {opt t:est(matname)} {opt gr:aph} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:roctab} {it:refvar} {it:classvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt d:etail} {opt tab:le} {opt han:ley} {opt bam:ber} {opt bin:omial} {opt lor:enz} {opt gr:aph} {opt noref:line} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:roccomp} {it:refvar} {it:classvar} [{it:classvars}] [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt by(varname)} {opt t:est(matname)} {opt bin:ormal} {opt gr:aph} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:rocfit} {it:refvar} {it:classvar} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt cont:inuous(#)} {opt l:evel(#)} {opt nolog}]{p_end}
 {p 8 16 2}{cmd:lroc} [{it:depvar}] [{cmd:,} {opt nog:raph}]{p_end}
 {p 8 16 2}{cmd:lsens} [{it:depvar}] [{cmd:,} {opt genp:rob(var)} {opt gens:ens(var)} {opt gens:pec(var)} {opt rep:lace} {opt nog:raph}]{p_end}
@@ -16,7 +16,7 @@
 {title:Description}
 
 {pstd}
-{cmd:roctab} computes the nonparametric ROC curve of a classifier against a 0/1 reference variable: the area under the curve with DeLong's standard error (or Hanley and McNeil's with {opt hanley}), the sensitivity, specificity and likelihood ratios at each cutpoint ({opt detail}) and the curve ({opt graph}). {cmd:roccomp} compares the areas of several classifiers measured on the same subjects (DeLong's covariance), or of one classifier in independent groups ({opt by()}), with a chi-squared test of equality or of the contrasts in {opt test()}.
+{cmd:roctab} computes the nonparametric ROC curve of a classifier against a 0/1 reference variable: the area under the curve with DeLong's standard error (or Hanley and McNeil's with {opt hanley}, Bamber's with {opt bamber}; exact binomial limits with {opt binomial}), the Gini and Pietra indices and the Lorenz curve ({opt lorenz}), the sensitivity, specificity and likelihood ratios at each cutpoint ({opt detail}) and the curve ({opt graph}). {cmd:roccomp} compares the areas of several classifiers measured on the same subjects (DeLong's covariance), or of one classifier in independent groups ({opt by()}), with a chi-squared test of equality or of the contrasts in {opt test()}; with {opt binormal}, the areas come from the binormal fit of each classifier and are compared as independent estimates.
 {p_end}
 
 {pstd}
@@ -26,7 +26,7 @@
 {title:Remarks}
 
 {pstd}
-The options {opt binomial}, {opt bamber} and {opt lorenz} of {cmd:roctab}, {opt binormal} of {cmd:roccomp}, {opt all} and {opt beta()} of {cmd:lroc}, and the command {cmd:rocreg}, are not available yet.
+The options {opt all} and {opt beta()} of {cmd:lroc} are not available yet. For ROC regression see {help rocreg}.
 {p_end}
 
 {title:Examples}

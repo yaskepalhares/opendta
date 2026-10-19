@@ -170,6 +170,14 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 - [x] `odbc` pelo pacote opcional `pyodbc`; calendários de dias úteis (`bcal`, o formato `%tb`, `bofd()` e `dofb()`)
 - O caso `1501` aguarda a rodada no Stata
 
+## Fase 12: epidemiologia, conclusão ✅
+
+- [x] `cs`, `cc` e `ir` com `by()`: estimativas combinadas diretamente (`pool`) com o seu teste de homogeneidade, estimativas padronizadas interna e externamente (`istandard`, `estandard`) ou com pesos de uma variável (`standard()`), diferenças de riscos e de taxas padronizadas (`rd`, `ird`), registros de frequências binomiais (`binomial()`) e os testes de Breslow-Day e de Tarone do `cc` (`bd`, `tarone`)
+- [x] `mhodds` com `by()`: a razão de chances dentro de cada grupo, a estimativa controlada pelos grupos e um teste de homogeneidade
+- [x] `roctab` com o erro padrão de Bamber (`bamber`), limites binomiais exatos (`binomial`) e a curva de Lorenz com os índices de Gini e de Pietra (`lorenz`); `roccomp` com áreas binormais (`binormal`)
+- [x] `rocreg`: estimação ROC não paramétrica com controles ajustados por covariáveis (estratificados ou por regressão linear, valores percentis empíricos ou normais) e os seus resumos (AUC, ROC(t), ROC inversa, AUC parcial), e o modelo paramétrico GLM probit com covariáveis da ROC; erros padrão por bootstrap com intervalos normal, percentil e com correção de viés
+- O caso `1601` aguarda a rodada no Stata
+
 ## Distribuição e documentação
 
 - [x] Licença MIT e avisos de licença dos componentes de terceiros
@@ -192,7 +200,7 @@ Um bloco por área de [Depois da 1.0](#depois-da-10): o tamanho é o número de 
 Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acrescentados aos poucos; a ordem segue o uso e os pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
 - **Manipulação de dados**: `table` com três variáveis ou mais; `import sas`, `spss`, `sasxport` e `haver`; `file` com leitura e gravação binária; `infile` com `byvariable()`; `putexcel` para `.xls`; `list` e `describe` com as opções que ainda faltam; `icd9p` com a lista de procedimentos da ICD-9-CM.
-- **Epidemiologia**: `rocreg`; `cs`, `cc` e `ir` com as opções `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`.
+- **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
 - **Estatística básica**: o comando `ml` (o motor já existe), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Modelos**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` e `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Dados em painel**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
