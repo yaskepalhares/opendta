@@ -59,3 +59,16 @@ def lorenz(pos: np.ndarray, neg: np.ndarray) -> tuple[np.ndarray, np.ndarray, fl
     y = np.concatenate([[0.0], np.searchsorted(np.sort(pos), cuts, "right") / len(pos)])
     under = float(((x[1:] - x[:-1]) * (y[1:] + y[:-1]) / 2).sum())
     return x, y, 2 * (0.5 - under), float((x - y).max())
+
+
+def area_trapezoid(pos: np.ndarray, neg: np.ndarray) -> float:
+    """The area as Stata reports it: the trapezoidal rule over the ROC points, with the
+    sensitivities and false-positive rates stored in single precision (equals the
+    Mann-Whitney statistic to about 1e-8; compat 1402 matches to the last digit)."""
+    cuts = np.unique(np.concatenate([pos, neg]))
+    ps, ns = np.sort(pos), np.sort(neg)
+    sens = np.concatenate([(len(ps) - np.searchsorted(ps, cuts, "left")) / len(ps), [0.0]])
+    fpr = np.concatenate([(len(ns) - np.searchsorted(ns, cuts, "left")) / len(ns), [0.0]])
+    s32 = sens.astype(np.float32).astype(float)
+    f32 = fpr.astype(np.float32).astype(float)
+    return float(((f32[:-1] - f32[1:]) * (s32[:-1] + s32[1:]) / 2).sum())

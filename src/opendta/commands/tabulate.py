@@ -219,7 +219,8 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
         rhead = _header_lines(rtitle, W)
         above = rhead[:-1] if len(rhead) > 1 else [""]
         for k, left in enumerate(above):
-            mid = ctitle.center(block).rstrip() if k == len(above) - 1 else ""
+            # centered, an odd leftover space on the left (compat 1402)
+            mid = " " * ((block - len(ctitle) + 1) // 2) + ctitle if k == len(above) - 1 else ""
             out.write(f"{left:>{W}} |{mid}\n", "text")
         lab = "".join(f"{clabels[j][:10]:>10} " for j in cols)
         tot = "|     Total" if last_panel else ""

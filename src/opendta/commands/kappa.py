@@ -107,6 +107,7 @@ def cmd_kap(s: "Session", args: str) -> None:
     for c in cols:
         mask &= c.data < SYS
     w, _, mask = weights(s, p, mask, ("fweight",))
+    w_given = w
     if w is None:
         w = np.ones(ds.nobs)
     levels = sorted(set(np.concatenate([c.data[mask] for c in cols]).tolist()))
@@ -143,7 +144,9 @@ def cmd_kap(s: "Session", args: str) -> None:
             raise StataError(111, f"weight {wname} not found")   # VERIFY (kapwgt)
     out = s.output
     if o.get("tab"):
-        _tab(s, names, levels, T)
+        # the two-way table of tabulate (compat 1402)
+        from .tabulate import _twoway
+        _twoway(s, cols[0], cols[1], mask, w_given, "fweight" if w_given is not None else "", {})
     if isinstance(wname, str):
         out.write("\nRatings weighted by:\n", "text")
         for i in range(K):
@@ -153,23 +156,10 @@ def cmd_kap(s: "Session", args: str) -> None:
     out.write("\n" + " " * 13 + "Expected\n", "text")
     out.write("Agreement   Agreement     Kappa   Std. Err.         Z      Prob>Z\n", "text")
     out.write("-" * 65 + "\n", "text")
-    out.write(f"{100 * po:>7.2f}%{100 * pe:>11.2f}%{_fmt(k, '>10.4f')}{_fmt(se, '>11.4f')}"
+    out.write(f"{100 * po:>7.2f}%{100 * pe:>11.2f}%{_fmt(k, '>11.4f')}{_fmt(se, '>11.4f')}"
               f"{_fmt(z, '>11.2f')}{_fmt(pv, '>12.4f')}\n", "result")
-    _set_r(s, [("prop_e", pe), ("prop_o", po), ("se", se), ("kappa", k), ("z", z), ("N", T.sum())])
-
-
-def _tab(s: "Session", names, levels, T) -> None:
-    out = s.output
-    K = len(levels)
-    out.write(f"\n{name12(names[0]):>12} |{name12(names[1]):^{11 * K}}|\n", "text")
-    out.write(" " * 13 + "|" + "".join(f"{_num(v):>11}" for v in levels) + f"|{'Total':>11}\n", "text")
-    out.write("-" * 13 + "+" + "-" * (11 * K) + "+" + "-" * 11 + "\n", "text")
-    for i, v in enumerate(levels):
-        out.write(f"{_num(v):>12} |", "text")
-        out.write("".join(f"{T[i, j]:>11.0f}" for j in range(K)) + f"|{T[i].sum():>11.0f}\n", "result")
-    out.write("-" * 13 + "+" + "-" * (11 * K) + "+" + "-" * 11 + "\n", "text")
-    out.write(f"{'Total':>12} |", "text")
-    out.write("".join(f"{T[:, j].sum():>11.0f}" for j in range(K)) + f"|{T.sum():>11.0f}\n", "result")
+    # return list order of Stata 14 (compat 1402)
+    _set_r(s, [("N", T.sum()), ("prop_o", po), ("prop_e", pe), ("kappa", k), ("z", z), ("se", se)])
 
 
 def _fleiss_out(s: "Session", counts: np.ndarray, labels: list[str]) -> None:
@@ -188,14 +178,15 @@ def _fleiss_out(s: "Session", counts: np.ndarray, labels: list[str]) -> None:
     for lab, kk, ss in zip(labels, kj, sej):
         z, pv = _zp(kk, ss)
         out.write(f"{name12(lab):>16} |", "text")
-        out.write(f"{_fmt(kk, '>9.4f')}{_fmt(z, '>11.2f')}{_fmt(pv, '>11.4f')}\n", "result")
+        out.write(f"{_fmt(kk, '>10.4f')}{_fmt(z, '>11.2f')}{_fmt(pv, '>10.4f')}\n", "result")
     out.write("-" * 17 + "+" + "-" * 31 + "\n", "text")
     z, pv = _zp(k, se)
     out.write(f"{'combined':>16} |", "text")
-    out.write(f"{_fmt(k, '>9.4f')}{_fmt(z, '>11.2f')}{_fmt(pv, '>11.4f')}\n", "result")
+    out.write(f"{_fmt(k, '>10.4f')}{_fmt(z, '>11.2f')}{_fmt(pv, '>10.4f')}\n", "result")
     if not const:
         out.write("\nNote: Number of ratings per subject vary; cannot calculate test statistics.\n", "text")
-    _set_r(s, [("se", se), ("kappa", k), ("z", z), ("N", counts.shape[0])])
+    # Stata 14 returns only these two (compat 1402)
+    _set_r(s, [("kappa", k), ("z", z)])
 
 
 @command("kappa", "kappa")
@@ -216,6 +207,4 @@ def cmd_kappa(s: "Session", args: str) -> None:
     m_i = counts.sum(1)
     if np.any(m_i < 2):
         raise StataError(459, "each subject needs at least two ratings")   # VERIFY
-    if np.all(m_i == m_i[0]):
-        s.output.write(f"\nThere are {int(m_i[0])} raters per subject:\n", "text")
     _fleiss_out(s, counts, names)
