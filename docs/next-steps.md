@@ -28,7 +28,7 @@ Notes for sessions that run in the cloud:
 - The CI logs cannot be downloaded from the cloud, but the annotations of each job show the `tools/compare.py` differences (`gh api repos/<owner>/<repo>/check-runs/<id>/annotations`). `gh pr` fails because GraphQL is blocked: open and merge the pull request with `gh api` (REST), using a merge commit.
 - A reference log from the Stata run is never edited by hand: when a case changes, the Stata run is repeated.
 
-Next free numbers: compat cases from **1801**, roadmap phases from **14**.
+Next free numbers: compat cases from **1902**, roadmap phases from **16**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -73,9 +73,9 @@ Done in phase 14 (compat case 1801), except `makecns` with a constraint list and
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 
-### 4. Survival analysis (1.5–2.5 h, ~90k tokens)
+### 4. Survival analysis ✅
 
-`stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `ltable`, `sttocc`, `sttoct`, `snapspan`, `ct`, `stcurve` (graph after `stcox`/`streg`), `stcrreg` (Fine-Gray competing risks, ML); `streg, distribution(ggamma)` and `frailty()`; the `exactm` and `exactp` ties of `stcox`. Reuse `estimation/st.py`, `km.py`, `stcox.py`, `streg.py`, `stfit.py`.
+Done in phase 15 (compat case 1901), except the options that stop with error 198 (`stcurve` with `unconditional`, `outfile()` and `kernel()`; `stcrreg` with `tvc()`; vce(robust) and weights with `ggamma` or `frailty()`; the graph options of `ltable`, `strate` and `stci`). The original plan: `stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `ltable`, `sttocc`, `sttoct`, `snapspan`, `ct`, `stcurve` (graph after `stcox`/`streg`), `stcrreg` (Fine-Gray competing risks, ML); `streg, distribution(ggamma)` and `frailty()`; the `exactm` and `exactp` ties of `stcox`. Reuse `estimation/st.py`, `km.py`, `stcox.py`, `streg.py`, `stfit.py`.
 
 ### 5. Multilevel models (1–1.5 h, ~55k tokens)
 

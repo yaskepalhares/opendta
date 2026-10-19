@@ -197,6 +197,15 @@ One tile per area of [After 1.0](#after-10): its size is the number of commands 
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` with a constraint matrix and `matcproc`
 - Checked against the Stata log: case `1801`
 
+## Phase 15: survival analysis ✅
+
+- [x] `strate`, `stptime`, `stci` (percentiles, restricted and extended means), `stir`, `stmh`, `stmc` and `ltable`
+- [x] `stsplit`, `stjoin`, `stfill`, `stgen`, `stvary`, `stbase` and `snapspan`
+- [x] Count-time data: `ctset`, `ct`, `cttost`, `sttoct`; case-control sampling with `sttocc`
+- [x] `stcrreg` (Fine-Gray competing risks) and `stcurve` after `stcox`, `streg` and `stcrreg`
+- [x] `streg, distribution(ggamma)` and `frailty(gamma|invgaussian)`, with `shared()`; the `exactm` and `exactp` ties of `stcox`
+- Checked against the Stata log: case `1901`
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -223,7 +232,6 @@ Commands and options that OpenDTA does not have yet, by area. They will be added
 - **Base statistics**: the `ml` command (the engine exists), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` after more commands, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
 - **Models**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` and `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` and `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Panel data**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
-- **Survival analysis**: `stcrreg`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `ltable`, `stcurve`, `sttocc`, `sttoct`, `snapspan`, `ct`; `streg, distribution(ggamma)` and `frailty()`; the `exactm` and `exactp` ties of `stcox`.
 - **Time series**: `arch`, `arfima`, `dfactor`, `sspace`, `ucm`, `mgarch`, `vec` and `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph` and `add`.
 - **Multivariate statistics**: `pca`, `factor`, `rotate`, `alpha`, `cluster`, `discrim`, `manova`, `mvreg`, `mvtest`, `canon`, `ca`/`mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`.
 - **Multilevel models**: `meglm`, `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `meqrlogit`, `meqrpoisson`, `mestreg`; crossed random effects in `mixed`.

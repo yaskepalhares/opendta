@@ -28,7 +28,7 @@ Notas para sessões que rodam na nuvem:
 - Os logs do CI não baixam da nuvem, mas as anotações de cada job mostram as diferenças do `tools/compare.py` (`gh api repos/<dono>/<repo>/check-runs/<id>/annotations`). O `gh pr` falha porque o GraphQL está bloqueado: abra e mescle o pull request com `gh api` (REST), com merge commit.
 - O log de referência da rodada no Stata nunca é editado à mão: quando um caso muda, a rodada no Stata é repetida.
 
-Próximos números livres: casos de comparação a partir de **1801**, fases do roadmap a partir de **14**.
+Próximos números livres: casos de comparação a partir de **1902**, fases do roadmap a partir de **16**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -73,9 +73,9 @@ Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de rest
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 
-### 4. Análise de sobrevivência (1,5–2,5 h, ~90 mil tokens)
+### 4. Análise de sobrevivência ✅
 
-`stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `ltable`, `sttocc`, `sttoct`, `snapspan`, `ct`, `stcurve` (gráfico depois de `stcox`/`streg`), `stcrreg` (riscos competitivos de Fine-Gray, ML); `streg, distribution(ggamma)` e `frailty()`; os empates `exactm` e `exactp` do `stcox`. Reaproveitar `estimation/st.py`, `km.py`, `stcox.py`, `streg.py`, `stfit.py`.
+Feito na fase 15 (caso de comparação 1901), exceto as opções que param com o erro 198 (`stcurve` com `unconditional`, `outfile()` e `kernel()`; `stcrreg` com `tvc()`; vce(robust) e pesos com `ggamma` ou `frailty()`; as opções gráficas de `ltable`, `strate` e `stci`). O plano original: `stsplit`, `stjoin`, `stfill`, `stgen`, `stbase`, `stvary`, `stci`, `strate`, `stptime`, `stir`, `stmh`, `stmc`, `ltable`, `sttocc`, `sttoct`, `snapspan`, `ct`, `stcurve` (gráfico depois de `stcox`/`streg`), `stcrreg` (riscos competitivos de Fine-Gray, ML); `streg, distribution(ggamma)` e `frailty()`; os empates `exactm` e `exactp` do `stcox`. Reaproveitar `estimation/st.py`, `km.py`, `stcox.py`, `streg.py`, `stfit.py`.
 
 ### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
 

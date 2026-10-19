@@ -174,7 +174,8 @@ def _frailty_fun(dist, X, t, t0, d, gid, kind, lnt_c, fit_aft, k_aux):
             l1 = lf1(X @ b[:kx], th)
         lam = np.bincount(gid, weights=-l0[0], minlength=ng)
         D = np.bincount(gid, weights=d, minlength=ng)
-        logh = np.where(fail, l1[0] - l0[0], 0.0)
+        with np.errstate(all="ignore"):
+            logh = np.where(fail, l1[0] - l0[0], 0.0)
         with np.errstate(all="ignore"):
             G, GL, Gv, GLL, GLv, Gvv = _group_partials(kind, lam, D, vt)
         ll = float(np.sum(logh)) + float(np.sum(G)) + lnt_c
@@ -371,8 +372,9 @@ def _shared_codes(ds, name: str, mask: np.ndarray) -> np.ndarray:
 
 
 def _exp_row(label: str, b: float, se: float, z: float) -> CoefRow:
-    v = float(np.exp(b))
-    return CoefRow("aux", label, v, v * se, eq=f"{float(np.exp(b - z * se))!r} {float(np.exp(b + z * se))!r}")
+    with np.errstate(over="ignore"):
+        v = float(np.exp(b))
+        return CoefRow("aux", label, v, v * se, eq=f"{float(np.exp(b - z * se))!r} {float(np.exp(b + z * se))!r}")
 
 
 def _post(s: "Session", est: Estimates, args: str, dist, res, res0, k: int, mask) -> None:
