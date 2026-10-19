@@ -350,6 +350,9 @@ def _icd(s: "Session", kind: str, args: str) -> None:
             ds.add(Variable(str(o["generate"]), v.vtype, np.array(new_vals, dtype=object)))
         else:
             v.data = new_vals
+            if kind != "icd10":
+                # Stata 14 leaves the cleaned variable left-justified in list (compat 1501; VERIFY: the width)
+                v.fmt = "%-" + v.fmt.lstrip("%-")
         _note(s, f"({changes:,} change{'s' if changes != 1 else ''} made)")   # VERIFY
         s.notify_state()
         return

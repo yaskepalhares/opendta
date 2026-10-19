@@ -153,7 +153,7 @@ def cmd_infile(s: "Session", args: str) -> None:
         _finish(s, new, p.if_, p.in_)
         return
     if by is not None and not (isinstance(by, str) and by.strip().isdigit()):
-        raise StataError(198, "option byvariable() requires the number of observations")
+        raise StataError(198, "option byvariable() incorrectly specified")
     spec = parse_free_spec(p.varlist, s.default_type())
     text = read_text(_path(p.using, ".raw"))
     new, warnings, partial = read_free(text, spec, automatic=bool(o.get("automatic")),

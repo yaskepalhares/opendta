@@ -19,7 +19,7 @@
 variable's display format. Value labels are shown instead of codes unless
 {cmd:nolabel} is given. A separator line is drawn every 5 observations
 ({cmd:separator(}{it:#}{cmd:)}; 0 for none) or, with {cmd:sepby()}, whenever
-the value of one of its variables changes. {cmd:header(}{it:#}{cmd:)} repeats the variable names every {it:#} observations and {cmd:nodotz} shows .a to .z as a dot. {cmd:mean}, {cmd:sum} and {cmd:N} add a row with the mean, the sum and the number of nonmissing values of the numeric variables (or of the ones named), labeled in the observation-number column or, with {cmd:labvar()}, in the column of that variable. {cmd:nocompress} is accepted and changes nothing. For browsing many observations, the Data Editor
+the value of one of its variables changes. {cmd:header(}{it:#}{cmd:)} repeats the variable names every {it:#} observations and {cmd:nodotz} shows .z as a blank field. {cmd:mean}, {cmd:sum} and {cmd:N} add a row with the mean, the sum and the number of nonmissing values of the numeric variables (or of the ones named), labeled in the observation-number column or, with {cmd:labvar()}, in the column of that variable. {cmd:nocompress} is accepted and changes nothing. For browsing many observations, the Data Editor
 ({cmd:browse}) is often more convenient.
 {p_end}
 

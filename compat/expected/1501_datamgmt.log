@@ -1,0 +1,524 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1501_datamgmt.log
+  log type:  text
+ opened on:  19 Oct 2026, 14:08:06
+
+. * Every command that Stata 14 may not have, or whose behavior the manual does not settle, runs under
+. * capture noisily, so that one Stata run shows the whole case.
+. * Data management: clonevar, ds, lookfor, insobs, range, separate, ipolate,
+. * expandcl, stack, xpose, corr2data, inspect, labelbook, compare, cf, snapshot,
+. * filefilter, outfile, statsby, putmata, icd9 and bcal (layouts, messages, r())
+. clear
+
+. input id grp x y
+
+            id        grp          x          y
+  1. 1 1 1 10
+  2. 2 1 2 .
+  3. 3 1 4 30
+  4. 4 2 1 5
+  5. 5 2 3 .
+  6. 6 2 5 25
+  7. end
+
+. label variable x "Dose given"
+
+. label define yn 1 "one" 2 "two"
+
+. label values grp yn
+
+. capture noisily clonevar xc = x if id < 4
+(3 missing values generated)
+
+. capture noisily describe x xc
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+x               float   %9.0g                 Dose given
+xc              float   %9.0g                 Dose given
+
+. capture noisily ds
+id   grp  x    y    xc
+
+. capture noisily return list
+
+macros:
+            r(varlist) : "id grp x y xc"
+
+. capture noisily ds, has(type numeric) not(varlabel)
+may not combine options has() and not()
+
+. ds, has(type numeric)
+id   grp  x    y    xc
+
+. ds, not(varlabel)
+id   grp  y
+
+. capture noisily lookfor dose
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+x               float   %9.0g                 Dose given
+xc              float   %9.0g                 Dose given
+
+. capture noisily return list
+
+macros:
+            r(varlist) : "x xc"
+
+. capture noisily inspect x
+
+x:  Dose given                                  Number of Observations
+--------------                         ---------------------------------------
+                                             Total      Integers   Nonintegers
+|  #                         Negative            -             -             -
+|  #                         Zero                -             -             -
+|  #                         Positive            6             6             -
+|  #   #   #   #   #                   -----------   -----------   -----------
+|  #   #   #   #   #         Total               6             6             -
+|  #   #   #   #   #         Missing             -
++----------------------                -----------
+1                     5                          6
+   (5 unique values)
+
+. capture noisily inspect y
+
+y:                                              Number of Observations
+----                                   ---------------------------------------
+                                             Total      Integers   Nonintegers
+|  #           #             Negative            -             -             -
+|  #           #             Zero                -             -             -
+|  #           #             Positive            4             4             -
+|  #           #                       -----------   -----------   -----------
+|  #           #             Total               4             4             -
+|  #   .   .   #             Missing             2
++----------------------                -----------
+5                    30                          6
+   (4 unique values)
+
+. capture noisily return list
+
+scalars:
+              r(N_neg) =  0
+           r(N_negint) =  0
+                r(N_0) =  0
+              r(N_pos) =  4
+           r(N_posint) =  4
+                  r(N) =  4
+           r(N_unique) =  4
+            r(N_undoc) =  .
+
+. capture noisily labelbook yn
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+value label yn 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+      values                                    labels
+       range:  [1,2]                     string length:  [3,3]
+           N:  2                 unique at full length:  yes
+        gaps:  no                  unique at length 12:  yes
+  missing .*:  0                           null string:  no
+                               leading/trailing blanks:  no
+                                    numeric -> numeric:  no
+  definition
+           1   one
+           2   two
+
+   variables:  grp
+
+
+. labelbook, problems
+
+no potential problems in dataset [unnamed]
+
+. capture noisily compare x xc
+
+                                        ---------- difference ----------
+                            count       minimum      average     maximum
+------------------------------------------------------------------------
+x=xc                            3
+                       ----------
+jointly defined                 3             0            0           0
+xc missing only                 3
+                       ----------
+total                           6
+
+. capture noisily by grp: ipolate y x, gen(yi)
+not sorted
+
+. capture noisily bysort grp: ipolate y x, gen(yi)
+
+. capture noisily list
+
+     +------------------------------------+
+     | id   grp   x    y   xc          yi |
+     |------------------------------------|
+  1. |  1   one   1   10    1          10 |
+  2. |  2   one   2    .    2   16.666667 |
+  3. |  3   one   4   30    4          30 |
+  4. |  4   two   1    5    .           5 |
+  5. |  5   two   3    .    .          15 |
+     |------------------------------------|
+  6. |  6   two   5   25    .          25 |
+     +------------------------------------+
+
+. capture noisily separate x, by(grp)
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+x1              byte    %9.0g                 x, grp == one
+x2              byte    %9.0g                 x, grp == two
+
+. capture noisily describe x1 x2
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+x1              byte    %9.0g                 x, grp == one
+x2              byte    %9.0g                 x, grp == two
+
+. capture noisily separate y, by(grp) generate(yy) shortlabel
+
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+yy1             byte    %9.0g                 grp == one
+yy2             byte    %9.0g                 grp == two
+
+. preserve
+
+. capture noisily expandcl 2, cluster(grp) generate(newcl)
+(6 observations created)
+
+. capture noisily sort grp id newcl
+
+. capture noisily list id grp newcl
+
+     +------------------+
+     | id   grp   newcl |
+     |------------------|
+  1. |  1   one       1 |
+  2. |  1   one       2 |
+  3. |  2   one       1 |
+  4. |  2   one       2 |
+  5. |  3   one       1 |
+     |------------------|
+  6. |  3   one       2 |
+  7. |  4   two       3 |
+  8. |  4   two       4 |
+  9. |  5   two       3 |
+ 10. |  5   two       4 |
+     |------------------|
+ 11. |  6   two       3 |
+ 12. |  6   two       4 |
+     +------------------+
+
+. restore
+
+. capture snapshot erase _all
+
+. capture noisily snapshot save, label("first")
+snapshot 1 (first) created at 19 Oct 2026 14:08
+
+. capture noisily snapshot list
+snapshot 1 (first) created at 19 Oct 2026 14:08
+
+. capture noisily drop if grp == 2
+(3 observations deleted)
+
+. capture noisily snapshot restore 1
+
+. capture noisily count
+  6
+
+. capture erase odta_a.dta
+
+. capture noisily save odta_a, replace
+(note: file odta_a.dta not found)
+file odta_a.dta saved
+
+. replace x = 99 in 2
+(1 real change made)
+
+. capture noisily cf _all using odta_a
+               x:  1 mismatches
+
+. capture noisily cf x y using odta_a, verbose
+               x:  1 mismatches
+                   obs 2. 99 in master; 2 in using
+
+. capture noisily statsby m=r(mean) n=r(N), by(grp) clear nodots: summarize x
+
+      command:  summarize x
+            m:  r(mean)
+            n:  r(N)
+           by:  grp
+
+
+. capture noisily list
+
+     +--------------------+
+     | grp          m   n |
+     |--------------------|
+  1. | one   34.66667   3 |
+  2. | two          3   3 |
+     +--------------------+
+
+. capture noisily putmata X=(grp m), replace
+(1 matrix posted)
+
+. capture noisily mata: X
+                 1             2
+    +-----------------------------+
+  1 |            1   34.66666794  |
+  2 |            2             3  |
+    +-----------------------------+
+
+. clear
+
+. set obs 3
+number of observations (_N) was 0, now 3
+
+. capture noisily insobs 2, before(2)
+(2 observations added)
+
+. capture noisily count
+  5
+
+. capture noisily range t 0 1 5
+
+. capture noisily list
+
+     +-----+
+     |   t |
+     |-----|
+  1. |   0 |
+  2. | .25 |
+  3. |  .5 |
+  4. | .75 |
+  5. |   1 |
+     +-----+
+
+. clear
+
+. set obs 3
+number of observations (_N) was 0, now 3
+
+. gen a = _n
+
+. gen b = 10*_n
+
+. capture noisily stack a b, into(z) clear
+
+. capture noisily list
+
+     +-------------+
+     | _stack    z |
+     |-------------|
+  1. |      1    1 |
+  2. |      1    2 |
+  3. |      1    3 |
+  4. |      2   10 |
+  5. |      2   20 |
+     |-------------|
+  6. |      2   30 |
+     +-------------+
+
+. clear
+
+. set obs 2
+number of observations (_N) was 0, now 2
+
+. gen a = _n
+
+. gen b = 10*_n
+
+. xpose, clear varname
+
+. capture noisily list
+
+     +--------------------+
+     | v1   v2   _varname |
+     |--------------------|
+  1. |  1    2          a |
+  2. | 10   20          b |
+     +--------------------+
+
+. clear
+
+. matrix C = (1, .3 \ .3, 1)
+
+. capture noisily corr2data u v, n(100) corr(C) means(5 10) sds(2 3)
+(obs 100)
+
+. capture noisily tabstat u v, statistics(mean sd)
+
+   stats |         u         v
+---------+--------------------
+    mean |         5        10
+      sd |         2         3
+------------------------------
+
+. capture noisily correlate u v
+(obs=100)
+
+             |        u        v
+-------------+------------------
+           u |   1.0000
+           v |   0.3000   1.0000
+
+
+. clear
+
+. input id x
+
+            id          x
+  1. 1 1.5
+  2. 2 2.25
+  3. end
+
+. capture erase odta_out.raw
+
+. capture erase odta_f.raw
+
+. capture noisily outfile using odta_out.raw, replace
+(note: file odta_out.raw not found)
+
+. capture noisily type odta_out.raw
+        1        1.5
+        2       2.25
+
+. capture noisily outfile using odta_out.raw, comma replace
+
+. capture noisily type odta_out.raw
+1,1.5
+2,2.25
+
+. capture noisily filefilter odta_out.raw odta_f.raw, from(",") to(";") replace
+
+. capture noisily type odta_f.raw
+1;1.5
+2;2.25
+
+. clear
+
+. input str8 dx
+
+            dx
+  1. "250.00"
+  2. "25000"
+  3. "401.9"
+  4. "V27.0"
+  5. "E880.0"
+  6. "bad!"
+  7. "999.99"
+  8. end
+
+. capture noisily icd9 check dx
+(dx contains no missing values)
+
+dx contains invalid codes:
+
+    1.  Invalid placement of period                       0
+    2.  Too many periods                                  0
+    3.  Code too short                                    0
+    4.  Code too long                                     0
+    5.  Invalid 1st char (not 0-9, E, or V)               1
+    6.  Invalid 2nd char (not 0-9)                        0
+    7.  Invalid 3rd char (not 0-9)                        0
+    8.  Invalid 4th char (not 0-9)                        0
+    9.  Invalid 5th char (not 0-9)                        0
+   10.  Code not defined                                  1
+                                                -----------
+        Total                                             2
+
+. capture noisily return list
+
+scalars:
+                r(e10) =  1
+                 r(e9) =  0
+                 r(e8) =  0
+                 r(e7) =  0
+                 r(e6) =  0
+                 r(e5) =  1
+                 r(e4) =  0
+                 r(e3) =  0
+                 r(e2) =  0
+                 r(e1) =  0
+               r(esum) =  2
+
+. capture noisily icd9 check dx, list
+(dx contains no missing values)
+
+dx contains invalid codes:
+
+    1.  Invalid placement of period                       0
+    2.  Too many periods                                  0
+    3.  Code too short                                    0
+    4.  Code too long                                     0
+    5.  Invalid 1st char (not 0-9, E, or V)               1
+    6.  Invalid 2nd char (not 0-9)                        0
+    7.  Invalid 3rd char (not 0-9)                        0
+    8.  Invalid 4th char (not 0-9)                        0
+    9.  Invalid 5th char (not 0-9)                        0
+   10.  Code not defined                                  1
+                                                -----------
+        Total                                             2
+
+Listing of invalid and undefined codes
+
+     +---------------------------+
+     |     dx   __prob           |
+     |---------------------------|
+  6. |   bad!   Invalid 1st char |
+  7. | 999.99   Code not defined |
+     +---------------------------+
+
+. capture noisily icd9 clean dx, dots generate(c)
+option generate() not allowed
+
+. gen c = dx
+
+. capture noisily icd9 clean c, dots
+c contains invalid ICD-9 codes
+
+. capture noisily drop if dx == "bad!"
+(1 observation deleted)
+
+. capture noisily icd9 clean c, dots
+(1 change made)
+
+. capture noisily icd9 generate cat = c, category
+
+. capture noisily list
+
+     +------------------------+
+     |     dx   c         cat |
+     |------------------------|
+  1. | 250.00   250.00    250 |
+  2. |  25000   250.00    250 |
+  3. |  401.9   401.9     401 |
+  4. |  V27.0   V27.0     V27 |
+  5. | E880.0   E880.0   E880 |
+     |------------------------|
+  6. | 999.99   999.99    999 |
+     +------------------------+
+
+. erase odta_a.dta
+
+. erase odta_out.raw
+
+. erase odta_f.raw
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1501_datamgmt.log
+  log type:  text
+ closed on:  19 Oct 2026, 14:08:06
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

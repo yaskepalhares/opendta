@@ -125,10 +125,12 @@ def test_infile_byvariable(run, tmp_path, monkeypatch):
     assert list(d.get("amount").data) == [14, 17, 25, 30]
     assert list(d.get("cost").data) == [120, 135, 150, 180]
     (tmp_path / "t2.raw").write_text("1980 1981 1982 1983;\n14 17 25 ;\n120 135 150 180;\n")
-    out = run("infile year amount cost using t2, byvariable(100) clear")
-    assert "(4 observations read)" in out
-    amount = run.session.data.get("amount").data
-    assert list(amount[:3]) == [14, 17, 25] and amount[3] == M.SYSMISS
+    out = run("infile year amount cost using t2, byvariable(100) clear")     # as in Stata 14 (compat 1701)
+    assert "'1983;' cannot be read as a number for year[4]" in out and "(7 observations read)" in out
+    d = run.session.data
+    amount = d.get("amount").data
+    assert list(d.get("year").data[4:]) == [14, 17, 25] and list(amount[:3]) == [120, 135, 150]
+    assert amount[3] == M.SYSMISS and d.get("cost").data[0] == M.SYSMISS
     run("infile year amount cost using t2, byvariable(x) clear")
     assert run.rc == 198
     run("infile str5 s using t2, byvariable(2) clear")
@@ -180,12 +182,12 @@ def test_describe_using(run, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     run(DATA + "save d, replace\nclear")
     out = run("describe using d")
-    assert "Contains data from d.dta" in out and "Price (USD)" in out
+    assert "Contains data" in out and "from d.dta" not in out and "Price (USD)" in out
     assert run.session.data.nvars == 0                                   # nothing was loaded
     assert run("describe using d, simple").split() == ["make", "price", "mpg"]
-    run("describe make using d, varlist")
-    assert run.session.r["varlist"] == "make"
-    assert run.eval("r(changed)") == 0
+    out = run("describe make using d, varlist")
+    assert "price" not in out and run.session.r["varlist"] == "make price mpg"
+    assert "changed" not in run.session.r
     run("describe using nothing")
     assert run.rc == 601
 
@@ -198,8 +200,9 @@ def test_list_header_and_nodotz(run):
     assert len(heads) == 2 and row[2] < heads[1] < row[3]
     clean = run("list, clean header(2)")
     assert clean.count("x") == 2
-    assert ".a" in run("list")
-    assert ".a" not in run("list, nodotz")
+    assert ".a" in run("list") and ".a" in run("list, nodotz")
+    run("input z\n.z\n1\nend")
+    assert ".z" in run("list z") and ".z" not in run("list z, nodotz")
     run("list, noheader header")
     assert run.rc == 198
 
@@ -214,8 +217,8 @@ def test_list_summary_rows(run):
     assert any(ln.split()[:2] == ["N", "|"] for ln in out)
     run("list, nocompress")
     assert run.rc == 0
-    run("list, labvar(zz) sum")
-    assert run.rc == 111
+    out = run("list, labvar(zz) sum")
+    assert run.rc == 198 and "variable zz not found" in out
 
 
 # -- SAS, SPSS and XPORT ---------------------------------------------------------------------------

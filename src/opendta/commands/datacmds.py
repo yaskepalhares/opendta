@@ -1096,8 +1096,11 @@ def cmd_statsby(s: "Session", args: str) -> None:
         s.data = sub
         s.r, s.e = {}, {}
         ok = True
+        # the command inside is silent even under `capture noisily statsby` (compat 1501)
+        noisy_saved = out.noisy_depth
         if not o.get("noisily"):
             out.quiet_depth += 1
+            out.noisy_depth = 0
         try:
             s.interp._execute_expanded(cmd)
         except StataError:
@@ -1105,6 +1108,7 @@ def cmd_statsby(s: "Session", args: str) -> None:
         finally:
             if not o.get("noisily"):
                 out.quiet_depth -= 1
+                out.noisy_depth = noisy_saved
         if gi == 0:
             if not exps:
                 exps = _default_explist(s)

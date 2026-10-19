@@ -265,7 +265,8 @@ def cmd_char(s: "Session", args: str) -> None:
         ds.changed = True
         return
     if sub in ("list", "l", "li", "lis", ""):
-        targets = rest.split()
+        # a target is a variable or _dta; "_dta[]" is the same (compat 1701)
+        targets = [x.split("[")[0] for x in rest.split()]
         out = s.output
         owners = [o for o in ["_dta"] + ds.names if o in ds.chars]
         owners += [o for o in ds.chars if o not in owners]

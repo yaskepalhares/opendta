@@ -60,7 +60,8 @@ def to_number(text: str) -> float | None:
 def tokenize_free(text: str, semicolons: bool = False) -> list[str]:
     """Splits values on spaces and commas; quotes (single or double)
     delimit strings; two consecutive commas mean a missing value. With semicolons (byvariable()),
-    ";" is a token of its own: it ends the data of a variable."""
+    a ";" set apart by blanks is a token of its own and ends the data of a variable; a ";" stuck to
+    a value stays part of it ("1983;" cannot be read as a number; compat 1701)."""
     out: list[str] = []
     i, n = 0, len(text)
     last_comma = False
@@ -76,7 +77,7 @@ def tokenize_free(text: str, semicolons: bool = False) -> list[str]:
             i += 1
             continue
         last_comma = False
-        if semicolons and ch == ";":
+        if semicolons and ch == ";" and (i + 1 >= n or text[i + 1] in " \t\r\n,"):
             out.append(";")
             i += 1
             continue
@@ -88,7 +89,7 @@ def tokenize_free(text: str, semicolons: bool = False) -> list[str]:
             i = j + 1
             continue
         j = i
-        while j < n and text[j] not in " \t\r\n," and not (semicolons and text[j] == ";"):
+        while j < n and text[j] not in " \t\r\n,":
             j += 1
         out.append(text[i:j])
         i = j
@@ -155,9 +156,11 @@ def _read_by_variable(text: str, spec: list[FreeVar], n: int, automatic: bool):
                 pos += 1
             pos += 1
     nobs = max((len(c) for c in columns), default=0)
+    # "(eof not at end of obs)" when the file ends before the data of some variable (compat 1701; VERIFY)
+    partial = any(not c for c in columns)
     for c in columns:
         c.extend([""] * (nobs - len(c)))
-    return _build_free(spec, columns, nobs, automatic, False)
+    return _build_free(spec, columns, nobs, automatic, partial)
 
 
 def _build_free(spec: list[FreeVar], columns: list[list[str]], nobs: int, automatic: bool,

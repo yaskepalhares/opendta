@@ -313,6 +313,10 @@ def cmd_file(s: "Session", args: str) -> None:
     elif sub == "set":
         _set(s, rest)
     elif sub == "query":
+        # one line per open handle: "binary read  h" (compat 1701; VERIFY: text files and read write)
+        for name, h in _handles(s).items():
+            how = {"r": "read", "w": "write", "rw": "read write"}.get(h.mode, h.mode)
+            s.output.write(f"{'binary' if h.binary else 'text':<6} {how:<5} {name}\n", "text")
         s.r = {"N": float(len(_handles(s)))}
     else:
         raise StataError(198, f"file {sub}: subcommand not yet supported by OpenDTA")

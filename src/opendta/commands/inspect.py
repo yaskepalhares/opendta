@@ -12,6 +12,7 @@ import numpy as np
 
 from ..core.errors import StataError
 from ..core.formats import format_value, parse_format
+from ..core.missing import MISSING_THRESHOLD
 from ..core.varlist import expand, unique
 from ..lang.syntax import match_options, parse_standard
 from ._util import touse
@@ -54,7 +55,7 @@ def cmd_list(s: "Session", args: str) -> None:
         "mean": 4, "sum": 3, "N": 1, "labvar": 6,
     })
     if opts.get("noheader") and opts.get("header") is True:
-        raise StataError(198, "options header and noheader may not be combined")
+        raise StataError(198, "option noheader not allowed")
     mask = touse(s, p)
     rows = np.flatnonzero(mask)
     if not names:
@@ -73,14 +74,14 @@ def cmd_list(s: "Session", args: str) -> None:
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
     if opts.get("nodotz"):
-        # extended missing values (.a-.z) are shown as "."
-        cells = [[("." if (len(c) == 2 and c[0] == "." and c[1].isalpha() and not v.is_string) else c)
-                  for c, v in zip(r, vars_)] for r in cells]
+        # .z is shown as a blank field (the manual's words; VERIFY with .z in the data)
+        cells = [[("" if (c == ".z" and not v.is_string) else c) for c, v in zip(r, vars_)] for r in cells]
     # mean/sum/N: one summary row each, below the observations; the label goes in the observation-number
     # position, or in the column of labvar(); VERIFY: layout of the summary rows (compat 1701)
     labvar = str(opts["labvar"]).strip() if isinstance(opts.get("labvar"), str) else ""
     if labvar and labvar not in names:
-        raise StataError(111, f"variable {labvar} not found")
+        out.write(f"variable {labvar} not found\n", "error")
+        raise StataError(198, "option labvar() incorrectly specified")
     summaries: list[tuple[str, list[str]]] = []
     for key, label in (("mean", "Mean"), ("sum", "Sum"), ("N", "N")):
         if not opts.get(key):
@@ -92,10 +93,10 @@ def cmd_list(s: "Session", args: str) -> None:
             if n not in pick or v.is_string:
                 row.append("")
                 continue
-            x = np.asarray(v.raw, dtype=float)[rows]
-            x = x[x < 1e300]
+            x = np.asarray(v.data, dtype=float)[rows]
+            x = x[x < MISSING_THRESHOLD]
             val = float(len(x)) if key == "N" else (float(x.sum()) if key == "sum" else
-                                                    float(x.mean()) if len(x) else 1e300)
+                                                    float(x.mean()) if len(x) else MISSING_THRESHOLD)
             row.append(f"{int(val)}" if key == "N" else format_value(val, v.fmt, pad=False).strip())
         if labvar:
             row[names.index(labvar)] = label
@@ -109,6 +110,8 @@ def cmd_list(s: "Session", args: str) -> None:
     widths = []
     for j, v in enumerate(vars_):
         data_w = max([len(r[j]) for r in cells + [sm[1] for sm in summaries]], default=0)
+        if opts.get("nocompress") or opts.get("fast"):
+            data_w = max(data_w, parse_format(v.fmt).width)     # widths from the display formats (compat 1701)
         title = v.name if len(v.name) <= max(ab, data_w) else _abbrev(v.name, float(max(ab, data_w)))
         titles.append(title)
         widths.append(max([len(title), data_w]))
@@ -123,6 +126,7 @@ def cmd_list(s: "Session", args: str) -> None:
     # layout observed in the Stata logs: 3 spaces between columns, observation label "  1."
     # followed by " | " (table) or by 3 spaces (clean)
     obs_w = max(3, len(str(int(rows[-1]) + 1))) if len(rows) else 3
+    obs_col = show_obs or bool(summaries and not labvar)      # the label of a summary row needs the column
     if summaries and not labvar:
         obs_w = max(obs_w, max(len(lb) for lb, _ in summaries))
     header = fmt_row(titles)
@@ -131,18 +135,17 @@ def cmd_list(s: "Session", args: str) -> None:
     out.ensure_line_start()
     out.write("\n", "text")
     if clean:
-        lead = " " * (obs_w + 1 + 3) if show_obs else ""
+        lead = " " * (obs_w + 1 + 3) if obs_col else ""
         if not opts.get("noheader"):
             out.write(lead + header + "  \n", "text")
         for k, (i, r) in enumerate(zip(rows, cells)):
             if every and k and k % every == 0 and not opts.get("noheader"):
                 out.write("\n" + lead + header + "  \n", "text")      # VERIFY: layout of header(#) (compat 1701)
-            label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else ""
+            label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else (lead if obs_col else "")
             out.write(label, "text")
             out.write(fmt_row(r) + "  \n", "result")
         for label, r in summaries:
-            out.write((" " * (obs_w + 1 + 3) if show_obs and labvar else (label.rjust(obs_w) + "    " if show_obs else ""))
-                      + fmt_row(r) + "  \n", "result")
+            out.write((lead if labvar else label.rjust(obs_w + 1) + "   ") + fmt_row(r) + "  \n", "result")
         return
 
     pad = " " * (obs_w + 2) if show_obs else "  "
@@ -152,8 +155,9 @@ def cmd_list(s: "Session", args: str) -> None:
         out.write(pad + "|" + "-" * inner + "|\n", "text")
     for k, (i, r) in enumerate(zip(rows, cells)):
         if every and k and k % every == 0 and not opts.get("noheader"):
-            # VERIFY: layout of header(#) (compat 1701)
-            out.write(pad + "|" + "-" * inner + "|\n", "text")
+            # a new table with its own header, after a blank line (compat 1701)
+            out.write(pad + "+" + "-" * inner + "+\n\n", "text")
+            out.write(pad + "+" + "-" * inner + "+\n", "text")
             out.write(pad + "| " + header + " |\n", "text")
             out.write(pad + "|" + "-" * inner + "|\n", "text")
         elif sep and k and k % sep == 0:
@@ -167,8 +171,8 @@ def cmd_list(s: "Session", args: str) -> None:
     for k, (label, r) in enumerate(summaries):
         if not k:
             out.write(pad + "|" + "-" * inner + "|\n", "text")
-        lead = (" " * obs_w + "  ") if labvar else (label.rjust(obs_w) + "  ")
-        out.write((lead if show_obs else "  ") + "| ", "text")
+        lead = (" " * obs_w + "  ") if labvar else (label.rjust(obs_w + 1) + " ")
+        out.write((lead if obs_col else "  ") + "| ", "text")
         out.write(fmt_row(r), "result")
         out.write(" |\n", "text")
     out.write(pad + "+" + "-" * inner + "+\n", "text")
@@ -190,7 +194,7 @@ def cmd_describe(s: "Session", args: str) -> None:
     opts = match_options(p.options, {"short": 2, "simple": 2, "fullnames": 1, "numbers": 1,
                                      "replace": 3, "clear": 5, "varlist": 7})
     if opts.get("clear") and not opts.get("replace"):
-        raise StataError(198, "option clear may be specified only with option replace")
+        raise StataError(198, "option clear not allowed")
     if p.using is not None:
         if opts.get("fullnames") or opts.get("numbers") or opts.get("replace"):
             raise StataError(198, "option not allowed with using")   # VERIFY
@@ -203,14 +207,20 @@ def cmd_describe(s: "Session", args: str) -> None:
         return
     out = s.output
     _LINE = _hline(s)
-    s.r = {"N": float(ds.nobs), "k": float(ds.nvars), "width": float(ds.width()),
-           "changed": float(ds.changed)}
+    # describe using a file (compat 1701; VERIFY each difference): no r(changed), r(varlist) lists all the
+    # variables of the file, the header has no file name and the date stamp on the obs line, size
+    # counts 4 more bytes per observation, and the lines around the table are 79 wide
+    using_file = getattr(ds, "describe_using", False)
+    s.r = {"N": float(ds.nobs), "k": float(ds.nvars), "width": float(ds.width())}
+    if not using_file:
+        s.r["changed"] = float(ds.changed)
     if opts.get("varlist"):
-        s.r["varlist"] = " ".join(names)
+        s.r["varlist"] = " ".join(ds.names if using_file else names)
         s.r["sortlist"] = " ".join(ds.sortlist)
 
     if opts.get("simple"):
-        out.write("  ".join(names) + "\n", "text")
+        w = max((len(n) for n in names), default=0) + 2
+        out.write("".join(n.ljust(w) for n in names).rstrip() + "\n", "text")
         return
 
     out.ensure_line_start()
@@ -218,32 +228,37 @@ def cmd_describe(s: "Session", args: str) -> None:
     # with a varlist, Stata 14 shows only the variables table
     only_vars = bool(p.varlist.strip())
     if not only_vars:
-        src = f"Contains data from {ds.filename}" if ds.filename else "Contains data"
+        src = f"Contains data from {ds.filename}" if ds.filename and not using_file else "Contains data"
         out.write(src + "\n", "text")
         label = ds.label
-        out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + label if label else "") + "\n", "text")
-        ts = getattr(ds, "timestamp", "") if ds.filename else ""
-        out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts.strip() if ts else "") + "\n", "text")
+        ts = getattr(ds, "timestamp", "").strip() if ds.filename else ""
+        out.write(f"  obs:{ds.nobs:>14,}" + (" " * 26 + (ts if using_file else label) if (ts if using_file else label) else "") + "\n", "text")
+        out.write(f" vars:{ds.nvars:>14,}" + (" " * 26 + ts if ts and not using_file else "") + "\n", "text")
         dta_notes = " " * 26 + "(_dta has notes)" if ds.chars.get("_dta", {}).get("note0") else ""
-        out.write(f" size:{ds.width() * ds.nobs:>14,}{dta_notes}\n", "text")
+        size = ds.nobs * (ds.width() + (4 if using_file else 0))
+        out.write(f" size:{size:>14,}{dta_notes}\n", "text")
     if not opts.get("short"):
         if not only_vars:
-            out.write(_LINE + "\n", "text")
+            out.write(("-" * 79 if using_file else _LINE) + "\n", "text")
         numbers = bool(opts.get("numbers"))
-        pad = "    " if numbers else ""      # VERIFY: header with numbers (compat 1701)
-        out.write(pad + "              storage   display    value\n", "text")
-        out.write(pad + "variable name   type    format     label      variable label\n", "text")
+        if numbers:
+            # VERIFY: with numbers the name column is 10 wide (compat 1701)
+            out.write("    variable  storage   display    value\n", "text")
+            out.write("      name      type    format     label      variable label\n", "text")
+        else:
+            out.write("              storage   display    value\n", "text")
+            out.write("variable name   type    format     label      variable label\n", "text")
         out.write(_LINE + "\n", "text")
         for k, n in enumerate(names, start=1):
             v = ds.get(n)
             shown = n if len(n) <= 15 or opts.get("fullnames") else n[:14] + "~"
             if numbers:
-                # VERIFY: layout of the variable number (compat 1701)
-                shown = f"{ds.names.index(n) + 1:>3}. {shown}"
+                shown = f"{ds.names.index(n) + 1:>5}. " + (n if len(n) <= 9 or opts.get("fullnames")
+                                                             else n[:8] + "~")
             star = "*" if ds.chars.get(n, {}).get("note0") else " "
             # formatos longos aparecem cortados ("%tdnn/dd/CCYY" → "%td..")
             fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFY truncation rule
-            line = f"{shown:<{20 if numbers else 16}}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
+            line = f"{shown:<{17 if numbers else 16}}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
     if only_vars:
         # VERIFY: notes footer with a varlist
@@ -253,7 +268,7 @@ def cmd_describe(s: "Session", args: str) -> None:
     if not opts.get("short"):
         if any(ds.chars.get(n, {}).get("note0") for n in names):
             out.write(" " * 44 + "* indicated variables have notes\n", "text")
-        out.write(_LINE + "\n", "text")
+        out.write(("-" * 79 if using_file else _LINE) + "\n", "text")
     out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 spaces (Stata 14)
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")
@@ -275,6 +290,7 @@ def _describe_using(s: "Session", p, opts: dict) -> None:
         new = read_dta(path)
         new.filename = path.name
         new.changed = False
+        new.describe_using = True
         s.data = new
         rest = []
         for name in ("short", "simple", "varlist"):
@@ -293,7 +309,9 @@ def _describe_replace(s: "Session", names: list[str], clear: bool) -> None:
     from ..core.dataset import Dataset, Variable, str_type_for
     ds = s.data
     if ds.changed and ds.nvars and not clear:
-        raise StataError(4, "no; data in memory would be lost")
+        s.output.write("no; data in memory would be lost\n", "error")
+        s.output.write("    Specify describe ..., replace clear to perform the command anyway.\n", "text")
+        raise StataError(4, "")
     vs = [ds.get(n) for n in names]
 
     def text(attr: str, width_min: int = 1):
@@ -313,8 +331,10 @@ def _describe_replace(s: "Session", names: list[str], clear: bool) -> None:
         vtype, col = text(attr)
         new.vars.append(Variable(name, vtype, col, label=label))
     # VERIFY: names and values of the characteristics
-    new.chars["_dta"] = {"d_filename": ds.filename or "", "d_N": str(ds.nobs),
-                         "d_sortedby": " ".join(ds.sortlist)}
+    # (char list shows them in reverse order of creation: d_filename, d_filedate, d_N, d_sortedby)
+    new.chars["_dta"] = {"d_sortedby": " ".join(ds.sortlist), "d_N": str(ds.nobs),
+                         "d_filedate": getattr(ds, "timestamp", "").strip(), "d_filename": ds.filename or ""}
+    s.r = {}
     new.changed = True
     s.data = new
     s.notify_state()
