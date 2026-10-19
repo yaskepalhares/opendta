@@ -1,15 +1,19 @@
 **English** · [Português](#português)
 
-## What's new in 1.0
+## What's new in 0.3
 
-OpenDTA 1.0 covers the core commands. New in this version:
+**If your copy says it is 0.2.0 and keeps offering 0.2.2:** versions 0.2.1 and 0.2.2 were built with the number 0.2.0 inside, so they kept offering the same update. This release fixes it: install it once and the updates work again.
 
+New since 0.2:
+
+- epidemiology: `cs`, `cc`, `ir` and `mcc` and their immediate forms, with Mantel-Haenszel stratification; `tabodds`, `mhodds`, `symmetry`, `dstdize` and `istdize`; interrater agreement with `kap` and `kappa`; ROC analysis with `roctab`, `roccomp`, `rocfit`, `lroc` and `lsens`;
+- data management: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; files and folders (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); example datasets (`sysuse`, `webuse`); ICD-9-CM and ICD-10-CM codes (`icd9`, `icd10`); `odbc`; business calendars (`bcal`);
 - `sem` (path models, confirmatory factor analysis and latent variables, `estat gof`), `power` (means, proportions and correlations) and `irf` after `var`;
 - `xtgee` and `xtreg, pa`/`be`/`mle`; `anova` with sequential sums of squares, nested terms, error terms and repeated measures; two-way `tabulate, summarize()`; `ci variances`; two-sample `prtest`; `misstable tree` and `nested`; `reshape error`; the old `merge` syntax; `export excel` to `.xls`;
 - error explanations for beginners, with a diagnosis from the data and a clickable link to the help;
-- `replace y = 2*L.y` is now sequential, as in Stata.
+- `replace y = 2*L.y` is now sequential, as in Stata; `sample #, count` with # at least the number of observations no longer draws random numbers, as in Stata.
 
-The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#after-10).
+The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#after-10), and the [coverage map](https://yaskepalhares.github.io/opendta/) shows the progress.
 
 ## Download
 
@@ -53,16 +57,20 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 1.0
+### Novidades da 0.3
 
-O OpenDTA 1.0 cobre o núcleo dos comandos. Novo nesta versão:
+**Se a sua cópia diz que é a 0.2.0 e fica oferecendo a 0.2.2:** as versões 0.2.1 e 0.2.2 foram geradas com o número 0.2.0 por dentro, por isso ofereciam sempre a mesma atualização. Esta versão corrige isso: instale-a uma vez e as atualizações voltam a funcionar.
 
+Novo desde a 0.2:
+
+- epidemiologia: `cs`, `cc`, `ir` e `mcc` e suas formas imediatas, com estratificação de Mantel-Haenszel; `tabodds`, `mhodds`, `symmetry`, `dstdize` e `istdize`; concordância entre avaliadores com `kap` e `kappa`; análise ROC com `roctab`, `roccomp`, `rocfit`, `lroc` e `lsens`;
+- manipulação de dados: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; arquivos e pastas (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); dados de exemplo (`sysuse`, `webuse`); códigos ICD-9-CM e ICD-10-CM (`icd9`, `icd10`); `odbc`; calendários de dias úteis (`bcal`);
 - `sem` (modelos de caminhos, análise fatorial confirmatória e variáveis latentes, `estat gof`), `power` (médias, proporções e correlações) e `irf` depois do `var`;
 - `xtgee` e `xtreg, pa`/`be`/`mle`; `anova` com somas de quadrados sequenciais, termos aninhados, termos de erro e medidas repetidas; `tabulate, summarize()` de duas entradas; `ci variances`; `prtest` de duas amostras; `misstable tree` e `nested`; `reshape error`; a sintaxe antiga do `merge`; `export excel` para `.xls`;
 - explicações de erro para iniciantes, com diagnóstico a partir dos dados e link clicável para a ajuda;
-- `replace y = 2*L.y` agora é sequencial, como no Stata.
+- `replace y = 2*L.y` agora é sequencial, como no Stata; `sample #, count` com # maior ou igual ao número de observações não sorteia mais números aleatórios, como no Stata.
 
-Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#depois-da-10).
+Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#depois-da-10), e o [mapa de cobertura](https://yaskepalhares.github.io/opendta/?lang=pt) mostra o progresso.
 
 ### Download
 
