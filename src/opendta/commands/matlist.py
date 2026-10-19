@@ -98,7 +98,7 @@ def _parse_cspec(text: str, nfields: int) -> tuple[list[Field], list[Sep], list[
     for k, f in enumerate(fields):
         fmt = f["fmt"] or "%9.0g"
         w = f["width"] or parse_format(fmt).width
-        out_fields.append(Field(w, f["align"] or "R"))
+        out_fields.append(Field(w, f["align"] or ("L" if "-" in fmt else "R")))
         fmts.append(fmt)
     last = len(seps) - 1
     for k, sp in enumerate(seps):
@@ -136,9 +136,10 @@ def cmd_matlist(s: "Session", args: str) -> None:
     show_rows, show_cols = names in ("rows", "all"), names in ("columns", "all")
     if rowtitle and not (show_rows and show_cols):
         raise StataError(198, "option rowtitle() requires both row and column names")
-    how = {"ralign": "R", "lalign": "L", "center": "C"}.get(str(o.get("aligncolnames", "ralign")).strip())
+    aname = str(o.get("aligncolnames", "ralign")).strip()
+    how = {"ralign": "R", "lalign": "L", "center": "C"}.get(aname)
     if how is None:
-        raise StataError(198, "option aligncolnames() incorrectly specified")
+        raise StataError(198, f"option {aname} not allowed")
     lines = str(o.get("lines", "oneline")).strip()
     if lines not in _LINES:
         raise StataError(198, "option lines() incorrectly specified")
@@ -162,15 +163,14 @@ def cmd_matlist(s: "Session", args: str) -> None:
         fields, seps, fmts = _parse_cspec(str(o["cspec"]), mat.cols + (1 if show_rows else 0))
         numfmts = fmts[1:] if show_rows else fmts
         numfields = fields[1:] if show_rows else fields
-        if show_rows:
-            fields[0] = Field(fields[0].width, "L")
     else:
         numfmts = [fmt] * mat.cols
         wfmt = parse_format(fmt).width
         numfields = [Field(max(wfmt, len(c)) if show_cols else wfmt, "R") for c in coln]
-        fields = ([Field(twidth, "L")] if show_rows else []) + numfields
+        fields = ([Field(twidth, "R")] if show_rows else []) + numfields
         n = len(fields)
         seps = [Sep() for _ in range(n + 1)]
+        seps[n] = Sep(False, 0, 1)        # a blank after the last column (compat 1801)
         for k in range(1, n):
             seps[k] = Sep(False, 1, 1)
         vline = {"oneline", "eq", "rowtotal", "coltotal", "rctotal", "rows", "columns", "cells"}

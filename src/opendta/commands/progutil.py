@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 @command("sleep")
 def cmd_sleep(s: "Session", args: str) -> None:
     if not args.strip():
-        raise StataError(198, "invalid syntax")
+        raise StataError(111, " not found")        # Stata evaluates the empty argument
     ms = s.eval(args.strip())
     if isinstance(ms, str) or ms != ms or ms < 0:
         raise StataError(198, "invalid syntax")
@@ -154,7 +154,8 @@ def cmd_plugin(s: "Session", args: str) -> None:
     sub = args.split(None, 1)[0] if args.strip() else ""
     if sub != "call":
         raise StataError(198, "invalid syntax")
-    raise StataError(198, "plugin call: OpenDTA does not run compiled Stata plugins")
+    # Stata says this when the plugin was not loaded; OpenDTA never loads one
+    raise StataError(199, "unrecognized command")
 
 
 @command("viewsource")
@@ -163,7 +164,7 @@ def cmd_viewsource(s: "Session", args: str) -> None:
     OpenDTA's own implementation (not Stata's)."""
     fname = strip_outer_quotes(args.strip())
     if not fname:
-        raise StataError(198, "invalid syntax")
+        raise StataError(601, 'file "" not found')
     hits = find_file(s, fname)
     if hits:
         try:

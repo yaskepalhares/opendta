@@ -31,6 +31,17 @@ capture noisily unabcmd gen
 capture noisily return list
 capture noisily unabcmd ka
 
+capture noisily unab x : mp tu, min(5)
+display _rc
+capture noisily unab x : mpg turn, max(1)
+display _rc
+capture noisily unab x : mpg, min(3) name(myopt())
+capture noisily unab x : mpg, min(2) max(2) name(myopt())
+capture noisily unab x : mpg turn trunk, max(2) name(myopt())
+capture noisily unab x : mpg turn trunk, min(2) max(2)
+capture noisily unab x : mpg turn trunk, max(1) name(myopt())
+display _rc
+
 * fvexpand, fvrevar, tsrevar
 capture noisily fvexpand i.rep78 mpg
 capture noisily return list
@@ -53,6 +64,21 @@ capture noisily display "`r(varlist)'"
 capture noisily tsrevar l.mpg d.mpg turn, list
 capture noisily display "`r(varlist)'"
 capture noisily list mpg `=word("`r(varlist)'",1)' in 1/4
+
+capture noisily fvexpand mpg turn
+capture noisily return list
+capture noisily fvexpand L.mpg
+capture noisily return list
+capture noisily fvexpand i.foreign L.mpg
+capture noisily return list
+capture noisily fvrevar turn i.foreign mpg i.rep78, list
+capture noisily display "`r(varlist)'"
+capture noisily fvrevar i.foreign mpg trunk i.rep78 turn, list
+capture noisily display "`r(varlist)'"
+capture noisily fvrevar turn mpg, list
+capture noisily display "`r(varlist)'"
+capture noisily tsrevar turn mpg l.mpg, list
+capture noisily display "`r(varlist)'"
 
 * _rmcoll
 capture noisily _rmcoll turn trunk tt
@@ -85,12 +111,15 @@ capture noisily markin in 2/6
 capture noisily display "`in'"
 capture noisily markin if x > 100
 capture noisily display "`in'"
-gen mk = 1
+gen byte mk = 1
 capture noisily markout mk x
 capture noisily count if mk
-gen mk2 = 1
+gen byte mk2 = 1
 capture noisily markout mk2 x, sysmissok
 capture noisily count if mk2
+gen mkf = 1
+capture noisily markout mkf x
+display _rc
 capture noisily mark m1
 capture noisily mark m4 [pweight=w]
 capture noisily mark m5 [aweight=w] if x > 2, zeroweight
@@ -110,7 +139,7 @@ capture program drop odta_myp
 set seed 12345
 capture program drop odta_lnsim
 program odta_lnsim
-    version 14.1
+    version 14
     tempname sim
     postfile `sim' mean var using odta_results, replace
     quietly {
@@ -131,23 +160,48 @@ tempname m
 capture noisily postfile `m' a b str5 c double(d e) using odta_r2, replace
 capture noisily post `m' (1) (2) ("abcdefgh") (3.5) (.)
 capture noisily post `m' (1) (2)
-capture noisily post `m' (1) (2) (3) (3.5) (.)
-capture noisily post `m' ("x") (2) ("a") (3.5) (.)
+display _rc
+capture noisily post `m' (1) (2) ("a") (3.5) (.)
+display _rc
 capture noisily postutil dir
 capture noisily postclose `m'
-capture noisily postclose `m'
-capture noisily post `m' (1) (2) ("a") (3.5) (.)
+display _rc
 capture noisily use odta_r2, clear
 capture noisily list
 capture noisily describe
-capture noisily postfile `m' z using odta_r2
-capture noisily postfile `m' a a using odta_r3, replace
-capture noisily postfile `m' a using odta_r4, replace
-capture noisily postfile `m' b using odta_r5, replace
+tempname m2
+capture noisily postfile `m2' a b using odta_r3, replace
+capture noisily post `m2' (1) (2) (3)
+display _rc
+capture noisily postutil dir
+tempname m3
+capture noisily postfile `m3' a str5 b using odta_r4, replace
+capture noisily post `m3' (1) (2)
+display _rc
+capture noisily postutil dir
+tempname m4
+capture noisily postfile `m4' a using odta_r5, replace
+capture noisily post `m4' (nosuchvar)
+display _rc
+capture noisily postutil dir
+tempname m5
+capture noisily postfile `m5' a using odta_r6, replace
+capture noisily postfile `m5' b using odta_r7, replace
+display _rc
+capture noisily postfile `m5' z using odta_r6
+display _rc
+capture noisily postutil dir
+capture noisily postclose `m5'
+capture noisily postfile `m5' z using odta_r6
+display _rc
+capture noisily postfile `m5' a a using odta_r8, replace
+display _rc
+capture noisily postfile `m5' _all using odta_r8, replace
+display _rc
+capture noisily postfile `m5' using odta_r8, replace
+display _rc
 capture noisily postutil clear
-capture noisily postfile `m' _all using odta_r5, replace
-capture noisily postfile `m' using odta_r5, replace
-capture noisily postutil clear
+capture noisily postutil dir
 
 * matlist
 matrix A = (1,2 \ 3,4 \ 5,6)
@@ -235,6 +289,41 @@ capture noisily tabdisp agecat sex party, c(reaction)
 capture noisily tabdisp agecat sex party, c(reaction) by(party)
 capture noisily tabdisp agecat sex, c(reaction) left
 
+* tabdisp: widths, titles and separations (probes)
+clear
+input g h v
+1 1 5
+1 2 123456
+2 1 1.5
+2 2 -3
+end
+gen double w = v*1000
+label var v "Value of v"
+gen str2 bb = "ab"
+capture noisily tabdisp g h, cell(v)
+capture noisily tabdisp g, cell(v)
+capture noisily tabdisp g, cell(w)
+capture noisily tabdisp g, cell(v w)
+capture noisily tabdisp g h, cell(v w)
+capture noisily tabdisp g h, cell(v) format(%7.1f)
+capture noisily tabdisp g h, cell(v) format(%12.2f)
+capture noisily tabdisp g bb, cell(v)
+capture noisily tabdisp g h, cell(v) center
+capture noisily tabdisp g h, cell(v) csepwidth(5)
+capture noisily tabdisp g h, cell(v) stubwidth(12)
+capture noisily tabdisp g h, cell(v) cellwidth(12) center
+clear
+input str5 r str5 c str5 sc str9 val
+"x" "p" "Green" "a"
+"x" "q" "Green" "b"
+"y" "p" "Red" "c"
+"y" "q" "Red" "d"
+end
+capture noisily tabdisp r c sc, cell(val)
+capture noisily tabdisp r c sc, cell(val) scsepwidth(5) csepwidth(1)
+capture noisily tabdisp r c sc, cell(val) center
+capture noisily tabdisp r c, cell(val) by(sc)
+
 * program, sortpreserve
 clear
 set obs 6
@@ -321,14 +410,25 @@ capture noisily matrix list T
 capture noisily matrix list a
 capture noisily matrix list Cx
 capture noisily makecns
+display _rc
+matrix C2 = (2, 0, -3, 5 \ 0, 1, 1, 0)
+capture noisily makecns C2, r
+capture noisily return list
+capture noisily makecns Zzz
+display _rc
 capture noisily makecns Zzz
 matrix Cbad = (1, -1)
 capture noisily makecns Cbad
 capture noisily matcproc T a
 
 * viewsource
-capture noisily viewsource regress.ado
 capture noisily viewsource nothing.ado
 capture noisily viewsource
 capture erase odta_results.dta
 capture erase odta_r2.dta
+capture erase odta_r3.dta
+capture erase odta_r4.dta
+capture erase odta_r5.dta
+capture erase odta_r6.dta
+capture erase odta_r7.dta
+capture erase odta_r8.dta

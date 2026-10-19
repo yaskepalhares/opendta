@@ -670,6 +670,9 @@ def cmd_table(s: "Session", args: str) -> None:
     CW = max([4] + [len(x) for x in every])
 
     def row_text(values: list[str]) -> str:
+        from ..core.layout import center_text
+        if o.get("center"):
+            return "".join((" " if k == 0 else "  ") + center_text(v, CW) for k, v in enumerate(values))
         return "".join((" " if k == 0 else "  ") + f"{v:>{CW}}" for k, v in enumerate(values))
 
     block = len(row_text([""] * len(heads)))

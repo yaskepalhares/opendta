@@ -36,16 +36,19 @@ _INTERPRETER_WORDS = ("if", "else", "foreach", "forvalues", "while", "by", "byso
 # unab, tsunab, fvunab
 # ---------------------------------------------------------------------------
 
-def _count_error(n: int, lo: int, hi: int, name: str) -> StataError:
+def _count_error(n: int, lo: int, hi: int, name: str, named: bool) -> StataError:
     if lo == hi:
         need = f"{lo} variable{'' if lo == 1 else 's'}"
     elif hi - lo == 1:
         need = f"{lo} or {hi} variables"      # VERIFY: plural of the 2-value range
     else:
         need = f"{lo} - {hi} variables"
-    if n > hi:
-        return StataError(103, f"too many variables specified\n{name}: {need} required")   # VERIFY
-    return StataError(102, f"too few variables specified\n{name}: {need} required")        # VERIFY
+    msg = "too many variables specified" if n > hi else "too few variables specified"
+    rc = 103 if n > hi else 102                # VERIFY: return codes
+    if named:
+        # VERIFY: the second line when n is too few
+        return StataError(rc, f"{name}:  {msg}\n{' ' * (len(name) + 3)}{need} required")
+    return StataError(rc, f"{name}:\n{msg}")   # VERIFY: the layout without name() for max
 
 
 def _unab(s: "Session", args: str, kind: str) -> None:
@@ -57,7 +60,8 @@ def _unab(s: "Session", args: str, kind: str) -> None:
     o = match_options(opts, {"min": 3, "max": 3, "name": 4}) if comma else {}
     lo = int(float(s.eval(str(o["min"])))) if o.get("min") not in (None, True) else 1
     hi = int(float(s.eval(str(o["max"])))) if o.get("max") not in (None, True) else 32000
-    label = str(o["name"]).strip().strip('"') if o.get("name") not in (None, True) else text.strip()
+    named = o.get("name") not in (None, True)
+    label = str(o["name"]).strip().strip('"') if named else text.strip()
     ds = s.data
     abbrev = s.settings.get("varabbrev", "on") == "on"
     text = text.strip()
@@ -68,7 +72,7 @@ def _unab(s: "Session", args: str, kind: str) -> None:
     else:
         names = fvars.unabbreviate(ds, text, abbrev, fv=kind == "fvunab")
     if not lo <= len(names) <= hi:
-        raise _count_error(len(names), lo, hi, label)
+        raise _count_error(len(names), lo, hi, label, named)
     s.macros.set_local(lname, " ".join(names))
 
 
@@ -127,6 +131,8 @@ def cmd_fvexpand(s: "Session", args: str) -> None:
     terms = _terms(s, p.varlist)
     cols = fvars.build_design(s.data, terms, touse(s, p))
     s.r = {"varlist": " ".join(c.name for c in cols)}
+    if any(t.is_interaction or t.has_factor or t.comps[0].explicit_c for t in terms):
+        s.r["fvops"] = "true"            # VERIFY: r(fvops) and r(tsops) when there are none
 
 
 def _indicator(ds, term: fvars.Term, cell: tuple) -> np.ndarray:
@@ -168,7 +174,7 @@ def _new_variable(s: "Session", term: fvars.Term, values: np.ndarray, stub: str,
         name = _temp_name(s)
         current_scope(s).tempvars.append(name)
         cache.setdefault(id(ds), []).append(name)
-    ds.add(Variable(name, _column_type(ds, term), values))
+    ds.add(Variable(name, _column_type(ds, term), values, fmt="%9.0g"))
     made.append(name)
     return name
 
@@ -187,7 +193,7 @@ def _revar(s: "Session", args: str, command_name: str) -> None:
                                          for t in terms):
         raise StataError(101, "factor variables not allowed")      # VERIFY
     if o.get("list"):
-        names = sorted(fvars.base_vars(terms), key=ds.index)
+        names = sorted(fvars.base_vars(terms))      # VERIFY: the order
         s.r = {"varlist": " ".join(names)}
         return
     stub = str(o.get("stub", "")) if o.get("stub") not in (None, True) else ""
@@ -243,7 +249,7 @@ def cmd_rmcoll(s: "Session", args: str) -> None:
             c.omitted, c.values = True, None
             notes[k] = f"note: {c.name} identifies no observations in the sample"
     if not o.get("collinear"):
-        flagged = fvars.drop_collinear(cols, constant, None if w is None else w[mask])
+        flagged = fvars.drop_collinear(cols, constant, None if w is None else w[mask], sequential=True)
         for k, c in enumerate(cols):
             if c.omitted and c.name in flagged:
                 notes[k] = f"note: {c.name} omitted because of collinearity"

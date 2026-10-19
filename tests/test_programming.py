@@ -40,7 +40,7 @@ def test_fvexpand_fvrevar(run):
     run("fvexpand i.rep78 mpg")
     assert run("display r(varlist)").strip() == "1b.rep78 2.rep78 3.rep78 4.rep78 5.rep78 mpg"
     run("fvrevar i(2,3)bn.rep78 mpg, list")
-    assert run("display r(varlist)").strip() == "rep78 mpg" or "__" in run("display r(varlist)")
+    assert run("display r(varlist)").strip() == "mpg rep78"
     run("tsrevar l.mpg turn")
     assert len(run("display r(varlist)").split()) == 2
     run("tsrevar l.mpg d.mpg turn, list")
@@ -63,11 +63,13 @@ def test_mark_markin_markout(run):
     assert run('display "`rng\'"').strip() == "in 3/10"
     run("markin in 2/6")
     assert run('display "`in\'"').strip() == "in 2/6"
-    run("gen mk = 1\nmarkout mk x")
+    run("gen byte mk = 1\nmarkout mk x")
     assert run("count if mk").strip() == "8"
-    run("gen mk2 = 1\nmarkout mk2 x, sysmissok")
+    run("gen byte mk2 = 1\nmarkout mk2 x, sysmissok")
     assert run("count if mk2").strip() == "9"
     assert "already defined" in run("capture noisily mark m1")
+    run("gen mkf = 1\nmarkout mkf x")
+    assert run.rc == 109
 
 
 def test_mark_weights(run):
@@ -109,8 +111,9 @@ use "{f}", clear
 def test_post_errors(run, tmp_path):
     f = str(tmp_path / "r2").replace("\\", "/")
     run(f'tempname m\npostfile `m\' a b using "{f}", replace')
-    assert "invalid syntax" in run("capture noisily post `m' (1)")
-    run("postclose `m'")
+    assert "2 expressions expected and only 1 found" in run("capture noisily post `m' (1)")
+    # the error closes the postfile
+    assert "not found" in run("capture noisily postclose `m'")
     assert "already exists" in run(f'capture noisily postfile x z using "{f}"')
 
 
@@ -204,3 +207,34 @@ def test_signestimationsample_and_makecns(run):
     run("matrix C = (1, -1, 0, 0)")
     run("makecns C")
     assert run.rc == 0
+
+
+def test_tempnames_are_hex_and_freed_by_programs(run):
+    run("tempname a b c d e f g h i j k")
+    assert run("display \"`k'\"").strip() == "__00000A"
+    run("program define pp\n tempvar t\n display \"`t'\"\nend")
+    first = run("pp").strip()
+    assert run("pp").strip() == first
+
+
+def test_rmcoll_omits_the_last(run):
+    run("clear\nset obs 20\ngen a = _n\ngen b = mod(_n,7)\ngen c = a + b")
+    out = run("_rmcoll a b c")
+    assert "c omitted" in out
+    assert run("display r(varlist)").strip() == "a b o.c"
+
+
+def test_list_duplicates_and_noobs_clean(run):
+    run("clear\nset obs 2\ngen x = _n")
+    out = run("list x x, noobs clean")
+    assert out.split()[:2] == ["x", "x"]
+    assert out.splitlines()[1].startswith("    ")
+
+
+def test_makecns_returns(run):
+    run("clear\nset obs 30\nset seed 2\ngen x1 = rnormal()\ngen x2 = rnormal()\ngen y = x1 + x2 + rnormal()")
+    run("quietly regress y x1 x2\nmatrix C = (1, -1, 0, 0)\nmakecns C, r")
+    assert run("display r(cns1)").strip() == "x1 - x2 = 0"
+    assert run("display r(k)").strip() == "1"
+    out = run("makecns Zzz")
+    assert "constraint matrix 'Zzz' caused error r(111)" in out

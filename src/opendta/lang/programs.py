@@ -106,6 +106,7 @@ def call_program(s: "Session", prog: Program, args: str) -> None:
     scope = Scope("program", prog.name, prog)
     s.scopes.append(scope)
     index = None
+    counter = getattr(s, "_temp_counter", 0)
     if prog.sortpreserve:
         index = _mark_order(s)
     ok = False
@@ -124,6 +125,8 @@ def call_program(s: "Session", prog: Program, args: str) -> None:
         s.close_scope(scope)       # restores the preserved data first
         if index is not None:
             _restore_order(s, index, ok)
+        # the temporary names of the program are free again when it ends
+        s._temp_counter = counter
     if ok:
         if prog.kind == "rclass":
             s.r = scope.pending
@@ -149,8 +152,8 @@ def _restore_order(s: "Session", index: tuple[str, list[str]], ok: bool) -> None
     ds = s.data
     if not ds.has(name):
         if ok:
-            # VERIFY: return code of this error
-            raise StataError(111, "could not restore sort order because variables were dropped")
+            # Stata only shows the message; the return code stays 0
+            s.output.write("could not restore sort order because variables were dropped\n")
         return
     import numpy as np
     v = ds.get(name)

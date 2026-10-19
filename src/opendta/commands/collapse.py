@@ -225,7 +225,8 @@ def cmd_collapse(s: "Session", args: str) -> None:
     new.nobs = k
     new.label = ds.label
     used_labels: set[str] = set()
-    for name in by:
+    # the by variables keep the order they have in the dataset (compat 1801)
+    for name in sorted(by, key=ds.index):
         v = ds.get(name)
         nv = Variable(name, v.vtype, np.empty(0), fmt=v.fmt, label=v.label, value_label=v.value_label)
         nv.raw = v.raw[first].copy()

@@ -556,6 +556,8 @@ def cmd_markout(s: "Session", args: str) -> None:
     if not words:
         raise StataError(198, "invalid syntax")
     marker = s.data.get(words[0])
+    if marker.vtype != "byte":
+        raise StataError(109, f"{marker.name} not byte")        # VERIFY: return code
     rest = " ".join(words[1:])
     names = rest.split() if fvars.has_fv_or_ts(rest) else s.expand_varlist(rest) if rest else []
     o = {n.lower() for n, _ in (parse_options(opts) if opts.strip() else [])}
@@ -595,7 +597,7 @@ def _temp_name(s: "Session") -> str:
     """__000000, __000001, ... (nomes livres)."""
     k = getattr(s, "_temp_counter", 0)
     while True:
-        name = f"__{k:06d}"
+        name = f"__{k:06X}"
         k += 1
         if not s.data.has(name) and name not in s.scalars:
             s._temp_counter = k

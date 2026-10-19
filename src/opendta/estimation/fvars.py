@@ -461,7 +461,7 @@ def ts_rowlabel(ops: list) -> str:
 
 
 def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = None,
-                   tol: float = 1e-13) -> list[str]:
+                   tol: float = 1e-13, sequential: bool = False) -> list[str]:
     """Marks collinear columns as omitted; returns the names for the
     "omitted because of collinearity" notes.
 
@@ -469,7 +469,8 @@ def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = No
     Stata's invsym(), which chooses the columns "to minimize roundoff
     error": at each step, the largest remaining diagonal element.
     With x3 = 2*x1, Stata omits x1 (compat 0501). VERIFY the general rule
-    and the tolerance."""
+    and the tolerance. With `sequential` the columns are swept in the order given, so the later
+    one of a collinear set is omitted (_rmcoll, compat 1801)."""
     notes: list[str] = []
     live = [c for c in cols if not c.base and not c.omitted and c.values is not None]
     if not live:
@@ -488,7 +489,7 @@ def drop_collinear(cols: list[Column], constant: bool, w: np.ndarray | None = No
         cand = [j for j in range(k) if not done[j]]
         if not cand:
             break
-        j = max(cand, key=lambda q: A[q, q])
+        j = cand[0] if sequential else max(cand, key=lambda q: A[q, q])
         d = A[j, j]
         done[j] = True
         if d <= tol * max(orig[j], 1e-300) or orig[j] <= 0:
@@ -565,8 +566,9 @@ def specific_name(ds: "Dataset", t: Term, mask: np.ndarray, cols: list[Column]) 
             infos.append(_levels(ds, c, comp_values(ds, c)[mask]))
         else:
             infos.append(None)
-    omitted = [col.cell for col in cols if col.base or col.omitted or
-               (col.values is None) or not np.any(col.values)] if t.is_interaction else []
+    omitted = [col.cell for col in cols if not col.base and
+               (col.omitted or col.values is None or not np.any(col.values))] \
+        if t.is_interaction else []
     parts = []
     k = 0
     for c, info in zip(t.comps, infos):

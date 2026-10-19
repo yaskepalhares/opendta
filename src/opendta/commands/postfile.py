@@ -69,7 +69,7 @@ def _declare(s: "Session", text: str) -> tuple[list[str], list[str]]:
             if not NAME_RE.match(name):
                 raise StataError(198, f"{name} invalid name")
             if name in names:
-                raise StataError(110, f"{name} already defined")
+                raise StataError(110, f"postfile: variable {name} already exists")   # VERIFY: rc
             names.append(name)
             types.append(vtype)
     return names, types
@@ -102,11 +102,15 @@ def cmd_postfile(s: "Session", args: str) -> None:
         int(float(s.eval(str(o["every"]))))
     posts = _posts(s)
     if postname in posts:
-        raise StataError(110, f"{postname} already defined")            # VERIFY
+        raise StataError(110, f"postfile {postname} already exists")      # VERIFY: return code
+    if re.search(r"(^|\s)_all(\s|$)", decl):
+        raise StataError(198, "_all not allowed")                        # VERIFY: return code
     names, types = _declare(s, decl)
     path = dta_path(p.using)
     if path.exists() and not o.get("replace"):
         raise StataError(602, f"file {path} already exists")
+    if not path.exists() and o.get("replace"):
+        s.output.write(f"(note: file {path} not found)\n", "text")
     post = _Post(path, names, types)
     try:
         write_dta(_dataset(post), path)
@@ -152,21 +156,28 @@ def cmd_post(s: "Session", args: str) -> None:
     postname, _, rest = args.strip().partition(" ")
     post = _posts(s).get(postname)
     if post is None:
-        raise StataError(111, f"{postname} not found")                   # VERIFY
-    exps = _groups(rest)
-    if len(exps) != len(post.names):
-        raise StataError(198, "invalid syntax")                          # VERIFY
-    row = []
-    for vtype, text in zip(post.types, exps):
-        v = s.eval(text)
-        if vtype.startswith("str"):
-            if not isinstance(v, str):
-                raise StataError(109, "type mismatch")
-            row.append(v if vtype == "strL" else v[:int(vtype[3:])])
-        else:
-            if isinstance(v, str):
-                raise StataError(109, "type mismatch")
-            row.append(float(v))
+        raise StataError(111, f"post {postname} not found")              # VERIFY: rc
+    try:
+        exps = _groups(rest)
+        if len(exps) != len(post.names):
+            found = f"only {len(exps)}" if len(exps) < len(post.names) else str(len(exps))
+            raise StataError(198, f"post:  {len(post.names)} expressions expected and "
+                                  f"{found} found")                      # VERIFY: rc, too many
+        row = []
+        for vtype, text in zip(post.types, exps):
+            v = s.eval(text)
+            if vtype.startswith("str"):
+                if not isinstance(v, str):
+                    raise StataError(109, "type mismatch")
+                row.append(v if vtype == "strL" else v[:int(vtype[3:])])
+            else:
+                if isinstance(v, str):
+                    raise StataError(109, "type mismatch")
+                row.append(float(v))
+    except StataError:
+        # an error in post closes the postfile (the rows posted so far are saved)
+        _close(s, postname)
+        raise
     post.rows.append(row)
 
 
@@ -182,7 +193,7 @@ def _close(s: "Session", name: str) -> None:
 def cmd_postclose(s: "Session", args: str) -> None:
     name = args.strip()
     if name not in _posts(s):
-        raise StataError(111, f"{name} not found")                       # VERIFY
+        raise StataError(111, f"post {name} not found")                  # VERIFY: rc
     _close(s, name)
 
 
