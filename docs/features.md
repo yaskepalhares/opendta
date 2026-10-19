@@ -20,6 +20,7 @@ OpenDTA covers the core commands: the do-file language, data management, descrip
 - graphical interface with the Results, Command, Review, Variables and Properties windows, menus, a toolbar with OpenDTA's own icons and a Settings window (Ctrl+, / ⌘,) with search, light, dark or system theme, app icon, font, language, results options and updates, applied at once;
 - text console and batch mode (`opendta -b do file.do`, which writes `file.log` like `stata -b`);
 - programming: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, extended macro functions, `matrix`, third-party `.ado` files on the adopath, `log`/`cmdlog`, `assert`, `set trace` and `timer`;
+- variable-list and programming utilities: `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `_rmcoll`, `mark`, `markin`, `markout`; `postfile`, `post` and `postclose`; `matlist` and `tabdisp`; `program, sortpreserve`; `pause`, `sleep`, `window`, `viewsource`; `signestimationsample`, `makecns` and `matcproc`;
 - Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
 - data in memory with Stata's storage types (including `float` precision), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` and subscripts;
 - `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` and `recast`;

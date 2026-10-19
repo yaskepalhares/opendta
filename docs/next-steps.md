@@ -67,7 +67,9 @@ Done in phase 13 (compat case 1701), except `import haver` (a proprietary format
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 
-### 3. Programming (40–60 min, ~35k tokens)
+### 3. Programming ✅
+
+Done in phase 14 (compat case 1801), except `makecns` with a constraint list and `displaycns` (they need `constraint`, from block 10), `matlist` with the equation options, the `window` dialogs and menus of the graphical interface, and loading plugins, which stay in *After 1.0*. The original plan:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 

@@ -67,7 +67,9 @@ Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato pro
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
-### 3. Programação (40–60 min, ~35 mil tokens)
+### 3. Programação ✅
+
+Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Depois da 1.0*. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 
