@@ -54,7 +54,8 @@ def test_cfa_just_identified(semdata):
 def test_full_model_gof_predict(semdata):
     run = semdata
     out = run("sem (F -> x1 x2 x3) (G -> y1 y2 y3) (G <- F)")
-    assert "( 1)  [x1]F = 1" in out and "( 2)  [y1]G = 1" in out
+    # endogenous latent variables first, as in Stata 14 (compat 1302)
+    assert "( 1)  [y1]G = 1" in out and "( 2)  [x1]F = 1" in out
     assert run.eval("e(df_ms)") == 8
     out = run("estat gof, stats(all)")
     for word in ("RMSEA", "CFI", "TLI", "SRMR", "AIC"):
