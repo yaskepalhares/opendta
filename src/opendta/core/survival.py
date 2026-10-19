@@ -360,3 +360,73 @@ def logrank_chi2(t: np.ndarray, dead: np.ndarray, w: np.ndarray, g: np.ndarray, 
     except np.linalg.LinAlgError:
         chi2 = float(diff @ np.linalg.pinv(V[:k, :k]) @ diff)
     return chi2, k
+
+
+# ---------------------------------------------------------------------------
+# exact ties of stcox
+# ---------------------------------------------------------------------------
+
+_GL = None
+
+
+def _gauss_laguerre():
+    global _GL
+    if _GL is None:
+        _GL = np.polynomial.laguerre.laggauss(15)
+    return _GL
+
+
+def exactm_term(xd: np.ndarray, xn: np.ndarray, b: np.ndarray):
+    """Log of the exact marginal-likelihood term of one failure time and its gradient and Hessian.
+    xd: covariates of the d tied failures; xn: those of the other subjects at risk. The term is
+    the integral over (0, inf) of exp(-t) times the product over the failures of
+    1 - exp(-t e_l / s), with s the sum of exp(xb) over the others, by 15-point Gauss-Laguerre
+    quadrature ([ST] stcox, Methods and formulas)."""
+    k = len(b)
+    rd, rn = np.exp(xd @ b), np.exp(xn @ b)
+    A = float(rn.sum())
+    if A <= 0:
+        return 0.0, np.zeros(k), np.zeros((k, k))
+    z, w = _gauss_laguerre()
+    abar = (rn[:, None] * xn).sum(axis=0) / A
+    A2 = np.einsum("j,jk,jl->kl", rn, xn, xn) / A
+    xc = xd - abar
+    y = (z[:, None] / A) * rd[None, :]            # K x d
+    E = np.exp(-y)
+    F = np.prod(1 - E, axis=1)
+    L = float(np.sum(w * F))
+    gm = y * E / (1 - E)
+    gp = E / (1 - E) - y * E / (1 - E) ** 2
+    v = np.einsum("ki,ic->kc", gm, xc)
+    pi = w * F / L
+    vbar = pi @ v
+    quad = np.einsum("k,kc,kl->cl", pi, v, v)
+    quad += np.einsum("k,ki,ic,il->cl", pi, gp * y, xc, xc)
+    quad -= np.einsum("k,k->", pi, gm.sum(axis=1)) * (A2 - np.outer(abar, abar))
+    return float(np.log(L)), vbar, quad - np.outer(vbar, vbar)
+
+
+def exactp_term(xr: np.ndarray, is_fail: np.ndarray, b: np.ndarray):
+    """Log of the exact partial-likelihood (conditional logistic) term of one failure time and its
+    gradient and Hessian: sum of xb over the failures minus log f(r, d), with the recursion
+    f(r, d) = f(r-1, d) + f(r-1, d-1) exp(xb_r)."""
+    k = len(b)
+    eta = xr @ b
+    c = float(eta.max())
+    e = np.exp(eta - c)
+    d = int(is_fail.sum())
+    f = np.zeros(d + 1)
+    f[0] = 1.0
+    g = np.zeros((d + 1, k))
+    H = np.zeros((d + 1, k, k))
+    for i in range(len(e)):
+        x, ei = xr[i], e[i]
+        xx = np.outer(x, x)
+        for m in range(min(d, i + 1), 0, -1):
+            H[m] += ei * (xx * f[m - 1] + np.outer(x, g[m - 1]) + np.outer(g[m - 1], x) + H[m - 1])
+            g[m] += ei * (x * f[m - 1] + g[m - 1])
+            f[m] += ei * f[m - 1]
+    ll = float(eta[is_fail].sum()) - d * c - float(np.log(f[d]))
+    grad = xr[is_fail].sum(axis=0) - g[d] / f[d]
+    hess = -(H[d] / f[d] - np.outer(g[d], g[d]) / f[d] ** 2)
+    return ll, grad, hess

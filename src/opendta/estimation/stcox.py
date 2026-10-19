@@ -15,6 +15,7 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
+from ..core import survival as SV
 from ..core.grouping import group_ids
 from ..core.stats import chi2_tail
 from ..lazy import lazy
@@ -129,6 +130,37 @@ def _cox_fun(strata: list[_Stratum], ties: str, k: int):
     return fun
 
 
+def _exact_fun(strata: list[_Stratum], method: str, k: int):
+    """Log likelihood, gradient and Hessian of exactm/exactp: a sum over the failure times of the
+    strata. A time with a single failure has the same term in every method."""
+    sets = []
+    for sr in strata:
+        for u in sr.ft:
+            risk = (sr.t0 < u) & (sr.t >= u)
+            fail = sr.fail & (sr.t == u)
+            sets.append((np.flatnonzero(risk), fail[risk], sr.X))
+
+    def fun(b, todo):
+        ll, g, H = 0.0, np.zeros(k), np.zeros((k, k))
+        for idx, isf, X in sets:
+            xr = X[idx]
+            if isf.sum() == 1:
+                r = np.exp(xr @ b)
+                S0 = r.sum()
+                a = (r[:, None] * xr).sum(axis=0) / S0
+                ll += float((xr[isf] @ b)[0]) - float(np.log(S0))
+                g += xr[isf][0] - a
+                H -= np.einsum("j,jk,jl->kl", r, xr, xr) / S0 - np.outer(a, a)
+            elif method == "exactp":
+                l_, g_, H_ = SV.exactp_term(xr, isf, b)
+                ll, g, H = ll + l_, g + g_, H + H_
+            else:
+                l_, g_, H_ = SV.exactm_term(xr[isf], xr[~isf], b)
+                ll, g, H = ll + l_, g + g_, H + H_
+        return (ll, None, None) if todo == 0 else (ll, g, H)
+    return fun
+
+
 def _cox_score_resid(strata_obs, b, ties):
     """Efficient score residuals per observation (Breslow form; with Efron ties the
     risk-set means of the Breslow form are used: VERIFY)."""
@@ -188,9 +220,12 @@ def cmd_stcox(s: "Session", args: str) -> None:
             "estimate": 3, "basesurv": 6, "basechazard": 6, "basehc": 5, "noheader": 6}
     stx = STSample(s, args, spec)
     o = stx.o
-    if o.get("exactm") or o.get("exactp"):
-        raise StataError(198, "exactm and exactp ties are not available in OpenDTA")   # OpenDTA
-    ties = "efron" if o.get("efron") else "breslow"
+    ties = "efron" if o.get("efron") else "exactm" if o.get("exactm") else "exactp" if o.get("exactp") else "breslow"
+    if ties.startswith("exact"):
+        if stx.robust:
+            raise StataError(198, f"{ties} may not be specified with vce(robust) or vce(cluster)")   # VERIFY
+        if stx.wtype:
+            raise StataError(198, f"weights are not available yet in OpenDTA with {ties}")
     stx.notes_and_header(s)
     X = stx.X
     k = X.shape[1]
@@ -205,7 +240,7 @@ def cmd_stcox(s: "Session", args: str) -> None:
     strata = [sr for sr, _ in strata_obs]
     tied = any(np.any(np.bincount(sr.fidx, weights=sr.w[sr.fail], minlength=len(sr.ft)) > 1)
                for sr in strata)
-    fun = _cox_fun(strata, ties, k)
+    fun = _exact_fun(strata, ties, k) if ties.startswith("exact") else _cox_fun(strata, ties, k)
     # VERIFY: stcox stops one iteration earlier than ml when g H^-1 g' is already tiny (stratified
     # model in compat 0902: 1.9e-8 stops, 7.4e-7 does not)
     res = maximize(fun, np.zeros(k), nr_stop=1e-7, **ml_options(o))
@@ -311,7 +346,9 @@ def _display_cox(s: "Session", est: Estimates, *, header: bool = True, table: bo
         if not est.tied:
             title = "Cox regression -- no ties in data"
         else:
-            title = f"Cox regression -- {'Breslow' if est.ties == 'breslow' else 'Efron'} method for ties"
+            title = {"exactm": "Cox regression -- exact marginal likelihood",
+                     "exactp": "Cox regression -- exact partial likelihood"}.get(   # VERIFY
+                est.ties, f"Cox regression -- {'Breslow' if est.ties == 'breslow' else 'Efron'} method for ties")
         if est.strata_vars:
             title = "Stratified Cox regr." + title[len("Cox regression"):]
         header_block(s, title, est)
