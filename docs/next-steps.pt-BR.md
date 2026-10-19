@@ -27,6 +27,7 @@ Notas para sessões que rodam na nuvem:
 - O `pytest` pode não instalar lá (sem acesso ao PyPI): os testes que dependem de pacotes opcionais (`pyreadstat`, `xlrd`, `xlwt`) só rodam no CI. Espere o CI e leia o resultado antes de pedir a rodada no Stata.
 - Os logs do CI não baixam da nuvem, mas as anotações de cada job mostram as diferenças do `tools/compare.py` (`gh api repos/<dono>/<repo>/check-runs/<id>/annotations`). O `gh pr` falha porque o GraphQL está bloqueado: abra e mescle o pull request com `gh api` (REST), com merge commit.
 - O log de referência da rodada no Stata nunca é editado à mão: quando um caso muda, a rodada no Stata é repetida.
+- A anotação do CI de um caso com diferença conhecida mostra só os trechos que os limites `ignore()` e `tolerance()` não aceitam. Ajustes na fronteira (por exemplo, uma variância de fragilidade em 0) podem diferir entre Linux, macOS e Windows: espere os três jobs do CI antes de fechar os limites de uma diferença conhecida e mantenha-os tão estreitos quanto as linhas que realmente diferem.
 
 Próximos números livres: casos de comparação a partir de **1902**, fases do roadmap a partir de **16**.
 
