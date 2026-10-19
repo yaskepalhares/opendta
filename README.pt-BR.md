@@ -2,7 +2,7 @@
 
 [English](README.md) | **Português**
 
-**Do-files e dados `.dta`, num programa livre e aberto.**
+**Do-files e dados `.dta`, num programa gratuito e de código aberto.**
 
 O OpenDTA roda do-files escritos para o Stata 14, lê e grava bases `.dta` e tem a interface de desktop que as pessoas já conhecem: as janelas Results, Command, Review, Variables e Properties, o Data Editor, o Do-file Editor, o Viewer e a janela de gráficos. Ele cobre manipulação de dados, estatística descritiva, estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, modelos de equações estruturais, Mata e gráficos. Quando um comando falha, ele explica o erro para quem está começando, olhando os dados em memória, em português ou em inglês.
 

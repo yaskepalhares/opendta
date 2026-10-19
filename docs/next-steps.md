@@ -14,7 +14,7 @@ Each block follows the same steps:
 
 1. Branch from `main` (`block-<name>`).
 2. For each command: the statistics in `src/opendta/core/` (see the next section), the command in `src/opendta/commands/` (new module registered in `commands/__init__.py`), its help page, its tests.
-3. A compat case `compat/do/NNNN_<block>.do` with the commands and `return list`/`ereturn list`; it has no reference until the Stata run. Run under `capture noisily` every command whose behavior in Stata the manual does not document (and do the same in any old case you change), so that a single Stata run shows the whole case instead of stopping at the first error.
+3. A compat case `compat/do/NNNN_<block>.do` with the commands and `return list`/`ereturn list`; it has no reference until the Stata run. Run under `capture noisily` every command whose behavior in Stata the manual does not document (and do the same in any old case you change), so that a single Stata run shows the whole case instead of stopping at the first error. The reference Stata is version 14.0: a case that says `version 14.1` stops with an error in the run, so write `version 14` or no `version` line.
 4. `ROADMAP.md` and `ROADMAP.pt-BR.md`: a new phase listing what was done; in *Missing for 1.0*, leave only what is missing. Each clause of an *Missing for 1.0* line that lists options must start with the command they belong to (`` `cs` with the `pool` option``), so the coverage map does not count options as commands.
 5. `tools/roadmap_coverage.py`: add the new module to `MODULE_AREA`.
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
