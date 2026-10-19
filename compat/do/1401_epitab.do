@@ -12,7 +12,7 @@ cci 4 386 4 1250, woolf
 cci 20 10 30 40, tb
 iri 41 15 28010 19017
 return list
-iri 41 15 28010 19017, exact
+capture noisily iri 41 15 28010 19017, exact
 iri 10 30 28010 19017
 mcci 8 8 3 8
 return list
