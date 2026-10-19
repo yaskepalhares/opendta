@@ -40,6 +40,8 @@ class Program:
     properties: str = ""
     source: str = ""                     # source .ado file, if any
     options: str = ""
+    sortpreserve: bool = False           # restores the sort order of the data at the end
+    plugin: str = ""                     # file named by `program name, plugin using()`
 
 
 @dataclass
@@ -77,7 +79,19 @@ def make_program(name: str, options: dict[str, str], lines: list[LogicalLine],
     byable = options.get("byable", "")
     if "byable" in options and byable not in ("recall", "onecall"):
         raise StataError(198, "option byable() must be recall or onecall")
-    return Program(name, lines, kind, byable, options.get("properties", ""), source)
+    return Program(name, lines, kind, byable, options.get("properties", ""), source,
+                   sortpreserve="sortpreserve" in options)
+
+
+def define_plugin(s: "Session", name: str, options: dict[str, str]) -> None:
+    """program name, plugin [using(file)]: the file is looked for as Stata does, but OpenDTA cannot
+    load a compiled Stata plugin."""
+    from .adopath import find_file
+    fname = options.get("using", "").strip().strip('"') or f"{name}.plugin"
+    if not Path(fname).expanduser().is_file() and not find_file(s, fname):
+        raise StataError(601, f"file {fname} not found")
+    raise StataError(198, f"plugin {fname} cannot be loaded: OpenDTA does not run compiled "
+                          "Stata plugins")
 
 
 def call_program(s: "Session", prog: Program, args: str) -> None:
@@ -91,6 +105,9 @@ def call_program(s: "Session", prog: Program, args: str) -> None:
     s.macros.push_frame(frame)
     scope = Scope("program", prog.name, prog)
     s.scopes.append(scope)
+    index = None
+    if prog.sortpreserve:
+        index = _mark_order(s)
     ok = False
     try:
         try:
@@ -104,12 +121,47 @@ def call_program(s: "Session", prog: Program, args: str) -> None:
     finally:
         s.scopes.pop()
         s.macros.pop_frame()
-        s.close_scope(scope)
+        s.close_scope(scope)       # restores the preserved data first
+        if index is not None:
+            _restore_order(s, index, ok)
     if ok:
         if prog.kind == "rclass":
             s.r = scope.pending
         elif prog.kind == "sclass":
             s.sret = scope.pending
+
+
+def _mark_order(s: "Session") -> tuple[str, list[str]]:
+    """sortpreserve: a variable with the order of the observations, whose name the program finds in
+    the local macro _sortindex, and the sort variables."""
+    from ..commands.syntaxcmd import _temp_name
+    from ..core.dataset import Variable
+    import numpy as np
+    ds = s.data
+    name = _temp_name(s)
+    ds.add(Variable(name, "long", np.arange(1, ds.nobs + 1, dtype=np.float64)))
+    s.macros.set_local("_sortindex", name)
+    return name, list(ds.sortlist)
+
+
+def _restore_order(s: "Session", index: tuple[str, list[str]], ok: bool) -> None:
+    name, sortlist = index
+    ds = s.data
+    if not ds.has(name):
+        if ok:
+            # VERIFY: return code of this error
+            raise StataError(111, "could not restore sort order because variables were dropped")
+        return
+    import numpy as np
+    v = ds.get(name)
+    order = np.argsort(v.data, kind="stable")
+    if not np.array_equal(order, np.arange(ds.nobs)):
+        ds.reorder_obs(order)
+    changed = ds.changed
+    ds.drop_vars([name])
+    ds.changed = changed
+    ds.sortlist = [x for x in sortlist if ds.has(x)]
+    s.notify_state()
 
 
 def current_program_scope(s: "Session") -> Scope | None:
