@@ -279,33 +279,41 @@ def mh_chi2(tables) -> tuple[float, float]:
     return chi2, float(st.chi2.sf(chi2, 1))
 
 
+def _expected_a(a, b, c, d, psi: float):
+    """Expected a cell A (margins fixed) under the common odds ratio psi and its variance
+    1/(1/A + 1/B + 1/C + 1/D); None when the table has no free cell or a zero fitted cell."""
+    n1, m1 = a + b, a + c
+    n = a + b + c + d
+    n0, m0 = n - n1, n - m1
+    lo, hi = max(0.0, n1 - m0), min(float(n1), float(m1))
+    if hi <= lo:
+        return None
+    if psi == 1:
+        A = n1 * m1 / n
+    else:
+        # (A (n0 - m1 + A)) / ((n1 - A)(m1 - A)) = psi: quadratic in A
+        qa = 1 - psi
+        qb = (n0 - m1) + psi * (n1 + m1)
+        qc = -psi * n1 * m1
+        disc = math.sqrt(qb * qb - 4 * qa * qc)
+        roots = [(-qb + disc) / (2 * qa), (-qb - disc) / (2 * qa)]
+        A = next((r for r in roots if lo - 1e-9 <= r <= hi + 1e-9), roots[0])
+    B, C = n1 - A, m1 - A
+    D = n0 - C
+    if min(A, B, C, D) <= 0:
+        return None
+    return A, 1 / (1 / A + 1 / B + 1 / C + 1 / D)
+
+
 def breslow_day(tables, psi: float) -> tuple[float, float, int]:
     """Breslow-Day test of homogeneity of the odds ratios around psi (without Tarone's
     correction; VERIFY which homogeneity test Stata's cc reports)."""
     chi2 = 0.0
     k = 0
-    for a, b, c, d in tables:
-        n1, m1 = a + b, a + c
-        n = a + b + c + d
-        n0, m0 = n - n1, n - m1
-        lo, hi = max(0.0, n1 - m0), min(float(n1), float(m1))
-        if hi <= lo:
-            continue
-        if psi == 1:
-            A = n1 * m1 / n
-        else:
-            # (A (n0 - m1 + A)) / ((n1 - A)(m1 - A)) = psi: quadratic in A
-            qa = 1 - psi
-            qb = (n0 - m1) + psi * (n1 + m1)
-            qc = -psi * n1 * m1
-            disc = math.sqrt(qb * qb - 4 * qa * qc)
-            roots = [(-qb + disc) / (2 * qa), (-qb - disc) / (2 * qa)]
-            A = next((r for r in roots if lo - 1e-9 <= r <= hi + 1e-9), roots[0])
-        B, C = n1 - A, m1 - A
-        D = n0 - C
-        v = 1 / (1 / A + 1 / B + 1 / C + 1 / D) if min(A, B, C, D) > 0 else 0
-        if v > 0:
-            chi2 += (a - A) ** 2 / v
+    for t in tables:
+        r = _expected_a(*t, psi)
+        if r is not None:
+            chi2 += (t[0] - r[0]) ** 2 / r[1]
             k += 1
     df = k - 1
     return chi2, float(st.chi2.sf(chi2, df)) if df > 0 else NAN, df
@@ -359,3 +367,78 @@ def homogeneity_log(estimates, variances, pooled) -> tuple[float, float, int]:
             k += 1
     df = k - 1
     return chi2, float(st.chi2.sf(chi2, df)) if df > 0 else NAN, df
+
+
+def tarone(tables, psi: float) -> tuple[float, float, int]:
+    """Tarone's correction of the Breslow-Day statistic around psi:
+    BD - (sum a_i - sum A_i)^2 / sum Var(A_i), with A_i, Var(A_i) the expected a cell and its
+    variance under the common odds ratio psi."""
+    bd, _, df = breslow_day(tables, psi)
+    obs = exp = var = 0.0
+    for t in tables:
+        r = _expected_a(*t, psi)
+        if r is not None:
+            obs += t[0]
+            exp += r[0]
+            var += r[1]
+    chi2 = bd - (obs - exp) ** 2 / var if var else NAN
+    return chi2, float(st.chi2.sf(chi2, df)) if df > 0 else NAN, df
+
+
+# ---------------------------------------------------------------------------
+# standardized and directly pooled estimates ([ST] epitab: estandard, istandard,
+# standard(), pool)
+# ---------------------------------------------------------------------------
+
+def standardized(m1, v1, m0, v0, w, level, difference: bool = False) -> tuple[float, float, float]:
+    """Standardized ratio sum w m1 / sum w m0 (or difference sum w (m1 - m0) / sum w) of the
+    stratum measures m1 (exposed) and m0 (unexposed) with variances v1, v0, and its limits:
+    var(ln ratio) = sum w^2 v1 / (sum w m1)^2 + sum w^2 v0 / (sum w m0)^2 and
+    var(difference) = sum w^2 (v1 + v0) / (sum w)^2 (Rothman and Greenland; VERIFY against
+    Stata's limits)."""
+    z = z_of(level)
+    W = sum(w)
+    S1 = sum(wi * x for wi, x in zip(w, m1))
+    S0 = sum(wi * x for wi, x in zip(w, m0))
+    V1 = sum(wi * wi * x for wi, x in zip(w, v1))
+    V0 = sum(wi * wi * x for wi, x in zip(w, v0))
+    if difference:
+        if not W:
+            return NAN, NAN, NAN
+        est = (S1 - S0) / W
+        se = math.sqrt(V1 + V0) / W
+        return est, est - z * se, est + z * se
+    if not S1 or not S0:
+        return _div(S1, S0), NAN, NAN
+    est = S1 / S0
+    se = math.sqrt(V1 / (S1 * S1) + V0 / (S0 * S0))
+    return est, est * math.exp(-z * se), est * math.exp(z * se)
+
+
+def pooled(estimates, variances, level, log: bool = True):
+    """Directly pooled estimate: the inverse-variance weighted mean of the stratum estimates
+    (of their logs for ratios), with the test of homogeneity
+    sum (est_i - pooled)^2 / var_i. Strata without a finite estimate or variance are left out
+    (VERIFY). Returns (est, lb, ub, chi2, p, df)."""
+    num = den = 0.0
+    keep = []
+    for e, v in zip(estimates, variances):
+        if log and not (e > 0 and not math.isinf(e)):
+            continue
+        if not (v > 0) or math.isinf(v) or math.isnan(e):
+            continue
+        x = math.log(e) if log else e
+        keep.append((x, v))
+        num += x / v
+        den += 1 / v
+    if not den:
+        return NAN, NAN, NAN, NAN, NAN, 0
+    m = num / den
+    se = math.sqrt(1 / den)
+    z = z_of(level)
+    chi2 = sum((x - m) ** 2 / v for x, v in keep)
+    df = len(keep) - 1
+    p = float(st.chi2.sf(chi2, df)) if df > 0 else NAN
+    if log:
+        return math.exp(m), math.exp(m - z * se), math.exp(m + z * se), chi2, p, df
+    return m, m - z * se, m + z * se, chi2, p, df

@@ -234,16 +234,14 @@ def cmd_mhodds(s: "Session", args: str) -> None:
     if len(names) < 2:
         raise StataError(198, "invalid syntax")
     o = match_options(p.options, {"by": 2, "binary": 3, "compare": 3, "level": 1})
-    if o.get("by"):
-        raise StataError(198, "option by() of mhodds is not available yet in OpenDTA")
     level = _level(s, o)
     case_n, exp_n, adj = names[0], names[1], names[2:]
-    mask, w = _prep(s, p, case_n, [exp_n] + adj)
+    byv = s.expand_varlist(str(o["by"])) if isinstance(o.get("by"), str) else []
+    mask, w = _prep(s, p, case_n, [exp_n] + adj + byv)
     ds = s.data
     case = ds.get(case_n).data != 0
     ev = ds.get(exp_n)
     vals, _ = _levels(s, ev, mask)
-    strata = [("", mask)] if not adj else _strata(s, " ".join(adj), mask)[1]
     out = s.output
     z = E.z_of(level)
     compare = None
@@ -252,23 +250,26 @@ def cmd_mhodds(s: "Session", args: str) -> None:
         if len(parts) != 2:
             raise StataError(198, "compare() requires two values")   # VERIFY
         compare = (float(parts[0]), float(parts[1]))
-    if compare or len(vals) == 2 or o.get("binary"):
-        hi_v, lo_v = compare if compare else (vals[-1], vals[0])
-        tabs = []
-        for _, sel in strata:
-            e1, e0 = sel & (ev.data == hi_v), sel & (ev.data == lo_v)
-            if o.get("binary") and not compare:
-                e1, e0 = sel & (ev.data != 0), sel & (ev.data == 0)
-            tabs.append((float(w[e1 & case].sum()), float(w[e0 & case].sum()),
-                         float(w[e1 & ~case].sum()), float(w[e0 & ~case].sum())))
-        est, lo, hi = E.mh_or(tabs, level)
-        chi2, pv = E.mh_chi2(tabs)
-        title = "Mantel-Haenszel estimate of the odds ratio" if adj else "Maximum likelihood estimate of the odds ratio"   # VERIFY
-        out.write(f"\n{title}\n", "text")
-        out.write(f"Comparing {ev.name}=={_num(hi_v)} vs. {ev.name}=={_num(lo_v)}\n", "text")
-        if adj:
-            out.write(f"controlling for {' '.join(adj)}\n", "text")
-    else:
+    binary = bool(compare or len(vals) == 2 or o.get("binary"))
+    hi_v, lo_v = compare if compare else (vals[-1], vals[0])
+
+    def estimate(sel_all, control):
+        """(or, lb, ub, chi2, p, b, var(b)) for the observations sel_all, stratified by the
+        variables control; b is the log odds ratio (or the score slope)."""
+        strata = [("", sel_all)] if not control else _strata(s, " ".join(control), sel_all)[1]
+        if binary:
+            tabs = []
+            for _, sel in strata:
+                e1, e0 = sel & (ev.data == hi_v), sel & (ev.data == lo_v)
+                if o.get("binary") and not compare:
+                    e1, e0 = sel & (ev.data != 0), sel & (ev.data == 0)
+                tabs.append((float(w[e1 & case].sum()), float(w[e0 & case].sum()),
+                             float(w[e1 & ~case].sum()), float(w[e0 & ~case].sum())))
+            est, lo, hi = E.mh_or(tabs, level)
+            chi2, pv = E.mh_chi2(tabs)
+            b = math.log(est) if est > 0 and not math.isinf(est) else NAN
+            vb = ((math.log(hi) - b) / z) ** 2 if hi > 0 and not math.isinf(hi) and not math.isnan(b) else NAN
+            return est, lo, hi, chi2, pv, b, vb
         tabs = [([float(w[sel & case & (ev.data == v)].sum()) for v in vals],
                  [float(w[sel & ~case & (ev.data == v)].sum()) for v in vals]) for _, sel in strata]
         U, V = _trend(tabs, [float(v) for v in vals])
@@ -276,19 +277,67 @@ def cmd_mhodds(s: "Session", args: str) -> None:
         pv = float(st.chi2.sf(chi2, 1)) if V else NAN
         # one-step (score) estimate of the odds ratio per unit of the exposure
         b1 = U / V if V else NAN
-        est = math.exp(b1)
-        lo, hi = math.exp(b1 - z / math.sqrt(V)), math.exp(b1 + z / math.sqrt(V))
+        return (math.exp(b1), math.exp(b1 - z / math.sqrt(V)), math.exp(b1 + z / math.sqrt(V)),
+                chi2, pv, b1, 1 / V if V else NAN)
+
+    if binary:
+        title = "Mantel-Haenszel estimate of the odds ratio" if adj or byv else "Maximum likelihood estimate of the odds ratio"   # VERIFY
+        out.write(f"\n{title}\n", "text")
+        out.write(f"Comparing {ev.name}=={_num(hi_v)} vs. {ev.name}=={_num(lo_v)}\n", "text")
+    else:
         out.write(f"\nScore test for trend of odds with {ev.name}\n", "text")
-        if adj:
-            out.write(f"controlling for {' '.join(adj)}\n", "text")
+    if adj:
+        out.write(f"controlling for {' '.join(adj)}\n", "text")
+    if byv:
+        _mhodds_by(s, o, estimate, mask, adj, byv, level)
+        return
+    if not binary:
         out.write("(The Odds Ratio estimate is an approximation to the odds ratio for a one unit increase in "
                   f"{ev.name})\n", "text")
-    out.write("\n" + "-" * 64 + "\n", "text")
-    out.write(f" Odds Ratio    chi2(1)        P>chi2        [{level:g}% Conf. Interval]\n", "text")
-    out.write("-" * 64 + "\n", "text")
-    out.write(f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}{_f5(lo):>16}{_f5(hi):>10}\n", "result")
-    out.write("-" * 64 + "\n", "text")
+    est, lo, hi, chi2, pv, _, _ = estimate(mask, adj)
+    _mhodds_row(s, level, est, chi2, pv, lo, hi)
     _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est)])
+
+
+def _mhodds_row(s: "Session", level: float, est, chi2, pv, lo, hi, indent: str = "", lead: str = "\n") -> None:
+    out = s.output
+    out.write(lead + indent + "-" * 64 + "\n", "text")
+    out.write(indent + f" Odds Ratio    chi2(1)        P>chi2        [{level:g}% Conf. Interval]\n", "text")
+    out.write(indent + "-" * 64 + "\n", "text")
+    out.write(indent + f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}{_f5(lo):>16}{_f5(hi):>10}\n", "result")
+    out.write(indent + "-" * 64 + "\n", "text")
+
+
+def _mhodds_by(s: "Session", o, estimate, mask, adj, byv, level) -> None:
+    """by(): the estimate within each group of the by() variables, the estimate controlling
+    for them, and a test of homogeneity of the group estimates,
+    sum (b_j - b)^2 / var(b_j) on the log odds ratios (VERIFY: layout and Stata's test)."""
+    out = s.output
+    byname, groups = _strata(s, " ".join(byv), mask)
+    out.write(f"by {byname}\n", "text")
+    out.write("\n" + "-" * 79 + "\n", "text")
+    out.write(f"{name12(byname):>12} |  Odds Ratio    chi2(1)       P>chi2       [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
+    parts = []
+    for lab, sel in groups:
+        est, lo, hi, chi2, pv, b, vb = estimate(sel, adj)
+        parts.append((b, vb))
+        out.write(f"{name12(lab):>12} |", "text")
+        out.write(f"{_f6(est):>12}{_f2(chi2):>11}{_p4(pv):>13}{_f6(lo):>15}{_f6(hi):>12}\n", "result")
+    out.write("-" * 79 + "\n", "text")
+    est, lo, hi, chi2, pv, b, _ = estimate(mask, adj + byv)
+    out.write(f"\n    Mantel-Haenszel estimate controlling for {' '.join(adj + byv)}\n", "text")
+    _mhodds_row(s, level, est, chi2, pv, lo, hi, indent="    ", lead="")
+    ok = [(bj, vj) for bj, vj in parts if not math.isnan(bj) and vj > 0 and not math.isinf(vj)]
+    chi_h = sum((bj - b) ** 2 / vj for bj, vj in ok) if not math.isnan(b) else NAN
+    df_h = len(ok) - 1
+    ph = float(st.chi2.sf(chi_h, df_h)) if df_h > 0 and not math.isnan(chi_h) else NAN
+    out.write(f"\nTest of homogeneity of ORs (approx): chi2({df_h})   = ", "text")
+    out.write(f"{_f2(chi_h):>8}\n", "result")
+    out.write(f"{'Pr>chi2   = ':>49}", "text")
+    out.write(f"{_p4(ph):>8}\n", "result")
+    _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est),
+               ("df_hom", float(df_h)), ("chi2_hom", chi_h), ("p_hom", ph)])
 
 
 def _num(v: float) -> str:

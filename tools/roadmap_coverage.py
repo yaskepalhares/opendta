@@ -48,7 +48,7 @@ MODULE_AREA = {
     "graphcmd": "Graphics",
     "power": "Other suites",
     "epitab": "Epidemiology", "epiodds": "Epidemiology", "stdize": "Epidemiology",
-    "kappa": "Epidemiology", "roc": "Epidemiology",
+    "kappa": "Epidemiology", "roc": "Epidemiology", "rocreg": "Epidemiology",
     "datautil": "Data management", "datacmds": "Data management", "datasets": "Data management",
 }
 AREA_OF = {
