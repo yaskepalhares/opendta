@@ -148,6 +148,34 @@ class FineGray:
         return psi
 
 
+def _cox_start(t, t0, d, w, X) -> np.ndarray:
+    """Starting values: the Cox (Breslow) estimates with the competing events censored, which is
+    where Stata's log starts (compat 1901)."""
+    k = X.shape[1]
+    times = np.unique(t[d > 0])
+    risks = [(t0 < tf) & (t >= tf) for tf in times]
+    fails = [(t == tf) & (d > 0) for tf in times]
+
+    def fun(b, todo):
+        eta = X @ b
+        ll, g, H = 0.0, np.zeros(k), np.zeros((k, k))
+        for risk, fail in zip(risks, fails):
+            e = w[risk] * np.exp(eta[risk])
+            S0 = e.sum()
+            Xr = X[risk]
+            S1 = Xr.T @ e
+            nd = float(w[fail].sum())
+            ll += float((w[fail] * eta[fail]).sum()) - nd * np.log(S0)
+            if todo:
+                g += X[fail].T @ w[fail] - nd * S1 / S0
+                H -= nd * ((Xr * e[:, None]).T @ Xr / S0 - np.outer(S1, S1) / S0 ** 2)
+        return ll, g, H
+    try:
+        return maximize(fun, np.zeros(k)).b
+    except (np.linalg.LinAlgError, StataError):
+        return np.zeros(k)
+
+
 def _competing(s: "Session", spec: str, mask: np.ndarray):
     """(indicator over the sample rows of mask, variable, text of the event) for compete()."""
     ds = s.data
@@ -203,7 +231,7 @@ def cmd_stcrreg(s: "Session", args: str) -> None:
     if k == 0:
         raise StataError(102, "too few variables specified")
     model = FineGray(t, stx.t0, stx.d, comp, cens, stx.w, X)
-    res = maximize(model.fun, np.zeros(k), **ml_options(o))
+    res = maximize(model.fun, _cox_start(t, stx.t0, stx.d, stx.w, X), **ml_options(o))
     ll0 = res.log[0][1]
     if not o.get("nolog"):
         print_log(s.output, res, "log pseudolikelihood")
@@ -252,22 +280,23 @@ def _post(s: "Session", est: Estimates, args: str, stx: STSample, res, clusters,
     from .regress import cmdline
     x = est.extra
     k = len(res.b)
-    scalars = [("N", x["N"]), ("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]),
-               ("N_compete", x["N_compete"]), ("N_censor", x["N_censor"]),
-               ("k", float(k)), ("k_eq", 1.0), ("k_eq_model", 1.0), ("k_dv", 1.0), ("df_m", float(k)),
-               ("ll", res.ll)]
+    scalars = [("rank", float(k)), ("N", x["N"]), ("ic", float(res.iterations)), ("k", float(k)),
+               ("k_eq", 1.0), ("k_dv", 1.0), ("converged", 1.0 if res.converged else 0.0),
+               ("rc", 0.0), ("ll", res.ll), ("k_eq_model", 1.0)]
     if est.n_clust is not None:
         scalars.append(("N_clust", float(est.n_clust)))
-    scalars += [("chi2", x["chi2"]), ("p", x["p"]), ("rank", float(k)), ("ic", float(res.iterations)),
-                ("rc", 0.0), ("converged", 1.0 if res.converged else 0.0)]
+    scalars += [("chi2", x["chi2"]), ("p", x["p"]), ("df_m", float(k)), ("fmult", 0.0),
+                ("crmult", 0.0), ("fnz", 0.0), ("crnz", 0.0), ("N_sub", x["N_sub"]),
+                ("N_censor", x["N_censor"]), ("N_compete", x["N_compete"]), ("N_fail", x["N_fail"])]
     mainvars = " ".join(c.name for c in est.fg["cols"])
-    macros = [("cmdline", cmdline("stcrreg", args)), ("cmd", "stcrreg"), ("depvar", "_t"),
+    macros = [("cmdline", cmdline("stcrreg", args)), ("title", "Competing-risks regression"),
               ("mainvars", mainvars), ("fevent", est.fevent), ("crevent", est.crevent),
-              ("compete", est.cname), ("title", "Competing-risks regression"),
-              ("clustvar", est.clustvar), ("chi2type", "Wald"),
-              ("vce", "cluster" if est.clustvar else "robust"), ("vcetype", "Robust"),
-              ("opt", "moptimize"), ("which", "max"), ("ml_method", "e2"),
-              ("properties", "b V"), ("predict", "stcrreg_p")]   # VERIFY: the e() lists
+              ("compete", str(o["compete"])), ("predict", "stcrreg_p"),
+              ("marginsnotok", "SCOres ESR DFBeta SCHoenfeld"), ("cmd", "stcrreg"),
+              ("clustvar", est.clustvar), ("vce", "cluster" if est.clustvar else "robust"),
+              ("vcetype", "Robust"), ("chi2type", "Wald"), ("opt", "moptimize"),
+              ("user", "stcrr_lf"), ("ml_method", "d2"), ("technique", "nr"), ("which", "max"),
+              ("depvar", "_t"), ("properties", "b V")]   # VERIFY: the e() lists
     post(s, est, scalars, macros, stx.mask)
 
 
@@ -277,7 +306,7 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
     x = est.extra
     if header:
         left = ["Competing-risks regression", "", f"{'Failure event  :'} {est.fevent}",
-                f"{'Competing event:'} {est.crevent}", "", "", f"Log pseudolikelihood = {fmt(x['ll'], '%10.0g')}"]
+                f"{'Competing event:'} {est.crevent}", "", "", f"Log pseudolikelihood = {fmt(x['ll'], '%10.0g'):>10}"]
         right = [("No. of obs", fmt(x["N"], "%12.0gc")), ("No. of subjects", fmt(x["N_sub"], "%12.0gc")),
                  ("No. failed", fmt(x["N_fail"], "%12.0gc")), ("No. competing", fmt(x["N_compete"], "%12.0gc")),
                  ("No. censored", fmt(x["N_censor"], "%12.0gc")), None,
@@ -290,7 +319,7 @@ def _display(s: "Session", est: Estimates, *, header: bool = True, table: bool =
             if rgt is None:
                 out.write(lft + "\n", "text")
                 continue
-            out.write(f"{lft:<48}{rgt[0]:<16}=", "text")
+            out.write(f"{lft:<49}{rgt[0]:<17}=", "text")
             out.write(f"{rgt[1]:>11}\n", "result")
         out.write("\n", "text")
     if not table:

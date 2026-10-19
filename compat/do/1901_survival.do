@@ -10,7 +10,7 @@ gen g = ceil(_n/4)
 gen x = mod(_n*7,11)/5 - 1
 gen byte grp = 1 + mod(_n,3)
 gen byte trt = mod(_n,2)
-gen double t = 1 + mod(_n*13,23) + mod(_n,4)/2
+gen double t = 1 + round(2*12*(-ln((mod(_n*37,61)+.5)/61))*exp(.4*x))/2
 gen byte ev = mod(_n,5) != 0
 replace ev = 2 if ev == 1 & mod(_n,7) == 0
 gen double pop = 10 + mod(_n,5)
@@ -99,11 +99,12 @@ stset t, failure(d) id(id)
 preserve
 capture noisily sttocc, number(20) nodots
 capture noisily describe
-capture noisily sort _set _case
+capture noisily sort _set id
 capture noisily list _set _case _time id, sepby(_set)
 restore
 preserve
 capture noisily sttocc, match(sex) number(20) nodots
+capture noisily sort _set id
 capture noisily list _set _case _time id sex, sepby(_set)
 restore
 
@@ -113,7 +114,7 @@ set obs 60
 gen id = _n
 gen x = mod(_n*7,11)/5 - 1
 gen byte grp = 1 + mod(_n,3)
-gen double t = 1 + mod(_n*13,23) + mod(_n,4)/2
+gen double t = 1 + round(2*12*(-ln((mod(_n*37,61)+.5)/61))*exp(.4*x))/2
 gen byte ev = mod(_n,5) != 0
 replace ev = 2 if ev == 1 & mod(_n,7) == 0
 stset t, failure(ev==1) id(id)

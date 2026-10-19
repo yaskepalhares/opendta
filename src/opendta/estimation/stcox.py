@@ -223,7 +223,8 @@ def cmd_stcox(s: "Session", args: str) -> None:
     ties = "efron" if o.get("efron") else "exactm" if o.get("exactm") else "exactp" if o.get("exactp") else "breslow"
     if ties.startswith("exact"):
         if stx.robust:
-            raise StataError(198, f"{ties} may not be specified with vce(robust) or vce(cluster)")   # VERIFY
+            stx.notes_and_header(s)
+            raise StataError(198, f"may not specify both {ties} and robust options")
         if stx.wtype:
             raise StataError(198, f"weights are not available yet in OpenDTA with {ties}")
     stx.notes_and_header(s)

@@ -103,7 +103,7 @@ def cmd_stcurve(s: "Session", args: str) -> None:
         raise StataError(198, "option hazard is not available yet in OpenDTA after stcox")
     if kind == "cox" and getattr(est, "strata_vars", None):
         raise StataError(198, "stcurve after a stratified stcox is not available yet in OpenDTA")
-    if not lopts.get("noshow"):
+    if not lopts.get("noshow") and not lopts.get("nodraw"):   # VERIFY: nodraw prints no header
         header(s, info)
     ds = s.data
     tt = ds.get("_t").data

@@ -94,6 +94,8 @@ def st_info(ds: "Dataset") -> STInfo | None:
 def require_st(s: "Session") -> STInfo:
     info = st_info(s.data)
     if info is None:
+        if s.data.chars.get("_dta", {}).get("ct_t"):
+            raise StataError(119, "data not st (data are marked as being ct data)")
         raise StataError(119, "data not st")
     return info
 

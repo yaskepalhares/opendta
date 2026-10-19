@@ -123,12 +123,16 @@ def cmd_stsplit(s: "Session", args: str) -> None:
     at_txt = str(o["at"]).strip() if isinstance(o.get("at"), str) else ""
     failures = at_txt == "failures"
     if failures:
-        if newvar or o.get("every") or o.get("after") or o.get("trim"):
-            raise StataError(198, "at(failures) may not be combined with a new variable, every(), "
-                             "after() or trim")   # VERIFY
+        if newvar:
+            raise StataError(101, "varlist not allowed")
+        if o.get("every") or o.get("after") or o.get("trim"):
+            raise StataError(198, "at(failures) may not be combined with every(), after() or "
+                             "trim")   # VERIFY
     else:
         if o.get("strata") or o.get("riskset"):
             raise StataError(198, "options strata() and riskset() require at(failures)")   # VERIFY
+        if o.get("every") and not newvar:
+            raise StataError(100, "varlist required")
         if bool(at_txt) == bool(o.get("every")):
             raise StataError(198, "must specify either at() or every()")   # VERIFY
     n = ds.nobs
@@ -247,7 +251,6 @@ def cmd_stjoin(s: "Session", args: str) -> None:
     if isinstance(o.get("censored"), str):
         cens = np.array(parse_numlist(str(o["censored"])), dtype=np.float64)
     elif info.failvals is not None and info.failvar:
-        s.output.write("(option censored(0) assumed)\n", "text")
         cens = np.array([0.0])
     st_, t0, t, d = _st_arrays(s)
     rows, gid, _bounds = _subjects(s, info, np.flatnonzero(st_))
@@ -278,6 +281,8 @@ def cmd_stjoin(s: "Session", args: str) -> None:
                         ds.get(nm).raw[dst] = ds.get(nm).raw[srcr]
     removed = ds.keep_obs(~drop)
     s.output.write(f"({removed} obs. eliminated)\n", "text")
+    if not removed and not isinstance(o.get("censored"), str):
+        s.output.write("(perhaps you need to specify stjoin's censored() option)\n", "text")
     s.notify_state()
 
 
@@ -328,7 +333,7 @@ def cmd_stfill(s: "Session", args: str) -> None:
         changed = int(np.sum([a != b for a, b in zip(full, x)])) if is_str else int(np.sum(full != x))
         if changed:
             (ds.set_string if is_str else ds.set_numeric)(ds.get(nm), full)
-        out.write(f"{nm}: {changed:,} real changes made\n", "text")   # VERIFY: layout
+        out.write(f"{nm:>16}:  {changed:,} real changes made\n", "text")   # VERIFY: layout
     s.notify_state()
 
 
@@ -347,15 +352,16 @@ def cmd_stvary(s: "Session", args: str) -> None:
     if not o.get("noshow"):
         header(s, info)
     out = s.output
-    out.write(f"{'':16}|     # subjects for whom the variable is\n", "text")
-    out.write(f"{'variable':>16}|  constant   varying  never miss  always miss  sometimes miss\n", "text")
-    out.write("-" * 16 + "+" + "-" * 61 + "\n", "text")
+    out.write(f"{'':15}subjects for whom the variable is\n", "text")
+    out.write(f"{'':49}never    always   sometimes\n", "text")
+    out.write(f"{'variable':>12} |  constant    varying{'':13}missing   missing   missing\n", "text")
+    out.write("-" * 13 + "+" + "-" * 62 + "\n", "text")
     last = (0, 0, 0, 0, 0)
     for nm in names:
         x, miss, _ = _value_vectors(ds, nm)
         last = SV.subject_summary(x[rows], miss[rows], bounds)
-        out.write(f"{nm[:15]:>16}|", "text")
-        out.write("".join(f"{v:>{w}}" for v, w in zip(last, (10, 10, 12, 13, 15))) + "\n", "result")
+        out.write(f"{nm[:12]:>12} |", "text")
+        out.write("".join(f"{v:>{w}}" for v, w in zip(last, (10, 11, 20, 10, 10))) + "\n", "result")
     s.r = dict(zip(("cons", "varies", "never", "always", "miss"), (float(v) for v in last)))
 
 
@@ -471,6 +477,14 @@ def cmd_snapspan(s: "Session", args: str) -> None:
     if ds.has(new0):
         raise StataError(110, f"variable {new0} already defined")
     gid = group_ids(ds, [idv], None)[0]
+    single = np.bincount(gid)[gid] == 1
+    if single.any():
+        s.output.write(f"note:  {int(single.sum())} obs. ({100 * single.mean():.1f}%) have only a single "
+                       "record; they will be ignored\n", "text")
+        if single.all():
+            raise StataError(2000, "no observations")
+        ds.keep_obs(~single)
+        gid = group_ids(ds, [idv], None)[0]
     tt = ds.get(tv).data.astype(np.float64)
     order = np.lexsort((tt, gid))
     _take(ds, order)
@@ -516,6 +530,10 @@ def cmd_stbase(s: "Session", args: str) -> None:
     st_, t0_all, t_all, d_all = _st_arrays(s)
     if isinstance(o.get("at"), str):
         _stbase_at(s, info, o, rows, bounds, float(s.eval(str(o["at"]))))
+        return
+    if np.all(np.diff(bounds) == 1):
+        s.output.write(f"nothing to do; data has one record per id({info.idvar}) and so is already "
+                       "baseline\n", "text")
         return
     # -- baseline values, then the records that can be joined
     skip = set(_ST_VARS) | {info.timevar, info.time0, info.failvar, info.idvar}

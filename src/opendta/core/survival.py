@@ -176,7 +176,7 @@ def poisson_rate_ci(d: float, rate: float, level: float) -> tuple[float, float]:
 def jackknife_log_ci(num: np.ndarray, den: np.ndarray, cluster: np.ndarray, level: float
                      ) -> tuple[float, float, float]:
     """Rate = sum(num)/sum(den) with a delete-one-cluster jackknife on ln(rate): returns
-    (rate, lower, upper). VERIFY: Stata's jackknife intervals."""
+    (rate, lower, upper); the limits are centred on the mean of the pseudovalues (compat 1901)."""
     ids, inv = np.unique(cluster, return_inverse=True)
     g = len(ids)
     N, D = float(num.sum()), float(den.sum())
@@ -193,7 +193,8 @@ def jackknife_log_ci(num: np.ndarray, den: np.ndarray, cluster: np.ndarray, leve
         return rate, float("nan"), float("nan")
     se = float(np.sqrt(np.var(pseudo, ddof=1) / g))
     z = _z(level)
-    return rate, float(np.exp(theta - z * se)), float(np.exp(theta + z * se))
+    centre = float(np.mean(pseudo))     # the interval is centred on the jackknife estimate
+    return rate, float(np.exp(centre - z * se)), float(np.exp(centre + z * se))
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +207,9 @@ def km_percentile_se(times: np.ndarray, S: np.ndarray, gw: np.ndarray, tp: float
     density estimated as in Collett (2003): (S(u) - S(l)) / (l - u) with u the largest time with
     S >= 1 - p + eps and l the smallest time with S <= 1 - p - eps (VERIFY: Stata's epsilon)."""
     q = 1 - p
-    up = np.flatnonzero(S >= q + eps)
-    lo = np.flatnonzero(S <= q - eps)
+    tol = 1e-9
+    up = np.flatnonzero(S >= q + eps + tol)
+    lo = np.flatnonzero(S <= q - eps - tol)
     if not len(lo):
         return float("nan")
     u = float(times[up[-1]]) if len(up) else 0.0
@@ -337,8 +339,9 @@ def lr_exponential(d: np.ndarray, T: np.ndarray) -> tuple[float, int]:
     return stat, len(d) - 1
 
 
-def logrank_chi2(t: np.ndarray, dead: np.ndarray, w: np.ndarray, g: np.ndarray, G: int) -> tuple[float, int]:
-    """Log-rank statistic for G groups (g = 0..G-1) with the hypergeometric variance."""
+def logrank_chi2(t: np.ndarray, dead: np.ndarray, w: np.ndarray, g: np.ndarray, G: int):
+    """Log-rank statistic for G groups (g = 0..G-1) with the hypergeometric variance: (chi2, df,
+    observed, expected)."""
     O = np.zeros(G)
     E = np.zeros(G)
     V = np.zeros((G, G))
@@ -359,7 +362,7 @@ def logrank_chi2(t: np.ndarray, dead: np.ndarray, w: np.ndarray, g: np.ndarray, 
         chi2 = float(diff @ np.linalg.solve(V[:k, :k], diff))
     except np.linalg.LinAlgError:
         chi2 = float(diff @ np.linalg.pinv(V[:k, :k]) @ diff)
-    return chi2, k
+    return chi2, k, O, E
 
 
 # ---------------------------------------------------------------------------

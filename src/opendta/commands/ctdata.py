@@ -14,7 +14,7 @@ from ..core import rng
 from ..core.dataset import Dataset, Variable, smallest_type_for
 from ..core.errors import StataError
 from ..core.grouping import group_ids
-from ..estimation.st import _stset, require_st, st_data
+from ..estimation.st import _stset, header, require_st, st_data
 from ..lang.syntax import match_options, parse_standard
 from ._util import touse
 from .strates import _result_dataset
@@ -39,12 +39,12 @@ def _show(s: "Session", c: dict) -> None:
     name = ds.fullpath or ds.filename
     if name:
         out.write(f"dataset name:  {name}\n", "text")
-    out.write(f"         time:  {c['ct_t']}\n", "text")
-    out.write(f"     no. fail:  {c['ct_nf']}\n", "text")
-    out.write(f"     no. lost:  {c['ct_nc'] or '-- (meaning 0 lost)'}\n", "text")
-    out.write(f"    no. enter:  {c['ct_ne'] or '-- (meaning all enter at time 0)'}\n", "text")
+    out.write(f"{'time:':>17}  {c['ct_t']}\n", "text")
+    out.write(f"{'no. fail:':>17}  {c['ct_nf']}\n", "text")
+    out.write(f"{'no. lost:':>17}  {c['ct_nc'] or '-- (meaning 0 lost)'}\n", "text")
+    out.write(f"{'no. enter:':>17}  {c['ct_ne'] or '-- (meaning all enter at time 0)'}\n", "text")
     if c["ct_by"]:
-        out.write(f"           by:  {c['ct_by']}\n", "text")   # VERIFY: alignment of the labels
+        out.write(f"{'by:':>17}  {c['ct_by']}\n", "text")   # VERIFY: alignment of the labels
 
 
 def _check(s: "Session", c: dict) -> None:
@@ -130,6 +130,8 @@ def cmd_cttost(s: "Session", args: str) -> None:
     o = match_options(p.options, {"t0": 2, "wvar": 1, "clear": 5, "nopreserve": 5})
     c = _ct(s)
     ds = s.data
+    if ds.changed and not (o.get("clear") or o.get("nopreserve")):
+        raise StataError(4, "no; data in memory would be lost")
     _check(s, c)
     wname = _free_name(ds, o.get("wvar"), ("w", "pop", "weight", "wgt"))
     t0name = _free_name(ds, o.get("t0"), ("t0", "time0", "etime")) if c["ct_ne"] else ""
@@ -271,7 +273,7 @@ def _subject_ends(sd, gid, by, ds, rows, info) -> np.ndarray:
 def cmd_sttocc(s: "Session", args: str) -> None:
     p = parse_standard(args)
     o = match_options(p.options, {"match": 1, "number": 1, "nodots": 3, "generate": 1})
-    require_st(s)
+    info = require_st(s)
     ds = s.data
     number = int(float(str(o["number"]))) if o.get("number") else 1
     if number < 1:
@@ -292,13 +294,16 @@ def cmd_sttocc(s: "Session", args: str) -> None:
     mg = group_ids(ds, mvars, sd.mask)[0][rows] if mvars else np.zeros(len(t), dtype=int)
     cases = np.flatnonzero(d == 1)
     out = s.output
+    header(s, info)
+    if mvars:
+        out.write(f"{'matching for':>19}:  {' '.join(mvars)}\n", "text")
     ft, cnt = np.unique(t[cases], return_counts=True)
     ties = int((cnt > 1).sum())
     if ties:
         out.write(f"There were {ties} tied times involving failure(s)\n", "text")
         out.write("- tied failure times split at random\n", "text")
     out.write(f"There are {len(cases)} cases\n", "text")
-    out.write(f"Sampling {number} controls for each case\n", "text")
+    out.write(f"Sampling {number} controls for each case \n", "text")
     order = np.full(len(t), 2.0)
     order[cases] = rng.RNG.uniform(len(cases)) if len(cases) else []
     picked, setid, ctime, is_case = [], [], [], []
@@ -309,6 +314,9 @@ def cmd_sttocc(s: "Session", args: str) -> None:
         if len(cand):
             _, first = np.unique(ids[cand], return_index=True)
             cand = cand[np.sort(first)]
+            if len(cand) < number:
+                out.write(f" Warning: sample requested greater than population. Only {len(cand)} "
+                          "controls selected\n", "text")
             u = rng.RNG.uniform(len(cand))
             cand = cand[np.argsort(u, kind="stable")[:number]]
         for j, flag in [(c, 1)] + [(j, 0) for j in cand]:
@@ -316,10 +324,17 @@ def cmd_sttocc(s: "Session", args: str) -> None:
             setid.append(k)
             ctime.append(tf)
             is_case.append(flag)
+    ordr = np.lexsort((np.array(is_case), np.array(setid)))
+    picked = [picked[i] for i in ordr]
+    setid, ctime, is_case = ([x[i] for i in ordr] for x in (setid, ctime, is_case))
     new = _result_dataset(s, keep_names, picked,
-                          [(gen[0], is_case, "%9.0g"), (gen[1], setid, "%9.0g"), (gen[2], ctime, "%9.0g")])
-    for nm in (gen[0], gen[1]):
+                          [(gen[0], is_case, "%8.0g"), (gen[1], setid, "%12.0g"), (gen[2], ctime, "%8.0g")])
+    for nm, vt, lab in ((gen[0], "byte", "0 for controls; 1 for cases"), (gen[1], "long", "case-control ID"),
+                        (gen[2], smallest_type_for(new.get(gen[2]).data), "analysis time of the case's failure")):
         v = new.get(nm)
-        v.vtype = smallest_type_for(v.data)   # VERIFY: types of the new variables
+        v.vtype = vt
+        v.label = lab
+    new.sortlist = [gen[1], gen[0]]
+    new.changed = True
     s.data = new
     s.notify_state()
