@@ -334,6 +334,9 @@ def _icd(s: "Session", kind: str, args: str) -> None:
         v = ds.get(name)
         if not v.is_string:
             raise StataError(109, f"{name} must be a string variable")   # VERIFY
+        if kind != "icd10" and any(str(c).strip() and _format_problem(kind, str(c)) for c in v.raw):
+            # clean refuses badly formed codes (compat 1501; VERIFY: icd9p wording)
+            raise StataError(459, f"{name} contains invalid ICD-9 codes")
         head = {"icd10": 3, "icd9p": 2}.get(kind, 3)
         new_vals, changes = [], 0
         for c in v.raw:

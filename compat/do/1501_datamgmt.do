@@ -82,6 +82,8 @@ input id x
 1 1.5
 2 2.25
 end
+capture erase odta_out.raw
+capture erase odta_f.raw
 outfile using odta_out.raw, replace
 type odta_out.raw
 outfile using odta_out.raw, comma replace
@@ -103,6 +105,8 @@ return list
 icd9 check dx, list
 capture noisily icd9 clean dx, dots generate(c)
 gen c = dx
+capture noisily icd9 clean c, dots
+drop if dx == "bad!"
 icd9 clean c, dots
 icd9 generate cat = c, category
 list

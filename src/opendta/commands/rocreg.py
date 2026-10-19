@@ -110,7 +110,7 @@ def cmd_rocreg(s: "Session", args: str) -> None:
             colnames += ["_cons"] + roccov + ["_cons"] + ([] if roccov else ["auc"])
             eqs += [c] * (1 + len(roccov)) + ["probit"] + ([] if roccov else [c])
         else:
-            labels = [_colname(k, j, spec) for j, k in enumerate(spec)]
+            labels = [_colname(k, j, spec) for j, (k, _) in enumerate(spec)]
             colnames += labels
             eqs += [c] * len(labels)
     k = len(observed)

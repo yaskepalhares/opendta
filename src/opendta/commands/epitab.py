@@ -516,8 +516,9 @@ def _cs_by(s: "Session", byname: str, strata, o, spec=None) -> None:
             r.put("df", df)
             r.put("chi2_p", _f32(chi2))
         else:
-            r.put("chi2_mh", _f32(chi2))
+            # cs lists chi2_mh before df (compat 1401)
             r.put("df", df)
+            r.put("chi2_mh", _f32(chi2))
     _set_r(s, list(r.items()))
 
 
@@ -852,7 +853,8 @@ def _ir_by(s: "Session", byname: str, strata, o, spec=None) -> None:
     r.put("lb_afe", af_lo)
     r.put("ub_afe", af_hi)
     r.put("afp", af * E._div(a_, a_ + b_))
-    for key in ("ird", "irr"):
+    # the requested measure is put last, so it is listed first (compat 1601)
+    for key in (("irr", "ird") if ird else ("ird", "irr")):
         on = (key == "ird") == ird
         r.put(key, main[0] if on else NAN)
         r.put("lb_" + key, main[1] if on else NAN)
