@@ -203,4 +203,12 @@ Comandos e opções que o OpenDTA ainda não tem, por área. Eles serão acresce
 - **Outras suítes**: `gsem`; `sem` com os métodos `mlmv` e `adf`, `group()` e os demais subcomandos de `estat`; os outros métodos do `power` (variâncias, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), os testes `lrchi2` e `fisher` e os gráficos; `bayesmh` e os comandos `bayes`; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg`; `svy:` com mais estimadores.
 - **Programação**: `postfile`/`post`, `unab`, `tsunab`, `fvunab`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve`, `signestimationsample`, `makecns`, `pause`, `sleep`, `window`, `plugin`, `viewsource`, `unabcmd`, o sistema de classes do Stata (as classes do Mata já funcionam).
 
+## Longo prazo
+
+Para registro, a ordem depois da 1.0:
+
+1. Terminar todos os comandos da versão-alvo (os blocos de [docs/next-steps.pt-BR.md](docs/next-steps.pt-BR.md)) e lançar a 1.0.
+2. Acrescentar os comandos e as mudanças de cada versão seguinte do Stata, uma versão de cada vez, até o Stata 19.
+3. Uma versão que roda no navegador, sem instalar nada: o núcleo estatístico (Python, NumPy e SciPy) roda em WebAssembly pelo Pyodide. Ela aproveita a separação entre o núcleo estatístico e a camada Stata que os comandos novos já seguem.
+
 Fora do escopo: ler os arquivos `.gph` gravados pelo Stata, cujo formato não tem especificação pública ([política de desenvolvimento](docs/clean-room-policy.pt-BR.md)); o OpenDTA grava gráficos no seu próprio formato `.gph`.
