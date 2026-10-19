@@ -2,7 +2,7 @@
 
 [English](next-steps.md) | **Português**
 
-Um plano de trabalho para os comandos que ainda faltam em [Depois da 1.0](../ROADMAP.pt-BR.md#depois-da-10), escrito para que cada bloco possa ser feito numa sessão nova sem redescobrir o código. A versão 1.0 sai quando todos os blocos estiverem prontos; depois vêm as melhorias do que já existe e as versões mais recentes do Stata.
+Um plano de trabalho para os comandos que ainda faltam em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10), escrito para que cada bloco possa ser feito numa sessão nova sem redescobrir o código. A versão 1.0 sai quando todos os blocos estiverem prontos; depois vêm as melhorias de [Depois da 1.0](../ROADMAP.pt-BR.md#depois-da-10) e as versões mais recentes do Stata.
 
 ## Como executar um bloco
 
@@ -15,7 +15,7 @@ Todo bloco segue os mesmos passos:
 1. Branch a partir do `main` (`block-<nome>`).
 2. Para cada comando: a estatística em `src/opendta/core/` (veja a próxima seção), o comando em `src/opendta/commands/` (módulo novo registrado em `commands/__init__.py`), a página de ajuda e os testes.
 3. Um caso de comparação `compat/do/NNNN_<bloco>.do` com os comandos e `return list`/`ereturn list`; ele fica sem referência até a rodada no Stata. Rode sob `capture noisily` todo comando cujo comportamento no Stata o manual não documenta (e faça o mesmo em qualquer caso antigo que você alterar), para que uma única rodada no Stata mostre o caso inteiro em vez de parar no primeiro erro.
-4. `ROADMAP.md` e `ROADMAP.pt-BR.md`: uma fase nova listando o que foi feito; em *Depois da 1.0*, só o que falta. Cada trecho de uma linha de *Depois da 1.0* que lista opções deve começar pelo comando a que elas pertencem (`` `cs` com a opção `pool` ``), para o mapa de cobertura não contar opções como comandos.
+4. `ROADMAP.md` e `ROADMAP.pt-BR.md`: uma fase nova listando o que foi feito; em *Faltam para a 1.0*, só o que falta. Cada trecho de uma linha de *Faltam para a 1.0* que lista opções deve começar pelo comando a que elas pertencem (`` `cs` com a opção `pool` ``), para o mapa de cobertura não contar opções como comandos.
 5. `tools/roadmap_coverage.py`: acrescentar o módulo novo em `MODULE_AREA`.
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
 7. A rodada no Stata, uma só, para tudo o que o bloco precisa (inclusive casos sem referência): peça ao usuário que rode `compat/gerar_esperados.do`, nunca um bloco improvisado de comandos. Esse arquivo já faz `set dp period` e `linesize 255`, apaga as sobras `odta_*` e roda `mata clear`. Antes de pedir, confira com o git que o branch está no GitHub e diga ao usuário que dê `git pull` nele. Se uma rodada falhar por motivo de ambiente (vírgula decimal, nome de arquivo, sobras de outra rodada), diga isso antes de pedir outra.
@@ -57,19 +57,19 @@ Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tok
 
 ### 1. Epidemiologia: completar ✅
 
-Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Depois da 1.0*. O plano original:
+Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Faltam para a 1.0*. O plano original:
 
 `rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
 
 ### 2. Manipulação de dados: opções ✅
 
-Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato proprietário), `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), `import sasxport, describe` e `member()`, os rótulos de valores do `formats.xpf`, `export sasxport` com `rename` e `vallabfile()`, e `list` com `string()` e `display`, que ficam em *Depois da 1.0*. O plano original:
+Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato proprietário), `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), `import sasxport, describe` e `member()`, os rótulos de valores do `formats.xpf`, `export sasxport` com `rename` e `vallabfile()`, e `list` com `string()` e `display`, que ficam em *Faltam para a 1.0*. O plano original:
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
 ### 3. Programação ✅
 
-Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Depois da 1.0*. O plano original:
+Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Faltam para a 1.0*. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 

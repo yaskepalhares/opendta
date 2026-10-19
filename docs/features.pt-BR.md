@@ -2,7 +2,7 @@
 
 [English](features.md) | **Português**
 
-O OpenDTA cobre o núcleo dos comandos: a linguagem dos do-files, a manipulação de dados, a estatística descritiva, os principais comandos de estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, Mata e gráficos. Os comandos que ainda não estão no OpenDTA estão listados no [ROADMAP](../ROADMAP.pt-BR.md#depois-da-10); eles serão acrescentados aos poucos.
+O OpenDTA cobre o núcleo dos comandos: a linguagem dos do-files, a manipulação de dados, a estatística descritiva, os principais comandos de estimação, amostras complexas, análise de sobrevivência, modelos multinível, séries temporais, imputação múltipla, Mata e gráficos. Os comandos que ainda não estão no OpenDTA estão listados no [ROADMAP](../ROADMAP.pt-BR.md#faltam-para-a-10); eles serão acrescentados aos poucos.
 
 ## Comandos e recursos
 
