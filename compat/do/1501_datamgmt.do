@@ -28,7 +28,8 @@ return list
 labelbook yn
 labelbook, problems
 compare x xc
-by grp: ipolate y x, gen(yi)
+capture noisily by grp: ipolate y x, gen(yi)
+bysort grp: ipolate y x, gen(yi)
 list
 separate x, by(grp)
 describe x1 x2

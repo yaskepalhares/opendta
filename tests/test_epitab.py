@@ -269,11 +269,13 @@ end
 """
 
 
-def test_tabodds_homogeneity_is_pearson(run):
+def test_tabodds_homogeneity_is_cmh(run):
+    # (N-1)/N times Pearson's chi2 (compat 1401)
     run(ALC)
     run("tabodds case alc [fw=pop]")
     chi2 = st.chi2_contingency([[12, 19, 33], [110, 70, 35]], correction=False)[0]
-    assert run.session.r["chi2_hom"] == pytest.approx(chi2)
+    n = 12 + 19 + 33 + 110 + 70 + 35
+    assert run.session.r["chi2_hom"] == pytest.approx(chi2 * (n - 1) / n)
     assert run.session.r["df_hom"] == 2
 
 
@@ -363,7 +365,11 @@ input agecat stdpop stddeaths
 end
 save "{std}", replace""")
     run(POPS)
+    # deaths is not the group total (compat 1401)
     run(f'istdize deaths pop agecat using "{std}", popvars(stddeaths stdpop) by(state)')
+    assert run.rc == 499
+    run("bysort state: egen tdeaths = total(deaths)")
+    run(f'istdize tdeaths pop agecat using "{std}", popvars(stddeaths stdpop) by(state)')
     R = np.array([50 / 300000, 140 / 200000, 400 / 80000])
     exp_iowa = float((np.array([150000, 90000, 30000]) * R).sum())
     assert run.session.r["smr"].data[0][0] == pytest.approx(255 / exp_iowa)

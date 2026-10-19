@@ -116,6 +116,8 @@ dstdize deaths pop agecat, by(state)
 return list
 matrix list r(adj)
 dstdize deaths pop agecat, by(state) base(Maine)
-istdize deaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
+capture noisily istdize deaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
+bysort state: egen tdeaths = total(deaths)
+istdize tdeaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
 return list
 erase odta_std.dta

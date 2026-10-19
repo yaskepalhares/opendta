@@ -185,7 +185,7 @@ def _head(s: "Session", title: str, cols=("Exposed", "Unexposed"), total="Total"
     out.write("\n", "text")
     if extra:
         out.write(" " * 57 + extra.split("\n")[0] + "\n", "text")
-    if title:
+    if title and not extra:      # cc shows no variable name (compat 1401)
         out.write(" " * (LBL + 1) + "| " + f"{title:<23}" + "|\n", "text")
     tail = f"{total:>11}" + (f"{extra.split(chr(10))[-1]:>12}" if extra else "")
     out.write(" " * (LBL + 1) + f"|{cols[0]:>10}{cols[1]:>12}  |" + tail + "\n", "text")
