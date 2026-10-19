@@ -9,7 +9,7 @@
 
 {p 8 16 2}
 {cmd:infile} [{it:type}] {it:newvar} [{it:newvar} ...] {cmd:using} {it:filename}
-[{it:if}] [{it:in}] [{cmd:,} {cmd:clear} {cmdab:a:utomatic}]
+[{it:if}] [{it:in}] [{cmd:,} {cmd:clear} {cmdab:a:utomatic} {cmd:byvariable(}{it:#}{cmd:)}]
 
 {p 8 16 2}
 {cmd:infile using} {it:dictionary} [{cmd:,} {cmd:using(}{it:datafile}{cmd:)} {cmd:clear}]
@@ -25,6 +25,11 @@ In free format, values are separated by spaces or commas and read in
 order regardless of line breaks; string variables must be declared, as
 in {cmd:str20 nome}. A type applies only to the name that follows it;
 {cmd:int(a b c)} applies it to several.
+{p_end}
+
+{pstd}
+With {cmd:byvariable(}{it:#}{cmd:)} the file holds all the values of the first variable, then all those of the second, and so on;
+{it:#} is the number of observations, or a larger number if a {cmd:;} ends the data of each variable.
 {p_end}
 
 {pstd}

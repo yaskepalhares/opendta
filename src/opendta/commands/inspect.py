@@ -50,8 +50,10 @@ def cmd_list(s: "Session", args: str) -> None:
     opts = match_options(p.options, {
         "noobs": 5, "clean": 5, "separator": 3, "nolabel": 5, "noheader": 6,
         "abbreviate": 2, "table": 3, "divider": 3, "string": 3, "compress": 3,
-        "fast": 4, "constant": 4, "sepby": 5,
+        "fast": 4, "constant": 4, "sepby": 5, "header": 6, "nodotz": 6,
     })
+    if opts.get("noheader") and opts.get("header") is True:
+        raise StataError(198, "options header and noheader may not be combined")
     mask = touse(s, p)
     rows = np.flatnonzero(mask)
     if not names:
@@ -69,6 +71,11 @@ def cmd_list(s: "Session", args: str) -> None:
         keys = [ds.get(n).raw for n in sepby]
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
+    if opts.get("nodotz"):
+        # extended missing values (.a-.z) are shown as "."
+        cells = [[("." if (len(c) == 2 and c[0] == "." and c[1].isalpha() and not v.is_string) else c)
+                  for c, v in zip(r, vars_)] for r in cells]
+    every = int(opts["header"]) if isinstance(opts.get("header"), str) and opts["header"].strip().isdigit() else 0
     # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
     # default is ab(8) ("Rendamensal" → "Rendam~l")
     ab = int(opts["abbreviate"]) if isinstance(opts.get("abbreviate"), str) else 8
@@ -100,7 +107,9 @@ def cmd_list(s: "Session", args: str) -> None:
         lead = " " * (obs_w + 1 + 3) if show_obs else ""
         if not opts.get("noheader"):
             out.write(lead + header + "  \n", "text")
-        for i, r in zip(rows, cells):
+        for k, (i, r) in enumerate(zip(rows, cells)):
+            if every and k and k % every == 0 and not opts.get("noheader"):
+                out.write("\n" + lead + header + "  \n", "text")      # VERIFY: layout of header(#) (compat 1701)
             label = f"{int(i) + 1:>{obs_w}}.   " if show_obs else ""
             out.write(label, "text")
             out.write(fmt_row(r) + "  \n", "result")
@@ -112,7 +121,12 @@ def cmd_list(s: "Session", args: str) -> None:
         out.write(pad + "| " + header + " |\n", "text")
         out.write(pad + "|" + "-" * inner + "|\n", "text")
     for k, (i, r) in enumerate(zip(rows, cells)):
-        if sep and k and k % sep == 0:
+        if every and k and k % every == 0 and not opts.get("noheader"):
+            # VERIFY: layout of header(#) (compat 1701)
+            out.write(pad + "|" + "-" * inner + "|\n", "text")
+            out.write(pad + "| " + header + " |\n", "text")
+            out.write(pad + "|" + "-" * inner + "|\n", "text")
+        elif sep and k and k % sep == 0:
             out.write(pad + "|" + "-" * inner + "|\n", "text")
         elif sepby and k and any(c[i] != c[rows[k - 1]] for c in keys):
             out.write(pad + "|" + "-" * inner + "|\n", "text")
@@ -136,13 +150,27 @@ def _hline(s: "Session") -> str:
 @command("describe", "d")
 def cmd_describe(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    opts = match_options(p.options, {"short": 2, "simple": 2, "fullnames": 1, "numbers": 1,
+                                     "replace": 3, "clear": 5, "varlist": 7})
+    if opts.get("clear") and not opts.get("replace"):
+        raise StataError(198, "option clear may be specified only with option replace")
+    if p.using is not None:
+        if opts.get("fullnames") or opts.get("numbers") or opts.get("replace"):
+            raise StataError(198, "option not allowed with using")   # VERIFY
+        _describe_using(s, p, opts)
+        return
     ds = s.data
-    opts = match_options(p.options, {"short": 2, "simple": 2, "fullnames": 1, "numbers": 1})
     names = unique(expand(ds, p.varlist)) if p.varlist else ds.names
+    if opts.get("replace"):
+        _describe_replace(s, names, bool(opts.get("clear")))
+        return
     out = s.output
     _LINE = _hline(s)
     s.r = {"N": float(ds.nobs), "k": float(ds.nvars), "width": float(ds.width()),
            "changed": float(ds.changed)}
+    if opts.get("varlist"):
+        s.r["varlist"] = " ".join(names)
+        s.r["sortlist"] = " ".join(ds.sortlist)
 
     if opts.get("simple"):
         out.write("  ".join(names) + "\n", "text")
@@ -164,16 +192,21 @@ def cmd_describe(s: "Session", args: str) -> None:
     if not opts.get("short"):
         if not only_vars:
             out.write(_LINE + "\n", "text")
-        out.write("              storage   display    value\n", "text")
-        out.write("variable name   type    format     label      variable label\n", "text")
+        numbers = bool(opts.get("numbers"))
+        pad = "    " if numbers else ""      # VERIFY: header with numbers (compat 1701)
+        out.write(pad + "              storage   display    value\n", "text")
+        out.write(pad + "variable name   type    format     label      variable label\n", "text")
         out.write(_LINE + "\n", "text")
-        for n in names:
+        for k, n in enumerate(names, start=1):
             v = ds.get(n)
             shown = n if len(n) <= 15 or opts.get("fullnames") else n[:14] + "~"
+            if numbers:
+                # VERIFY: layout of the variable number (compat 1701)
+                shown = f"{ds.names.index(n) + 1:>3}. {shown}"
             star = "*" if ds.chars.get(n, {}).get("note0") else " "
             # formatos longos aparecem cortados ("%tdnn/dd/CCYY" → "%td..")
             fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFY truncation rule
-            line = f"{shown:<16}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
+            line = f"{shown:<{20 if numbers else 16}}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
     if only_vars:
         # VERIFY: notes footer with a varlist
@@ -187,3 +220,64 @@ def cmd_describe(s: "Session", args: str) -> None:
     out.write("Sorted by: " + "  ".join(ds.sortlist) + "\n", "text")   # 2 spaces (Stata 14)
     if ds.changed and ds.nvars:
         out.write("     Note: Dataset has changed since last saved.\n", "text")
+
+
+def _describe_using(s: "Session", p, opts: dict) -> None:
+    """describe [varlist] using filename: the same report for the data in a .dta file, which is
+    not loaded (the dataset in memory stays as it is)."""
+    from pathlib import Path
+    from ..io.dta import read_dta
+    from ..lang.words import strip_outer_quotes
+    path = Path(strip_outer_quotes(p.using.strip())).expanduser()
+    if path.suffix == "":
+        path = path.with_suffix(".dta")
+    if not path.exists():
+        raise StataError(601, f"file {path} not found")
+    saved, saved_r = s.data, s.r
+    try:
+        new = read_dta(path)
+        new.filename = path.name
+        new.changed = False
+        s.data = new
+        rest = []
+        for name in ("short", "simple", "varlist"):
+            if opts.get(name):
+                rest.append(name)
+        cmd_describe(s, (p.varlist + (", " + " ".join(rest) if rest else "")).strip())
+        saved_r = s.r
+    finally:
+        s.data = saved
+        s.r = saved_r
+
+
+def _describe_replace(s: "Session", names: list[str], clear: bool) -> None:
+    """describe, replace: the data in memory become one observation per variable (position, name,
+    type, isnumeric, format, vallab, varlab); nothing is shown or stored in r()."""
+    from ..core.dataset import Dataset, Variable, str_type_for
+    ds = s.data
+    if ds.changed and ds.nvars and not clear:
+        raise StataError(4, "no; data in memory would be lost")
+    vs = [ds.get(n) for n in names]
+
+    def text(attr: str, width_min: int = 1):
+        col = [getattr(v, attr) for v in vs]
+        return str_type_for(max([len(x.encode("utf-8")) for x in col] + [width_min])), col
+    new = Dataset()
+    new.nobs = len(vs)
+    pos = np.array([float(ds.names.index(v.name) + 1) for v in vs])
+    new.vars.append(Variable("position", "int", pos, label="Position of variable in dataset"))
+    for name, attr, label in (("name", "name", "Variable name"), ("type", "vtype", "Storage type")):
+        vtype, col = text(attr)
+        new.vars.append(Variable(name, vtype, col, label=label))
+    new.vars.append(Variable("isnumeric", "byte", np.array([0.0 if v.is_string else 1.0 for v in vs]),
+                             label="1 if numeric, 0 if string"))
+    for name, attr, label in (("format", "fmt", "Display format"), ("vallab", "value_label", "Value label name"),
+                              ("varlab", "label", "Variable label")):
+        vtype, col = text(attr)
+        new.vars.append(Variable(name, vtype, col, label=label))
+    # VERIFY: names and values of the characteristics
+    new.chars["_dta"] = {"d_filename": ds.filename or "", "d_N": str(ds.nobs),
+                         "d_sortedby": " ".join(ds.sortlist)}
+    new.changed = True
+    s.data = new
+    s.notify_state()

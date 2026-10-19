@@ -27,6 +27,19 @@
 [{cmd:,} {cmd:replace} {cmd:sheet("}{it:name}{cmd:"}[{cmd:, modify}|{cmd:replace}]{cmd:)}
 {cmd:cell(}{it:B2}{cmd:)} {cmd:firstrow(}{it:variables}|{it:varlabels}{cmd:)} {cmdab:nol:abel}]
 
+{p 8 16 2}
+{cmd:import sas} [{it:namelist}] [{it:if}] [{it:in}] {cmd:using} {it:filename} [{cmd:,} {cmd:clear} {cmd:case(}{it:preserve}|{it:lower}|{it:upper}{cmd:)}
+{cmd:bcat(}{it:filename}{cmd:)} {cmd:encoding("}{it:enc}{cmd:")}]
+
+{p 8 16 2}
+{cmd:import spss} [{it:namelist}] [{it:if}] [{it:in}] {cmd:using} {it:filename} [{cmd:,} {cmd:clear} {cmd:case()} {cmd:zsav} {cmd:encoding()}]
+
+{p 8 16 2}
+{cmd:import sasxport} {it:filename} [{cmd:,} {cmd:clear} {cmd:novallabels}]
+
+{p 8 16 2}
+{cmd:export sasxport} [{it:varlist} {cmd:using}] {it:filename} [{it:if}] [{it:in}] [{cmd:,} {cmd:replace} {cmd:vallabfile(none)}]
+
 {title:Description}
 
 {pstd}
@@ -36,4 +49,13 @@ smallest storage type that holds each column. {cmd:import excel} reads
 package; {cmd:export excel} writes {cmd:.xls} with the optional {cmd:xlwt}
 package); Excel dates become {cmd:%td} or {cmd:%tc} variables.
 The older {cmd:insheet} and {cmd:outsheet} are also available.
+{p_end}
+
+{pstd}
+{cmd:import sas}, {cmd:import spss} and {cmd:import sasxport} read through the optional {cmd:pyreadstat} package and show
+{cmd:(}{it:k}{cmd: vars,} {it:n}{cmd: obs)}; {cmd:r(N)} and {cmd:r(k)} hold the counts. Names that Stata does not accept become
+{cmd:v}{it:#} (the original name is kept in the characteristic {cmd:original_name}), whole numbers use the smallest integer type
+that holds them, and dates become {cmd:%td} or {cmd:%tc}. SPSS value labels of numeric variables are named {cmd:labels}{it:#}; SAS
+value labels come from {cmd:bcat()}. {cmd:export sasxport} writes version 5 files, whose variable names have up to 8 characters.
+Value labels in {cmd:formats.xpf}, {cmd:import sasxport, describe} and {cmd:import haver} are not available.
 {p_end}
