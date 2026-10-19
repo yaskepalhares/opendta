@@ -1,0 +1,1030 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/do/../stata/1601_epidemiology.log
+  log type:  text
+ opened on:  19 Oct 2026, 11:50:48
+
+. * Epidemiology: cs, cc and ir with pool, istandard, estandard, standard(), rd, ird,
+. * binomial(), bd and tarone; mhodds with by(); roctab with bamber, binomial and lorenz;
+. * roccomp with binormal; rocreg (nonparametric and parametric, bootstrap) (layouts, r(), e())
+. clear
+
+. input agecat smokes deaths pyears
+
+        agecat     smokes     deaths     pyears
+  1. 1 1 32 52407
+  2. 2 1 104 43248
+  3. 3 1 206 28612
+  4. 4 1 186 12663
+  5. 5 1 102 5317
+  6. 1 0 2 18790
+  7. 2 0 12 10673
+  8. 3 0 28 5710
+  9. 4 0 28 2585
+ 10. 5 0 31 1462
+ 11. end
+
+. ir deaths smokes pyears, by(agecat) level(90) istandard pool
+
+          agecat |      IRR       [90% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               1 |   5.736638      1.704271   33.61646        52407 (exact)
+               2 |   2.138812      1.274552   3.813282        43248 (exact)
+               3 |    1.46824      1.044915   2.110422        28612 (exact)
+               4 |    1.35606      .9626026   1.953505        12663 (exact)
+               5 |   .9047304      .6375194   1.305412         5317 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.719823      1.437544     2.0688              (exact)
+ Pooled (direct) |   1.355343      1.134356   1.619382
+ I. Standardized |   1.417609      1.186541   1.693676
+-------------------------------------------------------------------
+ Test of homogeneity (direct) chi2(4) =     10.20  Pr>chi2 = 0.0372
+
+. return list
+
+scalars:
+             r(chi2_p) =  10.19906234741211
+                 r(df) =  4
+             r(ub_irr) =  1.693676122705954
+             r(lb_irr) =  1.186540901923838
+                r(irr) =  1.417609253003941
+             r(ub_ird) =  .
+             r(lb_ird) =  .
+                r(ird) =  .
+                r(afp) =  .3607156584868687
+             r(ub_afe) =  .5166280502890018
+             r(lb_afe) =  .3043691374344124
+                r(afe) =  .4185446767522238
+                  r(p) =  3.78036460661e-08
+
+. ir deaths smokes pyears, by(agecat) level(90) istandard ird
+
+          agecat |      IRD       [90% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               1 |   .0005042      .0002877   .0007206        52407 
+               2 |   .0012804      .0006205   .0019403        43248 
+               3 |   .0022961      .0005628   .0040294        28612 
+               4 |   .0038567      .0000521   .0076614        12663 
+               5 |  -.0020201     -.0090201     .00498         5317 
+-----------------+-------------------------------------------------
+           Crude |   .0018537       .001342   .0023654              
+ I. Standardized |   .0013047       .000712   .0018974
+
+. return list
+
+scalars:
+             r(ub_ird) =  .0018974357992372
+             r(lb_ird) =  .0007119662720554
+                r(ird) =  .0013047010356463
+             r(ub_irr) =  .
+             r(lb_irr) =  .
+                r(irr) =  .
+                r(afp) =  .3607156584868687
+             r(ub_afe) =  .5166280502890018
+             r(lb_afe) =  .3043691374344124
+                r(afe) =  .4185446767522238
+                  r(p) =  3.78036460661e-08
+
+. gen conswgt = 1
+
+. ir deaths smokes pyears, by(agecat) standard(conswgt)
+
+          agecat |      IRR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               1 |   5.736638      1.463557   49.40468            1 (exact)
+               2 |   2.138812      1.173714   4.272545            1 (exact)
+               3 |    1.46824      .9863624   2.264107            1 (exact)
+               4 |    1.35606      .9081925   2.096412            1 (exact)
+               5 |   .9047304      .6000757   1.399687            1 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.719823      1.391992    2.14353              (exact)
+    Standardized |   1.155026      .9006199   1.481295
+
+. ir deaths smokes pyears, by(agecat) estandard
+
+          agecat |      IRR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               1 |   5.736638      1.463557   49.40468        18790 (exact)
+               2 |   2.138812      1.173714   4.272545        10673 (exact)
+               3 |    1.46824      .9863624   2.264107         5710 (exact)
+               4 |    1.35606      .9081925   2.096412         2585 (exact)
+               5 |   .9047304      .6000757   1.399687         1462 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.719823      1.391992    2.14353              (exact)
+ E. Standardized |   1.428377      1.157184   1.763125
+
+. ir deaths smokes pyears, by(agecat) pool
+
+          agecat |      IRR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               1 |   5.736638      1.463557   49.40468     1.472169 (exact)
+               2 |   2.138812      1.173714   4.272545     9.624747 (exact)
+               3 |    1.46824      .9863624   2.264107     23.34176 (exact)
+               4 |    1.35606      .9081925   2.096412     23.25315 (exact)
+               5 |   .9047304      .6000757   1.399687     24.31435 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.719823      1.391992    2.14353              (exact)
+ Pooled (direct) |   1.355343      1.096329   1.675552
+    M-H combined |   1.424682      1.154703   1.757784
+-------------------------------------------------------------------
+ Test of homogeneity (direct) chi2(4) =     10.20  Pr>chi2 = 0.0372
+ Test of homogeneity (M-H)    chi2(4) =     10.41  Pr>chi2 = 0.0340
+
+. return list
+
+scalars:
+                 r(df) =  4
+            r(chi2_mh) =  10.41165924072266
+             r(chi2_p) =  10.19906234741211
+             r(ub_irr) =  1.75778418499287
+             r(lb_irr) =  1.154703100746796
+                r(irr) =  1.424682016751439
+             r(ub_ird) =  .
+             r(lb_ird) =  .
+                r(ird) =  .
+                r(afp) =  .3607156584868687
+             r(ub_afe) =  .533479717362873
+             r(lb_afe) =  .2816050390146724
+                r(afe) =  .4185446767522238
+                  r(p) =  3.78036460661e-08
+
+. 
+. clear
+
+. input case exp age pop
+
+          case        exp        age        pop
+  1. 1 1 0 10
+  2. 1 0 0 20
+  3. 0 1 0 90
+  4. 0 0 0 80
+  5. 1 1 1 25
+  6. 1 0 1 15
+  7. 0 1 1 75
+  8. 0 0 1 85
+  9. 1 1 2 30
+ 10. 1 0 2 12
+ 11. 0 1 2 50
+ 12. 0 0 2 70
+ 13. end
+
+. cs case exp [fw=pop], by(age) istandard
+
+             age |       RR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               0 |          .5     .2466408    1.01362          100 
+               1 |    1.666667     .9359697   2.967807          100 
+               2 |      2.5625     1.414235    4.64308           80 
+-----------------+-------------------------------------------------
+           Crude |    1.392857     .9944884   1.950803              
+ I. Standardized |    1.391645     .9987153   1.939167
+
+. return list
+
+scalars:
+              r(ub_rr) =  1.939166818862171
+              r(lb_rr) =  .9987152899066853
+                 r(rr) =  1.391644908616188
+                r(afp) =  .1636904761904763
+
+. cs case exp [fw=pop], by(age) estandard pool
+
+             age |       RR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               0 |          .5     .2466408    1.01362          100 
+               1 |    1.666667     .9359697   2.967807          100 
+               2 |      2.5625     1.414235    4.64308           82 
+-----------------+-------------------------------------------------
+           Crude |    1.392857     .9944884   1.950803              
+ Pooled (direct) |    1.431243     1.001322   2.045752
+ E. Standardized |    1.398936     1.004098   1.949036
+-------------------------------------------------------------------
+Test of homogeneity (direct)   chi2(2) =   12.464  Pr>chi2 = 0.0020
+
+. return list
+
+scalars:
+             r(chi2_p) =  12.46416759490967
+                 r(df) =  2
+              r(ub_rr) =  1.949036160915882
+              r(lb_rr) =  1.004097536810157
+                 r(rr) =  1.398936170212766
+                r(afp) =  .1636904761904763
+
+. gen wgt = 1
+
+. cs case exp [fw=pop], by(age) standard(wgt) rd
+
+             age |       RD       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               0 |         -.1    -.1979982  -.0020018            1 
+               1 |          .1    -.0100027   .2100027            1 
+               2 |    .2286585     .0978661    .359451            1 
+-----------------+-------------------------------------------------
+           Crude |    .0654762    -.0003836   .1313359              
+    Standardized |    .0762195     .0105512   .1418878
+
+. return list
+
+scalars:
+              r(ub_rd) =  .1418877989802056
+              r(lb_rd) =  .0105512254100384
+                 r(rd) =  .076219512195122
+                r(afp) =  .1636904761904763
+
+. cc case exp [fw=pop], by(age) bd
+
+             age |       OR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1754537    1.06988            9 (exact)
+               1 |   1.888889      .8792698   4.148725        5.625 (exact)
+               2 |        3.5      1.547331   8.213879     3.703704 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.511628      .9748253   2.352836              (exact)
+    M-H combined |   1.505178      .9947449    2.27753              
+-------------------------------------------------------------------
+Test of homogeneity (M-H)      chi2(2) =    13.68  Pr>chi2 = 0.0011
+Test of homogeneity (B-D)      chi2(2) =    14.50  Pr>chi2 = 0.0007
+
+                   Test that combined OR = 1:
+                                Mantel-Haenszel chi2(1) =      3.85
+                                                Pr>chi2 =    0.0498
+
+. return list
+
+scalars:
+              r(ub_or) =  2.277529701760356
+              r(lb_or) =  .9947448924714402
+                 r(or) =  1.505178075271533
+              r(df_bd) =  2
+            r(chi2_bd) =  14.50109980530543
+             r(chi2_p) =  13.67957878112793
+                 r(df) =  2
+               r(chi2) =  3.849379507272697
+                r(afp) =  .1964285714285714
+
+. cc case exp [fw=pop], by(age) tb tarone
+
+             age |       OR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1987815   .9937084            9 (tb)
+               1 |   1.888889        .93154   3.830111        5.625 (tb)
+               2 |        3.5      1.666915   7.348905     3.703704 (tb)
+-----------------+-------------------------------------------------
+           Crude |   1.511628      .9959976   2.294201              (tb)
+    M-H combined |   1.505178      1.000421   2.264608              (tb)
+-------------------------------------------------------------------
+Test of homogeneity (M-H)      chi2(2) =    13.68  Pr>chi2 = 0.0011
+Test of homogeneity (Tarone)   chi2(2) =    14.50  Pr>chi2 = 0.0007
+
+                   Test that combined OR = 1:
+                                Mantel-Haenszel chi2(1) =      3.85
+                                                Pr>chi2 =    0.0498
+
+. return list
+
+scalars:
+              r(ub_or) =  2.264607629661148
+              r(lb_or) =  1.000421003888038
+                 r(or) =  1.505178075271533
+               r(df_t) =  2
+             r(chi2_t) =  14.49793897871487
+             r(chi2_p) =  13.67957878112793
+                 r(df) =  2
+               r(chi2) =  3.849379507272697
+                r(afp) =  .1964285714285714
+
+. cc case exp [fw=pop], by(age) istandard pool
+
+             age |       OR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1754537    1.06988           90 (exact)
+               1 |   1.888889      .8792698   4.148725           75 (exact)
+               2 |        3.5      1.547331   8.213879           50 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.511628      .9748253   2.352836              (exact)
+ Pooled (direct) |   1.526981      .9848609   2.367514
+ I. Standardized |   1.467046      .9235302   2.330432              
+-------------------------------------------------------------------
+Test of homogeneity (direct)   chi2(2) =    13.68  Pr>chi2 = 0.0011
+
+. return list
+
+scalars:
+              r(ub_or) =  2.330431608141295
+              r(lb_or) =  .9235301903390467
+                 r(or) =  1.467045993361783
+             r(chi2_p) =  13.67544746398926
+                 r(df) =  2
+               r(chi2) =  .
+                r(afp) =  .1964285714285714
+
+. cc case exp [fw=pop], by(age) estandard
+
+             age |       OR       [95% Conf. Interval]       Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1754537    1.06988           80 (exact)
+               1 |   1.888889      .8792698   4.148725           85 (exact)
+               2 |        3.5      1.547331   8.213879           70 (exact)
+-----------------+-------------------------------------------------
+           Crude |   1.511628      .9748253   2.352836              (exact)
+ E. Standardized |   1.685579      1.036848   2.740206              
+
+. return list
+
+scalars:
+              r(ub_or) =  2.740205997680605
+              r(lb_or) =  1.036848043222324
+                 r(or) =  1.685579196217494
+               r(chi2) =  .
+                r(afp) =  .1964285714285714
+
+. cc case exp [fw=pop], by(age) pool woolf
+
+             age |       OR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1964039   1.005738            9 (Woolf)
+               1 |   1.888889      .9273107   3.847579        5.625 (Woolf)
+               2 |        3.5      1.634384   7.495177     3.703704 (Woolf)
+-----------------+-------------------------------------------------
+           Crude |   1.511628      .9948152   2.296928              (Woolf)
+ Pooled (direct) |   1.526981      .9848609   2.367514
+    M-H combined |   1.505178      .9947449    2.27753              
+-------------------------------------------------------------------
+Test of homogeneity (direct)   chi2(2) =    13.68  Pr>chi2 = 0.0011
+Test of homogeneity (M-H)      chi2(2) =    13.68  Pr>chi2 = 0.0011
+
+                   Test that combined OR = 1:
+                                Mantel-Haenszel chi2(1) =      3.85
+                                                Pr>chi2 =    0.0498
+
+. return list
+
+scalars:
+              r(ub_or) =  2.277529701760356
+              r(lb_or) =  .9947448924714402
+                 r(or) =  1.505178075271533
+             r(chi2_p) =  13.67957878112793
+                 r(df) =  2
+               r(chi2) =  3.849379507272697
+                r(afp) =  .1964285714285714
+
+. mhodds case exp [fw=pop], by(age)
+
+Maximum likelihood estimate of the odds ratio
+Comparing exp==1 vs. exp==0
+by age
+
+-------------------------------------------------------------------------------
+      age | Odds Ratio        chi2(1)         P>chi2       [95% Conf. Interval]
+----------+--------------------------------------------------------------------
+        0 |   0.444444           3.90         0.0482         0.19441    1.01604
+        1 |   1.888889           3.11         0.0778         0.92045    3.87625
+        2 |   3.500000          10.96         0.0009         1.58646    7.72158
+-------------------------------------------------------------------------------
+
+    Mantel-Haenszel estimate controlling for age
+    ----------------------------------------------------------------
+     Odds Ratio    chi2(1)        P>chi2        [95% Conf. Interval]
+    ----------------------------------------------------------------
+       1.505178       3.85        0.0498         0.997572   2.271075
+    ----------------------------------------------------------------
+
+Test of homogeneity of ORs (approx): chi2(2)   =   14.47
+                                     Pr>chi2   =  0.0007
+
+. return list
+
+scalars:
+                 r(or) =  1.505178075271533
+              r(lb_or) =  .9975719551096913
+              r(ub_or) =  2.271075311082698
+               r(chi2) =  3.849379507272695
+                  r(p) =  .0497643977799071
+             r(df_hom) =  2
+           r(chi2_hom) =  14.47002206165807
+
+. capture noisily cs case exp [fw=pop], pool
+
+                 | exp                    |
+                 |   Exposed   Unexposed  |      Total
+-----------------+------------------------+------------
+           Cases |        65          47  |        112
+        Noncases |       215         235  |        450
+-----------------+------------------------+------------
+           Total |       280         282  |        562
+                 |                        |
+            Risk |  .2321429    .1666667  |   .1992883
+                 |                        |
+                 |      Point estimate    |    [95% Conf. Interval]
+                 |------------------------+------------------------
+ Risk difference |         .0654762       |   -.0003836    .1313359 
+      Risk ratio |         1.392857       |    .9944884    1.950803 
+ Attr. frac. ex. |         .2820513       |   -.0055422    .4873906 
+ Attr. frac. pop |         .1636905       |
+                 +-------------------------------------------------
+                               chi2(1) =     3.77  Pr>chi2 = 0.0520
+
+. capture noisily cs case exp [fw=pop], by(age) rd
+invalid syntax
+
+. capture noisily csi 10 20 90 80, istandard
+option istandard not allowed
+
+. 
+. * binomial frequency records
+. clear
+
+. input cases n exp age
+
+         cases          n        exp        age
+  1. 10 100 1 0
+  2. 20 100 0 0
+  3. 25 100 1 1
+  4. 15 100 0 1
+  5. end
+
+. cs cases exp, binomial(n)
+
+                 | exp                    |
+                 |   Exposed   Unexposed  |      Total
+-----------------+------------------------+------------
+           Cases |        35          35  |         70
+        Noncases |       165         165  |        330
+-----------------+------------------------+------------
+           Total |       200         200  |        400
+                 |                        |
+            Risk |      .175        .175  |       .175
+                 |                        |
+                 |      Point estimate    |    [95% Conf. Interval]
+                 |------------------------+------------------------
+ Risk difference |                0       |   -.0744722    .0744722 
+      Risk ratio |                1       |    .6534068     1.53044 
+ Attr. frac. ex. |                0       |   -.5304401    .3465932 
+ Attr. frac. pop |                0       |
+                 +-------------------------------------------------
+                               chi2(1) =     0.00  Pr>chi2 = 1.0000
+
+. return list
+
+scalars:
+                r(afp) =  0
+             r(ub_afe) =  .3465931762872866
+             r(lb_afe) =  -.5304400929239064
+                r(afe) =  0
+              r(ub_rr) =  1.530440092923907
+              r(lb_rr) =  .6534068237127136
+                 r(rr) =  1
+              r(ub_rd) =  .0744721838834954
+              r(lb_rd) =  -.0744721838834954
+                 r(rd) =  0
+                  r(p) =  1
+               r(chi2) =  0
+
+. cs cases exp, by(age) binomial(n)
+
+             age |       RR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               0 |          .5     .2466408    1.01362           10 
+               1 |    1.666667     .9359697   2.967807          7.5 
+-----------------+-------------------------------------------------
+           Crude |           1     .6534068    1.53044              
+    M-H combined |           1     .6516095   1.534661
+-------------------------------------------------------------------
+Test of homogeneity (M-H)      chi2(1) =    6.707  Pr>chi2 = 0.0096
+
+. cc cases exp, by(age) binomial(n)
+
+             age |       OR       [95% Conf. Interval]   M-H Weight
+-----------------+-------------------------------------------------
+               0 |   .4444444      .1754537    1.06988            9 (exact)
+               1 |   1.888889      .8792698   4.148725        5.625 (exact)
+-----------------+-------------------------------------------------
+           Crude |          1      .5772343   1.732258              (exact)
+    M-H combined |          1      .5989918   1.669472              
+-------------------------------------------------------------------
+Test of homogeneity (M-H)      chi2(1) =     6.86  Pr>chi2 = 0.0088
+
+                   Test that combined OR = 1:
+                                Mantel-Haenszel chi2(1) =      0.00
+                                                Pr>chi2 =    1.0000
+
+. 
+. * tabodds/mhodds data with a three-level exposure
+. clear
+
+. input case alc age pop
+
+          case        alc        age        pop
+  1. 1 1 1 2
+  2. 0 1 1 60
+  3. 1 2 1 4
+  4. 0 2 1 40
+  5. 1 3 1 8
+  6. 0 3 1 20
+  7. 1 1 2 10
+  8. 0 1 2 50
+  9. 1 2 2 15
+ 10. 0 2 2 30
+ 11. 1 3 2 25
+ 12. 0 3 2 15
+ 13. end
+
+. mhodds case alc [fw=pop], by(age)
+
+Score test for trend of odds with alc
+by age
+
+(The Odds Ratio estimate is an approximation to the odds ratio 
+for a one unit increase in alc)
+
+-------------------------------------------------------------------------------
+      age | Odds Ratio        chi2(1)         P>chi2       [95% Conf. Interval]
+----------+--------------------------------------------------------------------
+        1 |   3.473950          11.90         0.0006         1.71193    7.04954
+        2 |   2.690782          21.67         0.0000         1.77378    4.08184
+-------------------------------------------------------------------------------
+
+    Mantel-Haenszel estimate controlling for age
+    ----------------------------------------------------------------
+     Odds Ratio    chi2(1)        P>chi2        [95% Conf. Interval]
+    ----------------------------------------------------------------
+       2.873717      33.20        0.0000         2.006760   4.115215
+    ----------------------------------------------------------------
+
+Test of homogeneity of ORs (approx): chi2(1)   =    0.37
+                                     Pr>chi2   =  0.5421
+
+. return list
+
+scalars:
+                 r(or) =  2.873716560334259
+              r(lb_or) =  2.006759669905224
+              r(ub_or) =  4.115214688129241
+               r(chi2) =  33.19753703266908
+                  r(p) =  8.32559191885e-09
+             r(df_hom) =  1
+           r(chi2_hom) =  .3717000733020228
+
+. mhodds case alc [fw=pop], compare(3,1) by(age)
+
+Maximum likelihood estimate of the odds ratio
+Comparing alc==3 vs. alc==1
+by age
+
+-------------------------------------------------------------------------------
+      age | Odds Ratio        chi2(1)         P>chi2       [95% Conf. Interval]
+----------+--------------------------------------------------------------------
+        1 |  12.000000          12.41         0.0004         2.05026   70.23514
+        2 |   8.333333          21.94         0.0000         2.87853   24.12494
+-------------------------------------------------------------------------------
+
+    Mantel-Haenszel estimate controlling for age
+    ----------------------------------------------------------------
+     Odds Ratio    chi2(1)        P>chi2        [95% Conf. Interval]
+    ----------------------------------------------------------------
+       9.171429      33.92        0.0000         3.699250  22.738422
+    ----------------------------------------------------------------
+
+Test of homogeneity of ORs (approx): chi2(1)   =    0.12
+                                     Pr>chi2   =  0.7283
+
+. 
+. * ROC: Hanley and McNeil (1982) ratings
+. clear
+
+. input disease rating pop
+
+       disease     rating        pop
+  1. 0 1 33
+  2. 0 2 6
+  3. 0 3 6
+  4. 0 4 11
+  5. 0 5 2
+  6. 1 1 3
+  7. 1 2 2
+  8. 1 3 2
+  9. 1 4 11
+ 10. 1 5 33
+ 11. end
+
+. roctab disease rating [fw=pop], bamber
+
+                      ROC      Bamber        -Asymptotic Normal--
+           Obs       Area     Std. Err.      [95% Conf. Interval]
+     ------------------------------------------------------------
+           109     0.8932       0.0306        0.83317     0.95317
+
+. return list
+
+scalars:
+                  r(N) =  109
+               r(area) =  .8931710672658629
+                 r(se) =  .0306113265511486
+                 r(lb) =  .8331739697066169
+                 r(ub) =  .9531681648251089
+
+. roctab disease rating [fw=pop], binomial
+
+                      ROC                    -- Binomial Exact --
+           Obs       Area     Std. Err.      [95% Conf. Interval]
+     ------------------------------------------------------------
+           109     0.8932       0.0307        0.81559     0.94180
+
+. roctab disease rating [fw=pop], hanley binomial
+
+                      ROC      Hanley        -- Binomial Exact --
+           Obs       Area     Std. Err.      [95% Conf. Interval]
+     ------------------------------------------------------------
+           109     0.8932       0.0320        0.81559     0.94180
+
+. return list
+
+scalars:
+                  r(N) =  109
+               r(area) =  .8931710672658629
+                 r(se) =  .0319904000925109
+                 r(lb) =  .8155873247221299
+                 r(ub) =  .9418038694755406
+
+. roctab disease rating [fw=pop], lorenz
+
+ Lorenz curve 
+---------------------------
+  Pietra index =   0.6386
+  Gini index   =   0.7863
+
+. return list
+
+scalars:
+             r(pietra) =  .6386071890592575
+               r(gini) =  .7863421057054347
+
+. expand pop
+(99 observations created)
+
+. * male before roccomp: Stata's roccomp, by() may reorder the data (compat 1601)
+. gen male = mod(_n, 2)
+
+. set seed 1601
+
+. gen r2 = rating + (disease==1)*(runiform()<.3)
+
+. gen grp = runiform() < .5
+
+. roccomp disease rating r2, binormal
+Fitting binormal model for: rating
+Fitting binormal model for: r2
+
+                              ROC
+                   Obs       Area     Std. Err.      [95% Conf. Interval]
+-------------------------------------------------------------------------
+rating             109     0.9113       0.0295        0.85350     0.96916
+r2                 109     0.9230       0.0269        0.87015     0.97577
+-------------------------------------------------------------------------
+Ho: area(rating) = area(r2)
+    chi2(1) =     2.09       Prob>chi2 =   0.1483
+
+. return list
+
+scalars:
+                r(N_g) =  2
+               r(chi2) =  2.090126718366225
+                 r(df) =  1
+                  r(p) =  .1482537727276442
+
+matrices:
+                  r(V) :  2 x 2
+
+. roccomp disease rating, by(grp) binormal
+Fitting binormal model for: grp==0
+Fitting binormal model for: grp==1
+
+                              ROC
+grp                Obs       Area     Std. Err.      [95% Conf. Interval]
+-------------------------------------------------------------------------
+0                   54     0.8689       0.0506        0.76961     0.96814
+1                   55     0.9439       0.0365        0.87248     1.01541
+-------------------------------------------------------------------------
+Ho: area(0) = area(1)
+    chi2(1) =     1.45       Prob>chi2 =   0.2290
+
+. 
+. * rocreg: the bootstrap replicates depend on Stata's resampling order (VERIFY)
+. rocreg disease rating r2, nobootstrap
+
+Nonparametric ROC estimation                    Number of obs     =        109
+
+Control standardization: empirical
+ROC method             : empirical
+
+Area under the ROC curve
+
+   Status    : disease
+   Classifier: rating
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8407708          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8698445          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+              e(level) =  95
+                  e(N) =  109
+
+macros:
+              e(title) : "Nonparametric ROC estimation"
+        e(nobootstrap) : "nobootstrap"
+            e(cmdline) : "rocreg disease rating r2, nobootstrap"
+             e(refvar) : "disease"
+          e(classvars) : "rating r2"
+                e(cmd) : "rocreg"
+                e(pvc) : "empirical"
+                e(auc) : "auc"
+                 e(np) : "2"
+         e(properties) : "b"
+
+matrices:
+                  e(b) :  1 x 2
+
+functions:
+             e(sample)   
+
+. rocreg disease rating, tiecorrected nobootstrap
+
+Nonparametric ROC estimation                    Number of obs     =        109
+
+Control standardization: empirical, corrected for ties
+ROC method             : empirical
+
+Area under the ROC curve
+
+   Status    : disease
+   Classifier: rating
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8931711          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+. rocreg disease r2, ctrlcov(male) auc roc(.2 .4) invroc(.8) pauc(.3) nobootstrap
+
+Nonparametric ROC estimation                    Number of obs     =        109
+
+Covariate control      : stratification
+Control variables      : male
+Control standardization: empirical
+ROC method             : empirical
+
+ROC curve
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         ROC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          .2 |    .7058824          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+          .4 |    .9019608          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+False-positive rate
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+      invROC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          .8 |    .2333333          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+Partial area under the ROC curve
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+        pAUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          .3 |    .2054155          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+Area under the ROC curve
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |     .869141          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+. rocreg disease r2, ctrlcov(male) ctrlmodel(linear) pvc(normal) nobootstrap
+
+Nonparametric ROC estimation                    Number of obs     =        109
+
+Covariate control      : linear regression
+Control variables      : male
+Control standardization: normal
+ROC method             : empirical
+
+Status    : disease
+Classifier: r2
+Covariate control adjustment model:
+
+      Source |       SS           df       MS      Number of obs   =        58
+-------------+----------------------------------   F(1, 56)        =      0.08
+       Model |   .15180624         1   .15180624   Prob > F        =    0.7726
+    Residual |  100.830952        56  1.80055272   R-squared       =    0.0015
+-------------+----------------------------------   Adj R-squared   =   -0.0163
+       Total |  100.982759        57  1.77162734   Root MSE        =    1.3418
+
+------------------------------------------------------------------------------
+          r2 |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        male |    .102381   .3525959     0.29   0.773    -.6039535    .8087154
+       _cons |   1.964286   .2535852     7.75   0.000     1.456294    2.472278
+------------------------------------------------------------------------------
+
+Area under the ROC curve
+
+   Status    : disease
+   Classifier: r2
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .9130147          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+. rocreg disease r2, probit nobootstrap
+
+Parametric ROC estimation                       Number of obs     =        109
+
+Control standardization: empirical
+ROC method             : parametric             Link: probit
+
+   Status    : disease
+   Classifier: r2
+   ROC Model : 
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+          r2 |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _cons |    1.396521          .           .            .          .
+-------------+----------------------------------------------------------------
+      probit |
+-------------+----------------------------------------------------------------
+       _cons |    .6284856          .           .            .          .
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8814748          .           .            .          .  (N)
+             |                                               .          .  (P)
+             |                                               .          . (BC)
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  109
+
+macros:
+              e(title) : "Parametric ROC estimation"
+        e(nobootstrap) : "nobootstrap"
+            e(cmdline) : "rocreg disease r2, probit nobootstrap"
+             e(refvar) : "disease"
+          e(classvars) : "r2"
+                e(cmd) : "rocreg"
+                e(pvc) : "empirical"
+             e(fprpts) : "10"
+            e(predict) : "rocreg_p"
+             e(probit) : "probit"
+                 e(np) : "3"
+         e(properties) : "b"
+
+matrices:
+                  e(b) :  1 x 3
+
+functions:
+             e(sample)   
+
+. rocreg disease r2, probit roccov(male) fprpts(5) nobootstrap
+
+Parametric ROC estimation                       Number of obs     =        109
+
+Control standardization: empirical
+ROC method             : parametric             Link: probit
+
+   Status    : disease
+   Classifier: r2
+   ROC Model : 
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+          r2 |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _cons |     1.25147          .           .            .          .
+        male |    .4426283          .           .            .          .
+-------------+----------------------------------------------------------------
+      probit |
+-------------+----------------------------------------------------------------
+       _cons |    .7878371          .           .            .          .
+------------------------------------------------------------------------------
+
+. rocreg disease rating, breps(50) bseed(1601) nodots
+
+Bootstrap results                               Number of obs     =        109
+                                                Replications      =         50
+
+Nonparametric ROC estimation
+
+Control standardization: empirical
+ROC method             : empirical
+
+Area under the ROC curve
+
+   Status    : disease
+   Classifier: rating
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8407708  -.0080875    .0472122     .7482367   .9333049  (N)
+             |                                        .7208754   .9094915  (P)
+             |                                        .7208754   .9094915 (BC)
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  109
+               e(rank) =  1
+              e(level) =  95
+
+macros:
+         e(properties) : "b V"
+               e(exp1) : "[rating]_b[auc]"
+           e(rngstate) : "XAA000000000000064158880f4bf2f0586e6e7d75865cb99c850fa8b651aa19ff37255b914eab3125afefb8384f5c3070c8b5209e0c269f88b59fee1ae7d560d1323212327f8abb9578ce133be410f7ce2169a8c0e8fc9c1a04e0c933bb79420deceea887b425a1040f82ed135c694baa.."
+                e(vce) : "bootstrap"
+                e(auc) : "auc"
+                e(pvc) : "empirical"
+            e(cmdline) : "rocreg disease rating, breps(50) bseed(1601) nodots"
+          e(classvars) : "rating"
+             e(refvar) : "disease"
+              e(breps) : "50"
+                e(cmd) : "rocreg"
+              e(title) : "Nonparametric ROC estimation"
+
+matrices:
+                  e(b) :  1 x 1
+                  e(V) :  1 x 1
+              e(ci_bc) :  2 x 1
+      e(ci_percentile) :  2 x 1
+          e(ci_normal) :  2 x 1
+                 e(se) :  1 x 1
+                 e(z0) :  1 x 1
+               e(bias) :  1 x 1
+               e(reps) :  1 x 1
+               e(b_bs) :  1 x 1
+
+functions:
+             e(sample)   
+
+. 
+end of do-file

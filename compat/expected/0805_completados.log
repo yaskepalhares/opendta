@@ -1,0 +1,803 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/do/../stata/0805_completados.log
+  log type:  text
+ opened on:  19 Oct 2026, 11:59:28
+
+. * Pieces completed for 1.0: anova (sequential, nested terms, error terms, repeated measures),
+. * xtgee and the pa estimator, xtreg be and mle, two-way tabulate summarize(), misstable
+. * tree/nested, two-sample prtest, reshape advanced syntax and reshape error,
+. * old merge syntax, sort in and list sepby()
+. clear
+
+. input person drug score
+
+        person       drug      score
+  1. 1 1 30
+  2. 1 2 28
+  3. 1 3 16
+  4. 1 4 34
+  5. 2 1 14
+  6. 2 2 18
+  7. 2 3 10
+  8. 2 4 22
+  9. 3 1 24
+ 10. 3 2 20
+ 11. 3 3 18
+ 12. 3 4 30
+ 13. 4 1 38
+ 14. 4 2 34
+ 15. 4 3 20
+ 16. 4 4 44
+ 17. 5 1 26
+ 18. 5 2 28
+ 19. 5 3 14
+ 20. 5 4 30
+ 21. end
+
+. anova score person drug, repeated(drug)
+
+                         Number of obs =         20    R-squared     =  0.9244
+                         Root MSE      =    3.06594    Adj R-squared =  0.8803
+
+                  Source | Partial SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |       1379          7         197     20.96  0.0000
+                         |
+                  person |      680.8          4       170.2     18.11  0.0001
+                    drug |      698.2          3   232.73333     24.76  0.0000
+                         |
+                Residual |      112.8         12         9.4  
+              -----------+----------------------------------------------------
+                   Total |     1491.8         19   78.515789  
+
+
+Between-subjects error term:  person
+                     Levels:  5         (4 df)
+     Lowest b.s.e. variable:  person
+
+Repeated variable: drug
+                                          Huynh-Feldt epsilon        =  1.0789
+                                          *Huynh-Feldt epsilon reset to 1.0000
+                                          Greenhouse-Geisser epsilon =  0.6049
+                                          Box's conservative epsilon =  0.3333
+
+                                            ------------ Prob > F ------------
+                  Source |     df      F    Regular    H-F      G-G      Box
+              -----------+----------------------------------------------------
+                    drug |      3    24.76   0.0000   0.0000   0.0006   0.0076
+                Residual |     12
+              ----------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  20
+               e(df_m) =  7
+               e(df_r) =  12
+                  e(F) =  20.95744680851062
+                 e(r2) =  .9243866470036197
+               e(rmse) =  3.065941943351179
+                e(mss) =  1379
+                e(rss) =  112.8000000000001
+               e(r2_a) =  .8802788577557312
+                 e(ll) =  -45.67761131919313
+               e(ll_0) =  -71.49883516376417
+               e(box1) =  .3333333333333333
+                e(gg1) =  .6048740416210279
+                e(hf1) =  1.078853944785526
+              e(N_bse) =  5
+             e(df_bse) =  4
+               e(rank) =  8
+               e(ss_1) =  680.7999999999998
+               e(df_1) =  4
+                e(F_1) =  18.10638297872339
+                e(F_2) =  24.75886524822694
+               e(df_2) =  3
+               e(ss_2) =  698.2
+
+macros:
+            e(cmdline) : "anova score person drug, repeated(drug)"
+             e(depvar) : "score"
+                e(cmd) : "anova"
+           e(varnames) : "person drug"
+          e(estat_cmd) : "anova_estat"
+             e(term_2) : "drug"
+             e(term_1) : "person"
+             e(sstype) : "partial"
+            e(repvars) : "drug"
+            e(repvar1) : "drug"
+         e(properties) : "b V"
+            e(predict) : "regres_p"
+              e(model) : "ols"
+
+matrices:
+                  e(b) :  1 x 10
+                  e(V) :  10 x 10
+               e(Srep) :  4 x 4
+
+functions:
+             e(sample)   
+
+. anova score drug person, sequential
+
+                         Number of obs =         20    R-squared     =  0.9244
+                         Root MSE      =    3.06594    Adj R-squared =  0.8803
+
+                  Source |    Seq. SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |       1379          7         197     20.96  0.0000
+                         |
+                    drug |      698.2          3   232.73333     24.76  0.0000
+                  person |      680.8          4       170.2     18.11  0.0001
+                         |
+                Residual |      112.8         12         9.4  
+              -----------+----------------------------------------------------
+                   Total |     1491.8         19   78.515789  
+
+. gen g = person > 3
+
+. anova score g / person|g drug g#drug, repeated(drug)
+
+                         Number of obs =         20    R-squared     =  0.9507
+                         Root MSE      =    2.85774    Adj R-squared =  0.8960
+
+                  Source | Partial SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |     1418.3         10      141.83     17.37  0.0001
+                         |
+                       g |      252.3          1       252.3      1.77  0.2759
+                person|g |      428.5          3   142.83333  
+              -----------+----------------------------------------------------
+                    drug |      727.3          3   242.43333     29.69  0.0001
+                  g#drug |       39.3          3        13.1      1.60  0.2559
+                         |
+                Residual |       73.5          9   8.1666667  
+              -----------+----------------------------------------------------
+                   Total |     1491.8         19   78.515789  
+
+
+Between-subjects error term:  person|g
+                     Levels:  5         (3 df)
+     Lowest b.s.e. variable:  person
+     Covariance pooled over:  g         (for repeated variable)
+
+Repeated variable: drug
+                                          Huynh-Feldt epsilon        =  2.9085
+                                          *Huynh-Feldt epsilon reset to 1.0000
+                                          Greenhouse-Geisser epsilon =  0.6843
+                                          Box's conservative epsilon =  0.3333
+
+                                            ------------ Prob > F ------------
+                  Source |     df      F    Regular    H-F      G-G      Box
+              -----------+----------------------------------------------------
+                    drug |      3    29.69   0.0001   0.0001   0.0007   0.0121
+                  g#drug |      3     1.60   0.2559   0.2559   0.2755   0.2947
+                Residual |      9
+              ----------------------------------------------------------------
+
+. anova score g / person|g /
+
+                         Number of obs =         20    R-squared     =  0.4564
+                         Root MSE      =      7.353    Adj R-squared =  0.3114
+
+                  Source | Partial SS         df         MS        F    Prob>F
+              -----------+----------------------------------------------------
+                   Model |      680.8          4       170.2      3.15  0.0458
+                         |
+                       g |      252.3          1       252.3      1.77  0.2759
+                person|g |      428.5          3   142.83333  
+              -----------+----------------------------------------------------
+                person|g |      428.5          3   142.83333      2.64  0.0873
+                         |
+                Residual |        811         15   54.066667  
+              -----------+----------------------------------------------------
+                   Total |     1491.8         19   78.515789  
+
+. tabulate g drug, summarize(score)
+
+            Means, Standard Deviations and Frequencies of score
+
+           |                  drug
+         g |         1          2          3          4 |     Total
+-----------+--------------------------------------------+----------
+         0 | 22.666667         22  14.666667  28.666667 |        22
+           | 8.0829038  5.2915026   4.163332  6.1101009 | 7.3360876
+           |         3          3          3          3 |        12
+-----------+--------------------------------------------+----------
+         1 |        32         31         17         37 |     29.25
+           | 8.4852814  4.2426407  4.2426407  9.8994949 |  9.617692
+           |         2          2          2          2 |         8
+-----------+--------------------------------------------+----------
+     Total |      26.4       25.6       15.6         32 |      24.9
+           | 8.7635609  6.5421709  3.8470768          8 | 8.8609136
+           |         5          5          5          5 |        20
+
+. tabulate g drug, summarize(score) means
+
+                              Means of score
+
+           |                  drug
+         g |         1          2          3          4 |     Total
+-----------+--------------------------------------------+----------
+         0 | 22.666667         22  14.666667  28.666667 |        22
+         1 |        32         31         17         37 |     29.25
+-----------+--------------------------------------------+----------
+     Total |      26.4       25.6       15.6         32 |      24.9
+
+. 
+. clear
+
+. set seed 805
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen id = ceil(_n/5)
+
+. gen t = mod(_n-1, 5) + 1
+
+. xtset id t
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 5
+                delta:  1 unit
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen u = (mod(id, 7) - 3)/3
+
+. gen y = 1 + .5*x + u + round(invnormal(runiform()), .01)
+
+. gen yb = runiform() < invlogit(-.3 + .8*x + u)
+
+. gen yc = floor(exp(.2 + .3*x + .5*u) * runiform()*2)
+
+. xtgee y x
+
+Iteration 1: tolerance = .01223339
+Iteration 2: tolerance = .00001469
+Iteration 3: tolerance = 1.619e-08
+
+GEE population-averaged model                   Number of obs     =        200
+Group variable:                         id      Number of groups  =         40
+Link:                             identity      Obs per group:
+Family:                           Gaussian                    min =          5
+Correlation:                  exchangeable                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      55.12
+Scale parameter:                  1.334219      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .579043   .0779945     7.42   0.000     .4261767    .7319094
+       _cons |   1.077692    .122014     8.83   0.000      .838549    1.316835
+------------------------------------------------------------------------------
+
+. xtgee y x, corr(ar 1)
+
+Iteration 1: tolerance = .00128281
+Iteration 2: tolerance = 1.950e-07
+
+GEE population-averaged model                   Number of obs     =        200
+Group and time vars:                  id t      Number of groups  =         40
+Link:                             identity      Obs per group:
+Family:                           Gaussian                    min =          5
+Correlation:                         AR(1)                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      47.50
+Scale parameter:                  1.333894      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5589786   .0811085     6.89   0.000     .4000088    .7179483
+       _cons |   1.081679   .0992087    10.90   0.000     .8872333    1.276124
+------------------------------------------------------------------------------
+
+. xtgee y x, corr(independent) vce(robust)
+
+Iteration 1: tolerance = 4.270e-16
+
+GEE population-averaged model                   Number of obs     =        200
+Group variable:                         id      Number of groups  =         40
+Link:                             identity      Obs per group:
+Family:                           Gaussian                    min =          5
+Correlation:                   independent                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      39.08
+Scale parameter:                  1.333886      Prob > chi2       =     0.0000
+
+Pearson chi2(200):                  266.78      Deviance          =     266.78
+Dispersion (Pearson):             1.333886      Dispersion        =   1.333886
+
+                                     (Std. Err. adjusted for clustering on id)
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5599365   .0895736     6.25   0.000     .3843754    .7354976
+       _cons |   1.079011   .1239057     8.71   0.000     .8361608    1.321862
+------------------------------------------------------------------------------
+
+. xtreg y x, pa
+
+Iteration 1: tolerance = .01223339
+Iteration 2: tolerance = .00001469
+Iteration 3: tolerance = 1.619e-08
+
+GEE population-averaged model                   Number of obs     =        200
+Group variable:                         id      Number of groups  =         40
+Link:                             identity      Obs per group:
+Family:                           Gaussian                    min =          5
+Correlation:                  exchangeable                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      55.12
+Scale parameter:                  1.334219      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .579043   .0779945     7.42   0.000     .4261767    .7319094
+       _cons |   1.077692    .122014     8.83   0.000      .838549    1.316835
+------------------------------------------------------------------------------
+
+. xtlogit yb x, pa
+
+Iteration 1: tolerance = .02994554
+Iteration 2: tolerance = .00084889
+Iteration 3: tolerance = 8.840e-06
+Iteration 4: tolerance = 1.383e-07
+
+GEE population-averaged model                   Number of obs     =        200
+Group variable:                         id      Number of groups  =         40
+Link:                                logit      Obs per group:
+Family:                           binomial                    min =          5
+Correlation:                  exchangeable                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      11.67
+Scale parameter:                         1      Prob > chi2       =     0.0006
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5345964   .1564768     3.42   0.001     .2279075    .8412854
+       _cons |  -.2118434   .1844615    -1.15   0.251    -.5733814    .1496945
+------------------------------------------------------------------------------
+
+. xtpoisson yc x, pa vce(robust)
+
+Iteration 1: tolerance = .01667893
+Iteration 2: tolerance = .00041751
+Iteration 3: tolerance = .00001233
+Iteration 4: tolerance = 2.379e-07
+
+GEE population-averaged model                   Number of obs     =        200
+Group variable:                         id      Number of groups  =         40
+Link:                                  log      Obs per group:
+Family:                            Poisson                    min =          5
+Correlation:                  exchangeable                    avg =        5.0
+                                                              max =          5
+                                                Wald chi2(1)      =      55.57
+Scale parameter:                         1      Prob > chi2       =     0.0000
+
+                                     (Std. Err. adjusted for clustering on id)
+------------------------------------------------------------------------------
+             |               Robust
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4542115   .0609286     7.45   0.000     .3347936    .5736294
+       _cons |  -.1877701   .1300107    -1.44   0.149    -.4425864    .0670463
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(df_m) =  1
+               e(chi2) =  55.57425599980808
+                  e(p) =  8.99945063648e-14
+            e(df_pear) =  200
+                  e(N) =  200
+                e(N_g) =  40
+              e(g_max) =  5
+              e(g_min) =  5
+              e(g_avg) =  5
+                e(tol) =  1.00000000000e-06
+                e(dif) =  2.37913135349e-07
+                e(phi) =  1
+           e(deviance) =  238.4747377502687
+            e(dispers) =  1.192373688751344
+           e(chi2_dev) =  212.0822198143331
+           e(chi2_dis) =  1.060411099071665
+                 e(rc) =  0
+               e(rank) =  2
+
+macros:
+            e(cmdline) : "xtpoisson yc x, pa vce(robust)"
+               e(cmd2) : "xtpoisson"
+            e(predict) : "xtpoisson_pa_p"
+             e(depvar) : "yc"
+                e(cmd) : "xtgee"
+       e(marginsnotok) : "SCore STDP"
+               e(link) : "log"
+               e(corr) : "exchangeable"
+             e(family) : "Poisson"
+               e(ivar) : "id"
+              e(model) : "pa"
+              e(scale) : "1"
+                e(vce) : "robust"
+            e(vcetype) : "Robust"
+           e(chi2type) : "Wald"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+                  e(R) :  5 x 5
+       e(V_modelbased) :  2 x 2
+
+functions:
+             e(sample)   
+
+. xtreg y x, be
+
+Between regression (regression on group means)  Number of obs     =        200
+Group variable: id                              Number of groups  =         40
+
+R-sq:                                           Obs per group:
+     within  = 0.2458                                         min =          5
+     between = 0.0743                                         avg =        5.0
+     overall = 0.1765                                         max =          5
+
+                                                F(1,38)           =       3.05
+sd(u_i + avg(e_i.))=  .7890252                  Prob > F          =     0.0887
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4642579   .2657415     1.75   0.089    -.0737077    1.002223
+       _cons |   1.085618   .1260981     8.61   0.000     .8303458     1.34089
+------------------------------------------------------------------------------
+
+. xtreg y x, mle
+
+Fitting constant-only model:
+Iteration 0:   log likelihood = -326.41115
+Iteration 1:   log likelihood = -323.50029
+Iteration 2:   log likelihood = -323.32573
+Iteration 3:   log likelihood = -323.32475
+
+Fitting full model:
+Iteration 0:   log likelihood = -299.36353
+Iteration 1:   log likelihood = -299.32068
+Iteration 2:   log likelihood = -299.32064
+
+Random-effects ML regression                    Number of obs     =        200
+Group variable: id                              Number of groups  =         40
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          5
+                                                              avg =        5.0
+                                                              max =          5
+
+                                                LR chi2(1)        =      48.01
+Log likelihood  = -299.32064                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |    .579043   .0780374     7.42   0.000     .4260925    .7319936
+       _cons |   1.077692   .1220141     8.83   0.000     .8385488    1.316835
+-------------+----------------------------------------------------------------
+    /sigma_u |   .6398171   .1051585                      .4636122    .8829922
+    /sigma_e |   .9616928   .0537661                      .8618815    1.073063
+         rho |   .3068206   .0772379                      .1746558     .470569
+------------------------------------------------------------------------------
+LR test of sigma_u=0: chibar2(01) = 26.55              Prob >= chibar2 = 0.000
+
+. quietly xtreg y x, fe
+
+. predict uhat, u
+
+. predict ehat, e
+
+. summarize uhat ehat
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+        uhat |        200    2.79e-10    .7732598   -1.34303   1.448891
+        ehat |        200    9.76e-10    .8622705  -2.093211   2.190331
+
+. 
+. generate g2 = mod(_n, 2)
+
+. prtest yb, by(g2)
+
+Two-sample test of proportions                     0: Number of obs =      100
+                                                   1: Number of obs =      100
+------------------------------------------------------------------------------
+    Variable |       Mean   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           0 |        .41   .0491833                      .3136024    .5063976
+           1 |        .51     .04999                      .4120214    .6079786
+-------------+----------------------------------------------------------------
+        diff |        -.1   .0701285                     -.2374492    .0374492
+             |  under Ho:    .070484    -1.42   0.156
+------------------------------------------------------------------------------
+        diff = prop(0) - prop(1)                                  z =  -1.4188
+    Ho: diff = 0
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(Z < z) = 0.0780         Pr(|Z| < |z|) = 0.1560          Pr(Z > z) = 0.9220
+
+. prtesti 30 .4 45 .6
+
+Two-sample test of proportions                     x: Number of obs =       30
+                                                   y: Number of obs =       45
+------------------------------------------------------------------------------
+    Variable |       Mean   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |         .4   .0894427                      .2246955    .5753045
+           y |         .6   .0730297                      .4568645    .7431355
+-------------+----------------------------------------------------------------
+        diff |        -.2   .1154701                     -.4263171    .0263171
+             |  under Ho:   .1177568    -1.70   0.089
+------------------------------------------------------------------------------
+        diff = prop(x) - prop(y)                                  z =  -1.6984
+    Ho: diff = 0
+
+    Ha: diff < 0                 Ha: diff != 0                 Ha: diff > 0
+ Pr(Z < z) = 0.0447         Pr(|Z| < |z|) = 0.0894          Pr(Z > z) = 0.9553
+
+. 
+. replace x = . in 1/20
+(20 real changes made, 20 to missing)
+
+. replace y = . in 11/40
+(30 real changes made, 30 to missing)
+
+. replace yc = . in 191/200
+(10 real changes made, 10 to missing)
+
+. misstable tree x y yc
+
+  Nested pattern of missing values
+           y          x         yc
+  --------------------------------
+          15%         5%         0%
+                                 5 
+                     10          0 
+                                10 
+          85          5          0 
+                                 5 
+                     80          5 
+                                75 
+  --------------------------------
+ (percent missing listed first)
+
+. misstable tree x y yc, frequency
+
+  Nested pattern of missing values
+           y          x         yc
+  --------------------------------
+          30         10          0 
+                                10 
+                     20          0 
+                                20 
+         170         10          0 
+                                10 
+                    160         10 
+                               150 
+  --------------------------------
+ (number missing listed first)
+
+. misstable nested x y yc
+
+     1.  yc(10)
+     2.  x(20)
+     3.  y(30)
+
+. 
+. clear
+
+. input id inc80 inc81 ue80 ue81
+
+            id      inc80      inc81       ue80       ue81
+  1. 1 5000 5500 0 1
+  2. 2 2000 2200 1 0
+  3. 3 3000 2000 0 0
+  4. end
+
+. reshape i id
+
+. reshape j year
+
+. reshape xij inc ue
+
+. reshape
+ (data are wide)
+
++-----------------------------------------------------------------------------+
+| Xij                          | Command/contents                             |
+|------------------------------+----------------------------------------------|
+| Subscript i,j definitions:   |                                              |
+|  group id variable(s)        | reshape i id                                 |
+|  within-group variable       | reshape j year                               |
+|   and its range              |                                              |
+|                              |                                              |
+| Variable X definitions:      |                                              |
+|  varying within group        | reshape xij inc ue                           |
+|  constant within group (opt) | reshape xi  <varlist>                        |
++-----------------------------------------------------------------------------+
+Optionally type reshape xi to define variables that are constant within i.
+Type reshape long to convert the data to long form.
+
+. reshape long
+(note: j = 80 81)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                        3   ->       6
+Number of variables                   5   ->       4
+j variable (2 values)                     ->   year
+xij variables:
+                            inc80 inc81   ->   inc
+                              ue80 ue81   ->   ue
+-----------------------------------------------------------------------------
+
+. reshape wide
+(note: j = 80 81)
+
+Data                               long   ->   wide
+-----------------------------------------------------------------------------
+Number of obs.                        6   ->       3
+Number of variables                   4   ->       5
+j variable (2 values)              year   ->   (dropped)
+xij variables:
+                                    inc   ->   inc80 inc81
+                                     ue   ->   ue80 ue81
+-----------------------------------------------------------------------------
+
+. reshape clear
+
+. clear
+
+. input id year inc
+
+            id       year        inc
+  1. 1 80 5
+  2. 1 80 6
+  3. 2 80 7
+  4. end
+
+. capture noisily reshape wide inc, i(id) j(year)
+(note: j = 80)
+values of variable year not unique within id
+    Your data are currently long.  You are performing a reshape wide.  You specified i(id) and j(year).  There are observations within i(id) with the same value of j(year).  In the long data, variables i() and j() together must uniquely identify the
+    observations.
+
+         long                                wide
+        +---------------+                   +------------------+
+        | i   j   a   b |                   | i   a1 a2  b1 b2 |
+        |---------------| <--- reshape ---> |------------------|
+        | 1   1   1   2 |                   | 1   1   3   2  4 |
+        | 1   2   3   4 |                   | 2   5   7   6  8 |
+        | 2   1   5   6 |                   +------------------+
+        | 2   2   7   8 |
+        +---------------+
+    Type reshape error for a list of the problem variables.
+
+. reshape error
+(note: j = 80)
+
+i (id) indicates the top-level grouping such as subject id.
+j (year) indicates the subgrouping such as time.
+The data are in the long form;  j should be unique within i.
+
+There are multiple observations on the same year within id.
+
+The following 2 of 3 observations have repeated year values:
+
+     +-----------+
+     | id   year |
+     |-----------|
+  1. |  1     80 |
+  2. |  1     80 |
+     +-----------+
+
+(data now sorted by id year)
+
+. 
+. clear
+
+. input id b
+
+            id          b
+  1. 1 10
+  2. 2 20
+  3. 4 40
+  4. end
+
+. save odta_u, replace
+(note: file odta_u.dta not found)
+file odta_u.dta saved
+
+. clear
+
+. input id a
+
+            id          a
+  1. 3 3
+  2. 1 1
+  3. 2 2
+  4. end
+
+. capture noisily merge id using odta_u
+(note: you are using old merge syntax; see [D] merge for new syntax)
+master data not sorted
+
+. sort id
+
+. * the using file is in order but not marked as sorted: Stata refuses it
+. capture noisily merge id using odta_u
+(note: you are using old merge syntax; see [D] merge for new syntax)
+using data not sorted
+
+. preserve
+
+. use odta_u, clear
+
+. sort id
+
+. save odta_u, replace
+file odta_u.dta saved
+
+. restore
+
+. merge id using odta_u
+(note: you are using old merge syntax; see [D] merge for new syntax)
+
+. list, sepby(_merge)
+
+     +----------------------+
+     | id   a    b   _merge |
+     |----------------------|
+  1. |  1   1   10        3 |
+  2. |  2   2   20        3 |
+     |----------------------|
+  3. |  3   3    .        1 |
+     |----------------------|
+  4. |  4   .   40        2 |
+     +----------------------+
+
+. erase odta_u.dta
+
+. 
+. clear
+
+. input x
+
+             x
+  1. 5
+  2. 4
+  3. 3
+  4. 2
+  5. 1
+  6. end
+
+. sort x in 2/4
+
+. list
+
+     +---+
+     | x |
+     |---|
+  1. | 5 |
+  2. | 2 |
+  3. | 3 |
+  4. | 4 |
+  5. | 1 |
+     +---+
+
+. 
+end of do-file

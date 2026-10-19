@@ -12,7 +12,7 @@ cci 4 386 4 1250, woolf
 cci 20 10 30 40, tb
 iri 41 15 28010 19017
 return list
-iri 41 15 28010 19017, exact
+capture noisily iri 41 15 28010 19017, exact
 iri 10 30 28010 19017
 mcci 8 8 3 8
 return list
@@ -116,6 +116,8 @@ dstdize deaths pop agecat, by(state)
 return list
 matrix list r(adj)
 dstdize deaths pop agecat, by(state) base(Maine)
-istdize deaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
+capture noisily istdize deaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
+bysort state: egen tdeaths = total(deaths)
+istdize tdeaths pop agecat using odta_std, popvars(stddeaths stdpop) by(state)
 return list
 erase odta_std.dta

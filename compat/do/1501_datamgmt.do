@@ -17,7 +17,9 @@ clonevar xc = x if id < 4
 describe x xc
 ds
 return list
-ds, has(type numeric) not(varlabel)
+capture noisily ds, has(type numeric) not(varlabel)
+ds, has(type numeric)
+ds, not(varlabel)
 lookfor dose
 return list
 inspect x
@@ -26,27 +28,31 @@ return list
 labelbook yn
 labelbook, problems
 compare x xc
-by grp: ipolate y x, gen(yi)
+capture noisily by grp: ipolate y x, gen(yi)
+bysort grp: ipolate y x, gen(yi)
 list
 separate x, by(grp)
 describe x1 x2
 separate y, by(grp) generate(yy) shortlabel
 preserve
 expandcl 2, cluster(grp) generate(newcl)
+sort grp id newcl
 list id grp newcl
 restore
+capture snapshot erase _all
 snapshot save, label("first")
 snapshot list
 drop if grp == 2
 snapshot restore 1
 count
+capture erase odta_a.dta
 save odta_a, replace
 replace x = 99 in 2
 capture noisily cf _all using odta_a
 capture noisily cf x y using odta_a, verbose
 statsby m=r(mean) n=r(N), by(grp) clear nodots: summarize x
 list
-putmata X=(grp m)
+putmata X=(grp m), replace
 mata: X
 clear
 set obs 3
@@ -69,13 +75,15 @@ list
 clear
 matrix C = (1, .3 \ .3, 1)
 corr2data u v, n(100) corr(C) means(5 10) sds(2 3)
-summarize u v
+tabstat u v, statistics(mean sd)
 correlate u v
 clear
 input id x
 1 1.5
 2 2.25
 end
+capture erase odta_out.raw
+capture erase odta_f.raw
 outfile using odta_out.raw, replace
 type odta_out.raw
 outfile using odta_out.raw, comma replace
@@ -95,8 +103,12 @@ end
 icd9 check dx
 return list
 icd9 check dx, list
-icd9 clean dx, dots generate(c)
-icd9 generate cat = dx, category
+capture noisily icd9 clean dx, dots generate(c)
+gen c = dx
+capture noisily icd9 clean c, dots
+drop if dx == "bad!"
+icd9 clean c, dots
+capture noisily icd9 generate cat = c, category
 list
 erase odta_a.dta
 erase odta_out.raw

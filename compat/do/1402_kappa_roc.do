@@ -66,8 +66,8 @@ roccomp disease rating, by(grp)
 clear
 set seed 1402
 set obs 200
-gen x = rnormal()
-gen z = rnormal()
+gen x = invnormal(runiform())
+gen z = invnormal(runiform())
 gen y = runiform() < invlogit(-0.5 + 1.2*x + 0.5*z)
 logit y x z, nolog
 lroc, nograph

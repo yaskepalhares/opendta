@@ -66,10 +66,17 @@ def test_separate(run):
 
 def test_ipolate_by_group(run):
     run(BASE)
-    run("by grp: ipolate y x, gen(yi)")
+    run("bysort grp: ipolate y x, gen(yi)")
     yi = col(run, "yi")
     assert yi[1] == pytest.approx(10 + (2 - 1) * (30 - 10) / (4 - 1))
     assert yi[4] == pytest.approx(5 + (3 - 1) * (25 - 5) / (5 - 1))
+
+
+def test_by_requires_sort_marker(run):
+    # data in order but never sorted: Stata says "not sorted" (compat 1501)
+    run(BASE)
+    run("by grp: ipolate y x, gen(yi)")
+    assert run.rc == 5
 
 
 def test_expandcl(run):

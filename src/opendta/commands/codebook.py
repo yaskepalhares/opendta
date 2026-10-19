@@ -349,7 +349,6 @@ def _miss_tree(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> Non
     N = int(mask.sum())
     freq = bool(o.get("frequency"))
     k = len(cols)
-    widths = [max(len(n), 7) for n, _ in cols]
     rows: list[list[str]] = []
 
     def walk(sel: np.ndarray, depth: int, row: list[str]) -> None:
@@ -365,16 +364,20 @@ def _miss_tree(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> Non
             row[:] = [""] * k
 
     walk(np.ones(N, dtype=bool), 0, [""] * k)
+    pct = [False] * len(rows)
     if not freq and rows:
-        rows[0] = [x + "%" if x else x for x in rows[0]]
-    total = sum(widths) + 3 * k + 4
-    out.write("\n" + " " * 4 + "Nested pattern of missing values\n", "text")
-    out.write(" " * 4 + "".join(f"{n:>{w}}   " for (n, _), w in zip(cols, widths)).rstrip() + "\n", "text")
-    out.write("-" * total + "\n", "text")
-    for r in rows:
-        out.write(" " * 4 + "".join(f"{x:>{w}}   " for x, w in zip(r, widths)).rstrip() + "\n", "result")
-    out.write("-" * total + "\n", "text")
-    out.write("(number missing listed first)\n" if freq else "(percent missing listed first)\n", "text")
+        pct[0] = True
+    # cells of 10 followed by "%" or a space, indented by 2 (compat 0805; VERIFY long names)
+    w = [max(10, len(nm)) for nm, _ in cols]
+    out.write("\n  Nested pattern of missing values\n", "text")
+    out.write("  " + " ".join(f"{nm:>{wi}}" for (nm, _), wi in zip(cols, w)) + "\n", "text")
+    rule = "  " + "-" * (sum(wi + 1 for wi in w) - 1) + "\n"
+    out.write(rule, "text")
+    for r, pc in zip(rows, pct):
+        cells = [f"{x:>{wi}}" + ("%" if pc and x else " ") for x, wi in zip(r, w)]
+        out.write("  " + "".join(cells).rstrip() + "\n", "result")
+    out.write(rule, "text")
+    out.write(" (number missing listed first)\n" if freq else " (percent missing listed first)\n", "text")
 
 
 def _miss_nested(s: "Session", names: list[str], mask: np.ndarray, o: dict) -> None:

@@ -22,14 +22,18 @@ def test_onemean(run):
     assert run.eval("r(N)") == math.ceil(z ** 2)
     run("power onemean 100 102, sd(5) n(40)")
     assert run.eval("r(power)") == pytest.approx(pw(40), rel=1e-6)
-    out = run("power onemean 100, sd(5) n(40)")
+    # Stata 14: with n() and no power(), the alternative mean is required (compat 1301)
+    run("power onemean 100, sd(5) n(40)")
+    assert run.rc == 198
+    out = run("power onemean 100, sd(5) n(40) power(.8)")
     assert "Estimated effect size and target mean" in out
     assert pw(40) < .8 and run.eval("r(ma)") > 102
 
 
 def test_twomeans_and_paired(run):
     run("power twomeans 12 14, sd(4)")
-    assert run.eval("r(N_per_group)") == 64 and run.eval("r(N)") == 128
+    # twomeans returns N, N1 and N2 (no N_per_group; compat 1301)
+    assert run.eval("r(N1)") == 64 and run.eval("r(N)") == 128
     run("power twomeans 12 14, sd1(4) sd2(6) nratio(2)")
     assert run.eval("r(N2)") == 2 * run.eval("r(N1)")
     run("power pairedmeans 10 12, sddiff(5)")
@@ -38,7 +42,8 @@ def test_twomeans_and_paired(run):
 
 def test_proportions_and_correlations(run):
     run("power twoproportions .3 .45")
-    assert run.eval("r(N_per_group)") == 163
+    assert run.eval("r(N1)") == run.eval("r(N2)") == 163
+    assert run.eval("r(init)") == 163       # closed-form size, rounded up (compat 1301)
     run("power oneproportion .3 .4")
     z1, z2 = stats.norm.isf(.025), stats.norm.isf(.2)
     n = ((z1 * math.sqrt(.21) + z2 * math.sqrt(.24)) / .1) ** 2
@@ -47,6 +52,13 @@ def test_proportions_and_correlations(run):
     assert run.eval("r(N)") == 85
     run("power twocorrelations .3 .5, n(400)")
     assert 0 < run.eval("r(power)") < 1
+
+
+def test_binomial_actual_alpha(run):
+    out = run("power oneproportion .3 .4, test(binomial) n(150)")
+    # equal-tailed rejection region {<= 33} U {>= 57} under p0 = .3 (compat 1301)
+    size = stats.binom.cdf(33, 150, .3) + stats.binom.sf(56, 150, .3)
+    assert f"actual alpha = {size:9.4f}" in out
 
 
 def test_table_of_values(run):

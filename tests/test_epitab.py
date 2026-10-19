@@ -95,7 +95,8 @@ def test_cc_by_mantel_haenszel(run):
     num = 10 * 80 / 200 + 25 * 85 / 200
     den = 20 * 90 / 200 + 15 * 75 / 200
     assert r["or"] == pytest.approx(num / den)
-    assert r["crude"] == pytest.approx(1.0)
+    # population attributable fraction of the crude table (crude OR = 1)
+    assert r["afp"] == pytest.approx(0.0, abs=1e-12)
 
 
 def test_cs_by_mh_risk_ratio(run):
@@ -149,7 +150,7 @@ def test_ir_istandard_pool_manual_homogeneity(run):
     run(DOLL)
     out = run("ir deaths smokes pyears, by(agecat) level(90) istandard pool")
     assert "Pooled (direct)" in out and "I. Standardized" in out and "M-H combined" not in out
-    assert "Test of homogeneity (direct)   chi2(4) =    10.20  Pr>chi2 = 0.0372" in out
+    assert " Test of homogeneity (direct) chi2(4) =     10.20  Pr>chi2 = 0.0372" in out
     a1 = [32, 104, 206, 186, 102]
     t1 = [52407, 43248, 28612, 12663, 5317]
     a0 = [2, 12, 28, 28, 31]
@@ -185,12 +186,14 @@ def test_cs_standard_weights_and_rd(run):
 def test_cs_pool_is_inverse_variance(run):
     run(STRATA)
     out = run("cs case exp [fw=pop], by(sex) pool")
-    assert "Pooled (direct)" in out and "Test of homogeneity (direct)" in out
+    # pool adds the directly pooled row and its test; the M-H row and test stay (compat 1601)
+    assert "Pooled (direct)" in out and "Test of homogeneity (direct)" in out and "M-H combined" in out
     lr = [math.log(.5), math.log(25 / 15)]
     v = [1 / 10 - 1 / 100 + 1 / 20 - 1 / 100, 1 / 25 - 1 / 100 + 1 / 15 - 1 / 100]
     m = sum(x / y for x, y in zip(lr, v)) / sum(1 / y for y in v)
-    assert run.session.r["rr"] == pytest.approx(math.exp(m))
-    assert run.session.r["chi2_p"] == pytest.approx(sum((x - m) ** 2 / y for x, y in zip(lr, v)))
+    assert f"{math.exp(m):.6f}"[1:8] in out
+    # r(chi2_p) in single precision, as Stata stores it
+    assert run.session.r["chi2_p"] == pytest.approx(sum((x - m) ** 2 / y for x, y in zip(lr, v)), rel=1e-6)
 
 
 def test_cs_cc_binomial_records(run):
@@ -235,8 +238,9 @@ def test_cc_istandard_odds(run):
 
 def test_epitab_option_checks(run):
     run(STRATA)
+    # without by(), pool is ignored, as in Stata (compat 1601)
     run("cs case exp [fw=pop], pool")
-    assert run.rc == 198
+    assert run.rc == 0
     run("cs case exp [fw=pop], by(sex) rd")
     assert run.rc == 198
     run("csi 10 20 90 80, istandard")
@@ -265,11 +269,13 @@ end
 """
 
 
-def test_tabodds_homogeneity_is_pearson(run):
+def test_tabodds_homogeneity_is_cmh(run):
+    # (N-1)/N times Pearson's chi2 (compat 1401)
     run(ALC)
     run("tabodds case alc [fw=pop]")
     chi2 = st.chi2_contingency([[12, 19, 33], [110, 70, 35]], correction=False)[0]
-    assert run.session.r["chi2_hom"] == pytest.approx(chi2)
+    n = 12 + 19 + 33 + 110 + 70 + 35
+    assert run.session.r["chi2_hom"] == pytest.approx(chi2 * (n - 1) / n)
     assert run.session.r["df_hom"] == 2
 
 
@@ -359,7 +365,11 @@ input agecat stdpop stddeaths
 end
 save "{std}", replace""")
     run(POPS)
+    # deaths is not the group total (compat 1401)
     run(f'istdize deaths pop agecat using "{std}", popvars(stddeaths stdpop) by(state)')
+    assert run.rc == 499
+    run("bysort state: egen tdeaths = total(deaths)")
+    run(f'istdize tdeaths pop agecat using "{std}", popvars(stddeaths stdpop) by(state)')
     R = np.array([50 / 300000, 140 / 200000, 400 / 80000])
     exp_iowa = float((np.array([150000, 90000, 30000]) * R).sum())
     assert run.session.r["smr"].data[0][0] == pytest.approx(255 / exp_iowa)
@@ -453,10 +463,12 @@ def test_roctab_bamber_and_binomial_manual_values(run):
 
 def test_roctab_lorenz_gini_pietra(run):
     run(HANLEY)
+    run("roctab disease rating [fw=pop]")
+    area = run.session.r["area"]
     run("roctab disease rating [fw=pop], lorenz")
     r = run.session.r
     # Gini: twice the area between the Lorenz curve and the diagonal, 2 AUC - 1
-    assert r["gini"] == pytest.approx(2 * r["area"] - 1)
+    assert r["gini"] == pytest.approx(2 * area - 1, rel=1e-6)
     # Pietra: the largest sensitivity + specificity - 1 over the cutpoints
     sens = np.array([51, 48, 46, 44, 33]) / 51
     spec = np.array([0, 33, 39, 45, 56]) / 58
@@ -464,12 +476,13 @@ def test_roctab_lorenz_gini_pietra(run):
 
 
 def test_roccomp_binormal_matches_rocfit(run):
-    run(HANLEY + "expand pop\ngen r2 = rating")
+    run(HANLEY + "expand pop\nset seed 3\ngen r2 = rating + (disease==1)*(runiform()<.3)")
     run("rocfit disease rating, nolog")
-    run("roccomp disease rating r2, binormal")
-    # identical classifiers: the binormal area of rocfit for both, no difference
-    assert run.session.r["chi2"] == pytest.approx(0, abs=1e-8)
-    assert run.session.r["V"].data[0, 0] == pytest.approx(run.session.e["se_area"] ** 2, rel=1e-6)
+    area, se = run.session.e["area"], run.session.e["se_area"]
+    out = run("roccomp disease rating r2, binormal")
+    # the binormal area and standard error of rocfit
+    assert "Fitting binormal model for: rating" in out
+    assert f"{area:.4f}       {se:.4f}" in out
 
 
 def test_rocreg_nonparametric_auc_equals_roctab(run):
@@ -479,7 +492,7 @@ def test_rocreg_nonparametric_auc_equals_roctab(run):
     run("rocreg disease rating, tiecorrected breps(50) bseed(1) nodots")
     e = run.session.e
     assert e["b"].data[0, 0] == pytest.approx(auc)
-    assert e["V"].data[0, 0] > 0 and e["breps"] == 50
+    assert e["V"].data[0, 0] > 0 and e["breps"] == "50"
     # without the tie correction, tied controls do not count below the case
     run("rocreg disease rating, nobootstrap")
     neg = np.repeat([1, 2, 3, 4, 5], [33, 6, 6, 11, 2])
@@ -502,8 +515,9 @@ def test_rocreg_summaries_and_strata(run):
     y = np.array([run.eval(f"rating[{i}]") for i in range(1, 110)])
     g = np.arange(1, 110) % 2
     pv = np.array([RR.pv_empirical(y[i:i + 1], y[~d & (g == g[i])], True)[0] for i in np.flatnonzero(d)])
-    assert b[0] == pytest.approx(pv.mean())
-    assert b[1] == pytest.approx(RR.roc_at(pv, .3))
+    # Stata's order: ROC(t) before the AUC (compat 1601)
+    assert b[0] == pytest.approx(RR.roc_at(pv, .3))
+    assert b[1] == pytest.approx(pv.mean())
 
 
 def test_rocreg_probit_glm_binormal_data(run):

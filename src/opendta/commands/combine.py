@@ -350,7 +350,9 @@ def _merge_old(s: "Session", args: str) -> None:
             for k in keys:
                 if not U.has(k):
                     raise StataError(111, f"variable {k} not found")
-            if not sorting.is_sorted(U, keys):
+            # the using file must be marked as sorted by the keys, not merely in order
+            # (compat 0805)
+            if list(getattr(U, "sortlist", []) or [])[:len(keys)] != keys:
                 raise StataError(5, "using data not sorted")
         um, uu = o.get("unique") or o.get("uniqmaster"), o.get("unique") or o.get("uniqusing")
         kind = {(True, True): "1:1", (True, False): "1:m", (False, True): "m:1"}.get(

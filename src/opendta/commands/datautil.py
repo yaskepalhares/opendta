@@ -209,7 +209,10 @@ def cmd_filefilter(s: "Session", args: str) -> None:
         raise StataError(198, "from() may not be empty")   # VERIFY
     data = src.read_bytes()
     n = data.count(old)
+    existed = dst.exists()
     dst.write_bytes(data.replace(old, new))
+    if existed:
+        s.output.write(f"(file {words[1]} was replaced)\n", "text")     # compat 1501
     s.r = {"occurrences": float(n), "bytes_from": float(n * len(old)), "bytes_to": float(n * len(new))}
 
 

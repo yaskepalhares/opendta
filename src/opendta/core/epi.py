@@ -227,14 +227,6 @@ def irr_midp(a: int, b: int, t1: float, t0: float) -> tuple[float, float]:
     return one, min(1.0, 2 * one)
 
 
-def irr_exact_p(a: int, b: int, t1: float, t0: float) -> tuple[float, float]:
-    n = a + b
-    p = t1 / (t1 + t0)
-    dist = st.binom(n, p)
-    one = float(dist.sf(a - 1)) if a >= n * p else float(dist.cdf(a))
-    return one, min(1.0, 2 * one)
-
-
 # ---------------------------------------------------------------------------
 # Mantel-Haenszel pooling
 # ---------------------------------------------------------------------------

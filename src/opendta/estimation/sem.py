@@ -178,6 +178,7 @@ class Model:
             if key not in self.free:
                 self.free.append(key)
         self.nfree = len(self.free)
+        self.hidden: set = set()
 
     # implied moments -------------------------------------------------------
     def matrices(self, theta: np.ndarray):
@@ -224,25 +225,39 @@ def _loglik(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, 
     return float(-0.5 * N * (p * math.log(2 * math.pi) + logdet + np.trace(cov @ Si) + d @ Si @ d))
 
 
-def _num_grad(f, x, h=1e-5):
-    g = np.zeros_like(x)
-    for i in range(len(x)):
-        e = np.zeros_like(x)
-        hh = h * (abs(x[i]) + 1)
-        e[i] = hh
-        g[i] = (f(x + e) - f(x - e)) / (2 * hh)
-    return g
-
-
-def _num_hess(f, x, h=1e-4):
-    k = len(x)
-    H = np.zeros((k, k))
-    for i in range(k):
-        e = np.zeros(k)
-        hh = h * (abs(x[i]) + 1)
-        e[i] = hh
-        H[:, i] = (_num_grad(f, x + e) - _num_grad(f, x - e)) / (2 * hh)
-    return (H + H.T) / 2
+def _grad(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, N: float) -> np.ndarray:
+    """Analytic gradient of the log likelihood: dll/dmu = N Si d and
+    dll/dSigma = -N/2 (Si - Si (S + d d') Si), chained through the exact derivatives of the
+    implied moments (dB = B dA B, dSv = dB S B' + B S dB' + B dS B', dmv = dB m + B dm)."""
+    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(theta)
+    p = model.p
+    Si = np.linalg.inv(Sig)
+    d = mean - mu
+    gmu = N * Si @ d
+    G = -0.5 * N * (Si - Si @ (cov + np.outer(d, d)) @ Si)
+    out = np.zeros(len(theta))
+    for k, (kind, a, b) in enumerate(model.free):
+        ia, ib = model.idx[a], model.idx[b]
+        if kind == "path":
+            dB = np.outer(B[:, ib], B[ia, :])
+            dSv = dB @ S @ B.T
+            dSv = dSv + dSv.T
+            dmv = dB @ m
+        elif kind == "mean":
+            dSv = None
+            dmv = B[:, ia]
+        else:
+            E = np.zeros_like(S)
+            E[ia, ib] = E[ib, ia] = 1.0
+            dSv = B @ E @ B.T
+            dmv = None
+        g = 0.0
+        if dmv is not None:
+            g += float(gmu @ dmv[:p])
+        if dSv is not None:
+            g += float((G * dSv[:p, :p]).sum())
+        out[k] = g
+    return out
 
 
 def _start(model: Model, mean: np.ndarray, cov: np.ndarray) -> np.ndarray:
@@ -274,6 +289,18 @@ def _start(model: Model, mean: np.ndarray, cov: np.ndarray) -> np.ndarray:
 
 def _fit(model: Model, mean, cov, N, s: "Session", log: bool, maxiter: int = 300):
     f = lambda th: _loglik(model, th, mean, cov, N)   # noqa: E731
+    gr = lambda th: _grad(model, th, mean, cov, N)   # noqa: E731
+
+    def hess(th):
+        # central differences of the analytic gradient
+        k = len(th)
+        H = np.zeros((k, k))
+        for i in range(k):
+            e = np.zeros(k)
+            hh = 1e-5 * (abs(th[i]) + 1)
+            e[i] = hh
+            H[:, i] = (gr(th + e) - gr(th - e)) / (2 * hh)
+        return (H + H.T) / 2
     th = _start(model, mean, cov)
     out = s.output
     lines = []
@@ -284,13 +311,13 @@ def _fit(model: Model, mean, cov, N, s: "Session", log: bool, maxiter: int = 300
     lines.append(ll)
     # quasi-Newton to approach the maximum, Newton steps with the numerical Hessian to finish
     res = optimize.minimize(lambda t: -f(t), th, method="BFGS",
-                            jac=lambda t: -_num_grad(f, t), options={"maxiter": maxiter, "gtol": 1e-7})
+                            jac=lambda t: -gr(t), options={"maxiter": maxiter, "gtol": 1e-7})
     th = res.x
     lines.append(f(th))
     converged = False
     for _ in range(50):
-        g = _num_grad(f, th)
-        H = _num_hess(f, th)
+        g = gr(th)
+        H = hess(th)
         try:
             step = np.linalg.solve(H, -g)
         except np.linalg.LinAlgError:
@@ -309,11 +336,13 @@ def _fit(model: Model, mean, cov, N, s: "Session", log: bool, maxiter: int = 300
         shown = [lines[0]] + [x for i, x in enumerate(lines[1:], 1) if abs(x - lines[i - 1]) > 1e-9 or i == len(lines) - 1]
         for i, x in enumerate(shown):
             out.write(f"{'Iteration ' + str(i) + ':':<14} log likelihood = {_g(x, '%10.0g'):>10}  \n", "text")
-    H = _num_hess(f, th)
+    H = hess(th)
     try:
         V = np.linalg.inv(-H)
     except np.linalg.LinAlgError:
         V = np.linalg.pinv(-H)
+    model.ilog = [lines[0]] + [x for i, x in enumerate(lines[1:], 1)
+                               if abs(x - lines[i - 1]) > 1e-9 or i == len(lines) - 1]
     return th, f(th), (V + V.T) / 2, converged
 
 
@@ -381,12 +410,22 @@ def cmd_sem(s: "Session", args: str) -> None:
     chi2_bs = max(2 * (ll_s - base_ll), 0.0)
     p_bs = float(st.chi2.sf(chi2_bs, df_bs)) if df_bs > 0 else SYS
     names = _param_names(model)
-    est = Estimates("sem", " ".join(model.endog), [nm for _, nm in names], th.copy(), V, N, "z", None)
-    est.eqnames = [eq for eq, _ in names]
+    # observed exogenous variables are conditioned on (Stata 14's xconditional): their means,
+    # variances and covariances are not parameters of e(b) and are not shown (compat 1302)
+    oxset = {n for n in model.exog if n in spec.observed}
+    user_cov = {v for pair in covs for v in pair} | set(var_fix)
+    xcond = bool(oxset) and not (oxset & user_cov)
+    keep = [i for i, (kind, a, b) in enumerate(model.free)
+            if not (xcond and kind in ("mean", "var", "cov") and a in oxset and b in oxset)]
+    model.hidden = set() if not xcond else {model.free[i] for i in range(model.nfree) if i not in keep}
+    est = Estimates("sem", " ".join(model.endog), [names[i][1] for i in keep], th[keep].copy(),
+                    V[np.ix_(keep, keep)], N, "z", None)
+    est.eqnames = [names[i][0] for i in keep]
     est.model = model
     est.level = level
     est.extra = dict(N=N, ll=ll, df=df, chi2_ms=chi2_ms, p_ms=p_ms, chi2_bs=chi2_bs, df_bs=df_bs,
-                     p_bs=p_bs, mean=mean, cov=cov, ll_s=ll_s, standardized=bool(o.get("standardized")))
+                     p_bs=p_bs, mean=mean, cov=cov, ll_s=ll_s, standardized=bool(o.get("standardized")),
+                     th=th.copy(), V=V, xcond=xcond)
     est.display = display_sem
     est.predict = _predict
     est.predict_opts = {"latent": 3, "xb": 2}
@@ -395,15 +434,50 @@ def cmd_sem(s: "Session", args: str) -> None:
     obs_endog = [n for n in model.endog if n in spec.observed]
     lat_exog = [n for n in model.exog if n in spec.latent]
     obs_exog = [n for n in model.exog if n in spec.observed]
-    scalars = [("N", float(N)), ("ll", ll), ("df_m", float(model.nfree)), ("df_b", float(df_bs)),
-               ("chi2_ms", chi2_ms), ("df_ms", float(df)), ("p_ms", p_ms), ("chi2_bs", chi2_bs),
-               ("df_bs", float(df_bs)), ("p_bs", p_bs), ("k", float(model.nfree)),
-               ("rank", float(np.linalg.matrix_rank(V))), ("converged", 1.0 if conv else 0.0)]
-    macros = [("cmdline", f"sem {args.strip()}"), ("cmd", "sem"), ("method", "ml"),
-              ("vce", "oim"), ("lyvars", " ".join(lat_endog)), ("oyvars", " ".join(obs_endog)),
+    # e() in Stata 14's ereturn list order (compat 1302; VERIFY the matrices' contents)
+    df_s = pobs * (pobs + 3) // 2
+    ilog = list(getattr(model, "ilog", [ll]))
+    scalars = [("converged", 1.0 if conv else 0.0), ("rc", 0.0), ("ic", float(len(ilog) - 1)),
+               ("N_groups", 1.0), ("modelmeans", 1.0), ("N", float(N)), ("N_missing", 0.0),
+               ("ll", ll), ("critvalue", ll), ("df_m", float(len(keep))),
+               ("rank", float(np.linalg.matrix_rank(est.V))), ("estimates", 1.0),
+               ("critvalue_s", ll_s), ("critvalue_b", base_ll), ("df_s", float(df_s)),
+               ("p_bs", p_bs), ("df_bs", float(df_bs)), ("chi2_bs", chi2_bs), ("p_ms", p_ms),
+               ("df_ms", float(df)), ("chi2_ms", chi2_ms), ("df_b", float(df_s - df_bs))]
+    first = obs_endog[0] if obs_endog else ""
+    macros = [("cmdline", f"sem {args.strip()}"), ("covariates", " ".join(obs_exog) if xcond else ""),
+              ("cmd", "sem"), ("predict", "sem_p"), ("estat_cmd", "sem_estat"),
+              ("marginsdefault", f"predict(xb({first}))" if first else ""),
+              ("marginsnotok", "XBLATent1(passthru) XBLATent LATent1(passthru) LATent SCores xb"),
+              ("xconditional", "xconditional" if xcond else ""), ("vcetype", "OIM"), ("vce", "oim"),
+              ("title", "Structural equation model"), ("method", "ml"), ("data", "raw"),
               ("lxvars", " ".join(lat_exog)), ("oxvars", " ".join(obs_exog)),
-              ("title", "Structural equation model"), ("properties", "b V"), ("predict", "sem_p")]
-    post(s, est, list(reversed(scalars)), list(reversed(macros)), mask)
+              ("lyvars", " ".join(lat_endog)), ("oyvars", " ".join(obs_endog)),
+              ("technique", "nr"), ("properties", "b V")]
+    from ..commands.matrix import Matrix
+    cn = list(est.names)
+
+    def row(v, rn="r1"):
+        mt = Matrix(np.asarray(v, float).reshape(1, -1), [rn], cn)
+        mt.coleq = list(est.eqnames)
+        return mt
+    g = _grad(model, th, mean, cov, N)[keep]
+    bstd = _standardized(model, th)[keep]
+    J = np.zeros((len(keep), len(keep)))
+    for jj, i in enumerate(keep):
+        e_ = np.zeros(len(th))
+        h = 1e-6 * (abs(th[i]) + 1)
+        e_[i] = h
+        J[:, jj] = (_standardized(model, th + e_)[keep] - _standardized(model, th - e_)[keep]) / (2 * h)
+    Vstd = Matrix(J @ est.V @ J.T, cn, cn)
+    Vstd.roweq = Vstd.coleq = list(est.eqnames)
+    pclass = [{"path": 1, "mean": 2, "var": 3, "cov": 4}[model.free[i][0]] for i in keep]
+    mats = [("gradient", row(g)), ("V_std", Vstd), ("b_std", row(bstd)),
+            ("admissible", Matrix(np.ones((1, 3)), ["r1"], ["c1", "c2", "c3"])),
+            ("b_pclass", row(pclass)), ("nobs", Matrix(np.array([[float(N)]]), ["r1"], ["c1"])),
+            ("ilog", Matrix(np.array([ilog + [0.0] * (20 - len(ilog))])[:, :20], ["r1"],
+                            [f"c{i}" for i in range(1, 21)]))]
+    post(s, est, scalars, macros, mask, extra_mats=mats)
     display_sem(s, est)
 
 
@@ -505,7 +579,8 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("Estimation method  = ml\n", "text")
         out.write("Log likelihood     = ", "text")
         out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
-        anchors = [(L, a) for L, a in model.anchor.items()]
+        # endogenous latent variables first (compat 1302: [y1]G before [x1]F)
+        anchors = sorted(model.anchor.items(), key=lambda la: la[0] not in model.endog)
         fixed_paths = [(a, b, v) for (a, b), v in spec.fixed.items()]
         k = 0
         if anchors or fixed_paths:
@@ -520,8 +595,8 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
             out.write("\n", "text")
     if not table:
         return
-    th = est.b
-    V = est.V
+    th = x["th"]
+    V = x["V"]
     se = np.sqrt(np.maximum(np.diag(V), 0))
     std = x.get("standardized")
     fixed_std: dict[tuple[str, str], tuple[float, float]] = {}
@@ -547,25 +622,39 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
             fixed_std[key] = (full[n0 + j], se_all[n0 + j])
         th = th_s
     c = crit("z", lv, None)
-    out.write(LINE + "\n", "text")
-    title = "Standardized" if std else ""
-    out.write(f"{title:>12} |                 OIM\n", "text")
-    out.write(f"{'':>12} |      Coef.   Std. Err.      z    P>|z|     [{lv:g}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
     pos = {(kind, a, b): i for i, (kind, a, b) in enumerate(model.free)}
 
+    def elab(n):
+        return f"e.{n}" if n in model.endog else n
+    # variances: errors of the observed endogenous, then of the latent endogenous, then the
+    # exogenous variables (compat 1302)
+    var_order = ([n for n in model.names if n in model.endog and n in spec.observed]
+                 + [n for n in model.names if n in model.endog and n not in spec.observed]
+                 + [n for n in model.names if n not in model.endog and n not in spec.observed]
+                 + [n for n in model.names if n not in model.endog and n in spec.observed])
+    var_order = [n for n in var_order if ("var", n, n) not in model.hidden]
+    covs = [(kind, a, b) for kind, a, b in model.free if kind == "cov" and (kind, a, b) not in model.hidden]
+    labels = [f"var({elab(n)})" for n in var_order] + [f"cov({elab(a)},{elab(b)})" for _, a, b in covs]
+    # variance rows end at the bar; a long label widens the whole table (compat 1302)
+    W = max([12] + [len(lb) - 1 for lb in labels])
+    dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
+    out.write("-" * (W + 66) + "\n", "text")
+    out.write(f"{'':>{W}} |                 OIM\n", "text")
+    out.write(f"{'Standardized' if std else '':>{W}} |      Coef.   Std. Err.      z    P>|z|     "
+              f"[{lv:g}% Conf. Interval]\n", "text")
+    out.write(dash, "text")
+
     def row(label, b, s_, kind="coef"):
-        if len(label) > 12:
-            # long names (cov(e.x1,e.y1)) on a line of their own (VERIFY)
-            out.write(f"{label} |\n", "text")
-            label = ""
-        out.write(f"{label:>12} |", "text")
+        if kind in ("var", "cov"):
+            out.write(f"{label:>{W + 1}}|", "text")
+        else:
+            out.write(f"{label:>{W}} |", "text")
         if kind == "constrained":
             out.write(f"  {_g(b):>9}  (constrained)\n", "result")
             return
         if s_ > 0 and np.isfinite(s_):
-            if kind == "var" and not std:
-                # variances: interval on the log scale (VERIFY)
+            if kind == "var":
+                # variances: interval on the log scale
                 lo, hi = b * math.exp(-c * s_ / b), b * math.exp(c * s_ / b)
                 out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(lo):>9}   {_g(hi):>9}\n",
                           "result")
@@ -574,6 +663,9 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
             pv = 2 * float(st.norm.sf(abs(z)))
             out.write(f"  {_g(b):>9}  {_g(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {_g(b - c * s_):>9}"
                       f"   {_g(b + c * s_):>9}\n", "result")
+        elif kind == "var":
+            # a variance fixed by the standardization (var(F) = 1)
+            out.write(f"  {_g(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
         else:
             out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
 
@@ -583,11 +675,11 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
     for section, members in (("Structural", struct), ("Measurement", meas)):
         if not members:
             continue
-        out.write(f"{section:<12} |\n", "text")
+        out.write(f"{section:<{W}} |\n", "text")
         for j, y in enumerate(members):
             if j:
-                out.write("  " + "-" * 11 + "+" + "-" * 64 + "\n", "text")
-            out.write(f"  {y + ' <-':<10} |\n", "text")
+                out.write("  " + "-" * (W - 1) + "+" + "-" * 64 + "\n", "text")
+            out.write(f"  {y + ' <-':<{W - 2}} |\n", "text")
             for a, b in spec.paths:
                 if b != y:
                     continue
@@ -601,29 +693,26 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
             if y in spec.observed:
                 k = pos[("mean", y, y)]
                 row("_cons", th[k], se[k])
-        out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
-    means = [n for n in model.exog if n in spec.observed]
+        out.write(dash, "text")
+    means = [n for n in model.exog if n in spec.observed and ("mean", n, n) not in model.hidden]
     if means:
         for n in means:
             k = pos[("mean", n, n)]
             row(f"mean({n})", th[k], se[k])
-        out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
-    for n in model.names:
+        out.write(dash, "text")
+    for n in var_order:
         key = ("var", n, n)
-        lab = f"var(e.{n})" if n in model.endog else f"var({n})"
+        lab = f"var({elab(n)})"
         if key in pos:
             row(lab, th[pos[key]], se[pos[key]], "var")
         elif n in model.var_fixed:
             row(lab, model.var_fixed[n], 0, "constrained")
-    covs = [(kind, a, b) for kind, a, b in model.free if kind == "cov"]
     if covs:
-        out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+        out.write(dash, "text")
         for key in covs:
             _, a, b = key
-            ea = f"e.{a}" if a in model.endog else a
-            eb = f"e.{b}" if b in model.endog else b
-            row(f"cov({ea},{eb})", th[pos[key]], se[pos[key]])
-    out.write(LINE + "\n", "text")
+            row(f"cov({elab(a)},{elab(b)})", th[pos[key]], se[pos[key]], "cov")
+    out.write("-" * (W + 66) + "\n", "text")
     df = x["df"]
     pv = "     ." if df == 0 else f"{x['p_ms']:>6.4f}"
     lab = f"chi2({df})"
@@ -690,7 +779,7 @@ def estat_gof(s: "Session", est: Estimates, args: str) -> None:
         elif b == "rmsea":
             rm = math.sqrt(max(chi - df, 0) / (df * N)) if df > 0 else 0.0
             lo, hi = _rmsea_ci(chi, df, N)
-            pclose = float(st.ncx2.sf(chi, df, 0.05 ** 2 * N * df)) if df > 0 else SYS
+            pclose = float(st.ncx2.sf(chi, df, 0.05 ** 2 * N * df)) if df > 0 else 1.0
             out.write(f"{'Population error':<21}|\n", "text")
             line("RMSEA", f"{rm:.3f}", "Root mean squared error of approximation")
             line("90% CI, lower bound", f"{lo:.3f}")
@@ -743,13 +832,17 @@ def _rmsea_ci(chi, df, N):
 def _srmr_cd(est):
     model: Model = est.model
     x = est.extra
-    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.b)
+    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.extra["th"])
     cov = x["cov"]
     p = model.p
     d = np.sqrt(np.diag(cov))
-    R = (cov - Sig) / np.outer(d, d)
+    ds = np.sqrt(np.diag(Sig))
+    # sample minus implied correlations, and the standardized mean residuals, over the
+    # p(p+3)/2 moments (compat 1302)
+    R = cov / np.outer(d, d) - Sig / np.outer(ds, ds)
     tri = R[np.tril_indices(p)]
-    srmr = float(np.sqrt(np.mean(tri ** 2)))
+    dm = (x["mean"] - mu) / d
+    srmr = float(np.sqrt(((tri ** 2).sum() + (dm ** 2).sum()) / (p * (p + 3) / 2)))
     endog = [model.idx[n] for n in model.endog]
     if endog:
         Psi = S[np.ix_(endog, endog)]
@@ -769,7 +862,7 @@ def _predict(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     target = (getattr(est, "_pred_opts", None) or {}).get(stat)
     X = np.column_stack([ds.get(n).data.astype(float) for n in spec.observed])
     ok = np.all(X < SYS, axis=1)
-    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.b)
+    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.extra["th"])
     if stat == "latent":
         names = [target] if isinstance(target, str) and target.strip() else spec.latent[:1]
         L = names[0].strip()
@@ -805,7 +898,7 @@ def _predict(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
 
 
 def _predict_latent(model, est, X, ok, L):
-    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.b)
+    mu, Sig, (A, S, m, B, Sv, mv) = model.implied(est.extra["th"])
     il = model.idx[L]
     w = np.linalg.solve(Sig, Sv[il, :model.p])
     return (np.where(ok[:, None], X, 0.0) - mu) @ w + mv[il], None

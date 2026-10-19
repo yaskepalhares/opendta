@@ -69,8 +69,7 @@ def _trend(strata_tables, scores) -> tuple[float, float]:
 
 def _homogeneity(strata_tables) -> tuple[float, int]:
     """Generalized Cochran-Mantel-Haenszel test that the odds are equal across the K levels
-    (K-1 df), summed over strata; with one stratum it is N-1/N times Pearson's chi2
-    (VERIFY: Stata may report Pearson's chi2 without adjust())."""
+    (K-1 df), summed over strata; with one stratum it is N-1/N times Pearson's chi2."""
     K = len(strata_tables[0][0])
     d = np.zeros(K - 1)
     Vm = np.zeros((K - 1, K - 1))
@@ -126,10 +125,13 @@ def cmd_tabodds(s: "Session", args: str) -> None:
     out = s.output
     z = E.z_of(level)
     rows = []
+    if adj and o.get("or"):
+        out.write(f"\nMantel-Haenszel odds ratios adjusted for {' '.join(adj)}\n", "text")
     if not o.get("or"):
+        # layout of Stata 14 (compat 1401)
         out.write("\n" + "-" * 74 + "\n", "text")
-        out.write(f"{name12(ev.name):>12} |     cases    controls       odds      [{level:g}% Conf. Interval]\n", "text")
-        out.write("-" * 13 + "+" + "-" * 60 + "\n", "text")
+        out.write(f"{name12(ev.name):>10}  |      cases     controls       odds      [{level:g}% Conf. Interval]\n", "text")
+        out.write("-" * 12 + "+" + "-" * 61 + "\n", "text")
         for lab, ai, bi in zip(labels, a, b):
             odds = E._div(ai, bi)
             if ai > 0 and bi > 0:
@@ -138,8 +140,8 @@ def cmd_tabodds(s: "Session", args: str) -> None:
             else:
                 lo = hi = NAN
             rows.append((odds, lo, hi))
-            out.write(f"{name12(lab):>12} |", "text")
-            out.write(f"{ai:>10.0f}{bi:>12.0f}   {_f5(odds):>9}   {_f5(lo):>9}   {_f5(hi):>9}\n", "result")
+            out.write(f"{name12(lab):>11} |", "text")
+            out.write(f"{ai:>11.0f}{bi:>13.0f}{_f5(odds):>11}{_f5(lo):>15}{_f5(hi):>10}\n", "result")
         out.write("-" * 74 + "\n", "text")
     else:
         bi = 0
@@ -147,54 +149,48 @@ def cmd_tabodds(s: "Session", args: str) -> None:
             bi = int(o["base"]) - 1
             if not 0 <= bi < K:
                 raise StataError(198, "base() out of range")   # VERIFY
-        out.write("\n" + "-" * 79 + "\n", "text")
+        out.write("\n" + "-" * 75 + "\n", "text")
         out.write(f"{name12(ev.name):>12} |  Odds Ratio       chi2       P>chi2     [{level:g}% Conf. Interval]\n", "text")
-        out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
+        out.write("-" * 13 + "+" + "-" * 61 + "\n", "text")
         for k, lab in enumerate(labels):
             out.write(f"{name12(lab):>12} |", "text")
             if k == bi:
-                out.write(f"{1.0:>12.6f}{'.':>11}{'.':>13}{'.':>15}{'.':>12}\n", "result")
+                out.write(f"{1.0:>12.6f}{'.':>11}{'.':>12}{'.':>15}{'.':>11}\n", "result")
                 rows.append((1.0, NAN, NAN))
                 continue
             t2 = [(ca[k], ca[bi], co[k], co[bi]) for ca, co in tabs]
             est, lo, hi = E.mh_or(t2, level)
             chi2, pv = E.mh_chi2(t2)
             rows.append((est, lo, hi))
-            out.write(f"{_f6(est):>12}{_f2(chi2):>11}{_p4(pv):>13}{_f6(lo):>15}{_f6(hi):>12}\n", "result")
-        out.write("-" * 79 + "\n", "text")
-    chi_h, df_h = _homogeneity(tabs) if adj else _pearson_2xk(a, b)
-    ph = float(st.chi2.sf(chi_h, df_h)) if df_h else NAN
+            out.write(f"{_f6(est):>12}{_f2(chi2):>11}{_p4(pv):>13}{_f6(lo):>14}{_f6(hi):>11}\n", "result")
+        out.write("-" * 75 + "\n", "text")
     scores = [float(v) for v in vals]
     U, V = _trend(tabs, scores)
     chi_t = U * U / V if V else NAN
     pt = float(st.chi2.sf(chi_t, 1)) if V else NAN
+    res = [("p_trend", pt), ("chi2_tr", chi_t)]
     if adj:
-        out.write(f"\nMantel-Haenszel odds ratios adjusted for {' '.join(adj)}\n", "text") if o.get("or") else None
-    out.write(f"\nTest of homogeneity (equal odds): chi2({df_h})  = ", "text")
-    out.write(f"{_f2(chi_h):>8}\n", "result")
-    out.write(f"{'Pr>chi2  = ':>45}", "text")
-    out.write(f"{_p4(ph):>8}\n", "result")
-    out.write("\nScore test for trend of odds:     chi2(1)  = ", "text")
-    out.write(f"{_f2(chi_t):>8}\n", "result")
-    out.write(f"{'Pr>chi2  = ':>45}", "text")
-    out.write(f"{_p4(pt):>8}\n", "result")
+        # with adjust(), no test of homogeneity and a shorter layout (compat 1401)
+        out.write("Score test for trend of odds: chi2(1)  =", "text")
+        out.write(f"{_f2(chi_t):>8}\n", "result")
+        out.write(f"{'Pr>chi2  =':>40}", "text")
+        out.write(f"{_p4(pt):>8}\n", "result")
+    else:
+        # the generalized Cochran-Mantel-Haenszel test, (N-1)/N times Pearson's (compat 1401)
+        chi_h, df_h = _homogeneity(tabs)
+        ph = float(st.chi2.sf(chi_h, df_h)) if df_h else NAN
+        out.write(f"Test of homogeneity (equal odds): chi2({df_h})  = ", "text")
+        out.write(f"{_f2(chi_h):>8}\n", "result")
+        out.write(f"{'Pr>chi2  = ':>45}", "text")
+        out.write(f"{_p4(ph):>8}\n", "result")
+        out.write("\nScore test for trend of odds:     chi2(1)  = ", "text")
+        out.write(f"{_f2(chi_t):>8}\n", "result")
+        out.write(f"{'Pr>chi2  = ':>45}", "text")
+        out.write(f"{_p4(pt):>8}\n", "result")
+        res = [("p_hom", ph), ("df_hom", float(df_h)), ("chi2_hom", chi_h)] + res
     if o.get("graph") or o.get("ciplot"):
         _tabodds_graph(s, ev, vals, rows, bool(o.get("ciplot")), bool(o.get("or")))
-    _set_r(s, [("p_trend", pt), ("chi2_tr", chi_t), ("p_hom", ph), ("df_hom", float(df_h)),
-               ("chi2_hom", chi_h)])
-
-
-def _pearson_2xk(a, b) -> tuple[float, int]:
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    n_k = a + b
-    keep = n_k > 0
-    a, b, n_k = a[keep], b[keep], n_k[keep]
-    N, A = n_k.sum(), a.sum()
-    if N == 0 or A == 0 or A == N:
-        return NAN, 0
-    ea, eb = n_k * A / N, n_k * (N - A) / N
-    chi2 = float(((a - ea) ** 2 / ea).sum() + ((b - eb) ** 2 / eb).sum())
-    return chi2, len(a) - 1
+    _set_r(s, res)
 
 
 def _f5(x) -> str:
@@ -281,63 +277,73 @@ def cmd_mhodds(s: "Session", args: str) -> None:
                 chi2, pv, b1, 1 / V if V else NAN)
 
     if binary:
-        title = "Mantel-Haenszel estimate of the odds ratio" if adj or byv else "Maximum likelihood estimate of the odds ratio"   # VERIFY
+        # with by(), the title stays "Maximum likelihood" (compat 1601)
+        title = "Mantel-Haenszel estimate of the odds ratio" if adj else "Maximum likelihood estimate of the odds ratio"   # VERIFY
         out.write(f"\n{title}\n", "text")
-        out.write(f"Comparing {ev.name}=={_num(hi_v)} vs. {ev.name}=={_num(lo_v)}\n", "text")
+        cmp = f"Comparing {ev.name}=={_num(hi_v)} vs. {ev.name}=={_num(lo_v)}"
+        # one line with the controls (compat 1401)
+        out.write(cmp + (f", controlling for {' '.join(adj)}" if adj else "") + "\n", "text")
     else:
         out.write(f"\nScore test for trend of odds with {ev.name}\n", "text")
-    if adj:
+    if adj and not binary:
         out.write(f"controlling for {' '.join(adj)}\n", "text")
+    if byv:
+        out.write(f"by {' '.join(byv)}\n", "text")
+    if not binary:
+        # two lines, the first ending in a space (compat 1601)
+        out.write("\n(The Odds Ratio estimate is an approximation to the odds ratio \n"
+                  f"for a one unit increase in {ev.name})\n", "text")
     if byv:
         _mhodds_by(s, o, estimate, mask, adj, byv, level)
         return
-    if not binary:
-        out.write("(The Odds Ratio estimate is an approximation to the odds ratio for a one unit increase in "
-                  f"{ev.name})\n", "text")
     est, lo, hi, chi2, pv, _, _ = estimate(mask, adj)
     _mhodds_row(s, level, est, chi2, pv, lo, hi)
-    _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est)])
+    _set_r(s, [("p", pv), ("chi2", chi2), ("ub_or", hi), ("lb_or", lo), ("or", est)])
 
 
-def _mhodds_row(s: "Session", level: float, est, chi2, pv, lo, hi, indent: str = "", lead: str = "\n") -> None:
+def _mhodds_row(s: "Session", level: float, est, chi2, pv, lo, hi, lead: str = "\n") -> None:
+    indent = "    "
     out = s.output
     out.write(lead + indent + "-" * 64 + "\n", "text")
     out.write(indent + f" Odds Ratio    chi2(1)        P>chi2        [{level:g}% Conf. Interval]\n", "text")
     out.write(indent + "-" * 64 + "\n", "text")
-    out.write(indent + f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}{_f5(lo):>16}{_f5(hi):>10}\n", "result")
+    # indented, the limits with six decimals (compat 1401, 1601)
+    ci = f"{_f6(lo):>17}{_f6(hi):>11}"
+    out.write(indent + f"{_f6(est):>11}{_f2(chi2):>11}{_p4(pv):>14}" + ci + "\n", "result")
     out.write(indent + "-" * 64 + "\n", "text")
 
 
 def _mhodds_by(s: "Session", o, estimate, mask, adj, byv, level) -> None:
     """by(): the estimate within each group of the by() variables, the estimate controlling
     for them, and a test of homogeneity of the group estimates,
-    sum (b_j - b)^2 / var(b_j) on the log odds ratios (VERIFY: layout and Stata's test)."""
+    sum (b_j - b)^2 / var(b_j) on the log odds ratios (layout: compat 1601; VERIFY: Stata's
+    limits and test for a two-level comparison differ)."""
     out = s.output
     byname, groups = _strata(s, " ".join(byv), mask)
-    out.write(f"by {byname}\n", "text")
     out.write("\n" + "-" * 79 + "\n", "text")
-    out.write(f"{name12(byname):>12} |  Odds Ratio    chi2(1)       P>chi2       [{level:g}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
+    out.write(f"{name12(byname):>9} | Odds Ratio        chi2(1)         P>chi2       [{level:g}% Conf. Interval]\n", "text")
+    out.write("-" * 10 + "+" + "-" * 68 + "\n", "text")
     parts = []
     for lab, sel in groups:
         est, lo, hi, chi2, pv, b, vb = estimate(sel, adj)
         parts.append((b, vb))
-        out.write(f"{name12(lab):>12} |", "text")
-        out.write(f"{_f6(est):>12}{_f2(chi2):>11}{_p4(pv):>13}{_f6(lo):>15}{_f6(hi):>12}\n", "result")
+        out.write(f"{name12(lab):>9} |", "text")
+        out.write(f"{_f6(est):>11}{_f2(chi2):>15}{_p4(pv):>15}{_f5(lo):>16}{_f5(hi):>11}\n", "result")
     out.write("-" * 79 + "\n", "text")
     est, lo, hi, chi2, pv, b, _ = estimate(mask, adj + byv)
     out.write(f"\n    Mantel-Haenszel estimate controlling for {' '.join(adj + byv)}\n", "text")
-    _mhodds_row(s, level, est, chi2, pv, lo, hi, indent="    ", lead="")
+    _mhodds_row(s, level, est, chi2, pv, lo, hi, lead="")
     ok = [(bj, vj) for bj, vj in parts if not math.isnan(bj) and vj > 0 and not math.isinf(vj)]
     chi_h = sum((bj - b) ** 2 / vj for bj, vj in ok) if not math.isnan(b) else NAN
     df_h = len(ok) - 1
     ph = float(st.chi2.sf(chi_h, df_h)) if df_h > 0 and not math.isnan(chi_h) else NAN
-    out.write(f"\nTest of homogeneity of ORs (approx): chi2({df_h})   = ", "text")
+    out.write(f"\nTest of homogeneity of ORs (approx): chi2({df_h})   =", "text")
     out.write(f"{_f2(chi_h):>8}\n", "result")
-    out.write(f"{'Pr>chi2   = ':>49}", "text")
+    out.write(f"{'Pr>chi2   =':>48}", "text")
     out.write(f"{_p4(ph):>8}\n", "result")
-    _set_r(s, [("ub_or", hi), ("lb_or", lo), ("p", pv), ("chi2", chi2), ("or", est),
-               ("df_hom", float(df_h)), ("chi2_hom", chi_h), ("p_hom", ph)])
+    # return list order of Stata 14 (compat 1601)
+    _set_r(s, [("chi2_hom", chi_h), ("df_hom", float(df_h)), ("p", pv), ("chi2", chi2),
+               ("ub_or", hi), ("lb_or", lo), ("or", est)])
 
 
 def _num(v: float) -> str:
@@ -366,18 +372,24 @@ def cmd_symmetry(s: "Session", args: str) -> None:
         T[pos[float(r.data[i])], pos[float(c.data[i])]] += w[i]
     out = s.output
     if not o.get("notable"):
-        width = 9
-        out.write("\n" + "-" * (14 + width * K + 11) + "\n", "text")
-        out.write(f"{name12(r.name):>12}  |{name12(c.name):^{width * K}}|\n", "text")
-        out.write(" " * 14 + "|" + "".join(f"{_num(v):>{width}}" for v in levels) + f"|{'Total':>10}\n", "text")
-        out.write("-" * 14 + "+" + "-" * (width * K) + "+" + "-" * 10 + "\n", "text")
+        # layout of Stata 14 with three levels (compat 1401); VERIFY: other sizes and wide counts
+        inner = 5 + 7 * (K - 1) + 8
+        rule = "-" * (11 + inner)
+        out.write("\n" + rule + "\n", "text")
+        out.write(" " * 10 + "|" + f"{name12(c.name):^{inner}}" + "\n", "text")
+        out.write(f"{name12(r.name):>9} |" + "".join(f"{_num(v):>{4 if j == 0 else 7}}" for j, v in enumerate(levels))
+                  + f"{'Total':>9}\n", "text")
+        out.write("-" * 10 + "+" + "-" * inner + "\n", "text")
+
+        def cells(vals):
+            return "".join(f"{x:>{5 if j == 0 else 7}.0f}" for j, x in enumerate(vals))
         for i, v in enumerate(levels):
-            out.write(f"{_num(v):>12}  |", "text")
-            out.write("".join(f"{T[i, j]:>{width}.0f}" for j in range(K)) + f"|{T[i].sum():>10.0f}\n", "result")
-        out.write("-" * 14 + "+" + "-" * (width * K) + "+" + "-" * 10 + "\n", "text")
-        out.write(f"{'Total':>12}  |", "text")
-        out.write("".join(f"{T[:, j].sum():>{width}.0f}" for j in range(K)) + f"|{T.sum():>10.0f}\n", "result")
-        out.write("-" * (14 + width * K + 11) + "\n", "text")
+            out.write(f"{_num(v):>9} |", "text")
+            out.write(cells(T[i]) + f"{T[i].sum():>7.0f} \n", "result")
+        out.write(" " * 10 + "| \n", "text")
+        out.write(f"{'Total':>9} |", "text")
+        out.write(cells(T.sum(0)) + f"{T.sum():>7.0f} \n", "result")
+        out.write(rule + "\n", "text")
     # Bowker's test of symmetry
     chi_s = 0.0
     df_s = 0
@@ -392,7 +404,7 @@ def cmd_symmetry(s: "Session", args: str) -> None:
                     term = (nij - nji) ** 2 / (nij + nji)
                 chi_s += term
                 df_s += 1
-                contrib.append((levels[i], levels[j], nij, nji, term))
+                contrib.append((i + 1, j + 1, nij, nji, term))
     p_s = float(st.chi2.sf(chi_s, df_s)) if df_s else NAN
     # Stuart-Maxwell test of marginal homogeneity
     d = (T.sum(1) - T.sum(0))[:-1]
@@ -405,39 +417,44 @@ def cmd_symmetry(s: "Session", args: str) -> None:
         chi_m, df_m = NAN, K - 1
     p_m = float(st.chi2.sf(chi_m, df_m)) if df_m and not math.isnan(chi_m) else NAN
     if o.get("contrib"):
-        out.write("\n" + " " * 4 + "Contribution to symmetry chi-squared statistic\n", "text")
-        out.write(f"{'cell':>14}{'n(i,j)':>9}{'n(j,i)':>9}{'chi2':>10}\n", "text")
-        for vi, vj, nij, nji, term in contrib:
-            out.write(f"{'(' + _num(vi) + ',' + _num(vj) + ')':>14}", "text")
-            out.write(f"{nij:>9.0f}{nji:>9.0f}{term:>10.3f}\n", "result")
-    out.write("\n" + " " * 42 + "chi2      df   Prob>chi2\n", "text")
-    out.write("-" * 66 + "\n", "text")
+        # VERIFY: the cells are named by level position
+        out.write("\n" + " " * 18 + "Contribution\n" + " " * 19 + "to symmetry\n"
+                  "   Cells           chi-squared\n" + "-" * 14 + "  " + "-" * 14 + "\n", "text")
+        for i, j, nij, nji, term in contrib:
+            out.write(f" {f'n{i}_{j} & n{j}_{i}':<11}", "text")
+            out.write(f"{term:>16.4f}\n", "result")
+    out.write("\n" + " " * 45 + "chi2     df      Prob>chi2\n", "text")
+    out.write("-" * 72 + "\n", "text")
     rows = [("Symmetry (asymptotic)", chi_s, df_s, p_s),
             ("Marginal homogeneity (Stuart-Maxwell)", chi_m, df_m, p_m)]
-    res = [("p_sm", p_m), ("df_sm", float(df_m)), ("chi2_sm", chi_m), ("p", p_s), ("df", float(df_s)),
-           ("chi2", chi_s), ("N_pair", T.sum())]
+    res = [("N_pair", T.sum()), ("chi2", chi_s), ("df", float(df_s)), ("p", p_s),
+           ("chi2_sm", chi_m), ("df_sm", float(df_m)), ("p_sm", p_m)]
     if o.get("mh"):
-        # Bickenboller's statistic: Stuart-Maxwell without the diagonal covariance terms (VERIFY)
-        Vb = np.diag((T.sum(1) + T.sum(0) - 2 * np.diag(T))[:-1])
-        try:
-            chi_b = float(d @ np.linalg.solve(Vb, d))
-        except np.linalg.LinAlgError:
-            chi_b = NAN
-        p_b = float(st.chi2.sf(chi_b, K - 1)) if not math.isnan(chi_b) else NAN
-        rows.append(("Marginal homogeneity (Bickenboller)", chi_b, K - 1, p_b))
-        res = [("p_b", p_b), ("chi2_b", chi_b)] + res
+        # Bickenboller: sum (n_k. - n_.k)^2 / (n_k. + n_.k); no diagonals: (K-1)/K times
+        # sum (n_k. - n_.k)^2 / (n_k. + n_.k - 2 n_kk) (match compat 1401; VERIFY: r() names)
+        dd = T.sum(1) - T.sum(0)
+        tot = T.sum(1) + T.sum(0)
+        off = tot - 2 * np.diag(T)
+        chi_b = float((dd[tot > 0] ** 2 / tot[tot > 0]).sum())
+        chi_n = float((dd[off > 0] ** 2 / off[off > 0]).sum()) * (K - 1) / K
+        p_b, p_n = float(st.chi2.sf(chi_b, K - 1)), float(st.chi2.sf(chi_n, K - 1))
+        rows += [("Marginal homogeneity (Bickenboller)", chi_b, K - 1, p_b),
+                 ("Marginal homogeneity (no diagonals)", chi_n, K - 1, p_n)]
+        res += [("chi2_b", chi_b), ("df_b", float(K - 1)), ("p_b", p_b),
+                ("chi2_nd", chi_n), ("df_nd", float(K - 1)), ("p_nd", p_n)]
     for label, chi, df, pv in rows:
-        out.write(f"{label:<38}", "text")
-        out.write(f"{_f2(chi):>10}{df:>8}{_p4(pv):>12}\n", "result")
-    out.write("-" * 66 + "\n", "text")
+        out.write(f"{label:<38}|", "text")
+        out.write(f"{_f2(chi):>10}{df:>7}{_p4(pv):>15}\n", "result")
+    out.write("-" * 72 + "\n", "text")
     if o.get("exact"):
         # exact significance of the symmetry test: product of conditional binomials over the
-        # off-diagonal pairs, enumerated by the statistic (VERIFY: Stata's exact test)
+        # off-diagonal pairs, enumerated by the statistic (compat 1401 matches)
         p_e = _symmetry_exact([(int(t[2]), int(t[3])) for t in contrib], chi_s)
-        out.write(f"{'Symmetry (exact significance probability)':<54}", "text")
-        out.write(f"{_p4(p_e):>12}\n", "result")
-        res = [("p_exact", p_e)] + res
-    _set_r(s, res)
+        out.write(f"{'Symmetry (exact significance probability)':<41}", "text")
+        out.write(f"{_p4(p_e):>30}\n", "result")
+        res.append(("p_exact", p_e))
+    # return list in Stata's order (compat 1401)
+    _set_r(s, res[::-1])
 
 
 def _symmetry_exact(pairs, observed: float) -> float:

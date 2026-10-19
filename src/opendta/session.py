@@ -338,7 +338,8 @@ class Session:
         extra = self.expand_varlist(" ".join(bp.sort_extra)) if bp.sort_extra else []
         if bp.sort:
             sorting.sort(ds, keys + extra)
-        elif not sorting.is_sorted(ds, keys + extra):
+        elif ds.sortlist[:len(keys + extra)] != keys + extra:
+            # Stata goes by the sort marker, not the order of the data (compat 1501)
             raise StataError(5, "not sorted")
         groups = Groups.from_columns([ds.get(k).data for k in keys])
         saved = self.by_groups, getattr(self, "_by_keys", [])

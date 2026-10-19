@@ -117,6 +117,8 @@ return list
 roctab disease rating [fw=pop], lorenz
 return list
 expand pop
+* male before roccomp: Stata's roccomp, by() may reorder the data (compat 1601)
+gen male = mod(_n, 2)
 set seed 1601
 gen r2 = rating + (disease==1)*(runiform()<.3)
 gen grp = runiform() < .5
@@ -125,7 +127,6 @@ return list
 roccomp disease rating, by(grp) binormal
 
 * rocreg: the bootstrap replicates depend on Stata's resampling order (VERIFY)
-gen male = mod(_n, 2)
 rocreg disease rating r2, nobootstrap
 ereturn list
 rocreg disease rating, tiecorrected nobootstrap

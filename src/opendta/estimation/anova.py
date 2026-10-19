@@ -475,20 +475,24 @@ def cmd_anova(s: "Session", args: str) -> None:
 
     line("Model", mss, df_m, mss / df_m if df_m else SYS, F_m, p_m)
     out.write(f"{'':>24} |\n", "text")
+    after_sep = False
     for gi, (members, err) in enumerate(groups):
         last = gi == len(groups) - 1
         for t_ in members:
             name, ss, df, ms, F, pv = rows[index[id(t_)]]
             line(name, ss, df, ms, F, pv)
+            after_sep = False
         if err is not None:
             k = index[id(err)]
             line(err.name, ss_df[k][0], ss_df[k][1], ms_of(k))
             out.write(sep, "text")
-        elif not last:
+            after_sep = True
+        elif not last and any(m for m, _ in groups[gi + 1:]):
             out.write(f"{'':>24} |\n", "text")
             line("Residual", rss, df_r, mse)
             out.write(sep, "text")
-    if groups[-1][0] or len(groups) == 1:
+            after_sep = True
+    if not after_sep:
         out.write(f"{'':>24} |\n", "text")
     line("Residual", rss, df_r, mse)
     out.write(sep, "text")
@@ -506,32 +510,43 @@ def cmd_anova(s: "Session", args: str) -> None:
         for n_ in t_.variables:
             if n_ not in seen:
                 seen.append(n_)
+    extra = getattr(s, "_anova_extra", {})
+    s._anova_extra = {}
     scalars = [("N", N), ("df_m", float(df_m)), ("df_r", float(df_r)), ("F", F_m), ("r2", r2),
                ("rmse", rmse), ("mss", mss), ("rss", rss), ("r2_a", r2a), ("ll", e0.get("ll", SYS)),
-               ("ll_0", e0.get("ll_0", SYS)), ("rank", e0.get("rank", SYS))]
+               ("ll_0", e0.get("ll_0", SYS))]
+    scalars += [(k_, v) for k_, v in extra.items() if not k_.startswith("_")]
+    scalars.append(("rank", e0.get("rank", SYS)))
     for k, (name, ss, df, ms, F, pv) in enumerate(rows, start=1):
-        scalars += [(f"ss_{k}", ss), (f"df_{k}", float(df)), (f"F_{k}", F)]
+        trio = [(f"ss_{k}", ss), (f"df_{k}", float(df)), (f"F_{k}", F)]
+        # the tests of the repeated variables are stored again, in reverse (compat 0805)
+        if set(terms[k - 1].variables) & set(repeated):
+            trio.reverse()
+        scalars += trio
         e = tested_against.get(k - 1)
         if isinstance(e, int):     # VERIFY: names of the error-term results
             scalars += [(f"ssdenom_{k}", ss_df[e][0]), (f"dfdenom_{k}", float(ss_df[e][1]))]
     macros = [("cmdline", f"anova {args.strip()}"), ("depvar", dep), ("cmd", "anova"),
               ("varnames", " ".join(seen)), ("estat_cmd", "anova_estat")]
     macros += [(f"term_{k}", rows[k - 1][0]) for k in range(len(rows), 0, -1)]
+    macros.append(("sstype", "sequential" if sequential else "partial"))
     if repeated:
         macros.append(("repvars", " ".join(repeated)))
-    macros += [("sstype", "sequential" if sequential else "partial"), ("properties", "b V"),
+        macros += [(f"repvar{i}", v) for i, v in enumerate(extra.get("_repvar", []), start=1)]
+    macros += [("properties", "b V"),
                ("predict", "regres_p"), ("model", "ols")]
     e: dict = {}
     for k_, v in reversed(macros):
         e[k_] = v
     for k_, v in reversed(scalars):
         e[k_] = float(v)
+    if "_Srep" in extra:
+        from ..commands.matrix import Matrix
+        nm = [str(i) for i in range(1, len(extra["_Srep"]) + 1)]   # VERIFY: row and column names
+        e["Srep"] = Matrix(np.asarray(extra["_Srep"], float), nm, nm)
     for k_ in ("V", "b"):
         if k_ in e0:
             e[k_] = e0[k_]
-    for k_, v in getattr(s, "_anova_extra", {}).items():
-        e[k_] = v
-    s._anova_extra = {}
     s.e = e
     est = getattr(s, "_estimates", None)
     if est is not None:
@@ -598,10 +613,10 @@ def _repeated(s, o, terms, ss_df, data, y, w, repeated, tested_against, index, r
             if all(len(set(x[unit == u].tolist())) == 1 for u in range(nunits)):
                 gvars.append(v)
     if gvars:
-        out.write(f"{'Covariance pooled over:':>28}  {' '.join(gvars)}   (for repeated variable)\n",
+        out.write(f"{'Covariance pooled over:':>28}  {' '.join(gvars):<10}(for repeated variable)\n",
                   "text")
     group = _cells(data, gvars) if gvars else np.zeros(len(y), dtype=np.int64)
-    extra = {}
+    extra = {"_repvar": []}
     for r_i, rv in enumerate(repeated, start=1):
         levels = data[rv][1]
         kl = len(levels)
@@ -665,7 +680,13 @@ def _repeated(s, o, terms, ss_df, data, y, w, repeated, tested_against, index, r
         for ename, edf in shown_err:
             out.write(f"{ename:>24} |", "text")
             out.write(f"{edf:>7.0f}\n", "result")
-        out.write(sep, "text")
-        extra.update({f"gg_{r_i}": gg_eps, f"hf_{r_i}": hf_used,
-                      f"box_{r_i}": box})   # VERIFY: names of these e() results
+        out.write(" " * 14 + "-" * 64 + "\n", "text")
+        # Stata 14 (compat 0805): box#, gg#, hf# (not reset to 1), the error unit, Srep
+        extra[f"box{r_i}"] = box
+        extra[f"gg{r_i}"] = gg_eps
+        extra[f"hf{r_i}"] = hf
+        extra["_repvar"].append(rv)
+        extra["_Srep"] = S_
+    extra["N_bse"] = float(nunits)
+    extra["df_bse"] = float(ss_df[k_bse][1])
     s._anova_extra = extra

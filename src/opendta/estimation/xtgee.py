@@ -47,6 +47,29 @@ def _g(x, fmt="%9.0g"):
     return format_value(float(x), fmt, pad=False).strip()
 
 
+def _tol(x: float) -> str:
+    """The convergence measure of the iteration log: 8 decimals, or 4 significant digits in
+    e-notation below 1e-5 (.01223339, .00001469, 1.619e-08; compat 0805)."""
+    if x >= 1e-5:
+        return f"{x:.8f}".lstrip("0") if x < 1 else f"{x:.8f}"
+    return f"{x:.3e}"
+
+
+def _deviance(fam: str, y, mu, m):
+    """Deviance of the GLM family (Gaussian, Bernoulli/binomial, Poisson; None otherwise)."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if fam == "gaussian":
+            return float(((y - mu) ** 2).sum())
+        if fam == "poisson":
+            t = np.where(y > 0, y * np.log(y / mu), 0.0)
+            return float(2 * (t - (y - mu)).sum())
+        if fam == "binomial":
+            t1 = np.where(y > 0, y * np.log(y / mu), 0.0)
+            t2 = np.where(m - y > 0, (m - y) * np.log((m - y) / (m - mu)), 0.0)
+            return float(2 * (t1 + t2).sum())
+    return None
+
+
 def _parse_corr(text: str) -> tuple[str, int]:
     words = text.replace("(", " ").replace(")", " ").split()
     if not words:
@@ -77,7 +100,7 @@ def run_pa(s: "Session", cmd: str, args: str) -> bool:
         return False
     family, link = {"xtreg": ("gaussian", "identity"), "xtlogit": ("binomial", "logit"),
                     "xtpoisson": ("poisson", "log"), "xtprobit": ("binomial", "probit")}[cmd]
-    cmd_xtgee(s, pa_args(args, family, link), cmd2=cmd)
+    cmd_xtgee(s, pa_args(args, family, link), cmd2=cmd, cmdline=f"{cmd} {args.strip()}")
     return True
 
 
@@ -100,7 +123,7 @@ def pa_args(args: str, family: str, link: str) -> str:
     return head + ", " + " ".join(keep)
 
 
-def cmd_xtgee(s: "Session", args: str, *, cmd2: str = "") -> None:
+def cmd_xtgee(s: "Session", args: str, *, cmd2: str = "", cmdline: str = "") -> None:
     from .postest import replay
     from .tsops import panel_info, ts_info
     if not args.strip() or args.strip().startswith(","):
@@ -330,6 +353,7 @@ def cmd_xtgee(s: "Session", args: str, *, cmd2: str = "") -> None:
     wobs = wg[inv]
     pearson = float((wobs * r * r).sum())
     phi_hat = pearson / (wobs.sum() - (p if nmp else 0))
+    dev = _deviance(fam, y, mu, m_trials)
     H, U, mu, v, parts = fit_step(b, R)
     Hinv = np.linalg.pinv(H)
     if sc_opt in ("x2", "chi2"):
@@ -344,19 +368,21 @@ def cmd_xtgee(s: "Session", args: str, *, cmd2: str = "") -> None:
     else:
         phi_use = 1.0 if scale_fixed else phi_hat
     robust = smp.vce in ("robust", "cluster")
+    V_model = phi_use * Hinv
     if robust:
         B = np.zeros((p, p))
         for g, part in enumerate(parts):
             B += wg[g] * np.outer(part, part)
-        V = Hinv @ B @ Hinv
+        # with the small-sample factor G/(G - 1) (compat 0805)
+        V = Hinv @ B @ Hinv * (G / (G - 1) if G > 1 else 1.0)
     else:
-        V = phi_use * Hinv
+        V = V_model
     V = (V + V.T) / 2
 
     if not o.get("nolog") and log:
         out.write("\n", "text")
         for k, d_ in enumerate(log, start=1):
-            out.write(f"Iteration {k}: tolerance = {_g(d_)}\n", "text")
+            out.write(f"Iteration {k}: tolerance = {_tol(d_)}\n", "text")
     k_slopes = pr.X.shape[1]
     bs, Vs = b[:k_slopes], V[:k_slopes, :k_slopes]
     try:
@@ -390,30 +416,39 @@ def cmd_xtgee(s: "Session", args: str, *, cmd2: str = "") -> None:
          "tmax": int(cnt.max()), "chi2": chi2, "p": pchi, "df": k_slopes, "phi": phi_use,
          "family": _FAMILY_TEXT[fam], "link": _LINK_TEXT.get(link_name, link_name.lower()),
          "corr": corr if corr in ("independent", "exchangeable", "unstructured")
-         else f"{corr}({corr_k})" if corr != "ar" else f"AR({corr_k})", "robust": robust}
+         else f"{corr}({corr_k})" if corr != "ar" else f"AR({corr_k})", "robust": robust,
+         "tvar": tvar if corr in ("ar", "stationary", "nonstationary", "unstructured") else "",
+         "pearson": pearson, "deviance": dev, "independent": corr == "independent"}
     est.extra = x
     est.glm_ginv = ginv
     est.predict = _predict
     est.display = display_xtgee
 
-    title = "GEE population-averaged model"
-    scalars = [("N", float(n)), ("N_g", float(G)), ("df_m", float(k_slopes)), ("chi2", chi2),
-               ("p", pchi), ("df_pear", float(n - p)), ("deviance", SYS), ("dispers", SYS),
-               ("phi", phi_use), ("tol", tol), ("dif", log[-1] if log else 0.0),
-               ("g_min", float(cnt.min())), ("g_avg", float(cnt.mean())), ("g_max", float(cnt.max())),
-               ("rank", float(np.linalg.matrix_rank(V))), ("rc", 0.0 if converged else 430.0)]
-    macros = [("cmdline", f"{cmd2 or 'xtgee'} {args.strip()}"), ("cmd", "xtgee"), ("cmd2", cmd2),
-              ("depvar", smp.depname), ("family", _FAMILY_TEXT[fam]),
-              ("link", x["link"]), ("corr", x["corr"]), ("scale", sc_opt or ("1" if scale_fixed else "phi")),
-              ("ivar", pvar), ("tvar", tvar), ("vce", "robust" if robust else "conventional"),
-              ("vcetype", "Robust" if robust else ""), ("chi2type", "Wald"), ("model", "pa"),
-              ("title", title), ("properties", "b V"), ("predict", "xtgee_p")]
+    # e() in Stata 14's ereturn list order (compat 0805)
+    df_pear = float(n)
+    scalars = [("df_m", float(k_slopes)), ("chi2", chi2), ("p", pchi), ("df_pear", df_pear),
+               ("N", float(n)), ("N_g", float(G)), ("g_max", float(cnt.max())),
+               ("g_min", float(cnt.min())), ("g_avg", float(cnt.mean())), ("tol", tol),
+               ("dif", log[-1] if log else 0.0), ("phi", phi_use),
+               ("deviance", dev if dev is not None else SYS),
+               ("dispers", dev / df_pear if dev is not None else SYS),
+               ("chi2_dev", pearson), ("chi2_dis", pearson / df_pear),   # VERIFY: names
+               ("rc", 0.0 if converged else 430.0), ("rank", float(np.linalg.matrix_rank(V)))]
+    macros = [("cmdline", cmdline or f"xtgee {args.strip()}"), ("cmd2", cmd2),
+              ("predict", f"{cmd2}_pa_p" if cmd2 else "xtgee_p"), ("depvar", smp.depname),
+              ("cmd", "xtgee"), ("marginsnotok", "SCore STDP" if cmd2 else ""),   # VERIFY
+              ("link", x["link"]), ("corr", x["corr"]), ("family", _FAMILY_TEXT[fam]),
+              ("ivar", pvar), ("tvar", x["tvar"]), ("model", "pa"),
+              ("scale", sc_opt or ("1" if scale_fixed else "phi")),
+              ("vce", "robust" if robust else "conventional"), ("vcetype", "Robust" if robust else ""),
+              ("chi2type", "Wald"), ("properties", "b V")]
     from ..commands.matrix import Matrix
-    Rshow = R if corr != "exchangeable" else np.array([[1.0, R[0, 1] if T > 1 else 0.0],
-                                                       [R[0, 1] if T > 1 else 0.0, 1.0]])
-    Rmat = Matrix(Rshow, [f"r{i + 1}" for i in range(Rshow.shape[0])],
-                  [f"c{i + 1}" for i in range(Rshow.shape[1])])
-    post(s, est, list(reversed(scalars)), list(reversed(macros)), mask, extra_mats=[("R", Rmat)])
+    Rmat = Matrix(R, [f"r{i + 1}" for i in range(R.shape[0])], [f"c{i + 1}" for i in range(R.shape[1])])
+    mats = [("R", Rmat)]
+    if robust:
+        names = [nm for nm, _ in layout]
+        mats.append(("V_modelbased", Matrix(_expand(pr, b, V_model, layout)[1], names, names)))
+    post(s, est, scalars, macros, mask, extra_mats=mats)
     if not o.get("nodisplay"):
         display_xtgee(s, est)
 
@@ -424,7 +459,9 @@ def display_xtgee(s: "Session", est: Estimates, *, header: bool = True, table: b
     x = est.extra
     if header:
         out.write("\n", "text")
-        left = [("GEE population-averaged model", ""), ("Group variable:", x["pvar"]),
+        left = [("GEE population-averaged model", ""),
+                ("Group and time vars:", f"{x['pvar']} {x['tvar']}") if x.get("tvar") else
+                ("Group variable:", x["pvar"]),
                 ("Link:", x["link"]), ("Family:", x["family"]), ("Correlation:", x["corr"]),
                 ("", ""), ("", ""), ("Scale parameter:", _g(x["phi"]))]
         right = [("Number of obs", f"{x['N']:,}"), ("Number of groups", f"{x['G']:,}"),
@@ -433,7 +470,7 @@ def display_xtgee(s: "Session", est: Estimates, *, header: bool = True, table: b
                  ("Prob > chi2", _g(x["p"], "%10.4f"))]
         for (ll, lv), (rl, rv) in zip(left, right):
             if lv:
-                lt = f"{ll:<16}{lv:>27}"
+                lt = f"{ll}{lv:>{42 - len(ll)}}"
             else:
                 lt = ll
             out.write(f"{lt:<48}", "text")
@@ -445,6 +482,16 @@ def display_xtgee(s: "Session", est: Estimates, *, header: bool = True, table: b
             else:
                 out.write(f"{rl:<18}= ", "text")
                 out.write(f"{rv:>10}\n", "result")
+        if x.get("independent") and x.get("deviance") is not None:
+            # VERIFY: shown only with corr(independent) (compat 0805)
+            dfp = x["N"]
+            out.write("\n", "text")
+            lab = f"Pearson chi2({dfp}):"
+            out.write(f"{lab}{_g(x['pearson'], '%10.2f'):>{42 - len(lab)}}      Deviance          = ", "text")
+            out.write(f"{_g(x['deviance'], '%10.2f'):>10}\n", "result")
+            lab = "Dispersion (Pearson):"
+            out.write(f"{lab}{_g(x['pearson'] / dfp):>{42 - len(lab)}}      Dispersion        = ", "text")
+            out.write(f"{_g(x['deviance'] / dfp):>10}\n", "result")
         out.write("\n", "text")
     if table:
         if x.get("robust"):

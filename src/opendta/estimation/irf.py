@@ -370,6 +370,24 @@ def _need_file(s) -> dict:
     return data
 
 
+def _six(x: float) -> str:
+    """irf table's numbers: six digits after the leading "0." of numbers below 1, six
+    significant digits otherwise, trailing zeros dropped (.479762, .06157, 1.53619;
+    compat 1303; VERIFY numbers of 1e5 and more)."""
+    if not np.isfinite(x):
+        return "."
+    ax = abs(x)
+    ndig = 0 if ax < 1 else len(str(int(ax)))
+    t = f"{x:.{max(6 - ndig, 0)}f}"
+    if "." in t:
+        t = t.rstrip("0").rstrip(".")
+    if t.startswith("0."):
+        t = t[1:]
+    elif t.startswith("-0."):
+        t = "-" + t[2:]
+    return "0" if t in ("", "-0", "-") else t
+
+
 def _table(s: "Session", rest: str) -> None:
     p = parse_standard(rest)
     o = match_options(p.options, {"irf": 3, "impulse": 3, "response": 3, "noci": 4,
@@ -384,43 +402,64 @@ def _table(s: "Session", rest: str) -> None:
     z = float(st.norm.isf((1 - level / 100) / 2))
     out = s.output
     names = list(dict.fromkeys(n for n, _a, _r in picks))
-    out.write(f"\nResults from {' '.join(names)}\n", "text")
-    cols = []          # (header, stat, kind, pick index)
+    # one group of columns per (irf result, statistic): the estimate, then its limits or its
+    # standard error; groups separated by "|" (compat 1303)
+    groups = []
     for q, pick in enumerate(picks, start=1):
         for k in stats:
-            cols.append((q, k, "est"))
+            cols = [(q, k, "est")]
             if not o.get("noci"):
                 cols += [(q, k, "lo"), (q, k, "hi")]
             if o.get("stderror"):
                 cols.append((q, k, "se"))
+            groups.append(cols)
     steps = min(data[n]["meta"]["step"] for n in names)
     if isinstance(o.get("step"), str):
         steps = min(steps, int(float(o["step"])))
     per = 6                      # VERIFY: columns per table
-    for start in range(0, len(cols), per):
-        block = cols[start:start + per]
-        width = 8 + 12 * len(block)
-        out.write("\n+" + "-" * (width + 1) + "+\n", "text")
-        out.write("|        |" + "".join(f"{'(' + str(q) + ')':>11} " for q, _k, _t in block) + "|\n", "text")
-        heads = {"est": None, "lo": "Lower", "hi": "Upper", "se": "S.E."}
-        out.write("|  step  |" + "".join(f"{(k if heads[t] is None else heads[t]):>11} " for _q, k, t in block)
+    tables, cur = [], []
+    for g in groups:
+        if cur and sum(len(x) for x in cur) + len(g) > per:
+            tables.append(cur)
+            cur = []
+        cur.append(g)
+    tables.append(cur)
+    heads = {"est": None, "lo": "Lower", "hi": "Upper", "se": "S.E."}
+
+    def cells(texts):
+        # 12-character cells, the last of each group one shorter
+        return "".join(t.ljust(12) for t in texts)[:12 * len(texts) - 1]
+    title = f"Results from {' '.join(names)}"
+    for ti, tab in enumerate(tables):
+        width = 10 + sum(12 * len(g) for g in tab)
+        if ti == 0:
+            out.write("\n" + " " * max(0, (width - len(title)) // 2 - 1) + title + "\n", "text")
+        out.write("\n+" + "-" * (width - 2) + "+\n", "text")
+        out.write("|        |" + "|".join(cells([f"{'(' + str(q) + ')':>7}" for q, _k, _t in g]) for g in tab)
                   + "|\n", "text")
-        out.write("|--------+" + "-" * (12 * len(block)) + "|\n", "text")
+        # names start at (10 - length) // 2 within the cell
+        out.write("|  step  |" + "|".join(cells([" " * ((10 - len(nm)) // 2) + nm for nm in
+                                                 [k if heads[t] is None else heads[t] for _q, k, t in g]])
+                                         for g in tab) + "|\n", "text")
+        out.write("|--------+" + "+".join("-" * (12 * len(g) - 1) for g in tab) + "|\n", "text")
         for h in range(steps + 1):
-            vals = []
-            for q, k, t in block:
-                n, a, r = picks[q - 1]
-                res = data[n]
-                deps = res["meta"]["vars"]
-                i, j = deps.index(r), deps.index(a)
-                b = res["stats"][k][h, i, j]
-                se_ = res["se"][k][h, i, j]
-                v = {"est": b, "lo": b - z * se_, "hi": b + z * se_, "se": se_}[t]
-                vals.append(_g(v))
+            parts = []
+            for g in tab:
+                vals = []
+                for q, k, t in g:
+                    n, a, r = picks[q - 1]
+                    res = data[n]
+                    deps = res["meta"]["vars"]
+                    i, j = deps.index(r), deps.index(a)
+                    b = res["stats"][k][h, i, j]
+                    se_ = res["se"][k][h, i, j]
+                    v = {"est": b, "lo": b - z * se_, "hi": b + z * se_, "se": se_}[t]
+                    vals.append(" " + _six(v))
+                parts.append(cells(vals))
             out.write(f"|{h:<8}|", "text")
-            out.write("".join(f"{v:>11} " for v in vals), "result")
+            out.write("|".join(parts), "result")
             out.write("|\n", "text")
-        out.write("+" + "-" * (width + 1) + "+\n", "text")
+        out.write("+" + "-" * (width - 2) + "+\n", "text")
     if not o.get("noci"):
         out.write(f"{level:g}% lower and upper bounds reported\n", "text")
     for q, (n, a, r) in enumerate(picks, start=1):
@@ -469,14 +508,19 @@ def _describe(s: "Session", rest: str) -> None:
     data = _need_file(s)
     path = _active(s)
     out = s.output
-    out.write(f"\nContains irf results from {path.name}\n\n", "text")   # VERIFY layout
-    out.write(f"{'irfname':<15}{'model':<8}{'endogenous variables and order (*)':<36}\n", "text")
-    out.write("-" * 78 + "\n", "text")
+    import datetime
+    stamp = datetime.datetime.fromtimestamp(path.stat().st_mtime).strftime("%d %b %Y %H:%M")
+    width = int(s.settings.get("linesize", 80))
+    # rules as wide as the line (compat 1303)
+    out.write(f"Contains irf results from {path.name} (dated {stamp})\n\n", "text")
+    out.write(f"{'irfname':>14} | model    endogenous variables and order (*)\n", "text")
+    out.write("-" * 15 + "+" + "-" * (width - 16) + "\n", "text")
     for n, res in data.items():
         m_ = res["meta"]
-        out.write(f"{n:<15}{m_['model']:<8}", "result")
-        out.write(" ".join(m_["order"]) + " *\n", "text")
-    out.write("-" * 78 + "\n", "text")
+        out.write(f"{n:>14} | ", "text")
+        out.write(f"{m_['model']:<9}" + " ".join(m_["order"]) + "\n", "result")
+    out.write("-" * width + "\n", "text")
+    out.write("  (*) order is relevant only when model is var\n", "text")
     s.r = {"irfnames": " ".join(data)}
 
 
@@ -510,3 +554,4 @@ def _rename(s: "Session", rest: str) -> None:
     _save(path, data)
     s.output.write(f"({len(data[new]['meta']['vars']) ** 2 * (data[new]['meta']['step'] + 1)} "
                    f"real changes made)\n", "text")   # VERIFY
+    s.output.write(f"{old} renamed to {new}\n", "text")

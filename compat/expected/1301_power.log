@@ -1,0 +1,579 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/do/../stata/1301_power.log
+  log type:  text
+ opened on:  19 Oct 2026, 11:43:54
+
+. * power: sample size, power and effect size of the essential methods
+. power onemean 100 102, sd(5)
+
+Performing iteration ...
+
+Estimated sample size for a one-sample mean test
+t test
+Ho: m = m0  versus  Ha: m != m0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.4000
+           m0 =  100.0000
+           ma =  102.0000
+           sd =    5.0000
+
+Estimated sample size:
+
+            N =        52
+
+. return list
+
+scalars:
+                  r(N) =  52
+              r(power) =  .8
+               r(beta) =  .2
+              r(alpha) =  .05
+        r(nfractional) =  0
+           r(onesided) =  0
+               r(init) =  49.05549833968178
+          r(converged) =  1
+               r(iter) =  4
+            r(maxiter) =  500
+             r(deltax) =  3.52695377133e-13
+          r(tolerance) =  1.00000000000e-12
+           r(function) =  0
+         r(ftolerance) =  1.00000000000e-12
+                 r(m0) =  100
+              r(delta) =  .4
+            r(knownsd) =  0
+                 r(sd) =  5
+               r(diff) =  2
+                 r(ma) =  102
+
+macros:
+               r(type) : "test"
+             r(method) : "onemean"
+
+. power onemean 100 102, sd(5) knownsd
+
+Performing iteration ...
+
+Estimated sample size for a one-sample mean test
+z test
+Ho: m = m0  versus  Ha: m != m0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.4000
+           m0 =  100.0000
+           ma =  102.0000
+           sd =    5.0000
+
+Estimated sample size:
+
+            N =        50
+
+. power onemean 100 102, sd(5) n(40)
+
+Estimated power for a one-sample mean test
+t test
+Ho: m = m0  versus  Ha: m != m0
+
+Study parameters:
+
+        alpha =    0.0500
+            N =        40
+        delta =    0.4000
+           m0 =  100.0000
+           ma =  102.0000
+           sd =    5.0000
+
+Estimated power:
+
+        power =    0.6940
+
+. capture noisily power onemean 100, sd(5) n(40)
+alternative mean is required to compute power
+
+. power onemean 100, sd(5) n(40) power(.8)
+
+Performing iteration ...
+
+Estimated target mean for a one-sample mean test
+t test
+Ho: m = m0  versus  Ha: m != m0; ma > m0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+            N =        40
+           m0 =  100.0000
+           sd =    5.0000
+
+Estimated effect size and target mean:
+
+        delta =    0.4543
+           ma =  102.2713
+
+. power onemean 100 102, sd(5) onesided
+
+Performing iteration ...
+
+Estimated sample size for a one-sample mean test
+t test
+Ho: m = m0  versus  Ha: m > m0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.4000
+           m0 =  100.0000
+           ma =  102.0000
+           sd =    5.0000
+
+Estimated sample size:
+
+            N =        41
+
+. power twomeans 12 14, sd(4)
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample means test
+t test assuming sd1 = sd2 = sd
+Ho: m2 = m1  versus  Ha: m2 != m1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    2.0000
+           m1 =   12.0000
+           m2 =   14.0000
+           sd =    4.0000
+
+Estimated sample sizes:
+
+            N =       128
+  N per group =        64
+
+. return list
+
+scalars:
+              r(power) =  .8
+               r(beta) =  .2
+              r(alpha) =  .05
+              r(delta) =  2
+        r(nfractional) =  0
+           r(onesided) =  0
+               r(init) =  63
+          r(converged) =  1
+               r(iter) =  4
+            r(maxiter) =  500
+             r(deltax) =  3.51071617750e-13
+          r(tolerance) =  1.00000000000e-12
+           r(function) =  4.93038065763e-32
+         r(ftolerance) =  1.00000000000e-12
+                  r(N) =  128
+            r(unequal) =  0
+           r(knownsds) =  0
+                r(sd2) =  4
+                r(sd1) =  4
+                 r(sd) =  4
+               r(diff) =  2
+                 r(m2) =  14
+                 r(m1) =  12
+             r(nratio) =  1
+                 r(N2) =  64
+                 r(N1) =  64
+
+macros:
+               r(type) : "test"
+             r(method) : "twomeans"
+
+. power twomeans 12 14, sd(4) power(.9)
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample means test
+t test assuming sd1 = sd2 = sd
+Ho: m2 = m1  versus  Ha: m2 != m1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.9000
+        delta =    2.0000
+           m1 =   12.0000
+           m2 =   14.0000
+           sd =    4.0000
+
+Estimated sample sizes:
+
+            N =       172
+  N per group =        86
+
+. power twomeans 12 14, sd1(4) sd2(6) nratio(2)
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample means test
+Satterthwaite's t test assuming unequal variances
+Ho: m2 = m1  versus  Ha: m2 != m1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    2.0000
+           m1 =   12.0000
+           m2 =   14.0000
+          sd1 =    4.0000
+          sd2 =    6.0000
+        N2/N1 =    2.0000
+
+Estimated sample sizes:
+
+            N =       204
+           N1 =        68
+           N2 =       136
+
+. power twomeans 12 14, sd(4) n(100)
+
+Estimated power for a two-sample means test
+t test assuming sd1 = sd2 = sd
+Ho: m2 = m1  versus  Ha: m2 != m1
+
+Study parameters:
+
+        alpha =    0.0500
+            N =       100
+  N per group =        50
+        delta =    2.0000
+           m1 =   12.0000
+           m2 =   14.0000
+           sd =    4.0000
+
+Estimated power:
+
+        power =    0.6969
+
+. power pairedmeans 10 12, sddiff(5)
+
+Performing iteration ...
+
+Estimated sample size for a two-sample paired-means test
+Paired t test
+Ho: d = d0  versus  Ha: d != d0
+
+Study parameters:
+
+        alpha =    0.0500          ma1 =   10.0000
+        power =    0.8000          ma2 =   12.0000
+        delta =    0.4000
+           d0 =    0.0000
+           da =    2.0000
+         sd_d =    5.0000
+
+Estimated sample size:
+
+            N =        52
+
+. power pairedmeans 10 12, corr(.5) sd(4)
+
+Performing iteration ...
+
+Estimated sample size for a two-sample paired-means test
+Paired t test assuming sd1 = sd2 = sd
+Ho: d = d0  versus  Ha: d != d0
+
+Study parameters:
+
+        alpha =    0.0500          ma1 =   10.0000
+        power =    0.8000          ma2 =   12.0000
+        delta =    0.5000           sd =    4.0000
+           d0 =    0.0000         corr =    0.5000
+           da =    2.0000
+         sd_d =    4.0000
+
+Estimated sample size:
+
+            N =        34
+
+. power oneproportion .3 .4
+
+Performing iteration ...
+
+Estimated sample size for a one-sample proportion test
+Score z test
+Ho: p = p0  versus  Ha: p != p0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.1000
+           p0 =    0.3000
+           pa =    0.4000
+
+Estimated sample size:
+
+            N =       172
+
+. power oneproportion .3 .4, test(wald)
+
+Performing iteration ...
+
+Estimated sample size for a one-sample proportion test
+Wald z test
+Ho: p = p0  versus  Ha: p != p0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.1000
+           p0 =    0.3000
+           pa =    0.4000
+
+Estimated sample size:
+
+            N =       189
+
+. capture noisily power oneproportion .3 .4, test(binomial)
+power oneproportion: sample-size determination is not allowed.
+    Sample-size determination is not allowed for the binomial test.  Power function of the binomial test is often nonmonotonic; see Saw-toothed power function for details.
+
+. power oneproportion .3 .4, test(binomial) n(150)
+
+Estimated power for a one-sample proportion test
+Binomial test
+Ho: p = p0  versus  Ha: p != p0
+
+Study parameters:
+
+        alpha =    0.0500
+            N =       150
+        delta =    0.1000
+           p0 =    0.3000
+           pa =    0.4000
+
+Estimated power and alpha:
+
+        power =    0.7189
+ actual alpha =    0.0400
+
+. power oneproportion .3 .4, n(150)
+
+Estimated power for a one-sample proportion test
+Score z test
+Ho: p = p0  versus  Ha: p != p0
+
+Study parameters:
+
+        alpha =    0.0500
+            N =       150
+        delta =    0.1000
+           p0 =    0.3000
+           pa =    0.4000
+
+Estimated power:
+
+        power =    0.7475
+
+. power twoproportions .3 .45
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample proportions test
+Pearson's chi-squared test 
+Ho: p2 = p1  versus  Ha: p2 != p1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.1500  (difference)
+           p1 =    0.3000
+           p2 =    0.4500
+
+Estimated sample sizes:
+
+            N =       326
+  N per group =       163
+
+. return list
+
+scalars:
+              r(power) =  .8
+               r(beta) =  .2
+              r(alpha) =  .05
+              r(delta) =  .15
+        r(nfractional) =  0
+           r(onesided) =  0
+               r(init) =  163
+          r(converged) =  1
+               r(iter) =  3
+            r(maxiter) =  500
+             r(deltax) =  2.32302922142e-13
+          r(tolerance) =  1.00000000000e-12
+           r(function) =  0
+         r(ftolerance) =  1.00000000000e-12
+                  r(N) =  326
+         r(continuity) =  0
+                 r(p2) =  .45
+                 r(p1) =  .3
+             r(nratio) =  1
+                 r(N2) =  163
+                 r(N1) =  163
+
+macros:
+               r(test) : "chi2"
+             r(effect) : "diff"
+               r(type) : "test"
+             r(method) : "twoproportions"
+
+. power twoproportions .3 .45, n(200)
+
+Estimated power for a two-sample proportions test
+Pearson's chi-squared test 
+Ho: p2 = p1  versus  Ha: p2 != p1
+
+Study parameters:
+
+        alpha =    0.0500
+            N =       200
+  N per group =       100
+        delta =    0.1500  (difference)
+           p1 =    0.3000
+           p2 =    0.4500
+
+Estimated power:
+
+        power =    0.5924
+
+. power twoproportions .3 .45, nratio(2)
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample proportions test
+Pearson's chi-squared test 
+Ho: p2 = p1  versus  Ha: p2 != p1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.1500  (difference)
+           p1 =    0.3000
+           p2 =    0.4500
+        N2/N1 =    2.0000
+
+Estimated sample sizes:
+
+            N =       369
+           N1 =       123
+           N2 =       246
+
+. capture noisily power twoproportions .3, n(300)
+one of options diff(), rdiff(), ratio(), rrisk(), or oratio() or the experimental-group proportion must be specified
+
+. power twoproportions .3, n(300) power(.8)
+
+Performing iteration ...
+
+Estimated experimental-group proportion for a two-sample proportions test
+Pearson's chi-squared test 
+Ho: p2 = p1  versus  Ha: p2 != p1; p2 > p1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+            N =       300
+  N per group =       150
+           p1 =    0.3000
+
+Estimated effect size and experimental-group proportion:
+
+        delta =    0.1563  (difference)
+           p2 =    0.4563
+
+. power onecorrelation 0 .3
+
+Performing iteration ...
+
+Estimated sample size for a one-sample correlation test
+Fisher's z test
+Ho: r = r0  versus  Ha: r != r0
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.3000
+           r0 =    0.0000
+           ra =    0.3000
+
+Estimated sample size:
+
+            N =        85
+
+. power twocorrelations .3 .5
+
+Performing iteration ...
+
+Estimated sample sizes for a two-sample correlations test
+Fisher's z test
+Ho: r2 = r1  versus  Ha: r2 != r1
+
+Study parameters:
+
+        alpha =    0.0500
+        power =    0.8000
+        delta =    0.2000
+           r1 =    0.3000
+           r2 =    0.5000
+
+Estimated sample sizes:
+
+            N =       554
+  N per group =       277
+
+. power onemean 100 (102 104 106), sd(5)
+
+Performing iteration ...
+
+Estimated sample size for a one-sample mean test
+t test
+Ho: m = m0  versus  Ha: m != m0
+
+  +---------------------------------------------------------+
+  |   alpha   power       N   delta      m0      ma      sd |
+  |---------------------------------------------------------|
+  |     .05      .8      52      .4     100     102       5 |
+  |     .05      .8      15      .8     100     104       5 |
+  |     .05      .8       8     1.2     100     106       5 |
+  +---------------------------------------------------------+
+
+. power twomeans 12 (13 14), sd(4) n(50 100)
+
+Estimated power for a two-sample means test
+t test assuming sd1 = sd2 = sd
+Ho: m2 = m1  versus  Ha: m2 != m1
+
+  +-------------------------------------------------------------------------+
+  |   alpha   power       N      N1      N2   delta      m1      m2      sd |
+  |-------------------------------------------------------------------------|
+  |     .05   .1394      50      25      25       1      12      13       4 |
+  |     .05   .2358     100      50      50       1      12      13       4 |
+  |     .05   .4101      50      25      25       2      12      14       4 |
+  |     .05   .6969     100      50      50       2      12      14       4 |
+  +-------------------------------------------------------------------------+
+
+. 
+end of do-file
