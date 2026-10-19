@@ -3,7 +3,8 @@ power onemean 100 102, sd(5)
 return list
 power onemean 100 102, sd(5) knownsd
 power onemean 100 102, sd(5) n(40)
-power onemean 100, sd(5) n(40)
+capture noisily power onemean 100, sd(5) n(40)
+power onemean 100, sd(5) n(40) power(.8)
 power onemean 100 102, sd(5) onesided
 power twomeans 12 14, sd(4)
 return list
@@ -20,7 +21,8 @@ power twoproportions .3 .45
 return list
 power twoproportions .3 .45, n(200)
 power twoproportions .3 .45, nratio(2)
-power twoproportions .3, n(300)
+capture noisily power twoproportions .3, n(300)
+power twoproportions .3, n(300) power(.8)
 power onecorrelation 0 .3
 power twocorrelations .3 .5
 power onemean 100 (102 104 106), sd(5)

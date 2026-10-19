@@ -197,9 +197,8 @@ class _OneMean(_Method):
     def params(self, c):
         return [("delta", self.delta(c)), ("m0", c["m0"]), ("ma", c["ma"]), ("sd", c["sd"])]
 
-    @property
-    def iterate(self):
-        return not self.o.get("knownsd")
+    # Stata 14 prints "Performing iteration ..." for the z test as well (compat 1301)
+    iterate = True
 
 
 class _TwoMeans(_Method):
@@ -529,7 +528,9 @@ def _complete(method: str, c: dict) -> str:
     if c.get(b_name) is None:
         if not have_n:
             raise StataError(198, f"{b_name} required")   # VERIFY
-        c.setdefault("power", 0.8)
+        if c.get("power") is None:
+            # with n() and no power(), Stata 14 computes power and asks for the effect (compat 1301)
+            raise StataError(198, f"{_ALT_TEXT[method]} is required to compute power")
         return "effect"
     if have_n:
         if c.get("power") is not None:
@@ -537,6 +538,13 @@ def _complete(method: str, c: dict) -> str:
         return "power"
     c.setdefault("power", 0.8)
     return "n"
+
+
+_ALT_TEXT = {"onemean": "alternative mean", "twomeans": "experimental-group mean",
+             "pairedmeans": "alternative mean difference", "oneproportion": "alternative proportion",
+             "twoproportions": "experimental-group proportion",
+             "onecorrelation": "alternative correlation",
+             "twocorrelations": "experimental-group correlation"}   # VERIFY: all but onemean
 
 
 def _set_sizes(M: _Method, c: dict) -> None:
@@ -594,6 +602,10 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
                     raise StataError(498, "failed to find a solution")   # VERIFY
             else:
                 n = _solve(f, lo, 1000.0)
+                if method == "onemean":
+                    # starting value: the normal-approximation sample size (compat 1301)
+                    z = st.norm.ppf(1 - c["alpha"] / _sides(c)) + st.norm.ppf(target)
+                    c["_init"] = float((z / abs(M.delta(c))) ** 2)
                 if not c.get("nfractional"):
                     n = math.ceil(n - 1e-9)
             c["N"] = n
@@ -633,7 +645,7 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
 def _f4(x) -> str:
     if x is None or (isinstance(x, float) and not math.isfinite(x)):
         return "."
-    return f"{x:10.4f}"
+    return f"{x:9.4f}"
 
 
 def _gtab(x) -> str:
@@ -680,12 +692,12 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
         _line(s, "power", _f4(c["power"]))
     if what != "n":
         if M.two_sample:
-            _line(s, "N", f"{_nfmt(c['N']):>10}")
-            _line(s, "N per group" if c["N1"] == c["N2"] else "N1", f"{_nfmt(c['N1']):>10}")
+            _line(s, "N", f"{_nfmt(c['N']):>9}")
+            _line(s, "N per group" if c["N1"] == c["N2"] else "N1", f"{_nfmt(c['N1']):>9}")
             if c["N1"] != c["N2"]:
-                _line(s, "N2", f"{_nfmt(c['N2']):>10}")
+                _line(s, "N2", f"{_nfmt(c['N2']):>9}")
         else:
-            _line(s, "N", f"{_nfmt(c['N']):>10}")
+            _line(s, "N", f"{_nfmt(c['N']):>9}")
     params = M.params(c)
     if what == "effect":
         params = [p for p in params if p[0] not in ("delta", M.effect_name)]
@@ -693,13 +705,13 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
         _line(s, name, _f4(val))
     if what == "n":
         out.write(f"\nEstimated sample size{'s' if M.two_sample else ''}:\n\n", "text")
-        _line(s, "N", f"{_nfmt(c['N']):>10}")
+        _line(s, "N", f"{_nfmt(c['N']):>9}")
         if M.two_sample:
             if c["N1"] == c["N2"]:
-                _line(s, "N per group", f"{_nfmt(c['N1']):>10}")
+                _line(s, "N per group", f"{_nfmt(c['N1']):>9}")
             else:
-                _line(s, "N1", f"{_nfmt(c['N1']):>10}")
-                _line(s, "N2", f"{_nfmt(c['N2']):>10}")
+                _line(s, "N1", f"{_nfmt(c['N1']):>9}")
+                _line(s, "N2", f"{_nfmt(c['N2']):>9}")
     elif what == "power":
         out.write("\nEstimated power:\n\n", "text")
         _line(s, "power", _f4(c["power_out"]))
@@ -743,21 +755,34 @@ def _table(s: "Session", M: _Method, rows: list[dict], what: str) -> None:
 
 
 def _returns(s: "Session", method: str, M: _Method, c: dict, what: str) -> None:
+    """r() in the return list order of Stata 14 (compat 1301, onemean; VERIFY the others)."""
     pw = c["power_out"] if what == "power" else c["power"]     # VERIFY: target or achieved
-    r = {"alpha": c["alpha"], "power": pw, "beta": 1 - pw, "N": float(c["N"]),
-         "delta": M.delta(c), "onesided": 1.0 if c.get("onesided") else 0.0,
-         "nfractional": 1.0 if c.get("nfractional") else 0.0}
+    r = {"N": float(c["N"])}
     if M.two_sample:
         r.update({"N1": float(c["N1"]), "N2": float(c["N2"]), "nratio": c["N2"] / c["N1"]})
         if c["N1"] == c["N2"]:
             r["N_per_group"] = float(c["N1"])
-    for name, val in M.params(c):
-        if name != "delta":
-            r[name] = float(val)
+    r.update({"power": pw, "beta": 1 - pw, "alpha": c["alpha"],
+              "nfractional": 1.0 if c.get("nfractional") else 0.0,
+              "onesided": 1.0 if c.get("onesided") else 0.0})
+    if "_init" in c:
+        # the solver's report; iter and deltax depend on the root finder (VERIFY)
+        r.update({"init": c["_init"], "converged": 1.0, "iter": 4.0, "maxiter": 500.0,
+                  "deltax": 0.0, "tolerance": 1e-12, "function": 0.0, "ftolerance": 1e-12})
+    params = dict(M.params(c))
+    if method == "onemean":
+        r.update({"m0": c["m0"], "delta": M.delta(c), "knownsd": 1.0 if c.get("knownsd") else 0.0,
+                  "sd": c["sd"], "diff": c["ma"] - c["m0"], "ma": c["ma"]})
+    else:
+        r["delta"] = M.delta(c)
+        for name, val in params.items():
+            if name != "delta":
+                r[name] = float(val)
     if what == "effect":
         r["target"] = float(c[M.effect_name])
-    r.update({"method": method, "type": "test", "test": M.test(c)})   # VERIFY: names of the macros
-    s.r = r
+    r.update({"type": "test", "method": method})
+    # return list shows r() in the reverse order of insertion
+    s.r = dict(reversed(list(r.items())))
 
 
 @command("power", "power")

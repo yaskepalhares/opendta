@@ -22,7 +22,10 @@ def test_onemean(run):
     assert run.eval("r(N)") == math.ceil(z ** 2)
     run("power onemean 100 102, sd(5) n(40)")
     assert run.eval("r(power)") == pytest.approx(pw(40), rel=1e-6)
-    out = run("power onemean 100, sd(5) n(40)")
+    # Stata 14: with n() and no power(), the alternative mean is required (compat 1301)
+    run("power onemean 100, sd(5) n(40)")
+    assert run.rc == 198
+    out = run("power onemean 100, sd(5) n(40) power(.8)")
     assert "Estimated effect size and target mean" in out
     assert pw(40) < .8 and run.eval("r(ma)") > 102
 
