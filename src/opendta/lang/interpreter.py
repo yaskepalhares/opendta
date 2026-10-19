@@ -506,6 +506,8 @@ class Interpreter:
         text = text.strip()
         if not text or text.startswith("*"):
             return
+        if text.startswith("!"):
+            text = "shell " + text[1:]      # !cmd is a synonym for shell cmd
         word, rest = split_command(text)
         if not word:
             raise StataError(198, "invalid syntax")

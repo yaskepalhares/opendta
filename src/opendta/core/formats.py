@@ -20,6 +20,7 @@ from .errors import StataError
 _NUMFMT = re.compile(r"^%(-)?(0)?(\d+)\.(\d+)([fge])(c)?$")
 _STRFMT = re.compile(r"^%(-|~)?(\d+)s$")
 _DATEFMT = re.compile(r"^%(-)?t([dcCwmqhy])(.*)$")
+_BCALFMT = re.compile(r"^%(-)?tb([A-Za-z_]\w*)(?::(.*))?$")    # business dates: %tbname[:codes]
 
 STATA_EPOCH = _dt.date(1960, 1, 1)
 _MONTHS = ["jan", "feb", "mar", "apr", "may", "jun",
@@ -54,6 +55,9 @@ def parse_format(text: str) -> Format:
     if m:
         just, w = m.groups()
         return Format("s", int(w), left=(just == "-"), text=t)
+    m = _BCALFMT.match(t)
+    if m:
+        return Format("t", 0 if m.group(3) else 9, left=bool(m.group(1)), sub="b", text=t)
     m = _DATEFMT.match(t)
     if m:
         left, sub, rest = m.groups()
@@ -331,6 +335,18 @@ def _date_code(code: str, d: _dt.datetime, week: int, ms: int) -> str:
 
 def _date(x: float, fmt: Format) -> str:
     sub = fmt.sub
+    if sub == "b":
+        # business date: through its calendar to a %td date, shown with the %td codes
+        from . import bcal
+        mb = _BCALFMT.match(fmt.text)
+        try:
+            td = bcal.get(mb.group(2)).dofb(x)
+        except StataError:
+            return "."
+        if td != td:
+            return "."
+        codes = mb.group(3)
+        return _date(td, parse_format("%td" + (codes or "")))
     m = _DATEFMT.match(fmt.text) if fmt.text else None
     codes = (m.group(3) if m else "") or _DATE_DEFAULT.get(sub, "")
     try:

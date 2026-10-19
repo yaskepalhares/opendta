@@ -27,6 +27,13 @@ included in the bundle, in its `*.dist-info` folder inside `Contents/Resources`
 | PyInstaller bootloader | GPL-2.0 with a bootloader exception | https://pyinstaller.org |
 | Inno Setup (Windows installer only) | Inno Setup License | https://jrsoftware.org/isinfo.php |
 
+## Data
+
+| Data | License | Source |
+|---|---|---|
+| ICD-9-CM diagnosis codes, version 29 (`data/icd/icd9cm.tsv.gz`) | Public domain (U.S. government work) | U.S. Centers for Medicare & Medicaid Services |
+| ICD-10-CM, 2018 (`data/icd/icd10cm.tsv.gz`) | Public domain (U.S. government work) | U.S. Centers for Medicare & Medicaid Services |
+
 ## Qt and the LGPL
 
 Qt and PySide6 are used under the GNU Lesser General Public License v3. They are

@@ -410,6 +410,32 @@ def _to_date(d: float) -> _dt.date | None:
         return None
 
 
+@register("bofd", 2)
+def _bofd(cal: Value, td: Value) -> float:
+    """Business date of the %td date td in calendar cal (missing if not a business day)."""
+    from ..core import bcal
+    if not isinstance(cal, str):
+        raise StataError(109, "type mismatch")
+    x = _n(td)
+    if _miss(x):
+        return M.SYSMISS
+    b = bcal.get(cal).bofd(float(x))
+    return M.SYSMISS if b != b else b
+
+
+@register("dofb", 2)
+def _dofb(b: Value, cal: Value) -> float:
+    """%td date of the business date b in calendar cal."""
+    from ..core import bcal
+    if not isinstance(cal, str):
+        raise StataError(109, "type mismatch")
+    x = _n(b)
+    if _miss(x):
+        return M.SYSMISS
+    d = bcal.get(cal).dofb(float(x))
+    return M.SYSMISS if d != d else d
+
+
 @register("mdy", 3)
 def _mdy(m: Value, d: Value, y: Value) -> float:
     m, d, y = _n(m), _n(d), _n(y)

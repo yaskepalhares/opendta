@@ -16,7 +16,7 @@ ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 from opendta import __version__  # noqa: E402
 
-datas = collect_data_files("opendta", includes=["help/*.sthlp", "gui/icons/*.svg", "gui/appicon/*.png"])
+datas = collect_data_files("opendta", includes=["help/*.sthlp", "gui/icons/*.svg", "gui/appicon/*.png", "data/*.dta", "data/icd/*"])
 # certifi's CA bundle (cacert.pem), used by the update check
 datas += collect_data_files("certifi")
 hidden = collect_submodules("opendta")
