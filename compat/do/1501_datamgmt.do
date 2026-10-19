@@ -108,7 +108,7 @@ gen c = dx
 capture noisily icd9 clean c, dots
 drop if dx == "bad!"
 icd9 clean c, dots
-icd9 generate cat = c, category
+capture noisily icd9 generate cat = c, category
 list
 erase odta_a.dta
 erase odta_out.raw
