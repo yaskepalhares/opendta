@@ -30,6 +30,8 @@ tools/
   build_windows.ps1  gera o instalador do Windows e o .zip portátil
 ```
 
+O plano para os comandos que ainda faltam, bloco a bloco, está em [next-steps.pt-BR.md](next-steps.pt-BR.md).
+
 ## Testes
 
 `pip install -e ".[dev]"` instala o pytest, o ReadStat (`pyreadstat`) e o pandas. Depois:
