@@ -15,7 +15,8 @@ power pairedmeans 10 12, sddiff(5)
 power pairedmeans 10 12, corr(.5) sd(4)
 power oneproportion .3 .4
 power oneproportion .3 .4, test(wald)
-power oneproportion .3 .4, test(binomial)
+capture noisily power oneproportion .3 .4, test(binomial)
+power oneproportion .3 .4, test(binomial) n(150)
 power oneproportion .3 .4, n(150)
 power twoproportions .3 .45
 return list

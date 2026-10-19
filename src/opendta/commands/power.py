@@ -151,8 +151,15 @@ def _solve(f: Callable[[float], float], lo: float, hi: float) -> float:
 class _Method:
     title = ""
     two_sample = False
-    iterate = False
+    # Stata 14 prints "Performing iteration ..." whenever it solves for n or the effect, also
+    # for closed forms (compat 1301; VERIFY the correlation methods)
+    iterate = True
     effect_name = "ma"
+    null_name = "m0"
+
+    def right(self, c) -> list:
+        """Parameters shown in a second column (pairedmeans)."""
+        return []
 
     def __init__(self, pos: list[float], o: dict):
         self.o = o
@@ -244,11 +251,10 @@ class _TwoMeans(_Method):
             rows.append(("sd", c["sd1"]))
         else:
             rows += [("sd1", c["sd1"]), ("sd2", c["sd2"])]
+        if c.get("nratio", 1.0) != 1.0:
+            rows.append(("N2/N1", c["nratio"]))   # compat 1301
         return rows
 
-    @property
-    def iterate(self):
-        return not self.o.get("knownsds")
 
 
 class _PairedMeans(_Method):
@@ -257,7 +263,10 @@ class _PairedMeans(_Method):
     effect_name = "ma2"
 
     def test(self, c):
-        return "z test" if c.get("knownsd") else "t test"
+        base = "Paired z test" if c.get("knownsd") else "Paired t test"   # VERIFY knownsd
+        if c.get("corr") is not None and c.get("sd1") == c.get("sd2"):
+            base += " assuming sd1 = sd2 = sd"
+        return base
 
     def sd_d(self, c):
         if c.get("sddiff") is not None:
@@ -281,15 +290,16 @@ class _PairedMeans(_Method):
         c["ma2"] = c["ma1"] + _direction(c) * delta * self.sd_d(c)
 
     def params(self, c):
-        rows = [("delta", self.delta(c)), ("d0", 0.0), ("da", c["ma2"] - c["ma1"]),
-                ("ma1", c["ma1"]), ("ma2", c["ma2"]), ("sd_d", self.sd_d(c))]
+        return [("delta", self.delta(c)), ("d0", 0.0), ("da", c["ma2"] - c["ma1"]),
+                ("sd_d", self.sd_d(c))]
+
+    def right(self, c):
+        rows = [("ma1", c["ma1"]), ("ma2", c["ma2"])]
         if c.get("corr") is not None:
-            rows += [("sd1", c["sd1"]), ("sd2", c["sd2"]), ("corr", c["corr"])]
+            rows += [("sd", c["sd1"])] if c["sd1"] == c["sd2"] else [("sd1", c["sd1"]), ("sd2", c["sd2"])]
+            rows.append(("corr", c["corr"]))
         return rows
 
-    @property
-    def iterate(self):
-        return not self.o.get("knownsd")
 
 
 class _OneProportion(_Method):
@@ -585,6 +595,12 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
                 return M.power(c) - target
             lo = 4.0 if method != "twocorrelations" else 3.0001
             n1 = _solve(f, lo, 1000.0)
+            if method == "twomeans":
+                # starting value: the normal-approximation size of the first group, rounded up
+                # (compat 1301: 63)
+                z = st.norm.ppf(1 - c["alpha"] / _sides(c)) + st.norm.ppf(target)
+                se2 = c["sd1"] ** 2 + c["sd2"] ** 2 / r
+                c["_init"] = float(math.ceil((z ** 2) * se2 / M.delta(c) ** 2))
             if not c.get("nfractional"):
                 n1 = math.ceil(n1 - 1e-9)
                 n2 = math.ceil(r * n1 - 1e-9)
@@ -597,9 +613,11 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
                 return M.power(c) - target
             lo = 2.0 if method not in ("onecorrelation",) else 3.0001
             if method == "oneproportion" and M.kind() == "binomial":
-                n = next((k for k in range(1, 100000) if (c.update(N=k) or M.power(c)) >= target), None)
-                if n is None:
-                    raise StataError(498, "failed to find a solution")   # VERIFY
+                # compat 1301
+                raise StataError(198, "power oneproportion: sample-size determination is not allowed.\n"
+                                      "    Sample-size determination is not allowed for the binomial test.  "
+                                      "Power function of the binomial test is often nonmonotonic; see "
+                                      "Saw-toothed power function for details.")
             else:
                 n = _solve(f, lo, 1000.0)
                 if method == "onemean":
@@ -675,7 +693,16 @@ def _header(s: "Session", M: _Method, c: dict, what: str) -> None:
         op = "!="
     else:
         op = ">" if (M.delta(c) > 0 if what != "effect" else _direction(c) > 0) else "<"
-    out.write(M.hyp.format(op=op) + "\n", "text")
+    hyp = M.hyp.format(op=op)
+    if what == "effect" and _sides(c) == 2:
+        # the direction of the computed effect (compat 1301; VERIFY other than onemean)
+        e, nul = _EFFECT_PAIR[M.effect_name]
+        hyp += f"; {e} {'>' if _direction(c) > 0 else '<'} {nul}"
+    out.write(hyp + "\n", "text")
+
+
+_EFFECT_PAIR = {"ma": ("ma", "m0"), "m2": ("m2", "m1"), "ma2": ("da", "d0"), "pa": ("pa", "p0"),
+                "p2": ("p2", "p1"), "ra": ("ra", "r0"), "r2": ("r2", "r1")}
 
 
 def _line(s: "Session", name: str, value: str) -> None:
@@ -687,22 +714,30 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
     out = s.output
     _header(s, M, c, what)
     out.write("\nStudy parameters:\n\n", "text")
-    _line(s, "alpha", _f4(c["alpha"]))
+    left = [("alpha", _f4(c["alpha"]))]
     if what != "power":
-        _line(s, "power", _f4(c["power"]))
+        left.append(("power", _f4(c["power"])))
     if what != "n":
         if M.two_sample:
-            _line(s, "N", f"{_nfmt(c['N']):>9}")
-            _line(s, "N per group" if c["N1"] == c["N2"] else "N1", f"{_nfmt(c['N1']):>9}")
+            left.append(("N", f"{_nfmt(c['N']):>9}"))
+            left.append(("N per group" if c["N1"] == c["N2"] else "N1", f"{_nfmt(c['N1']):>9}"))
             if c["N1"] != c["N2"]:
-                _line(s, "N2", f"{_nfmt(c['N2']):>9}")
+                left.append(("N2", f"{_nfmt(c['N2']):>9}"))
         else:
-            _line(s, "N", f"{_nfmt(c['N']):>9}")
+            left.append(("N", f"{_nfmt(c['N']):>9}"))
     params = M.params(c)
     if what == "effect":
         params = [p for p in params if p[0] not in ("delta", M.effect_name)]
-    for name, val in params:
-        _line(s, name, _f4(val))
+    left += [(name, _f4(val)) for name, val in params]
+    right = [(name, _f4(val)) for name, val in M.right(c)]
+    # a second column of parameters beside the first lines (pairedmeans; compat 1301)
+    for k, (name, val) in enumerate(left):
+        out.write(f"{name:>13} = ", "text")
+        out.write(val, "result")
+        if k < len(right):
+            out.write(f"{right[k][0]:>13} = ", "text")
+            out.write(right[k][1], "result")
+        out.write("\n", "text")
     if what == "n":
         out.write(f"\nEstimated sample size{'s' if M.two_sample else ''}:\n\n", "text")
         _line(s, "N", f"{_nfmt(c['N']):>9}")
@@ -755,34 +790,43 @@ def _table(s: "Session", M: _Method, rows: list[dict], what: str) -> None:
 
 
 def _returns(s: "Session", method: str, M: _Method, c: dict, what: str) -> None:
-    """r() in the return list order of Stata 14 (compat 1301, onemean; VERIFY the others)."""
+    """r() in the return list order of Stata 14 (compat 1301: onemean and twomeans; VERIFY
+    the others)."""
     pw = c["power_out"] if what == "power" else c["power"]     # VERIFY: target or achieved
-    r = {"N": float(c["N"])}
-    if M.two_sample:
-        r.update({"N1": float(c["N1"]), "N2": float(c["N2"]), "nratio": c["N2"] / c["N1"]})
-        if c["N1"] == c["N2"]:
-            r["N_per_group"] = float(c["N1"])
-    r.update({"power": pw, "beta": 1 - pw, "alpha": c["alpha"],
-              "nfractional": 1.0 if c.get("nfractional") else 0.0,
-              "onesided": 1.0 if c.get("onesided") else 0.0})
+    solver = []
     if "_init" in c:
-        # the solver's report; iter and deltax depend on the root finder (VERIFY)
-        r.update({"init": c["_init"], "converged": 1.0, "iter": 4.0, "maxiter": 500.0,
-                  "deltax": 0.0, "tolerance": 1e-12, "function": 0.0, "ftolerance": 1e-12})
+        # the solver's report; iter, deltax and function depend on the root finder (VERIFY)
+        solver = [("init", c["_init"]), ("converged", 1.0), ("iter", 4.0), ("maxiter", 500.0),
+                  ("deltax", 0.0), ("tolerance", 1e-12), ("function", 0.0), ("ftolerance", 1e-12)]
+    flags = [("nfractional", 1.0 if c.get("nfractional") else 0.0),
+             ("onesided", 1.0 if c.get("onesided") else 0.0)]
     params = dict(M.params(c))
     if method == "onemean":
-        r.update({"m0": c["m0"], "delta": M.delta(c), "knownsd": 1.0 if c.get("knownsd") else 0.0,
-                  "sd": c["sd"], "diff": c["ma"] - c["m0"], "ma": c["ma"]})
+        r = [("N", float(c["N"])), ("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"])] + flags + solver
+        r += [("m0", c["m0"]), ("delta", M.delta(c)), ("knownsd", 1.0 if c.get("knownsd") else 0.0),
+              ("sd", c["sd"]), ("diff", c["ma"] - c["m0"]), ("ma", c["ma"])]
+    elif method == "twomeans":
+        r = [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", M.delta(c))] + flags + solver
+        r += [("N", float(c["N"])), ("unequal", 0.0 if c["sd1"] == c["sd2"] else 1.0),
+              ("knownsds", 1.0 if c.get("knownsds") else 0.0), ("sd2", c["sd2"]), ("sd1", c["sd1"])]
+        if c["sd1"] == c["sd2"]:
+            r.append(("sd", c["sd1"]))
+        r += [("diff", c["m2"] - c["m1"]), ("m2", c["m2"]), ("m1", c["m1"]),
+              ("nratio", c["N2"] / c["N1"]), ("N2", float(c["N2"])), ("N1", float(c["N1"]))]
     else:
-        r["delta"] = M.delta(c)
-        for name, val in params.items():
-            if name != "delta":
-                r[name] = float(val)
+        r = [("N", float(c["N"]))]
+        if M.two_sample:
+            r += [("N1", float(c["N1"])), ("N2", float(c["N2"])), ("nratio", c["N2"] / c["N1"])]
+            if c["N1"] == c["N2"]:
+                r.append(("N_per_group", float(c["N1"])))
+        r += [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"])] + flags + solver
+        r.append(("delta", M.delta(c)))
+        r += [(k, float(v)) for k, v in params.items() if k != "delta"]
     if what == "effect":
-        r["target"] = float(c[M.effect_name])
-    r.update({"type": "test", "method": method})
+        r.append(("target", float(c[M.effect_name])))
+    r += [("type", "test"), ("method", method)]
     # return list shows r() in the reverse order of insertion
-    s.r = dict(reversed(list(r.items())))
+    s.r = dict(reversed(r))
 
 
 @command("power", "power")

@@ -32,7 +32,8 @@ def test_onemean(run):
 
 def test_twomeans_and_paired(run):
     run("power twomeans 12 14, sd(4)")
-    assert run.eval("r(N_per_group)") == 64 and run.eval("r(N)") == 128
+    # twomeans returns N, N1 and N2 (no N_per_group; compat 1301)
+    assert run.eval("r(N1)") == 64 and run.eval("r(N)") == 128
     run("power twomeans 12 14, sd1(4) sd2(6) nratio(2)")
     assert run.eval("r(N2)") == 2 * run.eval("r(N1)")
     run("power pairedmeans 10 12, sddiff(5)")
