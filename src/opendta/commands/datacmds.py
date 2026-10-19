@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from ..core import missing as M
-from ..core.dataset import Dataset, Variable
+from ..core.dataset import TYPE_ORDER, Dataset, Variable, smallest_type_for
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.varlist import expand, unique
@@ -194,33 +194,40 @@ def cmd_inspect(s: "Session", args: str) -> None:
         is_int = xv == np.floor(xv)
         rows = [("Negative", xv < 0), ("Zero", xv == 0), ("Positive", xv > 0)]
         hist = _hist_rows(xv)
-        out.write(f"{n + ':':<{max(len(n) + 3, 8)}}{v.label:<{max(0, 44 - max(len(n) + 3, 8))}}Number of Observations\n", "text")
-        out.write(f"{'-' * min(len(n) + 1, 30):<44}------------------------------\n", "text")
-        out.write(" " * 47 + "Total      Integers   Nonintegers\n", "text")
+        # layout of Stata 14 (compat 1501)
+        head = f"{n}:  {v.label}"
+        out.write(f"{head:<48}Number of Observations\n", "text")
+        out.write(f"{'-' * len(head):<39}" + "-" * 39 + "\n", "text")
+        out.write(" " * 45 + "Total      Integers   Nonintegers\n", "text")
         for i, (lab, sel) in enumerate(rows):
             t, ints = int(sel.sum()), int((sel & is_int).sum())
-            out.write(f"|  {hist[i]:<24}{lab:<14}", "text")
-            out.write(f"{_dash(t):>8}  {_dash(ints):>12}  {_dash(t - ints):>12}\n", "result")
-        out.write(f"|  {hist[3]:<38}{'-' * 8:>8}  {'-' * 12:>12}  {'-' * 12:>12}\n", "text")
+            out.write(f"|  {hist[i]:<26}{lab:<10}", "text")
+            out.write(f"{_dash(t):>11}{_dash(ints):>14}{_dash(t - ints):>14}\n", "result")
+        out.write(f"|  {hist[3]:<36}" + "   ".join(["-" * 11] * 3) + "\n", "text")
         t, ints = len(xv), int(is_int.sum())
-        out.write(f"|  {hist[4]:<24}{'Total':<14}", "text")
-        out.write(f"{_dash(t):>8}  {_dash(ints):>12}  {_dash(t - ints):>12}\n", "result")
-        out.write(f"|  {hist[5]:<24}{'Missing':<14}", "text")
-        out.write(f"{_dash(int((~ok).sum())):>8}\n", "result")
-        out.write("+" + "-" * 22 + " " * 17 + "-" * 10 + "\n", "text")
+        out.write(f"|  {hist[4]:<26}{'Total':<10}", "text")
+        out.write(f"{_dash(t):>11}{_dash(ints):>14}{_dash(t - ints):>14}\n", "result")
+        out.write(f"|  {hist[5]:<26}{'Missing':<10}", "text")
+        out.write(f"{_dash(int((~ok).sum())):>11}\n", "result")
+        out.write("+" + "-" * 22 + " " * 16 + "-" * 11 + "\n", "text")
         lo = format_value(float(xv.min()), "%9.0g", pad=False).strip() if len(xv) else ""
         hi = format_value(float(xv.max()), "%9.0g", pad=False).strip() if len(xv) else ""
-        out.write(f"{lo:<12}{hi:>11}{len(x):>23}\n", "result")
+        out.write(f"{lo}{hi:>{max(23 - len(lo), len(hi) + 1)}}{len(x):>27}\n", "result")
         u = len(np.unique(xv))
         out.write(f"   ({u if u <= 99 else 'More than 99'} unique value{'s' if u != 1 else ''})\n", "text")
+        nlab = 0
         if v.value_label and v.value_label in ds.value_labels:
             labs = ds.value_labels[v.value_label]
             nlab = sum(1 for val in np.unique(xv) if val == int(val) and int(val) in labs)
             out.write(f"\n   {n} is labeled and {'all' if nlab == u else nlab} values are documented in the "
                       f"label.\n", "text")   # VERIFY wording
-        s.r = {"N": float(len(x)), "N_neg": float((xv < 0).sum()), "N_0": float((xv == 0).sum()),
-               "N_pos": float((xv > 0).sum()), "N_negint": float(((xv < 0) & is_int).sum()),
-               "N_posint": float(((xv > 0) & is_int).sum()), "N_unique": float(u)}
+        # return list order of Stata 14; N counts the nonmissing values, N_undoc the values
+        # without a label (missing when there is no value label) (compat 1501)
+        undoc = float(u - nlab) if v.value_label and v.value_label in ds.value_labels else SYS
+        s.r = {"N_undoc": undoc, "N_unique": float(u), "N": float(len(xv)),
+               "N_posint": float(((xv > 0) & is_int).sum()), "N_pos": float((xv > 0).sum()),
+               "N_0": float((xv == 0).sum()), "N_negint": float(((xv < 0) & is_int).sum()),
+               "N_neg": float((xv < 0).sum())}
 
 
 def _dash(n: int) -> str:
@@ -228,7 +235,8 @@ def _dash(n: int) -> str:
 
 
 def _hist_rows(x: np.ndarray) -> list[str]:
-    """Small text histogram: up to 5 columns of '#', 6 rows high (VERIFY: Stata's layout)."""
+    """Small text histogram: up to 5 columns of '#', 6 rows high, empty bins shown as '.' in
+    the last row (compat 1501)."""
     rows = [""] * 6
     if not len(x):
         return rows
@@ -237,7 +245,7 @@ def _hist_rows(x: np.ndarray) -> list[str]:
     top = counts.max()
     for r in range(6):
         level = (5 - r) / 6 * top
-        rows[r] = "   ".join("#" if c > level else ("." if c > 0 and r == 5 else " ") for c in counts).rstrip()
+        rows[r] = "   ".join("#" if c > level else ("." if c == 0 and r == 5 else " ") for c in counts).rstrip()
     return rows
 
 
@@ -276,9 +284,10 @@ def cmd_labelbook(s: "Session", args: str) -> None:
             problems.append(name)
         if o.get("problems"):
             continue
-        out.write("\n" + "-" * 79 + "\n", "text")
-        out.write(f"value label {name}\n", "text")
-        out.write("-" * 79 + "\n\n", "text")
+        rule = "-" * int(s.settings.get("linesize", 80))      # c(linesize) (compat 1501)
+        out.write("\n" + rule + "\n", "text")
+        out.write(f"value label {name} \n", "text")
+        out.write(rule + "\n\n", "text")
         rng = f"[{real[0]},{real[-1]}]" if real else "[.]"
         rows = [("range:", rng, "string length:", f"[{min(lens)},{max(lens)}]"),
                 ("N:", str(len(vals)), "unique at full length:", "yes" if uniq_full else "no"),
@@ -288,15 +297,17 @@ def cmd_labelbook(s: "Session", args: str) -> None:
                 ("", "", "numeric -> numeric:", "yes" if numnum else "no")]
         out.write(f"{'values':>12}{'labels':>42}\n", "text")
         for a, b, c, d in rows:
-            out.write(f"{a:>12}  {b:<16}{c:>25}  {d}\n", "text")
+            out.write(f"{a:>13}  {b:<16}{c:>24}  {d}\n", "text")
         limit = int(o["list"]) if isinstance(o.get("list"), str) else 32000
         out.write("\n  definition\n", "text")
         for v, t in list(zip(vals, texts))[:limit]:
             out.write(f"{v:>12}   {t}\n", "text")
-        out.write("\n" + f"{'variables:':>12}  {' '.join(users)}\n", "text")
+        out.write("\n" + f"{'variables:':>13}  {' '.join(users)}\n", "text")
     if o.get("problems") or problems:
         if problems and o.get("problems"):
             out.write("\nValue labels with potential problems: " + " ".join(problems) + "\n", "text")   # VERIFY
+        elif o.get("problems"):
+            out.write(f"\nno potential problems in dataset {s.data.filename or "[unnamed]"}\n", "text")
     s.r = {"names": " ".join(names), "notused": " ".join(n for n in names if not any(v.value_label == n for v in ds.vars))}
 
 
@@ -342,7 +353,7 @@ def cmd_compare(s: "Session", args: str) -> None:
             out.write(f"{n:>10}\n", "result")
     an, bn = a.name, b.name
     line(f"{an}<{bn}", both & (x < y))
-    line(f"{an}={bn}", both & (x == y))
+    line(f"{an}={bn}", both & (x == y), False)     # no difference columns (compat 1501)
     line(f"{an}>{bn}", both & (x > y))
     out.write(" " * 23 + "-" * 10 + "\n", "text")
     line("jointly defined", both)
@@ -393,15 +404,20 @@ def cmd_cf(s: "Session", args: str) -> None:
         k = int(diff.sum())
         if k:
             bad += 1
-            out.write(f"{n:>13}:  {k} mismatch{'es' if k != 1 else ''}\n", "text")
+            # "mismatches" also for one; values as shown by %9.0g (compat 1501)
+            out.write(f"{n:>16}:  {k} mismatches\n", "text")
             if o.get("verbose"):
                 for i in np.flatnonzero(diff):
-                    out.write(f"{'':>15}obs {i + 1:,}. {a.value(i)} in master; {b.value(i)} in using\n", "text")
-        elif o.get("all") or o.get("verbose"):
-            out.write(f"{n:>13}:  match\n", "text")
+                    out.write(f"{'':>19}obs {i + 1:,}. {_cfval(a, i)} in master; {_cfval(b, i)} in using\n", "text")
+        elif o.get("all"):
+            out.write(f"{n:>16}:  match\n", "text")      # VERIFY
     s.r = {"Nsum": float(bad)}
     if bad:
         raise StataError(9, "")
+
+
+def _cfval(v, i: int) -> str:
+    return str(v.raw[i]) if v.is_string else _g(float(v.data[i]))
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +511,7 @@ def cmd_insobs(s: "Session", args: str) -> None:
     order = np.concatenate([np.arange(at), np.arange(n, n + k), np.arange(at, n)]).astype(int)
     ds.reorder_obs(order)
     ds.sortlist = []
+    s.output.write(f"({k} observation{'s' if k != 1 else ''} added)\n", "text")    # compat 1501
     s.notify_state()
 
 
@@ -557,7 +574,7 @@ def cmd_ipolate(s: "Session", args: str) -> None:
             val[outside] = SYS
         out[target] = val
     new = str(o["generate"])
-    ds.add(_new_numeric(s, new, out))
+    ds.add(_new_numeric(s, new, out, "double"))     # a double (compat 1501)
     nmiss = int((out >= SYS).sum())
     if nmiss:
         _note(s, _missing_text(nmiss))
@@ -609,8 +626,14 @@ def cmd_separate(s: "Session", args: str) -> None:
             vals = np.where(sel, v.data, SYS)
         i = int(np.flatnonzero(sel)[0])
         shown = cell_text(ds, g, i) if g is not None else format_value(float(lev), "%9.0g", pad=False).strip()
-        label = shown if o.get("shortlabel") else f"{v.name}, {bylabel} == {shown}"
-        ds.add(Variable(new, v.vtype, vals, fmt=v.fmt, label=label, value_label=v.value_label))
+        label = f"{bylabel} == {shown}" if o.get("shortlabel") else f"{v.name}, {bylabel} == {shown}"
+        vtype = v.vtype
+        if not v.is_string:
+            # the new variables are compressed, the display format kept (compat 1501)
+            need = smallest_type_for(vals)
+            if TYPE_ORDER[need] < TYPE_ORDER[vtype]:
+                vtype = need
+        ds.add(Variable(new, vtype, vals, fmt=v.fmt, label=label, value_label=v.value_label))
         created.append(new)
     from .inspect import cmd_describe
     cmd_describe(s, " ".join(created))
@@ -833,6 +856,7 @@ def _prepare_obs(s: "Session", o: dict) -> int:
             ds = s.data
         if n > ds.nobs:
             ds.set_obs(n)
+            s.output.write(f"(obs {n:,})\n", "text")      # compat 1501
         return n
     if o.get("clear"):
         s.data = Dataset()
@@ -921,6 +945,9 @@ def cmd_outfile(s: "Session", args: str) -> None:
         path = path.with_suffix(".dct" if o.get("dictionary") else ".raw")
     if path.exists() and not o.get("replace"):
         raise StataError(602, f"file {path} already exists")
+    if not path.exists() and o.get("replace"):
+        s.output.write(f"(note: file {path.name if not os.path.dirname(strip_outer_quotes(p.using)) else path} "
+                       "not found)\n", "text")
     mask = touse(s, p)
     from .inspect import cell_text
     sep = "," if o.get("comma") else " "
@@ -952,7 +979,8 @@ def cmd_outfile(s: "Session", args: str) -> None:
             elif o.get("comma") or o.get("runtogether"):
                 fields.append(format_value(x, v.fmt, pad=False).strip().replace(",", ""))
             else:
-                fields.append(format_value(x, v.fmt, pad=True))
+                # VERIFY: compat 1501 shows two spaces before a %9.0g value after the first
+                fields.append((" " if fields else "") + format_value(x, v.fmt, pad=True))
         line = ("" if o.get("runtogether") else sep).join(fields)
         if not o.get("wide") and not o.get("comma") and len(line) > 80:
             # VERIFY: Stata breaks long records over several lines

@@ -286,23 +286,34 @@ def _icd(s: "Session", kind: str, args: str) -> None:
         probs = np.array([icd_problem(kind, c, fmtonly) if m and c.strip() else 0 for c, m in zip(codes, mask)])
         nmiss = sum(1 for c, m in zip(codes, mask) if m and not c.strip())
         bad = int((probs > 0).sum())
+        # layout of Stata 14 (compat 1501; VERIFY: the wording with missing values and for
+        # icd10/icd9p)
+        tail = "no missing values" if not nmiss else f"{nmiss:,} missing value{'s' if nmiss != 1 else ''}"
+        out.write(f"({name} contains {tail})\n", "text")
         if bad == 0:
-            tail = "no missing values" if not nmiss else f"{nmiss:,} missing value{'s' if nmiss != 1 else ''}"
-            out.write(f"({name} contains defined codes; {tail})\n", "text")   # VERIFY: "defined" (format only)
+            out.write(f"\n{name} contains valid codes\n", "text")   # VERIFY
         else:
-            out.write(f"\n    {name} contains invalid codes:\n\n", "text")
+            out.write(f"\n{name} contains invalid codes:\n\n", "text")
             for i, lab in enumerate(_PROBLEMS[kind], start=1):
-                out.write(f"{i:>6}.  {lab:<40}", "text")
-                out.write(f"{int((probs == i).sum()):>8,}\n", "result")
-            out.write(f"{'':10}{'Total':<40}", "text")
-            out.write(f"{bad:>8,}\n", "result")
+                out.write(f"{i:>5}.  {lab:<40}", "text")
+                out.write(f"{int((probs == i).sum()):>11,}\n", "result")
+            out.write(" " * 48 + "-" * 11 + "\n", "text")
+            out.write(f"{'':8}{'Total':<40}", "text")
+            out.write(f"{bad:>11,}\n", "result")
         if isinstance(o.get("generate"), str):
             ds.add(Variable(str(o["generate"]), "byte", probs.astype(float)))
             s.notify_state()
         if o.get("list") and bad:
-            out.write("\n", "text")
-            for i in np.flatnonzero(probs):
-                out.write(f"{i + 1:>8}.  {codes[i]:<12}{_PROBLEMS[kind][probs[i] - 1]}\n", "text")
+            # a list of the code and the problem without its parenthesis (compat 1501)
+            from .inspect import cmd_list
+            out.write("\nListing of invalid and undefined codes\n", "text")
+            short = np.array([_PROBLEMS[kind][k - 1].split(" (")[0] if k else "" for k in probs], dtype=object)
+            w = max(len(x) for x in short)
+            ds.add(Variable("__prob", f"str{w}", short, fmt=f"%-{w}s"))
+            try:
+                cmd_list(s, f'{name} __prob if __prob != ""')
+            finally:
+                ds.drop_vars(["__prob"])
         if o.get("summary"):
             vals, counts = np.unique([c.strip().upper() for c, m in zip(codes, mask) if m and c.strip()],
                                      return_counts=True)
@@ -310,12 +321,15 @@ def _icd(s: "Session", kind: str, args: str) -> None:
             for c, n in zip(vals, counts):
                 out.write(f"{c:>12} |", "text")
                 out.write(f"{n:>11,}\n", "result")
-        s.r = {"esum": float(bad), "miss": float(nmiss), "N": float(int(mask.sum()))}
+        s.r = {"esum": float(bad)}
         for i in range(len(_PROBLEMS[kind])):
             s.r[f"e{i + 1}"] = float((probs == i + 1).sum())
         return
     if sub == "clean":
-        o = match_options(p.options, {"generate": 3, "replace": 7, "dots": 3, "pad": 3, "check": 5})
+        # icd9 and icd9p clean take only dots and pad in Stata 14 (compat 1501)
+        allowed = {"generate": 3, "replace": 7, "dots": 3, "pad": 3, "check": 5} if kind == "icd10" \
+            else {"dots": 3, "pad": 3}
+        o = match_options(p.options, allowed)
         name = s.expand_varlist(p.varlist)[0]
         v = ds.get(name)
         if not v.is_string:

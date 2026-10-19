@@ -231,14 +231,16 @@ def cmd_istdize(s: "Session", args: str) -> None:
         # the cases variable holds the group's total and must be constant in it (compat 1401)
         if len(set(cases[gsel].tolist())) > 1:
             raise StataError(499, f"values of {casen} must be the same for all observations in a group")
+    byname = " ".join(byvars)
+    # layout of Stata 14 (compat 1401; VERIFY: without by())
     for glab, gsel in groups:
         if byvars:
-            out.write(f"\n{'-' * 79}\n-> {' '.join(byvars)}= {glab}\n", "text")   # VERIFY
-        out.write("\n" + " " * 26 + "-----Study Population-----\n", "text")
-        out.write(f"{'':26}{'Cases':>8}{'Stratum':>13}\n", "text")
-        out.write(f"{'Stratum':>11}{'Rate':>12}{'Population':>13}{'Observed':>10}{'Rate':>10}"
-                  f"{'Expected':>11}\n", "text")
-        out.write("-" * 67 + "\n", "text")
+            out.write(f"\n{'-' * 58}\n-> {byname}= {glab} \n", "text")
+        out.write(" " * 19 + "Indirect Standardization   \n \n", "text")
+        out.write(" " * 19 + "Standard" + " " * 21 + "\n", "text")
+        out.write(" " * 18 + "Population     Observed      Cases    \n", "text")
+        out.write("  Stratum            Rate       Population    Expected \n", "text")
+        out.write("-" * 58 + "\n", "text")
         O = float(cases[gsel][0]) if gsel.any() else 0.0
         Ex = N = 0.0
         for k in order:
@@ -247,45 +249,55 @@ def cmd_istdize(s: "Session", args: str) -> None:
             e_k = n_k * R[k]
             Ex += e_k
             N += n_k
-            # VERIFY: the stratum observed cases and rate are unknown from a group total
-            out.write(f"{name12(labels[k]):>11}", "text")
-            out.write(f"{R[k]:>12.4f}{n_k:>13,.0f}{'-':>10}{'-':>10}{e_k:>11.2f}\n", "result")
-        out.write("-" * 67 + "\n", "text")
+            out.write(f"{name12(labels[k]):>9}", "text")
+            out.write(f"{R[k]:>17.4f}{n_k:>14,.0f}{e_k:>13.2f}\n", "result")
+        out.write("-" * 58 + "\n", "text")
         smr = O / Ex if Ex else NAN
         lo = float(st.chi2.ppf(a, 2 * O)) / 2 / Ex if O > 0 else 0.0
         hi = float(st.chi2.ppf(1 - a, 2 * (O + 1))) / 2 / Ex
         crude = O / N if N else NAN
         adj = crude_std * smr
         alo, ahi = crude_std * lo, crude_std * hi
-        out.write(f"{'Totals:':>11}", "text")
-        out.write(f"{N:>25,.0f}{O:>10,.0f}", "result")
-        out.write("\n", "text")
-        for lab, val, f in (("Observed Cases:", O, "{:>11,.0f}"), ("Expected Cases:", Ex, "{:>11.1f}"),
-                            ("SMR (Obs/Exp):", smr, "{:>11.2f}")):
-            out.write(f"{lab:>52}", "text")
+        out.write(f"{'Totals:':<9}", "text")
+        out.write(f"{N:>31.0f}{Ex:>13.2f}\n\n", "result")
+        for lab, val, f in (("Observed Cases:", O, "{:>9.0f}"), ("SMR (Obs/Exp):", smr, "{:>9.2f}")):
+            out.write(f"{lab:>64}", "text")
             out.write(f.format(val) + "\n", "result")
-        out.write(f"{f'SMR exact {level:g}% Conf. Interval: [':>52}", "text")
+        out.write(f"{f'SMR exact {level:g}% Conf. Interval:':>57} [", "text")
         out.write(f"{lo:.4f}, {hi:.4f}", "result")
         out.write("]\n", "text")
         for lab, val in (("Crude Rate:", crude), ("Adjusted Rate:", adj)):
-            out.write(f"{lab:>52}", "text")
-            out.write(f"{val:>11.4f}\n", "result")
-        out.write(f"{f'{level:g}% Conf. Interval: [':>52}", "text")
+            out.write(f"{lab:>64}", "text")
+            out.write(f"{val:>9.4f}\n", "result")
+        out.write(f"{f'{level:g}% Conf. Interval:':>57} [", "text")
         out.write(f"{alo:.4f}, {ahi:.4f}", "result")
         out.write("]\n", "text")
         summary.append((glab, O, Ex, smr, lo, hi, crude, adj, alo, ahi))
     if byvars:
-        out.write("\nSummary of Study Populations (Rates):\n\n", "text")
-        out.write(f"{'Cases':>27}\n", "text")
-        out.write(f" {' '.join(byvars):<12}{'Observed':>12}{'Crude':>10}{'Adj_Rate':>10}        Confidence Interval\n",
-                  "text")
-        out.write(" " + "-" * 74 + "\n", "text")
+        out.write(" \n \n\nSummary of Study Populations (Rates):\n\n", "text")
+        out.write(f"{'Cases':>21}\n", "text")
+        out.write(f"{name12(byname):>9}{'Observed':>12}{'Crude':>10}{'Adj_Rate':>11}  Confidence Interval\n", "text")
+        out.write("-" * 74 + "\n", "text")
         for glab, O, Ex, smr, lo, hi, crude, adj, alo, ahi in summary:
-            out.write(f" {name12(glab):<12}", "text")
-            out.write(f"{O:>12,.0f}{crude:>10.6f}{adj:>10.6f}    [{alo:>10.6f}, {ahi:>10.6f}]\n", "result")
-    cols = [g[0] or "r1" for g in summary]
+            out.write(f"{name12(glab):>10}", "text")
+            out.write(f"{O:>11.0f}{crude:>10.6f}{adj:>11.6f}  [{alo:.6f}, {ahi:.6f}]\n", "result")
+        out.write(" \n \nSummary of Study Populations (SMR):\n\n", "text")
+        out.write(f"{'Cases':>21}{'Cases':>13}{'Exact':>24}\n", "text")
+        out.write(f"{name12(byname):>9}{'Observed':>12}{'Expected':>13}{'SMR':>7}     Confidence Interval\n", "text")
+        out.write("-" * 74 + "\n", "text")
+        for glab, O, Ex, smr, lo, hi, crude, adj, alo, ahi in summary:
+            out.write(f"{name12(glab):>10}", "text")
+            out.write(f"{O:>11.0f}{Ex:>13.2f}{smr:>8.3f}    [{lo:.6f}, {hi:.6f}]\n", "result")
+    G = len(summary)
+    cols = [f"c{j + 1}" for j in range(G)]
 
     def mat(j):
         return Matrix(np.array([[g[j] for g in summary]], dtype=float), ["r1"], cols)
-    s.r = {"k": float(len(summary)), "cases_obs": mat(1), "cases_exp": mat(2), "smr": mat(3),
-           "lb_smr": mat(4), "ub_smr": mat(5), "crude": mat(6), "adj": mat(7), "lb_adj": mat(8), "ub_adj": mat(9)}
+    # return list order of Stata 14 (compat 1401; VERIFY: the row names of the matrices)
+    s.r = {"ub_adj": mat(9), "lb_adj": mat(8), "adj": mat(7), "crude": mat(6), "ub_smr": mat(5),
+           "lb_smr": mat(4), "smr": mat(3), "cases_exp": mat(2), "cases_obs": mat(1)}
+    if byvars:
+        for j, g in enumerate(summary):
+            s.r[f"c{j + 1}"] = f'`"{g[0]}"\''
+        s.r["by"] = byname
+    s.r["k"] = float(G)

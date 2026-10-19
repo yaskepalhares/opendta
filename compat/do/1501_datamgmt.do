@@ -36,6 +36,7 @@ describe x1 x2
 separate y, by(grp) generate(yy) shortlabel
 preserve
 expandcl 2, cluster(grp) generate(newcl)
+sort grp id newcl
 list id grp newcl
 restore
 snapshot save, label("first")
@@ -72,7 +73,7 @@ list
 clear
 matrix C = (1, .3 \ .3, 1)
 corr2data u v, n(100) corr(C) means(5 10) sds(2 3)
-summarize u v
+tabstat u v, statistics(mean sd)
 correlate u v
 clear
 input id x
@@ -98,8 +99,10 @@ end
 icd9 check dx
 return list
 icd9 check dx, list
-icd9 clean dx, dots generate(c)
-icd9 generate cat = dx, category
+capture noisily icd9 clean dx, dots generate(c)
+gen c = dx
+icd9 clean c, dots
+icd9 generate cat = c, category
 list
 erase odta_a.dta
 erase odta_out.raw
