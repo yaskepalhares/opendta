@@ -57,9 +57,10 @@ def to_number(text: str) -> float | None:
 # formato livre
 # ---------------------------------------------------------------------------
 
-def tokenize_free(text: str) -> list[str]:
+def tokenize_free(text: str, semicolons: bool = False) -> list[str]:
     """Splits values on spaces and commas; quotes (single or double)
-    delimit strings; two consecutive commas mean a missing value."""
+    delimit strings; two consecutive commas mean a missing value. With semicolons (byvariable()),
+    ";" is a token of its own: it ends the data of a variable."""
     out: list[str] = []
     i, n = 0, len(text)
     last_comma = False
@@ -75,6 +76,10 @@ def tokenize_free(text: str) -> list[str]:
             i += 1
             continue
         last_comma = False
+        if semicolons and ch == ";":
+            out.append(";")
+            i += 1
+            continue
         if ch in "\"'":
             j = text.find(ch, i + 1)
             if j == -1:
@@ -83,7 +88,7 @@ def tokenize_free(text: str) -> list[str]:
             i = j + 1
             continue
         j = i
-        while j < n and text[j] not in " \t\r\n,":
+        while j < n and text[j] not in " \t\r\n," and not (semicolons and text[j] == ";"):
             j += 1
         out.append(text[i:j])
         i = j
@@ -98,11 +103,15 @@ class FreeVar:
     value_label: str = ""    # name:label; with automatic, texts become codes
 
 
-def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
+def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False,
+              byvariable: int | None = None
               ) -> tuple[Dataset, list[tuple[str, str, int]], bool]:
     """Returns (data, warnings (text, variable, 0-based record), ended in the
     middle of an observation). `automatic` only applies to variables declared
-    with :label (observed in Stata 14)."""
+    with :label (observed in Stata 14). With byvariable(#) the file holds all the values of the
+    first variable, then all those of the second, and so on."""
+    if byvariable is not None:
+        return _read_by_variable(text, spec, byvariable, automatic)
     tokens = tokenize_free(text)
     width = sum(v.skip if not v.name else 1 for v in spec)
     if width == 0:
@@ -112,16 +121,55 @@ def read_free(text: str, spec: list[FreeVar], *, automatic: bool = False
     if partial:
         nobs += 1
         tokens += [""] * (width - rest)
-    warnings: list[tuple[str, str, int]] = []
-    ds = Dataset()
-    ds.nobs = nobs
+    columns: list[list[str]] = []
     pos = 0
     for v in spec:
         if not v.name:
             pos += v.skip
             continue
-        col = tokens[pos::width][:nobs]
+        columns.append(tokens[pos::width][:nobs])
         pos += 1
+    return _build_free(spec, columns, nobs, automatic, partial)
+
+
+def _read_by_variable(text: str, spec: list[FreeVar], n: int, automatic: bool):
+    """A ";" ends the data of a variable early; n may exceed the number of observations (the
+    longest variable decides; shorter ones are completed with missing values)."""
+    if n < 1:
+        raise StataError(198, "byvariable() must be a positive integer")   # VERIFY
+    tokens = tokenize_free(text, semicolons=True)
+    pos = 0
+    columns: list[list[str]] = []
+    for v in spec:
+        take: list[str] = []
+        while len(take) < n and pos < len(tokens) and tokens[pos] != ";":
+            take.append(tokens[pos])
+            pos += 1
+        if pos < len(tokens) and tokens[pos] == ";":
+            pos += 1
+        if v.name:
+            columns.append(take)
+        # VERIFY: _skip(#) skips the data of # whole variables
+        for _ in range(v.skip - 1 if not v.name else 0):
+            while pos < len(tokens) and tokens[pos] != ";":
+                pos += 1
+            pos += 1
+    nobs = max((len(c) for c in columns), default=0)
+    for c in columns:
+        c.extend([""] * (nobs - len(c)))
+    return _build_free(spec, columns, nobs, automatic, False)
+
+
+def _build_free(spec: list[FreeVar], columns: list[list[str]], nobs: int, automatic: bool,
+                partial: bool):
+    warnings: list[tuple[str, str, int]] = []
+    ds = Dataset()
+    ds.nobs = nobs
+    cols = iter(columns)
+    for v in spec:
+        if not v.name:
+            continue
+        col = next(cols)
         if v.vtype.startswith("str"):
             if v.vtype in ("str", "strL"):
                 longest = max((len(s.encode("utf-8")) for s in col), default=1)

@@ -132,6 +132,7 @@ def cmd_infile(s: "Session", args: str) -> None:
     if p.using is None:
         raise StataError(100, "using required")
     o = match_options(p.options, {"clear": 5, "automatic": 4, "byvariable": 2, "using": 5})
+    by = o.get("byvariable")
     _check_empty(s, bool(o.get("clear")))
     if not p.varlist.strip():
         # dictionary
@@ -151,11 +152,12 @@ def cmd_infile(s: "Session", args: str) -> None:
         new = read_dictionary_free(data, d.layout) if d.free else read_fixed(data, d.layout)
         _finish(s, new, p.if_, p.in_)
         return
-    if o.get("byvariable"):
-        raise StataError(198, "option byvariable() not yet supported by OpenDTA")
+    if by is not None and not (isinstance(by, str) and by.strip().isdigit()):
+        raise StataError(198, "option byvariable() requires the number of observations")
     spec = parse_free_spec(p.varlist, s.default_type())
     text = read_text(_path(p.using, ".raw"))
-    new, warnings, partial = read_free(text, spec, automatic=bool(o.get("automatic")))
+    new, warnings, partial = read_free(text, spec, automatic=bool(o.get("automatic")),
+                                         byvariable=int(by) if by is not None else None)
     _finish(s, new, p.if_, p.in_, warnings, partial)
 
 

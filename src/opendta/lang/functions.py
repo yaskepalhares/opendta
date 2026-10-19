@@ -491,6 +491,7 @@ def _date(s: Value, mask: Value, topyear: Value | None = None) -> float:
 
 # -- constantes -------------------------------------------------------------------
 
+register("byteorder", 0)(lambda: float(__import__("opendta.core.binfmt", fromlist=["x"]).NATIVE_ORDER))
 register("maxdouble", 0)(lambda: M.MAXDOUBLE)
 register("mindouble", 0)(lambda: M.MINDOUBLE)
 register("epsdouble", 0)(lambda: M.EPSDOUBLE)

@@ -187,6 +187,10 @@ def cmd_import(s: "Session", args: str) -> None:
         from .excel import import_excel
         import_excel(s, rest)
         return
+    if sub in ("sas", "spss") or (len(sub) >= 4 and "sasxport".startswith(sub)):
+        from . import statpkg
+        {"sas": statpkg.import_sas, "spss": statpkg.import_spss}.get(sub, statpkg.import_sasxport)(s, rest)
+        return
     raise StataError(199, f"import {sub} not yet available in OpenDTA")
 
 
@@ -199,6 +203,10 @@ def cmd_export(s: "Session", args: str) -> None:
     if len(sub) >= 3 and "excel".startswith(sub):
         from .excel import export_excel
         export_excel(s, rest)
+        return
+    if len(sub) >= 4 and "sasxport".startswith(sub):
+        from .statpkg import export_sasxport
+        export_sasxport(s, rest)
         return
     raise StataError(199, f"export {sub} not yet available in OpenDTA")
 
