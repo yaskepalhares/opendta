@@ -18,7 +18,7 @@ Todo bloco segue os mesmos passos:
 4. `ROADMAP.md` e `ROADMAP.pt-BR.md`: uma fase nova listando o que foi feito; em *Faltam para a 1.0*, só o que falta. Cada trecho de uma linha de *Faltam para a 1.0* que lista opções deve começar pelo comando a que elas pertencem (`` `cs` com a opção `pool` ``), para o mapa de cobertura não contar opções como comandos.
 5. `tools/roadmap_coverage.py`: acrescentar o módulo novo em `MODULE_AREA`.
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
-7. A rodada no Stata, uma só, para tudo o que o bloco precisa (inclusive casos sem referência): peça ao usuário que rode `compat/gerar_esperados.do`, nunca um bloco improvisado de comandos. Esse arquivo já faz `set dp period` e `linesize 255`, apaga as sobras `odta_*` e roda `mata clear`. Antes de pedir, confira com o git que o branch está no GitHub e diga ao usuário que dê `git pull` nele. Se uma rodada falhar por motivo de ambiente (vírgula decimal, nome de arquivo, sobras de outra rodada), diga isso antes de pedir outra.
+7. A rodada no Stata, uma só, para tudo o que o bloco precisa (inclusive casos sem referência): peça ao usuário que rode `compat/gerar_esperados.do`, nunca um bloco improvisado de comandos. Esse arquivo já faz `set dp period` e `linesize 255`, apaga as sobras `odta_*` e roda `mata clear`. Antes de pedir, confira com o git que o branch está no GitHub e diga ao usuário que dê `git pull` nele. Se uma rodada falhar por motivo de ambiente (vírgula decimal, nome de arquivo, sobras de outra rodada), diga isso antes de pedir outra. Antes de pedir, confira também que os dados do caso estão definitivos (os modelos convergem, os testes não são degenerados): mudar os dados depois custa uma segunda rodada. O clone do usuário precisa estar no branch do bloco (uma rodada em outro branch não gera o log); se tiver alterações locais, `git stash -u` antes.
 8. `python tools/compare.py` sem diferenças novas; abrir o PR; merge quando os testes passarem no Linux, no macOS e no Windows. A página de cobertura se atualiza sozinha depois do merge.
 
 Notas para sessões que rodam na nuvem:
@@ -27,6 +27,7 @@ Notas para sessões que rodam na nuvem:
 - O `pytest` pode não instalar lá (sem acesso ao PyPI): os testes que dependem de pacotes opcionais (`pyreadstat`, `xlrd`, `xlwt`) só rodam no CI. Espere o CI e leia o resultado antes de pedir a rodada no Stata.
 - Os logs do CI não baixam da nuvem, mas as anotações de cada job mostram as diferenças do `tools/compare.py` (`gh api repos/<dono>/<repo>/check-runs/<id>/annotations`). O `gh pr` falha porque o GraphQL está bloqueado: abra e mescle o pull request com `gh api` (REST), com merge commit.
 - O log de referência da rodada no Stata nunca é editado à mão: quando um caso muda, a rodada no Stata é repetida.
+- A anotação do CI de um caso com diferença conhecida mostra só os trechos que os limites `ignore()` e `tolerance()` não aceitam. Ajustes na fronteira (por exemplo, uma variância de fragilidade em 0) podem diferir entre Linux, macOS e Windows: espere os três jobs do CI antes de fechar os limites de uma diferença conhecida e mantenha-os tão estreitos quanto as linhas que realmente diferem.
 
 Próximos números livres: casos de comparação a partir de **1902**, fases do roadmap a partir de **16**.
 
