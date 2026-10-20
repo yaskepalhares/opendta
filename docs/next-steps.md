@@ -80,7 +80,7 @@ Done in phase 15 (compat case 1901), except the options that stop with error 198
 
 ### 5. Multilevel models (1–1.5 h, ~55k tokens)
 
-Done in phase 16 (compat case 1902), except more than one level of random effects in the `me` commands, weights, `vce(robust)` and the `predict` options `median`, `mean` and `hazard` of `mestreg`. The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
+Done in phase 16 (compat case 1902), except more than one level of random effects in the `me` commands, weights, `vce(robust)` and the `predict` options `median` and `mean` of `mestreg` (and `hazard` after its lognormal, loglogistic and gamma distributions). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
 
 ### 6. Panel data (2–3 h, ~100k tokens)
 

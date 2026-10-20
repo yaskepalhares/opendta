@@ -67,7 +67,7 @@ def test_meglm_gaussian_matches_mixed():
     ll_mixed = s.e["ll"]
     s, out = _run("meglm yg x || g:", s)
     assert abs(s.e["ll"] - ll_mixed) < 1e-5
-    assert "Gaussian" in out and "Identity" in out
+    assert "Gaussian" in out and "identity" in out
     f = _exact(s, lambda eta, a, y: stats.norm.logpdf(y, eta, np.exp(a[0] / 2)), 1)
     _check(s, f)
 
@@ -171,7 +171,8 @@ stset t, failure(d)
     lf = eta + np.log(p) + (p - 1) * np.log(t)[:, None] - np.exp(eta) * (t ** p)[:, None]
     S = np.zeros((g.max() + 1, len(xn)))
     np.add.at(S, g, lf)
-    assert abs(s.e["ll"] - np.sum(special.logsumexp(S + np.log(w)[None, :], axis=1))) < 2e-4
+    ll = np.sum(special.logsumexp(S + np.log(w)[None, :], axis=1)) + np.sum(np.log(t))   # + sum(d ln t), as streg
+    assert abs(s.e["ll"] - ll) < 2e-4
     assert "Mixed-effects Weibull regression" in out
 
 
@@ -184,7 +185,8 @@ def test_nonadaptive_quadrature_converges_to_the_adaptive_value():
 
 
 def test_stddeviations_and_conditional_fixedonly():
-    s, out = _run(DATA + "meglm yg x || g:, stddeviations")
-    assert "sd(_cons)" in out and "sd(e.yg)" in out
+    s, out = _run(DATA + "capture noisily meglm yg x || g:, stddeviations")
+    assert "option stddeviations not allowed" in out
+    s, out = _run("meglm yg x || g:", s)
     s, _ = _run("predict m1, mu conditional(fixedonly)\npredict m2, fixedonly\npredict m3, xb", s)
     assert np.allclose(_col(s, "m1"), _col(s, "m2")) and np.allclose(_col(s, "m1"), _col(s, "m3"))

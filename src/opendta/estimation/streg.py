@@ -462,6 +462,18 @@ def _post_streg(s: "Session", est: Estimates, args: str, dist: Dist, res, res0,
     if dist.aux:
         scalars += [dist.aux_scalar(float(est.b[-1])), ("k_aux", 1.0)]
     scalars += [("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]), ("risk", x["risk"])]
+    if dist.name in ("lognormal", "loglogistic"):
+        # the accelerated failure-time distributions list e() in another order (compat 1902;
+        # VERIFY for loglogistic)
+        scalars = [("rank", float(k)), ("N", x["N"])]
+        if est.n_clust is not None:
+            scalars.append(("N_clust", float(est.n_clust)))
+        scalars += [("ic", float(res.iterations)), ("k", float(k)), ("k_eq", 2.0), ("k_dv", 1.0),
+                    ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0), ("ll", res.ll),
+                    ("k_eq_model", 1.0), ("ll_0", res0.ll), ("rank0", float(1 + 1)),
+                    ("df_m", float(x["df_m"])), ("chi2", x["chi2"]), ("p", x["p"]), ("k_aux", 1.0),
+                    ("N_sub", x["N_sub"]), ("N_fail", x["N_fail"]),
+                    dist.aux_scalar(float(est.b[-1])), ("risk", x["risk"])]
     macros = [("cmdline", cmdline("streg", args)), ("predict", "streg_p"),
               ("predict_sub", dist.predict_sub), ("cmd2", "streg"), ("title", dist.title + " regression"),
               ("title2", "accelerated failure-time form" if aft else "log relative-hazard form"),
@@ -471,6 +483,15 @@ def _post_streg(s: "Session", est: Estimates, args: str, dist: Dist, res, res0,
               ("vce", "cluster" if est.n_clust is not None else "robust" if est.robust else "oim"),
               ("user", dist.user), ("ml_method", "e2"), ("technique", "nr"), ("which", "max"),
               ("depvar", "_t"), ("properties", "b V")]
+    if dist.name in ("lognormal", "loglogistic"):
+        macros = [("cmdline", cmdline("streg", args)), ("stcurve", "stcurve"), ("predict", "streg_p"),
+                  ("predict_sub", dist.predict_sub), ("cmd2", "streg"), ("frm2", "time"),
+                  ("title", dist.title + " regression"), ("cmd", dist.cmd), ("dead", "_d"), ("t0", "_t0"),
+                  ("title2", "accelerated failure-time form"), ("chi2type", x["chi2type"]),
+                  ("opt", "moptimize"), ("clustvar", est.clustvar), ("vcetype", est.vcetype),
+                  ("vce", "cluster" if est.n_clust is not None else "robust" if est.robust else "oim"),
+                  ("user", dist.user.replace("_lf0", "_lf")), ("ml_method", "e2"), ("technique", "nr"),
+                  ("which", "max"), ("depvar", "_t"), ("properties", "b V")]
     grad = np.zeros((1, len(est.names)))
     if res.g is not None:
         grad[0, full_pos] = res.g

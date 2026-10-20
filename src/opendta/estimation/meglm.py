@@ -99,6 +99,13 @@ def family_of(fam: str, link: str, y: np.ndarray, *, nbin: np.ndarray | None = N
     of the negative binomial, the cutpoints of the ordinal models) and the number of them."""
     yc = y[:, None]
     ln2pi = math.log(2 * math.pi)
+    if fam == "gaussian" and link == "log":
+        def f(eta, a):
+            v = math.exp(a[0])
+            mu = np.exp(np.clip(eta, -700, 700))
+            r = yc - mu
+            return -0.5 * (ln2pi + a[0]) - r * r / (2 * v), r * mu / v, (r * mu - mu * mu) / v
+        return f, 1
     if fam == "gaussian":
         def f(eta, a):
             v = math.exp(a[0])
@@ -109,10 +116,11 @@ def family_of(fam: str, link: str, y: np.ndarray, *, nbin: np.ndarray | None = N
         lny = np.log(yc)
 
         def f(eta, a):
-            phi = math.exp(a[0])
+            lphi = 2.0 * a[0]            # /logs is the log of the square root of the scale (compat 1902)
+            phi = math.exp(lphi)
             k = 1.0 / phi
             r = yc * np.exp(-np.clip(eta, -700, 700)) / phi
-            return (k - 1) * lny - r - k * (a[0] + eta) - special.gammaln(k), r - k, -r
+            return (k - 1) * lny - r - k * (lphi + eta) - special.gammaln(k), r - k, -r
         return f, 1
     if fam == "nbinomial":
         lgy = special.gammaln(yc + 1)
@@ -415,10 +423,9 @@ class GLMM:
 _CMDS = {
     "melogit": ("bernoulli", "logit", "Mixed-effects logistic regression", "logistic", "logistic model"),
     "meprobit": ("bernoulli", "probit", "Mixed-effects probit regression", "probit", "probit model"),
-    "mecloglog": ("bernoulli", "cloglog", "Mixed-effects cloglog regression", "cloglog",
-                  "complementary log-log model"),
+    "mecloglog": ("bernoulli", "cloglog", "Mixed-effects cloglog regression", "cloglog", "cloglog model"),
     "mepoisson": ("poisson", "log", "Mixed-effects Poisson regression", "Poisson", "Poisson model"),
-    "menbreg": ("nbinomial", "log", "Mixed-effects nbinomial regression", "nbreg", "nbinomial model"),
+    "menbreg": ("nbinomial", "log", "Mixed-effects nbinomial regression", "nbinomial", "nbinomial model"),
     "meologit": ("ordinal", "logit", "Mixed-effects ologit regression", "ologit", "ologit model"),
     "meoprobit": ("ordinal", "probit", "Mixed-effects oprobit regression", "oprobit", "oprobit model"),
     "meglm": (None, None, "Mixed-effects GLM", "", ""),
@@ -428,21 +435,21 @@ _CMDS = {
 _FAMILIES = ("gaussian", "bernoulli", "binomial", "gamma", "nbinomial", "ordinal", "poisson")
 _DEFAULT_LINK = {"gaussian": "identity", "bernoulli": "logit", "binomial": "logit", "gamma": "log",
                  "nbinomial": "log", "ordinal": "logit", "poisson": "log"}
-_LINKS_OK = {"gaussian": ("identity",), "bernoulli": ("logit", "probit", "cloglog"),
+_LINKS_OK = {"gaussian": ("identity", "log"), "bernoulli": ("logit", "probit", "cloglog"),
              "binomial": ("logit", "probit", "cloglog"), "gamma": ("log",), "nbinomial": ("log",),
              "ordinal": ("logit", "probit"), "poisson": ("log",)}
 # reference model of the LR test of meglm (VERIFY the names)
-_VS_GLM = {("gaussian", "identity"): "linear model", ("bernoulli", "logit"): "logistic model",
+_VS_GLM = {("gaussian", "identity"): "linear model", ("gaussian", "log"): "linear model", ("bernoulli", "logit"): "logistic model",
            ("bernoulli", "probit"): "probit model", ("bernoulli", "cloglog"): "cloglog model",
            ("binomial", "logit"): "logistic model", ("binomial", "probit"): "probit model",
            ("binomial", "cloglog"): "cloglog model", ("gamma", "log"): "gamma model",
            ("nbinomial", "log"): "nbinomial model", ("ordinal", "logit"): "ologit model",
            ("ordinal", "probit"): "oprobit model", ("poisson", "log"): "Poisson model"}
-_FAM_TITLE = {"gaussian": "Gaussian", "bernoulli": "Bernoulli", "binomial": "Binomial",
-              "gamma": "Gamma", "nbinomial": "Negative binomial", "ordinal": "Ordinal",
-              "poisson": "Poisson"}                                  # VERIFY
-_LINK_TITLE = {"identity": "Identity", "logit": "Logit", "probit": "Probit", "log": "Log",
-               "cloglog": "Complementary log-log"}                   # VERIFY
+_FAM_TITLE = {"gaussian": "Gaussian", "bernoulli": "Bernoulli", "binomial": "binomial",
+              "gamma": "gamma", "nbinomial": "negative binomial", "ordinal": "ordinal",
+              "poisson": "Poisson"}                                  # compat 1902
+_LINK_TITLE = {"identity": "identity", "logit": "logit", "probit": "probit", "log": "log",
+               "cloglog": "complementary log-log"}                   # compat 1902
 _GLOBAL = {"or": 2, "irr": 3, "intpoints": 4, "intmethod": 7, "nolog": 4, "log": 3, "iterate": 4,
            "tolerance": 3, "ltolerance": 4, "nrtolerance": 4, "level": 1, "noheader": 6, "nogroup": 5,
            "nolrtest": 5, "noconstant": 4, "offset": 3, "exposure": 3, "binomial": 3, "covariance": 3,
@@ -481,6 +488,7 @@ def _resolve(cmdname: str, o: dict) -> dict:
         if link not in _LINKS_OK[fam]:
             raise StataError(198, f"link({link}) with family({fam}) is not available yet in OpenDTA")   # OpenDTA
         vs = _VS_GLM[(fam, link)]
+        model = vs[:-6] if vs.endswith(" model") else ""
     elif cmdname == "menbreg":
         disp = _word(str(o["dispersion"]), ("mean", "constant"), "dispersion") if o.get("dispersion") else "mean"
     elif o.get("dispersion"):
@@ -519,7 +527,7 @@ def _fixed_start(sp, y, off, p, constant, n_nb):
         a0 = [math.log(max(float(y.var()), 1e-8))]
     elif fam == "gamma":
         c = math.log(max(ybar, 1e-10)) - float(off.mean())
-        a0 = [math.log(max(float(y.var()) / max(ybar * ybar, 1e-10), 1e-2))]
+        a0 = [0.5 * math.log(max(float(y.var()) / max(ybar * ybar, 1e-10), 1e-2))]
     elif fam == "nbinomial":
         c = math.log(max(ybar, 1e-10)) - float(off.mean())
         over = max(float(y.var()) / max(ybar, 1e-10) - 1.0, 0.05)
@@ -581,6 +589,10 @@ class Fit:
     predict: object = None
     predict_multi: dict = field(default_factory=dict)
     macro_edit: object = None
+    cmdline: str = ""                 # e(cmdline) when Stata rebuilds it (meglm, mestreg)
+    late_error: str = ""              # an error that Stata only raises after the fit
+    predict_opts: dict | None = None
+    cats: list = field(default_factory=list)      # outcome values of the ordinal models
 
 
 def cmd_me(s: "Session", args: str, cmdname: str) -> None:
@@ -590,6 +602,10 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
         replay(s, cmdname, args)
         return
     fixed, levels_spec, glob = split_levels(args)
+    import re
+    m_ = re.search(r"\b(exposure|offset)\s*\(\s*\w+\s*\)", glob)
+    if m_ and not cmdname.startswith("meqr"):      # compat 1902: these belong to the fixed-effects equation (before the ||)
+        raise StataError(198, f"option {re.sub(chr(32), '', m_.group(0))} allowed only in the fixed-effects equation")
     if len(levels_spec) != 1:
         raise StataError(198, "OpenDTA's me commands support one level of random effects")   # OpenDTA
     c = find_top(fixed, ",")
@@ -602,6 +618,9 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     sp = _resolve(cmdname, o)
     fam, link = sp["fam"], sp["link"]
     qr = cmdname.startswith("meqr")          # the older commands: same model, layout of mixed
+    for _opt in ("stddeviations", "variance"):
+        if o.get(_opt) and not qr:      # compat 1902: only the meqr commands accept them
+            raise StataError(198, f"option {_opt} not allowed")
     if fam == "ordinal":
         smp.constant = False
     out = s.output
@@ -679,7 +698,12 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
         b0 = np.concatenate([np.zeros(p), (special.logit if link == "logit" else st.norm.ppf)(cum)])
     else:
         b0b, a0 = _fixed_start(sp, y, off, p, smp.constant, nbin)
-        if fam == "gaussian" and p:
+        if fam == "gaussian" and link == "log":
+            b0b = np.zeros(p)
+            if smp.constant:
+                b0b[p - 1] = math.log(max(float(y.mean()), 0.1))
+            a0 = np.array([math.log(max(float(np.var(y)), 1e-8))])
+        elif fam == "gaussian" and p:
             b0b = np.linalg.lstsq(X, y - off, rcond=None)[0]
             a0 = np.array([math.log(max(float(np.mean((y - off - X @ b0b) ** 2)), 1e-8))])
         b0 = np.concatenate([b0b, a0])
@@ -688,7 +712,7 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     elif fam == "nbinomial":
         aux_eq = ["/lnalpha" if sp["disp"] == "mean" else "/lndelta"]
     elif fam == "gamma":
-        aux_eq = ["/lnphi"]                                     # VERIFY
+        aux_eq = ["/logs"]                                      # compat 1902
     elif fam == "gaussian":
         aux_eq = [f"/var(e.{smp.depname})"]
     else:
@@ -708,7 +732,31 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
             family=fam, link=link)
     if fam == "ordinal":
         F.predict_multi = {"": _pr_multi, "pr": _pr_multi}
+        F.cats = [float(c) for c in cats]
+    if cmdname == "meglm":      # Stata rebuilds the command line (compat 1902; VERIFY for other forms)
+        lvn, rev_, _ro = levels_spec[0]
+        F.cmdline = (f"meglm {fixed_body.strip()}   ,  || {lvn}: {rev_.strip()}{' ' if rev_.strip() else ''}, "
+                     + "    ".join(_split_opts(glob)))
     _fit_me(s, args, cmdname, F)
+
+
+def _split_opts(text: str) -> list[str]:
+    """The options of a command line as separate words (parentheses kept together)."""
+    out, depth, cur = [], 0, ""
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch.isspace() and depth == 0:
+            if cur:
+                out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur:
+        out.append(cur)
+    return out
 
 
 def _fit_fixed(F: "Fit", kw: dict):
@@ -780,8 +828,10 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     if not o.get("nolog"):
         if qr:
             # no fixed-effects fit is shown; the first stage refines the starting values (VERIFY)
-            out.write("\nRefining starting values:\n\n", "text")
-            out.write(f"{'Iteration 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
+            import re as _re
+            if not _re.search(r"iterate\(\s*0\s*\)", str(o.get("refineopts") or "")):   # compat 1902
+                out.write("\nRefining starting values:\n\n", "text")
+                out.write(f"{'Iteration 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
             out.write("\nPerforming gradient-based optimization:\n\n", "text")
         else:
             out.write("\nFitting fixed-effects model:\n\n", "text")
@@ -844,7 +894,7 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
         else:
             for j, nm_ in enumerate(aux_eq):
                 se_a = float(np.sqrt(max(Va[j, j], 0)))
-                est.rows.append(CoefRow("aux", nm_, float(aux[j]), se_a, name="_cons"))
+                est.rows.append(CoefRow("coef", nm_, float(aux[j]), se_a, name="_cons", noeform=True))
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = ""
@@ -862,72 +912,107 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     est.extra["npts"] = 1 if method == "laplace" else npts
     est.display = _display_qr if qr else display_me
     est.predict = F.predict or _predict_me
-    est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3,
-                         "conditional": 4}
+    est.predict_opts = F.predict_opts if F.predict_opts is not None else \
+        {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3, "conditional": 4}
     est.predict_multi = {"reffects": _reffects_me, **F.predict_multi}
-    est.estat = {"icc": (3, estat_icc), "group": (3, estat_group), "recovariance": (5, estat_recov)}
+    est.estat = {"icc": (3, estat_icc), "group": (3, estat_group)}
+    if qr:
+        est.estat["recovariance"] = (5, estat_recov)       # compat 1902: unrecognized after the others
+    est.icc_ok = cmdname in ("melogit", "meprobit", "meqrlogit", "meqrpoisson") or \
+        (cmdname == "meglm" and fam in ("bernoulli", "gaussian"))   # VERIFY for meglm
     est.eform_default = F.eform
-    # e() in the order Stata lists it after melogit (compat 1002); VERIFY for the other commands
+    # e() in the order Stata lists it (compat 1002 and 1902)
     nvar_p = {"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q)
     ncov_p = lv.npar() - nvar_p
-    scalars = [("rank", float(ball.size)), ("N", float(n)), ("ic", float(r.iterations)),
-               ("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("ll", r.ll),
-               ("k", float(ball.size)), ("k_eq", float(1 + naux + lv.npar())), ("k_eq_model", 1.0),
-               ("ll_c", rfe.ll), ("k_rs", float(nvar_p)), ("k_rc", float(ncov_p)), ("k_dv", 1.0),
-               ("k_r", float(lv.q)), ("k_f", float(len(slopes))),   # VERIFY: k_f without _cons
-               ("p_c", _p_chibar(chi2_c, lv.npar())), ("df_c", float(lv.npar())), ("chi2_c", chi2_c),
-               ("p", wp), ("chi2", wchi2), ("df_m", float(len(slopes)))]
     from ..commands.matrix import Matrix
     from .fvars import base_vars
     from .ml import ilog
     from .results import datasignature
     covs = [c.name for c in smp.cols if c.values is not None]
-    sigvars = [lv.var] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
     family = fam
-    if qr:
-        # e() of meqrlogit/meqrpoisson ([ME] meqrlogit; VERIFY the order and the values)
-        scalars = [("rank", float(ball.size)), ("k_f", float(len(slopes) + int(smp.constant))),
-                   ("k_r", float(th.size)), ("k", float(ball.size)), ("k_rs", float(nvar_p)),
-                   ("k_rc", float(ncov_p)), ("converged", 1.0 if r.converged else 0.0), ("ll", r.ll),
-                   ("ll_c", rfe.ll), ("df_c", float(lv.npar())), ("chi2_c", chi2_c),
-                   ("p_c", _p_chibar(chi2_c, lv.npar())), ("N", float(n)), ("rc", 0.0),
-                   ("df_m", float(len(slopes))), ("chi2", wchi2), ("p", wp)]
-        macros = [("cmdline", cmdline(cmdname, args)), ("datasignaturevars", " ".join(sigvars)),
-                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("chi2type", "Wald"),
-                  ("estat_cmd", "meqrlogit_estat"), ("predict", "meqrlogit_p"),
-                  ("n_quad", str(int(est.extra["npts"]))), ("redim", str(lv.q)), ("ivars", lv.var),
-                  ("vartypes", {"identity": "Identity", "independent": "Independent",
-                                "exchangeable": "Exchangeable",
-                                "unstructured": "Unstructured"}[lv.cov]),
-                  ("revars", " ".join(lv.names)), ("cmd", cmdname), ("title", sp["title"]),
-                  ("technique", "nr"), ("ml_method", "d2"), ("opt", "moptimize"), ("method", "ML"),
-                  ("depvar", smp.depname), ("model", sp["model"]), ("properties", "b V")]
-        if method == "laplace":
-            macros.append(("laplace", "laplace"))
-    else:
-        macros = [("cmd", "meglm"), ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"),
-                  ("cmdline", cmdline(cmdname, args)), ("cmd2", cmdname), ("model", sp["model"]),
-                  ("title", sp["title"]), ("link", link), ("family", family),
-                  ("dispersion", sp["disp"]),
-                  ("n_quad", str(int(est.extra["npts"]))), ("ivars", lv.var), ("chi2type", "Wald"),
-                  ("datasignaturevars", " ".join(sigvars)),
-                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
-                  ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
-                  ("covariates", " ".join(covs)), ("opt", "moptimize"), ("vce", "oim"),
-                  ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"), ("technique", "nr"),
-                  ("which", "max"), ("properties", "b V")]
-    if F.macro_edit is not None:
-        macros = F.macro_edit(macros)
     g1 = est.extra["groups"][0]
     names_all = list(est.names)
     grad = np.zeros((1, len(names_all)))
     if r.g is not None and len(r.g) == len(names_all):
         grad[0] = r.g
-    extra_mats = [(nm, Matrix(np.array([[val]], dtype=float), ["r1"], [lv.var]))
-                  for nm, val in (("g_max", g1[4]), ("g_avg", g1[3]), ("g_min", g1[2]), ("N_g", g1[1]))]
-    extra_mats += [("gradient", Matrix(grad, ["r1"], names_all)),
-                   ("ilog", Matrix(ilog(r), ["r1"], [f"c{i + 1}" for i in range(20)]))]
+    gmats = [(nm, Matrix(np.array([[val]], dtype=float), ["r1"], [lv.var]))
+             for nm, val in (("g_max", g1[4]), ("g_avg", g1[3]), ("g_min", g1[2]), ("N_g", g1[1]))]
+    cmdline_ = F.cmdline or cmdline(cmdname, args)
+    vt = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
+          "unstructured": "Unstructured"}[lv.cov]
+    if qr:
+        # meqrlogit and meqrpoisson: the e() of the xtmelogit family. The plain fit lists it in the
+        # order below and a fit with refineopts() in the reverse order (compat 1902; VERIFY)
+        sigvars = [smp.depname] + [v for v in base_vars(smp.terms) if v != smp.depname] + [lv.var] \
+            + [nm for nm in lv.names if nm != "_cons"]
+        scalars = [("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("p", wp), ("chi2", wchi2),
+                   ("df_m", float(len(slopes))), ("N", float(n)), ("p_c", _p_chibar(chi2_c, lv.npar())),
+                   ("chi2_c", chi2_c), ("df_c", float(lv.npar())), ("ll_c", rfe.ll), ("ll", r.ll),
+                   ("k_rc", float(ncov_p)), ("k_rs", float(nvar_p)), ("k_r", float(th.size)),
+                   ("k_f", float(len(slopes) + int(smp.constant))), ("k", float(ball.size)),
+                   ("reparm_rc", 0.0), ("rank", float(ball.size))]
+        macros = [("cmdline", cmdline_), ("datasignaturevars", " ".join(sigvars)),
+                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("chi2type", "Wald"),
+                  ("n_quad", str(int(est.extra["npts"]))), ("redim", str(lv.q)), ("ivars", lv.var),
+                  ("vartypes", vt), ("revars", " ".join(lv.names)), ("title", sp["title"]),
+                  ("technique", "nr"), ("ml_method", "d0"), ("opt", "moptimize"), ("model", sp["model"]),
+                  ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"), ("cmd", cmdname),
+                  ("marginsdefault", "predict(xb)"),
+                  ("marginsnotok", "stdp Pearson Deviance Anscombe REFfects RESEs"), ("method", "ML"),
+                  ("depvar", smp.depname), ("properties", "b V")]
+        extra_mats = list(gmats)
+        if o.get("refineopts"):
+            scalars.reverse()
+            macros.reverse()
+            extra_mats.reverse()
+        if method == "laplace":
+            macros.append(("laplace", "laplace"))
+    else:
+        sigvars = [lv.var] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
+        ordinal = fam == "ordinal"
+        scalars = [("rank", float(ball.size)), ("N", float(n)), ("ic", float(r.iterations)),
+                   ("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("ll", r.ll),
+                   ("k", float(ball.size)), ("k_eq", float(1 + naux + lv.npar()))]
+        if ordinal:
+            scalars.append(("k_cat", float(F.nlev)))
+        scalars += [("k_eq_model", 1.0), ("ll_c", rfe.ll), ("k_rs", float(nvar_p)), ("k_rc", float(ncov_p)),
+                    ("k_dv", 1.0), ("k_r", float(lv.q)), ("k_f", float(len(slopes))),   # VERIFY: k_f without _cons
+                    ("p_c", _p_chibar(chi2_c, lv.npar())), ("df_c", float(lv.npar())), ("chi2_c", chi2_c),
+                    ("p", wp), ("chi2", wchi2), ("df_m", float(len(slopes)))]
+        common = [("n_quad", str(int(est.extra["npts"]))), ("ivars", lv.var), ("chi2type", "Wald"),
+                  ("datasignaturevars", " ".join(sigvars)),
+                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
+                  ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
+                  ("covariates", " ".join(covs))]
+        tail = [("opt", "moptimize"), ("vce", "oim"), ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"),
+                ("technique", "nr"), ("which", "max"), ("properties", "b V")]
+        if ordinal:
+            tail.insert(0, ("marginsdefault", " ".join(f"predict(pr outcome({c:g}))" for c in F.cats)))
+        if sp["cmd"] == "meglm":
+            macros = [("cmdline", cmdline_), ("cmd2", "meglm"), ("cmd", "gsem"), ("title", sp["title"]),
+                      ("family", family), ("model", sp["model"]), ("predict", "meglm_p"),
+                      ("estat_cmd", "meglm_estat")] + common + [("link", link)] + tail
+        else:
+            macros = [("cmd", "meglm"), ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"),
+                      ("cmdline", cmdline_), ("cmd2", cmdname), ("model", sp["model"]), ("title", sp["title"]),
+                      ("dispersion", sp["disp"]), ("link", link), ("family", family)] + common + tail
+            if cmdname == "meoprobit":      # compat 1902
+                d_ = dict(macros)
+                macros = [(k_, d_[k_]) for k_ in ("cmd", "cmdline", "cmd2", "estat_cmd", "predict", "model",
+                                                  "title", "link", "family")] + \
+                         [m for m in macros if m[0] not in ("cmd", "cmdline", "cmd2", "estat_cmd", "predict",
+                                                            "model", "title", "link", "family")]
+        extra_mats = list(gmats)
+        if ordinal:
+            extra_mats.append(("cat", Matrix(np.array([F.cats], dtype=float), ["r1"],
+                                             [f"c{i + 1}" for i in range(len(F.cats))])))
+        extra_mats += [("gradient", Matrix(grad, ["r1"], names_all)),
+                       ("ilog", Matrix(ilog(r), ["r1"], [f"c{i + 1}" for i in range(20)]))]
+    if F.macro_edit is not None:
+        macros = F.macro_edit(macros)
     post(s, est, scalars, macros, smp.mask, extra_mats=extra_mats)
+    if F.late_error:
+        raise StataError(198, F.late_error)
     if qr:
         _display_qr(s, est, header=not o.get("noheader"), group=not o.get("nogroup"),
                     lrtest=not o.get("nolrtest"), table=not o.get("nofetable"),
@@ -948,12 +1033,18 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
         meth = x["method"]
         mid = []
         if sp["cmd"] == "meglm":
-            mid = [f"{'Family:':<15}{_FAM_TITLE[sp['fam']]:>16}", f"{'Link:':<15}{_LINK_TITLE[sp['link']]:>16}"]
+            mid = [f"{'Family:':<7}{_FAM_TITLE[sp['fam']]:>24}", f"{'Link:':<5}{_LINK_TITLE[sp['link']]:>26}"]
         if sp["fam"] == "nbinomial":
             mid.append(f"{'Overdispersion:':<15}{sp['disp']:>16}")      # VERIFY
+        if sp["fam"] == "binomial":
+            nb_ = str(sp["nbin"])
+            lab_ = "Binomial trials:" if nb_.replace(".", "").isdigit() else "Binomial variable:"
+            mid.append(f"{lab_}{nb_:>{31 - len(lab_)}}")
+        meth_line = (f"{'Integration method:':<19}{meth:>12}", "", "") if meth == "laplace" else \
+            (f"{'Integration method:':<19}{meth:>12}", "Integration pts.", f"{int(x['npts'])}")
         group_header(out, sp["title"], x["groups"] if group else [], x["N"],
                      [("", "", ""),
-                      (f"Integration method: {meth}", "Integration pts.", f"{int(x['npts'])}"),
+                      meth_line,
                       ("", "", ""),
                       ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
                       (ll, "Prob > chi2", _g(x["p"], "%10.4f"))], gv_right=True, mid=mid)
@@ -1035,6 +1126,8 @@ def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("-" * 78 + "\n", "text")
     if lrtest:
         lr_line(out, sp["vs"], x["chi2_c"], x["nvc"])
+    if x["method"] == "laplace":      # compat 1902
+        out.write("\nNote: Log-likelihood calculations are based on the Laplacian approximation.\n", "text")
 
 
 def _posterior_eta(s: "Session", est: Estimates, fixedonly: bool = False):
@@ -1085,7 +1178,9 @@ def _predict_me(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         return np.where(ok, eta, SYS), ""
     eta, ok = _posterior_eta(s, est, fixedonly=stat == "fixedonly")
     if stat == "eta":
-        return np.where(ok, eta, SYS), ""
+        if est.extra.get("qr") or (cond and "fixedonly".startswith(cond)):
+            return np.where(ok, eta, SYS), ""
+        return np.where(ok, eta, SYS), f"(predictions based on fixed effects and posterior means of random effects)\n(using {int(est.extra['npts'])} quadrature points)"
     mu = _mean_fn(sp)(eta)
     if sp["fam"] == "binomial":
         t = sp["nbin"]
@@ -1093,12 +1188,21 @@ def _predict_me(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
             mu = mu * float(t)
         except ValueError:
             mu = mu * s.data.get(t).data.astype(float)
-    note = "" if stat == "fixedonly" else \
-        "(predictions based on fixed effects and posterior means of random effects)"
-    if not stat:
-        note += "\n(option mu assumed)"
-    if stat != "fixedonly":
-        note += f"\n(using {int(est.extra['npts'])} quadrature points)"
+    # notes (compat 1902): fixedonly alone says only that mu was assumed; the meqr commands say
+    # "predicted means"; conditional(fixedonly) is silent
+    base = "(predictions based on fixed effects and posterior means of random effects)"
+    quad = f"(using {int(est.extra['npts'])} quadrature points)"
+    lines = []
+    if est.extra.get("qr"):
+        if stat in ("", "mu"):
+            lines = ["(option mu assumed; predicted means)"] if not stat else []
+    elif cond and "fixedonly".startswith(cond):
+        lines = []
+    elif stat == "fixedonly":
+        lines = ["(option mu assumed)"]
+    else:
+        lines = [base] + (["(option mu assumed)"] if stat in ("", "outcome") else []) + [quad]
+    note = "\n".join(lines)
     return np.where(ok, mu, SYS), note
 
 
@@ -1109,15 +1213,15 @@ def _pr_multi(s: "Session", est: Estimates):
     sp = est.extra["spec"]
     J = G["nlev"]
     oc = getattr(est, "_pred_opts", {}).get("outcome")
-    nreq = 1 if oc else J
+    nreq = 1        # compat 1902: pr takes one new variable ("too many variables specified" otherwise)
+    s.output.write("(predictions based on fixed effects and posterior means of random effects)\n", "text")
+    s.output.write(f"(using {int(est.extra['npts'])} quadrature points)\n", "text")
 
     def fn(mask):
         eta, ok = _posterior_eta(s, est)
         cuts = np.concatenate([[-np.inf], G["aux"], [np.inf]])
         F = special.expit if sp["link"] == "logit" else special.ndtr
         ps = [np.where(ok, F(cuts[j + 1] - eta) - F(cuts[j] - eta), SYS) for j in range(J)]
-        s.output.write("(predictions based on fixed effects and posterior means of random effects)\n", "text")
-        s.output.write(f"(using {int(est.extra['npts'])} quadrature points)\n", "text")
         if oc:
             t = str(oc).strip().lstrip("#")
             k = int(float(t)) - 1 if str(oc).strip().startswith("#") else None
@@ -1125,7 +1229,7 @@ def _pr_multi(s: "Session", est: Estimates):
                 cats = [c for c in range(J)]       # outcome(value): VERIFY with non-consecutive values
                 k = int(float(t)) - 1 if 0 <= int(float(t)) - 1 < len(cats) else 0
             return [ps[k]]
-        return ps
+        return ps[:1]       # pr with one variable: the first outcome (VERIFY)
     return nreq, fn, "too few variables specified"
 
 
@@ -1134,7 +1238,8 @@ def _reffects_me(s: "Session", est: Estimates):
     order of the level's effects (VERIFY: the order for random slopes)."""
     G = est.glmm
     lv = G["levels"][0]
-    s.output.write("(calculating posterior means of random effects)\n", "text")
+    if not est.extra.get("qr"):
+        s.output.write("(calculating posterior means of random effects)\n", "text")
 
     def fn(mask):
         ds = s.data
@@ -1148,7 +1253,8 @@ def _reffects_me(s: "Session", est: Estimates):
         for j in range(lv.q):
             vals = np.where(gidx >= 0, model.mu[np.maximum(gidx, 0), j], SYS)
             out.append(np.where(np.isfinite(vals), vals, SYS))
-        s.output.write(f"(using {int(est.extra['npts'])} quadrature points)\n", "text")
+        if not est.extra.get("qr"):
+            s.output.write(f"(using {int(est.extra['npts'])} quadrature points)\n", "text")
         return out
     # Stata's message here has a single line (compat 1002)
     return lv.q, fn, "too few variables specified"

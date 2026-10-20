@@ -125,6 +125,7 @@ class Level:
     gid: np.ndarray           # group index over the sample (nested in the upper levels)
     rep: int = 1              # R.factor equations: Z has `rep` indicator columns sharing one variance
     fac: str = ""             # the factor variable of an R. equation
+    fcode: np.ndarray | None = None   # its level (0..rep-1) of each observation
 
     @property
     def q(self) -> int:
@@ -343,19 +344,20 @@ def build_levels(s: "Session", mask: np.ndarray, levels_spec, n: int, crossed: b
         if lv == "_all":
             if not crossed:
                 raise StataError(198, "crossed random effects (_all:) are not available for this command")   # OpenDTA
-            if out and out[-1].var != "_all":
-                raise StataError(198, "_all: must be the first random-effects equation")   # VERIFY
             toks = revars.split()
             if len(toks) != 1 or not toks[0].startswith("R."):
-                raise StataError(198, "_all: requires one R.varname term")   # VERIFY
+                raise StataError(198, f"{revars} invalid level specification")   # compat 1902
             fac = resolve_name(ds, toks[0][2:])
             codes = codes_of(fac)
             L = int(codes.max()) + 1
             Z = np.zeros((nm_, L))
             Z[np.arange(nm_), codes] = 1.0
             q = 1
-            out.append(Level("_all", [f"R.{fac}"], _cov_kind(reo.get("covariance"), q), Z,
-                             np.zeros(nm_, dtype=np.int64), rep=L, fac=fac))
+            # _all is one group; below another level it is nested in its groups (compat 1902)
+            _, gid = np.unique(prev_key, return_inverse=True)
+            prev_key = gid.astype(np.int64)
+            out.append(Level("_all", [f"R.{fac}"], _cov_kind(reo.get("covariance"), q), Z, prev_key.copy(),
+                             rep=L, fac=fac, fcode=codes))
             continue
         var = resolve_name(ds, lv)
         names = s.expand_varlist(revars) if revars else []
@@ -388,6 +390,9 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     c = find_top(fixed, ",")
     fixed_body, fe_opts = (fixed, "") if c == -1 else (fixed[:c], fixed[c + 1:])
     opts_text = " ".join(x for x in (fe_opts.strip(), glob.strip()) if x)
+    for lv_, r_, _o in levels_spec:      # compat 1902: checked before the variables are looked up
+        if lv_ == "_all" and len(r_.split()) != 1:
+            raise StataError(198, f"{r_} invalid level specification")
     extra = " ".join([lv for lv, _r, _o in levels_spec if lv != "_all"] +
                      [(r[2:] if lv == "_all" and r.startswith("R.") else r)
                       for lv, r, _o in levels_spec if r])
@@ -517,12 +522,15 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     # e() in the order Stata lists it (compat 1001)
     nvar_p = sum({"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q) for lv in levels)
     ncov_p = nvc - nvar_p
+    # e(nrgroups) does not count the _all level (compat 1902; VERIFY with only _all levels)
     scalars = [("rank", float(ball.size)), ("k_f", float(kk)), ("k_r", float(th.size)),
                ("k", float(ball.size)), ("k_rs", float(nvar_p + 1)), ("k_rc", float(ncov_p)),
                ("k_res", 0.0), ("converged", 1.0 if r.converged else 0.0), ("ll", r.ll),
                ("ll_c", ll_lin), ("df_c", float(nvc)), ("chi2_c", chi2_c),
-               ("p_c", _p_chibar(chi2_c, nvc)), ("N", float(n)), ("nrgroups", float(len(levels))),
+               ("p_c", _p_chibar(chi2_c, nvc)), ("N", float(n)), ("nrgroups", float(max(1, sum(lv.var != "_all" for lv in levels)))),
                ("rc", 0.0), ("df_m", float(len(slopes))), ("chi2", wchi2), ("p", wp), ("small", 0.0)]
+    if any(lv.var == "_all" for lv in levels):      # compat 1902: crossed effects list the scalars reversed
+        scalars = scalars[-2::-1] + scalars[-1:]
     from .results import datasignature
     sigvars = [smp.depname] + fvars.base_vars(smp.terms)
     for lv in levels:
@@ -770,8 +778,6 @@ def _reffects(s: "Session", est: Estimates):
     down and, within a level, in the order of e(revars) ([ME] mixed postestimation)."""
     L = est.lmm
     model, th, b = L["model"], L["theta"], L["beta"]
-    if any(lv.rep > 1 for lv in model.levels):
-        raise StataError(198, "predict, reffects is not available with R. equations in OpenDTA")   # OpenDTA
     nreq = sum(lv.q for lv in model.levels)
 
     def fn(mask):
@@ -788,6 +794,10 @@ def _reffects(s: "Session", est: Estimates):
                 gids = np.unique(lv.gid[cl.rows])
                 for c in range(copies):
                     m = lv.gid[cl.rows] == gids[c]
+                    if lv.rep > 1:      # R.factor: the effect of the level of each observation
+                        out[offs[li]][rows[cl.rows[m]]] = uc[k + lv.fcode[cl.rows[m]]]
+                        k += lv.rep
+                        continue
                     for j in range(q):
                         out[offs[li] + j][rows[cl.rows[m]]] = uc[k + j]
                     k += q
@@ -814,8 +824,10 @@ def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
     # with covariates in the fixed part the correlation is conditional on them (compat 1001)
     has_cov = any(c.values is not None for c in (est.cols or []))
     title = "Residual intraclass correlation" if has_cov else "Intraclass correlation"
-    if L is None and est.glmm["resid_var"] is None:
-        raise StataError(321, "estat icc is not available after this model")   # VERIFY
+    if L is None and (est.glmm["resid_var"] is None or not getattr(est, "icc_ok", True)):
+        raise StataError(321, "requested action not valid after most recent estimation command")   # compat 1902
+    if L is not None and any(lv.var == "_all" for lv in levels):
+        raise StataError(321, "estat icc not allowed after crossed-effects models")   # compat 1902
     if any(lv.q != 1 or lv.names[0] != "_cons" for lv in levels):
         raise StataError(498, "estat icc is available only for random-intercept models")   # VERIFY
     out.write(f"\n{title}\n\n", "text")
@@ -872,9 +884,13 @@ def estat_recov(s: "Session", est: Estimates, rest: str) -> None:
         S = lv.sigma(th[k:k + npar])
         k += npar
         out.write(f"\nRandom-effects covariance matrix for level {lv.var}\n\n", "text")
-        m = Matrix(S, list(lv.names), list(lv.names))
-        from ..commands.matrix import list_matrix
-        list_matrix(s, lv.var, m)
+        nm = [x.replace(".", "_") for x in lv.names]
+        m = Matrix(S, nm, nm)
+        # compat 1902: columns of width 11, row names right-aligned in 13
+        out.write(f"{'':>13}|" + "".join(f"{c:>10} " for c in nm) + "\n", "text")
+        out.write("-" * 13 + "+" + "-" * (11 * len(nm)) + "\n", "text")
+        for i, r_ in enumerate(nm):
+            out.write(f"{r_:>12} |" + "".join(f"{_g(S[i, j]):>10} " for j in range(len(nm))) + "\n", "text")
         s.r = {"cov": m}
 
 
