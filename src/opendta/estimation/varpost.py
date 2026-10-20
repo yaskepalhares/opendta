@@ -370,6 +370,9 @@ def _fcast_compute(s: "Session", rest: str) -> None:
                                   "saving": 3, "level": 1}) if p.options.strip() else {}
     if o.get("bs") or o.get("bsp") or o.get("bscentile"):
         raise StataError(198, "options bs, bsp and bscentile are not implemented in OpenDTA")   # OpenDTA
+    if current(s).cmd == "vec":
+        _fcast_vec(s, current(s), prefix, o)
+        return
     est, V = _var(s, "fcast")
     if V["exog"]:
         raise StataError(198, "fcast after var with exog() is not implemented in OpenDTA")   # OpenDTA
@@ -482,3 +485,75 @@ def _fcast_graph(s: "Session", rest: str) -> None:
     opts = graph_options(graw)
     opts["_xtitle"] = info.tvar
     finish(s, Graph(family="twoway", opts=opts, panels=panels_), graw)
+
+
+def _fcast_vec(s: "Session", est, prefix: str, o: dict) -> None:
+    """fcast compute after vec: dynamic forecasts of the levels with standard errors
+    sqrt(diag(T/(T-d) sum Phi_i Omega Phi_i')) of the VAR representation (no parameter uncertainty)."""
+    from scipy import stats as st
+    from ..commands.tshelp import append_periods, new_variable
+    from .irfext import _simulate_vecm, vec_inputs
+    from .irf import _phis
+    from .tsops import require_ts
+    v = est.vec
+    deps = v["deps"]
+    K, p = len(deps), v["lags"]
+    steps = int(o["step"]) if o.get("step") and o["step"] is not True else 1
+    level = float(o["level"]) if o.get("level") and o["level"] is not True else float(s.settings.get("level", "95"))
+    info = require_ts(s.data)
+    dl = info.delta
+    t1 = v["t1"]
+    start = t1 + dl
+    if o.get("dynamic") and o["dynamic"] is not True:
+        start = float(s.eval(str(o["dynamic"])))
+    ds = s.data
+    times = [start + h * dl for h in range(steps)]
+    tv = ds.get(info.tvar).data.astype(float)
+    have = {float(x) for x in tv[tv < SYS]}
+    new = [(None, tt) for tt in times if tt not in have]
+    if new:
+        append_periods(s, new)
+        ds = s.data
+        tv = ds.get(info.tvar).data.astype(float)
+    pos = {float(x): i for i, x in enumerate(tv) if x < SYS}
+    hist = []
+    for k in range(p, 0, -1):
+        row = pos.get(start - k * dl)
+        if row is None:
+            raise StataError(198, "observations needed before the forecast period are missing")   # VERIFY
+        hist.append([float(ds.get(dv).data[row]) for dv in deps])
+    hist = np.array(hist)
+    idx = int(round((start - v["t0"]) / dl))                   # 0-based position of the first period
+    path = _simulate_vecm(v, np.zeros((steps, K)), hist, idx + 1)[p:]
+    names = {}
+    for dv in deps:
+        for suf in ("", "_LB", "_UB", "_SE"):
+            if suf and o.get("nose"):
+                continue
+            nm = f"{prefix}{dv}{suf}"
+            if s.data.has(nm) and not o.get("replace"):
+                raise StataError(110, f"{nm} already defined")
+            names[(dv, suf)] = nm
+    if not o.get("nose"):
+        _d, A, Om = vec_inputs(est)
+        Phi = _phis(A, steps)
+        fac = v["T"] / (v["T"] - v["d"])
+        acc, ses = np.zeros((K, K)), []
+        for h in range(steps):
+            acc = acc + Phi[h] @ Om @ Phi[h].T
+            ses.append(np.sqrt(np.diag(fac * acc)))
+        se = np.array(ses)
+        z = float(st.norm.isf((1 - level / 100) / 2))
+    n = ds.nobs
+    for j, dv in enumerate(deps):
+        def put(suf, vals):
+            col = np.full(n, np.nan)
+            for tt, val in zip(times, vals):
+                col[pos[tt]] = val
+            new_variable(s, names[(dv, suf)], col, vtype="float", replace=True)
+        put("", path[:, j])
+        if not o.get("nose"):
+            put("_LB", path[:, j] - z * se[:, j])
+            put("_UB", path[:, j] + z * se[:, j])
+            put("_SE", se[:, j])
+    s.notify_state()

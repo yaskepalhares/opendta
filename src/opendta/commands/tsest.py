@@ -59,3 +59,15 @@ for _n in ("vec", "vecrank"):
 def cmd_svar(s: "Session", args: str) -> None:
     from ..estimation.svar import cmd_svar as run
     run(s, args)
+
+
+@command("arch", "arch")
+def cmd_arch(s: "Session", args: str) -> None:
+    from ..estimation.archmodel import cmd_arch as run
+    run(s, args)
+
+
+@command("arfima", "arfima")
+def cmd_arfima(s: "Session", args: str) -> None:
+    from ..estimation.arfima import cmd_arfima as run
+    run(s, args)

@@ -84,27 +84,29 @@ def _refit_var(V: dict, Ysim: np.ndarray):
     return B, Sig
 
 
-def _simulate_vecm(v: dict, U: np.ndarray) -> np.ndarray:
-    """Dynamic simulation of the fitted VECM; returns the whole path (presample included)."""
-    Y, p, trend, coef, beta = v["Y"], v["lags"], v["trend"], v["coef"], v["beta"]
-    n, K = Y.shape
-    path = [Y[i].copy() for i in range(p)]
-    r = beta.shape[1]
-    for t in range(p, n):
+def _simulate_vecm(v: dict, U: np.ndarray, hist: np.ndarray | None = None, t_first: int | None = None) -> np.ndarray:
+    """Dynamic path of the fitted VECM driven by the innovations U (one row per period). By
+    default it starts from the first observed lags and covers the sample; with `hist` (rows of
+    levels before the first period) and `t_first` (position of the first period, counted from 1)
+    it continues from there. Returns the path including the history."""
+    p, trend, coef, beta = v["lags"], v["trend"], v["coef"], v["beta"]
+    if hist is None:
+        hist, t_first = v["Y"][:p], p + 1
+    path = [row.copy() for row in hist]
+    for k in range(U.shape[0]):
         z1 = path[-1]
         if trend == "rconstant":
             z1 = np.append(z1, 1.0)
         elif trend == "rtrend":
-            z1 = np.append(z1, float(t + 1))
+            z1 = np.append(z1, float(t_first + k))
         w = list(z1 @ beta)
         for i in range(1, p):
             w += list(path[-i] - path[-i - 1])
         if trend in ("constant", "trend", "rtrend"):
             w.append(1.0)
         if trend == "trend":
-            w.append(float(t + 1))
-        dy = np.array(w) @ coef + U[t - p]
-        path.append(path[-1] + dy)
+            w.append(float(t_first + k))
+        path.append(path[-1] + np.array(w) @ coef + U[k])
     return np.array(path)
 
 
