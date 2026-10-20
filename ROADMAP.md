@@ -223,7 +223,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Tests and correlations: `bitest`/`bitesti`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau` and `pcorr`
 - [x] Agreement and effect sizes: `icc`, `loneway`, `esize`/`esizei` and `ameans`
 - [x] Displays and graphs: `cumul`, `stem`, `lv`, `smooth`, `quantile`, `symplot`, `serrbar`, `dotplot`, `sunflower`, `lpoly`, `cusum`
-- Checked against the Stata log: case `1903` awaits the Stata run
+- Checked against the Stata 14 log: case `1903` matches except for the differences in `compat/known_differences.txt` (starting steps of `ml`/`ologit`, the `lnskew0` search, the depth-1 pseudosigma of `lv`, `permute`/`simulate` draws and the `sunflower` bin table)
 
 ## Distribution and documentation
 

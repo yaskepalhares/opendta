@@ -229,7 +229,7 @@ def cmd_loneway(s: "Session", args: str) -> None:
     out.write(f"{g9(r['sst'], '%10.0g'):>18}{r['N'] - 1:>7}"
               f"{g9(r['sst'] / (r['N'] - 1), '%10.0g'):>13}\n\n", "result")
     trunc = r["rho_raw"] < 0
-    out.write(f"{'':>9}{'Intraclass':>10}{'Asy.':>12}\n", "text")
+    out.write(f"{'':>9}{'Intraclass':>10}{'Asy.':>11}\n", "text")
     out.write(f"{'':>9}{'correlation':>11}{'S.E.':>10}{'':>7}[{_lvl_text(level)}% Conf. Interval]\n", "text")
     out.write(f"{'':>9}" + "-" * 48 + "\n", "text")
     out.write(f"{'':>9}{r['rho']:>10.5f}" + ("*" if trunc else " ")

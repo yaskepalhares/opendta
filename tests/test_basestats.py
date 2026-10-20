@@ -156,7 +156,7 @@ reshape long r, i(target) j(judge)
 def test_icc_shrout_fleiss(run):
     run(SHROUT + "icc r target judge, absolute")
     assert round(run.session.r["icc_i"], 2) == 0.29 and round(run.session.r["icc_avg"], 2) == 0.62
-    run("icc r target judge")
+    run("icc r target judge, consistency")
     assert round(run.session.r["icc_i"], 2) == 0.71 and round(run.session.r["icc_avg"], 2) == 0.91
     run("icc r target")
     assert round(run.session.r["icc_i"], 2) == 0.17 and round(run.session.r["icc_avg"], 2) == 0.44
@@ -212,20 +212,21 @@ def test_boxcox_matches_scipy(run):
     run(DATA + "boxcox yp, nolog")
     yp = _arr(run, "yp")
     lam = st.boxcox(yp)[1]
-    assert abs(run.session.e["theta"] - lam) < 1e-3
+    b = run.session.e["b"]
+    assert abs(b.data[0, list(b.colnames).index("/theta")] - lam) < 1e-3
     assert run.session.e["cmd"] == "boxcox"
 
 
 def test_cumul(run):
     run("clear\ninput v\n3\n1\n2\n2\nend\ncumul v, gen(c)\ncumul v, gen(c2) equal")
-    assert list(_arr(run, "c")) == [1.0, .25, .75, .75]
-    assert list(_arr(run, "c2")) == [1.0, .25, .5, .75]
+    assert list(_arr(run, "c")) == [1.0, .25, .5, .75]          # ties get different values by default
+    assert list(_arr(run, "c2")) == [1.0, .25, .75, .75]        # equal: the same value
 
 
 def test_smooth_median_of_three(run):
     run("clear\ninput v\n1\n5\n2\n6\n3\nend\nsmooth 3 v, gen(s)")
     assert list(_arr(run, "s")) == [1, 2, 5, 3, 3]
-    run("smooth 3, twice v, gen(s2)")
+    run("smooth 3,twice v, gen(s2)")
     assert run.session.data.has("s2")
 
 
@@ -314,7 +315,7 @@ def test_testnl_linear_equals_wald(run):
     run(DATA + "regress y x z\ntestnl _b[x] = 2")
     b = run.session.e["b"].data[0, 0]
     se = run.session.e["V"].data[0, 0] ** .5
-    assert abs(run.session.r["F"] - ((b - 2) / se) ** 2) < 1e-8
+    assert abs(run.session.r["chi2"] - ((b - 2) / se) ** 2) < 1e-8
 
 
 def test_predictnl_delta_method(run):
@@ -363,7 +364,7 @@ def test_graph_commands_build_graphs(run):
     run("serrbar y se x")
     run("dotplot x")
     run("sunflower y x")
-    run("cusum y x, gen(cs)")
+    run("gen byte yb = y > 0\ncusum yb x, gen(cs)")
     assert run.session.data.has("cs")
     run("gladder yp")
     g = store(run.session).graphs["Graph"]

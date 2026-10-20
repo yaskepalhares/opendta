@@ -36,10 +36,10 @@ def _p(x: float) -> str:
     return "." if math.isnan(x) else f"{x:.4f}"
 
 
-def _g0(x: float) -> str:
-    """%g without the leading zero, as display shows numbers."""
-    r = f"{x:g}"
-    return r.replace("0.", ".", 1) if r.startswith(("0.", "-0.")) else r
+def _g18(x: float) -> str:
+    """%18.0g (16 digits) without the padding: .81 shows as .8100000000000001."""
+    from ..core.formats import format_value
+    return format_value(x, "%18.0g").strip()
 
 
 def _kv(s: "Session", label: str, value: str, width: int = 14) -> None:
@@ -352,7 +352,7 @@ def cmd_runtest(s: "Session", args: str) -> None:
     pr = round(res["p"], 2)         # VERIFY: Stata shows z and p rounded to two decimals
     for lab, val in ((f" N({v.name} <= {tx})", f"{res['n0']}"), (f" N({v.name} >  {tx})", f"{res['n1']}"),
                      ("obs", f"{res['n0'] + res['n1']}"), ("N(runs)", f"{res['runs']}"),
-                     ("z ", _g0(zr)), ("Prob>|z|", _g0(pr))):
+                     ("z ", _g18(zr)), ("Prob>|z|", _g18(pr))):
         out.write(f"{lab:>14} = ", "text")
         out.write(f"{val}\n", "result")
     out.write("\n", "text")

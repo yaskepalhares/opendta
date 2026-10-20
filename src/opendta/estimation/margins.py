@@ -330,7 +330,7 @@ def cmd_margins(s: "Session", args: str) -> None:
     if atmeans or o.get("at"):
         _at_legend(s, est, ats, means, rows, atmeans)
     out.write("\n", "text")
-    stat = "t" if est.df_r else "z"
+    stat = "t" if (est.df_r and getattr(est, "cmd", "") != "tobit") else "z"      # VERIFY: z after tobit (compat 1903)
     rws = []
     last_head = None
     multi_at = len(ats) > 1

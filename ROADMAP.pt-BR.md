@@ -230,7 +230,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Testes e correlações: `bitest`/`bitesti`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau` e `pcorr`
 - [x] Concordância e tamanhos de efeito: `icc`, `loneway`, `esize`/`esizei` e `ameans`
 - [x] Exibições e gráficos: `cumul`, `stem`, `lv`, `smooth`, `quantile`, `symplot`, `serrbar`, `dotplot`, `sunflower`, `lpoly`, `cusum`
-- Conferido com o log do Stata: o caso `1903` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: o caso `1903` confere, exceto pelas diferenças de `compat/known_differences.txt` (passos iniciais de `ml`/`ologit`, a busca do `lnskew0`, o pseudosigma de profundidade 1 do `lv`, os sorteios de `permute`/`simulate` e a tabela de caixas do `sunflower`)
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 
