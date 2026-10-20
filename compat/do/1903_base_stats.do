@@ -10,12 +10,12 @@ program define mkdata
     set obs 74
     gen int weight = round(3000 + 700*invnormal(runiform()))
     gen int length = round(weight/17 + 4*invnormal(runiform()))
-    gen int mpg = max(12, round(44 - weight/110 + 2.5*invnormal(runiform())))
+    gen byte rep78 = 1 + floor(5*runiform())
+    gen int mpg = max(12, round(40 - weight/110 + rep78 + 2.5*invnormal(runiform())))
     gen int displacement = round(weight/12 + 30*invnormal(runiform()))
     gen int turn = round(length/5 + 2*invnormal(runiform()))
     gen byte foreign = runiform() < 1/(1 + exp((weight - 2800)/400))
     gen int price = round(exp(7.8 + .00025*weight - .01*mpg + .35*invnormal(runiform())))
-    gen byte rep78 = 1 + floor(5*runiform())
     replace rep78 = . if runiform() < .07
     label variable mpg "Mileage (mpg)"
 end
