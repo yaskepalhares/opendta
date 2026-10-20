@@ -224,7 +224,7 @@ def cmd_fp(s: "Session", args: str) -> None:
     big = models[degree]
     fitter.fit(big[2])
     dfr = s.e.get("df_r")
-    dfr = float(dfr) if isinstance(dfr, float) and dfr < SYS else None
+    dfr = float(dfr) - degree if isinstance(dfr, float) and dfr < SYS else None   # VERIFY: df_r - m (compat 1903)
     has_rmse = big[1] is not None and isinstance(big[1], float)
     _compare_table(s, var, models, degree, n, dfr, has_rmse)
     # final model: the best of the requested dimension
@@ -245,33 +245,40 @@ def _label(s: "Session", names: list[str], var: str, powers, a: float, b: float)
         s.data.get(nm).label = lab.replace("X", base)
 
 
+def _pw(p: float) -> str:
+    """Power as Stata's %g writes it (-.5, not -0.5)."""
+    return g9(p, "%9.0g").strip()
+
+
 def _compare_table(s: "Session", var: str, models: dict, degree: int, n: int, dfr, has_rmse: bool) -> None:
     out = s.output
     big = models[degree]
-    rows = [("Omitted", 0, models["omit"], "."), ("Linear", 1, models["linear"], "1")]
+    rows = [("omitted", 0, models["omit"], ""), ("linear", 1, models["linear"], "1")]
     for d in range(1, degree + 1):
-        rows.append((f"m = {d}", 2 * d, models[d], " ".join(f"{p:g}" for p in models[d][2])))
-    width = 71 if has_rmse else 60
+        rows.append((f"m = {d}", 2 * d, models[d], " ".join(_pw(p) for p in models[d][2])))
     out.write("\nFractional polynomial comparisons:\n", "text")
-    out.write("-" * width + "\n", "text")
-    head = f"{var[:12]:>12} |   df    Deviance" + ("   Res. s.d." if has_rmse else "") + \
-        "   Dev. dif.   P(*)    Powers"
+    out.write("-" * 79 + "\n", "text")
+    head = f"{var[:12]:>12} |   df    Deviance" + ("  Res. s.d." if has_rmse else "") + \
+        "   Dev. dif.   P(*)   Powers"
     out.write(head + "\n", "text")
-    out.write("-" * 13 + "+" + "-" * (width - 13) + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * 65 + "\n", "text")
     for lab, df, (dev, rmse, *rest), pw in rows:
-        out.write(f"{lab:<12} |{df:>5}{dev:>12.3f}", "result")
+        out.write(f"{lab:>12} |{df:>5}{dev:>11.3f}", "result")
         if has_rmse:
-            out.write(f"{rmse:>12.5g}" if isinstance(rmse, float) else f"{'':>12}", "result")
+            out.write(f"{rmse:>11.3f}" if isinstance(rmse, float) else f"{'':>11}", "result")
         dd = dev - big[0]
-        if lab.startswith("m =") and df == 2 * degree:
-            p = "     "
-            out.write(f"{dd:>12.3f}{'':>7}  {pw}\n", "result")
+        if df == 2 * degree and lab.startswith("m ="):
+            out.write(f"{dd:>11.3f}{'--':>9}   {pw:<12}\n", "result")
         else:
             ddf = 2 * degree - df
             diff, p = _ftest(s, dev, big[0], ddf, n, None, dfr)
-            out.write(f"{dd:>12.3f}{p:>7.3f}  {pw}\n", "result")
-    out.write("-" * width + "\n", "text")
-    out.write(f"(*) P-value from deviance difference comparing reported model with m = {degree} model\n", "text")
+            out.write(f"{dd:>11.3f}{p:>9.3f}   {pw:<12}\n", "result")
+    out.write("-" * 79 + "\n", "text")
+    if dfr:
+        out.write(f"(*) P = sig. level of model with m = {degree} based on F with {int(dfr)} denominator dof.\n",
+                  "text")
+    else:
+        out.write(f"(*) P = sig. level of model with m = {degree} based on chi^2 of dev. dif.\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -359,9 +366,15 @@ def cmd_mfp(s: "Session", args: str) -> None:
         dfr = s.e.get("df_r")
         return dev, int(s.e.get("N", 0)), (float(dfr) if isinstance(dfr, float) and dfr < SYS else None)
 
+    def fmt_rows(v: str, rows: list, final_dev: float, final_pw: str) -> None:
+        for k, (lm, vs, dev, dd, pval, pm, pv_) in enumerate(rows):
+            out.write(f"{v if k == 0 else '':<13}{lm:<7}{vs:<7}{dev:>8.3f}{dd:>10.3f}{pval:>7.3f}    "
+                      f"{pm:<10}{pv_}\n", "result")
+        out.write(f"{'':<13}{'Final':<14}{final_dev:>8.3f}{'':21}{final_pw}\n\n", "result")
+
     try:
         dev_lin, n, dfr = fit(state)
-        out.write(f"Deviance for model with all terms untransformed = {dev_lin:.3f}, {n} observations\n", "text")
+        out.write(f"Deviance for model with all terms untransformed = {dev_lin:9.3f}, {n} observations\n", "text")
         # order: increasing p-value of the Wald test of each variable in the linear model
         est = s._estimates
         pv = {}
@@ -374,55 +387,109 @@ def cmd_mfp(s: "Session", args: str) -> None:
             else:
                 pv[v] = 1.0
         order = sorted(vars_, key=lambda v: pv[v])
-        history = []
+        out.write("\nVariable     Model (vs.)   Deviance  Dev diff.   P      Powers   (vs.)\n", "text")
+        out.write("-" * 70 + "\n", "text")
         for cyc in range(1, cycles + 1):
             before = dict(state)
             for v in order:
-                state = _select_one(state, v, dfs[v], powers, alpha, select, fit)
+                state, rows, fdev = _select_one(state, v, dfs[v], powers, alpha, select, fit)
+                if cyc == 1:        # VERIFY: the steps of later cycles are not shown
+                    fmt_rows(v, rows, fdev, _state_pw(state[v]))
             if state == before:
                 break
-        out.write(f"\nFractional polynomial fitting algorithm converged after {cyc} cycles.\n", "text")
+        out.write(f"\nFractional polynomial fitting algorithm converged after {cyc} "
+                  f"cycle{'' if cyc == 1 else 's'}.\n", "text")
         out.write("\nTransformations of covariates:\n\n", "text")
+        # final model: every term centred at its mean in the estimation sample
+        final_names: list[str] = []
+        sample = np.ones(ds.nobs, dtype=bool)
         for v in vars_:
-            if state[v][0] == "fp":
-                a, b = scal[v]
-                out.write(f"-> {v}: powers {' '.join(f'{p:g}' for p in state[v][1])}"
-                          f" (shift {a:g}, scale {b:g})\n", "text")   # VERIFY: layout
+            if state[v][0] != "out":
+                sample &= ds.get(v).data < SYS
+        for v in vars_:
+            stt = state[v]
+            if stt[0] == "out":
+                continue
+            x = ds.get(v).data
+            a, b = scal[v]
+            powers_ = (1.0,) if stt[0] == "lin" else stt[1]
+            if stt[0] == "lin":
+                cols = x[sample][:, None]
+            else:
+                cols = fp_terms((x[sample] + a) / b, powers_)
+            for j in range(cols.shape[1]):
+                nm = f"I{v[:4]}__{j + 1}"
+                mean = float(cols[:, j].mean())
+                full = np.full(ds.nobs, SYS)
+                full[sample] = cols[:, j] - mean
+                from ..core.dataset import Variable
+                if ds.has(nm):
+                    ds.get(nm).data = full
+                else:
+                    ds.add(Variable(nm, "double", full))
+                final_names.append(nm)
+                created.setdefault("_final", []).append(nm)
+                if stt[0] == "lin":
+                    expr = v
+                else:
+                    base = f"(({v}+{a:g})/{b:g})" if (a or b != 1) else v
+                    expr = f"ln({base})" if powers_[j] == 0 and (j == 0 or powers_[j - 1] != 0) else \
+                        f"{base}^{_pw(powers_[j])}" if powers_[j] != 0 else f"ln({base})*ln({base})"   # VERIFY
+                sign = "-" if mean >= 0 else "+"
+                out.write(f"-> gen double {nm} = {expr}{sign}{format(abs(mean), '.10g')} if e(sample) \n", "text")
         out.write(f"\nFinal multivariable fractional polynomial model for {dep}\n", "text")
-        out.write("-" * 76 + "\n", "text")
-        out.write("    Variable    |-----Initial-----   |----------Final----------\n", "text")
-        out.write("                |   df     Select   Alpha    Status    df    Powers\n", "text")
-        out.write("-" * 76 + "\n", "text")
+        out.write("-" * 68 + "\n", "text")
+        out.write("    Variable |    -----Initial-----          -----Final-----\n", "text")
+        out.write("             |   df     Select   Alpha    Status    df    Powers\n", "text")
+        out.write("-" * 13 + "+" + "-" * 54 + "\n", "text")
         for v in vars_:
             stt = state[v]
             status = "out" if stt[0] == "out" else "in"
             fdf = 0 if stt[0] == "out" else 1 if stt[0] == "lin" else 2 * len(stt[1])
-            pw = "" if stt[0] == "out" else "1" if stt[0] == "lin" else " ".join(f"{p:g}" for p in stt[1])
-            out.write(f"{v:>15} |{dfs[v]:>5}{select:>11.4f}{alpha:>8.4f}{status:>10}{fdf:>6}  {pw}\n", "result")
-        out.write("-" * 76 + "\n", "text")
-        tmp = {v: write_fp(v, state[v][1]) for v in vars_ if state[v][0] == "fp"}
-        for v, nm in tmp.items():
-            created[v] = nm
-        s.interp._execute_expanded(text(state, tmp))
+            pw = "" if stt[0] == "out" else "1" if stt[0] == "lin" else " ".join(_pw(p) for p in stt[1])
+            out.write(f"{v[:12]:>12} |{dfs[v]:>5}{select:>11.4f}{alpha:>9.4f}{status:>7}{fdf:>7}     {pw}\n",
+                      "result")
+        out.write("-" * 68 + "\n", "text")
+        parts = []
+        k = 0
+        for v in vars_:
+            if state[v][0] == "out":
+                continue
+            m_ = 1 if state[v][0] == "lin" else len(state[v][1])
+            parts += final_names[k:k + m_]
+            k += m_
+        s.interp._execute_expanded(f"{cmd} {dep} {' '.join(parts)}{tail}")
+        dev_final, _ = _deviance(s)
+        out.write(f"Deviance: {dev_final:.3f}.\n", "text")
     finally:
         pass
 
 
-def _select_one(state: dict, v: str, df: int, powers, alpha: float, select: float, fit) -> dict:
-    """Closed test procedure for one variable with the others fixed."""
+def _state_pw(stt: tuple) -> str:
+    return "" if stt[0] == "out" else "1" if stt[0] == "lin" else " ".join(_pw(p) for p in stt[1])
+
+
+def _select_one(state: dict, v: str, df: int, powers, alpha: float, select: float, fit):
+    """Closed test procedure for one variable with the others fixed; returns the new state, the
+    rows of the comparison table and the deviance of the chosen model."""
     n_deg = max(df // 2, 1) if df > 1 else 0
-    cands = {}
     cur = dict(state)
     cur[v] = ("out",)
-    dev_out, n, dfr = fit(cur)
+    dev_out, n, _ = fit(cur)
     cur[v] = ("lin",)
-    dev_lin, _, _ = fit(cur)
+    dev_lin, _, dfr_lin = fit(cur)
+    nu = None if dfr_lin is None else dfr_lin - n_deg          # VERIFY: df_r of the linear model - degree
+    rows = []
+    new = dict(state)
     if n_deg == 0:
-        diff, p = _ftest(None, dev_out, dev_lin, 1, n, None, dfr)
-        keep = select >= 1 or p < select
-        new = dict(state)
-        new[v] = ("lin",) if keep else ("out",)
-        return new
+        if select < 1:
+            diff, p = _ftest(None, dev_out, dev_lin, 1, n, None, nu)
+            rows.append(("Not in", "lin.", dev_out, diff, p, "", "1"))
+            if p >= select:
+                new[v] = ("out",)
+                return new, rows, dev_out
+        new[v] = ("lin",)
+        return new, rows, dev_lin
     best_by_deg = {}
     for d in range(1, n_deg + 1):
         bestd = None
@@ -433,24 +500,30 @@ def _select_one(state: dict, v: str, df: int, powers, alpha: float, select: floa
                 bestd = (dev, ps)
         best_by_deg[d] = bestd
     dev_big, ps_big = best_by_deg[n_deg]
-    new = dict(state)
-    # 1) the variable in the model at all (4 df test for FP2): only when select < 1
-    _, p_in = _ftest(None, dev_out, dev_big, 2 * n_deg, n, None, dfr)
-    if select < 1 and p_in >= select:
-        new[v] = ("out",)
-        return new
+    big_pw = " ".join(_pw(p) for p in ps_big)
+    lab_big = f"FP{n_deg}"
+    # 1) the variable in the model at all (only when select < 1)
+    if select < 1:
+        diff, p_in = _ftest(None, dev_out, dev_big, 2 * n_deg, n, None, nu)
+        rows.append(("Not in", lab_big, dev_out, diff, p_in, "", big_pw))
+        if p_in >= select:
+            new[v] = ("out",)
+            return new, rows, dev_out
     # 2) nonlinearity
-    _, p_lin = _ftest(None, dev_lin, dev_big, 2 * n_deg - 1, n, None, dfr)
+    diff, p_lin = _ftest(None, dev_lin, dev_big, 2 * n_deg - 1, n, None, nu)
+    rows.append(("lin.", lab_big, dev_lin, diff, p_lin, "1", big_pw))
     if p_lin >= alpha:
         new[v] = ("lin",)
-        return new
+        return new, rows, dev_lin
     # 3) degree: FP(m) against FP(m-1)
     chosen = n_deg
     for d in range(n_deg - 1, 0, -1):
-        _, p_d = _ftest(None, best_by_deg[d][0], dev_big, 2 * (n_deg - d), n, None, dfr)
+        diff, p_d = _ftest(None, best_by_deg[d][0], dev_big, 2 * (n_deg - d), n, None, nu)
+        rows.append((f"FP{d}", lab_big, best_by_deg[d][0], diff, p_d,
+                     " ".join(_pw(p) for p in best_by_deg[d][1]), big_pw))
         if p_d >= alpha:
             chosen = d
         else:
             break
     new[v] = ("fp", best_by_deg[chosen][1])
-    return new
+    return new, rows, best_by_deg[chosen][0]

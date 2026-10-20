@@ -53,12 +53,32 @@ _CUBIC_PCT = {3: (10, 50, 90), 4: (5, 35, 65, 95), 5: (5, 27.5, 50, 72.5, 95),
               6: (5, 23, 41, 59, 77, 95), 7: (2.5, 18.33, 34.17, 50, 65.83, 81.67, 97.5)}
 
 
-def _display_knots(s: "Session", knots: list[float]) -> None:
+def _harrell_knots(xs: np.ndarray, k: int) -> list[float]:
+    """Cubic spline knots (sorted data xs): interior ones at the percentiles of Harrell's table, by
+    interpolating at (n+1)q; with fewer than 100 observations the outer ones are the 5th smallest and
+    5th largest values. VERIFY: the outer knots with 100 or more observations (reference log 1903
+    has n = 74)."""
+    n = len(xs)
+
+    def at(q: float) -> float:
+        pos = min(max((n + 1) * q / 100.0, 1.0), float(n))
+        lo = int(np.floor(pos))
+        hi = min(lo + 1, n)
+        return float(xs[lo - 1] + (pos - lo) * (xs[hi - 1] - xs[lo - 1]))
+    knots = [at(q) for q in _CUBIC_PCT[k]]
+    if n < 100 and n >= 5:
+        knots[0], knots[-1] = float(xs[4]), float(xs[n - 5])
+    return knots
+
+
+def _display_knots(s: "Session", knots: list[float], name: str) -> None:
+    from ..estimation.results import abbrev
     out = s.output
-    out.write("\n" + f"{'':>12} |" + "".join(f"{'knot' + str(i + 1):>11}" for i in range(len(knots))) + "\n", "text")
-    out.write("-" * 13 + "+" + "-" * (11 * len(knots) + 1) + "\n", "text")      # VERIFY: layout
-    out.write(f"{'knots':>12} |", "text")
-    out.write("".join(f"{g9(k, '%9.0g'):>11}" for k in knots) + "\n", "result")
+    out.write("\n" + f"{'':>12} |" + "".join(f"{'knot' + str(i + 1):>{10 if i == 0 else 11}}"
+                                              for i in range(len(knots))) + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * (11 * len(knots)) + "\n", "text")
+    out.write(f"{abbrev(name, 12):>12} |", "text")
+    out.write("".join(f"{g9(k, '%9.0g'):>{10 if i == 0 else 11}}" for i, k in enumerate(knots)) + "\n", "result")
 
 
 @command("mkspline", "mkspline")
@@ -93,7 +113,7 @@ def cmd_mkspline(s: "Session", args: str) -> None:
             k = int(o["nknots"]) if isinstance(o.get("nknots"), str) else 5
             if k not in _CUBIC_PCT:
                 raise StataError(198, "nknots() must be between 3 and 7")
-            knots = [S.percentile(xs, q) for q in _CUBIC_PCT[k]]
+            knots = _harrell_knots(xs, k)
         if k < 3 or k > 7 or sorted(knots) != knots:
             raise StataError(198, "knots() must have between 3 and 7 increasing values")
         tk, tk1, t1 = knots[-1], knots[-2], knots[0]
@@ -132,7 +152,7 @@ def cmd_mkspline(s: "Session", args: str) -> None:
         _add_var(s, nm, col, mask)
         created.append(nm)
     if o.get("displayknots"):
-        _display_knots(s, knots)
+        _display_knots(s, knots, xname)
     s.r = {"N_knots": float(len(knots)), "knots": Matrix(np.array(knots).reshape(1, -1), ["r1"],
                                                          [f"c{i + 1}" for i in range(len(knots))])}
 
@@ -194,7 +214,7 @@ def _xi_expand(s: "Session", text: str, prefix: str, omit_default: bool, made: l
         x, ok, levels, use, names = _xi_dummies(s, prefix, a, omit, made, [])
         if levels:
             first = f"{prefix}{a}_{_lv(levels[0])}"
-            rng = f"{names[0]}-{_lv(levels[-1])}" if names else ""
+            rng = f"{first}-{_lv(levels[-1])}" if names else ""
             notes.append((f"{flag}.{a}", rng, first if omit else None))
         if op is None:
             return " ".join(names)
@@ -402,7 +422,7 @@ def cmd_nestreg(s: "Session", args: str) -> None:
         so_far: list[str] = []
         for b, g in enumerate(spec.groups, start=1):
             so_far += g
-            out.write(f"Block {b}: {' '.join(g)}\n", "text")
+            out.write(f"Block {b:>2}: {' '.join(g)}\n", "text")
             est = _run_quiet(s, spec.text(so_far), noisy=not o.get("quietly"))
             e = dict(s.e)
             if isinstance(o.get("store"), str):
@@ -423,11 +443,18 @@ def cmd_nestreg(s: "Session", args: str) -> None:
 def _nestreg_table(s: "Session", rows, lr: bool, is_f: bool) -> None:
     out = s.output
     out.write("\n", "text")
+
+    def box(lines: list[str], nhead: int = 2) -> None:
+        width = len(lines[0]) - 4
+        out.write("  +" + "-" * width + "+\n", "text")
+        for ln in lines[:nhead]:
+            out.write(ln + "\n", "text")
+        out.write("  |-------+" + "-" * (width - 8) + "|\n", "text")
+        for ln in lines[nhead:]:
+            out.write(ln + "\n", "result")
+        out.write("  +" + "-" * width + "+\n", "text")
     if lr:
-        hdr1 = "  | Block |        LL        LR     df  Pr > LR       AIC       BIC |"
-        out.write("  +" + "-" * (len(hdr1) - 4) + "+\n", "text")
-        out.write(hdr1 + "\n", "text")
-        out.write("  |-------+" + "-" * (len(hdr1) - 12) + "|\n", "text")
+        lines = [f"  | Block |{'LL':>10}{'LR':>9}{'df':>7}{'Pr > LR':>9}{'AIC':>10}{'BIC':>10} |"]
         prev_ll = None
         for b, ll, prev, k, e in rows:
             n = e.get("N", SYS)
@@ -435,37 +462,38 @@ def _nestreg_table(s: "Session", rows, lr: bool, is_f: bool) -> None:
             aic = -2 * ll + 2 * rank
             bic = -2 * ll + rank * np.log(n)
             if prev_ll is None:
-                lrs, dfs, pv = "", "", ""
+                # the first block is tested against the constant-only model
+                ll0, df_v = e.get("ll_0", SYS), e.get("df_m", SYS)
+                lrs_v = 2 * (ll - ll0) if ll0 < SYS else None
             else:
                 lrs_v = 2 * (ll - prev_ll[0])
                 df_v = rank - prev_ll[1]
-                lrs, dfs, pv = f"{lrs_v:.3f}", f"{int(df_v)}", f"{chi2_tail(lrs_v, df_v):.4f}"
-            out.write(f"  | {b:>5} |{ll:>10.3f}{lrs:>10}{dfs:>7}{pv:>10}{aic:>10.3f}{bic:>10.3f} |\n", "result")
+            if lrs_v is None:
+                lrs, dfs, pv = "", "", ""
+            else:
+                lrs, dfs, pv = f"{lrs_v:.2f}", f"{int(df_v)}", f"{chi2_tail(lrs_v, df_v):.4f}"
+            lines.append(f"  | {b:>5} |{g9(ll, '%9.0g'):>10}{lrs:>9}{dfs:>7}{pv:>9}"
+                         f"{g9(aic, '%9.0g'):>10}{g9(bic, '%9.0g'):>10} |")
             prev_ll = (ll, rank)
-        out.write("  +" + "-" * (len(hdr1) - 4) + "+\n", "text")
+        box(lines, 1)
         return
     stat = "F" if is_f else "Chi2"
     if is_f:
-        lines = [f"  | Block |{stat:>9}{'Block':>9}{'Residual':>10}{'':>9}{'':>9}{'Change':>8} |",
-                 f"  |       |{'':>9}{'df':>9}{'df':>10}{'Pr > F':>9}{'R2':>9}{'in R2':>8} |"]
+        lines = [f"  |       |{'':>8}{'Block':>7}{'Residual':>10}{'':>9}{'':>9}{'Change':>9} |",
+                 f"  | Block |{stat:>8}{'df':>7}{'df':>10}{'Pr > F':>9}{'R2':>9}{'in R2':>9} |"]
     else:
-        lines = [f"  | Block |{stat:>9}{'Block':>9}{'':>9}{'Pseudo':>9}{'Change':>9} |",
-                 f"  |       |{'':>9}{'df':>9}{'Pr > ' + stat:>9}{'R2':>9}{'in R2':>9} |"]
-    width = len(lines[0]) - 4
-    out.write("  +" + "-" * width + "+\n", "text")
-    for ln in lines:
-        out.write(ln + "\n", "text")
-    out.write("  |-------+" + "-" * (width - 8) + "|\n", "text")
+        lines = [f"  |       |{'':>8}{'Block':>7}{'':>9}{'Pseudo':>9}{'Change':>9} |",
+                 f"  | Block |{stat:>8}{'df':>7}{'Pr > ' + stat:>9}{'R2':>9}{'in R2':>9} |"]
     prev_r2 = None
     for b, stv, df, pv, dfr, e in rows:
         r2 = e.get("r2", e.get("r2_p", SYS))
         ch = "" if prev_r2 is None else f"{r2 - prev_r2:.4f}"
         if is_f:
-            out.write(f"  | {b:>5} |{stv:>9.2f}{int(df):>9}{int(dfr):>10}{pv:>9.4f}{r2:>9.4f}{ch:>8} |\n", "result")
+            lines.append(f"  | {b:>5} |{stv:>8.2f}{int(df):>7}{int(dfr):>10}{pv:>9.4f}{r2:>9.4f}{ch:>9} |")
         else:
-            out.write(f"  | {b:>5} |{stv:>9.2f}{int(df):>9}{pv:>9.4f}{r2:>9.4f}{ch:>9} |\n", "result")
+            lines.append(f"  | {b:>5} |{stv:>8.2f}{int(df):>7}{pv:>9.4f}{r2:>9.4f}{ch:>9} |")
         prev_r2 = r2
-    out.write("  +" + "-" * width + "+\n", "text")
+    box(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -523,7 +551,7 @@ def cmd_stepwise(s: "Session", args: str) -> None:
                         best = (i, pv)
                 if best is not None and best[1] < pe:
                     incl = sorted(incl + [best[0]])
-                    out.write(f"p = {best[1]:.4f} <  {pe:.4f}  adding   {' '.join(terms[best[0]])}\n", "text")
+                    out.write(f"p = {best[1]:.4f} <  {pe:.4f}  adding  {' '.join(terms[best[0]])}\n", "text")
                     changed = True
                     if pr is not None and len(incl) > 1:
                         est = fit(incl)
