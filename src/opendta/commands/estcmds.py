@@ -425,6 +425,42 @@ def cmd_xtnbreg(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtgls", "xtgls")
+def cmd_xtgls(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtgls as run
+    run(s, args)
+
+
+@command("xtpcse", "xtpcse")
+def cmd_xtpcse(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtpcse as run
+    run(s, args)
+
+
+@command("xtregar", "xtregar")
+def cmd_xtregar(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtregar as run
+    run(s, args)
+
+
+@command("xtrc", "xtrc")
+def cmd_xtrc(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtrc as run
+    run(s, args)
+
+
+@command("xthtaylor", "xthtaylor")
+def cmd_xthtaylor(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xthtaylor as run
+    run(s, args)
+
+
+@command("xtivreg", "xtivreg")
+def cmd_xtivreg(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtivreg as run
+    run(s, args)
+
+
 @command("quadchk", "quadchk")
 def cmd_quadchk(s: "Session", args: str) -> None:
     from ..estimation.xtre import cmd_quadchk as run
