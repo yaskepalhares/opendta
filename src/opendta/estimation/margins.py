@@ -67,22 +67,41 @@ def _xb(s: "Session", est, b: np.ndarray, rows: np.ndarray, overrides: dict) -> 
 
 
 def _transform(est, predict: str):
-    """Function of xb that gives the model's default prediction, and the Expression text."""
+    """Function f(xb, b) that gives the model's default prediction, and the Expression text."""
     cmd = getattr(est, "ml_cmd", est.cmd)
     dep = est.depvar
     p = predict.strip()
     if p in ("xb", "xb()"):
-        return (lambda xb: xb), "Linear prediction, predict(xb)"
+        return (lambda xb, bb=None: xb), "Linear prediction, predict(xb)"
     if est.cmd == "regress" or cmd in ("regress", "areg", "xtreg", "ivregress"):
-        return (lambda xb: xb), "Linear prediction, predict()"
+        return (lambda xb, bb=None: xb), "Linear prediction, predict()"
     if cmd in ("logit", "logistic"):
-        return special.expit, f"Pr({dep}), predict()"
+        return (lambda xb, bb=None: special.expit(xb)), f"Pr({dep}), predict()"
     if cmd == "probit":
-        return st.norm.cdf, f"Pr({dep}), predict()"
+        return (lambda xb, bb=None: st.norm.cdf(xb)), f"Pr({dep}), predict()"
     if cmd in ("poisson", "nbreg"):
-        return (lambda xb: np.exp(xb)), "Predicted number of events, predict()"
+        return (lambda xb, bb=None: np.exp(xb)), "Predicted number of events, predict()"
     if cmd == "glm":
-        return est.glm_ginv, f"Predicted mean {dep}, predict()"
+        return (lambda xb, bb=None: est.glm_ginv(xb)), f"Predicted mean {dep}, predict()"
+    if cmd == "tobit":
+        return (lambda xb, bb=None: xb), "Linear prediction, predict()"
+    if cmd in ("ologit", "oprobit"):
+        m = re.fullmatch(r"outcome\(\s*#?(\d+)\s*\)", p) if p else None
+        k = int(m.group(1)) if m else 1
+        if p and not m:
+            raise StataError(322, f"margins not yet supported by OpenDTA after {cmd} with predict({p})")
+        ncut = len(est.b) - len(est.cols) - (1 if est.constant else 0)
+        cdf = special.expit if cmd == "ologit" else st.norm.cdf
+        if not 1 <= k <= ncut + 1:
+            raise StataError(111, f"outcome {k} not found")
+
+        def prob(xb, bb=None):
+            cuts = (bb if bb is not None else est.b)[-ncut:]
+            hi = cdf(cuts[k - 1] - xb) if k <= ncut else 1.0
+            lo = cdf(cuts[k - 2] - xb) if k >= 2 else 0.0
+            return hi - lo
+        tag = f"predict(outcome({k}))" if m else "predict()"
+        return prob, f"Pr({dep}=={k}), {tag}"
     raise StataError(322, f"margins not yet supported by OpenDTA after {cmd}")
 
 
@@ -220,7 +239,7 @@ def cmd_margins(s: "Session", args: str) -> None:
         return ov
 
     def margin_fn(ov):
-        return lambda bb: float(np.mean(f(_xb(s, est, bb, rows, ov))))
+        return lambda bb: float(np.mean(f(_xb(s, est, bb, rows, ov), bb)))
 
     factor_vars = {c.var for t in est.terms for c in t.comps if c.factor}
     for ai, at in enumerate(ats):
@@ -253,14 +272,14 @@ def cmd_margins(s: "Session", args: str) -> None:
                     def D(hh):
                         up = dict(ov0, **{var: x + hh})
                         dn = dict(ov0, **{var: x - hh})
-                        return (f(_xb(s, est, bb, rows, up)) - f(_xb(s, est, bb, rows, dn))) / (2 * hh)
+                        return (f(_xb(s, est, bb, rows, up), bb) - f(_xb(s, est, bb, rows, dn), bb)) / (2 * hh)
                     d = (4 * D(h / 2) - D(h)) / 3
                     if dydx_kind == "eyex":
-                        d = d * x / f(_xb(s, est, bb, rows, ov0))
+                        d = d * x / f(_xb(s, est, bb, rows, ov0), bb)
                     elif dydx_kind == "dyex":
                         d = d * x
                     elif dydx_kind == "eydx":
-                        d = d / f(_xb(s, est, bb, rows, ov0))
+                        d = d / f(_xb(s, est, bb, rows, ov0), bb)
                     return float(np.mean(d))
                 results.append(("", var, fn, at_lab))
         elif terms:

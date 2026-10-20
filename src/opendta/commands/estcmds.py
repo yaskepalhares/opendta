@@ -299,6 +299,48 @@ def cmd_mfp(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("testnl", "testnl")
+def cmd_testnl(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_testnl as run
+    run(s, args)
+
+
+@command("predictnl", "predictnl")
+def cmd_predictnl(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_predictnl as run
+    run(s, args)
+
+
+@command("linktest", "linktest")
+def cmd_linktest(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_linktest as run
+    run(s, args)
+
+
+@command("contrast", "contrast")
+def cmd_contrast(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_contrast as run
+    run(s, args)
+
+
+@command("pwcompare", "pwcompare")
+def cmd_pwcompare(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_pwcompare as run
+    run(s, args)
+
+
+@command("pwmean", "pwmean")
+def cmd_pwmean(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_pwmean as run
+    run(s, args)
+
+
+@command("suest", "suest")
+def cmd_suest(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_suest as run
+    run(s, args)
+
+
 @command("lrtest", "lrtest")
 def cmd_lrtest(s: "Session", args: str) -> None:
     from ..estimation.extra import cmd_lrtest as run
