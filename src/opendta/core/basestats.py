@@ -345,20 +345,30 @@ def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0) -> dict:
     msb, msw = ssb / dfb, ssw / dfw
     F = msb / msw
     n0 = (N - float((ng ** 2).sum()) / N) / (G - 1)
-    rho = (F - 1) / (F + n0 - 1)
-    se = math.sqrt(2 * (1 - rho) ** 2 * (1 + (n0 - 1) * rho) ** 2 / (n0 * (n0 - 1) * (G - 1))) \
-        if n0 > 1 else math.nan
-    alpha = 1 - level / 100
-    FL = F / st.f.ppf(1 - alpha / 2, dfb, dfw)
-    FU = F / st.f.ppf(alpha / 2, dfb, dfw)
-    lb = (FL - 1) / (FL + n0 - 1)
-    ub = (FU - 1) / (FU + n0 - 1)
-    sd_b = math.sqrt(max((msb - msw) / n0, 0.0))
+    rho_raw = (F - 1) / (F + n0 - 1)
+    rho = max(rho_raw, 0.0)
+    # Asymptotic variance of rho by the delta method on (MSb, MSw), with the variance of MSb for
+    # unbalanced groups; evaluated at the (truncated) estimate. VERIFY: matches the Stata 14 log.
+    sw = msw
+    sb2 = rho / (1 - rho) * sw
+    nn = ng.astype(float)
+    Q = np.diag(nn) - np.outer(nn, nn) / N
+    V = np.diag(sb2 + sw / nn)
+    var_msb = 2 * float(np.trace(Q @ V @ Q @ V)) / dfb ** 2
+    var_msw = 2 * sw ** 2 / dfw
+    msb_t = sw + n0 * sb2
+    D = msb_t + (n0 - 1) * sw
+    se = math.sqrt(n0 ** 2 / D ** 4 * (sw ** 2 * var_msb + msb_t ** 2 * var_msw))
+    z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
+    lb = max(rho - z * se, 0.0)
+    ub = min(rho + z * se, 1.0)
+    sd_b = math.sqrt((msb - msw) / n0) if msb > msw else math.nan
     sd_w = math.sqrt(msw)
+    rel = (F - 1) / F
     return {"N": N, "G": G, "ssb": ssb, "ssw": ssw, "sst": sst, "dfb": dfb, "dfw": dfw,
             "msb": msb, "msw": msw, "F": F, "p": float(st.f.sf(F, dfb, dfw)), "r2": ssb / sst,
-            "n0": n0, "rho": rho, "se": se, "lb": lb, "ub": ub, "sd_b": sd_b, "sd_w": sd_w,
-            "sd": math.sqrt(sd_b ** 2 + sd_w ** 2), "rel": (F - 1) / F, "nbar": N / G}
+            "n0": n0, "rho": rho, "rho_raw": rho_raw, "se": se, "lb": lb, "ub": ub, "sd_b": sd_b,
+            "sd_w": sd_w, "rel": max(rel, 0.0), "rel_raw": rel, "nbar": N / G}
 
 
 # ---------------------------------------------------------------------------
@@ -400,11 +410,10 @@ def effect_sizes(n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
     t = d * cn
     lo, hi = _nct_ci(t, df, level)
     out = {"cohen": (d, lo / cn, hi / cn), "hedges": (J * d, J * lo / cn, J * hi / cn)}
-    z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
     for key, sd, nc in (("glass1", s1, n1), ("glass2", s2, n2)):
         D = diff / sd
-        se = math.sqrt((n1 + n2) / (n1 * n2) + D * D / (2 * (nc - 1)))
-        out[key] = (D, D - z * se, D + z * se)
+        glo, ghi = _nct_ci(D * cn, nc - 1, level)       # noncentral t with the control's df
+        out[key] = (D, glo / cn, ghi / cn)
     rr = lambda x: x / math.sqrt(x * x + df)   # noqa: E731
     out["pbcorr"] = (rr(t), rr(lo), rr(hi))
     out["df"] = df
@@ -530,8 +539,36 @@ def boxcox_fit(y: np.ndarray, X: np.ndarray) -> dict:
     z = _bc(y, th)
     b, *_ = np.linalg.lstsq(X, z, rcond=None)
     rss = float(((z - X @ b) ** 2).sum())
-    return {"theta": th, "se": se, "ll": f0, "b": b, "sigma": math.sqrt(rss / len(y)),
-            "ll_at": lambda t: boxcox_ll(t, y, X), "z": z}
+    sigma = math.sqrt(rss / len(y))
+    ly = float(np.log(y).sum())
+    n, k = len(y), X.shape[1]
+
+    def full(pv):
+        """Log likelihood in (theta, b, sigma); the information gives the full covariance matrix."""
+        zz = _bc(y, pv[0])
+        r = zz - X @ pv[1:1 + k]
+        return -n / 2 * math.log(2 * math.pi) - n * math.log(pv[-1]) - float((r * r).sum()) \
+            / (2 * pv[-1] ** 2) + (pv[0] - 1) * ly
+
+    p0 = np.concatenate([[th], b, [sigma]])
+    q = len(p0)
+    H = np.zeros((q, q))
+    # steps that move the likelihood by comparable amounts in every direction
+    xs = np.abs(X).max(axis=0)
+    hs = np.concatenate([[1e-4 * max(abs(th), 1.0)], 1e-3 * sigma / np.maximum(xs, 1e-12),
+                         [1e-4 * sigma]])
+    for i in range(q):
+        for j in range(i + 1):
+            def at(si, sj):
+                pp = p0.copy()
+                pp[i] += si * hs[i]
+                pp[j] += sj * hs[j]
+                return full(pp)
+            H[i, j] = H[j, i] = (at(1, 1) - at(1, -1) - at(-1, 1) + at(-1, -1)) / (4 * hs[i] * hs[j])
+    V = np.linalg.inv(-H)
+    V[0, 0] = se * se          # the profile curvature is the exact theta block; the rest is numeric
+    return {"theta": th, "se": se, "ll": f0, "b": b, "sigma": sigma, "V": V,
+            "nit": int(getattr(res, "nit", 0)), "ll_at": lambda t: boxcox_ll(t, y, X), "z": z}
 
 
 # ---------------------------------------------------------------------------

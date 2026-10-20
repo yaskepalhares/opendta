@@ -102,7 +102,9 @@ def cmd_icc(s: "Session", args: str) -> None:
     if len(names) == 2 and (o.get("mixed") or o.get("random") or o.get("absolute")
                             or o.get("consistency")):
         model = "oneway"
-    kind = "absolute" if o.get("absolute") else "consistency"
+    # VERIFY: the default of the two-way mixed model is consistency, the other models absolute
+    kind = "consistency" if (model == "mixed" and not o.get("absolute")) or o.get("consistency") \
+        else "absolute"
     if model == "oneway":
         kind = "absolute"
     mask = touse(s, p)
@@ -144,38 +146,40 @@ def cmd_icc(s: "Session", args: str) -> None:
     out.write(title + "\n", "text")
     out.write(("Absolute agreement" if kind == "absolute" else "Consistency of agreement") + "\n\n",
               "text")
-    if model == "oneway":
-        out.write(f"{'Random effects: ' + names[1]:<34}{'Number of targets':<19}= ", "text")
-    elif model == "random":
-        out.write(f"{'Random effects: ' + names[1]:<34}{'Number of targets':<19}= ", "text")
-    else:
-        out.write(f"{'Random effects: ' + names[1]:<34}{'Number of targets':<19}= ", "text")
+    out.write(f"{'Random effects: ' + names[1]:<33}{'Number of targets':<18}= ", "text")
     out.write(f"{n:>9}\n", "result")
     if len(names) == 3:
-        lab = ("Random" if model == "random" else "Fixed") + " effects: " + names[2]
-        out.write(f"{lab:<34}{'Number of raters':<19}= ", "text")
-        out.write(f"{k:>9}\n", "result")
+        lab = f"{'Random' if model == 'random' else 'Fixed':>6} effects: " + names[2]
+        out.write(f"{lab:<33}{'Number of raters':<18}= ", "text")
     else:
-        out.write(f"{'':<34}{'Number of raters':<19}= ", "text")
-        out.write(f"{k:>9}\n", "result")
+        out.write(f"{'':<33}{'Number of raters':<18}= ", "text")
+    out.write(f"{k:>9}\n", "result")
     out.write("\n" + "-" * 62 + "\n", "text")
-    out.write(f"{'':>23}|{'ICC':>12}{'[' + _lvl_text(level) + '% Conf. Interval]':>26}\n", "text")
+    out.write(f"{names[0]:>22} |{'ICC':>11}{'[' + _lvl_text(level) + '% Conf. Interval]':>27}\n", "text")
     out.write("-" * 23 + "+" + "-" * 38 + "\n", "text")
     for lab, key in (("Individual", "ind"), ("Average", "avg")):
         out.write(f"{lab:>22} |", "text")
-        out.write(f"{r[key]:>12.7f}{r[key + '_lb']:>13.7f}{r[key + '_ub']:>13.7f}\n", "result")
+        out.write(f"{g9(r[key], '%9.0g'):>11}{g9(r[key + '_lb'], '%9.0g'):>15}"
+                  f"{g9(r[key + '_ub'], '%9.0g'):>12}\n", "result")
     out.write("-" * 62 + "\n", "text")
     out.write("F test that\n", "text")
-    out.write(f"  ICC=0.00: F({r['df1']:.1f},{r['df2']:.1f}) = {r['F']:>6.2f}"
-              f"{'Prob > F =':>16} {r['p']:.3f}\n\n", "text")
-    out.write("Note: ICCs estimate correlations between individual measurements and between\n"
-              "      average measurements made on the same target.\n", "text")
-    _set_r(s, [("level", level), ("N_target", float(n)), ("N_rater", float(k)),
+    out.write(f"  ICC=0.00: F({r['df1']:.1f}, {r['df2']:.1f}) = " + f"{r['F']:.2f}".ljust(19)
+              + f"Prob > F = {r['p']:.3f}\n\n", "text")
+    out.write("Note: ICCs estimate correlations between individual measurements\n"
+              "      and between average measurements made on the same target.\n", "text")
+    macros = [("model", {"oneway": "one-way random effects", "random": "two-way random effects",
+                         "mixed": "two-way mixed effects"}[model]),
+              ("depvar", names[0]), ("target", names[1])]
+    if len(names) == 3:
+        macros.append(("rater", names[2]))
+    macros.append(("type", kind))                       # VERIFY: macros of the two-way models
+    _set_r(s, [("N_target", float(n)), ("N_rater", float(k)),
                ("icc_i", r["ind"]), ("icc_i_F", r["F"]), ("icc_i_df1", float(r["df1"])),
                ("icc_i_df2", float(r["df2"])), ("icc_i_p", r["p"]), ("icc_i_lb", r["ind_lb"]),
                ("icc_i_ub", r["ind_ub"]), ("icc_avg", r["avg"]), ("icc_avg_F", r["F"]),
                ("icc_avg_df1", float(r["df1"])), ("icc_avg_df2", float(r["df2"])),
-               ("icc_avg_p", r["p"]), ("icc_avg_lb", r["avg_lb"]), ("icc_avg_ub", r["avg_ub"])])
+               ("icc_avg_p", r["p"]), ("icc_avg_lb", r["avg_lb"]), ("icc_avg_ub", r["avg_ub"]),
+               ("testvalue", 0.0), ("level", level)] + macros)
 
 
 # ---------------------------------------------------------------------------
@@ -207,36 +211,39 @@ def cmd_loneway(s: "Session", args: str) -> None:
     if r["G"] < 2:
         raise StataError(198, "need at least 2 groups")        # VERIFY
     out = s.output
-    head = f"One-way Analysis of Variance for {yv.name}:"
-    if yv.label:
-        head += f" {yv.label}"
-    out.write("\n" + head + "\n", "text")
-    out.write(f"{'':>48}{'Number of obs':<14}= ", "text")
-    out.write(f"{r['N']:>9}\n", "result")
-    out.write(f"{'':>48}{'R-squared':<14}= ", "text")
-    out.write(f"{r['r2']:>9.4f}\n\n", "result")
-    out.write(f"{'Source':<20}{'SS':>12}{'df':>8}{'MS':>14}{'F':>10}{'Prob > F':>10}\n", "text")
-    out.write("-" * 74 + "\n", "text")
-    out.write(f"{'Between ' + gv.name:<20}", "text")
-    out.write(f"{r['ssb']:>12.7g}{r['dfb']:>8}{r['msb']:>14.7g}{r['F']:>10.2f}{r['p']:>10.4f}\n", "result")
-    out.write(f"{'Within ' + gv.name:<20}", "text")
-    out.write(f"{r['ssw']:>12.7g}{r['dfw']:>8}{r['msw']:>14.7g}\n", "result")
-    out.write("-" * 74 + "\n", "text")
-    out.write(f"{'Total':<20}", "text")
-    out.write(f"{r['sst']:>12.7g}{r['N'] - 1:>8}{r['sst'] / (r['N'] - 1):>14.7g}\n\n", "result")
-    out.write(f"{'':>9}{'Intraclass':>12}{'Asy.':>12}\n", "text")
-    out.write(f"{'':>9}{'correlation':>12}{'S.E.':>12}{'[' + _lvl_text(level) + '% Conf. Interval]':>28}\n", "text")
+    head = f"One-way Analysis of Variance for {yv.name}: " + (yv.label or "")
+    out.write("\n" + " " * ((80 - len(head)) // 2) + head + "\n\n", "text")
+    out.write(f"{'':>45}{'Number of obs':<14}= ", "text")
+    out.write(f"{r['N']:>12}\n", "result")
+    out.write(f"{'':>45}{'R-squared':<14}= ".replace("R-squared    ", "    R-squared"), "text")
+    out.write(f"{r['r2']:>12.4f}\n\n", "result")
+    out.write(f"{'Source':>10}{'SS':>18}{'df':>11}{'MS':>8}{'F':>13}{'Prob > F':>13}\n", "text")
+    out.write("-" * 73 + "\n", "text")
+    out.write(f"{'Between ' + gv.name:<14}", "text")
+    out.write(f"{g9(r['ssb'], '%10.0g'):>18}{r['dfb']:>7}{g9(r['msb'], '%10.0g'):>13}"
+              f"{r['F']:>10.2f}{r['p']:>11.4f}\n", "result")
+    out.write(f"{'Within ' + gv.name:<14}", "text")
+    out.write(f"{g9(r['ssw'], '%10.0g'):>18}{r['dfw']:>7}{g9(r['msw'], '%10.0g'):>13}\n", "result")
+    out.write("-" * 73 + "\n", "text")
+    out.write(f"{'Total':<14}", "text")
+    out.write(f"{g9(r['sst'], '%10.0g'):>18}{r['N'] - 1:>7}"
+              f"{g9(r['sst'] / (r['N'] - 1), '%10.0g'):>13}\n\n", "result")
+    trunc = r["rho_raw"] < 0
+    out.write(f"{'':>9}{'Intraclass':>10}{'Asy.':>12}\n", "text")
+    out.write(f"{'':>9}{'correlation':>11}{'S.E.':>10}{'':>7}[{_lvl_text(level)}% Conf. Interval]\n", "text")
     out.write(f"{'':>9}" + "-" * 48 + "\n", "text")
-    out.write(f"{'':>9}{r['rho']:>12.5f}{r['se']:>12.5f}{r['lb']:>14.5f}{r['ub']:>14.5f}\n\n", "result")
-    out.write(f"{'':>9}{'Estimated SD of ' + gv.name + ' effect':<39}", "text")
-    out.write(f"{r['sd_b']:>12.7g}\n", "result")
-    out.write(f"{'':>9}{'Estimated SD within ' + gv.name:<39}", "text")
-    out.write(f"{r['sd_w']:>12.7g}\n", "result")
-    out.write(f"{'':>9}{'Estimated SD of ' + yv.name:<39}", "text")
-    out.write(f"{r['sd']:>12.7g}\n", "result")
-    out.write(f"{'':>9}{'Est. reliability of a ' + gv.name + ' mean':<39}", "text")
-    out.write(f"{r['rel']:>12.5f}\n", "result")
-    out.write(f"{'':>9}{'(evaluated at n=' + f'{r['n0']:.2f}' + ')':>40}\n", "text")
+    out.write(f"{'':>9}{r['rho']:>10.5f}" + ("*" if trunc else " ")
+              + f"{r['se']:>11.5f}{r['lb']:>14.5f}{r['ub']:>12.5f}\n\n", "result")
+    rel_trunc = r["rel_raw"] < 0
+    for lab, val, star in (("Estimated SD of " + gv.name + " effect", r["sd_b"], False),
+                           ("Estimated SD within " + gv.name, r["sd_w"], False),
+                           ("Est. reliability of a " + gv.name + " mean", r["rel"], rel_trunc)):
+        txt = "." if math.isnan(val) else (f"{val:.5f}" if lab.startswith("Est. rel") else g9(val, "%9.0g"))
+        out.write(f"{'':>9}{lab:<39}", "text")
+        out.write(f"{txt:>9}" + ("*" if star else "") + "\n", "result")
+    out.write(f"{'':>14}(evaluated at n={r['n0']:.2f})\n", "text")
+    if trunc or rel_trunc:
+        out.write("\n(*) Truncated at zero.\n", "text")
     _set_r(s, [("N", float(r["N"])), ("rho", r["rho"]), ("lb", r["lb"]), ("ub", r["ub"]),
                ("F", r["F"]), ("df_m", float(r["dfb"])), ("df_r", float(r["dfw"])),
                ("sd_w", r["sd_w"]), ("sd_b", r["sd_b"]), ("rho_se", r["se"]), ("N_g", float(r["G"])),
@@ -273,22 +280,23 @@ def _es_print(s: "Session", n1: int, m1: float, s1: float, n2: int, m2: float, s
     want = _es_options(o)
     out = s.output
     out.write("\nEffect size based on mean comparison\n\n", "text")
-    out.write(f"{'Obs per group:':>31}\n", "text")
-    out.write(f"{lab1:>31} = {n1:>9}\n{lab2:>31} = {n2:>9}\n", "text")
-    out.write("-" * 17 + "+" + "-" * 50 + "\n", "text")
-    out.write(f"{'Effect Size':>16} |{'Estimate':>11}{'[' + _lvl_text(level) + '% Conf. Interval]':>34}\n", "text")
-    out.write("-" * 17 + "+" + "-" * 50 + "\n", "text")
+    out.write(f"{'Obs per group:':>45}\n", "text")
+    out.write(f"{lab1:>44} = {n1:>10}\n{lab2:>44} = {n2:>10}\n", "text")
+    out.write("-" * 57 + "\n", "text")
+    out.write(f"{'Effect Size':>19} |{'Estimate':>11}{'[' + _lvl_text(level) + '% Conf. Interval]':>25}\n", "text")
+    out.write("-" * 20 + "+" + "-" * 36 + "\n", "text")
     for key, lab in _ES_ROWS:
         if key in want:
             est, lo, hi = r[key]
-            out.write(f"{lab:>16} |", "text")
-            out.write(f"{est:>11.7f}{lo:>14.7f}{hi:>14.7f}\n", "result")
-    out.write("-" * 17 + "+" + "-" * 50 + "\n", "text")
-    pairs = [("level", level), ("df", float(r["df"]))]
+            out.write(f"{lab:>19} |", "text")
+            out.write(f"{g9(est):>11}{g9(lo):>13}{g9(hi):>12}\n", "result")
+    out.write("-" * 57 + "\n", "text")
+    pairs = []
     names = {"cohen": "d", "hedges": "g", "glass1": "delta1", "glass2": "delta2", "pbcorr": "r_pb"}
     for key in want:
         est, lo, hi = r[key]
         pairs += [(names[key], est), (f"lb_{names[key]}", lo), (f"ub_{names[key]}", hi)]
+    pairs += [("N_1", float(n1)), ("N_2", float(n2)), ("level", level)]     # VERIFY: order and names
     _set_r(s, pairs)
 
 
@@ -313,8 +321,10 @@ def cmd_esize(s: "Session", args: str) -> None:
     x1, x2 = v.data[m1], v.data[m2]
     if len(x1) < 2 or len(x2) < 2:
         raise StataError(2001, "insufficient observations")
+    by = s.expand_varlist(o["by"])[0]
     _es_print(s, len(x1), float(x1.mean()), float(x1.std(ddof=1)), len(x2), float(x2.mean()),
-              float(x2.std(ddof=1)), o, t1, t2)
+              float(x2.std(ddof=1)), o, f"{by}=={g1:g}" if not isinstance(g1, str) else f"{by}=={g1}",
+              f"{by}=={g2:g}" if not isinstance(g2, str) else f"{by}=={g2}")
 
 
 @command("esizei", "esizei")
@@ -358,15 +368,25 @@ def cmd_lnskew0(s: "Session", args: str) -> None:
     col[mask] = np.log(x - k) if sign == 1 else np.log(k - x)
     s.data.add(Variable(name, "float", col))
     skew = B.skewness(col[mask])
-    skew = 0.0 if abs(skew) < 5e-7 else skew
     out = s.output
-    lab = f"ln({p.exp.strip()}-k)" if sign == 1 else f"ln(k-{p.exp.strip()})"
-    out.write(f"\n{'Transform':>16} |{'k':>10}{'[' + _lvl_text(level) + '% Conf. Interval]':>30}{'Skewness':>12}\n", "text")
-    out.write("-" * 17 + "+" + "-" * 51 + "\n", "text")
+    ex = p.exp.strip()
+    # VERIFY: for a negatively skewed variable Stata shows ln(-x-k) with k and its limits negated
+    if sign == 1:
+        lab, kd, lod, hid = f"ln({ex}-k)", k, lo, hi
+        lot = "-infinity" if math.isnan(lo) else g9(lo)
+        hit = "infinity" if math.isnan(hi) else g9(hi)
+    else:
+        lab, kd, lod, hid = f"ln(-{ex}-k)", -k, -hi, -lo
+        lot = "-infinity" if math.isnan(hi) else g9(-hi)
+        hit = "infinity" if math.isnan(lo) else g9(-lo)
+    out.write(f"\n{'Transform':>16} |{'k':>10}{'[' + _lvl_text(level) + '% Conf. Interval]':>25}{'Skewness':>15}\n", "text")
+    out.write("-" * 17 + "+" + "-" * 50 + "\n", "text")
     out.write(f"{lab:>16} |", "text")
-    fmt = lambda v: "." if math.isnan(v) else f"{v:.5g}"   # noqa: E731
-    out.write(f"{fmt(k):>10}{fmt(lo):>14}{fmt(hi):>14}{skew:>12.6f}\n", "result")
-    _set_r(s, [("gamma", k), ("lb", lo), ("ub", hi), ("skewness", skew), ("level", level)])
+    if math.isnan(lo) and math.isnan(hi):
+        out.write(f"{g9(kd):>11}{'(not calculated)':>22}{g9(skew):>17}\n", "result")
+    else:
+        out.write(f"{g9(kd):>11}{lot:>13}{hit:>11}{g9(skew):>15}\n", "result")
+    _set_r(s, [("gamma", kd), ("lb", lod), ("ub", hid), ("skewness", skew), ("level", level)])
     s.r["N"] = float(len(x))
 
 
@@ -413,14 +433,15 @@ def cmd_ladder(s: "Session", args: str) -> None:
         raise StataError(2001, "insufficient observations")
     rows = ladder_table(x, not o.get("noadjust"))
     out = s.output
-    out.write(f"\n{'Transformation':<22}{'formula':<14}{'chi2(2)':>12}{'P(chi2)':>12}\n", "text")
-    out.write("-" * 60 + "\n", "text")
+    out.write(f"\n{'Transformation':<23}{'formula':<7}{'chi2(2)':>22}{'P(chi2)':>14}\n", "text")
+    out.write("-" * 66 + "\n", "text")
     for lab, form, t, chi2, pv in rows:
-        out.write(f"{lab:<22}{form:<14}", "text")
+        out.write(f"{lab:<23}{form.replace('x', v.name):<13}", "text")
+        pt = "." if math.isnan(pv) else f"{pv:.3f}"
         if t is None or not math.isfinite(chi2):
-            out.write(f"{'.':>12}{'.' if t is None else f'{pv:.3f}':>12}\n", "result")
+            out.write(f"{'.':>15}{pt:>13}\n", "result")
         else:
-            out.write(f"{chi2:>12.2f}{pv:>12.3f}\n", "result")
+            out.write(f"{chi2:>15.2f}{pt:>13}\n", "result")
     if o.get("generate"):
         new = o["generate"]
         if s.data.has(new):
@@ -431,6 +452,7 @@ def cmd_ladder(s: "Session", args: str) -> None:
         col = np.full(s.data.nobs, SYS)
         col[mask] = rows[best][2]
         s.data.add(Variable(new, "float", col))
+        out.write(f"\n({new} = {rows[best][1].replace('x', v.name)}   generated)\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -456,51 +478,66 @@ def cmd_boxcox(s: "Session", args: str) -> None:
     n = len(y)
     X = np.column_stack([v.data[mask] for v in vars_[1:]] + [np.ones(n)])
     fit = B.boxcox_fit(y, X)
+    fit0 = B.boxcox_fit(y, np.ones((n, 1)))            # comparison model: constant only
     th, se, ll = fit["theta"], fit["se"], fit["ll"]
     level = _level(s, o)
     out = s.output
-    ll1 = fit["ll_at"](1.0)
-    lr = 2 * (ll - ll1)
-    out.write("\n", "text")
-    out.write(f"{'':>49}{'Number of obs':<16}= ", "text")
-    out.write(f"{n:>9}\n", "result")
-    out.write(f"{'':>49}{'LR chi2(1)':<16}= ", "text")
-    out.write(f"{lr:>9.2f}\n", "result")
-    out.write(f"{'Log likelihood = ' + f'{ll:.7g}':<49}{'Prob > chi2':<16}= ", "text")
-    out.write(f"{float(st.chi2.sf(lr, 1)):>9.3f}\n\n", "result")
+    ll0 = fit0["ll"]
+    lr = 2 * (ll - ll0)
+    ncov = len(vars_) - 1
+    out.write("Fitting comparison model\n\nFitting full model\n\n", "text")
+    out.write(f"{'':>50}{'Number of obs':<16}= ", "text")
+    out.write(f"{n:>10}\n", "result")
+    out.write(f"{'':>50}{'LR chi2(' + str(ncov) + ')':<16}= ", "text")
+    out.write(f"{lr:>10.2f}\n", "result")
+    out.write(f"{'Log likelihood = ' + f'{ll:.8g}':<50}{'Prob > chi2':<16}= ", "text")
+    out.write((f"{float(st.chi2.sf(lr, ncov)):>10.3f}" if ncov > 0 else f"{'.':>10}") + "\n", "result")
+    out.write(" \n", "text")
     rows = [CoefRow("coef", "/theta", th, se, name="theta")]
     coef_table(s, vars_[0].name, rows, stat="z", df=None, level=level)
-    if len(vars_) > 1:
-        out.write("\nEstimates of scale-variant parameters\n", "text")
-        out.write("-" * 13 + "+" + "-" * 12 + "\n", "text")
-        out.write(f"{'':>12} |{'Coef.':>11}\n", "text")
-        out.write("-" * 13 + "+" + "-" * 12 + "\n", "text")
-        out.write(f"{'Notrans':<12} |\n", "text")
-        names = [v.name for v in vars_[1:]] + ["_cons"]
-        for nm, b in zip(names, fit["b"]):
-            out.write(f"{name12(nm):>12} |", "text")
-            out.write(f"{b:>11.7g}\n", "result")
-        out.write("-" * 13 + "+" + "-" * 12 + "\n", "text")
-        out.write(f"{'/sigma':>12} |", "text")
-        out.write(f"{fit['sigma']:>11.7g}\n", "result")
-        out.write("-" * 13 + "+" + "-" * 12 + "\n", "text")
-    out.write("\n" + "-" * 58 + "\n", "text")
-    out.write(f"{'Test':<12}{'Restricted':>16}{'LR statistic':>16}{'P-value':>14}\n", "text")
-    out.write(f"{'H0:':<12}{'log likelihood':>16}{'chi2':>16}{'Prob > chi2':>14}\n", "text")
-    out.write("-" * 58 + "\n", "text")
-    tests = []
-    for t0 in (-1, 0, 1):
+    out.write(" \nEstimates of scale-variant parameters\n", "text")
+    out.write("-" * 28 + "\n", "text")
+    out.write(f"{'':>13}|{'Coef.':>11}\n", "text")
+    sep = "-" * 13 + "+" + "-" * 14 + "\n"
+    out.write(sep, "text")
+    out.write(f"{'Notrans':<13}|\n", "text")
+    names = [v.name for v in vars_[1:]] + ["_cons"]
+    for nm, b in zip(names, fit["b"]):
+        out.write(f"{name12(nm):>12} |", "text")
+        out.write(f"{g9(b):>11}\n", "result")
+    out.write(sep, "text")
+    out.write(f"{'/sigma':>12} |", "text")
+    out.write(f"{g9(fit['sigma']):>11}\n", "result")
+    out.write("-" * 28 + "\n\n", "text")
+    out.write("-" * 57 + "\n", "text")
+    out.write("   Test         Restricted     LR statistic      P-value\n", "text")
+    out.write("    H0:       log likelihood       chi2       Prob > chi2\n", "text")
+    out.write("-" * 57 + "\n", "text")
+    tests = {}
+    for t0, key in ((-1, "tm1"), (0, "t0"), (1, "t1")):
         llr = fit["ll_at"](float(t0))
         chi = 2 * (ll - llr)
         pv = float(st.chi2.sf(chi, 1))
-        out.write(f"{'theta = ' + str(t0):<12}", "text")
-        out.write(f"{llr:>16.7g}{chi:>16.2f}{pv:>14.3f}\n", "result")
-        tests.append((t0, llr, chi, pv))
-    out.write("-" * 58 + "\n", "text")
+        out.write(f"{'theta = ' + format(t0, '2d'):<10}", "text")
+        out.write(f"{g9(llr, '%10.0g'):>16}{chi:>13.2f}{pv:>16.3f}\n", "result")
+        tests[key] = (llr, chi, pv)
+    out.write("-" * 57 + "\n", "text")
     sample = mask.copy()
-    est = Estimates(cmd="boxcox", depvar=vars_[0].name, names=["/theta"], b=np.array([th]),
-                    V=np.array([[se * se]]), N=n, stat="z", rows=rows)
+    k = len(names) + 2
+    enames = ["/theta"] + names + ["/sigma"]
+    est = Estimates(cmd="boxcox", depvar=vars_[0].name, names=enames,
+                    b=np.concatenate([[th], fit["b"], [fit["sigma"]]]), V=fit["V"], N=n,
+                    stat="z", rows=rows)
+    est.eqnames = ["theta"] + ["Notrans"] * len(names) + ["sigma"]
     est.level = level
     est.title = "Box-Cox regression"
-    post(s, est, [("N", float(n)), ("ll", ll), ("chi2", lr), ("theta", th)],
-         [("cmd", "boxcox"), ("depvar", vars_[0].name), ("model", "lhsonly")], sample)
+    scal = [("N", float(n)), ("df_m", float(k)), ("ll0", ll0), ("df_r", 3.0), ("chi2", lr), ("ll", ll)]
+    for key in ("t1", "tm1", "t0"):
+        llr, chi, pv = tests[key]
+        scal += [(f"chi2_{key}", chi), (f"p_{key}", pv), (f"ll_{key}", llr)]
+    scal += [("ic", float(fit["nit"])), ("rc", 0.0), ("rank", 1.0)]      # VERIFY: e(ic), e(rank)
+    cl = f"boxcox {args.strip()}"
+    post(s, est, scal,
+         [("cmd", "boxcox"), ("marginsnotok", "_ALL"), ("cmdline", cl), ("ntrans", "yes"),
+          ("model", "lhsonly"), ("predict", "boxcox_p"), ("chi2type", "LR"),
+          ("depvar", vars_[0].name), ("properties", "b V")], sample)

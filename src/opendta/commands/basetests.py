@@ -551,5 +551,4 @@ def cmd_pcorr(s: "Session", args: str) -> None:
     names = [v.name for v in vars_[1:]]
     col = lambda a: Matrix(np.asarray(a, dtype=float).reshape(-1, 1).copy(), names, ["c1"])  # noqa: E731
     s.r = {"N": nobs, "df": float(res["df"]), "p_corr": col(res["partial"]),
-           "sp_corr": col(res["semipartial"]), "p_corr2": col(res["partial"] ** 2),
-           "sp_corr2": col(res["semipartial"] ** 2), "sig": col(res["p"])}
+           "sp_corr": col(res["semipartial"])}

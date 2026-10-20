@@ -420,7 +420,10 @@ def _set_r(s: "Session", pairs: list) -> None:
 def _royston_adjust(K2: float, n: int) -> tuple[float, float]:
     """Royston (1991c) correction of D'Agostino's K² ([R] sktest, Methods
     and formulas). Returns (adj chi2, P)."""
-    Zc = -float(st.norm.ppf(math.exp(-0.5 * K2)))
+    e = math.exp(-0.5 * K2)
+    if e < 1e-100:      # VERIFY: Stata shows both the statistic and P as missing for huge K2 (limit unknown)
+        return math.nan, math.nan
+    Zc = -float(st.norm.ppf(e))
     ln = math.log(n)
     Zt = 0.55 * n ** 0.2 - 0.21
     a1 = (-5 + 3.46 * ln) * math.exp(-1.37 * ln)
@@ -428,7 +431,7 @@ def _royston_adjust(K2: float, n: int) -> tuple[float, float]:
     a2 = a1 - (2.13 / (1 - 2.37 * ln)) * Zt
     b2 = 2.13 / (1 - 2.37 * ln) + b1
     Z = Zc if Zc < -1 else (a1 + b1 * Zc if Zc < Zt else a2 + b2 * Zc)
-    P = float(st.norm.sf(Z))
+    P = float(1.0 - st.norm.cdf(Z))    # VERIFY: 1-normal(Z) loses the tail below 1e-16, as in Stata
     return (-2 * math.log(P) if P > 0 else math.inf), P
 
 
