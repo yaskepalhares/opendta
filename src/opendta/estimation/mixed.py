@@ -123,6 +123,8 @@ class Level:
     cov: str
     Z: np.ndarray             # n x q over the estimation sample
     gid: np.ndarray           # group index over the sample (nested in the upper levels)
+    rep: int = 1              # R.factor equations: Z has `rep` indicator columns sharing one variance
+    fac: str = ""             # the factor variable of an R. equation
 
     @property
     def q(self) -> int:
@@ -171,13 +173,14 @@ class _Cluster:
 
     def __init__(self, rows, X, y, levels: list[Level]):
         self.rows = rows
+        self.reps = [lv.rep for lv in levels]
         Zs = []
         self.blocks = []        # (level index, number of copies)
         for li, lv in enumerate(levels):
             g = lv.gid[rows]
             ug = np.unique(g)
             for u in ug:
-                Zb = np.zeros((len(rows), lv.q))
+                Zb = np.zeros((len(rows), lv.Z.shape[1]))
                 m = g == u
                 Zb[m] = lv.Z[rows][m]
                 Zs.append(Zb)
@@ -199,6 +202,8 @@ def _G(cl: _Cluster, sigmas: list[np.ndarray]) -> np.ndarray:
     k = 0
     for li, copies in cl.blocks:
         S = sigmas[li]
+        if cl.reps[li] > 1:
+            S = np.kron(S, np.eye(cl.reps[li]))
         q = S.shape[0]
         for _ in range(copies):
             G[k:k + q, k:k + q] = S
@@ -317,28 +322,51 @@ _GLOBAL = {"mle": 3, "reml": 4, "variance": 3, "stddeviations": 3, "nolog": 4, "
            "nostderr": 6, "vce": 3}
 
 
-def build_levels(s: "Session", mask: np.ndarray, levels_spec, n: int) -> list[Level]:
+def build_levels(s: "Session", mask: np.ndarray, levels_spec, n: int, crossed: bool = False) -> list[Level]:
+    """crossed: mixed only; `_all: R.factor` equations (crossed random effects) are allowed
+    in the upper levels."""
     from ..core.varlist import resolve_name
     ds = s.data
     out = []
-    prev_key = np.zeros(int(mask.sum()), dtype=np.int64)
-    for lv, revars, reo in levels_spec:
-        if lv == "_all":
-            raise StataError(198, "crossed random effects (_all:) are not available in OpenDTA")   # OpenDTA
-        var = resolve_name(ds, lv)
-        names = s.expand_varlist(revars) if revars else []
-        cols = [ds.get(v).data[mask].astype(np.float64) for v in names]
-        cons = not reo.get("noconstant")
-        if cons:
-            cols.append(np.ones(int(mask.sum())))
-        if not cols:
-            raise StataError(198, "random-effects equation has no variables")   # VERIFY
-        Z = np.column_stack(cols)
+    nm_ = int(mask.sum())
+    prev_key = np.zeros(nm_, dtype=np.int64)
+
+    def codes_of(var):
         raw = ds.get(var).data[mask]
         if ds.get(var).is_string:
             _, codes = np.unique(raw, return_inverse=True)
         else:
             _, codes = np.unique(raw.astype(np.float64), return_inverse=True)
+        return codes
+
+    for lv, revars, reo in levels_spec:
+        if lv == "_all":
+            if not crossed:
+                raise StataError(198, "crossed random effects (_all:) are not available for this command")   # OpenDTA
+            if out and out[-1].var != "_all":
+                raise StataError(198, "_all: must be the first random-effects equation")   # VERIFY
+            toks = revars.split()
+            if len(toks) != 1 or not toks[0].startswith("R."):
+                raise StataError(198, "_all: requires one R.varname term")   # VERIFY
+            fac = resolve_name(ds, toks[0][2:])
+            codes = codes_of(fac)
+            L = int(codes.max()) + 1
+            Z = np.zeros((nm_, L))
+            Z[np.arange(nm_), codes] = 1.0
+            q = 1
+            out.append(Level("_all", [f"R.{fac}"], _cov_kind(reo.get("covariance"), q), Z,
+                             np.zeros(nm_, dtype=np.int64), rep=L, fac=fac))
+            continue
+        var = resolve_name(ds, lv)
+        names = s.expand_varlist(revars) if revars else []
+        cols = [ds.get(v).data[mask].astype(np.float64) for v in names]
+        cons = not reo.get("noconstant")
+        if cons:
+            cols.append(np.ones(nm_))
+        if not cols:
+            raise StataError(198, "random-effects equation has no variables")   # VERIFY
+        Z = np.column_stack(cols)
+        codes = codes_of(var)
         # nested in the levels above: the group is the combination with the upper key
         key = prev_key * (codes.max() + 1) + codes
         _, gid = np.unique(key, return_inverse=True)
@@ -361,7 +389,8 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     fixed_body, fe_opts = (fixed, "") if c == -1 else (fixed[:c], fixed[c + 1:])
     opts_text = " ".join(x for x in (fe_opts.strip(), glob.strip()) if x)
     extra = " ".join([lv for lv, _r, _o in levels_spec if lv != "_all"] +
-                     [r for _l, r, _o in levels_spec if r])
+                     [(r[2:] if lv == "_all" and r.startswith("R.") else r)
+                      for lv, r, _o in levels_spec if r])
     smp = Sample(s, fixed_body + (f", {opts_text}" if opts_text else ""), opts_spec=_GLOBAL,
                  weights=(), extra_vars=extra)
     o = smp.o
@@ -374,7 +403,7 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     X = np.column_stack([col.values for col in est_cols] + ([np.ones(n)] if smp.constant else [])) \
         if (est_cols or smp.constant) else np.zeros((n, 0))
     y = smp.y.astype(np.float64)
-    levels = build_levels(s, smp.mask, levels_spec, n)
+    levels = build_levels(s, smp.mask, levels_spec, n, crossed=True)
     model = LMM(X, y, levels, reml)
     # starting values from OLS
     b_ols, *_ = np.linalg.lstsq(X, y, rcond=None)
@@ -384,8 +413,8 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     for lv in levels:
         sd0 = []
         for j, nm in enumerate(lv.names):
-            zsd = float(np.std(lv.Z[:, j])) if nm != "_cons" else 1.0
-            sd0.append(0.5 * math.log(s2 / 4) - (math.log(zsd) if zsd > 0 and nm != "_cons" else 0.0))
+            zsd = float(np.std(lv.Z[:, j])) if nm != "_cons" and lv.rep == 1 else 1.0
+            sd0.append(0.5 * math.log(s2 / 4) - (math.log(zsd) if zsd > 0 and nm != "_cons" and lv.rep == 1 else 0.0))
         if lv.cov == "identity":
             th0.append(sd0[0])
         elif lv.cov == "independent":
@@ -480,6 +509,8 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     # groups per level
     ginfo = []
     for lv in levels:
+        if lv.var == "_all" and ginfo and ginfo[-1][0] == "_all":
+            continue                # one line for all the _all: equations   # VERIFY
         cnt = np.bincount(lv.gid)
         ginfo.append((lv.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max())))
     est.extra["groups"] = ginfo
@@ -495,7 +526,7 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     from .results import datasignature
     sigvars = [smp.depname] + fvars.base_vars(smp.terms)
     for lv in levels:
-        for nm in lv.names + [lv.var]:
+        for nm in lv.names + [lv.var, lv.fac]:
             if nm != "_cons" and nm not in sigvars and ds.has(nm):
                 sigvars.append(nm)
     macros = [("cmdline", cmdline(cmdname, args)), ("datasignaturevars", " ".join(sigvars)),
@@ -739,6 +770,8 @@ def _reffects(s: "Session", est: Estimates):
     down and, within a level, in the order of e(revars) ([ME] mixed postestimation)."""
     L = est.lmm
     model, th, b = L["model"], L["theta"], L["beta"]
+    if any(lv.rep > 1 for lv in model.levels):
+        raise StataError(198, "predict, reffects is not available with R. equations in OpenDTA")   # OpenDTA
     nreq = sum(lv.q for lv in model.levels)
 
     def fn(mask):
