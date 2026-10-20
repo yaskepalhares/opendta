@@ -523,3 +523,102 @@ def boxcox_fit(y: np.ndarray, X: np.ndarray) -> dict:
     rss = float(((z - X @ b) ** 2).sum())
     return {"theta": th, "se": se, "ll": f0, "b": b, "sigma": math.sqrt(rss / len(y)),
             "ll_at": lambda t: boxcox_ll(t, y, X), "z": z}
+
+
+# ---------------------------------------------------------------------------
+# Tukey smoothers ([R] smooth)
+# ---------------------------------------------------------------------------
+
+def _med_odd(x: np.ndarray, k: int) -> np.ndarray:
+    """Running median of odd span k; near the ends the window shrinks symmetrically and the
+    end points are copied."""
+    n = len(x)
+    h = k // 2
+    y = x.copy()
+    for i in range(1, n - 1):
+        w = min(i, n - 1 - i, h)
+        y[i] = np.median(x[i - w:i + w + 1])
+    return y
+
+
+def _endpoint(y: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """Tukey's end-point rule on both ends: y0 = median(x0, y1, 3 y1 - 2 y2)."""
+    z = y.copy()
+    n = len(y)
+    if n >= 3:
+        z[0] = np.median([x[0], y[1], 3 * y[1] - 2 * y[2]])
+        z[-1] = np.median([x[-1], y[-2], 3 * y[-2] - 2 * y[-3]])
+    return z
+
+
+def _split2(y: np.ndarray) -> np.ndarray:
+    """Splitting of the 2-flats that are local peaks or valleys."""
+    n = len(y)
+    z = y.copy()
+    for i in range(2, n - 3):
+        if y[i] == y[i + 1] and ((y[i - 1] < y[i] > y[i + 2]) or (y[i - 1] > y[i] < y[i + 2])):
+            z[i] = np.median([y[i], y[i - 1], 3 * y[i - 1] - 2 * y[i - 2]])
+            z[i + 1] = np.median([y[i + 1], y[i + 2], 3 * y[i + 2] - 2 * y[i + 3]])
+    return z
+
+
+def tukey_smooth(x: np.ndarray, spec: str, twice: bool = False) -> np.ndarray:
+    """Applies the smoother named by spec (digits: running medians of that span, an even span
+    is followed by the 2-centering; R: repeat the previous median until it stops changing; S:
+    split the 2-flats and resmooth with 3R; E: end-point rule; H: hanning). VERIFY the details
+    against Stata's smooth."""
+    spec = spec.upper()
+    y = np.asarray(x, dtype=float).copy()
+    last = None
+    shifted = None
+    i = 0
+    while i < len(spec):
+        c = spec[i]
+        if c == "2" and shifted is not None:
+            z = y.copy()
+            for j in range(1, len(y) - 1):
+                z[j] = (shifted[j - 1] + shifted[j]) / 2
+            y = z
+            shifted = None
+        elif c.isdigit():
+            k = int(c)
+            last = k
+            if k % 2:
+                y = _med_odd(y, k) if k > 1 else y
+            else:
+                n = len(y)
+                h = np.array([np.median(y[max(0, j - k // 2 + 1):min(n, j + k // 2 + 1)])
+                              for j in range(n - 1)])
+                shifted = h
+            if k % 2 == 0 and not (i + 1 < len(spec) and spec[i + 1] == "2"):
+                raise ValueError("an even span must be followed by 2")
+        elif c == "R":
+            if last is None:
+                raise ValueError("R must follow a running median")
+            for _ in range(100):
+                z = _med_odd(y, last) if last % 2 else y
+                if np.array_equal(z, y):
+                    break
+                y = z
+        elif c == "S":
+            z = _split2(y)
+            if not np.array_equal(z, y):
+                for _ in range(100):
+                    z2 = _med_odd(z, 3)
+                    if np.array_equal(z2, z):
+                        break
+                    z = z2
+            y = z
+        elif c == "E":
+            y = _endpoint(y, np.asarray(x, dtype=float))
+        elif c == "H":
+            z = y.copy()
+            z[1:-1] = 0.25 * y[:-2] + 0.5 * y[1:-1] + 0.25 * y[2:]
+            y = z
+        else:
+            raise ValueError(f"unknown smoother {c}")
+        i += 1
+    if twice:
+        r = np.asarray(x, dtype=float) - y
+        y = y + tukey_smooth(r, spec, False)
+    return y

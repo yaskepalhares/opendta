@@ -437,3 +437,21 @@ def _query(s: "Session", text: str) -> None:
             out.write(f"    {name}{note}\n", "text")
         return
     s.output.write("Graph families: twoway bar hbar box hbox pie matrix combine\n", "text")
+
+
+# ---------------------------------------------------------------------------
+# base statistics block: graphs
+# ---------------------------------------------------------------------------
+
+def _base_plot(name: str, abbrev: str | None = None):
+    def run(s: "Session", args: str) -> None:
+        from ..graphics import baseplots
+        _post(getattr(baseplots, name), s, args)
+    run.__name__ = f"cmd_{name}"
+    command(name, abbrev or name)(run)
+
+
+for _n, _a in (("quantile", "quantile"), ("symplot", "symplot"), ("serrbar", "serrbar"),
+               ("dotplot", "dotplot"), ("sunflower", "sunflower"), ("lpoly", "lpoly"),
+               ("cusum", "cusum"), ("gladder", "gladder")):
+    _base_plot(_n, _a)
