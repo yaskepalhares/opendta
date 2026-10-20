@@ -51,11 +51,11 @@ def cmd_estat(s: "Session", args: str) -> None:
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
-        raise StataError(321, f"invalid subcommand {sub}")   # VERIFY
+        raise StataError(321, f"subcommand estat {sub} is unrecognized")   # compat 1902
     fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
           "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
     if fn is None:
-        raise StataError(321, f"invalid subcommand {sub}")
+        raise StataError(321, f"subcommand estat {sub} is unrecognized")
     fn(s, est, rest)
 
 

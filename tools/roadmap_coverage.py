@@ -80,6 +80,10 @@ AREA_OF = {
     "corrgram": "Time series", "newey": "Time series", "irf": "Time series",
     "mixed": "Multilevel models", "xtmixed": "Multilevel models", "melogit": "Multilevel models",
     "meprobit": "Multilevel models", "mepoisson": "Multilevel models",
+    "meglm": "Multilevel models", "mecloglog": "Multilevel models", "menbreg": "Multilevel models",
+    "meologit": "Multilevel models", "meoprobit": "Multilevel models",
+    "meqrlogit": "Multilevel models", "meqrpoisson": "Multilevel models",
+    "mestreg": "Multilevel models",
     "svy": "Other suites", "svyset": "Other suites", "svydescribe": "Other suites",
     "mi": "Other suites", "sem": "Other suites",
 }

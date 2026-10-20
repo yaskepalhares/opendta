@@ -31,7 +31,7 @@ class STSample:
     """Regressors and sample of stcox/streg: the observations with _st == 1, the weights given to
     stset, _t, _t0 and _d of the sample, and the design matrix after collinearity checks."""
 
-    def __init__(self, s: "Session", args: str, spec: dict):
+    def __init__(self, s: "Session", args: str, spec: dict, extra_vars: str = ""):
         from .regress import Sample
         info = require_st(s)
         ds = s.data
@@ -44,6 +44,7 @@ class STSample:
         wt = f" [{info.wtype}={info.wvar}]" if info.wtype else ""
         text = f"_t {body.strip()}{wt}" + (f", {opts}" if opts is not None else "")
         extra = info.idvar if info.idvar and not ds.get(info.idvar).is_string else ""
+        extra = f"{extra} {extra_vars}".strip()
         smp = Sample(s, text, opts_spec=spec, weights=("fweight", "pweight", "iweight"),
                      extra_vars=extra, restrict=ds.get("_st").data == 1)
         self.smp = smp

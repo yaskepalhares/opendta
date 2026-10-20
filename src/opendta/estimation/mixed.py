@@ -123,6 +123,9 @@ class Level:
     cov: str
     Z: np.ndarray             # n x q over the estimation sample
     gid: np.ndarray           # group index over the sample (nested in the upper levels)
+    rep: int = 1              # R.factor equations: Z has `rep` indicator columns sharing one variance
+    fac: str = ""             # the factor variable of an R. equation
+    fcode: np.ndarray | None = None   # its level (0..rep-1) of each observation
 
     @property
     def q(self) -> int:
@@ -171,13 +174,14 @@ class _Cluster:
 
     def __init__(self, rows, X, y, levels: list[Level]):
         self.rows = rows
+        self.reps = [lv.rep for lv in levels]
         Zs = []
         self.blocks = []        # (level index, number of copies)
         for li, lv in enumerate(levels):
             g = lv.gid[rows]
             ug = np.unique(g)
             for u in ug:
-                Zb = np.zeros((len(rows), lv.q))
+                Zb = np.zeros((len(rows), lv.Z.shape[1]))
                 m = g == u
                 Zb[m] = lv.Z[rows][m]
                 Zs.append(Zb)
@@ -199,6 +203,8 @@ def _G(cl: _Cluster, sigmas: list[np.ndarray]) -> np.ndarray:
     k = 0
     for li, copies in cl.blocks:
         S = sigmas[li]
+        if cl.reps[li] > 1:
+            S = np.kron(S, np.eye(cl.reps[li]))
         q = S.shape[0]
         for _ in range(copies):
             G[k:k + q, k:k + q] = S
@@ -317,28 +323,52 @@ _GLOBAL = {"mle": 3, "reml": 4, "variance": 3, "stddeviations": 3, "nolog": 4, "
            "nostderr": 6, "vce": 3}
 
 
-def build_levels(s: "Session", mask: np.ndarray, levels_spec, n: int) -> list[Level]:
+def build_levels(s: "Session", mask: np.ndarray, levels_spec, n: int, crossed: bool = False) -> list[Level]:
+    """crossed: mixed only; `_all: R.factor` equations (crossed random effects) are allowed
+    in the upper levels."""
     from ..core.varlist import resolve_name
     ds = s.data
     out = []
-    prev_key = np.zeros(int(mask.sum()), dtype=np.int64)
-    for lv, revars, reo in levels_spec:
-        if lv == "_all":
-            raise StataError(198, "crossed random effects (_all:) are not available in OpenDTA")   # OpenDTA
-        var = resolve_name(ds, lv)
-        names = s.expand_varlist(revars) if revars else []
-        cols = [ds.get(v).data[mask].astype(np.float64) for v in names]
-        cons = not reo.get("noconstant")
-        if cons:
-            cols.append(np.ones(int(mask.sum())))
-        if not cols:
-            raise StataError(198, "random-effects equation has no variables")   # VERIFY
-        Z = np.column_stack(cols)
+    nm_ = int(mask.sum())
+    prev_key = np.zeros(nm_, dtype=np.int64)
+
+    def codes_of(var):
         raw = ds.get(var).data[mask]
         if ds.get(var).is_string:
             _, codes = np.unique(raw, return_inverse=True)
         else:
             _, codes = np.unique(raw.astype(np.float64), return_inverse=True)
+        return codes
+
+    for lv, revars, reo in levels_spec:
+        if lv == "_all":
+            if not crossed:
+                raise StataError(198, "crossed random effects (_all:) are not available for this command")   # OpenDTA
+            toks = revars.split()
+            if len(toks) != 1 or not toks[0].startswith("R."):
+                raise StataError(198, f"{revars} invalid level specification")   # compat 1902
+            fac = resolve_name(ds, toks[0][2:])
+            codes = codes_of(fac)
+            L = int(codes.max()) + 1
+            Z = np.zeros((nm_, L))
+            Z[np.arange(nm_), codes] = 1.0
+            q = 1
+            # _all is one group; below another level it is nested in its groups (compat 1902)
+            _, gid = np.unique(prev_key, return_inverse=True)
+            prev_key = gid.astype(np.int64)
+            out.append(Level("_all", [f"R.{fac}"], _cov_kind(reo.get("covariance"), q), Z, prev_key.copy(),
+                             rep=L, fac=fac, fcode=codes))
+            continue
+        var = resolve_name(ds, lv)
+        names = s.expand_varlist(revars) if revars else []
+        cols = [ds.get(v).data[mask].astype(np.float64) for v in names]
+        cons = not reo.get("noconstant")
+        if cons:
+            cols.append(np.ones(nm_))
+        if not cols:
+            raise StataError(198, "random-effects equation has no variables")   # VERIFY
+        Z = np.column_stack(cols)
+        codes = codes_of(var)
         # nested in the levels above: the group is the combination with the upper key
         key = prev_key * (codes.max() + 1) + codes
         _, gid = np.unique(key, return_inverse=True)
@@ -360,8 +390,12 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     c = find_top(fixed, ",")
     fixed_body, fe_opts = (fixed, "") if c == -1 else (fixed[:c], fixed[c + 1:])
     opts_text = " ".join(x for x in (fe_opts.strip(), glob.strip()) if x)
+    for lv_, r_, _o in levels_spec:      # compat 1902: checked before the variables are looked up
+        if lv_ == "_all" and len(r_.split()) != 1:
+            raise StataError(198, f"{r_} invalid level specification")
     extra = " ".join([lv for lv, _r, _o in levels_spec if lv != "_all"] +
-                     [r for _l, r, _o in levels_spec if r])
+                     [(r[2:] if lv == "_all" and r.startswith("R.") else r)
+                      for lv, r, _o in levels_spec if r])
     smp = Sample(s, fixed_body + (f", {opts_text}" if opts_text else ""), opts_spec=_GLOBAL,
                  weights=(), extra_vars=extra)
     o = smp.o
@@ -374,7 +408,7 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     X = np.column_stack([col.values for col in est_cols] + ([np.ones(n)] if smp.constant else [])) \
         if (est_cols or smp.constant) else np.zeros((n, 0))
     y = smp.y.astype(np.float64)
-    levels = build_levels(s, smp.mask, levels_spec, n)
+    levels = build_levels(s, smp.mask, levels_spec, n, crossed=True)
     model = LMM(X, y, levels, reml)
     # starting values from OLS
     b_ols, *_ = np.linalg.lstsq(X, y, rcond=None)
@@ -384,8 +418,8 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     for lv in levels:
         sd0 = []
         for j, nm in enumerate(lv.names):
-            zsd = float(np.std(lv.Z[:, j])) if nm != "_cons" else 1.0
-            sd0.append(0.5 * math.log(s2 / 4) - (math.log(zsd) if zsd > 0 and nm != "_cons" else 0.0))
+            zsd = float(np.std(lv.Z[:, j])) if nm != "_cons" and lv.rep == 1 else 1.0
+            sd0.append(0.5 * math.log(s2 / 4) - (math.log(zsd) if zsd > 0 and nm != "_cons" and lv.rep == 1 else 0.0))
         if lv.cov == "identity":
             th0.append(sd0[0])
         elif lv.cov == "independent":
@@ -480,22 +514,27 @@ def cmd_mixed(s: "Session", args: str, cmdname: str = "mixed") -> None:
     # groups per level
     ginfo = []
     for lv in levels:
+        if lv.var == "_all" and ginfo and ginfo[-1][0] == "_all":
+            continue                # one line for all the _all: equations   # VERIFY
         cnt = np.bincount(lv.gid)
         ginfo.append((lv.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max())))
     est.extra["groups"] = ginfo
     # e() in the order Stata lists it (compat 1001)
     nvar_p = sum({"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q) for lv in levels)
     ncov_p = nvc - nvar_p
+    # e(nrgroups) does not count the _all level (compat 1902; VERIFY with only _all levels)
     scalars = [("rank", float(ball.size)), ("k_f", float(kk)), ("k_r", float(th.size)),
                ("k", float(ball.size)), ("k_rs", float(nvar_p + 1)), ("k_rc", float(ncov_p)),
                ("k_res", 0.0), ("converged", 1.0 if r.converged else 0.0), ("ll", r.ll),
                ("ll_c", ll_lin), ("df_c", float(nvc)), ("chi2_c", chi2_c),
-               ("p_c", _p_chibar(chi2_c, nvc)), ("N", float(n)), ("nrgroups", float(len(levels))),
+               ("p_c", _p_chibar(chi2_c, nvc)), ("N", float(n)), ("nrgroups", float(max(1, sum(lv.var != "_all" for lv in levels)))),
                ("rc", 0.0), ("df_m", float(len(slopes))), ("chi2", wchi2), ("p", wp), ("small", 0.0)]
+    if any(lv.var == "_all" for lv in levels):      # compat 1902: crossed effects list the scalars reversed
+        scalars = scalars[-2::-1] + scalars[-1:]
     from .results import datasignature
     sigvars = [smp.depname] + fvars.base_vars(smp.terms)
     for lv in levels:
-        for nm in lv.names + [lv.var]:
+        for nm in lv.names + [lv.var, lv.fac]:
             if nm != "_cons" and nm not in sigvars and ds.has(nm):
                 sigvars.append(nm)
     macros = [("cmdline", cmdline(cmdname, args)), ("datasignaturevars", " ".join(sigvars)),
@@ -538,11 +577,14 @@ def _right(out, left: str, lab: str, val: str) -> None:
     out.write(f"{val:>10}\n", "result")
 
 
-def group_header(out, title: str, ginfo, N: float, extra_right=(), *, gv_right: bool = False) -> None:
+def group_header(out, title: str, ginfo, N: float, extra_right=(), *, gv_right: bool = False,
+                 mid=()) -> None:
     """gv_right: the me commands right-align the group variable ("Group variable:   g",
     compat 1002); mixed writes it after one space."""
     out.write("\n", "text")
     _right(out, title, "Number of obs", f"{int(N):,}")
+    for line in mid:                  # Family:/Link: of meglm, Overdispersion: of menbreg
+        out.write(line + "\n", "text")
     if len(ginfo) == 1:
         var, ng, mn, av, mx = ginfo[0]
         gv = f"Group variable:{var:>16}" if gv_right else f"Group variable: {var}"
@@ -597,7 +639,7 @@ def lr_line(out, against: str, chi2: float, k: int) -> None:
     else:
         left = f"LR test vs. {against}: chi2({k}) = {chi2:.2f}"
         right = f"Prob > chi2 = {chi2_tail(chi2, k):.4f}"
-    out.write(left + right.rjust(78 - len(left)) + "\n", "text")
+    out.write(left + right.rjust(max(78 - len(left), len(right) + 1)) + "\n", "text")
     if k > 1:
         out.write("\nNote: LR test is conservative and provided only for reference.\n", "text")
 
@@ -752,6 +794,10 @@ def _reffects(s: "Session", est: Estimates):
                 gids = np.unique(lv.gid[cl.rows])
                 for c in range(copies):
                     m = lv.gid[cl.rows] == gids[c]
+                    if lv.rep > 1:      # R.factor: the effect of the level of each observation
+                        out[offs[li]][rows[cl.rows[m]]] = uc[k + lv.fcode[cl.rows[m]]]
+                        k += lv.rep
+                        continue
                     for j in range(q):
                         out[offs[li] + j][rows[cl.rows[m]]] = uc[k + j]
                     k += q
@@ -778,6 +824,10 @@ def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
     # with covariates in the fixed part the correlation is conditional on them (compat 1001)
     has_cov = any(c.values is not None for c in (est.cols or []))
     title = "Residual intraclass correlation" if has_cov else "Intraclass correlation"
+    if L is None and (est.glmm["resid_var"] is None or not getattr(est, "icc_ok", True)):
+        raise StataError(321, "requested action not valid after most recent estimation command")   # compat 1902
+    if L is not None and any(lv.var == "_all" for lv in levels):
+        raise StataError(321, "estat icc not allowed after crossed-effects models")   # compat 1902
     if any(lv.q != 1 or lv.names[0] != "_cons" for lv in levels):
         raise StataError(498, "estat icc is available only for random-intercept models")   # VERIFY
     out.write(f"\n{title}\n\n", "text")
@@ -834,9 +884,13 @@ def estat_recov(s: "Session", est: Estimates, rest: str) -> None:
         S = lv.sigma(th[k:k + npar])
         k += npar
         out.write(f"\nRandom-effects covariance matrix for level {lv.var}\n\n", "text")
-        m = Matrix(S, list(lv.names), list(lv.names))
-        from ..commands.matrix import list_matrix
-        list_matrix(s, lv.var, m)
+        nm = [x.replace(".", "_") for x in lv.names]
+        m = Matrix(S, nm, nm)
+        # compat 1902: columns of width 11, row names right-aligned in 13
+        out.write(f"{'':>13}|" + "".join(f"{c:>10} " for c in nm) + "\n", "text")
+        out.write("-" * 13 + "+" + "-" * (11 * len(nm)) + "\n", "text")
+        for i, r_ in enumerate(nm):
+            out.write(f"{r_:>12} |" + "".join(f"{_g(S[i, j]):>10} " for j in range(len(nm))) + "\n", "text")
         s.r = {"cov": m}
 
 
