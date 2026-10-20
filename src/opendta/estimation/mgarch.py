@@ -71,7 +71,7 @@ def layout(spec: MGSpec):
         P.append((f"{eq}:_cons", eq, "_cons", f"omega{i}"))
     for j in range(m):
         for i in range(j + 1, m):
-            P.append((f"corr({spec.deps[i]},{spec.deps[j]})", "", f"corr({spec.deps[i]},{spec.deps[j]})", "corr"))
+            P.append((f"corr({spec.deps[i]},{spec.deps[j]})", "", f"corr({spec.deps[j]},{spec.deps[i]})", "corr"))
     if spec.kind == "dcc":
         P.append(("Adjustment:lambda1", "Adjustment", "lambda1", "lam"))
         P.append(("Adjustment:lambda2", "Adjustment", "lambda2", "lam"))
@@ -381,11 +381,14 @@ def cmd_mgarch(s: "Session", args: str) -> None:
         if isinstance(lab, tuple):
             if lab[0] != lastgrp:
                 if lastgrp is not None:
-                    pass
+                    rows.append(CoefRow("blank"))
                 rows.append(CoefRow("header", lab[0]))
                 lastgrp = lab[0]
             rows.append(CoefRow("coef", f"L{lab[1]}.", b[k], se[k], name=name))
         else:
+            if lab == "_cons" and lastgrp is not None:
+                rows.append(CoefRow("blank"))
+                lastgrp = None
             rows.append(CoefRow("coef", lab, b[k], se[k], name=name))
     est = Estimates("mgarch", " ".join(deps), names, b, V, T, "z", None)
     est.eqnames = [q[1] or "_" for q in P]
@@ -410,15 +413,16 @@ def cmd_mgarch(s: "Session", args: str) -> None:
 
 def display_mgarch(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                    level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .tsmodels import _g
+    from .archmodel import _right_arch
     out = s.output
     x = est.extra
     if header:
         out.write(f"\n{x['title']}\n\n", "text")
-        _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
+        _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         dfm = f"({int(x['df_m'])})" if x["df_m"] else "(.)"
-        _right(out, "Distribution: Gaussian", f"Wald chi2{dfm}", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right_arch(out, "Distribution: Gaussian", f"Wald chi2{dfm}", _g(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
-        coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
+        coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level, vcetype=None)

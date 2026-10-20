@@ -134,7 +134,7 @@ class _ARMA:
             return None
         RR = np.outer(R, R) * sigma ** 2
         try:
-            Pm = np.eye(r) * 1e6 if self.diffuse else linalg.solve_discrete_lyapunov(T, RR)   # VERIFY: kappa
+            Pm = np.eye(r) * 1e9 if self.diffuse else linalg.solve_discrete_lyapunov(T, RR)   # kappa = 1e9 reproduces the reference log of case 1904
         except (np.linalg.LinAlgError, ValueError):
             return None
         a = np.zeros(r)
@@ -154,23 +154,18 @@ class _ARMA:
         return out
 
     def _conditional(self, e: np.ndarray, phi: np.ndarray, theta: np.ndarray, sigma: float):
-        """Conditional likelihood: the first max(ar lags) observations only condition; presample
-        innovations are zero."""
+        """Conditional likelihood: the presample values of the innovations and of y - xb are zero and
+        no observation is dropped (reproduces the reference log of case 1904)."""
         n = len(e)
-        p0 = self.P
         eps = np.zeros(n)
         pred = np.zeros(n)
         for t in range(n):
-            if t < p0:
-                continue
-            m = sum(c * e[t - lag] for lag, c in zip(self.ar, phi))
+            m = sum(c * e[t - lag] for lag, c in zip(self.ar, phi) if t - lag >= 0)
             m += sum(c * eps[t - lag] for lag, c in zip(self.ma, theta) if t - lag >= 0)
             pred[t] = m
             eps[t] = e[t] - m
-        out = np.zeros(n)
-        out[p0:] = -0.5 * (math.log(2 * math.pi * sigma ** 2) + eps[p0:] ** 2 / sigma ** 2)
         self.pred = pred
-        return out
+        return -0.5 * (math.log(2 * math.pi * sigma ** 2) + eps ** 2 / sigma ** 2)
 
 
 def _expand_seasonal(phi, theta, sphi, stheta, ar, ma, sar, sma, period):

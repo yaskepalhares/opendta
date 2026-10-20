@@ -152,7 +152,8 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
                         entries.append(("X", i, xnames.index(t), coef(e["dep"], t, t, spec, 0.0)))
             if not e["noconstant"]:
                 entries.append(("C" if kind == "S" else "K", i, 0, coef(e["dep"], "_cons", "_cons", None, 0.0)))
-    if not any(nm for nm in errs_state + errs_obs):
+    implicit = not any(nm for nm in errs_state + errs_obs)
+    if implicit:
         # covariance form: every equation has an error unless it says noerror
         errs_state = [None if e["noerror"] else e["dep"] for e in eqs if e["state"]]
         errs_obs = [None if e["noerror"] else e["dep"] for e in obs]
@@ -162,10 +163,10 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
             if covstate == "identity":
                 unit.add(i)
                 continue
-            params.append(Param(f"var(e.{states[i]})", "", f"var(e.{states[i]})", "var", 1.0))
+            params.append(Param(f"var(e.{states[i]})", "", f"var({states[i]})" if implicit else f"var(e.{states[i]})", "var", 1.0))
     for i, nm in enumerate(errs_obs):
         if nm and not obs[i]["noerror"]:
-            params.append(Param(f"var(e.{obs[i]['dep']})", "", f"var(e.{obs[i]['dep']})", "var", 1.0))
+            params.append(Param(f"var(e.{obs[i]['dep']})", "", f"var({obs[i]['dep']})" if implicit else f"var(e.{obs[i]['dep']})", "var", 1.0))
     # an equation without the e. term is exact only when noerror is given or the term is omitted
     deps = [e["dep"] for e in obs]
     pnames = {p.name for p in params}
@@ -379,7 +380,7 @@ def display_ssm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
         _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
     if table:
-        coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
+        coef_table(s, est.depvar.split()[0] if est.cmd == "sspace" else "", est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: Tests of variances against zero are one sided, and the two-sided\n"
                   "      confidence intervals are truncated at zero.\n", "text")
 

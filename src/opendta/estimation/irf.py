@@ -437,11 +437,13 @@ def _table(s: "Session", rest: str) -> None:
     _table_render(s, data, picks, [stats] * len(picks), o)
 
 
-def _table_render(s: "Session", data: dict, picks: list, stat_lists: list, o: dict) -> None:
+def _table_render(s: "Session", data: dict, picks: list, stat_lists: list, o: dict, *, title: bool = True) -> None:
     level = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", "95"))
     z = float(st.norm.isf((1 - level / 100) / 2))
     out = s.output
     names = list(dict.fromkeys(n for n, _a, _r in picks))
+    if not o.get("noci") and not any(np.isfinite(data[n]["se"][k]).any() for n, _a, _r in picks for k in data[n]["se"]):
+        o = {**o, "noci": True}      # no standard errors stored (irf create after vec): no limits (compat 1904)
     # one group of columns per (irf result, statistic): the estimate, then its limits or its
     # standard error; groups separated by "|" (compat 1303)
     groups = []
@@ -465,17 +467,18 @@ def _table_render(s: "Session", data: dict, picks: list, stat_lists: list, o: di
         cur.append(g)
     tables.append(cur)
     heads = {"est": None, "lo": "Lower", "hi": "Upper", "se": "S.E."}
+    num = {pk: i for i, pk in enumerate(dict.fromkeys(picks), start=1)}     # columns of one combination share a number
 
     def cells(texts):
         # 12-character cells, the last of each group one shorter
         return "".join(t.ljust(12) for t in texts)[:12 * len(texts) - 1]
-    title = f"Results from {' '.join(names)}"
+    ttl = f"Results from {' '.join(names)}"
     for ti, tab in enumerate(tables):
         width = 10 + sum(12 * len(g) for g in tab)
-        if ti == 0:
-            out.write("\n" + " " * max(0, (width - len(title)) // 2 - 1) + title + "\n", "text")
+        if ti == 0 and title:
+            out.write("\n" + " " * max(0, (width - len(ttl)) // 2 - 1) + ttl + "\n", "text")
         out.write("\n+" + "-" * (width - 2) + "+\n", "text")
-        out.write("|        |" + "|".join(cells([f"{'(' + str(q) + ')':>7}" for q, _k, _t in g]) for g in tab)
+        out.write("|        |" + "|".join(cells([f"{'(' + str(num[picks[q - 1]]) + ')':>7}" for q, _k, _t in g]) for g in tab)
                   + "|\n", "text")
         # names start at (10 - length) // 2 within the cell
         out.write("|  step  |" + "|".join(cells([" " * ((10 - len(nm)) // 2) + nm for nm in
@@ -502,7 +505,7 @@ def _table_render(s: "Session", data: dict, picks: list, stat_lists: list, o: di
         out.write("+" + "-" * (width - 2) + "+\n", "text")
     if not o.get("noci"):
         out.write(f"{level:g}% lower and upper bounds reported\n", "text")
-    for q, (n, a, r) in enumerate(picks, start=1):
+    for (n, a, r), q in num.items():
         out.write(f"({q}) irfname = {n}, impulse = {a}, and response = {r}\n", "text")
 
 

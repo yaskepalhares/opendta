@@ -212,14 +212,14 @@ def dexp_run(x: np.ndarray, alpha: float, b0: float, b1: float):
     pred = np.empty(n)
     rss = 0.0
     for t in range(n):
-        pred[t] = (2 + k) * s1 - (1 + k) * s2
+        # VERIFY: the series is the doubly smoothed value s2_t and the criterion is the sum of
+        # (x_t - s2_t)^2 (reproduces the reference log of case 1904)
+        p1 = alpha * (x[t] if not math.isnan(x[t]) else (2 + k) * s1 - (1 + k) * s2) + (1 - alpha) * s1
+        s2 = alpha * p1 + (1 - alpha) * s2
+        s1 = p1
+        pred[t] = s2
         if not math.isnan(x[t]):
-            rss += (x[t] - pred[t]) ** 2
-            s1 = alpha * x[t] + (1 - alpha) * s1
-            s2 = alpha * s1 + (1 - alpha) * s2
-        else:
-            s1 = alpha * pred[t] + (1 - alpha) * s1
-            s2 = alpha * s1 + (1 - alpha) * s2
+            rss += (x[t] - s2) ** 2
     return pred, rss, s1, s2
 
 

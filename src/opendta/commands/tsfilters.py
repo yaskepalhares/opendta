@@ -268,15 +268,12 @@ def _ma(s: "Session", vtype, lhs, p, o, exp: str) -> None:
     sample = touse(s, p)
     x = np.where(sample, x, np.nan)
     ds = s.data
-    tvals = ds.get(info.tvar).data.astype(float)
     out = np.full(ds.nobs, np.nan)
     for _pv, rows, t in panels(s, sample):
         if not len(rows):
             continue
-        lo, hi = t.min(), t.max()
         num = np.zeros(ds.nobs)
         den = np.zeros(ds.nobs)
-        cnt = np.zeros(ds.nobs)
         # offsets: -k is a lag of k periods, +k a lead
         terms = [(-k, wl[nl - k]) for k in range(nl, 0, -1)] + [(0, w0)] + \
                 [(k, wf[k - 1]) for k in range(1, nf + 1)]
@@ -287,13 +284,9 @@ def _ma(s: "Session", vtype, lhs, p, o, exp: str) -> None:
             ok = sh < SYS
             num += np.where(ok, wt * np.where(ok, sh, 0.0), 0.0)
             den += np.where(ok, wt, 0.0)
-            cnt += ok
-        edge = (tvals - nl * info.delta >= lo - 1e-9) & (tvals + nf * info.delta <= hi + 1e-9)
-        # VERIFY: Stata 14 keeps all observations; terms outside the sample count as zero and
-        # the denominator stays the full sum of the weights
-        full = sum(wt for _o, wt in terms)
-        res = np.where(~edge & (full != 0), num / (full if full != 0 else 1.0), num / np.where(den == 0, 1, den))
-        res = np.where(den == 0, np.nan, res)
+        # Stata 14 keeps all observations; at the ends the average is taken over the terms that
+        # exist (reproduces the reference log of case 1904)
+        res = np.where(den == 0, np.nan, num / np.where(den == 0, 1, den))
         out[rows] = res[rows]
     new_variable(s, lhs[0], out, vtype=vtype, replace=bool(o.get("replace")))
     s.output.write("The smoother applied was\n", "text")
@@ -476,7 +469,7 @@ def _report(s: "Session", method: str, res: dict, optimal: bool, panel, o: dict)
             lab0, w, val = f"optimal {word} coefficient", 14, lambda x: _g(x, "%10.0g")
         else:
             out.write("\n", "text")
-            lab0, w, val = f"{word} coefficient ", 13, lambda x: _g(x, "%12.5g")
+            lab0, w, val = f"{word} coefficient ", 13, lambda x: _g(float(f"{x:.5g}"), "%12.0g")      # 5 significant digits
         pad = max(len(lab0), 24) + 1
         out.write(f"{lab0:<{pad}}={res['alpha']:>{w}.4f}\n", "text")
         out.write(f"{'sum-of-squared residuals':<{pad}}={val(res['rss']):>{w}}\n", "text")

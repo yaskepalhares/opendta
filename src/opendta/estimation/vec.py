@@ -224,7 +224,7 @@ def cmd_vecrank(s: "Session", args: str) -> None:
         chosen = None
         for r in range(K + 1):
             eig = f"{lam[r - 1]:>12.5f}" if r > 0 else f"{'.':>12}"
-            line = f"{r:>5}{parms[r]:>7}{ll[r]:>16.5f}{eig}"
+            line = f"{r:>5}{'':6}{parms[r]:<2}{ll[r]:>15.5f}{eig}"
             if r < K:
                 cvs = [critical_value(trend, kind, l, K - r) for l in levels]
                 mark = " "
@@ -238,11 +238,12 @@ def cmd_vecrank(s: "Session", args: str) -> None:
     if o.get("ic"):
         out.write("maximum\n  rank    parms       LL       eigenvalue     SBIC       HQIC       AIC\n", "text")
         best = [int(np.argmin([c[i] for c in ic])) for i in (1, 2, 0)]
+        best = [b_ if b_ < K else -1 for b_ in best]       # VERIFY: no mark when the minimum is at the full rank (1904)
         for r in range(K + 1):
             eig = f"{lam[r - 1]:>12.5f}" if r > 0 else f"{'':>12}"
             cells = "".join(f"{ic[r][i]:>{w}.6f}{'*' if best[j] == r else ' '}"
                             for j, (i, w) in enumerate(((1, 12), (2, 10), (0, 10))))
-            out.write(f"{r:>5}{parms[r]:>7}{ll[r]:>16.5f}{eig}{cells}".rstrip() + "\n", "result")
+            out.write(f"{r:>5}{'':6}{parms[r]:<2}{ll[r]:>15.5f}{eig}{cells}".rstrip() + "\n", "result")
         out.write(dash, "text")
     from ..commands.matrix import Matrix
     k95 = sel.get("trace")
@@ -307,6 +308,17 @@ def cmd_vec(s: "Session", args: str) -> None:
     ll = loglik(S00, J["lam"], r, T, K)
     d = nparms // K
     fac = T / (T - d)
+    # VERIFY (case 1904): with the unrestricted constant Stata splits it as mu = alpha rho + gamma, shows
+    # rho = (alpha'alpha)^-1 alpha' mu in the cointegrating equation (no standard error) and estimates the
+    # equations with the error-correction term shifted by rho, so that their constants are gamma
+    rho = None
+    coef0 = coef
+    if trend == "constant":
+        rho = np.linalg.solve(alpha.T @ alpha, alpha.T @ coef[-1, :])
+        W = W.copy()
+        W[:, :r] += rho
+        coef = coef.copy()
+        coef[-1, :] = coef[-1, :] - alpha @ rho
     XtXi = np.linalg.inv(W.T @ W)
     level = float(o["level"]) if o.get("level") and o["level"] is not True else float(s.settings.get("level", "95"))
     ds = s.data
@@ -328,13 +340,13 @@ def cmd_vec(s: "Session", args: str) -> None:
     se = np.sqrt(np.maximum(np.diag(V), 0))
     eqstats = []
     for j, dv in enumerate(deps):
-        cols = list(range(mpar - len(unr)))
+        cols = list(range(mpar))
         bj = coef[cols, j]
         Vj = Om[j, j] * fac * XtXi[np.ix_(cols, cols)]
         chi = float(bj @ np.linalg.solve(Vj, bj))
         rss = float(U[:, j] @ U[:, j])
         z0 = J["Z0"][:, j]
-        tss = float(((z0 - z0.mean()) ** 2).sum())
+        tss = float((z0 ** 2).sum())        # VERIFY: uncentered (reproduces the reference log of case 1904)
         eqstats.append((f"D_{dv}", mpar, math.sqrt(rss / (T - mpar)) if T > mpar else SYS,
                         1 - rss / tss if tss > 0 else SYS, chi, float(chi2_tail(chi, len(cols)))))
     rows_t = _arrange_rows(deps, unr, b, se, K, mpar, ce, lags)
@@ -347,9 +359,6 @@ def cmd_vec(s: "Session", args: str) -> None:
     bvec = beta.T.ravel()
     sevec = np.zeros(nb * r)
     sevec[free] = np.sqrt(np.maximum(np.diag(Vb_free), 0))
-    # VERIFY: with the unrestricted constant Stata shows the constant of the cointegrating equation
-    # without a standard error; here it is the projection of the constant on alpha (weighted by Omega^-1)
-    rho = np.linalg.solve(alpha.T @ Ominv @ alpha, alpha.T @ Ominv @ coef[-1, :]) if trend == "constant" else None
     brn = deps + (["_cons"] if trend == "rconstant" else ["_trend"] if trend == "rtrend" else [])
     est = Estimates("vec", " ".join(f"D_{d_}" for d_ in deps), names, b, V, T, "z", None)
     est.eqnames = eqs
@@ -362,7 +371,7 @@ def cmd_vec(s: "Session", args: str) -> None:
                  "r": r, "brn": brn, "ce": ce, "opts": o, "nb": nb, "rho": rho}
     est.display = display_vec
     est.vec = {"deps": deps, "lags": lags, "trend": trend, "r": r, "alpha": alpha, "beta": beta, "Om": Om,
-               "coef": coef, "T": T, "Y": Y, "J": J, "d": d, "XtXi": XtXi, "times": times, "t0": times[0],
+               "coef": coef0, "T": T, "Y": Y, "J": J, "d": d, "XtXi": XtXi, "times": times, "t0": times[0],
                "t1": times[-1]}
     from ..commands.matrix import Matrix
     scalars = [("N", T), ("k_rank", r), ("k_eq", K), ("k_dv", K), ("k_ce", r), ("n_lags", lags),
@@ -437,8 +446,9 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
         free, Vb = x["free"], x["Vb"]
         bvec = beta.T.ravel()
         for e_, c in enumerate(x["ce"]):
-            ids = [free.index(i + e_ * nb) for i in range(r, nb)]
-            bj = bvec[[i + e_ * nb for i in range(r, nb)]]
+            kv_ = range(r, len(x["eqstats"]))        # the constant or trend of the equation is not tested (case 1904)
+            ids = [free.index(i + e_ * nb) for i in kv_]
+            bj = bvec[[i + e_ * nb for i in kv_]]
             chi = float(bj @ np.linalg.solve(Vb[np.ix_(ids, ids)], bj))
             out.write(f"{c:<18}{len(ids):>5}{_g(chi, '%9.0g'):>11}{float(chi2_tail(chi, len(ids))):>9.4f}\n", "result")
         out.write("-" * 43 + "\n\n", "text")

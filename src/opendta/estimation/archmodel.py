@@ -100,6 +100,26 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
              pos: dict, prime0: float | None = None):
     """Conditional variance, innovations and mean for the whole sample. Returns None when the
     parameters are infeasible. Output: dict(s2, e, mu, h)."""
+    pth = _archpath(spec, par, y, X, Z, pos, prime0)
+    if pth is None or prime0 is not None or spec.arch0 not in ("xb", "xbwt") or \
+            not (spec.archm or spec.ar or spec.ma):
+        return pth
+    # VERIFY (case 1904): with ARCH-M or ARMA terms the presample value is the average of the squared
+    # innovations of the model itself (a fixed point), not of y - xb
+    pr = _prime(spec, pth["e"], 0.0)
+    for _ in range(50):
+        nxt = _archpath(spec, par, y, X, Z, pos, pr)
+        if nxt is None:
+            return pth
+        pth, new = nxt, _prime(spec, nxt["e"], 0.0)
+        if abs(new - pr) <= 1e-12 * max(pr, 1e-300):
+            break
+        pr = new
+    return pth
+
+
+def _archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: np.ndarray | None,
+              pos: dict, prime0: float | None = None):
     n = len(y)
     beta = par[pos["beta"][0]:pos["beta"][1]]
     psi = par[pos["psi"][0]:pos["psi"][1]]
@@ -140,6 +160,7 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
         for (kd, lag), p_ in zip(spec.terms, tp):
             j = i - lag
             e, ae = E[j], AE[j]
+            pos_ = e > 0 or j < P        # VERIFY (case 1904): the presample counts as a positive shock in the threshold terms
             if kd == "arch":
                 v += p_[0] * ae * ae
             elif kd == "garch":
@@ -147,7 +168,7 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
             elif kd == "saarch":
                 v += p_[0] * e
             elif kd == "tarch":
-                v += p_[0] * ae * ae * (e > 0)
+                v += p_[0] * ae * ae * pos_
             elif kd == "aarch":
                 v += p_[0] * (ae + p_[1] * e) ** 2
             elif kd == "narch":
@@ -157,7 +178,7 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
             elif kd == "abarch":
                 v += p_[0] * ae
             elif kd == "atarch":
-                v += p_[0] * ae * (e > 0)
+                v += p_[0] * ae * pos_
             elif kd == "sdgarch":
                 v += p_[0] * SD[j]
             elif kd == "earch":
@@ -168,7 +189,7 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
             elif kd == "parch":
                 v += p_[0] * ae ** phi
             elif kd == "tparch":
-                v += p_[0] * (e > 0) * ae ** phi
+                v += p_[0] * pos_ * ae ** phi
             elif kd == "aparch":
                 base = ae + p_[1] * e
                 v += p_[0] * (base ** phi if base > 0 else 0.0)

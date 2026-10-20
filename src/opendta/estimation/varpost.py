@@ -120,7 +120,7 @@ def forecast_mse(B: np.ndarray, Sig: np.ndarray, XtXi: np.ndarray, X: np.ndarray
     o = 1 if constant else 0
     if constant:
         Bc[0, 0] = 1.0
-        Bc[o:o + K, 0] = B[-1]
+        Bc[o:o + K, 0] = B[0]            # B has the constant in its first row
     Bc[o:o + K, o:] = np.hstack(A)
     if p > 1:
         Bc[o + K:, o:o + K * (p - 1)] = np.eye(K * (p - 1))
@@ -156,6 +156,15 @@ def _cg(x: float, n: int) -> str:
     """C-style %.<n>g without the leading zero, as the box tables of var postestimation show it."""
     r = format(float(x), f".{n}g")
     return r.replace("0.", ".", 1) if r.startswith(("0.", "-0.")) else r
+
+
+def _cg7(x: float) -> str:
+    """%10.7g: 7 significant digits, fewer when the value does not fit in 10 columns (varstable)."""
+    for n in range(7, 0, -1):
+        r = _cg(x, n)
+        if len(r) <= 10:
+            return r
+    return r
 
 
 def _opts(args: str, spec: dict) -> dict:
@@ -266,10 +275,10 @@ def cmd_varstable(s: "Session", args: str) -> None:
 
     for z, m in zip(ev, mod):
         if abs(z.imag) < 1e-12:
-            lab = f" {_cg(z.real, 7):>10}" + " " * 15
+            lab = f" {_cg7(z.real):>10}" + " " * 15
         else:
-            lab = f" {_cg(z.real, 7):>10} {'+' if z.imag > 0 else '-'} {_cg(abs(z.imag), 7):>9}i  "
-        out.write(f"  |{lab}| {_cg(m, 6):>9}   |\n", "result")      # VERIFY: number formats
+            lab = f" {_cg7(z.real):>10} {'+' if z.imag > 0 else '-'} {_cg7(abs(z.imag)):>9}i  "
+        out.write(f"  |{lab}| {_cg(round(m, 6), 9):>9}   |\n", "result")      # VERIFY: number formats
     out.write("  +" + "-" * 40 + "+\n", "text")
     if np.all(mod < 1):
         out.write("   All the eigenvalues lie inside the unit circle.\n   VAR satisfies stability condition.\n", "text")
@@ -456,7 +465,9 @@ def _fcast_compute(s: "Session", rest: str) -> None:
             col = np.full(n, np.nan)
             for tt, v in zip(times, vals):
                 col[pos[tt]] = v
-            new_variable(s, names[(dv, suf)], col, vtype="float", replace=True)
+            if not suf and start == t1 + dl and pos.get(t1) is not None:
+                col[pos[t1]] = ds.get(dv).data[pos[t1]]      # the last observation carries the actual value
+            new_variable(s, names[(dv, suf)], col, vtype="double", replace=True)
         put("", fc[:, j])
         if not o.get("nose"):
             put("_LB", fc[:, j] - z * se[:, j])
@@ -569,7 +580,9 @@ def _fcast_vec(s: "Session", est, prefix: str, o: dict) -> None:
             col = np.full(n, np.nan)
             for tt, val in zip(times, vals):
                 col[pos[tt]] = val
-            new_variable(s, names[(dv, suf)], col, vtype="float", replace=True)
+            if not suf and start == t1 + dl and pos.get(t1) is not None:
+                col[pos[t1]] = ds.get(dv).data[pos[t1]]      # the last observation carries the actual value
+            new_variable(s, names[(dv, suf)], col, vtype="double", replace=True)
         put("", path[:, j])
         if not o.get("nose"):
             put("_LB", path[:, j] - z * se[:, j])
