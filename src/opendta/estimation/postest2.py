@@ -92,23 +92,13 @@ def cmd_testnl(s: "Session", args: str) -> None:
     out.write("\n", "text")
     q = len(fns)
     W = float(g @ np.linalg.solve(GVG, g))
-    if est.stat == "t" and est.df_r:
-        F = W / q
-        dfr = float(est.df_r)
-        p = float(st.f.sf(F, q, dfr))
-        lab = f"F({q},{int(dfr)}) ="
-        out.write(f"{lab:>24}", "text")
-        out.write(f"{F:>12.2f}\n", "result")
-        out.write(f"{'Prob > F =':>24}", "text")
-        out.write(f"{p:>12.4f}\n", "result")
-        s.r = {"p": p, "df_r": dfr, "df": float(q), "F": F}
-    else:
-        p = float(chi2_tail(W, q))
-        out.write(f"{'chi2(' + str(q) + ') =':>24}", "text")
-        out.write(f"{W:>12.2f}\n", "result")
-        out.write(f"{'Prob > chi2 =':>24}", "text")
-        out.write(f"{p:>12.4f}\n", "result")
-        s.r = {"p": p, "df": float(q), "chi2": W}
+    # chi2 also after regress (reference log 1903); the F version is not used
+    p = float(chi2_tail(W, q))
+    out.write(f"{'chi2(' + str(q) + ') =':>24}", "text")
+    out.write(f"{W:>12.2f}\n", "result")
+    out.write(f"{'Prob > chi2 =':>24}", "text")
+    out.write(f"{p:>14.4f}\n", "result")
+    s.r = {"p": p, "df": float(q), "chi2": W}
 
 
 # ---------------------------------------------------------------------------
@@ -242,9 +232,9 @@ def cmd_linktest(s: "Session", args: str) -> None:
     snap = _snapshot(s)
     xb, ok = xb_all(s, est)
     smp = np.asarray(ds.esample, dtype=bool) & ok
-    hat = np.where(smp, xb, SYS)
-    ds.add(Variable("_hat", "float", hat))
-    ds.add(Variable("_hatsq", "float", np.where(smp, xb * xb, SYS)))
+    xb32 = xb.astype(np.float32).astype(float)       # predict stores _hat as float, as Stata does
+    ds.add(Variable("_hat", "float", np.where(smp, xb32, SYS)))
+    ds.add(Variable("_hatsq", "float", np.where(smp, (xb32 * xb32).astype(np.float32).astype(float), SYS)))
     parts = [word, dep, "_hat", "_hatsq"]
     if p.weight is not None:
         parts.append(f"[{p.weight[0]}={p.weight[1]}]")
@@ -442,7 +432,7 @@ def cmd_contrast(s: "Session", args: str) -> None:
         else:
             pv = float(chi2_tail(w, df))
             val = w
-        out.write(f"{label:>12} |", "text")
+        out.write(f"{label + ' ' if label.startswith('(') or label == 'Joint' else label:>12} |", "text")
         out.write(f"{df:>11}{val:>12.2f}{pv:>11.4f}\n", "result")
     for tok, labels, L, m, Vm, joint, rank in results:
         op_given = "." in tok
@@ -463,6 +453,19 @@ def cmd_contrast(s: "Session", args: str) -> None:
         out.write("\n", "text")
         rws = [CoefRow("coef", lab, b_, se_) for lab, b_, se_ in eff_rows]
         coef_table(s, "", rws, stat="t" if df_r else "z", df=df_r, level=lev, coef_title="Contrast")
+    elif eff_rows:
+        # with a contrast operator the table of contrasts with intervals follows (VERIFY: when the
+        # operator is not given, or with several terms, the reference log has no such table)
+        out.write("\n", "text")
+        tcrit = float(st.t.ppf(1 - (1 - lev / 100) / 2, df_r)) if df_r else float(st.norm.ppf(1 - (1 - lev / 100) / 2))
+        out.write("-" * 62 + "\n", "text")
+        out.write(f"{'':>13}|   Contrast   Std. Err.     [{lev:g}% Conf. Interval]\n", "text")
+        out.write("-" * 13 + "+" + "-" * 48 + "\n", "text")
+        out.write(f"{results[0][0].split('.')[-1]:>12} |\n", "text")
+        for lab, b_, se_ in eff_rows:
+            out.write(f"{lab + ' ':>12} |", "text")
+            out.write(f" {g9(b_):>10} {g9(se_):>10}     {g9(b_ - tcrit * se_):>9}   {g9(b_ + tcrit * se_):>9}\n", "result")
+        out.write("-" * 62 + "\n", "text")
     from ..commands.matrix import Matrix
     names = [tok.split(".")[-1] for tok, *_ in results]
     stat_v = [(j / rk if df_r else j) for *_, j, rk in results]
@@ -502,7 +505,7 @@ def _adjust(method: str, tval: float, df, m: int, k: int, level: float):
 
 
 def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarray, Vm: np.ndarray,
-                    df, o: dict, lev: float, title_lines: list[str]) -> None:
+                    df, o: dict, lev: float, title_lines: list[str], lhs: str = "") -> None:
     out = s.output
     method = str(o.get("mcompare") or "noadjust").lower()
     k = len(labels)
@@ -520,33 +523,37 @@ def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarra
         rows.append((f"{labels[j]} vs {labels[i]}", d, se, tv, p, c))
     for ln in title_lines:
         out.write(ln, "text")
-    cw = 13 + 1 + 64
     lv = f"{lev:g}"
     tag = {"noadjust": "Unadjusted", "bonferroni": "Bonferroni", "sidak": "Sidak", "scheffe": "Scheffe",
            "tukey": "Tukey"}.get(method, method.title())
+    effects = bool(eff or pv_eff)
+    cw = 13 + 1 + (64 if effects else 48)
     if adj:
-        out.write("-" * cw + "\n", "text")
-        out.write(f"{'':>13}|   Number of\n{'':>13}| Comparisons\n", "text")
-        out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
-        out.write(f"{term:>12} |{m:>12}\n", "result")
-        out.write("-" * cw + "\n", "text")
+        out.write("-" * 27 + "\n", "text")
+        out.write(f"{'':>13}|    Number of\n{'':>13}|  Comparisons\n", "text")
+        out.write("-" * 13 + "+" + "-" * 13 + "\n", "text")
+        out.write(f"{term:>12} |{m:>13}\n", "result")
+        out.write("-" * 27 + "\n", "text")
         out.write("\n", "text")
     out.write("-" * cw + "\n", "text")
-    if eff or pv_eff:
-        cols = ("   Contrast   Std. Err.      " + ("t" if df else "z") + "    P>|" + ("t" if df else "z") + "|"
-                if not adj else "")
-        out.write(f"{'':>13}|{' ' * 38}{tag}\n" if not adj else f"{'':>13}|{' ' * 40}{tag} \n", "text")
-        out.write(f"{'':>13}|   Contrast   Std. Err.      {'t' if df else 'z'}    P>|{'t' if df else 'z'}|     "
+    if effects:
+        if adj:
+            # VERIFY: the position of the method name over the P>|t| and the interval columns
+            p1 = 33 - (len(tag) + 1) // 2
+            p2 = 54 - (len(tag) + 1) // 2
+            out.write(f"{'':>13}|{' ' * p1}{tag}{' ' * (p2 - p1 - len(tag))}{tag}\n", "text")
+        out.write(f"{lhs:>12} |   Contrast   Std. Err.      {'t' if df else 'z'}    P>|{'t' if df else 'z'}|     "
                   f"[{lv}% Conf. Interval]\n", "text")
     else:
-        out.write(f"{'':>13}|{' ' * 28}{tag}\n", "text")
-        out.write(f"{'':>13}|   Contrast   Std. Err.     [{lv}% Conf. Interval]\n", "text")
-    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+        if adj:
+            out.write(f"{'':>13}|{' ' * (38 - (len(tag) + 1) // 2)}{tag}\n", "text")
+        out.write(f"{lhs:>12} |   Contrast   Std. Err.     [{lv}% Conf. Interval]\n", "text")
+    out.write("-" * 13 + "+" + "-" * (cw - 14) + "\n", "text")
     out.write(f"{term:>12} |\n", "text")
     for lab, d, se, tv, p, c in rows:
-        out.write(f"{lab:>12}  |" if False else f"{lab:>12} |", "text")
+        out.write(f"{lab + ' ':>12} |", "text")
         lo, hi = d - c * se, d + c * se
-        if eff or pv_eff:
+        if effects:
             out.write(f" {g9(d):>10} {g9(se):>10}  {tv:>7.2f}  {p:>6.3f}    {g9(lo):>9}   {g9(hi):>9}\n", "result")
         else:
             out.write(f" {g9(d):>10} {g9(se):>10}     {g9(lo):>9}   {g9(hi):>9}\n", "result")
@@ -610,6 +617,9 @@ def cmd_pwmean(s: "Session", args: str) -> None:
     from ..commands._util import touse
     mask = touse(s, p) & (v[0].data < SYS)
     overs = s.expand_varlist(o["over"])
+    for ov in overs:
+        var = s.data.get(ov)
+        mask = mask & (np.array([x != "" for x in var.raw]) if var.is_string else var.data < SYS)
     labels, ids = cells_of(s, overs, mask)
     k = len(labels)
     y = v[0].data
@@ -626,8 +636,8 @@ def cmd_pwmean(s: "Session", args: str) -> None:
     df = N - k
     Vm = np.diag(np.full(k, ss / df) / n_i)
     head = ["\nPairwise comparisons of means with equal variances\n\n",
-            f"{'Over':<13}: {' '.join(overs)}\n"]
-    _pairwise_table(s, "#".join(overs), labels, m_i, Vm, df, o, lev, head)
+            f"{'over':<13}: {' '.join(overs)}\n\n"]
+    _pairwise_table(s, "#".join(overs), labels, m_i, Vm, df, o, lev, head, v[0].name)
     s.r = {}
 
 
