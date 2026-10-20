@@ -461,6 +461,18 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtfrontier", "xtfrontier")
+def cmd_xtfrontier(s: "Session", args: str) -> None:
+    from ..estimation.xtfrontier import cmd_xtfrontier as run
+    run(s, args)
+
+
+@command("xtunitroot", "xtunitroot")
+def cmd_xtunitroot(s: "Session", args: str) -> None:
+    from ..estimation.xtroot import cmd_xtunitroot as run
+    run(s, args)
+
+
 @command("quadchk", "quadchk")
 def cmd_quadchk(s: "Session", args: str) -> None:
     from ..estimation.xtre import cmd_quadchk as run
