@@ -237,7 +237,7 @@ def cmd_ctable(s: "Session", rest: str) -> None:
     for _n, _a, _r, k in specs:
         if k.lower() not in STATS:
             raise StataError(198, f"statistic {k} not allowed")       # VERIFY
-    _table_render(s, data, picks, [[k.lower()] for _n, _a, _r, k in specs], o)
+    _table_render(s, data, picks, [[k.lower()] for _n, _a, _r, k in specs], o, title=False)
 
 
 def cmd_cgraph(s: "Session", rest: str, overlay: bool) -> None:

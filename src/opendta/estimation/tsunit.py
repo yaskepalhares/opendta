@@ -143,7 +143,8 @@ def cmd_dfgls(s: "Session", args: str) -> None:
         out.write(f"{r['k']:>5}{r['tau']:>18.3f}{crit[0]:>17.3f}{crit[1]:>18.3f}{crit[2]:>18.3f}\n", "result")
     out.write("\n", "text")
     if kmax > 0:
-        out.write(f"Opt Lag (Ng-Perron seq t) = {opt} [use maxlag({opt})]\n", "text")
+        rm = next(r["rmse"] for r in res if r["k"] == opt)
+        out.write(f"Opt Lag (Ng-Perron seq t) = {opt:>2} with RMSE {g7(rm):>9}\n", "text")
         out.write(f"Min SC   = {g7(sc_best['sc']):>9} at lag {sc_best['k']:>2} with RMSE {g7(sc_best['rmse']):>9}\n", "text")
         out.write(f"Min MAIC = {g7(maic_best['maic']):>9} at lag {maic_best['k']:>2} with RMSE {g7(maic_best['rmse']):>9}\n", "text")
     from ..commands.matrix import Matrix

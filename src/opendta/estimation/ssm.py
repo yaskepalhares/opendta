@@ -46,7 +46,7 @@ def initial_state(A: np.ndarray, S: np.ndarray, diffuse: np.ndarray | None = Non
 def kalman_loglik(y: np.ndarray, D: np.ndarray, A: np.ndarray, S: np.ndarray, H: np.ndarray,
                   c: np.ndarray | None = None, d: np.ndarray | None = None,
                   diffuse: np.ndarray | None = None, return_states: bool = False):
-    """Log-likelihood contributions (length T; zero for the diffuse and the missing observations).
+    """Log-likelihood contributions (length T; zero for the missing observations, only the constant for the diffuse ones).
     y: (T, m) with NaN for missing. Returns None when the filter breaks down."""
     T, m = y.shape
     r = A.shape[0]
@@ -74,6 +74,8 @@ def kalman_loglik(y: np.ndarray, D: np.ndarray, A: np.ndarray, S: np.ndarray, H:
                 return None
             if not (mask.any() and np.max(np.diag(Dt @ P @ Dt.T)) >= KAPPA / 100):
                 out[t] = -0.5 * (obs.sum() * log2pi + ld + float(v @ Fi @ v))
+            else:
+                out[t] = -0.5 * obs.sum() * log2pi      # VERIFY (case 1904): a diffuse observation keeps its constant
             K = P @ Dt.T @ Fi
             a = a + K @ v
             P = P - K @ F @ K.T

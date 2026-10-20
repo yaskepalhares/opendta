@@ -95,7 +95,7 @@ def cmd_pergram(s: "Session", args: str) -> None:
     if isinstance(lopts.get("generate"), str):
         col = np.full(s.data.nobs, np.nan)
         col[:len(pg)] = pg
-        new_variable(s, lopts["generate"], col)
+        new_variable(s, lopts["generate"], col, vtype="double")
     if lopts.get("nograph"):
         return
     with np.errstate(divide="ignore"):
@@ -123,7 +123,7 @@ def cmd_cumsp(s: "Session", args: str) -> None:
     if isinstance(lopts.get("generate"), str):
         col = np.full(s.data.nobs, np.nan)
         col[:len(F)] = F
-        new_variable(s, lopts["generate"], col)
+        new_variable(s, lopts["generate"], col, vtype="double")
     layers = [Layer("connected", om.tolist(), F.tolist(), {}, _own(lopts, {"generate"}), "")]
     g = _tsplot_graph(s, p, graw, layers, "Frequency", "Cumulative spectral distribution",
                       "Sample spectral distribution function", "Points evaluated at the natural frequencies")
@@ -173,7 +173,7 @@ def cmd_xcorr(s: "Session", args: str) -> None:
     if isinstance(lopts.get("generate"), str):
         col = np.full(s.data.nobs, np.nan)
         col[:len(r)] = r
-        new_variable(s, lopts["generate"], col)
+        new_variable(s, lopts["generate"], col, vtype="double")
     lags = np.arange(-Q, Q + 1)
     if lopts.get("table"):
         out = s.output
