@@ -287,6 +287,18 @@ def cmd_mlmatsum(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("fp", "fp", prefix=True)
+def cmd_fp(s: "Session", args: str) -> None:
+    from ..estimation.fpoly import cmd_fp as run
+    run(s, args)
+
+
+@command("mfp", "mfp", prefix=True)
+def cmd_mfp(s: "Session", args: str) -> None:
+    from ..estimation.fpoly import cmd_mfp as run
+    run(s, args)
+
+
 @command("lrtest", "lrtest")
 def cmd_lrtest(s: "Session", args: str) -> None:
     from ..estimation.extra import cmd_lrtest as run
