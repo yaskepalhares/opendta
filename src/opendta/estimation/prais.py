@@ -186,6 +186,7 @@ def cmd_prais(s: "Session", args: str) -> None:
         bmap["_cons"], semap["_cons"] = bf[-1], float(np.sqrt(max(Vf[-1, -1], 0)))
     est = Estimates("prais", smp.depname, names, bf, Vf, nn, "t", float(df_r))
     est.rows = rows_from_columns(smp.cols, bmap, semap, s.data, constant=smp.constant)
+    est.rows.append(CoefRow("sep"))
     est.rows.append(CoefRow("value", "rho", rho))
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = smp.level

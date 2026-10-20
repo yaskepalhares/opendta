@@ -171,7 +171,7 @@ def cmd_arfima(s: "Session", args: str) -> None:
         raise StataError(198, "only vce(oim) is implemented in OpenDTA")   # OpenDTA
     V = (V + V.T) / 2
     se = np.sqrt(np.maximum(np.diag(V), 0))
-    idx = list(range(len(est_cols)))
+    idx = list(range(len(est_cols))) + list(range(k, k + na + nm + 1))     # the constant is not tested
     try:
         chi2 = float(b[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], b[idx])) if idx else SYS
     except np.linalg.LinAlgError:
@@ -199,8 +199,8 @@ def cmd_arfima(s: "Session", args: str) -> None:
             rows.append(CoefRow("blank"))
         rows.append(CoefRow("header", lab))
         for lg in lags:
-            rows.append(CoefRow("coef", f"L{lg}." if lg > 1 else "L.", b[j], se[j], name=f"ARFIMA:L{lg}.{lab}"))
-            names.append(f"L{lg}.{lab}" if lg > 1 else f"L.{lab}")
+            rows.append(CoefRow("coef", f"L{lg}.", b[j], se[j], name=f"ARFIMA:L{lg}.{lab}"))
+            names.append(f"L{lg}.{lab}")
             eqs.append("ARFIMA")
             j += 1
     if rows[-1].kind != "eq":
@@ -208,7 +208,7 @@ def cmd_arfima(s: "Session", args: str) -> None:
     rows.append(CoefRow("coef", "d", b[j], se[j], name="ARFIMA:d"))
     names.append("d"); eqs.append("ARFIMA")
     rows.append(CoefRow("sep"))
-    rows.append(CoefRow("coef", "/sigma2", b[-1], se[-1], name="sigma2:_cons"))
+    rows.append(CoefRow("coef", "/sigma2", b[-1], se[-1], name="sigma2:_cons", zero_lo=True))
     names.append("_cons"); eqs.append("sigma2")
     kk = b.size
     est = Estimates("arfima", smp.depname, names, b, V, n, "z", None)
@@ -241,10 +241,9 @@ def display_arfima(s: "Session", est: Estimates, *, header: bool = True, table: 
     x = est.extra
     if header:
         out.write("\nARFIMA regression\n\n", "text")
-        _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
+        _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
-        out.write("\n", "text")
+        _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: The test of the variance against zero is one sided, and the two-sided\n"

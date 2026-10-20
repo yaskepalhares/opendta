@@ -367,6 +367,8 @@ def _create(s: "Session", rest: str) -> None:
         raise StataError(110, f"irfname {name} already exists in {path.name}")   # VERIFY
     meta = {"model": est.cmd, "vars": deps, "order": order, "step": steps, "lags": mv["lags"],
             "exog": mv.get("exog", []), "std": std, "cmdline": s.e.get("cmdline", "")}
+    if o.get("replace") and name not in data:
+        s.output.write(f"irfname {name} not found in {path.name}\n", "text")
     data[name] = {"meta": meta, "stats": point, "se": ses}
     _save(path, data)
     s.output.write(f"(file {path.name} updated)\n", "text")
@@ -563,7 +565,7 @@ def _describe(s: "Session", rest: str) -> None:
     for n, res in data.items():
         m_ = res["meta"]
         out.write(f"{n:>14} | ", "text")
-        out.write(f"{m_['model']:<9}" + " ".join(m_["order"]) + "\n", "result")
+        out.write(f"{'sr svar' if m_['model'] == 'svar' else m_['model']:<9}" + " ".join(m_["order"]) + "\n", "result")
     out.write("-" * width + "\n", "text")
     out.write("  (*) order is relevant only when model is var\n", "text")
     s.r = {"irfnames": " ".join(data)}

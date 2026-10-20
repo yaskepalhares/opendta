@@ -183,12 +183,14 @@ def cmd_xcorr(s: "Session", args: str) -> None:
             out.write(f"{'':28}-1       0       1\n", "text")
             out.write(" LAG       CORR     [Cross-correlation]\n", "text")
         else:
-            out.write(" LAG       CORR\n", "text")
-        out.write("-" * (47 if not noplot else 18) + "\n", "text")
+            out.write(" LAG      CORR\n", "text")
+        out.write("-" * (47 if not noplot else 15) + "\n", "text")
         for k, v in zip(lags, r):
+            if noplot:
+                out.write(f"{k:<8}{v:>7.4f}   \n", "result")      # VERIFY: Stata 14 layout
+                continue
             line = f"{k:<5}{v:>10.4f}"
-            if not noplot:
-                line += f"  {_bar(v)}"
+            line += f"  {_bar(v)}"
             out.write(line.rstrip() + "\n", "result")
         return
     layers = [Layer("spike", lags.tolist(), r.tolist(), {}, _own(lopts, {"generate", "lags", "table", "noplot", "base"}), "")]
@@ -233,9 +235,10 @@ def cmd_wntestb(s: "Session", args: str) -> None:
     kv(s, [("stat", B), ("p", pv)])
     out = s.output
     if lopts.get("table"):
-        out.write("\nCumulative periodogram white-noise test\n\n", "text")      # VERIFY
-        out.write(f"  Bartlett's (B) statistic = {B:>8.4f}\n", "text")
-        out.write(f"  Prob > B                 = {pv:>8.4f}\n", "text")
+        out.write("\nCumulative periodogram white-noise test\n", "text")
+        out.write("-" * 39 + "\n", "text")
+        out.write(f" Bartlett's (B) statistic  = {B:>10.4f}\n", "text")
+        out.write(f" Prob > B".ljust(27) + f"= {pv:>10.4f}\n", "text")
         return
     if lopts.get("noplot"):
         return

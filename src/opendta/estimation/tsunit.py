@@ -73,10 +73,10 @@ def gls_detrend(y: np.ndarray, trend: bool = True) -> np.ndarray:
 
 def adf_gls(ystar: np.ndarray, k: int, kmax: int):
     """Regression of dy*_t on y*_{t-1} and k lagged differences, no constant, on the sample
-    t = kmax+2..T. Returns (coefficients, standard errors, rmse, N, sum y*_{t-1}^2)."""
+    t = kmax+1..T. Returns (coefficients, standard errors, rmse, N, sum y*_{t-1}^2)."""
     T = len(ystar)
     dy = np.diff(ystar)                       # dy[i] = y*_{i+1} - y*_i  (period i+2 in 1..T)
-    rows = np.arange(kmax + 1, T - 1)         # dy index of the dependent variable
+    rows = np.arange(kmax, T - 1)             # dy index of the dependent variable (VERIFY: N = T - 1 - kmax)
     y = dy[rows]
     cols = [ystar[rows]]                      # y*_{t-1}
     for j in range(1, k + 1):
@@ -129,24 +129,23 @@ def cmd_dfgls(s: "Session", args: str) -> None:
     from ..core.formats import format_value
 
     def g7(x: float) -> str:
-        return format_value(x, "%10.7g", pad=False).strip()
+        return format_value(x, "%9.7g", pad=False).strip()
     name = p.varlist.strip()
-    out.write(f"\nDF-GLS for {name:<42}Number of obs = ", "text")
-    out.write(f"{N:>9}\n", "result")
-    out.write(f"Maxlag = {kmax}" + (" chosen by Schwert criterion" if schwert else "") + "\n\n", "text")
-    out.write(f"{'':15}DF-GLS tau      1% Critical       5% Critical      10% Critical\n", "text")
+    out.write(f"\nDF-GLS for {name:<46}Number of obs = ", "text")
+    out.write(f"{N:>5}\n\n", "result")
+    lab = "tau" if trend else "mu"
+    out.write(f"{'':15}{'DF-GLS ' + lab:<16}1% Critical       5% Critical      10% Critical\n", "text")
     out.write(f"  [lags]     Test Statistic        Value             Value             Value\n", "text")
     out.write("-" * 78 + "\n", "text")
     for r in reversed(res):
         if r["k"] == 0 and kmax > 0:
             continue
-        out.write(f"{r['k']:>6}{r['tau']:>17.3f}{crit[0]:>18.3f}{crit[1]:>18.3f}{crit[2]:>18.3f}\n", "result")
-    out.write("-" * 78 + "\n", "text")
+        out.write(f"{r['k']:>5}{r['tau']:>18.3f}{crit[0]:>17.3f}{crit[1]:>18.3f}{crit[2]:>18.3f}\n", "result")
+    out.write("\n", "text")
     if kmax > 0:
-        ro = res[opt]
-        out.write(f"Opt Lag (Ng-Perron seq t) = {opt:>2}  with RMSE {g7(ro['rmse']):>10}\n", "text")
-        out.write(f"Min SC   = {g7(sc_best['sc']):>10} at lag {sc_best['k']:>2}  with RMSE {g7(sc_best['rmse']):>10}\n", "text")
-        out.write(f"Min MAIC = {g7(maic_best['maic']):>10} at lag {maic_best['k']:>2}  with RMSE {g7(maic_best['rmse']):>10}\n", "text")
+        out.write(f"Opt Lag (Ng-Perron seq t) = {opt} [use maxlag({opt})]\n", "text")
+        out.write(f"Min SC   = {g7(sc_best['sc']):>9} at lag {sc_best['k']:>2} with RMSE {g7(sc_best['rmse']):>9}\n", "text")
+        out.write(f"Min MAIC = {g7(maic_best['maic']):>9} at lag {maic_best['k']:>2} with RMSE {g7(maic_best['rmse']):>9}\n", "text")
     from ..commands.matrix import Matrix
     if kmax == 0:
         s.r = {"rmse0": res[0]["rmse"], "dft0": res[0]["tau"]}

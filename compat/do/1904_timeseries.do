@@ -11,10 +11,10 @@ program define mkts
     gen int t = _n + 599
     format t %tm
     tsset t
-    gen double e1 = round(rnormal(), .01)
-    gen double e2 = round(rnormal(), .01)
-    gen double e3 = round(rnormal(), .01)
-    gen double x = round(rnormal(), .01)
+    gen double e1 = round(invnormal(runiform()), .01)
+    gen double e2 = round(invnormal(runiform()), .01)
+    gen double e3 = round(invnormal(runiform()), .01)
+    gen double x = round(invnormal(runiform()), .01)
     gen double w = round(sum(e3), .01)
     gen double c1 = round(w + .5*e1, .01)
     gen double c2 = round(.5*w + .5*e2, .01)
@@ -35,6 +35,13 @@ program define mkts
     forvalues i = 2/160 {
         quietly replace h = .2 + .2*g[`i'-1]^2 + .5*h[`i'-1] in `i'
         quietly replace g = round(sqrt(h)*e1, .01) in `i'
+    }
+    * GARCH(1,1) series with a shock correlated with e1
+    gen double h2 = 1
+    gen double g2 = 0
+    forvalues i = 2/160 {
+        quietly replace h2 = .1 + .2*g2[`i'-1]^2 + .6*h2[`i'-1] in `i'
+        quietly replace g2 = round(sqrt(h2)*(.5*e1 + .87*e2), .01) in `i'
     }
     * seasonal series (quarterly pattern)
     gen double sa = round(10 + 2*mod(_n, 4) + .1*_n + e2, .01)
@@ -85,7 +92,7 @@ capture noisily summarize ma1 ex1 ex2 dx1 hw1 sw1 nl1
 * --- spectral analysis and white-noise tests ---
 capture noisily pergram y, gen(pg) nograph
 capture noisily list pg in 1/5
-capture noisily cumsp y, gen(cs) nograph
+capture noisily cumsp y, gen(cs)
 capture noisily xcorr y z, lags(4) table noplot
 capture noisily wntestb y, table
 capture noisily wntestq y
@@ -128,7 +135,7 @@ capture noisily vec c1 c2, rank(1) lags(2) trend(rconstant) noidtest
 capture noisily vec c1 c2, rank(1) lags(2) alpha
 capture noisily fcast compute v_, step(4)
 capture noisily list t c1 v_c1 in -5/l
-capture noisily irf create vecirf, set(odta_vec) replace step(6) nose
+capture noisily irf create vecirf, set(odta_vec) replace step(6)
 capture noisily irf table irf, irf(vecirf) impulse(c1) response(c2)
 
 * --- svar and irf extensions ---
@@ -174,16 +181,10 @@ capture noisily ucm y, model(lltrend) nolog
 capture noisily ucm sa, model(llevel) seasonal(4) nolog
 capture noisily ucm y x, model(ntrend) nolog
 capture noisily ucm y, model(ntrend) cycle(1) nolog
-capture noisily sspace (z1 L.z1 e.z1, state noconstant) (y z1@1 e.y, noconstant), nolog
+capture noisily sspace (z1 L.z1, state noconstant) (y z1, noconstant), covstate(identity) nolog
 capture noisily dfactor (y z = , noconstant) (f = , ar(1)), nolog
 
 * --- mgarch ---
-gen double h2 = 1
-gen double g2 = 0
-forvalues i = 2/160 {
-    quietly replace h2 = .1 + .2*g2[`i'-1]^2 + .6*h2[`i'-1] in `i'
-    quietly replace g2 = round(sqrt(h2)*(.5*e1 + .87*e2), .01) in `i'
-}
 capture noisily mgarch ccc (g g2 = , noconstant), arch(1) garch(1) nolog
 capture noisily mgarch dcc (g g2 = , noconstant), arch(1) garch(1) nolog
 capture noisily mgarch dvech (g g2 = , noconstant), arch(1) garch(1) nolog

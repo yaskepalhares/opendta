@@ -168,6 +168,8 @@ def cmd_svar(s: "Session", args: str) -> None:
     se_all = np.sqrt(np.maximum(np.diag(Vphi), 0)) if nfree else np.zeros(0)
     q = 0
     for tag, M_, fix, free in (("a", A, Afix, fa), ("b", B, Bfix, fb)):
+        if tag == "b":
+            rows.append(CoefRow("sep"))
         for c in range(K):
             for r in range(K):
                 nm = f"/{tag}_{r + 1}_{c + 1}"
@@ -207,15 +209,15 @@ def display_svar(s: "Session", est: Estimates, *, header: bool = True, table: bo
         n = 0
         K = x["A"].shape[0]
         for tag, fix in (("a", x["Afix"]), ("b", x["Bfix"])):
-            for c in range(K):
-                for r in range(K):
+            for r in range(K):
+                for c in range(K):
                     if not np.isnan(fix[r, c]):
                         n += 1
                         out.write(f" ({n:>2})  [{tag}_{r + 1}_{c + 1}]_cons = {_g(fix[r, c])}\n", "text")
         out.write("\n", "text")
         kind = "Overidentified model" if x["df_oid"] > 0 else "Exactly identified model"
-        out.write(f"{x['sample']:<45}{'No. of obs':<16}= {int(x['N']):>9}\n", "text")
-        out.write(f"{kind:<45}{'Log likelihood':<16}= {_g(x['ll'], '%9.0g'):>9}\n\n", "text")
+        out.write(f"{x['sample']:<48}{'Number of obs':<18}= {int(x['N']):>10}\n", "text")
+        out.write(f"{kind:<48}{'Log likelihood':<18}= {_g(x['ll'], '%9.0g'):>10}\n\n", "text")
     if table:
         coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level)
         if x["df_oid"] > 0:

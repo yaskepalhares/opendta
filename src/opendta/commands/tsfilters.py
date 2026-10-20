@@ -289,7 +289,11 @@ def _ma(s: "Session", vtype, lhs, p, o, exp: str) -> None:
             den += np.where(ok, wt, 0.0)
             cnt += ok
         edge = (tvals - nl * info.delta >= lo - 1e-9) & (tvals + nf * info.delta <= hi + 1e-9)
-        res = np.where((den != 0) & edge, num / np.where(den == 0, 1, den), np.nan)
+        # VERIFY: Stata 14 keeps all observations; terms outside the sample count as zero and
+        # the denominator stays the full sum of the weights
+        full = sum(wt for _o, wt in terms)
+        res = np.where(~edge & (full != 0), num / (full if full != 0 else 1.0), num / np.where(den == 0, 1, den))
+        res = np.where(den == 0, np.nan, res)
         out[rows] = res[rows]
     new_variable(s, lhs[0], out, vtype=vtype, replace=bool(o.get("replace")))
     s.output.write("The smoother applied was\n", "text")
@@ -466,28 +470,31 @@ def _report(s: "Session", method: str, res: dict, optimal: bool, panel, o: dict)
         out.write(f"\nPanel: {_g(panel)}\n", "text")      # VERIFY: panel header
     if method in ("exponential", "dexponential"):
         word = "exponential" if method == "exponential" else "double-exponential"
+        # VERIFY: Stata 14 layout (column of "=" and the width of the values)
         if optimal:
-            out.write(f"computing optimal {word} coefficient (0,1)\n\n", "text")
-            out.write(f"optimal {word} coefficient = {res['alpha']:>8.4f}\n\n", "text")
+            out.write(f"\ncomputing optimal {word}  coefficient (0,1)\n\n", "text")
+            lab0, w, val = f"optimal {word} coefficient", 14, lambda x: _g(x, "%10.0g")
         else:
-            out.write(f"{word} coefficient = {res['alpha']:>8.4f}\n", "text")
-        out.write(f"sum-of-squared residuals = {_g(res['rss'], '%10.0g')}\n", "text")
-        out.write(f"root mean squared error  = {_g(res['rmse'], '%10.0g')}\n", "text")
+            out.write("\n", "text")
+            lab0, w, val = f"{word} coefficient ", 13, lambda x: _g(x, "%12.5g")
+        pad = max(len(lab0), 24) + 1
+        out.write(f"{lab0:<{pad}}={res['alpha']:>{w}.4f}\n", "text")
+        out.write(f"{'sum-of-squared residuals':<{pad}}={val(res['rss']):>{w}}\n", "text")
+        out.write(f"{'root mean squared error':<{pad}}={val(res['rmse']):>{w}}\n", "text")
         return
     if res.get("opt") is not None:
         print_log(out, res["opt"], "penalized RSS")
-        out.write("\nOptimal weights:\n\n", "text")
+        out.write("\nOptimal weights:\n", "text")
     else:
-        out.write("\nSpecified weights:\n\n", "text")
-    out.write(f"{'alpha':>20} = {res['alpha']:>8.4f}\n", "text")
-    out.write(f"{'beta':>20} = {res['beta']:>8.4f}\n", "text")
+        out.write("\nSpecified weights:\n", "text")
+    out.write(f"{'alpha':>24} = {res['alpha']:.4f}\n", "text")
+    out.write(f"{'beta':>24} = {res['beta']:.4f}\n", "text")
     if method == "shwinters":
-        out.write(f"{'gamma':>20} = {res['gamma']:>8.4f}\n", "text")
-    out.write("\n", "text")
+        out.write(f"{'gamma':>24} = {res['gamma']:.4f}\n", "text")
     if res.get("opt") is not None:
-        out.write(f"penalized sum-of-squared residuals = {_g(res['prss'], '%10.0g')}\n", "text")
-    out.write(f"sum-of-squared residuals = {_g(res['rss'], '%10.0g')}\n", "text")
-    out.write(f"root mean squared error  = {_g(res['rmse'], '%10.0g')}\n", "text")
+        out.write(f"{'penalized sum-of-squared residuals':>24} = {_g(res['prss'], '%9.0g'):<9}\n", "text")
+    out.write(f"{'sum-of-squared residuals':>24} = {_g(res['rss'], '%9.0g'):<9}\n", "text")
+    out.write(f"{'root mean squared error':>24} = {_g(res['rmse'], '%9.0g'):<9}\n", "text")
 
 
 def _nl(s: "Session", vtype, lhs, p, o, exp: str) -> None:

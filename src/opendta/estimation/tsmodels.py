@@ -405,7 +405,7 @@ def cmd_arima(s: "Session", args: str) -> None:
                 rows.append(CoefRow("coef", f"L{l}.", b[j], se[j], name=f"{seq}:L{l}.{lab}"))
                 j += 1
         rows.append(CoefRow("sep"))
-    rows.append(CoefRow("coef", "/sigma", b[-1], se[-1], name="sigma:_cons"))
+    rows.append(CoefRow("coef", "/sigma", b[-1], se[-1], name="sigma:_cons", zero_lo=True))
     est = Estimates("arima", smp.depname, names, b, V, n, "z", None)
     est.eqnames = eqs
     est.rows = rows
@@ -414,7 +414,9 @@ def cmd_arima(s: "Session", args: str) -> None:
     est.vcetype = {"opg": "OPG", "robust": "Semirobust", "oim": "OIM"}[vce]
     est.robust = vce == "robust"
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx),
-                 "sample": _sample_text(s, t0, t1)}
+                 "sample": _sample_text(s, t0, t1), "cond": bool(o.get("condition"))}
+    if o.get("condition"):     # VERIFY: Stata reports sigma2 (not sigma) and the ARCH-style header
+        rows[-1] = CoefRow("coef", "/SIGMA2", b[-1] ** 2, 2 * abs(b[-1]) * se[-1], name="sigma:_cons")
     est.arima = {"arma": arma, "k": k, "ar": ar, "ma": ma, "order": order, "mask": smp.mask.copy(),
                  "expand": expand}
     est.display = display_arima
@@ -439,7 +441,15 @@ def display_arima(s: "Session", est: Estimates, *, header: bool = True, table: b
                   level: float | None = None, **_kw) -> None:
     out = s.output
     x = est.extra
-    if header:
+    cond = x.get("cond")
+    if header and cond:
+        from .archmodel import _right_arch
+        out.write("\nTime-series regression -- ARMA disturbances\n\n", "text")
+        _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
+        _right_arch(out, "Distribution: Gaussian", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        out.write("\n", "text")
+    elif header:
         out.write("\nARIMA regression\n\n", "text")
         _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
         _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
@@ -448,6 +458,8 @@ def display_arima(s: "Session", est: Estimates, *, header: bool = True, table: b
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level,
                    vcetype=est.vcetype)
+        if cond:
+            return
         out.write("Note: The test of the variance against zero is one sided, and the two-sided\n"
                   "      confidence interval is truncated at zero.\n", "text")
 

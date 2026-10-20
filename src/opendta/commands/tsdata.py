@@ -137,6 +137,31 @@ def _block(s: "Session", lines: list[tuple[str, str]], width: int = 15) -> None:
         s.output.write(f"{lab:>{width}}{val}\n", "text")
 
 
+def _report_block(s, info, head, lo, hi, n, ng, fmt):
+    """Stata's layout of one tsreport block (no panel variable)."""
+    w = max(7, len(fmt(lo)), len(fmt(hi)), len(str(n)), len(str(ng)))
+    out = s.output
+    out.write("\n", "text")
+    if head:
+        out.write(f"{head[0]:<18}{head[1]}\n", "text")
+    out.write(f"{'Time variable:':<18}{info.tvar}\n", "text")
+    out.write("-" * (18 + w) + "\n", "text")
+    for lab, val in (("Starting period", fmt(lo)), ("Ending period", fmt(hi)),
+                     ("Observations", str(n)), ("Number of gaps", str(ng))):
+        out.write(f"{lab:<15} = {val:>{w}}\n", "text")
+
+
+def _report_gaps(s, gl, fmt):
+    out = s.output
+    out.write("\nGap report\n" + "-" * 50 + "\n", "text")
+    out.write(f"{'Obs.':<13}|{'Start':>11}{'End':>12}{'N. Obs.':>13}\n", "text")
+    out.write("-" * 13 + "+" + "-" * 36 + "\n", "text")
+    for a, b, _pv, st_, en, n in gl:
+        out.write(f"{f'{a + 1}--{b + 1}':>13}|{fmt(st_):>11}{(fmt(en) if en is not None else '.'):>12}"
+                  f"{(str(n) if n is not None else '.'):>13}\n", "result")
+    out.write("-" * 50 + "\n", "text")
+
+
 @command("tsreport", "tsrep")
 def cmd_tsreport(s: "Session", args: str) -> None:
     from ._util import touse
@@ -194,11 +219,14 @@ def cmd_tsreport(s: "Session", args: str) -> None:
         if names:
             out.write(lab + "\n", "text")
         gl, lines, rows_all, tt = head(mask, pre)
-        _block(s, lines)
+        if info.panel:
+            _block(s, lines)
+        else:
+            _report_block(s, info, None, tt.min(), tt.max(), len(rows_all), len(gl), fmt)
         if info.panel and not nopanel:
             out.write("(Gap count includes panel changes)\n", "text")
         if detail and gl:
-            gap_table(gl)
+            gap_table(gl) if info.panel else _report_gaps(s, gl, fmt)
         from ..commands.matrix import Matrix
         pairs = [("N_gaps", float(len(gl))), ("N_obs", float(len(rows_all))),
                  ("start", float(tt.min())), ("end", float(tt.max())),
@@ -225,6 +253,11 @@ def cmd_tsreport(s: "Session", args: str) -> None:
                   (f"start{k}", float(tt.min())), (f"end{k}", float(tt.max())), (f"var{k}", nm)]
     if detail:
         for nm, lo, hi, n, ng, gl in summary:
+            if not info.panel:
+                _report_block(s, info, ("Variable:", nm), lo, hi, n, ng, fmt)
+                if gl:
+                    _report_gaps(s, gl, fmt)
+                continue
             out.write(f"Variable: {nm}\n", "text")
             lines = ([("Panel variable: ", info.panel)] if info.panel else []) + \
                 [(" Time variable: ", info.tvar), ("Starting period = ", fmt(lo)),
