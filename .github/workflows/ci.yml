@@ -26,6 +26,17 @@ jobs:
       - name: Instalar
         run: pip install -e ".[dev]"
       - name: pytest
+        if: runner.os != 'Linux'
         run: pytest -q
+      - name: pytest by file (diagnostic)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for f in tests/test_*.py; do
+            s=$(date +%s)
+            timeout 300 pytest -q -x "$f" > /tmp/out.txt 2>&1; rc=$?
+            d=$(( $(date +%s) - s ))
+            echo "::notice title=$f::rc=$rc ${d}s $(tail -n 3 /tmp/out.txt | tr '\n' ' ' | cut -c1-300)"
+          done
       - name: Comparison with Stata
         run: python tools/compare.py --show-diff
