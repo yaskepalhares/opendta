@@ -251,6 +251,42 @@ def cmd_simulate(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("ml", "ml")
+def cmd_ml(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_ml as run
+    run(s, args)
+
+
+@command("mlexp", "mlexp")
+def cmd_mlexp(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlexp as run
+    run(s, args)
+
+
+@command("mleval", "mleval")
+def cmd_mleval(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mleval as run
+    run(s, args)
+
+
+@command("mlsum", "mlsum")
+def cmd_mlsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlsum as run
+    run(s, args)
+
+
+@command("mlvecsum", "mlvecsum")
+def cmd_mlvecsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlvecsum as run
+    run(s, args)
+
+
+@command("mlmatsum", "mlmatsum")
+def cmd_mlmatsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlmatsum as run
+    run(s, args)
+
+
 @command("lrtest", "lrtest")
 def cmd_lrtest(s: "Session", args: str) -> None:
     from ..estimation.extra import cmd_lrtest as run
