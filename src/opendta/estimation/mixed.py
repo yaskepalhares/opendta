@@ -538,11 +538,14 @@ def _right(out, left: str, lab: str, val: str) -> None:
     out.write(f"{val:>10}\n", "result")
 
 
-def group_header(out, title: str, ginfo, N: float, extra_right=(), *, gv_right: bool = False) -> None:
+def group_header(out, title: str, ginfo, N: float, extra_right=(), *, gv_right: bool = False,
+                 mid=()) -> None:
     """gv_right: the me commands right-align the group variable ("Group variable:   g",
     compat 1002); mixed writes it after one space."""
     out.write("\n", "text")
     _right(out, title, "Number of obs", f"{int(N):,}")
+    for line in mid:                  # Family:/Link: of meglm, Overdispersion: of menbreg
+        out.write(line + "\n", "text")
     if len(ginfo) == 1:
         var, ng, mn, av, mx = ginfo[0]
         gv = f"Group variable:{var:>16}" if gv_right else f"Group variable: {var}"
@@ -597,7 +600,7 @@ def lr_line(out, against: str, chi2: float, k: int) -> None:
     else:
         left = f"LR test vs. {against}: chi2({k}) = {chi2:.2f}"
         right = f"Prob > chi2 = {chi2_tail(chi2, k):.4f}"
-    out.write(left + right.rjust(78 - len(left)) + "\n", "text")
+    out.write(left + right.rjust(max(78 - len(left), len(right) + 1)) + "\n", "text")
     if k > 1:
         out.write("\nNote: LR test is conservative and provided only for reference.\n", "text")
 

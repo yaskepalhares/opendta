@@ -25,7 +25,8 @@ HELP_DIR = Path(__file__).resolve().parents[1] / "help"
 ALIASES = {
     "stjoin": "stsplit", "stfill": "stsplit", "stvary": "stsplit", "stgen": "stsplit", "stbase": "stsplit", "snapspan": "stsplit", "stptime": "strate", "stci": "strate", "stir": "strate", "stmh": "strate", "stmc": "strate", "ltable": "strate", "ctset": "ct", "cttost": "ct", "sttoct": "ct", "sttocc": "ct",
     "moptimize": "mata", "optimize": "mata", "m2_class": "mata", "class": "mata",
-    "xtmixed": "mixed", "meprobit": "melogit", "mepoisson": "melogit", "estat_icc": "mixed",
+    "xtmixed": "mixed", "meprobit": "melogit", "mepoisson": "melogit", "mecloglog": "melogit", "menbreg": "melogit",
+    "meologit": "melogit", "meoprobit": "melogit", "meglm": "melogit", "estat_icc": "mixed",
     "varsoc": "var", "vargranger": "var",
     "st": "stset", "streset": "stset", "stdes": "stdescribe", "estat_phtest": "stcox",
     "d": "describe", "de": "describe", "des": "describe", "g": "generate", "gen": "generate",
