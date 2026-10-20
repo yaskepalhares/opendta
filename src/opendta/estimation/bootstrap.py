@@ -331,14 +331,11 @@ def _warn_rclass(s: "Session", cmdname: str, prefix: str = "bootstrap") -> None:
 
 
 def _quiet(s: "Session", command: str, noisy: bool) -> None:
-    out = s.output
-    if not noisy:
-        out.quiet_depth += 1
-    try:
+    if noisy:
         s.interp._execute_expanded(command)
-    finally:
-        if not noisy:
-            out.quiet_depth -= 1
+    else:
+        with s.output.quietly():
+            s.interp._execute_expanded(command)
 
 
 # ---------------------------------------------------------------------------

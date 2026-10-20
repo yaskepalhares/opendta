@@ -344,14 +344,11 @@ class _Spec:
 
 
 def _run_quiet(s: "Session", text: str, noisy: bool = False):
-    out = s.output
-    if not noisy:
-        out.quiet_depth += 1
-    try:
+    if noisy:
         s.interp._execute_expanded(text)
-    finally:
-        if not noisy:
-            out.quiet_depth -= 1
+    else:
+        with s.output.quietly():
+            s.interp._execute_expanded(text)
     est = getattr(s, "_estimates", None)
     if est is None or "b" not in s.e:
         raise StataError(301, "last estimates not found")

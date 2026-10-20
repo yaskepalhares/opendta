@@ -348,12 +348,8 @@ def _full(m: Model, vec: np.ndarray, nobs: int) -> np.ndarray:
 
 
 def _call(s: "Session", text: str) -> None:
-    out = s.output
-    out.quiet_depth += 1
-    try:
+    with s.output.quietly():
         s.interp._execute_expanded(text)
-    finally:
-        out.quiet_depth -= 1
 
 
 def _lnf_obs(s: "Session", m: Model, th: np.ndarray) -> np.ndarray:
@@ -988,8 +984,10 @@ def cmd_mlexp(s: "Session", args: str) -> None:
             name = name.strip()
             lst, _, opt = rhs.partition(",")
             if name not in combos:
-                vars_ = s.expand_varlist(lst) if lst.strip() else []
-                combos[name] = Eq(name, [], vars_, "noconstant" not in opt)
+                words = lst.split()
+                has_cons = "_cons" in words      # VERIFY: the manual lists _cons explicitly
+                vars_ = s.expand_varlist(" ".join(w for w in words if w != "_cons")) if words else []
+                combos[name] = Eq(name, [], vars_, has_cons or "noconstant" not in opt)
                 order.append(name)
             return f"\x00c{name}\x00"
         name, _, init = body.partition("=")

@@ -463,7 +463,17 @@ def cmd_contrast(s: "Session", args: str) -> None:
         out.write("\n", "text")
         rws = [CoefRow("coef", lab, b_, se_) for lab, b_, se_ in eff_rows]
         coef_table(s, "", rws, stat="t" if df_r else "z", df=df_r, level=lev, coef_title="Contrast")
-    s.r = {}
+    from ..commands.matrix import Matrix
+    names = [tok.split(".")[-1] for tok, *_ in results]
+    stat_v = [(j / rk if df_r else j) for *_, j, rk in results]
+    dfs = [float(rk) for *_, rk in results]
+    pvs = [float(st.f.sf(v, d, df_r)) if df_r else float(chi2_tail(v, d)) for v, d in zip(stat_v, dfs)]
+    row = lambda v: Matrix(np.array([v], dtype=float), ["r1"], names)    # noqa: E731
+    # VERIFY: the names and order of what contrast leaves in r()
+    s.r = {"p": row(pvs), "df": row(dfs), stat_name: row(stat_v), "level": lev,
+           "k_terms": float(len(results))}
+    if df_r:
+        s.r["df_r"] = float(df_r)
 
 
 # ---------------------------------------------------------------------------

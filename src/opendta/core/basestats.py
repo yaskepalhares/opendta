@@ -372,10 +372,19 @@ def _nct_ci(t: float, df: float, level: float) -> tuple[float, float]:
     def g(delta, target):
         return float(st.nct.cdf(t, df, delta)) - target
 
-    span = max(10.0, abs(t) + 10)
-    lo = so.brentq(g, -span - 20, span + 20, args=(1 - a,))
-    hi = so.brentq(g, -span - 20, span + 20, args=(a,))
-    return lo, hi
+    # the limits lie within a few units of t; a narrow bracket keeps nct.cdf finite
+    out = []
+    for target in (1 - a, a):
+        w = 8.0
+        while True:
+            try:
+                out.append(so.brentq(g, t - w, t + w, args=(target,)))
+                break
+            except ValueError:
+                w *= 1.5
+                if w > 60:
+                    raise
+    return out[0], out[1]
 
 
 def effect_sizes(n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
@@ -474,7 +483,7 @@ def lnskew(x: np.ndarray, zero: float | None = None, level: float = 95.0):
     def fs(u):
         return skewness(tr(kk(u)))
 
-    lo_u, hi_u = -30.0, 30.0
+    lo_u, hi_u = -30.0, 10.0       # beyond 10 the shift is so large that the logs lose precision
     try:
         u0 = so.brentq(fs, lo_u, hi_u)
     except ValueError:

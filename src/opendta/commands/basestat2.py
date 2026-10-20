@@ -361,7 +361,8 @@ def cmd_lnskew0(s: "Session", args: str) -> None:
     out.write(f"\n{'Transform':>16} |{'k':>10}{'[' + _lvl_text(level) + '% Conf. Interval]':>30}{'Skewness':>12}\n", "text")
     out.write("-" * 17 + "+" + "-" * 51 + "\n", "text")
     out.write(f"{lab:>16} |", "text")
-    out.write(f"{k:>10.5g}{lo:>14.5g}{hi:>14.5g}{skew:>12.6f}\n", "result")
+    fmt = lambda v: "." if math.isnan(v) else f"{v:.5g}"   # noqa: E731
+    out.write(f"{fmt(k):>10}{fmt(lo):>14}{fmt(hi):>14}{skew:>12.6f}\n", "result")
     _set_r(s, [("gamma", k), ("lb", lo), ("ub", hi), ("skewness", skew), ("level", level)])
     s.r["N"] = float(len(x))
 

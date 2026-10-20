@@ -105,14 +105,11 @@ class _Fitter:
 
     def run(self, replacement: str, noisy: bool = False):
         text = self.command.replace(f"<{self.var}>", replacement)
-        out = self.s.output
-        if not noisy:
-            out.quiet_depth += 1
-        try:
+        if noisy:
             self.s.interp._execute_expanded(text)
-        finally:
-            if not noisy:
-                out.quiet_depth -= 1
+        else:
+            with self.s.output.quietly():
+                self.s.interp._execute_expanded(text)
         return _deviance(self.s)
 
     def fit(self, powers, noisy: bool = False):
@@ -356,11 +353,8 @@ def cmd_mfp(s: "Session", args: str) -> None:
         tmp = {v: write_fp(v, st_[v][1]) for v in vars_ if st_[v][0] == "fp"}
         for v in tmp:
             created[v] = tmp[v]
-        out.quiet_depth += 1
-        try:
+        with out.quietly():
             s.interp._execute_expanded(text(st_, tmp))
-        finally:
-            out.quiet_depth -= 1
         dev, _ = _deviance(s)
         dfr = s.e.get("df_r")
         return dev, int(s.e.get("N", 0)), (float(dfr) if isinstance(dfr, float) and dfr < SYS else None)
