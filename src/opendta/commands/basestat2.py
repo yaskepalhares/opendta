@@ -50,26 +50,29 @@ def cmd_ameans(s: "Session", args: str) -> None:
     mask = touse(s, p)
     level = _level(s, o)
     out = s.output
-    out.write(f"\n{'Variable':>12} |{'Type':>10}{'Obs':>13}{'Mean':>14}"
-              f"{'[' + _lvl_text(level) + '% Conf. Interval]':>27}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
+    out.write(f"\n{'Variable':>12} |    Type             Obs        Mean"
+              f"       [{_lvl_text(level)}% Conf. Interval]\n", "text")
+    sep = "-" * 13 + "+" + "-" * 63 + "\n"
+    out.write(sep, "text")
     last = None
-    for v in vars_:
+    for i, v in enumerate(vars_):
         x = v.data[mask & S.valid(v.data)]
         if len(x) == 0:
             raise StataError(2000, "no observations")
         res = B.three_means(x, level)
         last = res
         first = True
+        if i > 0:
+            out.write(sep, "text")
         for key, lab in (("a", "Arithmetic"), ("g", "Geometric"), ("h", "Harmonic")):
             if key not in res:
                 continue
             n, m, se, lo, hi = res[key]
             out.write(f"{name12(v.name) if first else '':>12} |", "text")
-            out.write(f"{lab:>11}{n:>8}{g9(m, '%9.0g'):>12}{g9(lo, '%9.0g'):>13}"
-                      f"{g9(hi, '%9.0g'):>13}\n", "result")
+            out.write(f"{lab:>11}{n:>13}{g9(m, '%9.0g'):>12}{g9(lo, '%9.0g'):>16}"
+                      f"{g9(hi, '%9.0g'):>11} \n", "result")
             first = False
-    out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
+    out.write(sep if len(vars_) > 1 else "-" * 77 + "\n", "text")      # VERIFY: closing rule
     if last is not None:
         pairs = []
         for key, sfx in (("a", ""), ("g", "_g"), ("h", "_h")):

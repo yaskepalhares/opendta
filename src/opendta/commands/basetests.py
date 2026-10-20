@@ -36,6 +36,12 @@ def _p(x: float) -> str:
     return "." if math.isnan(x) else f"{x:.4f}"
 
 
+def _g0(x: float) -> str:
+    """%g without the leading zero, as display shows numbers."""
+    r = f"{x:g}"
+    return r.replace("0.", ".", 1) if r.startswith(("0.", "-0.")) else r
+
+
 def _kv(s: "Session", label: str, value: str, width: int = 14) -> None:
     s.output.write(f"{label:>{width}} = ", "text")
     s.output.write(f"{value}\n", "result")
@@ -58,11 +64,16 @@ def _split_eq(args: str):
 def _bit_report(s: "Session", name: str, n: int, k: int, p0: float, detail: bool) -> None:
     upper, lower, two = B.binomial_test(n, k, p0)
     out = s.output
-    out.write("\n" + f"{'Variable':>12} |{'N':>9}{'Observed k':>14}{'Expected k':>13}"
-              f"{'Assumed p':>12}{'Observed p':>13}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 61 + "\n", "text")
-    out.write(f"{name12(name):>12} |", "text")
-    out.write(f"{n:>9}{k:>14}{n * p0:>13.5g}{p0:>12.5f}{k / n:>13.5f}\n", "result")
+    heads = f"{'N':>9}{'Observed k':>13}{'Expected k':>13}{'Assumed p':>12}{'Observed p':>13}"
+    vals = f"{n:>9}{k:>11}{n * p0:>13.5g}{p0:>14.5f}{k / n:>13.5f}"
+    if name:
+        out.write("\n" + f"{'Variable':>12} |{heads}\n", "text")
+        out.write("-" * 13 + "+" + "-" * 60 + "\n", "text")
+        out.write(f"{name12(name):>12} |", "text")
+    else:
+        out.write("\n" + heads + "\n", "text")
+        out.write("-" * 60 + "\n", "text")      # VERIFY: bitesti without the variable column
+    out.write(vals + "\n", "result")
     out.write("\n", "text")
     pm = st.binom.pmf(np.arange(n + 1), n, p0)
     pk = st.binom.pmf(k, n, p0)
@@ -71,12 +82,12 @@ def _bit_report(s: "Session", name: str, n: int, k: int, p0: float, detail: bool
         lo, hi = k, int(other[other > n * p0].min()) if (other > n * p0).any() else n + 1
     else:
         hi, lo = k, int(other[other < n * p0].max()) if (other < n * p0).any() else -1
-    out.write(f"  Pr(k >= {k})".ljust(26) + "= ", "text")
-    out.write(f"{upper:.6f}  (one-sided test)\n", "result")
-    out.write(f"  Pr(k <= {k})".ljust(26) + "= ", "text")
-    out.write(f"{lower:.6f}  (one-sided test)\n", "result")
-    out.write(f"  Pr(k <= {lo} or k >= {hi})".ljust(26) + "= ", "text")
-    out.write(f"{two:.6f}  (two-sided test)\n", "result")
+    rows = ((f"  Pr(k >= {k})", upper, "one-sided"), (f"  Pr(k <= {k})", lower, "one-sided"),
+            (f"  Pr(k <= {lo} or k >= {hi})", two, "two-sided"))
+    w = max(len(r[0]) for r in rows)
+    for lab, val, kind in rows:
+        out.write(lab.ljust(w) + " = ", "text")
+        out.write(f"{val:.6f}  ({kind} test)\n", "result")
     _set_r(s, [("N", float(n)), ("k", float(k)), ("p0", p0), ("p_l", lower), ("p_u", upper),
                ("p", two)])
 
@@ -117,6 +128,13 @@ def cmd_bitesti(s: "Session", args: str) -> None:
 # ksmirnov
 # ---------------------------------------------------------------------------
 
+def _ties_note(s: "Session", x: np.ndarray, what: str) -> None:
+    u = len(np.unique(x))
+    if u < len(x):
+        s.output.write(f"\nNote: Ties exist in {what};\n      there are {u} unique values out of "
+                       f"{len(x)} observations.\n", "text")      # VERIFY: shown only with ties
+
+
 @command("ksmirnov", "ksmirnov")
 def cmd_ksmirnov(s: "Session", args: str) -> None:
     p = parse_standard(args)
@@ -139,17 +157,15 @@ def cmd_ksmirnov(s: "Session", args: str) -> None:
         res = B.ks_one_sample(xs, lambda _: fvals)
         out.write("\nOne-sample Kolmogorov-Smirnov test against theoretical distribution\n", "text")
         out.write(f"{p.exp:>{len(p.exp) + 11}}\n\n", "text")
-        out.write(" Smaller group       D       P-value  Corrected\n", "text")
-        out.write(" " + "-" * 46 + "\n", "text")
-        corr = res["pexact"] if o.get("exact") or res["n"] < 100 else math.nan
+        out.write(" Smaller group       D       P-value  \n", "text")
+        out.write(" " + "-" * 35 + "\n", "text")
         for lab, d, pv in ((f"{v.name}:", res["dplus"], res["p1"]),
-                           ("Cumulative:", res["dminus"], res["p2"])):
+                           ("Cumulative:", -res["dminus"], res["p2"])):     # VERIFY: sign of D-
             out.write(f" {lab:<18}", "text")
-            out.write(f"{d:>8.4f}{pv:>11.3f}\n", "result")
+            out.write(f"{d:>8.4f}{pv:>9.3f}\n", "result")
         out.write(f" {'Combined K-S:':<18}", "text")
-        out.write(f"{res['d']:>8.4f}{res['p']:>11.3f}", "result")
-        out.write(f"{corr:>11.3f}\n" if not math.isnan(corr) else "\n", "result")
-        out.write("\n", "text")
+        out.write(f"{res['d']:>8.4f}{res['p']:>9.3f}\n", "result")
+        _ties_note(s, xs, "dataset")
         s.r = dict(reversed([("N", float(res["n"])), ("D", res["d"]), ("p", res["p"]),
                              ("D_1", res["dplus"]), ("p_1", res["p1"]), ("D_2", res["dminus"]),
                              ("p_2", res["p2"]), ("p_exact", res["pexact"])]))
@@ -163,16 +179,16 @@ def cmd_ksmirnov(s: "Session", args: str) -> None:
     res = B.ks_two_sample(v.data[m1], v.data[m2])
     out.write("\nTwo-sample Kolmogorov-Smirnov test for equality of distribution functions\n\n",
               "text")
-    out.write(" Smaller group       D       P-value  Corrected\n", "text")
-    out.write(" " + "-" * 46 + "\n", "text")
+    exact = bool(o.get("exact"))
+    out.write(" Smaller group       D       P-value" + ("      Exact" if exact else "  ") + "\n", "text")
+    out.write(" " + "-" * (46 if exact else 35) + "\n", "text")
     for lab, d, pv in ((t1, res["d1"], res["p1"]), (t2, res["d2"], res["p2"])):
         out.write(f" {lab + ':':<18}", "text")
-        out.write(f"{d:>8.4f}{pv:>11.3f}\n", "result")
-    corr = res["pexact"] if o.get("exact") or min(res["n1"], res["n2"]) < 50 else math.nan
+        out.write(f"{d:>8.4f}{pv:>9.3f}\n", "result")
     out.write(f" {'Combined K-S:':<18}", "text")
-    out.write(f"{res['d']:>8.4f}{res['p']:>11.3f}", "result")
-    out.write(f"{corr:>11.3f}\n" if not math.isnan(corr) else "\n", "result")
-    out.write("\n", "text")
+    out.write(f"{res['d']:>8.4f}{res['p']:>9.3f}", "result")
+    out.write(f"{res['pexact']:>11.3f}\n" if exact else "\n", "result")
+    _ties_note(s, np.concatenate([v.data[m1], v.data[m2]]), "combined dataset")
     s.r = dict(reversed([("D_1", res["d1"]), ("p_1", res["p1"]), ("D_2", res["d2"]),
                          ("p_2", res["p2"]), ("D", res["d"]), ("p", res["p"]),
                          ("p_exact", res["pexact"])]))
@@ -216,36 +232,43 @@ def cmd_median(s: "Session", args: str) -> None:
     out = s.output
     k = len(grp)
     out.write("\nMedian test\n\n", "text")
-    out.write(f"{'Greater than':>14} |\n", "text")
-    out.write(f"{'the median':>14} | " + "".join(f"{lab:>10}" for _, lab, _m in grp)
-              + f" |{'Total':>10}\n", "text")
-    sep = "-" * 15 + "+" + "-" * (10 * k + 1) + "+" + "-" * 11 + "\n"
+    gname = s.expand_varlist(o["by"])[0]
+    pad = -(-(11 * k - len(gname)) // 2)
+    out.write(f"{'Greater':>10} |\n", "text")
+    out.write(f"{'than the':>10} |{'':>{pad}}{gname}\n", "text")
+
+    def _row(lab: str, cells, tot: str, kind: str) -> None:
+        out.write(f"{lab:>10} |", "text")
+        out.write("".join(f"{c:>{10 if i == 0 else 11}}" for i, c in enumerate(cells)), kind)
+        out.write(" |", "text")
+        out.write(f"{tot:>10} \n" if kind == "result" else f"{tot:>10}\n", kind)
+    _row("median", [lab for _, lab, _m in grp], "Total", "text")
+    sep = "-" * 11 + "+" + "-" * (11 * k) + "+" + "-" * 10 + "\n"
     out.write(sep, "text")
     for lab, row in (("no", tab[0]), ("yes", tab[1])):
-        out.write(f"{lab:>14} | ", "text")
-        out.write("".join(f"{c:>10.0f}" for c in row) + f" |{row.sum():>10.0f}\n", "result")
+        _row(lab, [f"{c:.0f}" for c in row], f"{row.sum():.0f}", "result")
     out.write(sep, "text")
-    out.write(f"{'Total':>14} | ", "text")
     cs = tab.sum(0)
-    out.write("".join(f"{c:>10.0f}" for c in cs) + f" |{cs.sum():>10.0f}\n\n", "result")
+    _row("Total", [f"{c:.0f}" for c in cs], f"{cs.sum():.0f}", "result")
+    out.write("\n", "text")
     chi2, pv, df, _ = st.chi2_contingency(tab, correction=False)
-    out.write(f"{'Pearson chi2(' + str(df) + ')':>26} = ", "text")
+    out.write(f"{'Pearson chi2(' + str(df) + ')':>25} = ", "text")
     out.write(f"{chi2:>8.4f}   Pr = {pv:.3f}\n", "result")
     res = [("N", float(tab.sum())), ("chi2", float(chi2)), ("p", float(pv)), ("median", med)]
     if k == 2:
-        chi2c, pvc, *_ = st.chi2_contingency(tab, correction=True)
-        out.write(f"{'Continuity corrected:':>26}\n", "text")
-        out.write(f"{'Pearson chi2(1)':>26} = ", "text")
-        out.write(f"{chi2c:>8.4f}   Pr = {pvc:.3f}\n", "result")
-        res += [("chi2_cc", float(chi2c)), ("p_cc", float(pvc))]
         if o.get("exact"):
             odds, pf = st.fisher_exact(tab)
-            out.write(f"{'Fisher exact':>26} = ", "text")
-            out.write(f"{pf:>8.3f}\n", "result")
+            out.write(f"{'Fisher' + chr(39) + 's exact':>25} =", "text")
+            out.write(f"{pf:>22.3f}\n", "result")
             pf1 = st.fisher_exact(tab, alternative="greater" if odds >= 1 else "less")[1]
-            out.write(f"{'1-sided Fisher exact':>26} = ", "text")
-            out.write(f"{pf1:>8.3f}\n", "result")
+            out.write(f"{'1-sided Fisher' + chr(39) + 's exact':>25} =", "text")
+            out.write(f"{pf1:>22.3f}\n", "result")
             res += [("p_exact", float(pf)), ("p1_exact", float(pf1))]
+        chi2c, pvc, *_ = st.chi2_contingency(tab, correction=True)
+        out.write(f"\n{'Continuity corrected:':>24}\n", "text")
+        out.write(f"{'Pearson chi2(1)':>25} = ", "text")
+        out.write(f"{chi2c:>8.4f}   Pr = {pvc:.3f}\n", "result")
+        res += [("chi2_cc", float(chi2c)), ("p_cc", float(pvc))]
     out.write("\n", "text")
     _set_r(s, res)
 
@@ -263,10 +286,11 @@ def cmd_nptrend(s: "Session", args: str) -> None:
         raise StataError(198, "option by() required")
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
     mask = touse(s, p) & S.valid(v.data)
-    gv, grp = _groups(s, o["by"], mask)
     gnum = s.data.get(s.expand_varlist(o["by"])[0])
     if gnum.is_string:
         raise StataError(109, "type mismatch")
+    mask &= S.valid(gnum.data)
+    gv, grp = _groups(s, o["by"], mask)
     if o.get("score"):
         sv = numeric_vars(s, o["score"], allow_string=False)[0]
         mask &= S.valid(sv.data)
@@ -285,14 +309,15 @@ def cmd_nptrend(s: "Session", args: str) -> None:
     res = B.cuzick(y, g, score)
     out = s.output
     if not o.get("nodetail"):
-        out.write(f"\n{'group':>12} |{'score':>9}{'obs':>9}{'sum of ranks':>15}\n", "text")
-        out.write("-" * 13 + "+" + "-" * 33 + "\n", "text")
+        out.write(f"\n{gnum.name:>14}{'score':>13}{'obs':>13}{'sum of ranks':>15}  \n", "text")
         for i, (val, lab, _m) in enumerate(grp):
-            out.write(f"{lab[:12]:>12} |", "text")
-            out.write(f"{res['l'][i]:>9g}{int(res['n'][i]):>9}{res['R'][i]:>15.1f}\n", "result")
+            out.write(f"{lab[:14]:>14}", "result")
+            out.write(f"{res['l'][i]:>13g}{int(res['n'][i]):>13}{res['R'][i]:>15.9g}  \n", "result")
     out.write("\n", "text")
-    _kv(s, "z", f"{res['z']:.2f}", 14)
-    _kv(s, "Prob > |z|", f"{res['p']:.4f}", 14)
+    out.write(f"{'z':>11}  = ", "text")
+    out.write(f"{res['z']:>5.2f}\n", "result")
+    out.write("  Prob > |z| = ", "text")
+    out.write(f"{res['p']:>5.3f}\n", "result")
     out.write("\n", "text")
     _set_r(s, [("p", res["p"]), ("z", res["z"]), ("T", res["T"]), ("N", float(len(y)))])
 
@@ -323,13 +348,13 @@ def cmd_runtest(s: "Session", args: str) -> None:
     res = B.runs_test(above, bool(o.get("continuity")))
     out = s.output
     tx = f"{thr:g}"
-    out.write("\n", "text")
-    _kv(s, f"N({v.name} <= {tx})", f"{res['n0']}", 22)
-    _kv(s, f"N({v.name} > {tx})", f"{res['n1']}", 22)
-    _kv(s, "obs", f"{res['n0'] + res['n1']}", 22)
-    _kv(s, "N(runs)", f"{res['runs']}", 22)
-    _kv(s, "z", f"{res['z']:.2f}", 22)
-    _kv(s, "Prob>|z|", f"{res['p']:.4f}", 22)
+    zr = round(res["z"], 2)
+    pr = round(res["p"], 2)         # VERIFY: Stata shows z and p rounded to two decimals
+    for lab, val in ((f" N({v.name} <= {tx})", f"{res['n0']}"), (f" N({v.name} >  {tx})", f"{res['n1']}"),
+                     ("obs", f"{res['n0'] + res['n1']}"), ("N(runs)", f"{res['runs']}"),
+                     ("z ", _g0(zr)), ("Prob>|z|", _g0(pr))):
+        out.write(f"{lab:>14} = ", "text")
+        out.write(f"{val}\n", "result")
     out.write("\n", "text")
     _set_r(s, [("N", float(res["n0"] + res["n1"])), ("N_below", float(res["n0"])),
                ("N_above", float(res["n1"])), ("n_runs", float(res["runs"])),
@@ -381,12 +406,12 @@ def cmd_tetrachoric(s: "Session", args: str) -> None:
     names = [v.name for v in vars_]
     from .matrix import Matrix
     if k == 2 and not o.get("matrix"):
-        out.write("\nTetrachoric correlation\n\n", "text")
-        _kv(s, "Number of obs", f"{n}", 16)
-        _kv(s, "Tetrachoric rho", f"{R[0, 1]:.4f}", 16)
-        _kv(s, "Std. Err.", "." if math.isnan(SE[0, 1]) else f"{SE[0, 1]:.4f}", 16)
+        out.write("\n", "text")
+        _kv(s, "Number of obs", f"{n:>12}", 16)
+        _kv(s, "Tetrachoric rho", f"{R[0, 1]:>12.4f}", 16)
+        _kv(s, "Std error", f"{'.' if math.isnan(SE[0, 1]) else format(SE[0, 1], '.4f'):>12}", 16)
         out.write(f"\nTest of Ho: {names[0]} and {names[1]} are independent\n", "text")
-        _kv(s, "2-sided exact P", f"{P[0, 1]:.4f}", 16)
+        _kv(s, "2-sided exact P", f"{P[0, 1]:>12.4f}", 16)
         out.write("\n", "text")
         _set_r(s, [("N", float(n)), ("rho", float(R[0, 1])), ("se_rho", float(SE[0, 1])),
                    ("p", float(P[0, 1]))])
@@ -422,37 +447,67 @@ def cmd_ktau(s: "Session", args: str) -> None:
     if len(vars_) == 2 and not o.get("matrix"):
         r = B.kendall(vars_[0].data[mask], vars_[1].data[mask])
         out.write("\n", "text")
-        _kv(s, "Number of obs", f"{n:>8}", 16)
-        _kv(s, "Kendall's tau-a", f"{r['taua']:>8.4f}", 16)
-        _kv(s, "Kendall's tau-b", f"{r['taub']:>8.4f}", 16)
-        _kv(s, "Kendall's score", f"{r['S']:>8.0f}", 16)
-        _kv(s, "SE of score", f"{r['se']:>8.3f}", 16)
+        _kv(s, "Number of obs", f"{n:>7}", 15)
+        _kv(s, "Kendall's tau-a", f"{r['taua']:>12.4f}", 15)
+        _kv(s, "Kendall's tau-b", f"{r['taub']:>12.4f}", 15)
+        _kv(s, "Kendall's score", f"{r['S']:>7.0f}", 15)
+        ties = len(np.unique(vars_[0].data[mask])) < n or len(np.unique(vars_[1].data[mask])) < n
+        s.output.write(f"{'SE of score':>15} = ", "text")
+        s.output.write(f"{r['se']:>11.3f}" + ("   (corrected for ties)" if ties else "") + "\n", "result")
         out.write(f"\nTest of Ho: {vars_[0].name} and {vars_[1].name} are independent\n", "text")
-        _kv(s, "Prob > |z|", f"{r['p']:>8.4f}", 16)
-        out.write("(continuity corrected)\n", "text")
+        s.output.write(f"{'Prob > |z|':>15} = ", "text")
+        s.output.write(f"{r['p']:>12.4f}  (continuity corrected)\n", "result")
         out.write("\n", "text")
         _set_r(s, [("N", float(n)), ("tau_a", r["taua"]), ("tau_b", r["taub"]),
                    ("score", r["S"]), ("se_score", r["se"]), ("p", r["p"])])
         return
     k = len(vars_)
     names = [v.name for v in vars_]
+    stats = str(o.get("stats", "taua")).split() if isinstance(o.get("stats"), str) else ["taua"]
+    labels = {"taua": "tau_a", "taub": "tau_b", "score": "score", "obs": "Number of obs",
+              "p": "Sig. level"}
+    for sname in stats:
+        if sname not in labels:
+            raise StataError(198, f"stats({sname}) invalid")          # VERIFY: error text
+    pmax = float(o["print"]) if isinstance(o.get("print"), str) else None
     T = np.eye(k)
     Pm = np.zeros((k, k))
+    cell: dict = {}
     for i in range(k):
-        for j in range(i):
+        for j in range(i + 1):
             if o.get("pw"):
                 m = S.valid(vars_[i].data) & S.valid(vars_[j].data) & touse(s, p)
             else:
                 m = mask
             r = B.kendall(vars_[i].data[m], vars_[j].data[m])
-            T[i, j] = T[j, i] = r["taub"]
-            Pm[i, j] = Pm[j, i] = r["p"]
-    out.write(f"(obs={n:,})\n", "text")
-    cells = [[f"{T[i, j]:.4f}" for j in range(k)] for i in range(k)]
-    extra = None
-    if o.get("stats") or o.get("print"):
-        extra = [[[_p(Pm[i, j]) if i != j else "" for j in range(k)] for i in range(k)]]
-    _corr_table(s, names, cells, extra=extra)
+            if i != j:
+                T[i, j] = T[j, i] = r["taub"]
+                Pm[i, j] = Pm[j, i] = r["p"]
+            vals = {"taua": f"{r['taua']:.4f}", "taub": "1.0000" if i == j else f"{r['taub']:.4f}",
+                    "score": f"{r['S']:.0f}", "obs": f"{int(m.sum())}",
+                    "p": "" if i == j else f"{r['p']:.4f}"}
+            if pmax is not None and i != j and r["p"] > pmax:
+                vals = {key: "" for key in vals}
+            cell[i, j] = vals
+    out.write(f"(obs={n:,})\n\n", "text")
+    if len(stats) > 1:
+        w = 17
+        out.write("+" + "-" * w + "+\n", "text")
+        out.write("|" + "  Key".ljust(w) + "|\n", "text")
+        out.write("|" + "-" * w + "|\n", "text")
+        for sname in stats:
+            out.write("|" + ("   " + labels[sname]).ljust(w) + "|\n", "text")
+        out.write("+" + "-" * w + "+\n\n", "text")
+    out.write(f"{'':>13}|" + "".join(f"{nm:>11}" for nm in names) + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * (11 * k) + "\n", "text")
+    for i in range(k):
+        for si, sname in enumerate(stats):
+            lab = name12(names[i]) if si == 0 else ""
+            out.write(f"{lab:>12} |", "text")
+            row = "".join(f"{cell[i, j][sname]:>11}" for j in range(i + (1 if sname != "p" else 0)))
+            out.write(row + " \n", "result")
+        if len(stats) > 1:
+            out.write(f"{'':>13}|\n", "text")
     from .matrix import Matrix
     s.r = {"N": float(n), "Rho": Matrix(T.copy(), names, names)}
 
@@ -482,15 +537,14 @@ def cmd_pcorr(s: "Session", args: str) -> None:
     nobs = float(ww.sum()) if ww is not None and wtype == "fweight" else n
     out.write(f"(obs={nobs:,.0f})\n\n", "text")
     out.write(f"Partial and semipartial correlations of {vars_[0].name} with\n\n", "text")
-    out.write(f"{'':>13}|{'Partial':>11}{'Semipartial':>14}{'Partial':>12}{'Semipartial':>14}"
-              f"{'Significance':>15}\n", "text")
-    out.write(f"{'Variable':>12} |{'Corr.':>11}{'Corr.':>14}{'Corr.^2':>12}{'Corr.^2':>14}"
-              f"{'Value':>15}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 66 + "\n", "text")
+    out.write(f"{'':>15}Partial   Semipartial      Partial   Semipartial   Significance\n", "text")
+    out.write(f"{'Variable':>11} |    Corr.         Corr.      Corr.^2       Corr.^2          Value\n",
+              "text")
+    out.write("-" * 12 + "+" + "-" * 65 + "\n", "text")
     for i, v in enumerate(vars_[1:]):
         pc, sc = res["partial"][i], res["semipartial"][i]
-        out.write(f"{name12(v.name):>12} |", "text")
-        out.write(f"{pc:>11.4f}{sc:>14.4f}{pc * pc:>12.4f}{sc * sc:>14.4f}{res['p'][i]:>15.4f}\n",
+        out.write(f"{name12(v.name):>11} |", "text")
+        out.write(f"{pc:>9.4f}{sc:>14.4f}{pc * pc:>13.4f}{sc * sc:>14.4f}{res['p'][i]:>15.4f}\n",
                   "result")
     out.write("\n", "text")
     from .matrix import Matrix

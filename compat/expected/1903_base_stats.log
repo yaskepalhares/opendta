@@ -1,0 +1,4081 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1903_base_stats.log
+  log type:  text
+ opened on:  20 Oct 2026, 08:45:33
+
+. * Phase 17: base statistics (resampling, ml, model building, postestimation, tests, agreement,
+. * transformations and displays). Every command runs under capture noisily so that a difference
+. * in one command does not stop the rest of the case; the layouts marked VERIFY in the code are
+. * settled by the reference log.
+. * Stata's example datasets are not available in OpenDTA, so the case builds its own data.
+. * Everything is rounded to integers (or cents), so that the last digit of the draws does not matter.
+. program define mkdata
+  1.     clear
+  2.     set seed 1903
+  3.     set obs 74
+  4.     gen int weight = round(3000 + 700*invnormal(runiform()))
+  5.     gen int length = round(weight/17 + 4*invnormal(runiform()))
+  6.     gen byte rep78 = 1 + floor(5*runiform())
+  7.     gen int mpg = max(12, round(40 - weight/110 + rep78 + 2.5*invnormal(runiform())))
+  8.     gen int displacement = round(weight/12 + 30*invnormal(runiform()))
+  9.     gen int turn = round(length/5 + 2*invnormal(runiform()))
+ 10.     gen byte foreign = runiform() < 1/(1 + exp((weight - 2800)/400))
+ 11.     gen int price = round(exp(7.8 + .00025*weight - .01*mpg + .35*invnormal(runiform())))
+ 12.     replace rep78 = . if runiform() < .07
+ 13.     label variable mpg "Mileage (mpg)"
+ 14. end
+
+. set more off
+
+. mkdata
+number of observations (_N) was 0, now 74
+(7 real changes made, 7 to missing)
+
+. gen hiprice = price > 6000
+
+. gen hiwt = weight > 3000
+
+. gen double lnprice0 = ln(price)
+
+. 
+. * --- means, tests and correlations ---
+. capture noisily ameans price mpg weight
+
+    Variable |    Type             Obs        Mean       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+       price | Arithmetic           74    4941.635        4391.458   5491.813 
+             |  Geometric           74    4451.239        4001.038   4952.098 
+             |   Harmonic           74    4012.861        3615.171   4508.863 
+-------------+---------------------------------------------------------------
+         mpg | Arithmetic           74    17.41892        15.95715   18.88069 
+             |  Geometric           74    16.42799        15.19605    17.7598 
+             |   Harmonic           74    15.59625        14.57522   16.77112 
+-------------+---------------------------------------------------------------
+      weight | Arithmetic           74    2998.419        2825.739   3171.099 
+             |  Geometric           74    2891.295        2704.599   3090.879 
+             |   Harmonic           74    2757.048        2533.107   3024.423 
+-------------+---------------------------------------------------------------
+
+. capture noisily ameans price, level(90)
+
+    Variable |    Type             Obs        Mean       [90% Conf. Interval]
+-------------+---------------------------------------------------------------
+       price | Arithmetic           74    4941.635        4481.728   5401.542 
+             |  Geometric           74    4451.239        4071.652   4866.214 
+             |   Harmonic           74    4012.861        3674.927    4419.24 
+-----------------------------------------------------------------------------
+
+. capture noisily bitest foreign == .5
+
+    Variable |        N   Observed k   Expected k   Assumed p   Observed p
+-------------+------------------------------------------------------------
+     foreign |       74         32           37       0.50000      0.43243
+
+  Pr(k >= 32)            = 0.899661  (one-sided test)
+  Pr(k <= 32)            = 0.147707  (one-sided test)
+  Pr(k <= 32 or k >= 42) = 0.295413  (two-sided test)
+
+. capture noisily bitesti 74 22 .5
+
+        N   Observed k   Expected k   Assumed p   Observed p
+------------------------------------------------------------
+       74         22           37       0.50000      0.29730
+
+  Pr(k >= 22)            = 0.999872  (one-sided test)
+  Pr(k <= 22)            = 0.000321  (one-sided test)
+  Pr(k <= 22 or k >= 52) = 0.000643  (two-sided test)
+
+. capture noisily bitesti 20 12 .3
+
+        N   Observed k   Expected k   Assumed p   Observed p
+------------------------------------------------------------
+       20         12            6       0.30000      0.60000
+
+  Pr(k >= 12)           = 0.005138  (one-sided test)
+  Pr(k <= 12)           = 0.998721  (one-sided test)
+  Pr(k <= 0 or k >= 12) = 0.005936  (two-sided test)
+
+. capture noisily ksmirnov mpg, by(foreign)
+
+Two-sample Kolmogorov-Smirnov test for equality of distribution functions
+
+ Smaller group       D       P-value  
+ -----------------------------------
+ 0:                  0.7247    0.000
+ 1:                  0.0000    1.000
+ Combined K-S:       0.7247    0.000
+
+Note: Ties exist in combined dataset;
+      there are 18 unique values out of 74 observations.
+
+. capture noisily ksmirnov mpg, by(foreign) exact
+
+Two-sample Kolmogorov-Smirnov test for equality of distribution functions
+
+ Smaller group       D       P-value      Exact
+ ----------------------------------------------
+ 0:                  0.7247    0.000
+ 1:                  0.0000    1.000
+ Combined K-S:       0.7247    0.000      0.000
+
+Note: Ties exist in combined dataset;
+      there are 18 unique values out of 74 observations.
+
+. capture noisily ksmirnov price = normal((price-6165.257)/2949.496)
+
+One-sample Kolmogorov-Smirnov test against theoretical distribution
+           normal((price-6165.257)/2949.496)
+
+ Smaller group       D       P-value  
+ -----------------------------------
+ price:              0.2859    0.000
+ Cumulative:        -0.0600    0.587
+ Combined K-S:       0.2859    0.000
+
+Note: Ties exist in dataset; 
+      there are 73 unique values out of 74 observations.
+
+. capture noisily median mpg, by(foreign)
+
+Median test
+
+   Greater |
+  than the |        foreign
+    median |         0          1 |     Total
+-----------+----------------------+----------
+        no |        34          5 |        39 
+       yes |         8         27 |        35 
+-----------+----------------------+----------
+     Total |        42         32 |        74 
+
+          Pearson chi2(1) =  31.0949   Pr = 0.000
+
+   Continuity corrected:
+          Pearson chi2(1) =  28.5293   Pr = 0.000
+
+. capture noisily median mpg, by(foreign) exact
+
+Median test
+
+   Greater |
+  than the |        foreign
+    median |         0          1 |     Total
+-----------+----------------------+----------
+        no |        34          5 |        39 
+       yes |         8         27 |        35 
+-----------+----------------------+----------
+     Total |        42         32 |        74 
+
+          Pearson chi2(1) =  31.0949   Pr = 0.000
+           Fisher's exact =                 0.000
+   1-sided Fisher's exact =                 0.000
+
+   Continuity corrected:
+          Pearson chi2(1) =  28.5293   Pr = 0.000
+
+. capture noisily median mpg, by(rep78)
+
+Median test
+
+   Greater |
+  than the |                         rep78
+    median |         1          2          3          4          5 |     Total
+-----------+-------------------------------------------------------+----------
+        no |        10         11          5          9          1 |        36 
+       yes |         7          3          8          6          7 |        31 
+-----------+-------------------------------------------------------+----------
+     Total |        17         14         13         15          8 |        67 
+
+          Pearson chi2(4) =  10.5789   Pr = 0.032
+
+. capture noisily nptrend mpg, by(rep78)
+
+         rep78        score          obs   sum of ranks  
+             1            1           17            503  
+             2            2           14          328.5  
+             3            3           13            522  
+             4            4           15          501.5  
+             5            5            8            423  
+
+          z  =  2.82
+  Prob > |z| = 0.005
+
+. capture noisily nptrend mpg, by(rep78) nodetail
+
+          z  =  2.82
+  Prob > |z| = 0.005
+
+. capture noisily runtest price
+ N(price <= 4293) = 37
+ N(price >  4293) = 37
+           obs = 74
+       N(runs) = 37
+            z  = -.23
+      Prob>|z| = .8100000000000001
+
+. capture noisily runtest price, threshold(5000) continuity
+ N(price <= 5000) = 46
+ N(price >  5000) = 28
+           obs = 74
+       N(runs) = 35
+            z  = -.08
+      Prob>|z| = .9399999999999999
+
+. capture noisily tetrachoric hiprice hiwt
+
+   Number of obs =           74
+ Tetrachoric rho =       0.7277
+       Std error =       0.1210
+
+Test of Ho: hiprice and hiwt are independent
+ 2-sided exact P =       0.0002
+
+. capture noisily tetrachoric hiprice hiwt foreign
+(obs=74)
+
+             |  hiprice     hiwt  foreign
+-------------+---------------------------
+     hiprice |   1.0000 
+        hiwt |   0.7277   1.0000 
+     foreign |  -0.4153  -0.8909   1.0000 
+
+. capture noisily ktau mpg weight
+
+  Number of obs =      74
+Kendall's tau-a =      -0.6764
+Kendall's tau-b =      -0.7522
+Kendall's score =   -1827
+    SE of score =     205.865   (corrected for ties)
+
+Test of Ho: mpg and weight are independent
+     Prob > |z| =       0.0000  (continuity corrected)
+
+. capture noisily ktau mpg weight price
+(obs=74)
+
+             |        mpg     weight      price
+-------------+---------------------------------
+         mpg |     0.8093 
+      weight |    -0.6764     0.9993 
+       price |    -0.3676     0.3754     0.9996 
+
+. capture noisily ktau mpg weight price, stats(taub p) print(.05)
+(obs=74)
+
++-----------------+
+|  Key            |
+|-----------------|
+|   tau_b         |
+|   Sig. level    |
++-----------------+
+
+             |        mpg     weight      price
+-------------+---------------------------------
+         mpg |     1.0000 
+             | 
+             |
+      weight |    -0.7522     1.0000 
+             |     0.0000 
+             |
+       price |    -0.4087     0.3756     1.0000 
+             |     0.0000     0.0000 
+             |
+
+. capture noisily pcorr mpg weight length foreign
+(obs=74)
+
+Partial and semipartial correlations of mpg with
+
+               Partial   Semipartial      Partial   Semipartial   Significance
+   Variable |    Corr.         Corr.      Corr.^2       Corr.^2          Value
+------------+-----------------------------------------------------------------
+     weight |   0.0455        0.0191       0.0021        0.0004         0.7042
+     length |  -0.2006       -0.0858       0.0402        0.0074         0.0911
+    foreign |   0.2825        0.1234       0.0798        0.0152         0.0162
+
+. capture noisily return list
+
+scalars:
+                 r(df) =  70
+                  r(N) =  74
+
+matrices:
+            r(sp_corr) :  3 x 1
+             r(p_corr) :  3 x 1
+
+. 
+. * --- agreement and effect sizes ---
+. preserve
+
+. clear
+
+. input r1 r2 r3 r4
+
+            r1         r2         r3         r4
+  1. 9 2 5 8
+  2. 6 1 3 2
+  3. 8 4 6 8
+  4. 7 1 2 6
+  5. 10 5 6 9
+  6. 6 2 4 7
+  7. end
+
+. gen target = _n
+
+. reshape long r, i(target) j(judge)
+(note: j = 1 2 3 4)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                        6   ->      24
+Number of variables                   5   ->       3
+j variable (4 values)                     ->   judge
+xij variables:
+                           r1 r2 ... r4   ->   r
+-----------------------------------------------------------------------------
+
+. capture noisily icc r target judge
+
+Intraclass correlations
+Two-way random-effects model
+Absolute agreement
+
+Random effects: target           Number of targets =         6
+Random effects: judge            Number of raters  =         4
+
+--------------------------------------------------------------
+                     r |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .2897638       .0187865    .7610844
+               Average |   .6200505       .0711368     .927232
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(5.0, 15.0) = 11.03              Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily icc r target judge, absolute
+
+Intraclass correlations
+Two-way random-effects model
+Absolute agreement
+
+Random effects: target           Number of targets =         6
+Random effects: judge            Number of raters  =         4
+
+--------------------------------------------------------------
+                     r |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .2897638       .0187865    .7610844
+               Average |   .6200505       .0711368     .927232
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(5.0, 15.0) = 11.03              Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily icc r target judge, mixed
+
+Intraclass correlations
+Two-way mixed-effects model
+Consistency of agreement
+
+Random effects: target           Number of targets =         6
+ Fixed effects: judge            Number of raters  =         4
+
+--------------------------------------------------------------
+                     r |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .7148407       .3424648    .9458583
+               Average |   .9093155       .6756747    .9858917
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(5.0, 15.0) = 11.03              Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily icc r target
+
+Intraclass correlations
+One-way random-effects model
+Absolute agreement
+
+Random effects: target           Number of targets =         6
+                                 Number of raters  =         4
+
+--------------------------------------------------------------
+                     r |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .1657418      -.1329323    .7225601
+               Average |   .4427971      -.8844422    .9124154
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(5.0, 18.0) = 1.79               Prob > F = 0.165
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily return list
+
+scalars:
+           r(N_target) =  6
+            r(N_rater) =  4
+              r(icc_i) =  .1657417684054754
+            r(icc_i_F) =  1.794678492239468
+          r(icc_i_df1) =  5
+          r(icc_i_df2) =  18
+            r(icc_i_p) =  .1647688083446397
+           r(icc_i_lb) =  -.1329323248747511
+           r(icc_i_ub) =  .7225600623281211
+            r(icc_avg) =  .4427971336792687
+          r(icc_avg_F) =  1.794678492239468
+        r(icc_avg_df1) =  5
+        r(icc_avg_df2) =  18
+          r(icc_avg_p) =  .1647688083446397
+         r(icc_avg_lb) =  -.884442155238121
+         r(icc_avg_ub) =  .9124154203407756
+          r(testvalue) =  0
+              r(level) =  95
+
+macros:
+              r(model) : "one-way random effects"
+             r(depvar) : "r"
+             r(target) : "target"
+               r(type) : "absolute"
+
+. restore
+
+. capture noisily loneway price rep78
+
+                    One-way Analysis of Variance for price: 
+
+                                             Number of obs =           67
+                                                 R-squared =       0.0579
+
+    Source                SS         df      MS            F     Prob > F
+-------------------------------------------------------------------------
+Between rep78           22954950      4    5738737.6      0.95     0.4395
+Within rep78           3.732e+08     62    6019750.7
+-------------------------------------------------------------------------
+Total                  3.962e+08     66    6002719.6
+
+         Intraclass       Asy.        
+         correlation      S.E.       [95% Conf. Interval]
+         ------------------------------------------------
+            0.00000*    0.05514       0.00000     0.10807
+
+         Estimated SD of rep78 effect                   .
+         Estimated SD within rep78               2453.518
+         Est. reliability of a rep78 mean         0.00000*
+              (evaluated at n=13.23)
+
+(*) Truncated at zero.
+
+. capture noisily loneway mpg rep78, level(90)
+
+              One-way Analysis of Variance for mpg: Mileage (mpg)
+
+                                             Number of obs =           67
+                                                 R-squared =       0.1769
+
+    Source                SS         df      MS            F     Prob > F
+-------------------------------------------------------------------------
+Between rep78          481.55563      4    120.38891      3.33     0.0155
+Within rep78           2241.1906     62    36.148236
+-------------------------------------------------------------------------
+Total                  2722.7463     66    41.253731
+
+         Intraclass       Asy.        
+         correlation      S.E.       [90% Conf. Interval]
+         ------------------------------------------------
+            0.14975     0.13408       0.00000     0.37030
+
+         Estimated SD of rep78 effect            2.523242
+         Estimated SD within rep78                6.01234
+         Est. reliability of a rep78 mean         0.69974
+              (evaluated at n=13.23)
+
+. capture noisily esize twosample price, by(foreign)
+
+Effect size based on mean comparison
+
+                               Obs per group:
+                                  foreign==0 =         42
+                                  foreign==1 =         32
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |     .98323     .4931349    1.467215
+         Hedges's g |   .9729464     .4879771    1.451869
+---------------------------------------------------------
+
+. capture noisily esize twosample mpg, by(foreign) all
+
+Effect size based on mean comparison
+
+                               Obs per group:
+                                  foreign==0 =         42
+                                  foreign==1 =         32
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |  -2.070484    -2.636197   -1.495222
+         Hedges's g |  -2.048828    -2.608625   -1.479584
+    Glass's Delta 1 |  -3.536765    -4.421145   -2.639792
+    Glass's Delta 2 |  -1.514365    -2.100529   -.9132941
+   Point-Biserial r |   -.720798    -.7979753    -.600497
+---------------------------------------------------------
+
+. capture noisily esizei 20 5 2 25 6 2.5
+
+Effect size based on mean comparison
+
+                               Obs per group:
+                                     Group 1 =         20
+                                     Group 2 =         25
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |  -.4361943    -1.028854    .1614065
+         Hedges's g |  -.4285343    -1.010786     .158572
+---------------------------------------------------------
+
+. capture noisily return list
+
+scalars:
+                  r(d) =  -.4361943222070453
+               r(lb_d) =  -1.02885419353023
+               r(ub_d) =  .1614064779411663
+                  r(g) =  -.428534294874268
+               r(lb_g) =  -1.010786440598445
+               r(ub_g) =  .158572011810427
+                r(N_1) =  20
+                r(N_2) =  25
+              r(level) =  95
+
+. 
+. * --- transformations ---
+. capture noisily lnskew0 lnp = price
+
+       Transform |         k     [95% Conf. Interval]       Skewness
+-----------------+--------------------------------------------------
+     ln(price-k) |   90.22811      (not calculated)        -.0005503
+
+. capture noisily lnskew0 lnw = weight, level(90)
+
+       Transform |         k     [90% Conf. Interval]       Skewness
+-----------------+--------------------------------------------------
+   ln(-weight-k) |  -6876.772    -infinity  -5014.103      -.0000401
+
+. capture noisily ladder price
+
+Transformation         formula               chi2(2)       P(chi2)
+------------------------------------------------------------------
+cubic                  price^3                53.57        0.000
+square                 price^2                38.10        0.000
+identity               price                  16.29        0.000
+square root            sqrt(price)             5.70        0.058
+log                    log(price)              0.01        0.993
+1/(square root)        1/sqrt(price)           4.94        0.085
+inverse                1/price                15.27        0.000
+1/square               1/(price^2)            37.76        0.000
+1/cubic                1/(price^3)            53.80        0.000
+
+. capture noisily ladder mpg
+
+Transformation         formula               chi2(2)       P(chi2)
+------------------------------------------------------------------
+cubic                  mpg^3                  32.04        0.000
+square                 mpg^2                  17.56        0.000
+identity               mpg                     8.16        0.017
+square root            sqrt(mpg)               8.39        0.015
+log                    log(mpg)               15.18        0.001
+1/(square root)        1/sqrt(mpg)            33.85        0.000
+inverse                1/mpg                      .        0.000
+1/square               1/(mpg^2)                  .            .
+1/cubic                1/(mpg^3)                  .            .
+
+. capture noisily ladder price, generate(ladp)
+
+Transformation         formula               chi2(2)       P(chi2)
+------------------------------------------------------------------
+cubic                  price^3                53.57        0.000
+square                 price^2                38.10        0.000
+identity               price                  16.29        0.000
+square root            sqrt(price)             5.70        0.058
+log                    log(price)              0.01        0.993
+1/(square root)        1/sqrt(price)           4.94        0.085
+inverse                1/price                15.27        0.000
+1/square               1/(price^2)            37.76        0.000
+1/cubic                1/(price^3)            53.80        0.000
+
+(ladp = log(price)   generated)
+
+. capture noisily boxcox mpg, nolog
+Fitting comparison model
+
+Fitting full model
+
+                                                  Number of obs   =         74
+                                                  LR chi2(0)      =       0.00
+Log likelihood = -226.71053                       Prob > chi2     =          .
+ 
+------------------------------------------------------------------------------
+         mpg |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      /theta |  -1.328412   .4751804    -2.80   0.005    -2.259748   -.3970755
+------------------------------------------------------------------------------
+ 
+Estimates of scale-variant parameters
+----------------------------
+             |      Coef.
+-------------+--------------
+Notrans      |
+       _cons |   .7327981
+-------------+--------------
+      /sigma |   .0076544
+----------------------------
+
+---------------------------------------------------------
+   Test         Restricted     LR statistic      P-value
+    H0:       log likelihood       chi2       Prob > chi2
+---------------------------------------------------------
+theta = -1      -226.95536         0.49           0.484
+theta =  0        -231.016         8.61           0.003
+theta =  1      -240.80893        28.20           0.000
+---------------------------------------------------------
+
+. capture noisily boxcox mpg weight, nolog
+Fitting comparison model
+
+Fitting full model
+
+                                                  Number of obs   =         74
+                                                  LR chi2(1)      =     123.90
+Log likelihood = -164.76204                       Prob > chi2     =      0.000
+ 
+------------------------------------------------------------------------------
+         mpg |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      /theta |  -.8656568   .3651668    -2.37   0.018    -1.581371    -.149943
+------------------------------------------------------------------------------
+ 
+Estimates of scale-variant parameters
+----------------------------
+             |      Coef.
+-------------+--------------
+Notrans      |
+      weight |  -.0000343
+       _cons |   1.151557
+-------------+--------------
+      /sigma |   .0121021
+----------------------------
+
+---------------------------------------------------------
+   Test         Restricted     LR statistic      P-value
+    H0:       log likelihood       chi2       Prob > chi2
+---------------------------------------------------------
+theta = -1      -164.82832         0.13           0.716
+theta =  0      -167.94112         6.36           0.012
+theta =  1      -181.07857        32.63           0.000
+---------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  74
+               e(df_m) =  4
+                e(ll0) =  -226.7105326451217
+               e(df_r) =  3
+               e(chi2) =  123.8969819070039
+                 e(ll) =  -164.7620416916198
+            e(chi2_t1) =  32.6330609015464
+               e(p_t1) =  1.11305240580e-08
+              e(ll_t1) =  -181.078572142393
+           e(chi2_tm1) =  .1325497005070133
+              e(p_tm1) =  .715802932910615
+             e(ll_tm1) =  -164.8283165418733
+            e(chi2_t0) =  6.35815032581155
+               e(p_t0) =  .0116843289035079
+              e(ll_t0) =  -167.9411168545255
+                 e(ic) =  3
+                 e(rc) =  0
+               e(rank) =  1
+
+macros:
+                e(cmd) : "boxcox"
+       e(marginsnotok) : "_ALL"
+            e(cmdline) : "boxcox mpg weight, nolog"
+             e(ntrans) : "yes"
+              e(model) : "lhsonly"
+            e(predict) : "boxcox_p"
+           e(chi2type) : "LR"
+             e(depvar) : "mpg"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+
+functions:
+             e(sample)   
+
+. 
+. * --- displays ---
+. capture noisily cumul price, generate(cprice)
+
+. capture noisily cumul mpg, generate(cmpg) equal
+
+. capture noisily summarize cprice cmpg
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+      cprice |         74    .5067568    .2906191   .0135135          1
+        cmpg |         74    .6008035    .2016967   .4189189          1
+
+. capture noisily stem mpg
+
+Stem-and-leaf plot for mpg (Mileage (mpg))
+
+  1t | 22222222222222222222222222222223333
+  1f | 4555
+  1s | 677
+  1. | 88888999
+  2* | 0011
+  2t | 233333
+  2f | 45555
+  2s | 777
+  2. | 9
+  3* | 0000
+  3t | 
+  3f | 
+  3s | 6
+
+. capture noisily stem price
+
+Stem-and-leaf plot for price
+
+   1*** | 580,626,795
+   2*** | 007,337,386,391,395,477,499
+   2*** | 650,685,925,936,941
+   3*** | 080,262,287,423,439,443,449
+   3*** | 754,789,798,823,832,855,920,920
+   4*** | 024,114,116,156,179,259,281,305,347,413
+   4*** | 612,655,856,912,930,936
+   5*** | 099,130,477
+   5*** | 550,582,919,976
+   6*** | 047,051,057,208,226,280
+   6*** | 604,674,715,732,783,966
+   7*** | 
+   7*** | 703,961
+   8*** | 125
+   8*** | 926
+   9*** | 
+   9*** | 
+  10*** | 083,208
+  10*** | 
+  11*** | 288
+  11*** | 557
+  12*** | 
+  12*** | 955
+
+. capture noisily stem price, lines(2)
+
+Stem-and-leaf plot for price
+
+   158* | 0
+   158. | 
+   159* | 
+   159. | 
+   160* | 
+   160. | 
+   161* | 
+   161. | 
+   162* | 
+   162. | 6
+   163* | 
+   163. | 
+   164* | 
+   164. | 
+   165* | 
+   165. | 
+   166* | 
+   166. | 
+   167* | 
+   167. | 
+   168* | 
+   168. | 
+   169* | 
+   169. | 
+   170* | 
+   170. | 
+   171* | 
+   171. | 
+   172* | 
+   172. | 
+   173* | 
+   173. | 
+   174* | 
+   174. | 
+   175* | 
+   175. | 
+   176* | 
+   176. | 
+   177* | 
+   177. | 
+   178* | 
+   178. | 
+   179* | 
+   179. | 5
+   180* | 
+   180. | 
+   181* | 
+   181. | 
+   182* | 
+   182. | 
+   183* | 
+   183. | 
+   184* | 
+   184. | 
+   185* | 
+   185. | 
+   186* | 
+   186. | 
+   187* | 
+   187. | 
+   188* | 
+   188. | 
+   189* | 
+   189. | 
+   190* | 
+   190. | 
+   191* | 
+   191. | 
+   192* | 
+   192. | 
+   193* | 
+   193. | 
+   194* | 
+   194. | 
+   195* | 
+   195. | 
+   196* | 
+   196. | 
+   197* | 
+   197. | 
+   198* | 
+   198. | 
+   199* | 
+   199. | 
+   200* | 
+   200. | 7
+   201* | 
+   201. | 
+   202* | 
+   202. | 
+   203* | 
+   203. | 
+   204* | 
+   204. | 
+   205* | 
+   205. | 
+   206* | 
+   206. | 
+   207* | 
+   207. | 
+   208* | 
+   208. | 
+   209* | 
+   209. | 
+   210* | 
+   210. | 
+   211* | 
+   211. | 
+   212* | 
+   212. | 
+   213* | 
+   213. | 
+   214* | 
+   214. | 
+   215* | 
+   215. | 
+   216* | 
+   216. | 
+   217* | 
+   217. | 
+   218* | 
+   218. | 
+   219* | 
+   219. | 
+   220* | 
+   220. | 
+   221* | 
+   221. | 
+   222* | 
+   222. | 
+   223* | 
+   223. | 
+   224* | 
+   224. | 
+   225* | 
+   225. | 
+   226* | 
+   226. | 
+   227* | 
+   227. | 
+   228* | 
+   228. | 
+   229* | 
+   229. | 
+   230* | 
+   230. | 
+   231* | 
+   231. | 
+   232* | 
+   232. | 
+   233* | 
+   233. | 7
+   234* | 
+   234. | 
+   235* | 
+   235. | 
+   236* | 
+   236. | 
+   237* | 
+   237. | 
+   238* | 
+   238. | 6
+   239* | 1
+   239. | 5
+   240* | 
+   240. | 
+   241* | 
+   241. | 
+   242* | 
+   242. | 
+   243* | 
+   243. | 
+   244* | 
+   244. | 
+   245* | 
+   245. | 
+   246* | 
+   246. | 
+   247* | 
+   247. | 7
+   248* | 
+   248. | 
+   249* | 
+   249. | 9
+   250* | 
+   250. | 
+   251* | 
+   251. | 
+   252* | 
+   252. | 
+   253* | 
+   253. | 
+   254* | 
+   254. | 
+   255* | 
+   255. | 
+   256* | 
+   256. | 
+   257* | 
+   257. | 
+   258* | 
+   258. | 
+   259* | 
+   259. | 
+   260* | 
+   260. | 
+   261* | 
+   261. | 
+   262* | 
+   262. | 
+   263* | 
+   263. | 
+   264* | 
+   264. | 
+   265* | 0
+   265. | 
+   266* | 
+   266. | 
+   267* | 
+   267. | 
+   268* | 
+   268. | 5
+   269* | 
+   269. | 
+   270* | 
+   270. | 
+   271* | 
+   271. | 
+   272* | 
+   272. | 
+   273* | 
+   273. | 
+   274* | 
+   274. | 
+   275* | 
+   275. | 
+   276* | 
+   276. | 
+   277* | 
+   277. | 
+   278* | 
+   278. | 
+   279* | 
+   279. | 
+   280* | 
+   280. | 
+   281* | 
+   281. | 
+   282* | 
+   282. | 
+   283* | 
+   283. | 
+   284* | 
+   284. | 
+   285* | 
+   285. | 
+   286* | 
+   286. | 
+   287* | 
+   287. | 
+   288* | 
+   288. | 
+   289* | 
+   289. | 
+   290* | 
+   290. | 
+   291* | 
+   291. | 
+   292* | 
+   292. | 5
+   293* | 
+   293. | 6
+   294* | 1
+   294. | 
+   295* | 
+   295. | 
+   296* | 
+   296. | 
+   297* | 
+   297. | 
+   298* | 
+   298. | 
+   299* | 
+   299. | 
+   300* | 
+   300. | 
+   301* | 
+   301. | 
+   302* | 
+   302. | 
+   303* | 
+   303. | 
+   304* | 
+   304. | 
+   305* | 
+   305. | 
+   306* | 
+   306. | 
+   307* | 
+   307. | 
+   308* | 0
+   308. | 
+   309* | 
+   309. | 
+   310* | 
+   310. | 
+   311* | 
+   311. | 
+   312* | 
+   312. | 
+   313* | 
+   313. | 
+   314* | 
+   314. | 
+   315* | 
+   315. | 
+   316* | 
+   316. | 
+   317* | 
+   317. | 
+   318* | 
+   318. | 
+   319* | 
+   319. | 
+   320* | 
+   320. | 
+   321* | 
+   321. | 
+   322* | 
+   322. | 
+   323* | 
+   323. | 
+   324* | 
+   324. | 
+   325* | 
+   325. | 
+   326* | 2
+   326. | 
+   327* | 
+   327. | 
+   328* | 
+   328. | 7
+   329* | 
+   329. | 
+   330* | 
+   330. | 
+   331* | 
+   331. | 
+   332* | 
+   332. | 
+   333* | 
+   333. | 
+   334* | 
+   334. | 
+   335* | 
+   335. | 
+   336* | 
+   336. | 
+   337* | 
+   337. | 
+   338* | 
+   338. | 
+   339* | 
+   339. | 
+   340* | 
+   340. | 
+   341* | 
+   341. | 
+   342* | 3
+   342. | 
+   343* | 
+   343. | 9
+   344* | 3
+   344. | 9
+   345* | 
+   345. | 
+   346* | 
+   346. | 
+   347* | 
+   347. | 
+   348* | 
+   348. | 
+   349* | 
+   349. | 
+   350* | 
+   350. | 
+   351* | 
+   351. | 
+   352* | 
+   352. | 
+   353* | 
+   353. | 
+   354* | 
+   354. | 
+   355* | 
+   355. | 
+   356* | 
+   356. | 
+   357* | 
+   357. | 
+   358* | 
+   358. | 
+   359* | 
+   359. | 
+   360* | 
+   360. | 
+   361* | 
+   361. | 
+   362* | 
+   362. | 
+   363* | 
+   363. | 
+   364* | 
+   364. | 
+   365* | 
+   365. | 
+   366* | 
+   366. | 
+   367* | 
+   367. | 
+   368* | 
+   368. | 
+   369* | 
+   369. | 
+   370* | 
+   370. | 
+   371* | 
+   371. | 
+   372* | 
+   372. | 
+   373* | 
+   373. | 
+   374* | 
+   374. | 
+   375* | 4
+   375. | 
+   376* | 
+   376. | 
+   377* | 
+   377. | 
+   378* | 
+   378. | 9
+   379* | 
+   379. | 8
+   380* | 
+   380. | 
+   381* | 
+   381. | 
+   382* | 3
+   382. | 
+   383* | 2
+   383. | 
+   384* | 
+   384. | 
+   385* | 
+   385. | 5
+   386* | 
+   386. | 
+   387* | 
+   387. | 
+   388* | 
+   388. | 
+   389* | 
+   389. | 
+   390* | 
+   390. | 
+   391* | 
+   391. | 
+   392* | 00
+   392. | 
+   393* | 
+   393. | 
+   394* | 
+   394. | 
+   395* | 
+   395. | 
+   396* | 
+   396. | 
+   397* | 
+   397. | 
+   398* | 
+   398. | 
+   399* | 
+   399. | 
+   400* | 
+   400. | 
+   401* | 
+   401. | 
+   402* | 4
+   402. | 
+   403* | 
+   403. | 
+   404* | 
+   404. | 
+   405* | 
+   405. | 
+   406* | 
+   406. | 
+   407* | 
+   407. | 
+   408* | 
+   408. | 
+   409* | 
+   409. | 
+   410* | 
+   410. | 
+   411* | 4
+   411. | 6
+   412* | 
+   412. | 
+   413* | 
+   413. | 
+   414* | 
+   414. | 
+   415* | 
+   415. | 6
+   416* | 
+   416. | 
+   417* | 
+   417. | 9
+   418* | 
+   418. | 
+   419* | 
+   419. | 
+   420* | 
+   420. | 
+   421* | 
+   421. | 
+   422* | 
+   422. | 
+   423* | 
+   423. | 
+   424* | 
+   424. | 
+   425* | 
+   425. | 9
+   426* | 
+   426. | 
+   427* | 
+   427. | 
+   428* | 1
+   428. | 
+   429* | 
+   429. | 
+   430* | 
+   430. | 5
+   431* | 
+   431. | 
+   432* | 
+   432. | 
+   433* | 
+   433. | 
+   434* | 
+   434. | 7
+   435* | 
+   435. | 
+   436* | 
+   436. | 
+   437* | 
+   437. | 
+   438* | 
+   438. | 
+   439* | 
+   439. | 
+   440* | 
+   440. | 
+   441* | 3
+   441. | 
+   442* | 
+   442. | 
+   443* | 
+   443. | 
+   444* | 
+   444. | 
+   445* | 
+   445. | 
+   446* | 
+   446. | 
+   447* | 
+   447. | 
+   448* | 
+   448. | 
+   449* | 
+   449. | 
+   450* | 
+   450. | 
+   451* | 
+   451. | 
+   452* | 
+   452. | 
+   453* | 
+   453. | 
+   454* | 
+   454. | 
+   455* | 
+   455. | 
+   456* | 
+   456. | 
+   457* | 
+   457. | 
+   458* | 
+   458. | 
+   459* | 
+   459. | 
+   460* | 
+   460. | 
+   461* | 2
+   461. | 
+   462* | 
+   462. | 
+   463* | 
+   463. | 
+   464* | 
+   464. | 
+   465* | 
+   465. | 5
+   466* | 
+   466. | 
+   467* | 
+   467. | 
+   468* | 
+   468. | 
+   469* | 
+   469. | 
+   470* | 
+   470. | 
+   471* | 
+   471. | 
+   472* | 
+   472. | 
+   473* | 
+   473. | 
+   474* | 
+   474. | 
+   475* | 
+   475. | 
+   476* | 
+   476. | 
+   477* | 
+   477. | 
+   478* | 
+   478. | 
+   479* | 
+   479. | 
+   480* | 
+   480. | 
+   481* | 
+   481. | 
+   482* | 
+   482. | 
+   483* | 
+   483. | 
+   484* | 
+   484. | 
+   485* | 
+   485. | 6
+   486* | 
+   486. | 
+   487* | 
+   487. | 
+   488* | 
+   488. | 
+   489* | 
+   489. | 
+   490* | 
+   490. | 
+   491* | 2
+   491. | 
+   492* | 
+   492. | 
+   493* | 0
+   493. | 6
+   494* | 
+   494. | 
+   495* | 
+   495. | 
+   496* | 
+   496. | 
+   497* | 
+   497. | 
+   498* | 
+   498. | 
+   499* | 
+   499. | 
+   500* | 
+   500. | 
+   501* | 
+   501. | 
+   502* | 
+   502. | 
+   503* | 
+   503. | 
+   504* | 
+   504. | 
+   505* | 
+   505. | 
+   506* | 
+   506. | 
+   507* | 
+   507. | 
+   508* | 
+   508. | 
+   509* | 
+   509. | 9
+   510* | 
+   510. | 
+   511* | 
+   511. | 
+   512* | 
+   512. | 
+   513* | 0
+   513. | 
+   514* | 
+   514. | 
+   515* | 
+   515. | 
+   516* | 
+   516. | 
+   517* | 
+   517. | 
+   518* | 
+   518. | 
+   519* | 
+   519. | 
+   520* | 
+   520. | 
+   521* | 
+   521. | 
+   522* | 
+   522. | 
+   523* | 
+   523. | 
+   524* | 
+   524. | 
+   525* | 
+   525. | 
+   526* | 
+   526. | 
+   527* | 
+   527. | 
+   528* | 
+   528. | 
+   529* | 
+   529. | 
+   530* | 
+   530. | 
+   531* | 
+   531. | 
+   532* | 
+   532. | 
+   533* | 
+   533. | 
+   534* | 
+   534. | 
+   535* | 
+   535. | 
+   536* | 
+   536. | 
+   537* | 
+   537. | 
+   538* | 
+   538. | 
+   539* | 
+   539. | 
+   540* | 
+   540. | 
+   541* | 
+   541. | 
+   542* | 
+   542. | 
+   543* | 
+   543. | 
+   544* | 
+   544. | 
+   545* | 
+   545. | 
+   546* | 
+   546. | 
+   547* | 
+   547. | 7
+   548* | 
+   548. | 
+   549* | 
+   549. | 
+   550* | 
+   550. | 
+   551* | 
+   551. | 
+   552* | 
+   552. | 
+   553* | 
+   553. | 
+   554* | 
+   554. | 
+   555* | 0
+   555. | 
+   556* | 
+   556. | 
+   557* | 
+   557. | 
+   558* | 2
+   558. | 
+   559* | 
+   559. | 
+   560* | 
+   560. | 
+   561* | 
+   561. | 
+   562* | 
+   562. | 
+   563* | 
+   563. | 
+   564* | 
+   564. | 
+   565* | 
+   565. | 
+   566* | 
+   566. | 
+   567* | 
+   567. | 
+   568* | 
+   568. | 
+   569* | 
+   569. | 
+   570* | 
+   570. | 
+   571* | 
+   571. | 
+   572* | 
+   572. | 
+   573* | 
+   573. | 
+   574* | 
+   574. | 
+   575* | 
+   575. | 
+   576* | 
+   576. | 
+   577* | 
+   577. | 
+   578* | 
+   578. | 
+   579* | 
+   579. | 
+   580* | 
+   580. | 
+   581* | 
+   581. | 
+   582* | 
+   582. | 
+   583* | 
+   583. | 
+   584* | 
+   584. | 
+   585* | 
+   585. | 
+   586* | 
+   586. | 
+   587* | 
+   587. | 
+   588* | 
+   588. | 
+   589* | 
+   589. | 
+   590* | 
+   590. | 
+   591* | 
+   591. | 9
+   592* | 
+   592. | 
+   593* | 
+   593. | 
+   594* | 
+   594. | 
+   595* | 
+   595. | 
+   596* | 
+   596. | 
+   597* | 
+   597. | 6
+   598* | 
+   598. | 
+   599* | 
+   599. | 
+   600* | 
+   600. | 
+   601* | 
+   601. | 
+   602* | 
+   602. | 
+   603* | 
+   603. | 
+   604* | 
+   604. | 7
+   605* | 1
+   605. | 7
+   606* | 
+   606. | 
+   607* | 
+   607. | 
+   608* | 
+   608. | 
+   609* | 
+   609. | 
+   610* | 
+   610. | 
+   611* | 
+   611. | 
+   612* | 
+   612. | 
+   613* | 
+   613. | 
+   614* | 
+   614. | 
+   615* | 
+   615. | 
+   616* | 
+   616. | 
+   617* | 
+   617. | 
+   618* | 
+   618. | 
+   619* | 
+   619. | 
+   620* | 
+   620. | 8
+   621* | 
+   621. | 
+   622* | 
+   622. | 6
+   623* | 
+   623. | 
+   624* | 
+   624. | 
+   625* | 
+   625. | 
+   626* | 
+   626. | 
+   627* | 
+   627. | 
+   628* | 0
+   628. | 
+   629* | 
+   629. | 
+   630* | 
+   630. | 
+   631* | 
+   631. | 
+   632* | 
+   632. | 
+   633* | 
+   633. | 
+   634* | 
+   634. | 
+   635* | 
+   635. | 
+   636* | 
+   636. | 
+   637* | 
+   637. | 
+   638* | 
+   638. | 
+   639* | 
+   639. | 
+   640* | 
+   640. | 
+   641* | 
+   641. | 
+   642* | 
+   642. | 
+   643* | 
+   643. | 
+   644* | 
+   644. | 
+   645* | 
+   645. | 
+   646* | 
+   646. | 
+   647* | 
+   647. | 
+   648* | 
+   648. | 
+   649* | 
+   649. | 
+   650* | 
+   650. | 
+   651* | 
+   651. | 
+   652* | 
+   652. | 
+   653* | 
+   653. | 
+   654* | 
+   654. | 
+   655* | 
+   655. | 
+   656* | 
+   656. | 
+   657* | 
+   657. | 
+   658* | 
+   658. | 
+   659* | 
+   659. | 
+   660* | 4
+   660. | 
+   661* | 
+   661. | 
+   662* | 
+   662. | 
+   663* | 
+   663. | 
+   664* | 
+   664. | 
+   665* | 
+   665. | 
+   666* | 
+   666. | 
+   667* | 4
+   667. | 
+   668* | 
+   668. | 
+   669* | 
+   669. | 
+   670* | 
+   670. | 
+   671* | 
+   671. | 5
+   672* | 
+   672. | 
+   673* | 2
+   673. | 
+   674* | 
+   674. | 
+   675* | 
+   675. | 
+   676* | 
+   676. | 
+   677* | 
+   677. | 
+   678* | 3
+   678. | 
+   679* | 
+   679. | 
+   680* | 
+   680. | 
+   681* | 
+   681. | 
+   682* | 
+   682. | 
+   683* | 
+   683. | 
+   684* | 
+   684. | 
+   685* | 
+   685. | 
+   686* | 
+   686. | 
+   687* | 
+   687. | 
+   688* | 
+   688. | 
+   689* | 
+   689. | 
+   690* | 
+   690. | 
+   691* | 
+   691. | 
+   692* | 
+   692. | 
+   693* | 
+   693. | 
+   694* | 
+   694. | 
+   695* | 
+   695. | 
+   696* | 
+   696. | 6
+   697* | 
+   697. | 
+   698* | 
+   698. | 
+   699* | 
+   699. | 
+   700* | 
+   700. | 
+   701* | 
+   701. | 
+   702* | 
+   702. | 
+   703* | 
+   703. | 
+   704* | 
+   704. | 
+   705* | 
+   705. | 
+   706* | 
+   706. | 
+   707* | 
+   707. | 
+   708* | 
+   708. | 
+   709* | 
+   709. | 
+   710* | 
+   710. | 
+   711* | 
+   711. | 
+   712* | 
+   712. | 
+   713* | 
+   713. | 
+   714* | 
+   714. | 
+   715* | 
+   715. | 
+   716* | 
+   716. | 
+   717* | 
+   717. | 
+   718* | 
+   718. | 
+   719* | 
+   719. | 
+   720* | 
+   720. | 
+   721* | 
+   721. | 
+   722* | 
+   722. | 
+   723* | 
+   723. | 
+   724* | 
+   724. | 
+   725* | 
+   725. | 
+   726* | 
+   726. | 
+   727* | 
+   727. | 
+   728* | 
+   728. | 
+   729* | 
+   729. | 
+   730* | 
+   730. | 
+   731* | 
+   731. | 
+   732* | 
+   732. | 
+   733* | 
+   733. | 
+   734* | 
+   734. | 
+   735* | 
+   735. | 
+   736* | 
+   736. | 
+   737* | 
+   737. | 
+   738* | 
+   738. | 
+   739* | 
+   739. | 
+   740* | 
+   740. | 
+   741* | 
+   741. | 
+   742* | 
+   742. | 
+   743* | 
+   743. | 
+   744* | 
+   744. | 
+   745* | 
+   745. | 
+   746* | 
+   746. | 
+   747* | 
+   747. | 
+   748* | 
+   748. | 
+   749* | 
+   749. | 
+   750* | 
+   750. | 
+   751* | 
+   751. | 
+   752* | 
+   752. | 
+   753* | 
+   753. | 
+   754* | 
+   754. | 
+   755* | 
+   755. | 
+   756* | 
+   756. | 
+   757* | 
+   757. | 
+   758* | 
+   758. | 
+   759* | 
+   759. | 
+   760* | 
+   760. | 
+   761* | 
+   761. | 
+   762* | 
+   762. | 
+   763* | 
+   763. | 
+   764* | 
+   764. | 
+   765* | 
+   765. | 
+   766* | 
+   766. | 
+   767* | 
+   767. | 
+   768* | 
+   768. | 
+   769* | 
+   769. | 
+   770* | 3
+   770. | 
+   771* | 
+   771. | 
+   772* | 
+   772. | 
+   773* | 
+   773. | 
+   774* | 
+   774. | 
+   775* | 
+   775. | 
+   776* | 
+   776. | 
+   777* | 
+   777. | 
+   778* | 
+   778. | 
+   779* | 
+   779. | 
+   780* | 
+   780. | 
+   781* | 
+   781. | 
+   782* | 
+   782. | 
+   783* | 
+   783. | 
+   784* | 
+   784. | 
+   785* | 
+   785. | 
+   786* | 
+   786. | 
+   787* | 
+   787. | 
+   788* | 
+   788. | 
+   789* | 
+   789. | 
+   790* | 
+   790. | 
+   791* | 
+   791. | 
+   792* | 
+   792. | 
+   793* | 
+   793. | 
+   794* | 
+   794. | 
+   795* | 
+   795. | 
+   796* | 1
+   796. | 
+   797* | 
+   797. | 
+   798* | 
+   798. | 
+   799* | 
+   799. | 
+   800* | 
+   800. | 
+   801* | 
+   801. | 
+   802* | 
+   802. | 
+   803* | 
+   803. | 
+   804* | 
+   804. | 
+   805* | 
+   805. | 
+   806* | 
+   806. | 
+   807* | 
+   807. | 
+   808* | 
+   808. | 
+   809* | 
+   809. | 
+   810* | 
+   810. | 
+   811* | 
+   811. | 
+   812* | 
+   812. | 5
+   813* | 
+   813. | 
+   814* | 
+   814. | 
+   815* | 
+   815. | 
+   816* | 
+   816. | 
+   817* | 
+   817. | 
+   818* | 
+   818. | 
+   819* | 
+   819. | 
+   820* | 
+   820. | 
+   821* | 
+   821. | 
+   822* | 
+   822. | 
+   823* | 
+   823. | 
+   824* | 
+   824. | 
+   825* | 
+   825. | 
+   826* | 
+   826. | 
+   827* | 
+   827. | 
+   828* | 
+   828. | 
+   829* | 
+   829. | 
+   830* | 
+   830. | 
+   831* | 
+   831. | 
+   832* | 
+   832. | 
+   833* | 
+   833. | 
+   834* | 
+   834. | 
+   835* | 
+   835. | 
+   836* | 
+   836. | 
+   837* | 
+   837. | 
+   838* | 
+   838. | 
+   839* | 
+   839. | 
+   840* | 
+   840. | 
+   841* | 
+   841. | 
+   842* | 
+   842. | 
+   843* | 
+   843. | 
+   844* | 
+   844. | 
+   845* | 
+   845. | 
+   846* | 
+   846. | 
+   847* | 
+   847. | 
+   848* | 
+   848. | 
+   849* | 
+   849. | 
+   850* | 
+   850. | 
+   851* | 
+   851. | 
+   852* | 
+   852. | 
+   853* | 
+   853. | 
+   854* | 
+   854. | 
+   855* | 
+   855. | 
+   856* | 
+   856. | 
+   857* | 
+   857. | 
+   858* | 
+   858. | 
+   859* | 
+   859. | 
+   860* | 
+   860. | 
+   861* | 
+   861. | 
+   862* | 
+   862. | 
+   863* | 
+   863. | 
+   864* | 
+   864. | 
+   865* | 
+   865. | 
+   866* | 
+   866. | 
+   867* | 
+   867. | 
+   868* | 
+   868. | 
+   869* | 
+   869. | 
+   870* | 
+   870. | 
+   871* | 
+   871. | 
+   872* | 
+   872. | 
+   873* | 
+   873. | 
+   874* | 
+   874. | 
+   875* | 
+   875. | 
+   876* | 
+   876. | 
+   877* | 
+   877. | 
+   878* | 
+   878. | 
+   879* | 
+   879. | 
+   880* | 
+   880. | 
+   881* | 
+   881. | 
+   882* | 
+   882. | 
+   883* | 
+   883. | 
+   884* | 
+   884. | 
+   885* | 
+   885. | 
+   886* | 
+   886. | 
+   887* | 
+   887. | 
+   888* | 
+   888. | 
+   889* | 
+   889. | 
+   890* | 
+   890. | 
+   891* | 
+   891. | 
+   892* | 
+   892. | 6
+   893* | 
+   893. | 
+   894* | 
+   894. | 
+   895* | 
+   895. | 
+   896* | 
+   896. | 
+   897* | 
+   897. | 
+   898* | 
+   898. | 
+   899* | 
+   899. | 
+   900* | 
+   900. | 
+   901* | 
+   901. | 
+   902* | 
+   902. | 
+   903* | 
+   903. | 
+   904* | 
+   904. | 
+   905* | 
+   905. | 
+   906* | 
+   906. | 
+   907* | 
+   907. | 
+   908* | 
+   908. | 
+   909* | 
+   909. | 
+   910* | 
+   910. | 
+   911* | 
+   911. | 
+   912* | 
+   912. | 
+   913* | 
+   913. | 
+   914* | 
+   914. | 
+   915* | 
+   915. | 
+   916* | 
+   916. | 
+   917* | 
+   917. | 
+   918* | 
+   918. | 
+   919* | 
+   919. | 
+   920* | 
+   920. | 
+   921* | 
+   921. | 
+   922* | 
+   922. | 
+   923* | 
+   923. | 
+   924* | 
+   924. | 
+   925* | 
+   925. | 
+   926* | 
+   926. | 
+   927* | 
+   927. | 
+   928* | 
+   928. | 
+   929* | 
+   929. | 
+   930* | 
+   930. | 
+   931* | 
+   931. | 
+   932* | 
+   932. | 
+   933* | 
+   933. | 
+   934* | 
+   934. | 
+   935* | 
+   935. | 
+   936* | 
+   936. | 
+   937* | 
+   937. | 
+   938* | 
+   938. | 
+   939* | 
+   939. | 
+   940* | 
+   940. | 
+   941* | 
+   941. | 
+   942* | 
+   942. | 
+   943* | 
+   943. | 
+   944* | 
+   944. | 
+   945* | 
+   945. | 
+   946* | 
+   946. | 
+   947* | 
+   947. | 
+   948* | 
+   948. | 
+   949* | 
+   949. | 
+   950* | 
+   950. | 
+   951* | 
+   951. | 
+   952* | 
+   952. | 
+   953* | 
+   953. | 
+   954* | 
+   954. | 
+   955* | 
+   955. | 
+   956* | 
+   956. | 
+   957* | 
+   957. | 
+   958* | 
+   958. | 
+   959* | 
+   959. | 
+   960* | 
+   960. | 
+   961* | 
+   961. | 
+   962* | 
+   962. | 
+   963* | 
+   963. | 
+   964* | 
+   964. | 
+   965* | 
+   965. | 
+   966* | 
+   966. | 
+   967* | 
+   967. | 
+   968* | 
+   968. | 
+   969* | 
+   969. | 
+   970* | 
+   970. | 
+   971* | 
+   971. | 
+   972* | 
+   972. | 
+   973* | 
+   973. | 
+   974* | 
+   974. | 
+   975* | 
+   975. | 
+   976* | 
+   976. | 
+   977* | 
+   977. | 
+   978* | 
+   978. | 
+   979* | 
+   979. | 
+   980* | 
+   980. | 
+   981* | 
+   981. | 
+   982* | 
+   982. | 
+   983* | 
+   983. | 
+   984* | 
+   984. | 
+   985* | 
+   985. | 
+   986* | 
+   986. | 
+   987* | 
+   987. | 
+   988* | 
+   988. | 
+   989* | 
+   989. | 
+   990* | 
+   990. | 
+   991* | 
+   991. | 
+   992* | 
+   992. | 
+   993* | 
+   993. | 
+   994* | 
+   994. | 
+   995* | 
+   995. | 
+   996* | 
+   996. | 
+   997* | 
+   997. | 
+   998* | 
+   998. | 
+   999* | 
+   999. | 
+  1000* | 
+  1000. | 
+  1001* | 
+  1001. | 
+  1002* | 
+  1002. | 
+  1003* | 
+  1003. | 
+  1004* | 
+  1004. | 
+  1005* | 
+  1005. | 
+  1006* | 
+  1006. | 
+  1007* | 
+  1007. | 
+  1008* | 3
+  1008. | 
+  1009* | 
+  1009. | 
+  1010* | 
+  1010. | 
+  1011* | 
+  1011. | 
+  1012* | 
+  1012. | 
+  1013* | 
+  1013. | 
+  1014* | 
+  1014. | 
+  1015* | 
+  1015. | 
+  1016* | 
+  1016. | 
+  1017* | 
+  1017. | 
+  1018* | 
+  1018. | 
+  1019* | 
+  1019. | 
+  1020* | 
+  1020. | 8
+  1021* | 
+  1021. | 
+  1022* | 
+  1022. | 
+  1023* | 
+  1023. | 
+  1024* | 
+  1024. | 
+  1025* | 
+  1025. | 
+  1026* | 
+  1026. | 
+  1027* | 
+  1027. | 
+  1028* | 
+  1028. | 
+  1029* | 
+  1029. | 
+  1030* | 
+  1030. | 
+  1031* | 
+  1031. | 
+  1032* | 
+  1032. | 
+  1033* | 
+  1033. | 
+  1034* | 
+  1034. | 
+  1035* | 
+  1035. | 
+  1036* | 
+  1036. | 
+  1037* | 
+  1037. | 
+  1038* | 
+  1038. | 
+  1039* | 
+  1039. | 
+  1040* | 
+  1040. | 
+  1041* | 
+  1041. | 
+  1042* | 
+  1042. | 
+  1043* | 
+  1043. | 
+  1044* | 
+  1044. | 
+  1045* | 
+  1045. | 
+  1046* | 
+  1046. | 
+  1047* | 
+  1047. | 
+  1048* | 
+  1048. | 
+  1049* | 
+  1049. | 
+  1050* | 
+  1050. | 
+  1051* | 
+  1051. | 
+  1052* | 
+  1052. | 
+  1053* | 
+  1053. | 
+  1054* | 
+  1054. | 
+  1055* | 
+  1055. | 
+  1056* | 
+  1056. | 
+  1057* | 
+  1057. | 
+  1058* | 
+  1058. | 
+  1059* | 
+  1059. | 
+  1060* | 
+  1060. | 
+  1061* | 
+  1061. | 
+  1062* | 
+  1062. | 
+  1063* | 
+  1063. | 
+  1064* | 
+  1064. | 
+  1065* | 
+  1065. | 
+  1066* | 
+  1066. | 
+  1067* | 
+  1067. | 
+  1068* | 
+  1068. | 
+  1069* | 
+  1069. | 
+  1070* | 
+  1070. | 
+  1071* | 
+  1071. | 
+  1072* | 
+  1072. | 
+  1073* | 
+  1073. | 
+  1074* | 
+  1074. | 
+  1075* | 
+  1075. | 
+  1076* | 
+  1076. | 
+  1077* | 
+  1077. | 
+  1078* | 
+  1078. | 
+  1079* | 
+  1079. | 
+  1080* | 
+  1080. | 
+  1081* | 
+  1081. | 
+  1082* | 
+  1082. | 
+  1083* | 
+  1083. | 
+  1084* | 
+  1084. | 
+  1085* | 
+  1085. | 
+  1086* | 
+  1086. | 
+  1087* | 
+  1087. | 
+  1088* | 
+  1088. | 
+  1089* | 
+  1089. | 
+  1090* | 
+  1090. | 
+  1091* | 
+  1091. | 
+  1092* | 
+  1092. | 
+  1093* | 
+  1093. | 
+  1094* | 
+  1094. | 
+  1095* | 
+  1095. | 
+  1096* | 
+  1096. | 
+  1097* | 
+  1097. | 
+  1098* | 
+  1098. | 
+  1099* | 
+  1099. | 
+  1100* | 
+  1100. | 
+  1101* | 
+  1101. | 
+  1102* | 
+  1102. | 
+  1103* | 
+  1103. | 
+  1104* | 
+  1104. | 
+  1105* | 
+  1105. | 
+  1106* | 
+  1106. | 
+  1107* | 
+  1107. | 
+  1108* | 
+  1108. | 
+  1109* | 
+  1109. | 
+  1110* | 
+  1110. | 
+  1111* | 
+  1111. | 
+  1112* | 
+  1112. | 
+  1113* | 
+  1113. | 
+  1114* | 
+  1114. | 
+  1115* | 
+  1115. | 
+  1116* | 
+  1116. | 
+  1117* | 
+  1117. | 
+  1118* | 
+  1118. | 
+  1119* | 
+  1119. | 
+  1120* | 
+  1120. | 
+  1121* | 
+  1121. | 
+  1122* | 
+  1122. | 
+  1123* | 
+  1123. | 
+  1124* | 
+  1124. | 
+  1125* | 
+  1125. | 
+  1126* | 
+  1126. | 
+  1127* | 
+  1127. | 
+  1128* | 
+  1128. | 8
+  1129* | 
+  1129. | 
+  1130* | 
+  1130. | 
+  1131* | 
+  1131. | 
+  1132* | 
+  1132. | 
+  1133* | 
+  1133. | 
+  1134* | 
+  1134. | 
+  1135* | 
+  1135. | 
+  1136* | 
+  1136. | 
+  1137* | 
+  1137. | 
+  1138* | 
+  1138. | 
+  1139* | 
+  1139. | 
+  1140* | 
+  1140. | 
+  1141* | 
+  1141. | 
+  1142* | 
+  1142. | 
+  1143* | 
+  1143. | 
+  1144* | 
+  1144. | 
+  1145* | 
+  1145. | 
+  1146* | 
+  1146. | 
+  1147* | 
+  1147. | 
+  1148* | 
+  1148. | 
+  1149* | 
+  1149. | 
+  1150* | 
+  1150. | 
+  1151* | 
+  1151. | 
+  1152* | 
+  1152. | 
+  1153* | 
+  1153. | 
+  1154* | 
+  1154. | 
+  1155* | 
+  1155. | 7
+  1156* | 
+  1156. | 
+  1157* | 
+  1157. | 
+  1158* | 
+  1158. | 
+  1159* | 
+  1159. | 
+  1160* | 
+  1160. | 
+  1161* | 
+  1161. | 
+  1162* | 
+  1162. | 
+  1163* | 
+  1163. | 
+  1164* | 
+  1164. | 
+  1165* | 
+  1165. | 
+  1166* | 
+  1166. | 
+  1167* | 
+  1167. | 
+  1168* | 
+  1168. | 
+  1169* | 
+  1169. | 
+  1170* | 
+  1170. | 
+  1171* | 
+  1171. | 
+  1172* | 
+  1172. | 
+  1173* | 
+  1173. | 
+  1174* | 
+  1174. | 
+  1175* | 
+  1175. | 
+  1176* | 
+  1176. | 
+  1177* | 
+  1177. | 
+  1178* | 
+  1178. | 
+  1179* | 
+  1179. | 
+  1180* | 
+  1180. | 
+  1181* | 
+  1181. | 
+  1182* | 
+  1182. | 
+  1183* | 
+  1183. | 
+  1184* | 
+  1184. | 
+  1185* | 
+  1185. | 
+  1186* | 
+  1186. | 
+  1187* | 
+  1187. | 
+  1188* | 
+  1188. | 
+  1189* | 
+  1189. | 
+  1190* | 
+  1190. | 
+  1191* | 
+  1191. | 
+  1192* | 
+  1192. | 
+  1193* | 
+  1193. | 
+  1194* | 
+  1194. | 
+  1195* | 
+  1195. | 
+  1196* | 
+  1196. | 
+  1197* | 
+  1197. | 
+  1198* | 
+  1198. | 
+  1199* | 
+  1199. | 
+  1200* | 
+  1200. | 
+  1201* | 
+  1201. | 
+  1202* | 
+  1202. | 
+  1203* | 
+  1203. | 
+  1204* | 
+  1204. | 
+  1205* | 
+  1205. | 
+  1206* | 
+  1206. | 
+  1207* | 
+  1207. | 
+  1208* | 
+  1208. | 
+  1209* | 
+  1209. | 
+  1210* | 
+  1210. | 
+  1211* | 
+  1211. | 
+  1212* | 
+  1212. | 
+  1213* | 
+  1213. | 
+  1214* | 
+  1214. | 
+  1215* | 
+  1215. | 
+  1216* | 
+  1216. | 
+  1217* | 
+  1217. | 
+  1218* | 
+  1218. | 
+  1219* | 
+  1219. | 
+  1220* | 
+  1220. | 
+  1221* | 
+  1221. | 
+  1222* | 
+  1222. | 
+  1223* | 
+  1223. | 
+  1224* | 
+  1224. | 
+  1225* | 
+  1225. | 
+  1226* | 
+  1226. | 
+  1227* | 
+  1227. | 
+  1228* | 
+  1228. | 
+  1229* | 
+  1229. | 
+  1230* | 
+  1230. | 
+  1231* | 
+  1231. | 
+  1232* | 
+  1232. | 
+  1233* | 
+  1233. | 
+  1234* | 
+  1234. | 
+  1235* | 
+  1235. | 
+  1236* | 
+  1236. | 
+  1237* | 
+  1237. | 
+  1238* | 
+  1238. | 
+  1239* | 
+  1239. | 
+  1240* | 
+  1240. | 
+  1241* | 
+  1241. | 
+  1242* | 
+  1242. | 
+  1243* | 
+  1243. | 
+  1244* | 
+  1244. | 
+  1245* | 
+  1245. | 
+  1246* | 
+  1246. | 
+  1247* | 
+  1247. | 
+  1248* | 
+  1248. | 
+  1249* | 
+  1249. | 
+  1250* | 
+  1250. | 
+  1251* | 
+  1251. | 
+  1252* | 
+  1252. | 
+  1253* | 
+  1253. | 
+  1254* | 
+  1254. | 
+  1255* | 
+  1255. | 
+  1256* | 
+  1256. | 
+  1257* | 
+  1257. | 
+  1258* | 
+  1258. | 
+  1259* | 
+  1259. | 
+  1260* | 
+  1260. | 
+  1261* | 
+  1261. | 
+  1262* | 
+  1262. | 
+  1263* | 
+  1263. | 
+  1264* | 
+  1264. | 
+  1265* | 
+  1265. | 
+  1266* | 
+  1266. | 
+  1267* | 
+  1267. | 
+  1268* | 
+  1268. | 
+  1269* | 
+  1269. | 
+  1270* | 
+  1270. | 
+  1271* | 
+  1271. | 
+  1272* | 
+  1272. | 
+  1273* | 
+  1273. | 
+  1274* | 
+  1274. | 
+  1275* | 
+  1275. | 
+  1276* | 
+  1276. | 
+  1277* | 
+  1277. | 
+  1278* | 
+  1278. | 
+  1279* | 
+  1279. | 
+  1280* | 
+  1280. | 
+  1281* | 
+  1281. | 
+  1282* | 
+  1282. | 
+  1283* | 
+  1283. | 
+  1284* | 
+  1284. | 
+  1285* | 
+  1285. | 
+  1286* | 
+  1286. | 
+  1287* | 
+  1287. | 
+  1288* | 
+  1288. | 
+  1289* | 
+  1289. | 
+  1290* | 
+  1290. | 
+  1291* | 
+  1291. | 
+  1292* | 
+  1292. | 
+  1293* | 
+  1293. | 
+  1294* | 
+  1294. | 
+  1295* | 
+  1295. | 5
+
+. capture noisily lv mpg
+
+ #     74              Mileage (mpg)
+             ---------------------------------
+ M     37.5 |                   15            |    spread  pseudosigma
+ F     19   |        12       17.5         23 |        11    8.197136
+ E     10   |        12       18.5         25 |        13    5.771728
+ D      5.5 |        12      20.75       29.5 |      17.5    5.914261
+ C      3   |        12         21         30 |        18    4.998033
+ B      2   |        12         21         30 |        18    4.486264
+ A      1.5 |        12       22.5         33 |        21    4.878974
+        1   |        12         24         36 |        24    5.102582
+            |                                 |
+            |                                 |   # below     # above
+inner fence |      -4.5                  39.5 |         0           0
+outer fence |       -21                    56 |         0           0
+
+. capture noisily lv price weight
+
+ #     74                  price
+             ---------------------------------
+ M     37.5 |                 4293            |    spread  pseudosigma
+ F     19   |      3423       4740       6057 |      2634    1962.841
+ E     10   |      2499     4732.5       6966 |      4467    1983.255
+ D      5.5 |    2361.5       5933     9504.5 |      7143    2414.032
+ C      3   |      1795     6541.5      11288 |      9493    2635.907
+ B      2   |      1626     6591.5      11557 |      9931    2475.171
+ A      1.5 |      1603     6929.5      12256 |     10653    2475.034
+        1   |      1580     7267.5      12955 |     11375    2418.411
+            |                                 |
+            |                                 |   # below     # above
+inner fence |      -528                 10008 |         0           5
+outer fence |     -4479                 13959 |         0           0
+
+ #     74                  weight
+             ---------------------------------
+ M     37.5 |               3157.5            |    spread  pseudosigma
+ F     19   |      2374       2976       3578 |      1204    897.2138
+ E     10   |      2084     3007.5       3931 |      1847    820.0294
+ D      5.5 |      1998    2983.25     3968.5 |    1970.5    665.9458
+ C      3   |      1712       2882       4052 |      2340    649.7443
+ B      2   |      1597       2831       4065 |      2468    615.1166
+ A      1.5 |      1199    2735.75     4272.5 |    3073.5    714.0727
+        1   |       801     2640.5       4480 |      3679    782.1833
+            |                                 |
+            |                                 |   # below     # above
+inner fence |       568                  5384 |         0           0
+outer fence |     -1238                  7190 |         0           0
+
+. capture noisily smooth 3RSSH, twice mpg, generate(smpg)
+variable twice not found
+
+. capture noisily smooth 4253H price, generate(sprice)
+
+. capture noisily list mpg smpg price sprice in 1/10
+variable smpg not found
+
+. 
+. * --- graphs (the log shows only the messages) ---
+. capture noisily quantile price
+
+. capture noisily symplot price
+
+. gen sdp = 300
+
+. capture noisily serrbar price sdp mpg
+
+. capture noisily dotplot mpg
+
+. capture noisily sunflower price weight
+Bin width          =   459.875
+Bin height         =   3254.23
+Bin aspect ratio   =   6.12829
+Max obs in a bin   =         9
+Light              =         3
+Dark               =        13
+X-center           =    3157.5
+Y-center           =      4293
+Petal weight       =         1
+------------------------------------------------------------------
+     flower      petal     No. of     No. of  estimated     actual
+       type     weight     petals    flowers       obs.       obs.
+------------------------------------------------------------------
+       none                                          10         10
+      light          1          3          3          9          9
+      light          1          4          4         16         16
+      light          1          5          3         15         15
+      light          1          7          1          7          7
+      light          1          8          1          8          8
+      light          1          9          1          9          9
+------------------------------------------------------------------
+                                                     74         74
+
+. capture noisily lpoly price weight, nograph generate(xg yg) n(20) bwidth(300)
+
+. capture noisily list xg yg in 1/5
+
+     +-----------------------+
+     |        xg          yg |
+     |-----------------------|
+  1. |       801           . |
+  2. | 994.63158   2889.6579 |
+  3. | 1188.2632   3262.3598 |
+  4. | 1381.8947   3449.2234 |
+  5. | 1575.5263   3078.3492 |
+     +-----------------------+
+
+. capture noisily cusum price mpg, generate(cs)
+Yvar has values outside range [0,1]
+
+. capture noisily gladder price
+
+. 
+. * --- ml ---
+. program define mylogit
+  1.     args lnf xb
+  2.     quietly replace `lnf' = ln(invlogit(`xb')) if $ML_y1 == 1
+  3.     quietly replace `lnf' = ln(invlogit(-`xb')) if $ML_y1 == 0
+  4. end
+
+. capture noisily ml model lf mylogit (foreign = mpg weight)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -51.292891
+alternative:   log likelihood = -51.081697
+rescale:       log likelihood = -50.619517
+Iteration 0:   log likelihood = -50.619517  
+Iteration 1:   log likelihood = -25.463855  
+Iteration 2:   log likelihood = -25.390038  
+Iteration 3:   log likelihood = -25.389476  
+Iteration 4:   log likelihood = -25.389475  
+
+                                                Number of obs     =         74
+                                                Wald chi2(2)      =      22.67
+Log likelihood = -25.389475                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2493173   .1401792     1.78   0.075     -.025429    .5240636
+      weight |  -.0014711   .0011385    -1.29   0.196    -.0037025    .0007603
+       _cons |  -.1661798   5.444888    -0.03   0.976    -10.83796     10.5056
+------------------------------------------------------------------------------
+
+. capture noisily ml model lf mylogit (foreign = mpg weight), vce(robust)
+
+. capture noisily ml maximize, nolog
+
+                                                Number of obs     =         74
+                                                Wald chi2(2)      =      31.51
+Log pseudolikelihood = -25.389475               Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |               Robust
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2493173   .1397339     1.78   0.074    -.0245561    .5231907
+      weight |  -.0014711    .001205    -1.22   0.222    -.0038328    .0008906
+       _cons |  -.1661798   5.795575    -0.03   0.977     -11.5253    11.19294
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  74
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -25.38947547854551
+         e(k_eq_model) =  1
+               e(df_m) =  2
+               e(chi2) =  31.51388808546785
+                  e(p) =  1.43498099931e-07
+
+macros:
+                e(cmd) : "ml"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+            e(predict) : "ml_p"
+            e(vcetype) : "Robust"
+                e(vce) : "robust"
+               e(user) : "mylogit"
+          e(ml_method) : "lf"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "foreign"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+       e(V_modelbased) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily mlexp (foreign*ln(invlogit({xb: mpg weight _cons})) + (1-foreign)*ln(invlogit(-{xb:})))
+initial:       log likelihood = -51.292891
+alternative:   log likelihood = -51.081697
+rescale:       log likelihood = -50.619517
+Iteration 0:   log likelihood = -50.619517  
+Iteration 1:   log likelihood = -25.463855  
+Iteration 2:   log likelihood = -25.390038  
+Iteration 3:   log likelihood = -25.389476  
+Iteration 4:   log likelihood = -25.389475  
+
+Maximum likelihood estimation
+
+Log likelihood = -25.389475                     Number of obs     =         74
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2493173   .1401792     1.78   0.075     -.025429    .5240636
+      weight |  -.0014711   .0011385    -1.29   0.196    -.0037025    .0007603
+       _cons |  -.1661798   5.444888    -0.03   0.976    -10.83796     10.5056
+------------------------------------------------------------------------------
+
+. capture noisily logit foreign mpg weight
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -25.459911  
+Iteration 2:   log likelihood = -25.390003  
+Iteration 3:   log likelihood = -25.389476  
+Iteration 4:   log likelihood = -25.389475  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(2)        =      50.45
+                                                Prob > chi2       =     0.0000
+Log likelihood = -25.389475                     Pseudo R2         =     0.4984
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2493173   .1401792     1.78   0.075     -.025429    .5240636
+      weight |  -.0014711   .0011385    -1.29   0.196    -.0037025    .0007603
+       _cons |  -.1661798   5.444888    -0.03   0.976    -10.83796     10.5056
+------------------------------------------------------------------------------
+
+. 
+. * --- resampling ---
+. set seed 1903
+
+. capture noisily jackknife r(mean) r(sd): summarize price
+(running summarize on estimation sample)
+
+Jackknife replications (74)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..................................................    50
+........................
+
+Jackknife results                               Number of obs     =         74
+                                                Replications      =         74
+
+      command:  summarize price
+        _jk_1:  r(mean)
+        _jk_2:  r(sd)
+          n():  r(N)
+
+------------------------------------------------------------------------------
+             |              Jackknife
+             |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _jk_1 |   4941.635   276.0555    17.90   0.000     4391.457    5491.813
+       _jk_2 |   2374.718   274.2402     8.66   0.000     1828.158    2921.278
+------------------------------------------------------------------------------
+
+. capture noisily jackknife: regress price weight
+(running regress on estimation sample)
+
+Jackknife replications (74)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..................................................    50
+........................
+
+Linear regression                               Number of obs     =         74
+                                                Replications      =         74
+                                                F(   1,     73)   =      26.91
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.2736
+                                                Adj R-squared     =     0.2635
+                                                Root MSE          =  2038.0169
+
+------------------------------------------------------------------------------
+             |              Jackknife
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   1.666421   .3212273     5.19   0.000     1.026215    2.306626
+       _cons |  -54.99175   849.7688    -0.06   0.949    -1748.578    1638.595
+------------------------------------------------------------------------------
+
+. capture noisily jackknife, cluster(rep78): regress price weight
+(running regress on estimation sample)
+missing values not allowed in cluster variable rep78
+
+. capture noisily permute foreign diff=(r(mu_2)-r(mu_1)), reps(100) nodots: ttest price, by(foreign)
+
+Warning:  Because ttest is not an estimation command or does not set e(sample), permute has no way to determine which observations are used in calculating the statistics and so assumes that all observations are used.  This means that no observations
+          will be excluded from the resampling because of missing values or other reasons.
+
+          If the assumption is not true, press Break, save the data, and drop the observations that are to be excluded.  Be sure that the dataset in memory contains only the relevant data.
+
+Monte Carlo permutation results                 Number of obs     =         74
+
+      command:  ttest price, by(foreign)
+         diff:  r(mu_2)-r(mu_1)
+  permute var:  foreign
+
+------------------------------------------------------------------------------
+T            |     T(obs)       c       n   p=c/n   SE(p) [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        diff |  -2108.027       2     100  0.0200  0.0140  .0024313   .0703839
+------------------------------------------------------------------------------
+Note: Confidence interval is with respect to p=c/n.
+Note: c = #{|T| >= |T(obs)|}
+
+. program define sim1, rclass
+  1.     drop _all
+  2.     set obs 30
+  3.     gen x = rnormal()
+  4.     summarize x
+  5.     return scalar m = r(mean)
+  6. end
+
+. capture noisily simulate m=r(m), reps(20) nodots: sim1
+
+      command:  sim1
+            m:  r(m)
+
+
+. capture noisily summarize m
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+           m |         20    .0131203     .116861  -.2661341    .253217
+
+. 
+. * --- model building ---
+. mkdata
+number of observations (_N) was 0, now 74
+(7 real changes made, 7 to missing)
+
+. capture noisily mkspline mpg1 20 mpg2 30 mpg3 = mpg
+
+. capture noisily summarize mpg1 mpg2 mpg3
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+        mpg1 |         74    15.67568    3.634342         12         20
+        mpg2 |         74    1.662162    3.075654          0         10
+        mpg3 |         74    .0810811    .6974858          0          6
+
+. capture noisily mkspline wsp = weight, cubic nknots(4) displayknots
+
+             |     knot1      knot2      knot3      knot4 
+-------------+--------------------------------------------
+      weight |      1984    2651.25     3389.5       3975 
+
+. capture noisily xi: regress price i.rep78 weight
+i.rep78           _Irep78_1-5         (naturally coded; _Irep78_1 omitted)
+
+      Source |       SS           df       MS      Number of obs   =        67
+-------------+----------------------------------   F(5, 61)        =      5.36
+       Model |   120996896         5  24199379.3   Prob > F        =    0.0004
+    Residual |   275182597        61  4511190.11   R-squared       =    0.3054
+-------------+----------------------------------   Adj R-squared   =    0.2485
+       Total |   396179493        66  6002719.59   Root MSE        =      2124
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   _Irep78_2 |  -410.8254   768.0873    -0.53   0.595    -1946.711     1125.06
+   _Irep78_3 |  -280.7317    787.662    -0.36   0.723    -1855.759    1294.296
+   _Irep78_4 |  -39.54489   752.8726    -0.05   0.958    -1545.007    1465.917
+   _Irep78_5 |  -1000.232   930.2584    -1.08   0.287    -2860.399    859.9342
+      weight |   1.682549    .360917     4.66   0.000      .960851    2.404247
+       _cons |   307.8707   1225.491     0.25   0.802     -2142.65    2758.392
+------------------------------------------------------------------------------
+
+. capture noisily drop _I*
+
+. capture noisily nestreg: regress price (weight) (length foreign)
+
+Block  1: weight
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(1, 72)        =     27.11
+       Model |   112614888         1   112614888   Prob > F        =    0.0000
+    Residual |   299052917        72  4153512.74   R-squared       =    0.2736
+-------------+----------------------------------   Adj R-squared   =    0.2635
+       Total |   411667805        73     5639285   Root MSE        =      2038
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   1.666421   .3200328     5.21   0.000     1.028447    2.304394
+       _cons |  -54.99175   988.4058    -0.06   0.956    -2025.343    1915.359
+------------------------------------------------------------------------------
+
+Block  2: length foreign
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(3, 70)        =     10.28
+       Model |   125888886         3  41962961.9   Prob > F        =    0.0000
+    Residual |   285778919        70  4082555.99   R-squared       =    0.3058
+-------------+----------------------------------   Adj R-squared   =    0.2761
+       Total |   411667805        73     5639285   Root MSE        =    2020.5
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   6.710968   3.691858     1.82   0.073    -.6522117    14.07415
+      length |   -91.5899   62.44246    -1.47   0.147    -216.1275    32.94766
+     foreign |  -738.2114   668.9319    -1.10   0.274    -2072.354    595.9312
+       _cons |   1264.579   1576.323     0.80   0.425    -1879.298    4408.457
+------------------------------------------------------------------------------
+
+
+  +-------------------------------------------------------------+
+  |       |          Block  Residual                     Change |
+  | Block |       F     df        df   Pr > F       R2    in R2 |
+  |-------+-----------------------------------------------------|
+  |     1 |   27.11      1        72   0.0000   0.2736          |
+  |     2 |    1.63      2        70   0.2041   0.3058   0.0322 |
+  +-------------------------------------------------------------+
+
+. capture noisily nestreg, lr: logit foreign (mpg) (weight price)
+
+Block  1: mpg
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -26.431275  
+Iteration 2:   log likelihood = -26.251598  
+Iteration 3:   log likelihood = -26.249236  
+Iteration 4:   log likelihood = -26.249236  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(1)        =      48.73
+                                                Prob > chi2       =     0.0000
+Log likelihood = -26.249236                     Pseudo R2         =     0.4814
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .4093906    .087533     4.68   0.000     .2378291    .5809521
+       _cons |  -7.235476   1.479477    -4.89   0.000     -10.1352   -4.335754
+------------------------------------------------------------------------------
+
+Block  2: weight price
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -25.339816  
+Iteration 2:   log likelihood = -25.269176  
+Iteration 3:   log likelihood = -25.268599  
+Iteration 4:   log likelihood = -25.268599  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(3)        =      50.69
+                                                Prob > chi2       =     0.0000
+Log likelihood = -25.268599                     Pseudo R2         =     0.5008
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2415453    .142469     1.70   0.090    -.0376887    .5207794
+      weight |   -.001357   .0011598    -1.17   0.242    -.0036301    .0009161
+       price |  -.0001018   .0002115    -0.48   0.630    -.0005164    .0003127
+       _cons |   .1300216   5.531626     0.02   0.981    -10.71177    10.97181
+------------------------------------------------------------------------------
+
+
+  +----------------------------------------------------------------+
+  | Block |        LL       LR     df  Pr > LR       AIC       BIC |
+  |-------+--------------------------------------------------------|
+  |     1 | -26.24924    48.73      1   0.0000  56.49847   61.1066 |
+  |     2 |  -25.2686     1.96      2   0.3751   58.5372  67.75346 |
+  +----------------------------------------------------------------+
+
+. capture noisily stepwise, pr(.2): regress price mpg weight length turn displacement
+                      begin with full model
+p = 0.9269 >= 0.2000  removing turn
+p = 0.8964 >= 0.2000  removing displacement
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(3, 70)        =     10.62
+       Model |   128758105         3  42919368.3   Prob > F        =    0.0000
+    Residual |   282909700        70  4041567.15   R-squared       =    0.3128
+-------------+----------------------------------   Adj R-squared   =    0.2833
+       Total |   411667805        73     5639285   Root MSE        =    2010.4
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |  -118.9122   85.37091    -1.39   0.168    -289.1791    51.35472
+      weight |   7.060134   3.670763     1.92   0.059    -.2609727    14.38124
+      length |  -106.9058   63.40344    -1.69   0.096      -233.36    19.54839
+       _cons |    4666.36   3556.596     1.31   0.194    -2427.047    11759.77
+------------------------------------------------------------------------------
+
+. capture noisily stepwise, pe(.1): regress price mpg weight length turn displacement
+                      begin with empty model
+p = 0.0000 <  0.1000  adding  weight
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(1, 72)        =     27.11
+       Model |   112614888         1   112614888   Prob > F        =    0.0000
+    Residual |   299052917        72  4153512.74   R-squared       =    0.2736
+-------------+----------------------------------   Adj R-squared   =    0.2635
+       Total |   411667805        73     5639285   Root MSE        =      2038
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   1.666421   .3200328     5.21   0.000     1.028447    2.304394
+       _cons |  -54.99175   988.4058    -0.06   0.956    -2025.343    1915.359
+------------------------------------------------------------------------------
+
+. capture noisily fp <weight>: regress price <weight> mpg
+(fitting 44 models)
+(....10%....20%....30%....40%....50%....60%....70%....80%....90%....100%)
+
+Fractional polynomial comparisons:
+-------------------------------------------------------------------------------
+      weight |   df    Deviance  Res. s.d.   Dev. dif.   P(*)   Powers
+-------------+-----------------------------------------------------------------
+     omitted |    0   1336.485   2048.918      2.845    0.617               
+      linear |    1   1334.535   2036.290      0.896    0.843   1           
+       m = 1 |    2   1334.233   2032.138      0.593    0.761   2           
+       m = 2 |    4   1333.640   2038.412      0.000       --   -.5 -.5     
+-------------------------------------------------------------------------------
+(*) P = sig. level of model with m = 2 based on F with 68 denominator dof.
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(3, 70)        =      9.69
+       Model |   120809188         3  40269729.3   Prob > F        =    0.0000
+    Residual |   290858617        70   4155123.1   R-squared       =    0.2935
+-------------+----------------------------------   Adj R-squared   =    0.2632
+       Total |   411667805        73     5639285   Root MSE        =    2038.4
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+    weight_1 |    2426010    1539245     1.58   0.120    -643916.5     5495936
+    weight_2 |  -463877.2   286249.5    -1.62   0.110     -1034784    107029.5
+         mpg |  -94.39119   90.50893    -1.04   0.301    -274.9056    86.12318
+       _cons |   30083.83   13187.45     2.28   0.026     3782.289    56385.38
+------------------------------------------------------------------------------
+
+. capture noisily mfp: regress price weight mpg length
+
+Deviance for model with all terms untransformed =  1331.589, 74 observations
+
+Variable     Model (vs.)   Deviance  Dev diff.   P      Powers   (vs.)
+----------------------------------------------------------------------
+weight       lin.   FP2    1331.589     1.797  0.645    1         2 3
+             Final         1331.589                     1
+
+length       lin.   FP2    1331.589     2.131  0.578    1         0 3
+             Final         1331.589                     1
+
+mpg          lin.   FP2    1331.589     1.445  0.720    1         3 3
+             Final         1331.589                     1
+
+
+Fractional polynomial fitting algorithm converged after 1 cycle.
+
+Transformations of covariates:
+
+-> gen double Iweig__1 = weight-2998.418919 if e(sample) 
+-> gen double Impg__1 = mpg-17.41891892 if e(sample) 
+-> gen double Ileng__1 = length-176.0675676 if e(sample) 
+
+Final multivariable fractional polynomial model for price
+--------------------------------------------------------------------
+    Variable |    -----Initial-----          -----Final-----
+             |   df     Select   Alpha    Status    df    Powers
+-------------+------------------------------------------------------
+      weight |    4     1.0000   0.0500     in      1     1
+         mpg |    4     1.0000   0.0500     in      1     1
+      length |    4     1.0000   0.0500     in      1     1
+--------------------------------------------------------------------
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(3, 70)        =     10.62
+       Model |   128758105         3  42919368.3   Prob > F        =    0.0000
+    Residual |   282909700        70  4041567.15   R-squared       =    0.3128
+-------------+----------------------------------   Adj R-squared   =    0.2833
+       Total |   411667805        73     5639285   Root MSE        =    2010.4
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+    Iweig__1 |   7.060134   3.670763     1.92   0.059    -.2609727    14.38124
+     Impg__1 |  -118.9122   85.37091    -1.39   0.168    -289.1791    51.35472
+    Ileng__1 |  -106.9058   63.40344    -1.69   0.096      -233.36    19.54839
+       _cons |   4941.635   233.7002    21.15   0.000     4475.535    5407.735
+------------------------------------------------------------------------------
+Deviance: 1331.589.
+
+. 
+. * --- after estimation ---
+. capture noisily regress price mpg weight
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(2, 71)        =     14.14
+       Model |   117267932         2  58633966.1   Prob > F        =    0.0000
+    Residual |   294399873        71  4146477.08   R-squared       =    0.2849
+-------------+----------------------------------   Adj R-squared   =    0.2647
+       Total |   411667805        73     5639285   Root MSE        =    2036.3
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |  -89.69494   84.67184    -1.06   0.293    -258.5258    79.13591
+      weight |    .986883   .7167612     1.38   0.173    -.4422983    2.416064
+       _cons |   3544.935   3538.912     1.00   0.320    -3511.454    10601.32
+------------------------------------------------------------------------------
+
+. capture noisily testnl _b[mpg]/_b[weight] = -.01
+
+  (1)  _b[mpg]/_b[weight] = -.01
+
+               chi2(1) =        0.38
+           Prob > chi2 =        0.5387
+
+. capture noisily linktest
+
+      Source |       SS           df       MS      Number of obs   =        74
+-------------+----------------------------------   F(2, 71)        =     14.44
+       Model |   119028756         2    59514378   Prob > F        =    0.0000
+    Residual |   292639049        71  4121676.75   R-squared       =    0.2891
+-------------+----------------------------------   Adj R-squared   =    0.2691
+       Total |   411667805        73     5639285   Root MSE        =    2030.2
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        _hat |   .1897269   1.253776     0.15   0.880    -2.310232    2.689686
+      _hatsq |   .0000892   .0001365     0.65   0.515    -.0001829    .0003613
+       _cons |   1684.781   2749.219     0.61   0.542    -3797.006    7166.567
+------------------------------------------------------------------------------
+
+. capture noisily logit foreign mpg weight
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -25.459911  
+Iteration 2:   log likelihood = -25.390003  
+Iteration 3:   log likelihood = -25.389476  
+Iteration 4:   log likelihood = -25.389475  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(2)        =      50.45
+                                                Prob > chi2       =     0.0000
+Log likelihood = -25.389475                     Pseudo R2         =     0.4984
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2493173   .1401792     1.78   0.075     -.025429    .5240636
+      weight |  -.0014711   .0011385    -1.29   0.196    -.0037025    .0007603
+       _cons |  -.1661798   5.444888    -0.03   0.976    -10.83796     10.5056
+------------------------------------------------------------------------------
+
+. capture noisily predictnl p1 = invlogit(xb()), se(sep1)
+
+. capture noisily summarize p1 sep1
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          p1 |         74    .4324324    .3786076   .0226457    .999515
+        sep1 |         74    .0623452    .0386793   .0008385   .2010854
+
+. capture noisily regress price i.rep78
+
+      Source |       SS           df       MS      Number of obs   =        67
+-------------+----------------------------------   F(4, 62)        =      0.95
+       Model |  22954950.2         4  5738737.55   Prob > F        =    0.4395
+    Residual |   373224543        62  6019750.69   R-squared       =    0.0579
+-------------+----------------------------------   Adj R-squared   =   -0.0028
+       Total |   396179493        66  6002719.59   Root MSE        =    2453.5
+
+------------------------------------------------------------------------------
+       price |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       rep78 |
+          2  |   -184.063   885.4858    -0.21   0.836    -1954.124    1585.998
+          3  |   -698.552   903.9694    -0.77   0.443    -2505.561    1108.457
+          4  |  -163.5059   869.1488    -0.19   0.851     -1900.91    1573.898
+          5  |  -1886.206   1051.937    -1.79   0.078    -3988.998    216.5866
+             |
+       _cons |   5491.706   595.0655     9.23   0.000     4302.187    6681.225
+------------------------------------------------------------------------------
+
+. capture noisily contrast rep78
+
+Contrasts of marginal linear predictions
+
+Margins      : asbalanced
+
+------------------------------------------------
+             |         df           F        P>F
+-------------+----------------------------------
+       rep78 |          4        0.95     0.4395
+             |
+ Denominator |         62
+------------------------------------------------
+
+. capture noisily contrast r.rep78
+
+Contrasts of marginal linear predictions
+
+Margins      : asbalanced
+
+------------------------------------------------
+             |         df           F        P>F
+-------------+----------------------------------
+       rep78 |
+   (2 vs 1)  |          1        0.04     0.8360
+   (3 vs 1)  |          1        0.60     0.4426
+   (4 vs 1)  |          1        0.04     0.8514
+   (5 vs 1)  |          1        3.22     0.0778
+      Joint  |          4        0.95     0.4395
+             |
+ Denominator |         62
+------------------------------------------------
+
+--------------------------------------------------------------
+             |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       rep78 |
+   (2 vs 1)  |   -184.063   885.4858     -1954.124    1585.998
+   (3 vs 1)  |   -698.552   903.9694     -2505.561    1108.457
+   (4 vs 1)  |  -163.5059   869.1488      -1900.91    1573.898
+   (5 vs 1)  |  -1886.206   1051.937     -3988.998    216.5866
+--------------------------------------------------------------
+
+. capture noisily pwcompare rep78, mcompare(bonferroni)
+
+Pairwise comparisons of marginal linear predictions
+
+Margins      : asbalanced
+
+---------------------------
+             |    Number of
+             |  Comparisons
+-------------+-------------
+       rep78 |           10
+---------------------------
+
+--------------------------------------------------------------
+             |                                 Bonferroni
+             |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       rep78 |
+     2 vs 1  |   -184.063   885.4858     -2761.683    2393.557
+     3 vs 1  |   -698.552   903.9694     -3329.977    1932.873
+     4 vs 1  |  -163.5059   869.1488     -2693.569    2366.558
+     5 vs 1  |  -1886.206   1051.937      -4948.36    1175.948
+     3 vs 2  |   -514.489   945.0079     -3265.376    2236.398
+     4 vs 2  |   20.55714   911.7559     -2633.534    2674.648
+     5 vs 2  |  -1702.143   1087.406     -4867.545    1463.259
+     4 vs 3  |   535.0462   929.7174      -2171.33    3241.423
+     5 vs 3  |  -1187.654   1102.509     -4397.022    2021.714
+     5 vs 4  |    -1722.7   1074.144     -4849.498    1404.098
+--------------------------------------------------------------
+
+. capture noisily pwcompare rep78, mcompare(tukey) effects
+
+Pairwise comparisons of marginal linear predictions
+
+Margins      : asbalanced
+
+---------------------------
+             |    Number of
+             |  Comparisons
+-------------+-------------
+       rep78 |           10
+---------------------------
+
+------------------------------------------------------------------------------
+             |                              Tukey                Tukey
+             |   Contrast   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       rep78 |
+     2 vs 1  |   -184.063   885.4858    -0.21   1.000     -2671.99    2303.864
+     3 vs 1  |   -698.552   903.9694    -0.77   0.937    -3238.412    1841.308
+     4 vs 1  |  -163.5059   869.1488    -0.19   1.000    -2605.531     2278.52
+     5 vs 1  |  -1886.206   1051.937    -1.79   0.387    -4841.807    1069.395
+     3 vs 2  |   -514.489   945.0079    -0.54   0.982    -3169.654    2140.676
+     4 vs 2  |   20.55714   911.7559     0.02   1.000     -2541.18    2582.295
+     5 vs 2  |  -1702.143   1087.406    -1.57   0.525    -4757.399    1353.113
+     4 vs 3  |   535.0462   929.7174     0.58   0.978    -2077.157     3147.25
+     5 vs 3  |  -1187.654   1102.509    -1.08   0.817    -4285.346    1910.038
+     5 vs 4  |    -1722.7   1074.144    -1.60   0.501    -4740.695    1295.295
+------------------------------------------------------------------------------
+
+. capture noisily pwmean price, over(rep78) mcompare(sidak)
+
+Pairwise comparisons of means with equal variances
+
+over         : rep78
+
+---------------------------
+             |    Number of
+             |  Comparisons
+-------------+-------------
+       rep78 |           10
+---------------------------
+
+--------------------------------------------------------------
+             |                                   Sidak
+       price |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       rep78 |
+     2 vs 1  |   -184.063   885.4858     -2754.437    2386.311
+     3 vs 1  |   -698.552   903.9694      -3322.58    1925.476
+     4 vs 1  |  -163.5059   869.1488     -2686.457    2359.446
+     5 vs 1  |  -1886.206   1051.937     -4939.752    1167.341
+     3 vs 2  |   -514.489   945.0079     -3257.643    2228.665
+     4 vs 2  |   20.55714   911.7559     -2626.074    2667.188
+     5 vs 2  |  -1702.143   1087.406     -4858.647    1454.361
+     4 vs 3  |   535.0462   929.7174     -2163.723    3233.815
+     5 vs 3  |  -1187.654   1102.509         -4388    2012.692
+     5 vs 4  |    -1722.7   1074.144     -4840.708    1395.308
+--------------------------------------------------------------
+
+. capture noisily logit foreign mpg
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -26.431275  
+Iteration 2:   log likelihood = -26.251598  
+Iteration 3:   log likelihood = -26.249236  
+Iteration 4:   log likelihood = -26.249236  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(1)        =      48.73
+                                                Prob > chi2       =     0.0000
+Log likelihood = -26.249236                     Pseudo R2         =     0.4814
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .4093906    .087533     4.68   0.000     .2378291    .5809521
+       _cons |  -7.235476   1.479477    -4.89   0.000     -10.1352   -4.335754
+------------------------------------------------------------------------------
+
+. capture noisily estimates store a
+
+. capture noisily logit foreign weight
+
+Iteration 0:   log likelihood = -50.615144  
+Iteration 1:   log likelihood = -27.498751  
+Iteration 2:   log likelihood = -27.274587  
+Iteration 3:   log likelihood = -27.270344  
+Iteration 4:   log likelihood = -27.270343  
+
+Logistic regression                             Number of obs     =         74
+                                                LR chi2(1)        =      46.69
+                                                Prob > chi2       =     0.0000
+Log likelihood = -27.270343                     Pseudo R2         =     0.4612
+
+------------------------------------------------------------------------------
+     foreign |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |  -.0032904   .0006959    -4.73   0.000    -.0046544   -.0019263
+       _cons |   9.430738   2.067309     4.56   0.000     5.378887    13.48259
+------------------------------------------------------------------------------
+
+. capture noisily estimates store b
+
+. capture noisily suest a b
+
+Simultaneous results for a, b
+
+                                                Number of obs     =         74
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+a_foreign    |
+         mpg |   .4093906   .0762657     5.37   0.000     .2599126    .5588686
+       _cons |  -7.235476   1.383435    -5.23   0.000    -9.946959   -4.523993
+-------------+----------------------------------------------------------------
+b_foreign    |
+      weight |  -.0032904   .0006717    -4.90   0.000    -.0046068   -.0019739
+       _cons |   9.430738   1.935147     4.87   0.000     5.637919    13.22356
+------------------------------------------------------------------------------
+
+. capture noisily tobit mpg weight, ll(15)
+
+Tobit regression                                Number of obs     =         74
+                                                LR chi2(1)        =     109.40
+                                                Prob > chi2       =     0.0000
+Log likelihood = -100.12709                     Pseudo R2         =     0.3533
+
+------------------------------------------------------------------------------
+         mpg |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   -.010461   .0009015   -11.60   0.000    -.0122577   -.0086644
+       _cons |   46.84353   2.306202    20.31   0.000     42.24728    51.43979
+-------------+----------------------------------------------------------------
+      /sigma |   3.257531   .3926928                      2.474895    4.040166
+------------------------------------------------------------------------------
+            39  left-censored observations at mpg <= 15
+            35     uncensored observations
+             0 right-censored observations
+
+. capture noisily margins, dydx(weight)
+
+Average marginal effects                        Number of obs     =         74
+Model VCE    : OIM
+
+Expression   : Linear prediction, predict()
+dy/dx w.r.t. : weight
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      dy/dx   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      weight |   -.010461   .0009015   -11.60   0.000    -.0122279   -.0086942
+------------------------------------------------------------------------------
+
+. capture noisily ologit rep78 mpg weight
+
+Iteration 0:   log likelihood = -106.00235  
+Iteration 1:   log likelihood = -99.899272  
+Iteration 2:   log likelihood = -99.739428  
+Iteration 3:   log likelihood = -99.739122  
+Iteration 4:   log likelihood = -99.739122  
+
+Ordered logistic regression                     Number of obs     =         67
+                                                LR chi2(2)        =      12.53
+                                                Prob > chi2       =     0.0019
+Log likelihood = -99.739122                     Pseudo R2         =     0.0591
+
+------------------------------------------------------------------------------
+       rep78 |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .2724758   .0866362     3.15   0.002      .102672    .4422796
+      weight |   .0015931   .0007069     2.25   0.024     .0002077    .0029785
+-------------+----------------------------------------------------------------
+       /cut1 |   8.231459   3.504152                      1.363448    15.09947
+       /cut2 |   9.252291   3.525505                      2.342428    16.16215
+       /cut3 |   10.18152   3.566515                      3.191275    17.17176
+       /cut4 |   11.76292   3.658354                      4.592682    18.93317
+------------------------------------------------------------------------------
+
+. capture noisily margins, predict(outcome(3))
+
+Predictive margins                              Number of obs     =         67
+Model VCE    : OIM
+
+Expression   : Pr(rep78==3), predict(outcome(3))
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _cons |   .1953859   .0479504     4.07   0.000     .1014047     .289367
+------------------------------------------------------------------------------
+
+. capture noisily oprobit rep78 mpg weight
+
+Iteration 0:   log likelihood = -106.00235  
+Iteration 1:   log likelihood = -100.17846  
+Iteration 2:   log likelihood = -100.17074  
+Iteration 3:   log likelihood = -100.17074  
+
+Ordered probit regression                       Number of obs     =         67
+                                                LR chi2(2)        =      11.66
+                                                Prob > chi2       =     0.0029
+Log likelihood = -100.17074                     Pseudo R2         =     0.0550
+
+------------------------------------------------------------------------------
+       rep78 |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .1462358   .0489844     2.99   0.003     .0502282    .2422435
+      weight |   .0008229   .0004061     2.03   0.043     .0000271    .0016188
+-------------+----------------------------------------------------------------
+       /cut1 |   4.267751   2.007426                      .3332674    8.202234
+       /cut2 |    4.87351   2.012204                      .9296613    8.817358
+       /cut3 |   5.428997   2.026156                      1.457803     9.40019
+       /cut4 |   6.323019   2.059466                       2.28654     10.3595
+------------------------------------------------------------------------------
+
+. capture noisily margins, dydx(mpg) predict(outcome(5))
+
+Average marginal effects                        Number of obs     =         67
+Model VCE    : OIM
+
+Expression   : Pr(rep78==5), predict(outcome(5))
+dy/dx w.r.t. : mpg
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      dy/dx   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         mpg |   .0255805   .0097141     2.63   0.008     .0065413    .0446198
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1903_base_stats.log
+  log type:  text
+ closed on:  20 Oct 2026, 08:45:45
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
