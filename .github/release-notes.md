@@ -1,17 +1,17 @@
 **English** · [Português](#português)
 
-## What's new in 0.3
+## What's new in 0.4
 
-**If your copy says it is 0.2.0 and keeps offering 0.2.2:** versions 0.2.1 and 0.2.2 were built with the number 0.2.0 inside, so they kept offering the same update. This release fixes it: install it once and the updates work again.
+New since 0.3:
 
-New since 0.2:
+- time series: `arima` with seasonal and multiplicative terms, `condition` and `diffuse`; `arch` (ARCH, GARCH and the other variance terms, ARCH-M, t and GED errors), `arfima`, `mgarch`, `ucm`, `sspace` and `dfactor`; `var` with `varlmar`, `varnorm`, `varstable`, `varwle`, `varbasic` and `fcast`; `vecrank`, `vec` and `svar`; `irf` with bootstrap errors, `irf ctable`, `cgraph` and `ograph`; `dfgls`, `pperron`, `prais`, the spectral and white-noise tools, `tsfilter`, `tssmooth`, `tsappend`, `tsfill`, `tsreport` and `rolling`;
+- survival: `strate`, `stptime`, `stci`, `stir`, `stmh`, `stmc`, `ltable`, `stsplit`, `stjoin`, `stfill`, `stcrreg` (Fine-Gray), `stcurve`, `streg` with generalized gamma and frailty, and count-time data (`ctset`, `ct`, `cttost`, `sttoct`, `sttocc`);
+- multilevel models: `meglm` and its family (`mecloglog`, `menbreg`, `meologit`, `meoprobit`, `meqrlogit`, `meqrpoisson`), `mestreg` and crossed random effects in `mixed`;
+- base statistics: `jackknife`, `permute` and `simulate`; `ml` with its evaluators and `mlexp`; `mkspline`, `xi`, `nestreg`, `stepwise` and `fp`/`mfp`; `testnl`, `predictnl`, `linktest`, `contrast`, `pwcompare`, `pwmean` and `suest`; `boxcox`, `ladder`, `bitest`, `ksmirnov`, `icc`, `loneway`, `esize`, `lv`, `stem`, `lpoly` and more;
+- programming: `unab` and the other variable-list tools, `mark`/`markout`, `postfile`, `matlist`, `tabdisp`, `sortpreserve`;
+- epidemiology and data management: pooled and standardized `cs`/`cc`/`ir`, `rocreg`, binary `file` reading and writing, `import sas`/`spss`, and more options of `describe` and `list`.
 
-- epidemiology: `cs`, `cc`, `ir` and `mcc` and their immediate forms, with Mantel-Haenszel stratification; `tabodds`, `mhodds`, `symmetry`, `dstdize` and `istdize`; interrater agreement with `kap` and `kappa`; ROC analysis with `roctab`, `roccomp`, `rocfit`, `lroc` and `lsens`;
-- data management: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; files and folders (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); example datasets (`sysuse`, `webuse`); ICD-9-CM and ICD-10-CM codes (`icd9`, `icd10`); `odbc`; business calendars (`bcal`);
-- `sem` (path models, confirmatory factor analysis and latent variables, `estat gof`), `power` (means, proportions and correlations) and `irf` after `var`;
-- `xtgee` and `xtreg, pa`/`be`/`mle`; `anova` with sequential sums of squares, nested terms, error terms and repeated measures; two-way `tabulate, summarize()`; `ci variances`; two-sample `prtest`; `misstable tree` and `nested`; `reshape error`; the old `merge` syntax; `export excel` to `.xls`;
-- error explanations for beginners, with a diagnosis from the data and a clickable link to the help;
-- `replace y = 2*L.y` is now sequential, as in Stata; `sample #, count` with # at least the number of observations no longer draws random numbers, as in Stata.
+Results of the new commands were checked against Stata 14 reference logs; the few remaining differences are listed in the repository.
 
 The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10), and the [coverage map](https://yaskepalhares.github.io/opendta/) shows the progress.
 
@@ -57,18 +57,18 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.3
+### Novidades da 0.4
 
-**Se a sua cópia diz que é a 0.2.0 e fica oferecendo a 0.2.2:** as versões 0.2.1 e 0.2.2 foram geradas com o número 0.2.0 por dentro, por isso ofereciam sempre a mesma atualização. Esta versão corrige isso: instale-a uma vez e as atualizações voltam a funcionar.
+Novo desde a 0.3:
 
-Novo desde a 0.2:
+- séries temporais: `arima` com termos sazonais e multiplicativos, `condition` e `diffuse`; `arch` (ARCH, GARCH e os outros termos de variância, ARCH-M, erros t e GED), `arfima`, `mgarch`, `ucm`, `sspace` e `dfactor`; `var` com `varlmar`, `varnorm`, `varstable`, `varwle`, `varbasic` e `fcast`; `vecrank`, `vec` e `svar`; `irf` com erros bootstrap, `irf ctable`, `cgraph` e `ograph`; `dfgls`, `pperron`, `prais`, as ferramentas espectrais e de ruído branco, `tsfilter`, `tssmooth`, `tsappend`, `tsfill`, `tsreport` e `rolling`;
+- sobrevivência: `strate`, `stptime`, `stci`, `stir`, `stmh`, `stmc`, `ltable`, `stsplit`, `stjoin`, `stfill`, `stcrreg` (Fine-Gray), `stcurve`, `streg` com gama generalizada e fragilidade, e dados de contagem no tempo (`ctset`, `ct`, `cttost`, `sttoct`, `sttocc`);
+- modelos multinível: `meglm` e sua família (`mecloglog`, `menbreg`, `meologit`, `meoprobit`, `meqrlogit`, `meqrpoisson`), `mestreg` e efeitos aleatórios cruzados no `mixed`;
+- estatística básica: `jackknife`, `permute` e `simulate`; `ml` com seus avaliadores e `mlexp`; `mkspline`, `xi`, `nestreg`, `stepwise` e `fp`/`mfp`; `testnl`, `predictnl`, `linktest`, `contrast`, `pwcompare`, `pwmean` e `suest`; `boxcox`, `ladder`, `bitest`, `ksmirnov`, `icc`, `loneway`, `esize`, `lv`, `stem`, `lpoly` e outros;
+- programação: `unab` e as demais ferramentas de listas de variáveis, `mark`/`markout`, `postfile`, `matlist`, `tabdisp`, `sortpreserve`;
+- epidemiologia e manipulação de dados: `cs`/`cc`/`ir` com combinação e padronização, `rocreg`, leitura e escrita binária com `file`, `import sas`/`spss` e mais opções de `describe` e `list`.
 
-- epidemiologia: `cs`, `cc`, `ir` e `mcc` e suas formas imediatas, com estratificação de Mantel-Haenszel; `tabodds`, `mhodds`, `symmetry`, `dstdize` e `istdize`; concordância entre avaliadores com `kap` e `kappa`; análise ROC com `roctab`, `roccomp`, `rocfit`, `lroc` e `lsens`;
-- manipulação de dados: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; arquivos e pastas (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); dados de exemplo (`sysuse`, `webuse`); códigos ICD-9-CM e ICD-10-CM (`icd9`, `icd10`); `odbc`; calendários de dias úteis (`bcal`);
-- `sem` (modelos de caminhos, análise fatorial confirmatória e variáveis latentes, `estat gof`), `power` (médias, proporções e correlações) e `irf` depois do `var`;
-- `xtgee` e `xtreg, pa`/`be`/`mle`; `anova` com somas de quadrados sequenciais, termos aninhados, termos de erro e medidas repetidas; `tabulate, summarize()` de duas entradas; `ci variances`; `prtest` de duas amostras; `misstable tree` e `nested`; `reshape error`; a sintaxe antiga do `merge`; `export excel` para `.xls`;
-- explicações de erro para iniciantes, com diagnóstico a partir dos dados e link clicável para a ajuda;
-- `replace y = 2*L.y` agora é sequencial, como no Stata; `sample #, count` com # maior ou igual ao número de observações não sorteia mais números aleatórios, como no Stata.
+Os resultados dos comandos novos foram conferidos com logs de referência do Stata 14; as poucas diferenças restantes estão listadas no repositório.
 
 Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10), e o [mapa de cobertura](https://yaskepalhares.github.io/opendta/?lang=pt) mostra o progresso.
 
