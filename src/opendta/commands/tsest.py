@@ -26,3 +26,18 @@ def cmd_pperron(s: "Session", args: str) -> None:
 def cmd_prais(s: "Session", args: str) -> None:
     from ..estimation.prais import cmd_prais as run
     run(s, args)
+
+
+def _varpost(name):
+    def run(s: "Session", args: str) -> None:
+        from ..estimation import varpost
+        getattr(varpost, f"cmd_{name}")(s, args)
+    run.__name__ = f"cmd_{name}"
+    return run
+
+
+for _n in ("varlmar", "varnorm", "varstable", "varwle"):
+    command(_n, _n)(_varpost(_n))
+
+
+command("fcast", "fcast")(_varpost("fcast"))

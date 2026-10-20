@@ -528,7 +528,8 @@ def cmd_var(s: "Session", args: str) -> None:
     est.extra = {"N": float(T), "ll": ll, "aic": aic, "hqic": hqic, "sbic": sbic, "fpe": fpe, "det": det,
                  "eqstats": eqstats, "sample": _sample_text(s, t0, t1), "small": small}
     est.var = {"deps": deps, "lags": lags, "exog": exog, "xnames": xnames, "B": B, "Sig": Sig,
-               "XtXi": XtXi, "T": T}
+               "XtXi": XtXi, "T": T, "U": U, "X": Xo, "Y": Yo, "Sml": Sml, "t0": t0, "t1": t1,
+               "constant": constant, "small": small, "dfk": bool(o.get("dfk"))}
     est.display = display_var
     est.predict = _predict_var
     est.predict_opts = {"equation": 2}
