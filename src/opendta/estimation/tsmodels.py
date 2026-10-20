@@ -107,8 +107,9 @@ def _lags(text) -> list[int]:
 
 
 class _ARMA:
-    def __init__(self, ar: list[int], ma: list[int]):
+    def __init__(self, ar: list[int], ma: list[int], *, cond: bool = False, diffuse: bool = False):
         self.ar, self.ma = ar, ma
+        self.cond, self.diffuse = cond, diffuse
         self.P = max(ar) if ar else 0
         self.Q = max(ma) if ma else 0
         self.r = max(self.P, self.Q + 1)
@@ -118,6 +119,8 @@ class _ARMA:
         r = self.r
         if sigma <= 0:
             return None
+        if self.cond:
+            return self._conditional(e, phi, theta, sigma)
         T = np.zeros((r, r))
         for lag, c in zip(self.ar, phi):
             T[lag - 1, 0] = c
@@ -131,7 +134,7 @@ class _ARMA:
             return None
         RR = np.outer(R, R) * sigma ** 2
         try:
-            Pm = linalg.solve_discrete_lyapunov(T, RR)
+            Pm = np.eye(r) * 1e6 if self.diffuse else linalg.solve_discrete_lyapunov(T, RR)   # VERIFY: kappa
         except (np.linalg.LinAlgError, ValueError):
             return None
         a = np.zeros(r)
@@ -149,6 +152,49 @@ class _ARMA:
             Pm = T @ Pm @ T.T - np.outer(K, K) * F + RR
         self.pred = pred
         return out
+
+    def _conditional(self, e: np.ndarray, phi: np.ndarray, theta: np.ndarray, sigma: float):
+        """Conditional likelihood: the first max(ar lags) observations only condition; presample
+        innovations are zero."""
+        n = len(e)
+        p0 = self.P
+        eps = np.zeros(n)
+        pred = np.zeros(n)
+        for t in range(n):
+            if t < p0:
+                continue
+            m = sum(c * e[t - lag] for lag, c in zip(self.ar, phi))
+            m += sum(c * eps[t - lag] for lag, c in zip(self.ma, theta) if t - lag >= 0)
+            pred[t] = m
+            eps[t] = e[t] - m
+        out = np.zeros(n)
+        out[p0:] = -0.5 * (math.log(2 * math.pi * sigma ** 2) + eps[p0:] ** 2 / sigma ** 2)
+        self.pred = pred
+        return out
+
+
+def _expand_seasonal(phi, theta, sphi, stheta, ar, ma, sar, sma, period):
+    """Coefficients (and their lags) of the multiplicative ARMA: (1 - phi(L))(1 - Phi(L^s)) and
+    (1 + theta(L))(1 + Theta(L^s)). Returns (ar_lags, phi_full, ma_lags, theta_full)."""
+    pa = max(ar + [lg * period for lg in sar] + [0])
+    pm = max(ma + [lg * period for lg in sma] + [0])
+    A = np.zeros(pa + 1); A[0] = 1.0
+    for lag, c in zip(ar, phi):
+        A[lag] -= c
+    SA = np.zeros(pa + 1); SA[0] = 1.0
+    for lag, c in zip(sar, sphi):
+        SA[lag * period] -= c
+    Af = np.convolve(A[:max(ar + [0]) + 1], SA[:max([lg * period for lg in sar] + [0]) + 1])
+    M_ = np.zeros(pm + 1); M_[0] = 1.0
+    for lag, c in zip(ma, theta):
+        M_[lag] += c
+    SM = np.zeros(pm + 1); SM[0] = 1.0
+    for lag, c in zip(sma, stheta):
+        SM[lag * period] += c
+    Mf = np.convolve(M_[:max(ma + [0]) + 1], SM[:max([lg * period for lg in sma] + [0]) + 1])
+    ar_l = list(range(1, len(Af)))
+    ma_l = list(range(1, len(Mf)))
+    return ar_l, -Af[1:], ma_l, Mf[1:]
 
 
 def _hr_start(e: np.ndarray, ar: list[int], ma: list[int]) -> np.ndarray:
@@ -187,10 +233,8 @@ def cmd_arima(s: "Session", args: str) -> None:
     body, opts = (args, "") if c == -1 else (args[:c], args[c + 1:])
     spec = {"ar": 2, "ma": 2, "arima": 5, "sarima": 6, "noconstant": 4, "vce": 3, "nolog": 4, "log": 3,
             "iterate": 4, "level": 1, "condition": 4, "diffuse": 4, "technique": 4, "tolerance": 3,
-            "ltolerance": 4, "nrtolerance": 4, "robust": 1}
+            "ltolerance": 4, "nrtolerance": 4, "robust": 1, "mar": 3, "mma": 3}
     o = match_options(opts, spec) if opts.strip() else {}
-    if o.get("sarima") or o.get("condition") or o.get("diffuse"):
-        raise StataError(198, "sarima(), condition and diffuse are not available in OpenDTA")   # OpenDTA
     ar, ma = _lags(o.get("ar")), _lags(o.get("ma"))
     from ..lang.syntax import parse_standard
     p = parse_standard(body)
@@ -204,6 +248,27 @@ def cmd_arima(s: "Session", args: str) -> None:
         if d:
             pre = "D." if d == 1 else f"D{d}."
             toks = [pre + t if not t.startswith(("i.", "c.")) else t for t in toks]
+    # seasonal terms: sarima(P,D,Q,s) with all seasonal lags, mar(numlist, s) and mma(numlist, s)
+    sar, sma, period = [], [], 0
+    if isinstance(o.get("sarima"), str):
+        nums = [int(float(v)) for v in o["sarima"].replace(",", " ").split()]
+        if len(nums) != 4 or nums[3] < 1:
+            raise StataError(198, "sarima() invalid")   # VERIFY
+        pp_, dd_, qq_, period = nums
+        sar, sma = list(range(1, pp_ + 1)), list(range(1, qq_ + 1))
+        if dd_:
+            pre = (f"S{period}." if period > 1 else "S.") * dd_
+            toks = [pre + t if not t.startswith(("i.", "c.")) else t for t in toks]
+    for key, dest in (("mar", "sar"), ("mma", "sma")):
+        if isinstance(o.get(key), str):
+            lst, _c, per = o[key].rpartition(",")
+            if not _c:
+                raise StataError(198, f"{key}() invalid")   # VERIFY
+            if period and int(float(per)) != period:
+                raise StataError(198, "seasonal periods differ")   # VERIFY
+            period = int(float(per))
+            (sar if dest == "sar" else sma).extend(x for x in _lags(lst) if x not in (sar if dest == "sar" else sma))
+    sar.sort(); sma.sort()
     rest_opts = " ".join(f"{k}({v})" if isinstance(v, str) else k for k, v in o.items()
                          if k in ("noconstant", "level", "vce", "robust"))
     text = " ".join(toks)
@@ -224,15 +289,26 @@ def cmd_arima(s: "Session", args: str) -> None:
     X = X[order]
     y = smp.y.astype(float)[order]
     k = X.shape[1]
-    arma = _ARMA(ar, ma)
-    na, nm = len(ar), len(ma)
+    na, nm, nsa, nsm = len(ar), len(ma), len(sar), len(sma)
+    seasonal = bool(nsa or nsm)
+    if seasonal:
+        ar_f, _x, ma_f, _y = _expand_seasonal([0] * na, [0] * nm, [0] * nsa, [0] * nsm, ar, ma, sar, sma, period)
+    else:
+        ar_f, ma_f = ar, ma
+    arma = _ARMA(ar_f, ma_f, cond=bool(o.get("condition")), diffuse=bool(o.get("diffuse")))
 
-    def unpack(b):
-        return b[:k], b[k:k + na], b[k + na:k + na + nm], b[-1]
+    def expand(b):
+        """Coefficients of the (multiplicative) ARMA polynomials from the parameter vector."""
+        ph, th = b[k:k + na], b[k + na:k + na + nm]
+        if not seasonal:
+            return ph, th
+        sph, sth = b[k + na + nm:k + na + nm + nsa], b[k + na + nm + nsa:k + na + nm + nsa + nsm]
+        _a, phf, _m, thf = _expand_seasonal(ph, th, sph, sth, ar, ma, sar, sma, period)
+        return phf, thf
 
     def contrib(b):
-        beta, phi, theta, sigma = unpack(b)
-        return arma.contributions(y - X @ beta, phi, theta, sigma)
+        phf, thf = expand(b)
+        return arma.contributions(y - X @ b[:k], phf, thf, b[-1])
 
     def ll(b):
         c_ = contrib(b)
@@ -245,10 +321,14 @@ def cmd_arima(s: "Session", args: str) -> None:
 
     beta0 = np.linalg.lstsq(X, y, rcond=None)[0] if k else np.zeros(0)
     res0 = y - X @ beta0
-    arma0, sig0 = _hr_start(res0, ar, ma)
+    arma0, sig0 = _hr_start(res0, ar + [lg * period for lg in sar], ma + [lg * period for lg in sma])
+    if seasonal:
+        # regression order: ar, seasonal ar, ma, seasonal ma -> ar, ma, seasonal ar, seasonal ma
+        arma0 = np.concatenate([arma0[:na], arma0[na + nsa:na + nsa + nm], arma0[na:na + nsa],
+                                arma0[na + nsa + nm:]])
     b0 = np.concatenate([beta0, arma0, [sig0 or float(np.std(res0)) or 1.0]])
     if not np.isfinite(ll(b0)):
-        b0 = np.concatenate([beta0, np.zeros(na + nm), [float(np.std(res0)) or 1.0]])
+        b0 = np.concatenate([beta0, np.zeros(na + nm + nsa + nsm), [float(np.std(res0)) or 1.0]])
     r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **ml_options(o))
     # the estimates are those of the last iteration, as in Stata (compat 1101: with the same
     # starting values the BHHH log and the estimates match); the variance needs the Hessian there
@@ -283,9 +363,11 @@ def cmd_arima(s: "Session", args: str) -> None:
     pv = float(chi2_tail(chi2, len(idx))) if idx and chi2 < SYS else SYS
     base = smp.depcomp.name if hasattr(smp.depcomp, "name") else smp.depname.split(".")[-1]
     eqname = smp.depname.split(".")[-1]
+    seq = f"ARMA{period}"
     names = [col.name for col in est_cols] + (["_cons"] if smp.constant else []) + \
-        [f"L{l}.ar" if l > 1 else "L.ar" for l in ar] + [f"L{l}.ma" if l > 1 else "L.ma" for l in ma] + ["_cons"]
-    eqs = [eqname] * k + ["ARMA"] * (na + nm) + ["sigma"]
+        [f"L{l}.ar" if l > 1 else "L.ar" for l in ar] + [f"L{l}.ma" if l > 1 else "L.ma" for l in ma] + \
+        [f"L{l}.ar" if l > 1 else "L.ar" for l in sar] + [f"L{l}.ma" if l > 1 else "L.ma" for l in sma] + ["_cons"]
+    eqs = [eqname] * k + ["ARMA"] * (na + nm) + [seq] * (nsa + nsm) + ["sigma"]
     se = np.sqrt(np.maximum(np.diag(V), 0))
     bmap = {col.name: b[i] for i, col in enumerate(est_cols)}
     semap = {col.name: se[i] for i, col in enumerate(est_cols)}
@@ -310,6 +392,19 @@ def cmd_arima(s: "Session", args: str) -> None:
                 rows.append(CoefRow("coef", f"L{l}.", b[j], se[j], name=f"ARMA:L{l}.{lab}"))
                 j += 1
         rows.append(CoefRow("sep"))
+    if nsa + nsm:
+        rows.append(CoefRow("eq", seq))
+        j = k + na + nm
+        for lab, lags in (("ar", sar), ("ma", sma)):
+            if not lags:
+                continue
+            if rows[-1].kind != "eq":
+                rows.append(CoefRow("blank"))
+            rows.append(CoefRow("header", lab))
+            for l in lags:
+                rows.append(CoefRow("coef", f"L{l}.", b[j], se[j], name=f"{seq}:L{l}.{lab}"))
+                j += 1
+        rows.append(CoefRow("sep"))
     rows.append(CoefRow("coef", "/sigma", b[-1], se[-1], name="sigma:_cons"))
     est = Estimates("arima", smp.depname, names, b, V, n, "z", None)
     est.eqnames = eqs
@@ -320,11 +415,12 @@ def cmd_arima(s: "Session", args: str) -> None:
     est.robust = vce == "robust"
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx),
                  "sample": _sample_text(s, t0, t1)}
-    est.arima = {"arma": arma, "k": k, "ar": ar, "ma": ma, "order": order, "mask": smp.mask.copy()}
+    est.arima = {"arma": arma, "k": k, "ar": ar, "ma": ma, "order": order, "mask": smp.mask.copy(),
+                 "expand": expand}
     est.display = display_arima
     est.predict = _predict_arima
     est.predict_opts = {"y": 1, "mse": 3, "structural": 6}
-    scalars = [("N", float(n)), ("k", float(kk)), ("k_eq", float(1 + (na + nm > 0) + 1)),
+    scalars = [("N", float(n)), ("k", float(kk)), ("k_eq", float(1 + (na + nm > 0) + (nsa + nsm > 0) + 1)),
                ("k_dv", 1.0), ("ll", r.ll), ("chi2", chi2), ("p", pv), ("df_m", float(len(idx))),
                ("sigma", float(b[-1])), ("tmin", t0), ("tmax", t1), ("ar_max", float(arma.P)),
                ("ma_max", float(arma.Q)), ("rank", float(kk)), ("ic", float(r.iterations)),
@@ -367,9 +463,9 @@ def _predict_arima(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     xb_full, ok = xb_all(s, _fixed_part(est, k))
     yv = fvars.comp_values(ds, est.depcomp).astype(float)
     e = yv[rows] - xb_full[rows]
-    na, nm = len(A["ar"]), len(A["ma"])
     arma = A["arma"]
-    c = arma.contributions(e, b[k:k + na], b[k + na:k + na + nm], b[-1])
+    phf, thf = A["expand"](b)
+    c = arma.contributions(e, phf, thf, b[-1])
     if c is None:
         raise StataError(498, "prediction failed")   # VERIFY
     pred = np.full(ds.nobs, SYS)
@@ -528,7 +624,8 @@ def cmd_var(s: "Session", args: str) -> None:
     est.extra = {"N": float(T), "ll": ll, "aic": aic, "hqic": hqic, "sbic": sbic, "fpe": fpe, "det": det,
                  "eqstats": eqstats, "sample": _sample_text(s, t0, t1), "small": small}
     est.var = {"deps": deps, "lags": lags, "exog": exog, "xnames": xnames, "B": B, "Sig": Sig,
-               "XtXi": XtXi, "T": T}
+               "XtXi": XtXi, "T": T, "U": U, "X": Xo, "Y": Yo, "Sml": Sml, "t0": t0, "t1": t1,
+               "constant": constant, "small": small, "dfk": bool(o.get("dfk"))}
     est.display = display_var
     est.predict = _predict_var
     est.predict_opts = {"equation": 2}

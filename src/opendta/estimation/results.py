@@ -193,6 +193,14 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         if r.kind == "empty":
             out.write("          0  (empty)\n", "result")
             continue
+        if r.kind == "cons":
+            # a parameter fixed by the model (svar: entries of A and B)
+            out.write(f"  {g9(r.b):>9}  (constrained)\n", "result")
+            continue
+        if r.kind == "value":
+            # a single number without standard error (rho in prais)
+            out.write(f"  {g9(r.b):>9}\n", "result")
+            continue
         if r.kind == "fixed":
             # exposure()/offset(): coefficient fixed at 1 (compat 0507)
             out.write(f"          1  {r.eq}\n", "result")

@@ -105,7 +105,7 @@ Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica 
 
 ### 9. Séries temporais (3–4 h, ~150 mil tokens)
 
-`arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+Feito na fase 18 (caso 1904), exceto as peças listadas em Séries temporais em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (restrições em `vec`, `svar`, `arch`, `ucm` e `sspace`, `mgarch vcc`, `predict` depois dos comandos de espaço de estados…). O plano original: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
 
 ### 10. Modelos (6–8 h, ~285 mil tokens; pode ser dividido)
 

@@ -32,6 +32,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 # area of each implemented command, by the module that registers it; AREA_OF overrides it
 MODULE_AREA = {
+    "tsest": "Time series", "tsspectral": "Time series", "tsdata": "Time series", "tsfilters": "Time series",
+    "tshelp": "Time series",
     "stcmds": "Survival analysis",
     "stdata": "Survival analysis",
     "strates": "Survival analysis",

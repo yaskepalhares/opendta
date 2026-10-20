@@ -166,6 +166,7 @@ def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.
     tech, left = plan[0]
     log.append((-1, 0.0, f"(setting optimization to {tech.upper()})"))
     W = None            # BFGS approximation of the inverse of -H
+    stalled = 0
     while True:
         log.append((it, ll, ""))
         if it >= maxiter:
@@ -203,6 +204,9 @@ def maximize_switching(llf: Callable[[np.ndarray], float], scores: Callable[[np.
         b, ll, g, S = bn, fn, gn, Sn
         it += 1
         left -= 1
+        stalled = stalled + 1 if dv < 1e-13 else 0
+        if stalled >= 25:
+            break               # no progress at all (an optimum on the boundary of the parameter space)
         if left == 0:
             # the switch is announced before the next iteration, even when that iteration is the
             # last one (compat 1101)

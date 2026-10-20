@@ -225,6 +225,19 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Displays and graphs: `cumul`, `stem`, `lv`, `smooth`, `quantile`, `symplot`, `serrbar`, `dotplot`, `sunflower`, `lpoly`, `cusum`
 - Checked against the Stata 14 log: case `1903` matches except for the differences in `compat/known_differences.txt` (starting steps of `ml`/`ologit`, the `lnskew0` search, the depth-1 pseudosigma of `lv`, `permute`/`simulate` draws and the `sunflower` bin table)
 
+## Phase 18: time series ✅
+
+- [x] Data tools: `tsappend`, `tsfill`, `tsreport` and the `rolling` prefix
+- [x] Filters and smoothers: `tsfilter` (`hp`, `bk`, `cf`, `bw`) and `tssmooth` (`ma`, `exponential`, `dexponential`, `hwinters`, `shwinters`, `nl`)
+- [x] Spectral analysis and white-noise tests: `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq` and `psdensity` after `arima` and `arfima`
+- [x] Unit roots and regression with AR(1) errors: `dfgls`, `pperron` and `prais` (Prais-Winsten, Cochrane-Orcutt, `rhotype()`, `ssesearch`, `twostep`)
+- [x] VAR postestimation: `varlmar`, `varnorm`, `varstable`, `varwle`, `varbasic` and `fcast` (after `var`, `svar` and `vec`)
+- [x] Cointegration and structural VAR: `vecrank`, `vec` and `svar` (short-run `aeq()`/`beq()` matrices); `irf` after `svar` and `vec`, with bootstrap standard errors (`bs`, `bsp`), and `irf ctable`, `cgraph`, `ograph` and `add`
+- [x] Conditional variance and long memory: `arch` (ARCH, GARCH and the other variance terms, ARCH-M, ARMA errors, t and GED distributions, `het()`), `arfima` (exact ML) and `mgarch` (`dvech`, `ccc` and `dcc`)
+- [x] `arima` with `sarima()`, `mar()`, `mma()`, `condition` and `diffuse`
+- [x] State-space models by the Kalman filter with diffuse initial states: `ucm`, `sspace` and `dfactor`
+- Checked against the Stata 14 log: case `1904` awaits the Stata run
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -251,7 +264,7 @@ Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of
 - **Base statistics**: `margins` after more commands; `ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `constraints()` and `svy`; `boxcox` with `model(lhsrhs)`, `rhsonly` and `notrans()`; `icc` with `testvalue()` and unbalanced data; `loneway` with `median` and `exact`; `esize` with `unequal` and `welch`; `pwmean` with `unequal`; `ameans` with weights; `lv` with `generate()` and `tail()`; `stem` with `width()`; `cusum` with the test statistics.
 - **Models**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` and `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` and `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Panel data**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
-- **Time series**: `arch`, `arfima`, `dfactor`, `sspace`, `ucm`, `mgarch`, `vec` and `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph` and `add`.
+- **Time series**: `vec` with `bconstraints()`, `aconstraints()` and `sindicators()`, and the Osterwald-Lenum critical values for the trends other than `constant` and `rconstant`; `svar` with `aconstraints()`, `bconstraints()` and `lrconstraints()`; `fcast` with `bs`, `bsp`, `exog` and non-consecutive lags; `arch` with `constraints()` and `from()`; `arfima` with `mpl`, `smemory` and `vce(robust)`; `ucm` with `constraints()` and the `frequency()` suboption of `cycle()`; `sspace` with `covstate()` and `covobserved()` other than `diagonal`, `constraints()` and states with lags above one; `dfactor` with more than one factor, `ma()` and error autoregressions; `mgarch vcc`, `distribution(t)`, `het()`, `constraints()` and `vce(robust)`; `prais` with `vce(robust)`; `predict` and `estat` after `ucm`, `sspace`, `dfactor` and `mgarch`; `psdensity` after `ucm`.
 - **Multivariate statistics**: `pca`, `factor`, `rotate`, `alpha`, `cluster`, `discrim`, `manova`, `mvreg`, `mvtest`, `canon`, `ca`/`mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`.
 - **Multilevel models**: `meglm` and the other `me` commands with more than one level of random effects, weights or `vce(robust)`; `mestreg` with weights, `vce(robust)` and the `median` and `mean` options of `predict` (and `hazard` after the lognormal, loglogistic and gamma distributions); `predict, reffects` after `mixed` with `R.` equations.
 - **Other suites**: `gsem`; `sem` with the `mlmv` and `adf` methods, `group()` and the other `estat` subcommands; the other `power` methods (variances, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), the `lrchi2` and `fisher` tests and graphs; `bayesmh` and the `bayes` commands; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with more estimators.
