@@ -112,10 +112,23 @@ def _sample(s: "Session", eclass: bool):
     return np.ones(base.nobs, dtype=bool)
 
 
+def _balanced_all(ex: str) -> bool:
+    """True when the first parenthesis of ex closes at its last character."""
+    depth = 0
+    for k, ch in enumerate(ex):
+        depth += (ch == "(") - (ch == ")")
+        if depth == 0 and k < len(ex) - 1:
+            return False
+    return depth == 0
+
+
 def _legend(s: "Session", command: str, names: list[str], exps: list[str], extra=()) -> None:
     out = s.output
     out.write(f"{'command':>13}:  {command}\n", "text")
     for n, ex in zip(names, exps):
+        ex = ex.strip()
+        if ex.startswith("(") and ex.endswith(")") and _balanced_all(ex):
+            ex = ex[1:-1]
         out.write(f"{abbrev(n, 12):>13}:  {ex}\n", "text")
     for lab, val in extra:
         out.write(f"{lab:>13}:  {val}\n", "text")
@@ -143,16 +156,15 @@ def cmd_jackknife(s: "Session", args: str) -> None:
     names, observed = _evaluate(s, items)
     base = s.data
     sample = _sample(s, eclass)
-    if eclass:
-        out.write(f"(running {cmdname} on estimation sample)\n", "text")
-    else:
-        _warn_rclass(s, cmdname, "jackknife")
+    out.write(f"(running {cmdname} on estimation sample)\n", "text")
     r0 = dict(s.r)
     work = _subset(base, np.flatnonzero(sample))
     nw = work.nobs
     if isinstance(o.get("cluster"), str):
         cv = work.get(s.expand_varlist(o["cluster"])[0])
         cl = np.asarray(cv.raw if cv.is_string else cv.data)
+        if (cl == "").any() if cv.is_string else (cl >= SYS).any():
+            raise StataError(459, f"missing values not allowed in cluster variable {cv.name}")
         units = [np.flatnonzero(cl == v) for v in np.unique(cl)]
     else:
         units = [np.array([i]) for i in range(nw)]
@@ -192,6 +204,8 @@ def cmd_jackknife(s: "Session", args: str) -> None:
     if isinstance(o.get("saving"), str):
         _save(s, o["saving"], names, R, bool(o.get("double")))
     df = float(o["dof"]) if isinstance(o.get("dof"), str) else None
+    if df is None and not eclass_b:
+        df = float(n - 1)          # VERIFY: t statistics with n-1 degrees of freedom (clusters - 1)
     _post_jk(s, names, observed, V, command, items, eclass_b, est0, e0, cmdname, sample, n, mis, level, df, o)
     _display_jk(s, o)
 
@@ -265,7 +279,7 @@ def _display_jk(s: "Session", o: dict) -> None:
             k = x["df_m"]
             if x["chi2"] is not None:
                 if est.df_r is not None:
-                    items.append((f"F({k}, {int(est.df_r)})", f"{x['chi2'] / k:.2f}"))
+                    items.append((f"F({k:4d},{int(est.df_r):7d})", f"{x['chi2'] / k:.2f}"))
                     items.append(("Prob > F", f"{float(st.f.sf(x['chi2'] / k, k, est.df_r)):.4f}"))
                 else:
                     items.append((f"Wald chi2({k})", f"{x['chi2']:.2f}"))
@@ -278,7 +292,7 @@ def _display_jk(s: "Session", o: dict) -> None:
         _hdr(s, est.title if x["eclass_b"] else "Jackknife results", items)
         if not x["eclass_b"]:
             out.write("\n", "text")
-            _legend(s, x["command"], [n for n in x["names"]], x["names_exp"])
+            _legend(s, x["command"], [n for n in x["names"]], x["names_exp"], [("n()", "r(N)")])
         out.write("\n", "text")
     if o.get("notable"):
         return
@@ -325,7 +339,9 @@ def cmd_permute(s: "Session", args: str) -> None:
     if isinstance(o.get("seed"), str):
         s.interp._execute_expanded(f"set seed {o['seed'].strip()}")
     noisy = bool(o.get("noisily"))
-    _run0(s, command, noisy)
+    cmdname, eclass, _, _ = _run0(s, command, noisy)
+    if not eclass:
+        _warn_rclass(s, cmdname, "permute")
     names, observed = _evaluate(s, items)
     base = s.data
     r0 = dict(s.r)
@@ -387,13 +403,13 @@ def cmd_permute(s: "Session", args: str) -> None:
         lo = 0.0 if c == 0 else float(st.beta.ppf(a / 2, c, m - c + 1))
         hi = 1.0 if c == m else float(st.beta.ppf(1 - a / 2, c + 1, m - c))
         out.write(f"{abbrev(nm, 12):>12} |", "text")
-        out.write(f"{g9(obs, '%10.0g'):>11}{c:>8}{m:>8}{p:>8.4f}{se:>8.4f}{lo:>10.4f}{hi:>10.4f}\n", "result")
+        out.write(f"{g9(obs, '%9.0g'):>11}{c:>8}{m:>8}{p:>8.4f}{se:>8.4f}{g9(lo, '%9.0g'):>10}{g9(hi, '%9.0g'):>11}\n", "result")
         cs.append(c)
         ns.append(m)
     out.write("-" * 78 + "\n", "text")
-    out.write(" Note:  confidence interval is with respect to p=c/n.\n", "text")
+    out.write("Note: Confidence interval is with respect to p=c/n.\n", "text")
     note = {"left": "c = #{T <= T(obs)}", "right": "c = #{T >= T(obs)}", "two": "c = #{|T| >= |T(obs)|}"}[side]
-    out.write(f" Note:  {note}\n", "text")      # VERIFY: layout of the notes
+    out.write(f"Note: {note}\n", "text")
     from ..commands.matrix import Matrix
     s.r = {"N_reps": float(reps)}
     s.r["N"] = float(n)

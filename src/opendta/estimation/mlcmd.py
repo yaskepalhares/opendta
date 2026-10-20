@@ -354,6 +354,8 @@ def _call(s: "Session", text: str) -> None:
 
 def _lnf_obs(s: "Session", m: Model, th: np.ndarray) -> np.ndarray:
     """lf: the program fills lnf for the given linear predictors; returns lnf per observation."""
+    if m.method == "mlexp":
+        return _mlexp_obs(s, m, th)
     from ..commands.syntaxcmd import _temp_name
     from ..core.dataset import Variable
     ds = s.data
@@ -529,9 +531,7 @@ def _lf_fun(s: "Session", m: Model):
 
 def _fun(s: "Session", m: Model):
     _setup(s, m)
-    if m.method == "mlexp":
-        return _mlexp_fun(s, m)
-    return _lf_fun(s, m) if m.method == "lf" else _d_fun(s, m)
+    return _lf_fun(s, m) if m.method in ("lf", "mlexp") else _d_fun(s, m)
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +570,22 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
         b, ll = best
         if not quiet:
             _line(out, "feasible:", ll)
+    elif m.b0 is None and any(e.cons for e in m.eqs):
+        # alternative: constants set to -.5 or .5, kept if the likelihood improves (VERIFY: the
+        # reference log shows constant -.5 for a logit with 43% of ones; Stata's rule is not documented)
+        best = None
+        for c in (-0.5, 0.5):
+            cand = b.copy()
+            for e in m.eqs:
+                if e.cons:
+                    cand[e.start + e.k - 1] = c
+            v = fun(cand, 0)[0]
+            if np.isfinite(v) and v > ll and (best is None or v > best[1]):
+                best = (cand, v)
+        if best is not None:
+            b, ll = best
+            if not quiet:
+                _line(out, "alternative:", ll)
     # rescale: best multiple of the whole vector, then of each equation
     def rescale(idx_sets):
         nonlocal b, ll
@@ -652,17 +668,15 @@ def _variance(s: "Session", m: Model, fun, mo: dict) -> None:
     vce = str(mo["vce"]).split()[0].lower() if isinstance(mo.get("vce"), str) else "oim"
     robust = bool(mo.get("robust")) or vce.startswith("rob") or bool(m.clustvar) or m.wtype == "pweight"
     m.vcetype, m.vce = "OIM", "oim"
+    m.Vh = Vh
     if vce.startswith("opg"):
         robust = False
     if robust or vce.startswith("opg"):
         if m.method not in ("lf", "mlexp"):
             raise StataError(198, f"vce({vce}) is not allowed with method {m.method}")   # VERIFY
         w = m.w if m.w is not None else np.ones(m.N)
-        if m.method == "mlexp":
-            S = m._scores(r.b)
-        else:
-            G = getattr(m, "_G", None)
-            S = np.column_stack([e.X * (w * G[:, j])[:, None] for j, e in enumerate(m.eqs)])
+        G = getattr(m, "_G", None)
+        S = np.column_stack([e.X * (w * G[:, j])[:, None] for j, e in enumerate(m.eqs)])
         if vce.startswith("opg"):
             m.V = np.linalg.inv(S.T @ S)
             m.vcetype, m.vce = "OPG", "opg"
@@ -713,12 +727,19 @@ def _post(s: "Session", m: Model, mo: dict) -> None:
                ("ic", float(r.iterations)), ("rank", float(np.linalg.matrix_rank(V))), ("ll", r.ll)]
     if chi2 < SYS:
         scalars += [("df_m", float(dfm)), ("chi2", chi2), ("p", float(chi2_tail(chi2, dfm)))]
+    if not mlx:
+        # order of the reference log: rank N ic k k_eq k_dv converged rc ll k_eq_model df_m chi2 p
+        # (VERIFY: e(k_eq_model) when there is no Wald test)
+        sc = dict(scalars)
+        sc["k_eq_model"] = float(k_eq)
+        scalars = [(k, sc[k]) for k in ("p", "chi2", "df_m", "k_eq_model", "ll", "rc", "converged", "k_dv",
+                                        "k_eq", "k", "ic", "N", "rank") if k in sc]
     if m.clustvar:
         scalars.append(("N_clust", float(getattr(m, "nclust", 0))))
-    macros = [("cmdline", m.cmdline), ("user", m.prog), ("ml_method", m.method), ("title", est.title),
-              ("technique", "nr"), ("vce", m.vce), ("vcetype", m.vcetype), ("opt", "moptimize"),
-              ("which", "max"), ("crittype", "log likelihood"), ("properties", "b V"),
-              ("depvar", " ".join(m.ysets))]
+    macros = [("properties", "b V"), ("depvar", " ".join(m.ysets)), ("which", "max"), ("technique", "nr"),
+              ("ml_method", m.method), ("user", m.prog), ("vce", m.vce),
+              ("vcetype", m.vcetype if m.vcetype != "OIM" else ""), ("predict", "ml_p"), ("opt", "moptimize"),
+              ("chi2type", "Wald" if chi2 < SYS else ""), ("cmd", "ml")]
     if mlx:
         macros = [("cmd", "mlexp"), ("cmdline", m.cmdline), ("lexp", m.lexp), ("title", est.title),
                   ("technique", "nr"), ("vce", m.vce), ("vcetype", m.vcetype), ("opt", "moptimize"),
@@ -732,6 +753,8 @@ def _post(s: "Session", m: Model, mo: dict) -> None:
     ilog[0, :len(vals)] = vals
     extra = [("ilog", Matrix(ilog, ["r1"], [str(i) for i in range(1, 21)])),
              ("gradient", Matrix(np.asarray(r.g).reshape(1, -1), ["r1"], names))]
+    if m.vcetype == "Robust":
+        extra.append(("V_modelbased", Matrix(m.Vh, names, names)))
     sample = m.touse.copy()
     post(s, est, list(reversed(scalars)), list(reversed(macros)), sample, extra_mats=extra)
     s._estimates = est
@@ -741,19 +764,20 @@ def _display(s: "Session", m: Model, mo: dict) -> None:
     out = s.output
     est = s._estimates
     level = float(mo["level"]) if isinstance(mo.get("level"), str) else est.level
+    lll = "Log pseudolikelihood" if m.vcetype == "Robust" else "Log likelihood"
     if not mo.get("noheader") and m.method == "mlexp":
         out.write(f"\n{est.title}\n\n", "text")
-        out.write(f"{'Log likelihood = ' + _g10(m.result.ll):<48}{'Number of obs':<18}= ", "text")
+        out.write(f"{lll + ' = ' + _g10(m.result.ll):<48}{'Number of obs':<18}= ", "text")
         out.write(f"{m.N:>10,}\n\n", "result")
     elif not mo.get("noheader"):
         out.write("\n", "text")
         rows = [(est.title, "Number of obs", f"{m.N:,}")]
         if m.chi2 < SYS:
             rows.append(("", f"Wald chi2({m.dfm})", g9(m.chi2, "%10.2f")))
-            rows.append((f"Log likelihood = {_g10(m.result.ll):>10}", "Prob > chi2",
+            rows.append((f"{lll} = {_g10(m.result.ll):>10}", "Prob > chi2",
                          g9(float(chi2_tail(m.chi2, m.dfm)), "%10.4f")))
         else:
-            rows.append((f"Log likelihood = {_g10(m.result.ll):>10}", "", ""))
+            rows.append((f"{lll} = {_g10(m.result.ll):>10}", "", ""))
         for left, lab, val in rows:
             out.write(f"{left:<48}{lab:<18}{'= ' if lab else ''}", "text")
             out.write(f"{val:>10}\n" if lab else "\n", "result")
@@ -1056,50 +1080,32 @@ def cmd_mlexp(s: "Session", args: str) -> None:
         s._ml = m
         _init(s, " ".join(f"{k}={v}" if "=" not in k else k for k, v in
                           zip(o["initial"].split()[::2], o["initial"].split()[1::2])))
+    elif not m.b0.any():
+        m.b0 = None          # no starting values given: the search steps apply
     s._ml = m
     _maximize(s, "")
 
 
-def _mlexp_obs(s: "Session", m: Model):
-    """ll_obs(b): the log likelihood per observation of the sample (NaN when missing)."""
+def _mlexp_obs(s: "Session", m: Model, th: np.ndarray) -> np.ndarray:
+    """mlexp: the expression evaluated for the given linear predictors (one column per
+    parameter group, like lf); returns the log likelihood per observation (NaN when missing)."""
     from ..commands._util import eval_vector
     from ..commands.syntaxcmd import _temp_name
     from ..core.dataset import Variable
     ds = s.data
-    names = {e.name: _temp_name(s) for e in m.eqs if not e.scalar}
-    for nm in names.values():
-        ds.add(Variable(nm, "double", np.full(ds.nobs, SYS)))
-    m._tmp = list(names.values())
-
-    def ll_obs(b):
-        text = m.template
-        for e in m.eqs:
-            c = b[e.start:e.start + e.k]
-            if e.scalar:
-                text = text.replace(f"\x00s{e.name}\x00", f"({float(c[0])!r})")
-            else:
-                ds.get(names[e.name]).data = _full(m, e.X @ c + e.off, ds.nobs)
-                text = text.replace(f"\x00c{e.name}\x00", names[e.name])
-        v = np.broadcast_to(np.asarray(eval_vector(s, text), dtype=float), (ds.nobs,))[m.touse]
-        return np.where(v >= SYS, np.nan, v)
-    return ll_obs
-
-
-def _mlexp_fun(s: "Session", m: Model):
-    ll_obs = _mlexp_obs(s, m)
-    w = m.w if m.w is not None else np.ones(m.N)
-
-    def f0(b):
-        v = ll_obs(b)
-        return float("nan") if np.any(np.isnan(v)) else float((w * v).sum())
-
-    def scores(b):
-        S = np.zeros((m.N, m.nb))
-        for j in range(m.nb):
-            hj = 5e-3 * max(1.0, abs(b[j]))
-            e = np.zeros(m.nb)
-            e[j] = hj
-            S[:, j] = w * (-ll_obs(b + 2 * e) + 8 * ll_obs(b + e) - 8 * ll_obs(b - e) + ll_obs(b - 2 * e)) / (12 * hj)
-        return S
-    m._scores = scores
-    return _num_fun(f0, m.nb)
+    names = getattr(m, "_names", None)
+    if names is None or any(not ds.has(n) for n in names.values()):
+        names = {e.name: _temp_name(s) for e in m.eqs if not e.scalar}
+        for nm in names.values():
+            ds.add(Variable(nm, "double", np.full(ds.nobs, SYS)))
+        m._names = names
+        m._tmp = list(names.values())
+    text = m.template
+    for j, e in enumerate(m.eqs):
+        if e.scalar:
+            text = text.replace(f"\x00s{e.name}\x00", f"({float(th[0, j])!r})")
+        else:
+            ds.get(names[e.name]).data = _full(m, th[:, j], ds.nobs)
+            text = text.replace(f"\x00c{e.name}\x00", names[e.name])
+    v = np.broadcast_to(np.asarray(eval_vector(s, text), dtype=float), (ds.nobs,))[m.touse]
+    return np.where(v >= SYS, np.nan, v)
