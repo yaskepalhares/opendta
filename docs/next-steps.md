@@ -32,7 +32,7 @@ Notes for sessions that run in the cloud:
 - Do not build case data on the order of tied observations (`bysort g: gen ... if _n == 1` followed by `runiform()`): Stata's order of ties is arbitrary, so later draws go to other observations and every estimate differs. Use `sort g, stable` or generate by `_n` before sorting.
 - In the cloud shell, do not use `pkill -f` with a pattern that also matches the command line of the shell itself (it kills the session); and do not leave a file named like a standard module (`struct.py`) in the folder of a script: run scripts with `python -I`.
 
-Next free numbers: compat cases from **1903**, roadmap phases from **17**.
+Next free numbers: compat cases from **1904**, roadmap phases from **18**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -91,7 +91,7 @@ Random-effects models by quadrature: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobi
 
 ### 7. Base statistics (3–4 h, ~135k tokens)
 
-Prefixes and resampling: `jackknife`, `permute`, `simulate` (reuse `estimation/bootstrap.py`); `ml` (the command around `estimation/ml.py`), `mlexp`; model building: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; after estimation: `contrast`, `pwcompare`, `pwmean`, `margins` after more commands (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformations: `boxcox`, `ladder`, `gladder`, `lnskew0`; tests: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; agreement and effect sizes: `icc`, `loneway`, `esize`, `ameans`; displays: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+Done in phase 17 (compat case 1903), except the pieces listed under Base statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `boxcox` with other models, `cusum` test statistics…). The original plan: prefixes and resampling: `jackknife`, `permute`, `simulate` (reuse `estimation/bootstrap.py`); `ml` (the command around `estimation/ml.py`), `mlexp`; model building: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; after estimation: `contrast`, `pwcompare`, `pwmean`, `margins` after more commands (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformations: `boxcox`, `ladder`, `gladder`, `lnskew0`; tests: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; agreement and effect sizes: `icc`, `loneway`, `esize`, `ameans`; displays: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
 ### 8. Multivariate statistics (2–3 h, ~90k tokens)
 

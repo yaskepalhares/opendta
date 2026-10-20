@@ -32,7 +32,7 @@ Notas para sessões que rodam na nuvem:
 - Não construa os dados do caso sobre a ordem de observações empatadas (`bysort g: gen ... if _n == 1` seguido de `runiform()`): a ordem dos empates no Stata é arbitrária, então os sorteios seguintes vão para outras observações e todas as estimativas diferem. Use `sort g, stable` ou gere por `_n` antes de ordenar.
 - No shell da nuvem, não use `pkill -f` com um padrão que também casa com a linha de comando do próprio shell (mata a sessão); e não deixe um arquivo com nome de módulo padrão (`struct.py`) na pasta de um script: rode os scripts com `python -I`.
 
-Próximos números livres: casos de comparação a partir de **1903**, fases do roadmap a partir de **17**.
+Próximos números livres: casos de comparação a partir de **1904**, fases do roadmap a partir de **18**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -91,7 +91,7 @@ Modelos de efeitos aleatórios por quadratura: `xtprobit`, `xtcloglog`, `xtnbreg
 
 ### 7. Estatística básica (3–4 h, ~135 mil tokens)
 
-Prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `boxcox` com outros modelos, estatísticas de teste do `cusum`…). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
 ### 8. Estatística multivariada (2–3 h, ~90 mil tokens)
 

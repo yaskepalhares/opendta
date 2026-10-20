@@ -220,6 +220,18 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Download para Windows (64 bits, Intel/AMD): instalador por usuário e `.zip` portátil, gerados pelo mesmo workflow
 - [x] Versão 1.0: README curto com captura de tela, documentação em `docs/` (primeiros passos, recursos, testes, desenvolvimento), `CONTRIBUTING.md`, modelos de issue (diferença com o Stata, bug, pedido de comando) e de pull request; o workflow de release confere se a tag coincide com a versão
 
+## Fase 17: estatística básica ✅
+
+- [x] Prefixos de reamostragem `jackknife` (observações ou conglomerados, `mse`, `dof()`), `permute` e `simulate`
+- [x] `ml` com os avaliadores `lf`, `d0`, `d1` e `d2` (`ml model`, `init`, `search`, `maximize`, `display`, `clear`, `score`; variâncias `oim`, `opg`, `robust` e `cluster()`; derivadas numéricas), `mleval`, `mlsum`, `mlvecsum`, `mlmatsum` e `mlexp`
+- [x] Construção de modelos: `mkspline` (linear, `pctile`, `cubic`, `marginal`), `xi`, `nestreg`, `stepwise` e `fp`/`mfp`
+- [x] Depois da estimação: `testnl`, `predictnl`, `linktest`, `contrast`, `pwcompare`, `pwmean` e `suest`; `margins` depois de `tobit`, `ologit` e `oprobit`
+- [x] Transformações: `boxcox` (modelo do lado esquerdo), `ladder`, `gladder` e `lnskew0`
+- [x] Testes e correlações: `bitest`/`bitesti`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau` e `pcorr`
+- [x] Concordância e tamanhos de efeito: `icc`, `loneway`, `esize`/`esizei` e `ameans`
+- [x] Exibições e gráficos: `cumul`, `stem`, `lv`, `smooth`, `quantile`, `symplot`, `serrbar`, `dotplot`, `sunflower`, `lpoly`, `cusum`
+- Conferido com o log do Stata: o caso `1903` aguarda a rodada no Stata
+
 ## Melhorias em relação ao Stata (ao longo das fases)
 
 - [x] Explicação dos erros: depois da mensagem e antes do r(#), uma linha diz o que deu errado no contexto do comando e outra sugere como resolver (nomes parecidos, arquivos parecidos na pasta, número de observações…). Em inglês ou português, conforme o idioma da interface; `set hints off` desliga
@@ -234,7 +246,7 @@ Comandos e opções do Stata 14 que o OpenDTA ainda não tem, por área. Todos s
 
 - **Manipulação de dados**: `table` com três variáveis ou mais; `import haver`; `import sasxport` com `describe`, `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`; `list` com `string()` e `display`; `icd9p` com a lista de procedimentos da ICD-9-CM.
 - **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
-- **Estatística básica**: o comando `ml` (o motor já existe), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
+- **Estatística básica**: `margins` depois de mais comandos; `ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `constraints()` e `svy`; `boxcox` com `model(lhsrhs)`, `rhsonly` e `notrans()`; `icc` com `testvalue()` e dados não balanceados; `loneway` com `median` e `exact`; `esize` com `unequal` e `welch`; `pwmean` com `unequal`; `ameans` com pesos; `lv` com `generate()` e `tail()`; `stem` com `width()`; `cusum` com as estatísticas de teste.
 - **Modelos**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` e `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` e `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Dados em painel**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
 - **Séries temporais**: `arch`, `arfima`, `dfactor`, `sspace`, `ucm`, `mgarch`, `vec` e `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros-padrão bootstrap, e `irf ctable`, `cgraph`, `ograph` e `add`.
