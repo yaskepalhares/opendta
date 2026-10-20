@@ -19,6 +19,7 @@ compat/do/1002_melogit.do).
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -537,6 +538,40 @@ def _num_gh(gfun, b):
     return (H + H.T) / 2
 
 
+@dataclass
+class Fit:
+    """What a command hands to _fit_me once it has read its data: design, offset, level, the
+    conditional distribution of the outcome with its auxiliary parameters, and the details that
+    differ from one command to the next."""
+    smp: object
+    o: dict
+    sp: dict
+    X: np.ndarray
+    off: np.ndarray
+    lv: Level
+    fam_f: object
+    naux: int
+    b0: np.ndarray                    # starting values of the fixed-effects model (with auxiliary)
+    npts: int
+    method: str
+    family: str
+    link: str
+    aux_eq: list
+    off_name: str = ""
+    ordered: bool = False
+    analytic: bool = False            # analytic Hessian of the fixed-effects model
+    aux_in_table: bool = False
+    aux_rows: object = None           # (aux, Va, z) -> rows of the coefficient table
+    resid: object = None              # latent residual variance of the outcome (float or f(aux))
+    nbin: object = None
+    nlev: int = 0
+    qr: bool = False
+    eform: str = ""
+    predict: object = None
+    predict_multi: dict = field(default_factory=dict)
+    macro_edit: object = None
+
+
 def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     from .postest import replay
     from .regress import Sample, cmdline
@@ -624,11 +659,53 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     else:
         fam_f, naux = family_of("binomial" if fam == "bernoulli" else fam, link, y, nbin=nbin,
                                 disp=sp["disp"])
-    model = GLMM(fam, y, X, off, lv, npts, method, fam=fam_f, naux=naux, ordered=fam == "ordinal")
-    kw = ml_options(o)
     p = X.shape[1]
-    # fixed-effects model
-    if naux == 0 and fam != "binomial" and not (fam == "bernoulli" and link == "cloglog"):
+    analytic = naux == 0 and fam != "binomial" and not (fam == "bernoulli" and link == "cloglog")
+    if analytic:
+        b0 = _fixed_start(sp, y, off, p, smp.constant, nbin)[0]
+    elif fam == "ordinal":
+        cum = np.array([np.mean(yi <= j) for j in range(len(cats) - 1)])
+        b0 = np.concatenate([np.zeros(p), (special.logit if link == "logit" else st.norm.ppf)(cum)])
+    else:
+        b0b, a0 = _fixed_start(sp, y, off, p, smp.constant, nbin)
+        if fam == "gaussian" and p:
+            b0b = np.linalg.lstsq(X, y - off, rcond=None)[0]
+            a0 = np.array([math.log(max(float(np.mean((y - off - X @ b0b) ** 2)), 1e-8))])
+        b0 = np.concatenate([b0b, a0])
+    if fam == "ordinal":
+        aux_eq = [f"/cut{j + 1}" for j in range(naux)]
+    elif fam == "nbinomial":
+        aux_eq = ["/lnalpha" if sp["disp"] == "mean" else "/lndelta"]
+    elif fam == "gamma":
+        aux_eq = ["/lnphi"]                                     # VERIFY
+    elif fam == "gaussian":
+        aux_eq = [f"/var(e.{smp.depname})"]
+    else:
+        aux_eq = []
+    resid = {("bernoulli", "logit"): math.pi ** 2 / 3, ("bernoulli", "probit"): 1.0,
+             ("bernoulli", "cloglog"): math.pi ** 2 / 6, ("binomial", "logit"): math.pi ** 2 / 3,
+             ("binomial", "probit"): 1.0, ("binomial", "cloglog"): math.pi ** 2 / 6,
+             ("ordinal", "logit"): math.pi ** 2 / 3, ("ordinal", "probit"): 1.0}.get((fam, link))
+    if fam == "gaussian":
+        resid = lambda a: float(math.exp(a[0]))                 # noqa: E731
+    eform = "Odds Ratio" if (link == "logit" and o.get("or")) else \
+        ("IRR" if (fam in ("poisson", "nbinomial") and o.get("irr")) else "")
+    F = Fit(smp=smp, o=o, sp=sp, X=X, off=off, off_name=off_name, lv=lv, fam_f=fam_f, naux=naux,
+            ordered=fam == "ordinal", b0=b0, analytic=analytic, aux_eq=aux_eq,
+            aux_in_table=fam in ("ordinal", "nbinomial", "gamma"), resid=resid, nbin=nbin,
+            nlev=(len(cats) if fam == "ordinal" else 0), qr=qr, eform=eform, npts=npts, method=method,
+            family=fam, link=link)
+    if fam == "ordinal":
+        F.predict_multi = {"": _pr_multi, "pr": _pr_multi}
+    _fit_me(s, args, cmdname, F)
+
+
+def _fit_fixed(F: "Fit", kw: dict):
+    """The model without random effects: its log likelihood is the reference of the LR test and
+    its estimates start the full model."""
+    X, off, naux, fam_f, b0 = F.X, F.off, F.naux, F.fam_f, F.b0
+    p = X.shape[1]
+    if F.analytic:
         def fe_fun(b, todo):
             eta = (X @ b + off)[:, None]
             lf, s1, s2 = fam_f(eta)
@@ -636,7 +713,6 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
             if todo == 0:
                 return ll, None, None
             return ll, X.T @ s1[:, 0], (X * s2[:, 0][:, None]).T @ X
-        b0 = _fixed_start(sp, y, off, p, smp.constant, nbin)[0]
     else:
         def fe_grad(b):
             eta = (X @ b[:p] + off)[:, None]
@@ -651,23 +727,31 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
             return g
 
         def fe_fun(b, todo):
-            if fam == "ordinal" and np.any(np.diff(b[p:]) <= 0):
+            if F.ordered and np.any(np.diff(b[p:]) <= 0):
                 return -np.inf, None, None
             eta = (X @ b[:p] + off)[:, None]
             ll = float(fam_f(eta, b[p:])[0].sum())
             if todo == 0:
                 return ll, None, None
             return ll, fe_grad(b), _num_gh(fe_grad, b)
-        if fam == "ordinal":
-            cum = np.array([np.mean(yi <= j) for j in range(len(cats) - 1)])
-            b0 = np.concatenate([np.zeros(p), (special.logit if link == "logit" else st.norm.ppf)(cum)])
-        else:
-            b0b, a0 = _fixed_start(sp, y, off, p, smp.constant, nbin)
-            if fam == "gaussian" and p:
-                b0b = np.linalg.lstsq(X, y - off, rcond=None)[0]
-                a0 = np.array([math.log(max(float(np.mean((y - off - X @ b0b) ** 2)), 1e-8))])
-            b0 = np.concatenate([b0b, a0])
-    rfe = maximize(fe_fun, b0, **kw)
+    return maximize(fe_fun, b0, **kw)
+
+
+def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
+    """Fits the mixed-effects model with the conditional distribution F.fam_f and posts and
+    shows the results (the part that meglm and mestreg have in common)."""
+    from .regress import cmdline
+    smp, o, sp, X, off, lv = F.smp, F.o, F.sp, F.X, F.off, F.lv
+    fam, link, qr, naux = F.family, F.link, F.qr, F.naux
+    off_name, aux_eq, npts, method = F.off_name, F.aux_eq, F.npts, F.method
+    out = s.output
+    ds = s.data
+    n = smp.n
+    model = GLMM(fam, np.zeros(n), X, off, lv, npts, method, fam=F.fam_f, naux=naux, ordered=F.ordered)
+    kw = ml_options(o)
+    p = X.shape[1]
+    est_cols = [col for col in smp.cols if col.values is not None]
+    rfe = _fit_fixed(F, kw)
     # starting values for the variance components: best of a small grid (VERIFY)
     best = None
     for ls in (math.log(0.5), 0.0, math.log(0.25), math.log(1.5)):
@@ -729,17 +813,7 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     if smp.constant:
         bmap["_cons"], semap["_cons"] = bf[-1], float(np.sqrt(max(Vf[-1, -1], 0)))
     th_names = [f"{t}:_cons" for t in lv.labels()]
-    # auxiliary parameters: names in e(b) and the rows of the table
-    if fam == "ordinal":
-        aux_eq = [f"/cut{j + 1}" for j in range(naux)]
-    elif fam == "nbinomial":
-        aux_eq = ["/lnalpha" if sp["disp"] == "mean" else "/lndelta"]
-    elif fam == "gamma":
-        aux_eq = ["/lnphi"]                                     # VERIFY
-    elif fam == "gaussian":
-        aux_eq = [f"/var(e.{smp.depname})"]
-    else:
-        aux_eq = []
+    # auxiliary parameters: names in e(b) and the rows of the table are in F.aux_eq
     ball = np.concatenate([bf, aux, th])
     Vall = np.zeros((ball.size, ball.size))
     Vall[:kk, :kk] = Vf
@@ -752,25 +826,23 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     est.rows = rows_from_columns(smp.cols, bmap, semap, ds, constant=smp.constant)
     if off_name:
         est.rows.append(CoefRow("fixed", off_name, eq="(exposure)" if o.get("exposure") else "(offset)"))
-    if fam in ("ordinal", "nbinomial", "gamma"):
+    if F.aux_in_table:
         est.rows.append(CoefRow("sep"))
-        for j, nm_ in enumerate(aux_eq):
-            se_a = float(np.sqrt(max(Va[j, j], 0)))
-            est.rows.append(CoefRow("aux", nm_, float(aux[j]), se_a, name="_cons"))
+        if F.aux_rows is not None:
+            est.rows += F.aux_rows(aux, Va, st.norm.ppf(1 - (1 - smp.level / 100) / 2))
+        else:
+            for j, nm_ in enumerate(aux_eq):
+                se_a = float(np.sqrt(max(Va[j, j], 0)))
+                est.rows.append(CoefRow("aux", nm_, float(aux[j]), se_a, name="_cons"))
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = ""
     est.robust = False
     est.offset_name = off_name
-    resid = {("bernoulli", "logit"): math.pi ** 2 / 3, ("bernoulli", "probit"): 1.0,
-             ("bernoulli", "cloglog"): math.pi ** 2 / 6, ("binomial", "logit"): math.pi ** 2 / 3,
-             ("binomial", "probit"): 1.0, ("binomial", "cloglog"): math.pi ** 2 / 6,
-             ("ordinal", "logit"): math.pi ** 2 / 3, ("ordinal", "probit"): 1.0}.get((fam, link))
-    if fam == "gaussian":
-        resid = float(math.exp(aux[0]))
+    resid = F.resid(aux) if callable(F.resid) else F.resid
     est.glmm = {"model": model, "theta": th, "Vth": Vth, "beta": beta, "levels": [lv], "aux": aux,
-                "Va": Va, "aux_eq": aux_eq, "resid_var": resid, "mask": smp.mask.copy(), "nbin": nbin,
-                "nlev": (len(cats) if fam == "ordinal" else 0)}
+                "Va": Va, "aux_eq": aux_eq, "resid_var": resid, "mask": smp.mask.copy(), "nbin": F.nbin,
+                "nlev": F.nlev}
     cnt = np.bincount(lv.gid)
     est.extra = {"N": float(n), "ll": r.ll, "chi2": wchi2, "p": wp, "df_m": len(slopes), "ll_c": rfe.ll,
                  "chi2_c": chi2_c, "nvc": lv.npar(), "spec": sp, "method": method, "qr": qr,
@@ -778,14 +850,11 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
                  "groups": [(lv.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max()))]}
     est.extra["npts"] = 1 if method == "laplace" else npts
     est.display = _display_qr if qr else display_me
-    est.predict = _predict_me
+    est.predict = F.predict or _predict_me
     est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3}
-    est.predict_multi = {"reffects": _reffects_me}
-    if fam == "ordinal":
-        est.predict_multi.update({"": _pr_multi, "pr": _pr_multi})
+    est.predict_multi = {"reffects": _reffects_me, **F.predict_multi}
     est.estat = {"icc": (3, estat_icc), "recovariance": (5, estat_recov)}
-    est.eform_default = "Odds Ratio" if (link == "logit" and o.get("or")) else \
-        ("IRR" if (fam in ("poisson", "nbinomial") and o.get("irr")) else "")
+    est.eform_default = F.eform
     # e() in the order Stata lists it after melogit (compat 1002); VERIFY for the other commands
     nvar_p = {"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q)
     ncov_p = lv.npar() - nvar_p
@@ -802,9 +871,7 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     from .results import datasignature
     covs = [c.name for c in smp.cols if c.values is not None]
     sigvars = [lv.var] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
-    family = {"bernoulli": "bernoulli", "binomial": "binomial", "poisson": "poisson",
-              "nbinomial": "nbinomial", "gaussian": "gaussian", "gamma": "gamma",
-              "ordinal": "ordinal"}[fam]
+    family = fam
     if qr:
         # e() of meqrlogit/meqrpoisson ([ME] meqrlogit; VERIFY the order and the values)
         scalars = [("rank", float(ball.size)), ("k_f", float(len(slopes) + int(smp.constant))),
@@ -837,6 +904,8 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
                   ("covariates", " ".join(covs)), ("opt", "moptimize"), ("vce", "oim"),
                   ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"), ("technique", "nr"),
                   ("which", "max"), ("properties", "b V")]
+    if F.macro_edit is not None:
+        macros = F.macro_edit(macros)
     g1 = est.extra["groups"][0]
     names_all = list(est.names)
     grad = np.zeros((1, len(names_all)))
