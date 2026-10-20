@@ -491,6 +491,24 @@ def cmd_xtdpd(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtline", "xtline")
+def cmd_xtline(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xtline as run
+    run(s, args)
+
+
+@command("xttab", "xttab")
+def cmd_xttab(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xttab as run
+    run(s, args)
+
+
+@command("xtdata", "xtdata")
+def cmd_xtdata(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xtdata as run
+    run(s, args)
+
+
 @command("quadchk", "quadchk")
 def cmd_quadchk(s: "Session", args: str) -> None:
     from ..estimation.xtre import cmd_quadchk as run
