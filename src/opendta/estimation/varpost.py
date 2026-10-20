@@ -147,8 +147,8 @@ def forecast_mse(B: np.ndarray, Sig: np.ndarray, XtXi: np.ndarray, X: np.ndarray
 
 def _var(s: "Session", name: str):
     est = current(s)
-    if est.cmd != "var":
-        raise StataError(301, "last estimates not found")   # VERIFY: svar and vec in later versions
+    if est.cmd not in ("var", "svar"):
+        raise StataError(301, "last estimates not found")
     return est, est.var
 
 

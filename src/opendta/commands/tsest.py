@@ -41,3 +41,21 @@ for _n in ("varlmar", "varnorm", "varstable", "varwle"):
 
 
 command("fcast", "fcast")(_varpost("fcast"))
+
+
+def _vec(name):
+    def run(s: "Session", args: str) -> None:
+        from ..estimation import vec
+        getattr(vec, f"cmd_{name}")(s, args)
+    run.__name__ = f"cmd_{name}"
+    return run
+
+
+for _n in ("vec", "vecrank"):
+    command(_n, _n)(_vec(_n))
+
+
+@command("svar", "svar")
+def cmd_svar(s: "Session", args: str) -> None:
+    from ..estimation.svar import cmd_svar as run
+    run(s, args)
