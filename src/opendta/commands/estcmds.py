@@ -233,6 +233,24 @@ def cmd_bootstrap(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("jackknife", "jack", prefix=True)
+def cmd_jackknife(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_jackknife as run
+    run(s, args)
+
+
+@command("permute", "permute", prefix=True)
+def cmd_permute(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_permute as run
+    run(s, args)
+
+
+@command("simulate", "sim", prefix=True)
+def cmd_simulate(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_simulate as run
+    run(s, args)
+
+
 @command("lrtest", "lrtest")
 def cmd_lrtest(s: "Session", args: str) -> None:
     from ..estimation.extra import cmd_lrtest as run

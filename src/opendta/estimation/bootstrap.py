@@ -312,11 +312,11 @@ def _wrap(text: str, width: int, first: str, rest: str) -> list[str]:
     return lines
 
 
-def _warn_rclass(s: "Session", cmdname: str) -> None:
+def _warn_rclass(s: "Session", cmdname: str, prefix: str = "bootstrap") -> None:
     """bootstrap warning for a command that does not store e(sample) (compat 0803)."""
     width = int(s.settings.get("linesize", 80)) - 1
     out = s.output
-    p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), bootstrap has no "
+    p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), {prefix} has no "
           "way to determine which observations are used in calculating the statistics and so assumes "
           "that all observations are used.  This means that no observations will be excluded from the "
           "resampling because of missing values or other reasons.")
