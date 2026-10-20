@@ -395,6 +395,12 @@ def cmd_meqrpoisson(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("mestreg", "mestreg")
+def cmd_mestreg(s: "Session", args: str) -> None:
+    from ..estimation.mestreg import cmd_mestreg as run
+    run(s, args)
+
+
 @command("arima", "arima")
 def cmd_arima(s: "Session", args: str) -> None:
     from ..estimation.tsmodels import cmd_arima as run
