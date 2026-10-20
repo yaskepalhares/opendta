@@ -191,3 +191,25 @@ def test_ucm_local_level_and_mgarch_run():
     assert np.isfinite(s.e["ll"])
     s.run_command("dfactor (y z = , noconstant) (f = , ar(1)), nolog")
     assert np.isfinite(s.e["ll"])
+
+
+def test_pergram_values_and_bartlett_b():
+    # compat 1904: the generated periodogram is |sum x e^(-iwt)|^2 of the demeaned series, and
+    # B = sqrt(q) max|F_k - (k-1)/(q-1)| with q = n/2 + 1
+    s, out = _run("pergram y, gen(pg) nograph\nwntestb y, table")
+    y = s.data.get("y").data[:150]
+    pg = s.data.get("pg").data[:76]
+    f = np.fft.rfft(y - y.mean())
+    assert np.allclose(pg[1:], np.abs(f[1:]) ** 2, rtol=1e-9)
+    F = np.cumsum(pg) / pg.sum()
+    q = 76
+    B = np.sqrt(q) * np.abs(F - np.arange(q) / (q - 1)).max()
+    assert f"{B:.4f}" in out
+
+
+def test_program_echo_does_not_count_comments():
+    # compat 1904: the prompt after a comment line of a program body is "." and comments do not advance the count
+    _s, out = _run("program define zz\n  gen a1 = 1\n  * note\n  gen a2 = 2\n  gen a3 = 3\nend\n")
+    lines = [ln for ln in out.splitlines() if "gen a" in ln or "note" in ln]
+    assert lines[1].lstrip().startswith("2.") and lines[1].strip().endswith("* note")
+    assert lines[2].startswith(".") and lines[3].lstrip().startswith("3.")

@@ -87,7 +87,8 @@ def adf_gls(ystar: np.ndarray, k: int, kmax: int):
     e = y - X @ b
     s2 = float(e @ e) / (n - p)
     V = s2 * np.linalg.inv(X.T @ X)
-    return b, np.sqrt(np.diag(V)), math.sqrt(s2), n, float(np.sum(X[:, 0] ** 2))
+    # VERIFY: the root MSE reported with the lag choice divides by n, not n - p (reference log)
+    return b, np.sqrt(np.diag(V)), math.sqrt(float(e @ e) / n), n, float(np.sum(X[:, 0] ** 2))
 
 
 def cmd_dfgls(s: "Session", args: str) -> None:
@@ -122,8 +123,10 @@ def cmd_dfgls(s: "Session", args: str) -> None:
         if r["k"] >= 1 and abs(r["tlast"]) > zc:
             opt = r["k"]
             break
-    sc_best = min(res, key=lambda r: r["sc"])
-    maic_best = min(res, key=lambda r: r["maic"])
+    # VERIFY: the information criteria are compared over lags 1..maxlag (the lines of the table)
+    cand = [r for r in res if r["k"] >= 1] if kmax > 0 else res
+    sc_best = min(cand, key=lambda r: r["sc"])
+    maic_best = min(cand, key=lambda r: r["maic"])
     crit = ers_critical(trend, T0)      # VERIFY: interpolation uses the number of observations
     out = s.output
     from ..core.formats import format_value

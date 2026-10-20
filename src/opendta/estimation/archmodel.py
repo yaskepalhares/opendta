@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special
+from scipy import special, stats as st_
 
 from ..core import missing as M
 from ..core.errors import StataError
@@ -182,8 +182,9 @@ def _archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: 
             elif kd == "sdgarch":
                 v += p_[0] * SD[j]
             elif kd == "earch":
-                zj = ZZ[j]
-                v += p_[0] * zj + p_[1] * (abs(zj) - sq2pi)
+                if j >= P:      # VERIFY (case 1904): the presample contributes nothing to the earch terms
+                    zj = ZZ[j]
+                    v += p_[0] * zj + p_[1] * (abs(zj) - sq2pi)
             elif kd == "egarch":
                 v += p_[0] * LS[j]
             elif kd == "parch":
@@ -542,7 +543,11 @@ def cmd_arch(s: "Session", args: str) -> None:
         rows.append(CoefRow("sep"))
         val = math.exp(b[j]) + 2 if spec.dist == "t" else math.exp(b[j])
         sev = math.exp(b[j]) * se[j]
-        rows.append(CoefRow("aux", "df" if spec.dist == "t" else "shape", val, sev))
+        # VERIFY: the interval is the exponential of the interval of the log parameter (reference log, df)
+        zc_ = float(st_.norm.ppf(0.5 + (float(o["level"]) if o.get("level") else smp.level) / 200))
+        off_ = 2.0 if spec.dist == "t" else 0.0
+        ci_ = f"{math.exp(b[j] - zc_ * se[j]) + off_!r} {math.exp(b[j] + zc_ * se[j]) + off_!r}"
+        rows.append(CoefRow("aux", "df" if spec.dist == "t" else "shape", val, sev, eq=ci_))
         if spec.dist == "t":
             tdf = val
         else:
