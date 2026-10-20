@@ -218,6 +218,8 @@ def cmd_ucm(s: "Session", args: str) -> None:
         return kalman_loglik(y.reshape(-1, 1), D, A, S, H, cc, dd, dm)
 
     def ll(u):
+        if any(abs(v) > 25 for v, k in zip(u, kinds) if k == "var"):
+            return -np.inf            # variances beyond exp(+-25) are numerically meaningless
         c_ = contrib(u)
         return -np.inf if c_ is None else float(c_.sum())
 

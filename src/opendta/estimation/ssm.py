@@ -72,7 +72,7 @@ def kalman_loglik(y: np.ndarray, D: np.ndarray, A: np.ndarray, S: np.ndarray, H:
             sign, ld = np.linalg.slogdet(F)
             if sign <= 0:
                 return None
-            if np.max(np.diag(F)) < KAPPA / 100:
+            if not (mask.any() and np.max(np.diag(Dt @ P @ Dt.T)) >= KAPPA / 100):
                 out[t] = -0.5 * (obs.sum() * log2pi + ld + float(v @ Fi @ v))
             K = P @ Dt.T @ Fi
             a = a + K @ v

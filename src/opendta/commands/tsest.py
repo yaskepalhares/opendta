@@ -77,3 +77,21 @@ def cmd_arfima(s: "Session", args: str) -> None:
 def cmd_ucm(s: "Session", args: str) -> None:
     from ..estimation.ucm import cmd_ucm as run
     run(s, args)
+
+
+@command("sspace", "sspace")
+def cmd_sspace(s: "Session", args: str) -> None:
+    from ..estimation.sspace import cmd_sspace as run
+    run(s, args)
+
+
+@command("dfactor", "dfactor")
+def cmd_dfactor(s: "Session", args: str) -> None:
+    from ..estimation.sspace import cmd_dfactor as run
+    run(s, args)
+
+
+@command("mgarch", "mgarch")
+def cmd_mgarch(s: "Session", args: str) -> None:
+    from ..estimation.mgarch import cmd_mgarch as run
+    run(s, args)
