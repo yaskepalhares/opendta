@@ -20,16 +20,18 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
-                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSplitter, QToolBar,
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import __version__
 from .. import i18n
+from . import qt_i18n
 from ..i18n import tr
 from ..core.errors import ExitRequest
 from ..session import Session
@@ -100,6 +102,7 @@ class MainWindow(QMainWindow):
         self._last_find = ""
         i18n.set_language(self.prefs.language)
         i18n.set_messages(self.prefs.messages)
+        qt_i18n.apply(i18n.language())
         self.resize(1280, 800)
         self._build_central()
         self._build_docks()
@@ -117,6 +120,7 @@ class MainWindow(QMainWindow):
         self.session.ui_hooks["language"] = lambda: QTimer.singleShot(0, self.retranslate)
         self.session.output.add_listener(self.results.append_styled)
         self.session.add_state_listener(self.refresh_state)
+        self._startup_session()
         self.refresh_state()
         self.apply_preferences()
         self._restore_layout()
@@ -219,6 +223,9 @@ class MainWindow(QMainWindow):
         self.resizeDocks([self.dock_review], [260], Qt.Orientation.Horizontal)
         self.resizeDocks([self.dock_variables], [300], Qt.Orientation.Horizontal)
         self.resizeDocks([self.dock_variables, self.dock_properties], [420, 330], Qt.Orientation.Vertical)
+        # chosen again in the Window menu, a closed window comes back to its fixed place
+        for dock in (self.dock_review, self.dock_variables, self.dock_properties):
+            dock.toggleViewAction().triggered.connect(lambda on, d=dock: on and self._place_dock(d))
 
     def _action(self, menu, text: str, slot, *, shortcut: str | None = None) -> QAction:
         act = QAction(tr(text), self)
@@ -343,6 +350,7 @@ class MainWindow(QMainWindow):
 
     def retranslate(self) -> None:
         """Switches the interface language without restarting: rebuilds menus and texts."""
+        qt_i18n.apply(i18n.language())
         self.menuBar().clear()
         self._build_menus()
         self.refresh_state()
@@ -405,6 +413,19 @@ class MainWindow(QMainWindow):
                     act.triggered.connect(slot)
                 tb.addAction(act)
                 self.toolbar_actions[name] = act
+        # Settings on the far right, away from the Stata-style groups
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        tb.addWidget(spacer)
+        act = QAction(icon("settings"), tr("Settings"), self)
+        act.setData(("settings", None))
+        act.setProperty("key", "Settings")
+        suffix = f"  [{QKeySequence('Ctrl+,').toString(QKeySequence.SequenceFormat.NativeText)}]"
+        act.setProperty("suffix", suffix)
+        act.setToolTip(tr("Settings") + suffix)
+        act.triggered.connect(lambda: self.show_preferences())
+        tb.addAction(act)
+        self.toolbar_actions["settings"] = act
         self.addToolBar(tb)
 
     def _build_statusbar(self) -> None:
@@ -459,11 +480,62 @@ class MainWindow(QMainWindow):
         item.setData(0, Qt.ItemDataRole.UserRole, text)
         item.setToolTip(0, text)
         if rc:
-            _paint(item, QColor(results_scheme(self.prefs.effective_theme).colors["error"]))
+            _paint(item, QColor(self._scheme().colors["error"]))
         self.review.addTopLevelItem(item)
         self.review.scrollToItem(item)
 
+    def _startup_session(self) -> None:
+        """Initial folder and automatic log (Settings > General > Session)."""
+        folder = self.prefs.start_dir
+        if folder and os.path.isdir(folder):
+            self.session.run(f'quietly cd "{folder}"')
+        if self.prefs.auto_log:
+            base = Path(folder) if folder and os.path.isdir(folder) else Path.home()
+            try:
+                (base / "logs").mkdir(exist_ok=True)
+            except OSError:
+                return
+            path = base / "logs" / time.strftime("opendta-%Y-%m-%d-%H%M%S.log")
+            self.session.run(f'log using "{path}", text')
+
+    def _confirm(self, line: str) -> bool:
+        """Settings > General > Safety: asks before a command that discards much of the data."""
+        from .. import guard
+        skip = frozenset(c for c in guard.COMMANDS if not self.prefs.confirm_enabled(c))
+        if len(skip) == len(guard.COMMANDS):
+            return True
+        risk = guard.check(self.session, line, skip)
+        if risk is None or self._ask_risk(risk, line):
+            return True
+        self.session.output.write(i18n.L("(not run: cancelled at the confirmation)\n",
+                                    "(não executado: cancelado na confirmação)\n"), "text")
+        return False
+
+    def _ask_risk(self, risk, line: str) -> bool:
+        """The confirmation window. The first time, it also says where to turn it off."""
+        first = not self.prefs.confirm_notice_shown
+        self.prefs.confirm_notice_shown = True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("Confirm command"))
+        box.setText(risk.message)
+        info = f". {line.strip()}"
+        if first:
+            info += "\n\n" + tr("You can turn these confirmations off in Settings > General > Safety.")
+        box.setInformativeText(info)
+        run = box.addButton(tr("Run anyway"), QMessageBox.ButtonRole.AcceptRole)
+        cancel = box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        settings = box.addButton(tr("Cancel and open Settings"), QMessageBox.ButtonRole.ActionRole) if first else None
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        box.exec()
+        if settings is not None and box.clickedButton() is settings:
+            self.show_preferences("general", reveal=f"confirm_{risk.command}")
+        return box.clickedButton() is run
+
     def run_command(self, line: str) -> None:
+        if not self._confirm(line):
+            return
         try:
             rc = self.session.run_command(line)
         except ExitRequest:
@@ -576,8 +648,16 @@ class MainWindow(QMainWindow):
     def show_dofile_editor(self, path: str = "") -> None:
         if self.dofile_editor is None:
             self.dofile_editor = DoFileEditor(self.session, self, run=self.run_command,
-                                              font=monospace_font(self.prefs), theme=self.prefs.effective_theme)
+                                              font=monospace_font(self.prefs), theme=self.prefs.effective_theme,
+                                              palette=self.prefs.editor_palette)
             self.dofile_editor.setWindowFlag(Qt.WindowType.Window, True)
+            if self.prefs.reopen_files:
+                for f in self.prefs.editor_files:
+                    if os.path.isfile(f):
+                        self.dofile_editor.open_path(f)
+            # connected after the files are restored, so the stored list is not rewritten halfway
+            self.dofile_editor.files_changed.connect(
+                lambda: setattr(self.prefs, "editor_files", self.dofile_editor.open_paths()))
         if path:
             self.dofile_editor.open_path(path)
         _present(self.dofile_editor)
@@ -674,8 +754,9 @@ class MainWindow(QMainWindow):
         if path:
             self.run_command(f'cd "{path}"')
 
-    def show_preferences(self, page: str | None = None) -> None:
-        """The Settings window (not modal: the changes show in the windows behind it)."""
+    def show_preferences(self, page: str | None = None, reveal: str | None = None) -> None:
+        """The Settings window (not modal: the changes show in the windows behind it). `reveal` scrolls
+        to a row of the page and flashes it."""
         dlg = self._settings
         if dlg is None or not dlg.isVisible():
             dlg = PreferencesDialog(self.prefs, self)
@@ -686,6 +767,8 @@ class MainWindow(QMainWindow):
         if page:
             dlg.select(page)
         _present(dlg)
+        if reveal:
+            QTimer.singleShot(150, lambda: dlg.reveal(reveal))
 
     def apply_preferences(self) -> None:
         """Applies the chosen theme, font, icon and language (also called at startup)."""
@@ -701,7 +784,7 @@ class MainWindow(QMainWindow):
         if self.browser is not None:
             self.browser.table.setFont(font)
         if self.dofile_editor is not None:
-            self.dofile_editor.set_theme(self.prefs.effective_theme)
+            self.dofile_editor.set_theme(self.prefs.effective_theme, self.prefs.editor_palette)
         ico = app_icon(self.prefs.app_icon)
         self.setWindowIcon(ico)
         app = QApplication.instance()
@@ -709,12 +792,30 @@ class MainWindow(QMainWindow):
             app.setWindowIcon(ico)
 
     # -- layout saved between sessions -------------------------------------------
+    def _place_dock(self, dock: QDockWidget) -> None:
+        """Review, Variables and Properties always go back to where the application puts them: Review on
+        the left, Variables above Properties on the right, docked and at their usual size."""
+        dock.setFloating(False)
+        if dock is self.dock_review:
+            self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+            self.resizeDocks([dock], [260], Qt.Orientation.Horizontal)
+            return
+        right = [d for d in (self.dock_variables, self.dock_properties) if d is dock or d.isVisible()]
+        for d in right:
+            d.setFloating(False)
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, d)
+        if len(right) == 2:
+            self.splitDockWidget(self.dock_variables, self.dock_properties, Qt.Orientation.Vertical)
+            self.resizeDocks(right, [420, 330], Qt.Orientation.Vertical)
+        self.resizeDocks([dock], [300], Qt.Orientation.Horizontal)
+
     def _restore_layout(self) -> None:
-        geo, state, split = self.prefs.layout()
+        """The size of the window and of the Results/Command split come back; the side windows (Review,
+        Variables, Properties) do not: at every start they open at their default place, even if they
+        were closed or moved last time."""
+        geo, _state, split = self.prefs.layout()
         if geo:
             self.restoreGeometry(geo)
-        if state:
-            self.restoreState(state)
         if split:
             self.splitter.restoreState(split)
 
@@ -724,6 +825,8 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self.dofile_editor.cleanup()
+        if self.prefs.auto_log:
+            self.session.run("capture quietly log close _all")
         self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
         super().closeEvent(event)
         start = self._pending_update
@@ -733,14 +836,18 @@ class MainWindow(QMainWindow):
             start()
             QApplication.quit()
 
+    def _scheme(self, theme: str | None = None):
+        """Colors of the Results window: the chosen color scheme in the current theme."""
+        return results_scheme(theme or self.prefs.effective_theme, self.prefs.results_palette)
+
     def apply_theme(self, theme: str) -> None:
         """Light or dark theme for the whole interface, independent of the system."""
         app = QApplication.instance()
         if app is not None:
             apply_theme(app, theme)
         set_icon_theme(theme)
-        self.results.set_scheme(results_scheme(theme))
-        err = QColor(results_scheme(theme).colors["error"])
+        self.results.set_scheme(self._scheme(theme))
+        err = QColor(self._scheme(theme).colors["error"])
         for k in range(self.review.topLevelItemCount()):
             it = self.review.topLevelItem(k)
             if it.text(1):

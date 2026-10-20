@@ -54,6 +54,6 @@ regress income age i.sex
 
 When a command fails, OpenDTA shows Stata's message and code and, below them, an explanation for beginners: what went wrong with the data at hand, why, how to fix it, and a link to the help page. Turn it off with `set hints off`.
 
-The interface can be in English or Portuguese (**Settings**, or `set language pt`). Results and Stata-style messages stay in English unless you ask for the translation (`set messages translated`).
+In the Command window, OpenDTA asks before a command that discards much of the data (`clear` with unsaved changes, `drop` or `keep` removing many observations, `save, replace` over a much larger file); each one has its own switch in **Settings → General → Safety**. The interface can be in English or Portuguese (**Settings**, or `set language pt`). Results and Stata-style messages stay in English unless you ask for the translation (`set messages translated`).
 
 Type `help` for the list of commands, or see [what OpenDTA does](features.md).

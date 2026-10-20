@@ -1,7 +1,7 @@
 """Settings window (Edit > Preferences, Ctrl+,).
 
 A sidebar with a search field and the pages (General, Appearance, Results,
-Updates, About); each page has sections made of rows: a title and a short
+Do-file Editor, Updates, About); each page has sections made of rows: a title and a short
 description on the left, the control on the right (segmented choices,
 switches, menus, buttons). Changes apply at once, as in current desktop
 apps, so there is no OK or Cancel; Esc or the close button closes the
@@ -10,21 +10,25 @@ window. The colors follow the light or dark theme of the interface.
 
 from __future__ import annotations
 
+import html
+import os
 import tempfile
 import time
 from pathlib import Path
 
 from PySide6.QtCore import (Property, QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer,
                             Signal)
-from PySide6.QtGui import QColor, QFont, QPainter
-from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QComboBox, QDialog, QFontComboBox,
-                               QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
+from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QComboBox, QDialog, QFileDialog,
+                               QFontComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMessageBox, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
                                QToolButton, QVBoxLayout, QWidget)
 
 from .. import __version__
 from ..i18n import LANGUAGES, L, tr
+from .dofile_editor import editor_colors
 from .icons import app_icon, icon, is_dark
+from .palettes import labels as palette_labels
 from .settings import Preferences
 from .theme import default_monospace, results_scheme
 
@@ -97,6 +101,7 @@ QPushButton#Link {{ background: transparent; border: none; color: {c['accent']};
                     padding: 2px 0; text-align: left; }}
 QPushButton#Link:hover {{ text-decoration: underline; }}
 QFrame#Preview {{ border: 1px solid {c['border']}; border-radius: 10px; }}
+QWidget#Row[flash="true"] {{ background: rgba(10, 132, 255, 0.14); border-radius: 8px; }}
 """
 
 
@@ -200,6 +205,8 @@ class Row(QWidget):
 
     def __init__(self, title: str, desc: str, control: QWidget | None, keywords: str = ""):
         super().__init__()
+        self.setObjectName("Row")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.search_text = f"{title} {desc} {keywords}".lower()
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 14, 0, 14)
@@ -297,11 +304,41 @@ def _button(text: str, kind: str = "Secondary") -> QPushButton:
 # the window
 # ---------------------------------------------------------------------------
 
+_PALETTE_WORDS = "cores colors paleta palette tema scheme solarized monokai dracula nord gruvbox github"
+
 SAMPLE = (". summarize bmi age\n\n"
           "    Variable |        Obs        Mean    Std. Dev.       Min        Max\n"
           "-------------+---------------------------------------------------------\n"
           "         bmi |        250    26.18413    4.120871      17.2       38.9\n"
           "         age |        250      46.312    14.80267        18         80\n")
+
+
+def _span(text: str, color: str, bold: bool = False, underline: bool = False) -> str:
+    style = f"color:{color};" + ("font-weight:600;" if bold else "") + ("text-decoration:underline;" if underline else "")
+    return f'<span style="{style}">{html.escape(text)}</span>'
+
+
+def _results_html(rs) -> str:
+    c = rs.colors
+    return "<pre style='margin:0'>" + "\n".join([
+        _span(". ", c["text"]) + _span("keep if year >= 2016", c["input"], True),
+        _span("(519,227 observations deleted)", c["alert"], True),
+        _span("variable zz not found", c["error"]),
+        _span("    How to fix: ", c["hint_label"], True) + _span("check the spelling", c["hint"]),
+        _span("    ", c["hint"]) + _span("help varlist", c["hint_link"], underline=True),
+    ]) + "</pre>"
+
+
+def _editor_html(ec: dict, fg: str) -> str:
+    def code(text: str) -> str:
+        return _span(text, fg)
+    return "<pre style='margin:0'>" + "\n".join([
+        _span("* mean BMI by sex", ec["comment"]),
+        _span("use", ec["command"], True) + code(" ") + _span('"survey.dta"', ec["string"]) + code(", clear"),
+        _span("local", ec["command"], True) + code(" lim = ") + _span("18", ec["number"]),
+        _span("keep if", ec["command"], True) + code(" age >= ") + _span("`lim'", ec["macro"]),
+        _span("summarize", ec["command"], True) + code(" bmi"),
+    ]) + "</pre>"
 
 
 class PreferencesDialog(QDialog):
@@ -317,6 +354,7 @@ class PreferencesDialog(QDialog):
         self.resize(940, 660)
         self.setMinimumSize(760, 520)
         self.switches: list[Switch] = []
+        self.anchors: dict[str, tuple[str, Row]] = {}
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -350,6 +388,7 @@ class PreferencesDialog(QDialog):
         self._build_general()
         self._build_appearance()
         self._build_results()
+        self._build_editor()
         self._build_updates()
         self._caption("OpenDTA")
         self._build_about()
@@ -394,6 +433,24 @@ class PreferencesDialog(QDialog):
             if _k == key:
                 self.nav.setCurrentItem(it)
 
+    def reveal(self, name: str) -> None:
+        """Goes to a row of a page, scrolls to it and flashes it for a moment."""
+        key, row = self.anchors[name]
+        self.select(key)
+        for k, page, _it in self.pages:
+            if k == key:
+                page.ensureWidgetVisible(row, 0, 80)
+
+        def flash(on: bool) -> None:
+            try:
+                row.setProperty("flash", on)
+                row.style().unpolish(row)
+                row.style().polish(row)
+            except RuntimeError:        # the window was closed meanwhile
+                pass
+        flash(True)
+        QTimer.singleShot(2200, lambda: flash(False))
+
     def _switch(self, on: bool) -> Switch:
         sw = Switch(on)
         self.switches.append(sw)
@@ -418,6 +475,45 @@ class PreferencesDialog(QDialog):
         p.row(Row(tr("Explain errors"),
                   tr("After an error message, explain what went wrong and suggest a fix. Same as "
                      "set hints on."), self.hints, "hints dicas explicações"))
+        p.section(tr("Session"))
+        self.startdir_label = QLabel()
+        self.startdir_label.setObjectName("Muted")
+        choose = _button(tr("Choose..."))
+        choose.clicked.connect(self._choose_start_dir)
+        default = _button(tr("Default"))
+        default.clicked.connect(self._clear_start_dir)
+        box = QWidget()
+        bl = QHBoxLayout(box)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(8)
+        for w in (self.startdir_label, choose, default):
+            bl.addWidget(w)
+        p.row(Row(tr("Initial folder"),
+                  tr("The working directory OpenDTA starts in. Takes effect the next time OpenDTA opens."),
+                  box, "pasta folder diretório directory cd início start"))
+        self._refresh_start_dir()
+        self.autolog = self._switch(self.prefs.auto_log)
+        self.autolog.toggled.connect(self._autolog_changed)
+        p.row(Row(tr("Save a log of each session"),
+                  tr("Starts a text log when OpenDTA opens, in a logs folder inside the initial folder (or "
+                     "your home folder). Takes effect the next time OpenDTA opens."), self.autolog,
+                  "log registro histórico"))
+        p.section(tr("Safety"))
+        self.confirms: dict[str, Switch] = {}
+        for command, title, desc in (
+                ("clear", "Confirm clear", "In the Command window, ask before clear when the data in memory "
+                                           "have unsaved changes."),
+                ("drop", "Confirm drop", "In the Command window, ask before drop removes many observations or "
+                                         "most of the variables."),
+                ("keep", "Confirm keep", "In the Command window, ask before keep removes many observations or "
+                                         "most of the variables."),
+                ("save", "Confirm save, replace", "In the Command window, ask before save, replace overwrites a "
+                                                  "file much larger than the data in memory.")):
+            sw = self._switch(self.prefs.confirm_enabled(command))
+            sw.toggled.connect(lambda on, c=command: self._confirm_changed(c, on))
+            self.confirms[command] = sw
+            row = p.row(Row(tr(title), tr(desc), sw, f"confirmar confirmação segurança safety {command}"))
+            self.anchors[f"confirm_{command}"] = ("general", row)
         p.finish()
         self.translate.setEnabled(self.prefs.language == "pt")
 
@@ -474,6 +570,40 @@ class PreferencesDialog(QDialog):
         p.row(Row(tr("Arithmetic"),
                   tr("Stata reproduces Stata's rounding. Precise gives the same estimates with more exact "
                      "arithmetic (set numerics)."), self.numerics, "numerics precisão precision"))
+        p.section(tr("Color scheme"))
+        self.rpalette = _menu(palette_labels(), self.prefs.results_palette)
+        self.rpalette.currentIndexChanged.connect(self._rpalette_changed)
+        p.row(Row(tr("Color scheme"),
+                  tr("Colors of the Results window and the Review list: the classic look, high contrast, a "
+                     "soft one, or a scheme common in code editors."), self.rpalette, _PALETTE_WORDS))
+        self.rpreview = QLabel()
+        self.rpreview.setObjectName("PalettePreview")
+        self.rpreview.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self.rpreview.setContentsMargins(16, 12, 16, 12)
+        p.widget_(self._spacer(10))
+        p.widget_(self.rpreview)
+        p.finish()
+
+    def _build_editor(self) -> None:
+        p = self._page("editor", tr("Do-file Editor"), "set-editor")
+        p.section(tr("Color scheme"))
+        self.epalette = _menu(palette_labels(), self.prefs.editor_palette)
+        self.epalette.currentIndexChanged.connect(self._epalette_changed)
+        p.row(Row(tr("Color scheme"),
+                  tr("Syntax colors and background of the Do-file Editor, independent of the Results window."),
+                  self.epalette, _PALETTE_WORDS))
+        self.epreview = QLabel()
+        self.epreview.setObjectName("PalettePreview")
+        self.epreview.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self.epreview.setContentsMargins(16, 12, 16, 12)
+        p.widget_(self._spacer(10))
+        p.widget_(self.epreview)
+        p.section(tr("Session"))
+        self.reopen = self._switch(self.prefs.reopen_files)
+        self.reopen.toggled.connect(self._reopen_changed)
+        p.row(Row(tr("Reopen last session's files"),
+                  tr("When the Do-file Editor opens, reopen the files that were open when it was last used."),
+                  self.reopen, "reabrir arquivos reopen files sessão session"))
         p.finish()
 
     def _build_updates(self) -> None:
@@ -592,6 +722,45 @@ class PreferencesDialog(QDialog):
             pass
         self._apply()
 
+    def _refresh_start_dir(self) -> None:
+        path = self.prefs.start_dir
+        shown = QFontMetrics(self.startdir_label.font()).elidedText(path, Qt.TextElideMode.ElideMiddle, 220) \
+            if path else tr("Not set")
+        self.startdir_label.setText(shown)
+        self.startdir_label.setToolTip(path)
+
+    def _choose_start_dir(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, tr("Initial folder"), self.prefs.start_dir or os.getcwd())
+        if path:
+            self.prefs.start_dir = path
+            self.prefs.sync()
+            self._refresh_start_dir()
+
+    def _clear_start_dir(self) -> None:
+        self.prefs.start_dir = ""
+        self.prefs.sync()
+        self._refresh_start_dir()
+
+    def _autolog_changed(self, on: bool) -> None:
+        self.prefs.auto_log = on
+        self.prefs.sync()
+
+    def _confirm_changed(self, command: str, on: bool) -> None:
+        self.prefs.set_confirm(command, on)
+        self.prefs.sync()
+
+    def _reopen_changed(self, on: bool) -> None:
+        self.prefs.reopen_files = on
+        self.prefs.sync()
+
+    def _rpalette_changed(self, *_a) -> None:
+        self.prefs.results_palette = self.rpalette.currentData() or "classic"
+        self._apply()
+
+    def _epalette_changed(self, *_a) -> None:
+        self.prefs.editor_palette = self.epalette.currentData() or "classic"
+        self._apply()
+
     def _auto_changed(self, on: bool) -> None:
         self.prefs.check_updates = on
         self.prefs.sync()
@@ -640,7 +809,14 @@ class PreferencesDialog(QDialog):
         self.family.setCurrentFont(QFont(self.prefs.font_family))
         self.size.setCurrentIndex(max(0, self.size.findData(str(self.prefs.font_size))))
         self.numerics.set_current("stata")
-        for sw, on in ((self.hints, True), (self.superscript, True), (self.auto, True), (self.translate, False)):
+        for combo, key in ((self.rpalette, self.prefs.results_palette), (self.epalette, self.prefs.editor_palette)):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, combo.findData(key)))
+            combo.blockSignals(False)
+        self._refresh_start_dir()
+        for sw, on in ((self.hints, True), (self.superscript, True), (self.auto, True), (self.translate, False),
+                       (self.reopen, False), (self.autolog, False),
+                       *((sw, True) for sw in self.confirms.values())):
             sw.blockSignals(True)
             sw.setChecked(on)
             sw._set(1.0 if on else 0.0)
@@ -677,10 +853,20 @@ class PreferencesDialog(QDialog):
             self.theme.buttons[key].setIcon(icon(f"theme-{key}"))
         # preview in the Results window's colors and font
         from .panes import monospace_font
-        rs = results_scheme("dark" if dark else "light")
+        theme = "dark" if dark else "light"
+        rs = results_scheme(theme, self.prefs.results_palette)
         self.preview.setFont(monospace_font(self.prefs))
         self.preview.setStyleSheet(f"QLabel#Preview {{ background: {rs.background}; color: {rs.colors['text']}; "
                                    f"border: 1px solid {c['border']}; border-radius: 10px; }}")
+        ec = editor_colors(self.prefs.editor_palette, theme)
+        efg = ec.get("fg", c["text"])
+        for lab, bg, fg, body in ((self.rpreview, rs.background, rs.colors["text"], _results_html(rs)),
+                                  (self.epreview, ec.get("bg", c["content"]), efg, _editor_html(ec, efg))):
+            lab.setFont(monospace_font(self.prefs))
+            lab.setTextFormat(Qt.TextFormat.RichText)
+            lab.setText(body)
+            lab.setStyleSheet(f"QLabel#PalettePreview {{ background: {bg}; color: {fg}; "
+                              f"border: 1px solid {c['border']}; border-radius: 10px; }}")
 
     def keyPressEvent(self, e) -> None:  # noqa: N802
         if e.key() == Qt.Key.Key_Escape:

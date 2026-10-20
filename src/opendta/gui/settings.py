@@ -8,10 +8,12 @@ read nor change the preferences of whoever runs pytest).
 
 from __future__ import annotations
 
+import json
 import os
 
 from PySide6.QtCore import QSettings
 
+from .palettes import KEYS as PALETTE_KEYS
 from .theme import default_monospace
 
 ORG, APP = "OpenDTA", "OpenDTA"
@@ -154,6 +156,79 @@ class Preferences:
     @font_size.setter
     def font_size(self, value: int) -> None:
         self._s.setValue("fonts/size", int(value))
+
+    # color schemes (palettes.py) of the Results window and of the Do-file Editor
+    @property
+    def results_palette(self) -> str:
+        v = str(self._s.value("colors/results", "classic"))
+        return v if v in PALETTE_KEYS else "classic"
+
+    @results_palette.setter
+    def results_palette(self, value: str) -> None:
+        self._s.setValue("colors/results", value if value in PALETTE_KEYS else "classic")
+
+    @property
+    def editor_palette(self) -> str:
+        v = str(self._s.value("colors/editor", "classic"))
+        return v if v in PALETTE_KEYS else "classic"
+
+    @editor_palette.setter
+    def editor_palette(self, value: str) -> None:
+        self._s.setValue("colors/editor", value if value in PALETTE_KEYS else "classic")
+
+    # Do-file Editor: reopen the files of the last session (off by default)
+    @property
+    def reopen_files(self) -> bool:
+        return str(self._s.value("editor/reopen", "off")) == "on"
+
+    @reopen_files.setter
+    def reopen_files(self, on: bool) -> None:
+        self._s.setValue("editor/reopen", "on" if on else "off")
+
+    @property
+    def editor_files(self) -> list[str]:
+        try:
+            files = json.loads(str(self._s.value("editor/files", "[]")))
+        except ValueError:
+            return []
+        return [f for f in files if isinstance(f, str)] if isinstance(files, list) else []
+
+    @editor_files.setter
+    def editor_files(self, files: list[str]) -> None:
+        self._s.setValue("editor/files", json.dumps(list(files)))
+
+    # session: initial folder and automatic log (both applied when OpenDTA opens)
+    @property
+    def start_dir(self) -> str:
+        return str(self._s.value("session/start_dir", "") or "")
+
+    @start_dir.setter
+    def start_dir(self, path: str) -> None:
+        self._s.setValue("session/start_dir", path)
+
+    @property
+    def auto_log(self) -> bool:
+        return str(self._s.value("session/auto_log", "off")) == "on"
+
+    @auto_log.setter
+    def auto_log(self, on: bool) -> None:
+        self._s.setValue("session/auto_log", "on" if on else "off")
+
+    # confirmation before risky commands (guard.py): one switch per command, all on by default;
+    # and whether the first-time notice was shown
+    def confirm_enabled(self, command: str) -> bool:
+        return str(self._s.value(f"safety/confirm_{command}", "on")) != "off"
+
+    def set_confirm(self, command: str, on: bool) -> None:
+        self._s.setValue(f"safety/confirm_{command}", "on" if on else "off")
+
+    @property
+    def confirm_notice_shown(self) -> bool:
+        return str(self._s.value("safety/notice_shown", "off")) == "on"
+
+    @confirm_notice_shown.setter
+    def confirm_notice_shown(self, shown: bool) -> None:
+        self._s.setValue("safety/notice_shown", "on" if shown else "off")
 
     # position of the windows and height of the Command window
     def layout(self):

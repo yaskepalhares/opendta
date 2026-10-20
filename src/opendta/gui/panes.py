@@ -3,6 +3,8 @@ windows."""
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout, QWidget
@@ -32,6 +34,10 @@ def monospace_font(prefs: Preferences | None = None) -> QFont:
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
+
+# "(519,227 observations deleted)": shown in the "alert" style, unless nothing was deleted
+_DELETED = re.compile(r"\(([\d,]+) observations? deleted\)")
+
 
 class ResultsView(QPlainTextEdit):
     """Results window. Text in the "hint_link" style (the "help topic" of an error explanation)
@@ -85,7 +91,15 @@ class ResultsView(QPlainTextEdit):
         if style == "hint_link":
             fmt = QTextCharFormat(fmt)
             fmt.setAnchorHref(text)
-        cursor.insertText(text, fmt)
+        pos = 0
+        if style != "hint_link" and "deleted)" in text:
+            for m in _DELETED.finditer(text):
+                if int(m.group(1).replace(",", "")) == 0:
+                    continue
+                cursor.insertText(text[pos:m.start()], fmt)
+                cursor.insertText(m.group(), self._formats["alert"])
+                pos = m.end()
+        cursor.insertText(text[pos:], fmt)
         self.setTextCursor(cursor)
         self.ensureCursorVisible()
 

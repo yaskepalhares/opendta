@@ -19,6 +19,8 @@ from opendta import __version__  # noqa: E402
 datas = collect_data_files("opendta", includes=["help/*.sthlp", "gui/icons/*.svg", "gui/appicon/*.png", "data/*.dta", "data/icd/*"])
 # certifi's CA bundle (cacert.pem), used by the update check
 datas += collect_data_files("certifi")
+# Qt's own Portuguese texts (standard buttons, right-click menus): gui/qt_i18n.py
+datas += collect_data_files("PySide6", includes=["Qt/translations/qt_pt_BR.qm", "Qt/translations/qtbase_pt_BR.qm"])
 hidden = collect_submodules("opendta")
 
 # licenses: OpenDTA's own, the third-party notice and the metadata (with the license texts) of the

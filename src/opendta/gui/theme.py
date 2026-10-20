@@ -22,11 +22,12 @@ class ResultsScheme:
         "error": "#cc0000",
         "input": "#000000",
         "command": "#000000",
+        "alert": "#cc0000",     # "(N observations deleted)": the data changed (OpenDTA)
         "hint": "#6b5a00",      # error explanations (OpenDTA)
         "hint_label": "#6b5a00",  # "How to fix:", "Learn more:" (bold)
         "hint_link": "#1f5fbf",   # "help topic" links (underlined, clickable)
     })
-    bold: frozenset[str] = frozenset({"result", "input", "hint_label"})
+    bold: frozenset[str] = frozenset({"result", "input", "hint_label", "alert"})
 
 
 STANDARD = ResultsScheme()
@@ -37,6 +38,7 @@ DARK_RESULTS = ResultsScheme(
         "text": "#d4d4d6",
         "result": "#ffffff",
         "error": "#ff6b68",
+        "alert": "#ff6b68",
         "input": "#ffffff",
         "command": "#d4d4d6",
         "hint": "#e5c07b",
@@ -48,8 +50,16 @@ DARK_RESULTS = ResultsScheme(
 THEMES = ("light", "dark")
 
 
-def results_scheme(theme: str) -> ResultsScheme:
-    return DARK_RESULTS if theme == "dark" else STANDARD
+def results_scheme(theme: str, palette: str = "classic") -> ResultsScheme:
+    """Colors of the Results window: the chosen color scheme (palettes.py) or, for "classic", the
+    Stata-like look of the theme."""
+    from .palettes import resolve
+    pal = resolve(palette, theme)
+    if pal is None:
+        return DARK_RESULTS if theme == "dark" else STANDARD
+    return ResultsScheme(background=pal.bg, colors={
+        "text": pal.fg, "result": pal.fg, "error": pal.error, "alert": pal.error, "input": pal.fg,
+        "command": pal.fg, "hint": pal.warn, "hint_label": pal.warn, "hint_link": pal.link})
 
 
 # Interface colors (windows, panels, menus) in each theme. The theme is chosen in Settings:
