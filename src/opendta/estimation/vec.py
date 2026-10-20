@@ -15,6 +15,7 @@ from ..core.stats import chi2_tail
 from ..lang.syntax import match_options, parse_standard
 from .results import CoefRow, Estimates, coef_table, post
 from .tsops import _fmt_time, require_ts
+from .varpost import _cg
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -29,7 +30,7 @@ _CV = {
     ("constant", "trace", 1): [6.65, 20.04, 35.65, 54.46, 76.07, 103.18, 133.57, 168.36, 204.95, 247.18],
     ("constant", "max", 5): [3.76, 14.07, 20.97, 27.07, 33.46, 39.37, 45.28, 51.42, 57.12, 62.81],
     ("constant", "max", 1): [6.65, 18.63, 25.52, 32.24, 38.77, 45.10, 51.57, 57.69, 62.80, 69.09],
-    ("rconstant", "trace", 5): [9.24, 19.96, 34.91, 53.12, 76.07, 102.14, 131.70, 165.58, 202.92, 244.15],
+    ("rconstant", "trace", 5): [9.42, 19.96, 34.91, 53.12, 76.07, 102.14, 131.70, 165.58, 202.92, 244.15],
     ("rconstant", "trace", 1): [12.97, 24.60, 41.07, 60.16, 84.45, 111.01, 143.09, 177.20, 215.74, 257.68],
     ("rconstant", "max", 5): [9.24, 15.67, 22.00, 28.14, 34.40, 40.30, 46.45, 52.00, 57.42, 63.57],
     ("rconstant", "max", 1): [12.97, 20.20, 26.81, 33.24, 39.79, 46.82, 51.91, 57.95, 63.71, 69.94],
@@ -203,43 +204,46 @@ def cmd_vecrank(s: "Session", args: str) -> None:
     show_trace = not o.get("notrace")
     two = bool(o.get("levela"))
     lev = 1 if o.get("level99") else 5
-    out.write("\n                       Johansen tests for cointegration\n", "text")
-    out.write(f"Trend: {trend:<48}Number of obs = {T:>7}\n", "text")
-    out.write(f"Sample: {_fmt_time(ds, info.tvar, first)} - {_fmt_time(ds, info.tvar, last):<{max(1, 40 - len(_fmt_time(ds, info.tvar, first)))}}"
-              f"Lags          = {lags:>7}\n", "text")
+    fa, fb = _fmt_time(ds, info.tvar, first), _fmt_time(ds, info.tvar, last)
+    out.write("\n" + " " * 23 + "Johansen tests for cointegration" + " " * 24 + "\n", "text")
+    out.write(f"{'Trend: ' + trend:<56}Number of obs = {T:>7}\n", "text")
+    out.write(f"{'Sample:  ' + fa + ' - ' + fb:<65}Lags = {lags:>7}\n", "text")
+    dash = "-" * 79 + "\n"
+    out.write(dash, "text")
     stats = [("trace", trace)] if show_trace else []
     if o.get("max"):
         stats.append(("max", mx))
     sel = {}
-    if stats:
-        for kind, vals in stats:
-            levels = [5, 1] if two else [lev]
-            out.write("\n", "text")
-            lab = "trace" if kind == "trace" else "max"
-            cols = "".join(f"{(str(l) + '% critical'):>13}" for l in levels)
-            out.write(f"  maximum{'':>56}{lab:>10}{cols}\n", "text")
-            out.write(f"  rank       parms       LL         eigenvalue{'':>14}statistic" +
-                      "".join(f"{'value':>13}" for _ in levels) + "\n", "text")
-            chosen = None
-            for r in range(K + 1):
-                eig = f"{lam[r - 1]:>10.5f}" if r > 0 else f"{'.':>10}"
-                line = f"  {r:>3}   {parms[r]:>8}{ll[r]:>14.4f}  {eig}"
-                if r < K:
-                    cvs = [critical_value(trend, kind, l, K - r) for l in levels]
-                    mark = ""
-                    if kind == "trace" and chosen is None and cvs[0] < SYS and vals[r] < cvs[0]:
-                        chosen, mark = r, "*"
-                    line += f"{vals[r]:>22.4f}{mark:<1}" + "".join(
-                        f"{c:>13.2f}" if c < SYS else f"{'.':>13}" for c in cvs)
-                out.write(line + "\n", "result")
-            sel[kind] = chosen
+    levels = [5, 1] if two else [lev]
+    for kind, vals in stats:
+        lab = "trace" if kind == "trace" else "max"
+        out.write(" " * 57 + "".join(f"{str(l) + '%':<9}" for l in levels).rstrip() + "\n", "text")
+        out.write((f"{'maximum':<45}{lab:>5}    critical" if kind == "trace" else
+                   f"{'maximum':<46}{lab}     critical") + "\n", "text")
+        out.write("  rank    parms       LL       eigenvalue  statistic    value\n", "text")
+        chosen = None
+        for r in range(K + 1):
+            eig = f"{lam[r - 1]:>12.5f}" if r > 0 else f"{'.':>12}"
+            line = f"{r:>5}{parms[r]:>7}{ll[r]:>16.5f}{eig}"
+            if r < K:
+                cvs = [critical_value(trend, kind, l, K - r) for l in levels]
+                mark = " "
+                if kind == "trace" and chosen is None and cvs[0] < SYS and vals[r] < cvs[0]:
+                    chosen, mark = r, "*"
+                line += f"{vals[r]:>12.4f}{mark}" + "".join(
+                    f"{c:>8.2f}" if c < SYS else f"{'.':>8}" for c in cvs)
+            out.write(line.rstrip() + "\n", "result")
+        out.write(dash, "text")
+        sel[kind] = chosen
     if o.get("ic"):
-        out.write("\n  maximum\n  rank       parms       LL         eigenvalue         SBIC          HQIC          AIC\n", "text")
+        out.write("maximum\n  rank    parms       LL       eigenvalue     SBIC       HQIC       AIC\n", "text")
         best = [int(np.argmin([c[i] for c in ic])) for i in (1, 2, 0)]
         for r in range(K + 1):
-            eig = f"{lam[r - 1]:>10.5f}" if r > 0 else f"{'.':>10}"
-            cells = "".join(f"{ic[r][i]:>14.5f}{'*' if best[j] == r else ' '}" for j, i in enumerate((1, 2, 0)))
-            out.write(f"  {r:>3}   {parms[r]:>8}{ll[r]:>14.4f}  {eig}{cells}\n", "result")
+            eig = f"{lam[r - 1]:>12.5f}" if r > 0 else f"{'':>12}"
+            cells = "".join(f"{ic[r][i]:>{w}.6f}{'*' if best[j] == r else ' '}"
+                            for j, (i, w) in enumerate(((1, 12), (2, 10), (0, 10))))
+            out.write(f"{r:>5}{parms[r]:>7}{ll[r]:>16.5f}{eig}{cells}".rstrip() + "\n", "result")
+        out.write(dash, "text")
     from ..commands.matrix import Matrix
     k95 = sel.get("trace")
     if k95 is None and show_trace:
@@ -343,6 +347,9 @@ def cmd_vec(s: "Session", args: str) -> None:
     bvec = beta.T.ravel()
     sevec = np.zeros(nb * r)
     sevec[free] = np.sqrt(np.maximum(np.diag(Vb_free), 0))
+    # VERIFY: with the unrestricted constant Stata shows the constant of the cointegrating equation
+    # without a standard error; here it is the projection of the constant on alpha (weighted by Omega^-1)
+    rho = np.linalg.solve(alpha.T @ Ominv @ alpha, alpha.T @ Ominv @ coef[-1, :]) if trend == "constant" else None
     brn = deps + (["_cons"] if trend == "rconstant" else ["_trend"] if trend == "rtrend" else [])
     est = Estimates("vec", " ".join(f"D_{d_}" for d_ in deps), names, b, V, T, "z", None)
     est.eqnames = eqs
@@ -352,7 +359,7 @@ def cmd_vec(s: "Session", args: str) -> None:
     est.extra = {"N": T, "ll": ll, "aic": aic, "hqic": hqic, "sbic": sbic, "det": float(np.linalg.det(Om)),
                  "sample": f"Sample:  {_fmt_time(ds, info.tvar, first)} - {_fmt_time(ds, info.tvar, last)}",
                  "eqstats": eqstats, "beta": beta, "sebeta": sevec, "free": free, "Vb": Vb_free,
-                 "r": r, "brn": brn, "ce": ce, "opts": o, "nb": nb}
+                 "r": r, "brn": brn, "ce": ce, "opts": o, "nb": nb, "rho": rho}
     est.display = display_vec
     est.vec = {"deps": deps, "lags": lags, "trend": trend, "r": r, "alpha": alpha, "beta": beta, "Om": Om,
                "coef": coef, "T": T, "Y": Y, "J": J, "d": d, "XtXi": XtXi, "times": times, "t0": times[0],
@@ -410,10 +417,10 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
     lev = level or est.level
     if header:
         out.write("\nVector error-correction model\n\n", "text")
-        out.write(f"{x['sample']:<48}{'No. of obs':<18}= {int(x['N']):>9}\n", "text")
+        out.write(f"{x['sample']:<48}{'Number of obs':<18}= {int(x['N']):>10}\n", "text")
         out.write(f"{'':<48}{'AIC':<18}= {_g(x['aic'], '%9.0g'):>10}\n", "text")
         out.write(f"{'Log likelihood = ' + _g(x['ll'], '%9.0g'):<48}{'HQIC':<18}= {_g(x['hqic'], '%9.0g'):>10}\n", "text")
-        out.write(f"{'Det(Sigma_ml)  = ' + _g(x['det'], '%9.0g'):<48}{'SBIC':<18}= {_g(x['sbic'], '%9.0g'):>10}\n\n", "text")
+        out.write(f"{'Det(Sigma_ml)  = ' + _g(x['det'], '%9.0g').rjust(9):<48}{'SBIC':<18}= {_g(x['sbic'], '%9.0g'):>10}\n\n", "text")
         out.write(f"{'Equation':<15}{'Parms':>9}{'RMSE':>10}{'R-sq':>9}{'chi2':>10}{'P>chi2':>11}\n", "text")
         out.write("-" * 64 + "\n", "text")
         for dv, mp, rm, r2, chi, pv in x["eqstats"]:
@@ -425,19 +432,18 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
     if table and not o.get("nobtable"):
         r, nb, beta = x["r"], x["nb"], x["beta"]
         out.write("\nCointegrating equations\n\n", "text")
-        out.write(f"{'Equation':<15}{'Parms':>9}{'chi2':>10}{'P>chi2':>11}\n", "text")
-        out.write("-" * 45 + "\n", "text")
+        out.write("Equation           Parms    chi2     P>chi2\n", "text")
+        out.write("-" * 43 + "\n", "text")
         free, Vb = x["free"], x["Vb"]
         bvec = beta.T.ravel()
         for e_, c in enumerate(x["ce"]):
             ids = [free.index(i + e_ * nb) for i in range(r, nb)]
             bj = bvec[[i + e_ * nb for i in range(r, nb)]]
             chi = float(bj @ np.linalg.solve(Vb[np.ix_(ids, ids)], bj))
-            out.write(f"{c:<15}{len(ids):>8}{_g(chi, '%11.0g'):>12}{float(chi2_tail(chi, len(ids))):>9.4f}\n", "result")
-        out.write("-" * 45 + "\n\n", "text")
-        if not o.get("noidtest"):
-            out.write("Identification:  beta is exactly identified\n\n", "text")       # VERIFY layout
-            out.write(f"{'Johansen normalization restriction imposed':>60}\n", "text")
+            out.write(f"{c:<18}{len(ids):>5}{_g(chi, '%9.0g'):>11}{float(chi2_tail(chi, len(ids))):>9.4f}\n", "result")
+        out.write("-" * 43 + "\n\n", "text")
+        out.write("Identification:  beta is exactly identified\n\n", "text")       # VERIFY layout
+        out.write(f"{'Johansen normalization restriction imposed':>59}\n", "text")
         rows = []
         for e_, c in enumerate(x["ce"]):
             rows.append(CoefRow("eq", c))
@@ -448,4 +454,35 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
                 else:
                     rows.append(CoefRow("coef", nm, float(bvec[k]),
                                         float(est.extra["sebeta"][k])))
+            if x.get("rho") is not None:
+                rows.append(CoefRow("coef", "_cons", float(x["rho"][e_]), float("nan")))
         coef_table(s, "beta", rows, stat="z", df=None, level=lev)
+    if table and o.get("alpha"):
+        _display_alpha(s, est, lev)
+
+
+def _display_alpha(s: "Session", est: Estimates, lev: float) -> None:
+    """The `alpha` option: Wald tests and table of the adjustment parameters."""
+    from .tsmodels import _g
+    out = s.output
+    x = est.extra
+    r, ce = x["r"], x["ce"]
+    K = len(x["eqstats"])
+    mpar = est.V.shape[0] // K
+    out.write("\nAdjustment parameters\n\n", "text")
+    out.write("Equation           Parms    chi2     P>chi2\n", "text")
+    out.write("-" * 43 + "\n", "text")
+    rows = []
+    for j, (name, *_rest) in enumerate(x["eqstats"]):
+        idx = [j * mpar + k for k in range(r)]
+        b = est.b[idx]
+        chi = float(b @ np.linalg.solve(est.V[np.ix_(idx, idx)], b))
+        out.write(f"{name[:18]:<18}{r:>5}{_g(chi, '%9.0g'):>11}{float(chi2_tail(chi, r)):>9.4f}\n", "result")
+        rows.append(CoefRow("eq", name))
+        for k, c in enumerate(ce):
+            rows.append(CoefRow("header", c))
+            rows.append(CoefRow("coef", "L1.", float(est.b[idx[k]]), float(np.sqrt(est.V[idx[k], idx[k]]))))
+        if j < K - 1:
+            rows.append(CoefRow("sep"))
+    out.write("-" * 43 + "\n", "text")
+    coef_table(s, "alpha", rows, stat="z", df=None, level=lev)

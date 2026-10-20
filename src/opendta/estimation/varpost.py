@@ -152,6 +152,12 @@ def _var(s: "Session", name: str):
     return est, est.var
 
 
+def _cg(x: float, n: int) -> str:
+    """C-style %.<n>g without the leading zero, as the box tables of var postestimation show it."""
+    r = format(float(x), f".{n}g")
+    return r.replace("0.", ".", 1) if r.startswith(("0.", "-0.")) else r
+
+
 def _opts(args: str, spec: dict) -> dict:
     p = parse_standard(args)
     if p.varlist.strip():
@@ -172,15 +178,17 @@ def cmd_varlmar(s: "Session", args: str) -> None:
         chi, df = lm_autocorr(V["U"], V["X"], lag)
         rows.append((lag, chi, df, float(chi2_tail(chi, df))))
     sep = int(o["separator"]) if o.get("separator") and o["separator"] is not True else 0
-    out.write("\nLagrange-multiplier test\n\n", "text")     # VERIFY layout
-    out.write(" lag       chi2   df       Prob > chi2\n", "text")
-    out.write("-" * 38 + "\n", "text")
+    bar = "|" + "-" * 6 + "+" + "-" * 31 + "|"
+    out.write("\n   Lagrange-multiplier test\n", "text")
+    out.write("  +" + "-" * 38 + "+\n", "text")
+    out.write("  | lag  |      chi2    df   Prob > chi2 |\n", "text")
+    out.write("  " + bar + "\n", "text")
     for i, (lag, chi, df, pv) in enumerate(rows):
-        out.write(f"{lag:>4}{chi:>11.4f}{df:>5}{pv:>16.5f}\n", "result")
+        out.write(f"  |{lag:>4}  |{chi:>10.4f}{df:>6}{pv:>12.5f}   |\n", "result")
         if sep and (i + 1) % sep == 0 and i + 1 < len(rows):
-            out.write("-" * 38 + "\n", "text")
-    out.write("-" * 38 + "\n", "text")
-    out.write("H0: no autocorrelation at lag order\n", "text")
+            out.write("  " + bar + "\n", "text")
+    out.write("  +" + "-" * 38 + "+\n", "text")
+    out.write("   H0: no autocorrelation at lag order\n", "text")
     s.r = {"lm": Matrix(np.array([[r[1], r[2], r[3]] for r in rows]),
                         [str(r[0]) for r in rows], ["chi2", "df", "p"])}
 
@@ -207,24 +215,26 @@ def cmd_varnorm(s: "Session", args: str) -> None:
         if key not in which:
             continue
         title, coef, chi, df, chi_all, df_all = tabs[key]
-        out.write(f"\n  {title}\n\n", "text")                      # VERIFY layout
-        head = f"{'Equation':>18}" + (f"{'Skewness' if key == 'skewness' else 'Kurtosis':>11}" if coef is not None else "")
-        out.write(head + f"{'chi2':>11}{'df':>5}{'Prob > chi2':>14}\n", "text")
-        width = len(head) + 30
-        out.write("-" * width + "\n", "text")
+        bar = "|" + "-" * 20 + "+" + "-" * 35 + "|"
+        out.write(f"\n   {title}\n", "text")
+        out.write("  +" + "-" * 56 + "+\n", "text")
+        lab = "Skewness" if key == "skewness" else "Kurtosis"
+        mid = f"{lab:>9}{'chi2':>7}{'df':>5}  Prob > chi2 " if coef is not None else \
+            f"{'chi2':>16}{'df':>5}  Prob > chi2 "
+        out.write(f"  |{'Equation':>19} |{mid}|\n", "text")
+        out.write("  " + bar + "\n", "text")
         mat = []
         for i, dv in enumerate(deps):
             pv = float(chi2_tail(chi[i], df))
             mat.append([chi[i], df, pv])
-            out.write(f"{dv[:18]:>18}" + (f"{coef[i]:>11.5f}" if coef is not None else "") +
-                      f"{chi[i]:>11.3f}{df:>5}{pv:>14.5f}\n", "result")
+            sk = f"{_cg(coef[i], 5):>8}" if coef is not None else " " * 8
+            out.write(f"  |{dv[:19]:>19} |{sk}{chi[i]:>9.3f}{df:>4}{pv:>11.5f}   |\n", "result")
             if sep and (i + 1) % sep == 0:
-                out.write("-" * width + "\n", "text")
+                out.write("  " + bar + "\n", "text")
         pv = float(chi2_tail(chi_all, df_all))
         mat.append([chi_all, df_all, pv])
-        out.write(f"{'ALL':>18}" + (" " * 11 if coef is not None else "") +
-                  f"{chi_all:>11.3f}{df_all:>5}{pv:>14.5f}\n", "result")
-        out.write("-" * width + "\n", "text")
+        out.write(f"  |{'ALL':>19} |{' ' * 8}{chi_all:>9.3f}{df_all:>4}{pv:>11.5f}   |\n", "result")
+        out.write("  +" + "-" * 56 + "+\n", "text")
         res[key] = Matrix(np.array(mat), deps + ["ALL"], ["chi2", "df", "p"])
     if V["dfk"]:
         out.write("dfk estimator used in computations\n", "text")
@@ -249,18 +259,22 @@ def cmd_varstable(s: "Session", args: str) -> None:
     mod = np.abs(ev)
     out = s.output
     from .tsmodels import _g
-    out.write("\nEigenvalue stability condition\n\n", "text")
-    out.write(f"{'Eigenvalue':<34}Modulus\n", "text")
+    out.write("\n   Eigenvalue stability condition\n", "text")
+    out.write("  +" + "-" * 40 + "+\n", "text")
+    out.write("  |        Eigenvalue        |   Modulus   |\n", "text")
+    out.write("  |" + "-" * 26 + "+" + "-" * 13 + "|\n", "text")
+
     for z, m in zip(ev, mod):
         if abs(z.imag) < 1e-12:
-            lab = _g(z.real)
+            lab = f" {_cg(z.real, 7):>10}" + " " * 15
         else:
-            lab = f"{_g(z.real)} {'+' if z.imag > 0 else '-'} {_g(abs(z.imag))}i"
-        out.write(f"{lab:<34}{f'{m:.6f}'.replace('0.', '.', 1) if m < 1 else f'{m:.6f}'}\n", "result")
+            lab = f" {_cg(z.real, 7):>10} {'+' if z.imag > 0 else '-'} {_cg(abs(z.imag), 7):>9}i  "
+        out.write(f"  |{lab}| {_cg(m, 6):>9}   |\n", "result")      # VERIFY: number formats
+    out.write("  +" + "-" * 40 + "+\n", "text")
     if np.all(mod < 1):
-        out.write("\nAll the eigenvalues lie inside the unit circle.\nVAR satisfies stability condition.\n", "text")
+        out.write("   All the eigenvalues lie inside the unit circle.\n   VAR satisfies stability condition.\n", "text")
     else:
-        out.write("\nAt least one eigenvalue is outside the unit circle.\nVAR does not satisfy stability condition.\n", "text")
+        out.write("   At least one eigenvalue is outside the unit circle.\n   VAR does not satisfy stability condition.\n", "text")
     s.r = {"Modulus": Matrix(mod.reshape(-1, 1)), "Im": Matrix(ev.imag.reshape(-1, 1)),
            "Re": Matrix(ev.real.reshape(-1, 1))}
     if o.get("amat") and o["amat"] is not True:
@@ -307,11 +321,16 @@ def cmd_varwle(s: "Session", args: str) -> None:
     groups = [(dv, j) for j, dv in enumerate(deps)] + [("All", None)]
     last = None
     for name, j in groups:
-        out.write(f"\n   Equation: {name}\n\n", "text")                   # VERIFY layout
-        hdr = f"{'lag':>5}{'F':>12}{'df':>5}{'df_r':>6}{'Prob > F':>12}" if small else \
-            f"{'lag':>5}{'chi2':>12}{'df':>5}{'Prob > chi2':>14}"
-        out.write(hdr + "\n", "text")
-        out.write("-" * len(hdr) + "\n", "text")
+        out.write(f"\n   Equation: {name}\n", "text")
+        if small:       # VERIFY: layout of the F version
+            cell = f"{'F':>8}{'':2}{'df':>6}{'df_r':>6}  Prob > F "
+        else:
+            cell = f"{'chi2':>8}{'':2}{'df':>6}  Prob > chi2 "
+        wd = len(cell)
+        out.write("  +" + "-" * (6 + wd) + "+\n", "text")
+        out.write(f"  | lag |{cell}|\n", "text")
+        bar = "  |" + "-" * 5 + "+" + "-" * wd + "|\n"
+        out.write(bar, "text")
         rows = []
         for i, l in enumerate(lags):
             idx = [k for k, (_v, ll) in enumerate(xnames) if ll == l]
@@ -320,14 +339,14 @@ def cmd_varwle(s: "Session", args: str) -> None:
                 F = chi / df
                 pv = float(_f.sf(F, df, dfr))
                 rows.append((l, F, df, dfr, pv))
-                out.write(f"{l:>5}{F:>12.5f}{df:>5}{dfr:>6}{pv:>12.4f}\n", "result")
+                out.write(f"  |{l:>4} |{_cg(F, 7):>10}{df:>6}{dfr:>6}{pv:>10.3f}    |\n", "result")
             else:
                 pv = float(chi2_tail(chi, df))
                 rows.append((l, chi, df, pv))
-                out.write(f"{l:>5}{chi:>12.5f}{df:>5}{pv:>14.3f}\n", "result")
+                out.write(f"  |{l:>4} |{_cg(chi, 7):>10}{df:>6}{pv:>10.3f}    |\n", "result")
             if sep and (i + 1) % sep == 0 and i + 1 < len(lags):
-                out.write("-" * len(hdr) + "\n", "text")
-        out.write("-" * len(hdr) + "\n", "text")
+                out.write(bar, "text")
+        out.write("  +" + "-" * (6 + wd) + "+\n", "text")
         last = rows
     # r(): the last table ("All"), as a matrix lags x columns
     names = [str(r[0]) for r in last]

@@ -56,6 +56,7 @@ class CoefRow:
     name: str = ""                # name in e(b), for estimates table
     noeform: bool = False         # never exponentiated (e.g. /ln_p in streg)
     tight: bool = False           # label over 13 columns, touching the bar (var(_cons)| in me)
+    zero_lo: bool = False         # variance: the lower confidence limit is truncated at zero
 
 
 @dataclass
@@ -151,7 +152,11 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
     out = s.output
     lv = level_text(level)
     ci = f"[{lv}% Conf. Interval]"
-    out.write(LINE + "\n", "text")
+    # a label that touches the bar and does not fit in 13 columns widens the first column
+    W = max([13] + [len(r.label) + 1 for r in rows if r.tight])
+    X = W - 1
+    LINE_ = "-" * (len(LINE) + W - 13)
+    out.write(LINE_ + "\n", "text")
     if top_line is not None:
         # bootstrap: "Observed   Bootstrap ... Normal-based" (VERIFY alinhamento)
         out.write(top_line + "\n", "text")
@@ -159,31 +164,31 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
         # VERIFY alignment of the label (Robust, Bootstrap...)
         lab = vcetype
         start = 28 + (9 - len(lab)) // 2      # centrado sobre "Std. Err."
-        out.write(f"{'':>12} |" + " " * max(start - 14, 1) + lab + "\n", "text")
+        out.write(f"{'':>{X}} |" + " " * max(start - 14, 1) + lab + "\n", "text")
     stat_h = "t    P>|t|" if stat == "t" else "z    P>|z|"
     # depvar_left: dfuller, regress writes "D.w          |" (compat 1101)
-    dep = f"{abbrev(depvar):<13}|" if depvar_left else f"{abbrev(depvar):>12} |"
+    dep = f"{abbrev(depvar):<{W}}|" if depvar_left else f"{abbrev(depvar):>{X}} |"
     out.write(f"{dep} {coef_title:>10}   Std. Err.      {stat_h}     {ci:>20}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+    out.write("-" * W + "+" + "-" * 64 + "\n", "text")
     c = crit(stat, level, df)
     for r in rows:
         if r.kind == "eq":
-            out.write(f"{abbrev(r.label):<12} |", "result")
+            out.write(f"{abbrev(r.label):<{X}} |", "result")
             out.write(("  " + r.eq if r.eq else "") + "\n", "text")   # ex.: (base outcome)
             continue
         if r.kind == "header":
-            out.write(f"{abbrev(r.label):>12} |\n", "text")
+            out.write(f"{abbrev(r.label):>{X}} |\n", "text")
             continue
         if r.kind == "blank":
-            out.write(f"{'':>12} |\n", "text")
+            out.write(f"{'':>{X}} |\n", "text")
             continue
         if r.kind == "sep":
-            out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+            out.write("-" * W + "+" + "-" * 64 + "\n", "text")
             continue
         if r.tight:
-            out.write(f"{abbrev(r.label, 13):>13}|", "text")
+            out.write(f"{abbrev(r.label, W):>{W}}|", "text")
         else:
-            out.write(f"{abbrev(r.label):>12} |", "text")
+            out.write(f"{abbrev(r.label):>{X}} |", "text")
         if r.kind == "base":
             out.write("          0  (base)\n", "result")
             continue
@@ -224,6 +229,9 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             tval = b / se
             p = pvalue(stat, tval, df)
             lo, hi = b - c * se, b + c * se
+            if r.zero_lo:       # variance: one-sided test against zero, interval truncated at zero
+                p = float(st.norm.sf(tval))
+                lo = max(lo, 0.0)
             if eform and not r.noeform:
                 b, se, lo, hi = np.exp(b), np.exp(b) * se, np.exp(lo), np.exp(hi)
             out.write(f"  {g9(b):>9}  {g9(se):>9}  {tval:>7.2f}  {p:>6.3f}    {g9(lo):>9}   {g9(hi):>9}\n",
@@ -233,7 +241,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             out.write(f"  {g9(b):>9}  {g9(se) if se == 0 else '.':>9}  {'.':>7}  {'.':>6}    "
                       f"{'.':>9}   {'.':>9}\n", "result")
     if footer:
-        out.write(LINE + "\n", "text")
+        out.write(LINE_ + "\n", "text")
 
 
 def rows_from_columns(cols: "list[Column]", b: dict[str, float], se: dict[str, float],

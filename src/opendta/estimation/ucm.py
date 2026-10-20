@@ -61,7 +61,7 @@ def param_layout(spec: UCSpec, depname: str) -> list[tuple[str, str]]:
     if lv:
         out.append(("var(level)", "var"))
     if tv:
-        out.append(("var(trend)", "var"))
+        out.append(("var(slope)", "var"))
     if spec.seasonal:
         out.append(("var(seasonal)", "var"))
     for i in range(nc):
@@ -107,7 +107,7 @@ def build_state_space(spec: UCSpec, nat: dict):
         if lv:
             S[0, 0] = nat["var(level)"]
         if tv:
-            S[n - 1, n - 1] = nat["var(trend)"]
+            S[n - 1, n - 1] = nat["var(slope)"]
         c = np.zeros(n)
         if drift:
             c[0] = nat["beta"]
@@ -229,7 +229,7 @@ def cmd_ucm(s: "Session", args: str) -> None:
         return _numderiv(ll, u)
 
     vy = float(np.var(np.diff(y))) or 1.0
-    start = {"var(level)": 0.3 * vy, "var(trend)": 0.05 * vy, "var(seasonal)": 0.05 * vy, "beta": float(np.mean(np.diff(y))),
+    start = {"var(level)": 0.3 * vy, "var(slope)": 0.05 * vy, "var(seasonal)": 0.05 * vy, "beta": float(np.mean(np.diff(y))),
              f"var({smp.depname})": 0.5 * vy}
     u0 = []
     beta0 = np.linalg.lstsq(X, y, rcond=None)[0] if nreg else np.zeros(0)
@@ -277,20 +277,26 @@ def cmd_ucm(s: "Session", args: str) -> None:
         except np.linalg.LinAlgError:
             chi2 = SYS
     pv = float(chi2_tail(chi2, len(idx))) if idx and chi2 < SYS else SYS
-    rows: list[CoefRow] = []
+    blocks: list[list[CoefRow]] = []
     if nreg:
         bmap = {col.name: nat_vals[i] for i, col in enumerate(est_cols)}
         semap = {col.name: se[i] for i, col in enumerate(est_cols)}
-        rows.append(CoefRow("eq", smp.depname))
-        rows += rows_from_columns(est_cols, bmap, semap, s.data, constant=False)
-        rows.append(CoefRow("sep"))
+        blocks.append(rows_from_columns(est_cols, bmap, semap, s.data, constant=False))
     enames, eqs = [], []
+    others: list[CoefRow] = []
+    vrows: list[CoefRow] = []
     for i, (nm, kd) in enumerate(layout):
         if nm.startswith("reg"):
             enames.append(est_cols[int(nm[3:])].name); eqs.append(smp.depname)
             continue
-        rows.append(CoefRow("coef", nm, nat_vals[i], se[i], name=nm))
+        (vrows if kd == "var" else others).append(CoefRow("coef", nm, nat_vals[i], se[i], name=nm, tight=kd == "var", zero_lo=kd == "var"))
         enames.append(nm); eqs.append("")
+    blocks += [b_ for b_ in (others, vrows) if b_]
+    rows: list[CoefRow] = []
+    for b_ in blocks:
+        if rows:
+            rows.append(CoefRow("sep"))
+        rows += b_
     est = Estimates("ucm", smp.depname, enames, nat_vals, V, n, "z", None)
     est.eqnames = [e_ or "_" for e_ in eqs]
     est.rows = rows
@@ -303,7 +309,7 @@ def cmd_ucm(s: "Session", args: str) -> None:
         comps.append("order " + " ".join(map(str, spec.cycles)) + (" cycle" if len(spec.cycles) == 1 else " cycles")
                      if len(spec.cycles) == 1 else f"{len(spec.cycles)} cycles of order " + " ".join(map(str, spec.cycles)))
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1),
-                 "components": ", ".join(comps) or "none", "stationary": stationary, "nreg": nreg}
+                 "components": ", ".join(comps), "stationary": stationary, "nreg": nreg}
     est.ucm = {"spec": spec, "layout": layout, "u": u, "y": y, "X": X, "order": order, "mask": smp.mask.copy()}
     est.display = display_ucm
     scalars = [("N", float(n)), ("k", float(len(u))), ("k_aux", float(len(u) - nreg)), ("k_eq", float(1 + (nreg > 0))),
@@ -324,15 +330,15 @@ def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: boo
     x = est.extra
     if header:
         out.write("\nUnobserved-components model\n", "text")
-        out.write(f"Components: {x['components']}\n\n", "text")
-        _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
+        out.write(f"Components: {x['components']}".rstrip() + "\n\n", "text")
+        _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         if x["nreg"]:
             _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
+        ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
         if x["nreg"]:
-            _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+            _right(out, ll, "Prob > chi2", _g(x["p"], "%10.4f"))
         else:
-            out.write(f"Log likelihood = {_g(x['ll'], '%9.0g')}\n", "text")
-        out.write("\n", "text")
+            out.write(ll + "\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         if not x["stationary"]:

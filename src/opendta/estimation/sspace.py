@@ -35,6 +35,7 @@ class Param:
     label: str                # row label
     kind: str = "id"          # id or var
     start: float = 0.0
+    hdr: str = ""             # variable shown on its own row above a lagged term (L1. under it)
 
 
 @dataclass
@@ -62,12 +63,10 @@ def _split_eqs(args: str) -> tuple[list[str], str]:
                     break
             eqs.append(args[i + 1:j - 1])
             i = j
-        elif args[i] == ",":
-            return eqs, args[i + 1:]
         elif args[i].isspace():
             i += 1
         else:
-            raise StataError(198, "invalid syntax")
+            return eqs, args[i:]       # [if] [in] [, options]
     return eqs, ""
 
 
@@ -90,8 +89,9 @@ def parse_sspace(s: "Session", args: str):
 
 
 def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
-    if covstate != "diagonal" or covobs != "diagonal":
-        raise StataError(198, "covstate() and covobserved() other than diagonal not implemented in OpenDTA")   # OpenDTA
+    if covstate not in ("diagonal", "identity") or covobs != "diagonal":
+        raise StataError(198, "covstate() other than diagonal and identity, and covobserved() other than diagonal, "
+                              "are not implemented in OpenDTA")   # OpenDTA
     states = [e["dep"] for e in eqs if e["state"]]
     obs = [e for e in eqs if not e["state"]]
     if not states or not obs:
@@ -105,10 +105,10 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
     errs_state = [None] * r
     errs_obs = [None] * m
 
-    def coef(eq_label, label, ename, spec, start):
+    def coef(eq_label, label, ename, spec, start, hdr=""):
         if spec is None:
             nm = f"{eq_label}:{ename}"
-            params.append(Param(nm, eq_label, label, "id", start))
+            params.append(Param(nm, eq_label, label, "id", start, hdr))
             return ("p", nm)
         try:
             return ("f", float(spec))
@@ -140,7 +140,7 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
                 if kind == "S":
                     if lag != 1 or base not in states:
                         raise StataError(198, "state equations may contain only lagged states and error terms in OpenDTA")   # OpenDTA
-                    entries.append(("A", i, states.index(base), coef(e["dep"], t, t, spec, 0.1)))
+                    entries.append(("A", i, states.index(base), coef(e["dep"], "L1.", t, spec, 0.1, base)))
                 else:
                     if lag == 0 and base in states:
                         entries.append(("D", i, states.index(base), coef(e["dep"], base, t, spec, 1.0)))
@@ -152,8 +152,16 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
                         entries.append(("X", i, xnames.index(t), coef(e["dep"], t, t, spec, 0.0)))
             if not e["noconstant"]:
                 entries.append(("C" if kind == "S" else "K", i, 0, coef(e["dep"], "_cons", "_cons", None, 0.0)))
+    if not any(nm for nm in errs_state + errs_obs):
+        # covariance form: every equation has an error unless it says noerror
+        errs_state = [None if e["noerror"] else e["dep"] for e in eqs if e["state"]]
+        errs_obs = [None if e["noerror"] else e["dep"] for e in obs]
+    unit = set()
     for i, nm in enumerate(errs_state):
         if nm and not [e for e in eqs if e["state"]][i]["noerror"]:
+            if covstate == "identity":
+                unit.add(i)
+                continue
             params.append(Param(f"var(e.{states[i]})", "", f"var(e.{states[i]})", "var", 1.0))
     for i, nm in enumerate(errs_obs):
         if nm and not obs[i]["noerror"]:
@@ -178,7 +186,9 @@ def build_sspace(s: "Session", eqs: list[dict], covstate: str, covobs: str):
             else: k0[i] = v
         S = np.zeros((r, r)); H = np.zeros((m, m))
         for i in range(r):
-            if f"var(e.{states[i]})" in th:
+            if i in unit:
+                S[i, i] = 1.0
+            elif f"var(e.{states[i]})" in th:
                 S[i, i] = th[f"var(e.{states[i]})"]
         for i in range(m):
             if f"var(e.{deps[i]})" in th:
@@ -197,14 +207,14 @@ def build_dfactor(s: "Session", obs_eq: tuple, fac_eq: tuple):
     r = max(p, 1)
     m = len(deps)
     params: list[Param] = []
+    for l in arl:
+        params.append(Param(f"{fname}:L{l}.{fname}", fname, f"L{l}.", "id", 0.3 if l == 1 else 0.0, fname))
     for i, dv in enumerate(deps):
         params.append(Param(f"{dv}:{fname}", dv, fname, "id", 0.5 + 0.1 * i))
         for x in exog:
             params.append(Param(f"{dv}:{x}", dv, x, "id", 0.0))
         if not nocons:
             params.append(Param(f"{dv}:_cons", dv, "_cons", "id", 0.0))
-    for l in arl:
-        params.append(Param(f"{fname}:L{l}.{fname}", fname, f"L{l}.", "id", 0.3 if l == 1 else 0.0))
     for dv in deps:
         params.append(Param(f"var(e.{dv})", "", f"var(e.{dv})", "var", 1.0))
 
@@ -321,17 +331,22 @@ def _fit(s: "Session", spec: ModelSpec, xnames: list[str], mask: np.ndarray, o: 
         chi2 = SYS
     pv = float(chi2_tail(chi2, len(idx))) if chi2 < SYS else SYS
     rows: list[CoefRow] = []
-    last = None
+    last, lasth = None, ""
     for i, p in enumerate(spec.params):
         if p.eq and p.eq != last:
             if last is not None:
                 rows.append(CoefRow("sep"))
             rows.append(CoefRow("eq", p.eq))
-            last = p.eq
+            last, lasth = p.eq, ""
         elif not p.eq and last is not None:
             rows.append(CoefRow("sep"))
-            last = None
-        rows.append(CoefRow("coef", p.label, nat[i], se[i], name=p.name))
+            last, lasth = None, ""
+        if p.hdr and p.hdr != lasth:
+            if lasth:
+                rows.append(CoefRow("blank"))
+            rows.append(CoefRow("header", p.hdr))
+        lasth = p.hdr
+        rows.append(CoefRow("coef", p.label, nat[i], se[i], name=p.name, tight=p.kind == "var", zero_lo=p.kind == "var"))
     est = Estimates(spec.cmd, " ".join(spec.deps), names, nat, V, T, "z", None)
     est.eqnames = [p.eq or "_" for p in spec.params]
     est.rows = rows
@@ -360,12 +375,11 @@ def display_ssm(s: "Session", est: Estimates, *, header: bool = True, table: boo
     x = est.extra
     if header:
         out.write(f"\n{x['title']}\n\n", "text")
-        _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
-        _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, "", "Prob > chi2", _g(x["p"], "%10.4f"))
-        out.write("\n", "text")
+        _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
+        _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
+        _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
     if table:
-        coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
+        coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: Tests of variances against zero are one sided, and the two-sided\n"
                   "      confidence intervals are truncated at zero.\n", "text")
 

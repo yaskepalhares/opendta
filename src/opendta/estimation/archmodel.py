@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 SYS = M.SYSMISS
 
 # variance terms in the order Stata lists them; (option, number of extra parameters per lag)
-TERMS = ["arch", "garch", "saarch", "tarch", "aarch", "narch", "narchk", "abarch", "atarch", "sdgarch",
-         "earch", "egarch", "parch", "tparch", "aparch", "nparch", "nparchk", "pgarch"]
+TERMS = ["arch", "saarch", "tarch", "aarch", "narch", "narchk", "abarch", "atarch", "sdgarch",
+         "earch", "egarch", "parch", "tparch", "aparch", "nparch", "nparchk", "pgarch", "garch"]    # VERIFY: garch last
 POWER = {"parch", "tparch", "aparch", "nparch", "nparchk", "pgarch"}
 EXTRA = {"aarch": "aarch_e", "narch": "narch_k", "narchk": "narch_k", "earch": "earch_a",
          "aparch": "aparch_e", "nparch": "nparch_k", "nparchk": "nparch_k"}
@@ -472,8 +472,8 @@ def cmd_arch(s: "Session", args: str) -> None:
                 rows.append(CoefRow("blank"))
             rows.append(CoefRow("header", lab))
             for lg in lags:
-                rows.append(CoefRow("coef", f"L{lg}." if lg > 1 else "L.", b[j], se[j], name=f"ARMA:L{lg}.{lab}"))
-                names.append(f"L{lg}.{lab}" if lg > 1 else f"L.{lab}")
+                rows.append(CoefRow("coef", f"L{lg}.", b[j], se[j], name=f"ARMA:L{lg}.{lab}"))
+                names.append(f"L{lg}.{lab}")
                 eqs.append("ARMA")
                 j += 1
     if spec.nhet:
@@ -491,7 +491,7 @@ def cmd_arch(s: "Session", args: str) -> None:
             for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
                 if kd2 != kd:
                     continue
-                lab = f"L{lg}." if lg > 1 else "L."
+                lab = f"L{lg}."
                 rows.append(CoefRow("coef", lab, b[a], se[a], name=f"ARCH:{lab}{kd}"))
                 names.append(f"{lab}{kd}"); eqs.append("ARCH")
             if kd in EXTRA:
@@ -500,7 +500,7 @@ def cmd_arch(s: "Session", args: str) -> None:
                 for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
                     if kd2 != kd:
                         continue
-                    lab = f"L{lg}." if lg > 1 else "L."
+                    lab = f"L{lg}."
                     rows.append(CoefRow("coef", lab, b[a + 1], se[a + 1], name=f"ARCH:{lab}{EXTRA[kd]}"))
                     names.append(f"{lab}{EXTRA[kd]}"); eqs.append("ARCH")
         if not spec.nhet:
@@ -515,9 +515,10 @@ def cmd_arch(s: "Session", args: str) -> None:
     if pos["dist"][1] > pos["dist"][0]:
         j = pos["dist"][0]
         rows.append(CoefRow("sep"))
-        lab = "/lndfm" if spec.dist == "t" else "/lnshape"
+        lab = "/lndfm2" if spec.dist == "t" else "/lnshape"      # VERIFY: Stata 14 names the t parameter lndfm2
         rows.append(CoefRow("coef", lab, b[j], se[j], name=f"{lab[1:]}:_cons"))
         names.append("_cons"); eqs.append(lab[1:])
+        rows.append(CoefRow("sep"))
         val = math.exp(b[j]) + 2 if spec.dist == "t" else math.exp(b[j])
         sev = math.exp(b[j]) * se[j]
         rows.append(CoefRow("aux", "df" if spec.dist == "t" else "shape", val, sev))
@@ -538,7 +539,7 @@ def cmd_arch(s: "Session", args: str) -> None:
     est.level = float(o["level"]) if o.get("level") else smp.level
     est.vcetype = {"opg": "OPG", "robust": "Robust", "oim": "OIM"}[vce]
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1),
-                 "dist": {"gaussian": "Gaussian", "t": "Student's t", "ged": "GED"}[spec.dist], "ar": bool(spec.ar),
+                 "dist": {"gaussian": "Gaussian", "t": "t", "ged": "GED"}[spec.dist], "ar": bool(spec.ar),
                  "ma": bool(spec.ma)}
     est.arch = {"spec": spec, "pos": pos, "y": y, "X": X, "Z": Z, "order": order, "mask": smp.mask.copy(), "k": k}
     est.display = display_arch
@@ -567,6 +568,11 @@ def cmd_arch(s: "Session", args: str) -> None:
     display_arch(s, est)
 
 
+def _right_arch(out, left: str, lab: str, val: str) -> None:
+    out.write(f"{left:<50}{lab:<16}= ", "text")
+    out.write(f"{val:>10}\n", "result")
+
+
 def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                  level: float | None = None, **_kw) -> None:
     from .tsmodels import _g, _right
@@ -576,9 +582,9 @@ def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bo
         suffix = " -- ARMA disturbances" if x["ar"] and x["ma"] else " -- AR disturbances" if x["ar"] \
             else " -- MA disturbances" if x["ma"] else ""
         out.write(f"\nARCH family regression{suffix}\n\n", "text")
-        _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
-        _right(out, f"Distribution: {x['dist']}", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
+        _right_arch(out, f"Distribution: {x['dist']}", f"Wald chi2({int(x['df_m']) if x['df_m'] else '.'})", _g(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
