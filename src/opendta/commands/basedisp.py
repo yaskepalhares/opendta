@@ -20,7 +20,7 @@ from ..lazy import lazy
 from ._util import touse
 from .nptests import _set_r
 from .registry import command
-from .summarize import numeric_vars, weights
+from .summarize import g9, numeric_vars, weights
 
 st = lazy("scipy.stats")
 
@@ -53,8 +53,9 @@ def cmd_cumul(s: "Session", args: str) -> None:
     order = np.argsort(x, kind="stable")
     xs, wsrt = x[order], ww[order]
     cum = np.cumsum(wsrt)
-    if not o.get("equal"):
-        # tied values get the highest cumulative value
+    if o.get("equal"):
+        # equal: tied values get the same (highest) cumulative value; otherwise each observation
+        # of a tie has its own, in the order of the data
         last = np.searchsorted(xs, xs, side="right") - 1
         cum = cum[last]
     total = float(ww.sum())
@@ -94,6 +95,24 @@ def _span(keys, L: int) -> int:
     return pos[-1][1] - pos[0][1] + 1
 
 
+def _natural_unit(x: np.ndarray) -> int:
+    """Largest 10**u that divides every value (u <= 0 for values with decimals)."""
+    u = 0
+    while u > -8 and not np.allclose(x / 10.0 ** u, np.round(x / 10.0 ** u), rtol=0, atol=1e-9):
+        u -= 1
+    return u
+
+
+def _stem_rows(q: np.ndarray, d: int, L: int):
+    """(rows, leaves-by-row) of a stem-and-leaf plot of integers q with d digits per leaf and L
+    lines per stem."""
+    B = 10 ** d
+    w = B // L
+    mag = np.abs(q) // w
+    keys = [(bool(a < 0), int(b)) for a, b in zip(q, mag)]
+    return keys, w
+
+
 @command("stem", "stem", byable=True)
 def cmd_stem(s: "Session", args: str) -> None:
     p = parse_standard(args)
@@ -111,6 +130,8 @@ def cmd_stem(s: "Session", args: str) -> None:
     target = 10 * math.log10(n)
     best = None
     cands = []
+    if not isinstance(o.get("digits"), str) and not isinstance(o.get("round"), str):
+        return _stem_natural(s, v, x, o, target)
     if isinstance(o.get("digits"), str):
         es = [-int(o["digits"])]
     else:
@@ -166,11 +187,69 @@ def cmd_stem(s: "Session", args: str) -> None:
     out.write("\n", "text")
 
 
+def _stem_natural(s: "Session", v, x: np.ndarray, o: dict, target: float) -> None:
+    """stem without digits() or round(): the leaves keep every digit of the data. lines() given:
+    one digit per leaf; otherwise the stem unit and the number of lines come from the number of
+    rows nearest to 10*log10(n). VERIFY: the choice of the unit (compat/do/1903_base_stats.do)."""
+    u = _natural_unit(x)
+    q = np.round(x / 10.0 ** u).astype(np.int64)
+    if isinstance(o.get("lines"), str):
+        L = int(o["lines"])
+        if L not in _SYMS:
+            raise StataError(198, "lines() must be 1, 2 or 5")
+        d = 1
+    else:
+        top = int(np.abs(q).max())
+        cands = []
+        for d_ in range(1, len(str(top)) + 2):
+            for L_ in ((1, 2, 5) if d_ == 1 else (1, 2)):
+                keys, _w = _stem_rows(q, d_, L_)
+                rows = _span(keys, L_)
+                cands.append((abs(rows - target) + (0.001 if rows > target else 0), d_, L_))
+        cands.sort()
+        _, d, L = cands[0]
+    keys, w = _stem_rows(q, d, L)
+    B = 10 ** d
+    neg, pos = _order(keys)
+    if neg and pos:
+        full = [(True, m) for m in range(neg[0][1], -1, -1)] + [(False, m) for m in range(0, pos[-1][1] + 1)]
+    elif neg:
+        full = [(True, m) for m in range(neg[0][1], neg[-1][1] - 1, -1)]
+    else:
+        full = [(False, m) for m in range(pos[0][1], pos[-1][1] + 1)]
+    leaves: dict = {k: [] for k in full}
+    qs = np.sort(q)
+    for qq, k in zip(qs, _stem_rows(qs, d, L)[0]):
+        leaves[k].append(f"{abs(int(qq)) % B:0{d}d}")
+    labels = []
+    for neg_, m in full:
+        stem = (m * w) // B
+        if d == 1:
+            sym = _SYMS[L][((m * w) % B) // w]
+        else:
+            sym = "*" * d                      # VERIFY: label of stems with multi-digit leaves
+        labels.append((("-" if neg_ else "") + str(stem) + sym, (",".join if d > 1 else "".join)(leaves[(neg_, m)])))
+    if o.get("prune"):
+        labels = [t for t in labels if t[1]]
+    out = s.output
+    head = f"Stem-and-leaf plot for {v.name}"
+    if v.label:
+        head += f" ({v.label})"
+    out.write("\n" + head + "\n\n", "text")
+    if u > 0:
+        out.write(f"{v.name} rounded to nearest multiple of {10 ** u:g}\nplot in units of {10 ** u:g}\n\n", "text")
+    wd = max(len(a) for a, _b in labels)
+    for lab, lv in labels:
+        out.write(f"{lab:>{wd + 2}} | ", "text")
+        out.write(lv + "\n", "result")
+    out.write("\n", "text")
+
+
 # ---------------------------------------------------------------------------
 # lv
 # ---------------------------------------------------------------------------
 
-_LETTERS = "MHEDCBAZYXWVU"
+_LETTERS = "MFEDCBAZYXWVU"
 
 
 @command("lv", "lv", byable=True)
@@ -194,28 +273,45 @@ def cmd_lv(s: "Session", args: str) -> None:
         for i, d in enumerate(depths):
             lo = 0.5 * (xs[int(math.floor(d)) - 1] + xs[int(math.ceil(d)) - 1])
             hi = 0.5 * (xs[n - int(math.floor(d))] + xs[n - int(math.ceil(d))])
-            rows.append((_LETTERS[i], d, lo, hi))
+            rows.append((_LETTERS[i] if i < len(depths) - 1 else " ", d, lo, hi))
         out = s.output
-        out.write("\n" + f"{'#':>33} {n:<9}" + (f"{v.label}" if v.label else "") + "\n", "text")
+        ttl = v.label or v.name
+        head = [" "] * 70
+        head[1] = "#"
+        txt = f"{n}"
+        head[7:7 + len(txt)] = txt
+        pos = (59 - len(ttl) + 1) // 2
+        head[pos:pos + len(ttl)] = ttl
+        out.write("\n" + "".join(head).rstrip() + "\n", "text")
+        out.write(" " * 13 + "-" * 33 + "\n", "text")
         hspread = None
         for i, (let, d, lo, hi) in enumerate(rows):
-            mid = 0.5 * (lo + hi)
             ds = f"{d:g}"
-            out.write(f"{let:>4}{ds:>9}   |", "text")
+            ip, dp = ds.split(".") if "." in ds else (ds, "")
+            left = f" {let}".ljust(9 - len(ip)) + ip + ("." + dp if dp else "")
+            out.write(f"{left:<12}|", "text")
+            mid = 0.5 * (lo + hi)
             if i == 0:
-                out.write(f"{'':>14}{mid:>10.7g}{'':>14} |\n", "result")
+                out.write(f"{'':>10}{g9(mid):>11}{'':>11} |", "result")
+                out.write(f"{'spread':>10}{'pseudosigma':>13}\n", "text")
             else:
                 spread = hi - lo
+                # VERIFY: the pseudosigma of the last row (depth 1) is not given by the same tail
                 tail = (d - 1 / 3) / (n + 1 / 3)
                 pseudo = spread / (2 * float(st.norm.ppf(1 - tail))) if tail < 0.5 else math.nan
-                out.write(f"{lo:>14.7g}{mid:>10.7g}{hi:>14.7g} |{spread:>10.7g}{pseudo:>10.4g}\n", "result")
-                if let == "H":
+                out.write(f"{g9(lo):>10}{g9(mid):>11}{g9(hi):>11} |", "result")
+                out.write(f"{g9(spread):>10}{g9(pseudo):>12}\n", "result")
+                if let == "F":
                     hspread = spread
+        out.write(" " * 12 + "|" + " " * 33 + "|\n", "text")
+        out.write(" " * 12 + "|" + " " * 33 + "|" + f"{'# below':>10}{'# above':>12}\n", "text")
         if hspread is not None:
             hl, hu = rows[1][2], rows[1][3]
-            out.write(f"{'':>13}{'inner fence':>14}|{hl - 1.5 * hspread:>14.7g}{'':>10}{hu + 1.5 * hspread:>14.7g}\n", "text")
-            out.write(f"{'':>13}{'outer fence':>14}|{hl - 3 * hspread:>14.7g}{'':>10}{hu + 3 * hspread:>14.7g}\n", "text")
-        out.write("\n", "text")
+            for lab, k in (("inner fence", 1.5), ("outer fence", 3.0)):
+                flo, fhi = hl - k * hspread, hu + k * hspread
+                nb, na = int((xs < flo).sum()), int((xs > fhi).sum())
+                out.write(f"{lab:<12}|{g9(flo):>10}{'':>11}{g9(fhi):>11} |", "text")
+                out.write(f"{nb:>10}{na:>12}\n", "result")
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +320,8 @@ def cmd_lv(s: "Session", args: str) -> None:
 
 @command("smooth", "sm")
 def cmd_smooth(s: "Session", args: str) -> None:
-    m = re.match(r"\s*(\w+)\s*(,\s*twice\b)?\s*(.*)$", args, re.S)
+    # smoother[,twice] varname: the comma and twice are glued to the smoother, as in Stata
+    m = re.match(r"\s*(\w+)(,twice\b)?\s*,?\s*(.*)$", args, re.S)
     if not m:
         raise StataError(198, "invalid syntax")
     spec, twice, rest = m.group(1), bool(m.group(2)), m.group(3)

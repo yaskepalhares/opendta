@@ -239,9 +239,9 @@ def sunflower(s: "Session", text: str):
 
 _KERNELS = {
     "epanechnikov": lambda u: np.where(np.abs(u) < 1, 0.75 * (1 - u * u), 0.0),
-    "epan2": lambda u: np.where(np.abs(u) < 1, 0.75 * (1 - u * u), 0.0),
+    "epan2": lambda u: np.where(np.abs(u) < math.sqrt(5), 0.75 * (1 - u * u / 5) / math.sqrt(5), 0.0),
     "biweight": lambda u: np.where(np.abs(u) < 1, 15 / 16 * (1 - u * u) ** 2, 0.0),
-    "cosine": lambda u: np.where(np.abs(u) < 1, 1 + np.cos(2 * math.pi * u), 0.0),
+    "cosine": lambda u: np.where(np.abs(u) < 0.5, 1 + np.cos(2 * math.pi * u), 0.0),
     "gaussian": lambda u: np.exp(-0.5 * u * u) / math.sqrt(2 * math.pi),
     "parzen": lambda u: np.where(np.abs(u) <= 0.5, 4 / 3 - 8 * u * u + 8 * np.abs(u) ** 3,
                                  np.where(np.abs(u) <= 1, 8 / 3 * (1 - np.abs(u)) ** 3, 0.0)),
@@ -251,7 +251,7 @@ _KERNELS = {
 
 
 def lpoly_fit(x: np.ndarray, y: np.ndarray, grid: np.ndarray, h: float, degree: int = 0,
-              kernel: str = "epanechnikov") -> np.ndarray:
+              kernel: str = "epan2") -> np.ndarray:
     """Local polynomial smooth of y on x at the points of `grid` ([R] lpoly, Methods and
     formulas): weighted least squares of degree `degree` with kernel weights K((x - g)/h)."""
     K = _KERNELS[kernel]
@@ -259,7 +259,7 @@ def lpoly_fit(x: np.ndarray, y: np.ndarray, grid: np.ndarray, h: float, degree: 
     for i, g0 in enumerate(grid):
         w = K((x - g0) / h)
         keep = w > 0
-        if keep.sum() <= degree:
+        if keep.sum() <= degree + 1:        # VERIFY: Stata leaves the point missing with one observation
             continue
         d = x[keep] - g0
         Z = np.vander(d, degree + 1, increasing=True)
@@ -292,8 +292,8 @@ def lpoly(s: "Session", text: str):
     xx, yy = x[mask], y[mask]
     if len(xx) < 2:
         raise StataError(2001, "insufficient observations")
-    kn = str(lopts.get("kernel", "epanechnikov"))
-    full = [k for k in _KERNELS if k.startswith(kn)]
+    kn = str(lopts.get("kernel", "epan2"))
+    full = [kn] if kn in _KERNELS else [k for k in _KERNELS if k.startswith(kn)]
     if not full:
         raise StataError(198, f"kernel {kn} not allowed")
     kn = full[0]
@@ -317,15 +317,15 @@ def lpoly(s: "Session", text: str):
             if isinstance(lopts.get("at"), str):
                 gm = D.valid(D.numeric(s, s.expand_varlist(lopts["at"])[0]))
                 vals[gm & D.base_mask(s, p)] = np.where(np.isnan(sm), D.SYS, sm)
-                s.data.add(Variable(names[0], "float", vals))
+                s.data.add(Variable(names[0], "double", vals))
         else:
             if len(grid) > nobs:
                 raise StataError(198, "number of grid points exceeds the number of observations")
             gx = np.full(nobs, D.SYS)
             gx[:len(grid)] = grid
             vals[:len(grid)] = np.where(np.isnan(sm), D.SYS, sm)
-            s.data.add(Variable(names[0], "float", gx))
-            s.data.add(Variable(names[1], "float", vals))
+            s.data.add(Variable(names[0], "double", gx))
+            s.data.add(Variable(names[1], "double", vals))
     if lopts.get("nograph"):
         return None, graw
     layers = []
@@ -355,6 +355,8 @@ def cusum(s: "Session", text: str):
     n = len(xx)
     if n < 3:
         raise StataError(2001, "insufficient observations")
+    if ((yy < 0) | (yy > 1)).any():
+        raise StataError(198, "Yvar has values outside range [0,1]")
     o = np.argsort(xx, kind="stable")
     xs, ys = xx[o], yy[o]
     Z = np.column_stack([np.ones(n), xs])
