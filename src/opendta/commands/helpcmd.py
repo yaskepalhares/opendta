@@ -23,6 +23,14 @@ if TYPE_CHECKING:
 HELP_DIR = Path(__file__).resolve().parents[1] / "help"
 
 ALIASES = {
+    "jackknife": "resample", "permute": "resample", "simulate": "resample",
+    "mlexp": "ml", "mleval": "ml", "mlsum": "ml", "mlvecsum": "ml", "mlmatsum": "ml",
+    "mkspline": "modelbuild", "xi": "modelbuild", "nestreg": "modelbuild", "stepwise": "modelbuild", "fp": "modelbuild", "mfp": "modelbuild",
+    "testnl": "postest2", "predictnl": "postest2", "linktest": "postest2", "contrast": "postest2", "pwcompare": "postest2", "pwmean": "postest2", "suest": "postest2",
+    "bitest": "basetests", "bitesti": "basetests", "ksmirnov": "basetests", "median": "basetests", "nptrend": "basetests", "runtest": "basetests", "tetrachoric": "basetests", "ktau": "basetests", "pcorr": "basetests",
+    "ameans": "basestats", "icc": "basestats", "loneway": "basestats", "esize": "basestats", "esizei": "basestats", "lnskew0": "basestats", "ladder": "basestats", "boxcox": "basestats",
+    "quantile": "basegraphs", "symplot": "basegraphs", "serrbar": "basegraphs", "dotplot": "basegraphs", "sunflower": "basegraphs", "lpoly": "basegraphs", "cusum": "basegraphs", "gladder": "basegraphs",
+    "cumul": "basedisp", "stem": "basedisp", "lv": "basedisp", "smooth": "basedisp",
     "stjoin": "stsplit", "stfill": "stsplit", "stvary": "stsplit", "stgen": "stsplit", "stbase": "stsplit", "snapspan": "stsplit", "stptime": "strate", "stci": "strate", "stir": "strate", "stmh": "strate", "stmc": "strate", "ltable": "strate", "ctset": "ct", "cttost": "ct", "sttoct": "ct", "sttocc": "ct",
     "moptimize": "mata", "optimize": "mata", "m2_class": "mata", "class": "mata",
     "xtmixed": "mixed", "meprobit": "melogit", "mepoisson": "melogit", "mecloglog": "meglm", "menbreg": "meglm",
