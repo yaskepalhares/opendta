@@ -37,8 +37,12 @@ Notes for sessions that run in the cloud:
 - A case of hundreds of commands makes a full `tools/compare.py` slow: while fixing, run a slice of the case and diff each command's output against the same command in the reference log, then run `compare.py` once at the end.
 - Numbers shown with `%18.0g` have 16 significant digits (`.81` appears as `.8100000000000001`): use `format_value(x, "%18.0g")`, not `repr`. Iteration counts (`e(ic)`) of a search can differ by platform: ignore the line with a range (`(3|1[0-9])`).
 - Permutations and simulations: after `permute` or `simulate` the generator is in another state than Stata's, so everything that draws afterwards differs; list these lines in the known difference.
+- `rnormal()` does not give Stata's draws: build normal data as `round(invnormal(runiform()), .01)`.
+- A first Stata run mostly shows layouts and numerics, and a command that fails on degenerate data wastes its section: give every model data it can estimate (heavy tails for `arch` with `t` errors, a series with the feature a component model estimates: cycle, trend, seasonal, moving correlation) and keep the sections of a case independent, each under `capture noisily`, so that one run settles the block.
+- To find what a numeric difference is, dump the case data to a csv and test hypotheses offline: evaluate OpenDTA's likelihood at the reference estimates. A constant gap (for example `ln 4`) is a constant of the likelihood; a gap that disappears when a presample value is set to zero or to the sample mean is a presample rule; a likelihood that is higher in OpenDTA at the same estimates, with other estimates, is the optimizer or a different model, and goes into the known difference.
+- In a known difference, `ignore(/REGEX/)` removes lines from both logs, so lines that exist in only one (Stata's iteration logs) are fine; a table that appears several times cannot be scoped by position, so match the values that differ instead and keep `tolerance()` for the last digits.
 
-Next free numbers: compat cases from **1904**, roadmap phases from **18**.
+Next free numbers: compat cases from **1905**, roadmap phases from **19**.
 
 ## Rule: statistics in the core, Stata in the command
 

@@ -37,8 +37,12 @@ Notas para sessões que rodam na nuvem:
 - Um caso com centenas de comandos deixa o `tools/compare.py` completo lento: ao corrigir, rode um trecho do caso e compare a saída de cada comando com o mesmo comando do log de referência; rode o `compare.py` uma vez no final.
 - Números mostrados com `%18.0g` têm 16 dígitos significativos (`.81` aparece como `.8100000000000001`): use `format_value(x, "%18.0g")`, não `repr`. A contagem de iterações (`e(ic)`) de uma busca pode variar por plataforma: ignore a linha com uma faixa (`(3|1[0-9])`).
 - Permutações e simulações: depois de `permute` ou `simulate` o gerador fica em outro estado que o do Stata, então tudo o que sorteia depois difere; liste essas linhas na diferença conhecida.
+- `rnormal()` não dá os sorteios do Stata: crie dados normais com `round(invnormal(runiform()), .01)`.
+- Uma primeira rodada no Stata mostra sobretudo layouts e numéricos, e um comando que falha com dados degenerados desperdiça a sua seção: dê a cada modelo dados que ele consiga estimar (caudas pesadas para `arch` com erros `t`, uma série com o que um modelo de componentes estima: ciclo, tendência, sazonalidade, correlação móvel) e mantenha as seções do caso independentes, cada uma sob `capture noisily`, para que uma rodada resolva o bloco.
+- Para descobrir o que é uma diferença numérica, salve os dados do caso em csv e teste hipóteses fora do Stata: avalie a verossimilhança do OpenDTA nas estimativas de referência. Uma diferença constante (por exemplo `ln 4`) é uma constante da verossimilhança; uma diferença que some quando um valor pré-amostral vira zero ou a média da amostra é uma regra de pré-amostra; uma verossimilhança maior no OpenDTA nas mesmas estimativas, com estimativas diferentes, é o otimizador ou outro modelo, e vai para a diferença conhecida.
+- Numa diferença conhecida, `ignore(/REGEX/)` tira linhas dos dois logs, então linhas que existem em só um deles (logs de iteração do Stata) não atrapalham; uma tabela que aparece várias vezes não se delimita por posição, então case os valores que diferem e deixe o `tolerance()` para os últimos dígitos.
 
-Próximos números livres: casos de comparação a partir de **1904**, fases do roadmap a partir de **18**.
+Próximos números livres: casos de comparação a partir de **1905**, fases do roadmap a partir de **19**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
