@@ -29,7 +29,7 @@ Notes for sessions that run in the cloud:
 - A reference log from the Stata run is never edited by hand: when a case changes, the Stata run is repeated.
 - The CI annotation of a case with a known difference shows only the hunks that the `ignore()` and `tolerance()` limits do not accept. Fits at a boundary (for example a frailty variance at 0) can differ between Linux, macOS and Windows: wait for the three CI jobs before finishing the limits of a known difference, and keep them as narrow as the lines that really differ.
 
-Next free numbers: compat cases from **1902**, roadmap phases from **16**.
+Next free numbers: compat cases from **1903**, roadmap phases from **17**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -80,7 +80,7 @@ Done in phase 15 (compat case 1901), except the options that stop with error 198
 
 ### 5. Multilevel models (1–1.5 h, ~55k tokens)
 
-`meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
+Done in phase 16 (compat case 1902), except more than one level of random effects in the `me` commands, weights, `vce(robust)` and the `predict` options `median`, `mean` and `hazard` of `mestreg`. The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
 
 ### 6. Panel data (2–3 h, ~100k tokens)
 

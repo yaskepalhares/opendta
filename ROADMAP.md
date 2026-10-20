@@ -206,6 +206,13 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `streg, distribution(ggamma)` and `frailty(gamma|invgaussian)`, with `shared()`; the `exactm` and `exactp` ties of `stcox`
 - Checked against the Stata log: case `1901`
 
+## Phase 16: multilevel models ✅
+
+- [x] `meglm` (families gaussian, bernoulli, binomial, gamma, nbinomial, ordinal and poisson with their links), `mecloglog`, `menbreg` (mean and constant dispersion), `meologit`, `meoprobit`, `meqrlogit` and `meqrpoisson`; `predict` and `estat icc`/`recovariance`/`group` after them
+- [x] `mestreg` (exponential, Weibull, lognormal, loglogistic and gamma with a random effect per group)
+- [x] Crossed random effects in `mixed` (`|| _all: R.factor`)
+- Checked against the Stata log: case `1902` awaits the Stata run
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -234,7 +241,7 @@ Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of
 - **Panel data**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
 - **Time series**: `arch`, `arfima`, `dfactor`, `sspace`, `ucm`, `mgarch`, `vec` and `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph` and `add`.
 - **Multivariate statistics**: `pca`, `factor`, `rotate`, `alpha`, `cluster`, `discrim`, `manova`, `mvreg`, `mvtest`, `canon`, `ca`/`mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`.
-- **Multilevel models**: `meglm`, `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `meqrlogit`, `meqrpoisson`, `mestreg`; crossed random effects in `mixed`.
+- **Multilevel models**: `meglm` and the other `me` commands with more than one level of random effects, weights or `vce(robust)`; `mestreg` with weights, `vce(robust)` and the `median`, `mean` and `hazard` options of `predict`; `predict, reffects` after `mixed` with `R.` equations.
 - **Other suites**: `gsem`; `sem` with the `mlmv` and `adf` methods, `group()` and the other `estat` subcommands; the other `power` methods (variances, `oneway`, `twoway`, `repeated`, `cox`, `logrank`, `exponential`), the `lrchi2` and `fisher` tests and graphs; `bayesmh` and the `bayes` commands; `irt`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with more estimators.
 - **Programming**: `makecns` with a constraint list and `displaycns` (they need `constraint`, from the Models area); `matlist` with the equation options; `window` dialogs and menus in the graphical interface; `plugin` loading (compiled Stata plugins cannot run in OpenDTA); Stata's class system (Mata classes already work).
 

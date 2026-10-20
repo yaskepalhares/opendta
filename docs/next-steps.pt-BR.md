@@ -29,7 +29,7 @@ Notas para sessões que rodam na nuvem:
 - O log de referência da rodada no Stata nunca é editado à mão: quando um caso muda, a rodada no Stata é repetida.
 - A anotação do CI de um caso com diferença conhecida mostra só os trechos que os limites `ignore()` e `tolerance()` não aceitam. Ajustes na fronteira (por exemplo, uma variância de fragilidade em 0) podem diferir entre Linux, macOS e Windows: espere os três jobs do CI antes de fechar os limites de uma diferença conhecida e mantenha-os tão estreitos quanto as linhas que realmente diferem.
 
-Próximos números livres: casos de comparação a partir de **1902**, fases do roadmap a partir de **16**.
+Próximos números livres: casos de comparação a partir de **1903**, fases do roadmap a partir de **17**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -80,7 +80,7 @@ Feito na fase 15 (caso de comparação 1901), exceto as opções que param com o
 
 ### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
 
-`meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
+Feito na fase 16 (caso 1902), exceto mais de um nível de efeitos aleatórios nos comandos `me`, pesos, `vce(robust)` e as opções `median`, `mean` e `hazard` do `predict` do `mestreg`. O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
 
 ### 6. Dados em painel (2–3 h, ~100 mil tokens)
 

@@ -35,6 +35,7 @@ from .mixed import (
     Level,
     _p_chibar,
     build_levels,
+    estat_group,
     estat_icc,
     estat_recov,
     group_header,
@@ -338,6 +339,16 @@ class GLMM:
         for m in range(th.size):
             e = np.zeros(th.size)
             e[m] = h
+            if not self.adaptive:
+                # non-adaptive points u = C t move with C = chol(S): the prior terms cancel and
+                # only the linear predictor depends on theta, through dC
+                dC = (np.linalg.cholesky(self.lv.sigma(th + e)) - np.linalg.cholesky(self.lv.sigma(th - e))) / (2 * h)
+                dU = np.einsum("ij,kj->ki", dC, self.nodes)                    # K x q
+                dEta = np.einsum("nq,kq->nk", self.Z, dU)                      # N x K
+                contrib = np.zeros((self.G, dEta.shape[1]))
+                np.add.at(contrib, self.gid, s1 * dEta)
+                gth[m] = float(np.sum(pw * contrib))
+                continue
             dS = (self.lv.sigma(th + e) - self.lv.sigma(th - e)) / (2 * h)
             A = Sinv @ dS @ Sinv
             quad = np.einsum("gki,ij,gkj->gk", U, A, U)
@@ -851,9 +862,10 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     est.extra["npts"] = 1 if method == "laplace" else npts
     est.display = _display_qr if qr else display_me
     est.predict = F.predict or _predict_me
-    est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3}
+    est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3,
+                         "conditional": 4}
     est.predict_multi = {"reffects": _reffects_me, **F.predict_multi}
-    est.estat = {"icc": (3, estat_icc), "recovariance": (5, estat_recov)}
+    est.estat = {"icc": (3, estat_icc), "group": (3, estat_group), "recovariance": (5, estat_recov)}
     est.eform_default = F.eform
     # e() in the order Stata lists it after melogit (compat 1002); VERIFY for the other commands
     nvar_p = {"identity": 1, "exchangeable": 1}.get(lv.cov, lv.q)
@@ -953,11 +965,12 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
     G = est.glmm
     lv = G["levels"][0]
     from .mixed import _vc_rows
-    vc = _vc_rows(lv, G["theta"], G["Vth"], False, z)
+    sd = bool(x.get("sd"))
+    vc = _vc_rows(lv, G["theta"], G["Vth"], sd, z)
     rows.append(CoefRow("sep"))
     rows.append(CoefRow("eq", lv.var))
     for lab, v, se, lo, hi in vc:
-        if not lab.startswith("cov("):
+        if not lab.startswith("cov("):      # stddeviations: sd() and corr() rows, VERIFY the layout
             rows.append(CoefRow("aux", lab, v, se, eq=f"{float(lo)!r} {float(hi)!r}", noeform=True,
                                 tight=True))
     covs = [r_ for r_ in vc if r_[0].startswith("cov(")]
@@ -973,10 +986,11 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
     if sp["fam"] == "gaussian":
         # residual variance, after the variances of the levels (VERIFY the layout)
         a_, se_a = float(G["aux"][0]), float(np.sqrt(max(G["Va"][0, 0], 0)))
-        v_ = math.exp(a_)
+        h_ = 0.5 if sd else 1.0
+        v_ = math.exp(h_ * a_)
         rows.append(CoefRow("sep"))
-        rows.append(CoefRow("aux", f"var(e.{est.depvar})", v_, v_ * se_a,
-                            eq=f"{math.exp(a_ - z * se_a)!r} {math.exp(a_ + z * se_a)!r}",
+        rows.append(CoefRow("aux", f"{'sd' if sd else 'var'}(e.{est.depvar})", v_, v_ * h_ * se_a,
+                            eq=f"{math.exp(h_ * (a_ - z * se_a))!r} {math.exp(h_ * (a_ + z * se_a))!r}",
                             noeform=True, tight=True))
     coef_table(s, est.depvar, rows, stat="z", df=None, level=lev,
                coef_title=ef or "Coef.", eform=bool(ef))
@@ -1059,6 +1073,13 @@ def _posterior_eta(s: "Session", est: Estimates, fixedonly: bool = False):
 def _predict_me(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     sp = est.extra["spec"]
     G = est.glmm
+    cond = str((getattr(est, "_pred_opts", None) or {}).get("conditional") or "").strip().lower()
+    if cond and not ("fixedonly".startswith(cond) or "ebmeans".startswith(cond)):
+        raise StataError(198, f"conditional({cond}) invalid")   # ebmodes: VERIFY, not available
+    if cond and "fixedonly".startswith(cond):
+        stat = "fixedonly" if stat in ("", "mu") else stat
+        if stat == "eta":
+            stat = "xb"
     if stat == "xb":
         eta, ok = _posterior_eta(s, est, fixedonly=True)
         return np.where(ok, eta, SYS), ""

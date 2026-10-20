@@ -124,7 +124,7 @@ def cmd_predict(s: "Session", args: str) -> None:
         vtype = words.pop(0)
     stats = [k for k in ("xb", "residuals", "stdp", "stdf", "stdr", "hat", "leverage", "rstandard",
                          "rstudent", "cooksd", "pr", "p", "n", "ir") if o.get(k)]
-    stats += [k for k in extra if o.get(k) and k not in stats and k != "partial"]
+    stats += [k for k in extra if o.get(k) and k not in stats and k not in ("partial", "conditional")]
     if "time" in stats and len(stats) > 1:
         stats.remove("time")      # "median time", "mean time" (streg)
     est._partial = bool(o.get("partial"))
