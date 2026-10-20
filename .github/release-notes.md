@@ -1,19 +1,16 @@
 **English** · [Português](#português)
 
-## What's new in 0.3
+## What's new in 0.4.1
 
-**If your copy says it is 0.2.0 and keeps offering 0.2.2:** versions 0.2.1 and 0.2.2 were built with the number 0.2.0 inside, so they kept offering the same update. This release fixes it: install it once and the updates work again.
+Interface improvements:
 
-New since 0.2:
-
-- epidemiology: `cs`, `cc`, `ir` and `mcc` and their immediate forms, with Mantel-Haenszel stratification; `tabodds`, `mhodds`, `symmetry`, `dstdize` and `istdize`; interrater agreement with `kap` and `kappa`; ROC analysis with `roctab`, `roccomp`, `rocfit`, `lroc` and `lsens`;
-- data management: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; files and folders (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); example datasets (`sysuse`, `webuse`); ICD-9-CM and ICD-10-CM codes (`icd9`, `icd10`); `odbc`; business calendars (`bcal`);
-- `sem` (path models, confirmatory factor analysis and latent variables, `estat gof`), `power` (means, proportions and correlations) and `irf` after `var`;
-- `xtgee` and `xtreg, pa`/`be`/`mle`; `anova` with sequential sums of squares, nested terms, error terms and repeated measures; two-way `tabulate, summarize()`; `ci variances`; two-sample `prtest`; `misstable tree` and `nested`; `reshape error`; the old `merge` syntax; `export excel` to `.xls`;
-- error explanations for beginners, with a diagnosis from the data and a clickable link to the help;
-- `replace y = 2*L.y` is now sequential, as in Stata; `sample #, count` with # at least the number of observations no longer draws random numbers, as in Stata.
-
-The commands still missing are listed in the [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10), and the [coverage map](https://yaskepalhares.github.io/opendta/) shows the progress.
+- **Do-file Editor**: a modern toolbar with icons (new, open, save, save as, undo and redo, find, comment/uncomment, indent and outdent), a **+** button for a new tab, and **Do**, **Run** and **Do current line** (Ctrl+Enter) on the right, as in Stata 14.
+- **Color schemes** for the Results window and for the Do-file Editor, chosen separately in **Settings**: Classic Stata, High contrast, Soft, Solarized, Monokai, Dracula, One Dark, Nord, Gruvbox and GitHub.
+- **Results**: `(N observations deleted)` is highlighted in red.
+- **Settings** button at the right end of the toolbar, with new options: an initial folder, an automatic log of each session, and reopening the Do-file Editor's files from the last session (both off by default).
+- **Confirmation before risky commands** typed in the Command window (`clear` with unsaved changes, `drop` or `keep` removing many observations or variables, `save, replace` over a much larger file), with a switch for each command in **Settings › General › Safety**.
+- **Review, Variables and Properties** open in their default place every time OpenDTA starts, and go back there when chosen again in the **Window** menu.
+- Portuguese interface: the standard buttons (Save / Don't Save / Cancel) and the right-click menus of text fields are now translated.
 
 ## Download
 
@@ -57,20 +54,17 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.3
+### Novidades da 0.4.1
 
-**Se a sua cópia diz que é a 0.2.0 e fica oferecendo a 0.2.2:** as versões 0.2.1 e 0.2.2 foram geradas com o número 0.2.0 por dentro, por isso ofereciam sempre a mesma atualização. Esta versão corrige isso: instale-a uma vez e as atualizações voltam a funcionar.
+Melhorias na interface:
 
-Novo desde a 0.2:
-
-- epidemiologia: `cs`, `cc`, `ir` e `mcc` e suas formas imediatas, com estratificação de Mantel-Haenszel; `tabodds`, `mhodds`, `symmetry`, `dstdize` e `istdize`; concordância entre avaliadores com `kap` e `kappa`; análise ROC com `roctab`, `roccomp`, `rocfit`, `lroc` e `lsens`;
-- manipulação de dados: `clonevar`, `ds`, `lookfor`, `inspect`, `labelbook`, `compare`, `cf`, `separate`, `ipolate`, `stack`, `xpose`, `expandcl`, `drawnorm`, `corr2data`, `statsby`, `putmata`, `snapshot`, `outfile`; arquivos e pastas (`copy`, `mkdir`, `dir`, `shell`, `filefilter`, `zipfile`…); dados de exemplo (`sysuse`, `webuse`); códigos ICD-9-CM e ICD-10-CM (`icd9`, `icd10`); `odbc`; calendários de dias úteis (`bcal`);
-- `sem` (modelos de caminhos, análise fatorial confirmatória e variáveis latentes, `estat gof`), `power` (médias, proporções e correlações) e `irf` depois do `var`;
-- `xtgee` e `xtreg, pa`/`be`/`mle`; `anova` com somas de quadrados sequenciais, termos aninhados, termos de erro e medidas repetidas; `tabulate, summarize()` de duas entradas; `ci variances`; `prtest` de duas amostras; `misstable tree` e `nested`; `reshape error`; a sintaxe antiga do `merge`; `export excel` para `.xls`;
-- explicações de erro para iniciantes, com diagnóstico a partir dos dados e link clicável para a ajuda;
-- `replace y = 2*L.y` agora é sequencial, como no Stata; `sample #, count` com # maior ou igual ao número de observações não sorteia mais números aleatórios, como no Stata.
-
-Os comandos que ainda faltam estão no [ROADMAP](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10), e o [mapa de cobertura](https://yaskepalhares.github.io/opendta/?lang=pt) mostra o progresso.
+- **Do-file Editor**: barra de botões moderna, com ícones (novo, abrir, salvar, salvar como, desfazer e refazer, localizar, comentar/descomentar, aumentar e diminuir recuo), um botão **+** para nova aba e **Do**, **Run** e **Do na linha atual** (Ctrl+Enter) à direita, como no Stata 14.
+- **Esquemas de cores** para a janela Results e para o Do-file Editor, escolhidos separadamente em **Settings**: Clássico Stata, Alto contraste, Suave, Solarized, Monokai, Dracula, One Dark, Nord, Gruvbox e GitHub.
+- **Results**: `(N observations deleted)` aparece em vermelho.
+- Botão **Settings** na ponta direita da barra, com novas opções: pasta inicial, log automático de cada sessão e reabertura dos arquivos do Do-file Editor da última sessão (ambos desligados por padrão).
+- **Confirmação antes de comandos arriscados** digitados na janela Command (`clear` com alterações não salvas, `drop` ou `keep` removendo muitas observações ou variáveis, `save, replace` sobre um arquivo bem maior), com um interruptor para cada comando em **Settings › General › Safety**.
+- **Review, Variables e Properties** abrem na posição padrão a cada vez que o OpenDTA inicia e voltam para ela quando escolhidas de novo no menu **Window**.
+- Interface em português: os botões padrão (Salvar / Não salvar / Cancelar) e os menus de clique direito dos campos de texto agora estão traduzidos.
 
 ### Download
 
