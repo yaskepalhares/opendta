@@ -383,6 +383,18 @@ def cmd_meglm(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("meqrlogit", "meqrlogit")
+def cmd_meqrlogit(s: "Session", args: str) -> None:
+    from ..estimation.meglm import cmd_meqrlogit as run
+    run(s, args)
+
+
+@command("meqrpoisson", "meqrpoisson")
+def cmd_meqrpoisson(s: "Session", args: str) -> None:
+    from ..estimation.meglm import cmd_meqrpoisson as run
+    run(s, args)
+
+
 @command("arima", "arima")
 def cmd_arima(s: "Session", args: str) -> None:
     from ..estimation.tsmodels import cmd_arima as run

@@ -781,6 +781,8 @@ def estat_icc(s: "Session", est: Estimates, rest: str) -> None:
     # with covariates in the fixed part the correlation is conditional on them (compat 1001)
     has_cov = any(c.values is not None for c in (est.cols or []))
     title = "Residual intraclass correlation" if has_cov else "Intraclass correlation"
+    if L is None and est.glmm["resid_var"] is None:
+        raise StataError(321, "estat icc is not available after this model")   # VERIFY
     if any(lv.q != 1 or lv.names[0] != "_cons" for lv in levels):
         raise StataError(498, "estat icc is available only for random-intercept models")   # VERIFY
     out.write(f"\n{title}\n\n", "text")

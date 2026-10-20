@@ -343,7 +343,40 @@ class GLMM:
             gth[m] = float(np.sum(pw * (-0.5 * np.trace(Sinv @ dS) + 0.5 * quad)))
         return np.concatenate([gb, ga, gth])
 
+    def _laplace_ll(self, b) -> float:
+        self._mode_curvature(b)
+        return self.loglik(b)
+
+    def _laplace_fun(self, b, todo):
+        """The Laplace approximation depends on the parameters through the mode and the curvature
+        of each group, so its derivatives are numerical (the analytic gradient of the other
+        methods holds the quadrature points fixed)."""
+        ll = self._laplace_ll(b)
+        if todo == 0 or not np.isfinite(ll):
+            return ll, None, None
+        k = b.size
+
+        def grad(x):
+            g = np.zeros(k)
+            for i in range(k):
+                h = 1e-5 * (abs(x[i]) + 1)
+                e = np.zeros(k)
+                e[i] = h
+                g[i] = (self._laplace_ll(x + e) - self._laplace_ll(x - e)) / (2 * h)
+            return g
+        g = grad(b)
+        H = np.zeros((k, k))
+        for i in range(k):
+            h = 1e-4 * (abs(b[i]) + 1)
+            e = np.zeros(k)
+            e[i] = h
+            H[:, i] = (grad(b + e) - grad(b - e)) / (2 * h)
+        self._mode_curvature(b)
+        return ll, g, (H + H.T) / 2
+
     def fun(self, b, todo):
+        if self.nodes.shape[0] == 1:
+            return self._laplace_fun(b, todo)
         if todo == 0:
             return self.loglik(b), None, None
         self.adapt(b)
@@ -377,6 +410,8 @@ _CMDS = {
     "meologit": ("ordinal", "logit", "Mixed-effects ologit regression", "ologit", "ologit model"),
     "meoprobit": ("ordinal", "probit", "Mixed-effects oprobit regression", "oprobit", "oprobit model"),
     "meglm": (None, None, "Mixed-effects GLM", "", ""),
+    "meqrlogit": ("bernoulli", "logit", "Mixed-effects logistic regression", "logistic", "logistic model"),
+    "meqrpoisson": ("poisson", "log", "Mixed-effects Poisson regression", "Poisson", "Poisson model"),
 }
 _FAMILIES = ("gaussian", "bernoulli", "binomial", "gamma", "nbinomial", "ordinal", "poisson")
 _DEFAULT_LINK = {"gaussian": "identity", "bernoulli": "logit", "binomial": "logit", "gamma": "log",
@@ -400,7 +435,7 @@ _GLOBAL = {"or": 2, "irr": 3, "intpoints": 4, "intmethod": 7, "nolog": 4, "log":
            "tolerance": 3, "ltolerance": 4, "nrtolerance": 4, "level": 1, "noheader": 6, "nogroup": 5,
            "nolrtest": 5, "noconstant": 4, "offset": 3, "exposure": 3, "binomial": 3, "covariance": 3,
            "startgrid": 6, "nofetable": 5, "noretable": 5, "estmetric": 4, "family": 3, "link": 4,
-           "dispersion": 4, "asis": 4}
+           "dispersion": 4, "asis": 4, "laplace": 3, "stddeviations": 3, "variance": 3, "refineopts": 6}
 
 
 def _word(text: str, choices, what: str) -> str:
@@ -520,6 +555,7 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     o = smp.o
     sp = _resolve(cmdname, o)
     fam, link = sp["fam"], sp["link"]
+    qr = cmdname.startswith("meqr")          # the older commands: same model, layout of mixed
     if fam == "ordinal":
         smp.constant = False
     out = s.output
@@ -576,6 +612,8 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     method = {"mv": "mvaghermite", "mvaghermite": "mvaghermite", "mc": "mcaghermite",
               "mcaghermite": "mcaghermite", "gh": "ghermite", "ghermite": "ghermite",
               "laplace": "laplace"}.get(method, method)
+    if qr and o.get("laplace"):
+        method = "laplace"
     # the conditional distribution of the outcome
     if fam == "bernoulli" and link in ("logit", "probit"):
         fam_f, naux = _family(link, y), 0
@@ -645,11 +683,17 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     model.mu, model.C = best[2], best[3]
     lab = "log likelihood"
     if not o.get("nolog"):
-        out.write("\nFitting fixed-effects model:\n\n", "text")
-        print_log(out, rfe, lab)
-        out.write("\nRefining starting values:\n\n", "text")
-        out.write(f"{'Grid node 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
-        out.write("\nFitting full model:\n\n", "text")
+        if qr:
+            # no fixed-effects fit is shown; the first stage refines the starting values (VERIFY)
+            out.write("\nRefining starting values:\n\n", "text")
+            out.write(f"{'Iteration 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
+            out.write("\nPerforming gradient-based optimization:\n\n", "text")
+        else:
+            out.write("\nFitting fixed-effects model:\n\n", "text")
+            print_log(out, rfe, lab)
+            out.write("\nRefining starting values:\n\n", "text")
+            out.write(f"{'Grid node 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
+            out.write("\nFitting full model:\n\n", "text")
     r = maximize(model.fun, best[1], **kw)
     if not o.get("nolog"):
         print_log(out, r, lab)
@@ -729,10 +773,11 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
                 "nlev": (len(cats) if fam == "ordinal" else 0)}
     cnt = np.bincount(lv.gid)
     est.extra = {"N": float(n), "ll": r.ll, "chi2": wchi2, "p": wp, "df_m": len(slopes), "ll_c": rfe.ll,
-                 "chi2_c": chi2_c, "nvc": lv.npar(), "spec": sp, "method": method,
+                 "chi2_c": chi2_c, "nvc": lv.npar(), "spec": sp, "method": method, "qr": qr,
+                 "sd": bool(o.get("stddeviations")),
                  "groups": [(lv.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max()))]}
     est.extra["npts"] = 1 if method == "laplace" else npts
-    est.display = display_me
+    est.display = _display_qr if qr else display_me
     est.predict = _predict_me
     est.predict_opts = {"mu": 2, "eta": 3, "reffects": 4, "fixedonly": 5, "pr": 2, "outcome": 3}
     est.predict_multi = {"reffects": _reffects_me}
@@ -760,17 +805,38 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     family = {"bernoulli": "bernoulli", "binomial": "binomial", "poisson": "poisson",
               "nbinomial": "nbinomial", "gaussian": "gaussian", "gamma": "gamma",
               "ordinal": "ordinal"}[fam]
-    macros = [("cmd", "meglm"), ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"),
-              ("cmdline", cmdline(cmdname, args)), ("cmd2", cmdname), ("model", sp["model"]),
-              ("title", sp["title"]), ("link", link), ("family", family),
-              ("dispersion", sp["disp"]),
-              ("n_quad", str(int(est.extra["npts"]))), ("ivars", lv.var), ("chi2type", "Wald"),
-              ("datasignaturevars", " ".join(sigvars)),
-              ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
-              ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
-              ("covariates", " ".join(covs)), ("opt", "moptimize"), ("vce", "oim"),
-              ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"), ("technique", "nr"),
-              ("which", "max"), ("properties", "b V")]
+    if qr:
+        # e() of meqrlogit/meqrpoisson ([ME] meqrlogit; VERIFY the order and the values)
+        scalars = [("rank", float(ball.size)), ("k_f", float(len(slopes) + int(smp.constant))),
+                   ("k_r", float(th.size)), ("k", float(ball.size)), ("k_rs", float(nvar_p)),
+                   ("k_rc", float(ncov_p)), ("converged", 1.0 if r.converged else 0.0), ("ll", r.ll),
+                   ("ll_c", rfe.ll), ("df_c", float(lv.npar())), ("chi2_c", chi2_c),
+                   ("p_c", _p_chibar(chi2_c, lv.npar())), ("N", float(n)), ("rc", 0.0),
+                   ("df_m", float(len(slopes))), ("chi2", wchi2), ("p", wp)]
+        macros = [("cmdline", cmdline(cmdname, args)), ("datasignaturevars", " ".join(sigvars)),
+                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("chi2type", "Wald"),
+                  ("estat_cmd", "meqrlogit_estat"), ("predict", "meqrlogit_p"),
+                  ("n_quad", str(int(est.extra["npts"]))), ("redim", str(lv.q)), ("ivars", lv.var),
+                  ("vartypes", {"identity": "Identity", "independent": "Independent",
+                                "exchangeable": "Exchangeable",
+                                "unstructured": "Unstructured"}[lv.cov]),
+                  ("revars", " ".join(lv.names)), ("cmd", cmdname), ("title", sp["title"]),
+                  ("technique", "nr"), ("ml_method", "d2"), ("opt", "moptimize"), ("method", "ML"),
+                  ("depvar", smp.depname), ("model", sp["model"]), ("properties", "b V")]
+        if method == "laplace":
+            macros.append(("laplace", "laplace"))
+    else:
+        macros = [("cmd", "meglm"), ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"),
+                  ("cmdline", cmdline(cmdname, args)), ("cmd2", cmdname), ("model", sp["model"]),
+                  ("title", sp["title"]), ("link", link), ("family", family),
+                  ("dispersion", sp["disp"]),
+                  ("n_quad", str(int(est.extra["npts"]))), ("ivars", lv.var), ("chi2type", "Wald"),
+                  ("datasignaturevars", " ".join(sigvars)),
+                  ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
+                  ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
+                  ("covariates", " ".join(covs)), ("opt", "moptimize"), ("vce", "oim"),
+                  ("user", "_gsem_eval_chol()"), ("ml_method", "gf2"), ("technique", "nr"),
+                  ("which", "max"), ("properties", "b V")]
     g1 = est.extra["groups"][0]
     names_all = list(est.names)
     grad = np.zeros((1, len(names_all)))
@@ -781,8 +847,13 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     extra_mats += [("gradient", Matrix(grad, ["r1"], names_all)),
                    ("ilog", Matrix(ilog(r), ["r1"], [f"c{i + 1}" for i in range(20)]))]
     post(s, est, scalars, macros, smp.mask, extra_mats=extra_mats)
-    display_me(s, est, header=not o.get("noheader"), group=not o.get("nogroup"),
-               lrtest=not o.get("nolrtest"))
+    if qr:
+        _display_qr(s, est, header=not o.get("noheader"), group=not o.get("nogroup"),
+                    lrtest=not o.get("nolrtest"), table=not o.get("nofetable"),
+                    retable=not o.get("noretable"))
+    else:
+        display_me(s, est, header=not o.get("noheader"), group=not o.get("nogroup"),
+                   lrtest=not o.get("nolrtest"))
 
 
 def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
@@ -840,6 +911,45 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
                             noeform=True, tight=True))
     coef_table(s, est.depvar, rows, stat="z", df=None, level=lev,
                coef_title=ef or "Coef.", eform=bool(ef))
+    if lrtest:
+        lr_line(out, sp["vs"], x["chi2_c"], x["nvc"])
+
+
+def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
+                level: float | None = None, group: bool = True, lrtest: bool = True, eform=None,
+                retable: bool = True, **_kw) -> None:
+    """meqrlogit and meqrpoisson: the layout of mixed (header with the integration points, table
+    of random-effects parameters); VERIFY against the Stata run."""
+    from .mixed import _re_row
+    out = s.output
+    x = est.extra
+    sp = x["spec"]
+    lev = level or est.level
+    if header:
+        ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
+        group_header(out, sp["title"], x["groups"] if group else [], x["N"],
+                     [("", "", ""),
+                      (f"Integration points = {int(x['npts']):>3}", f"Wald chi2({int(x['df_m'])})",
+                       _g(x["chi2"], "%10.2f")),
+                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
+    if table:
+        ef = est.eform_default if eform is None else eform
+        coef_table(s, est.depvar, est.rows, stat="z", df=None, level=lev,
+                   coef_title=ef or "Coef.", eform=bool(ef))
+    z = st.norm.ppf(1 - (1 - lev / 100) / 2)
+    G = est.glmm
+    lv = G["levels"][0]
+    if retable:
+        from .mixed import _vc_rows
+        out.write("\n" + "-" * 78 + "\n", "text")
+        out.write(f"  Random-effects Parameters  |   Estimate   Std. Err.     [{lev:g}% Conf. Interval]\n", "text")
+        out.write("-" * 29 + "+" + "-" * 48 + "\n", "text")
+        kind = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
+                "unstructured": "Unstructured"}[lv.cov]
+        out.write(f"{lv.var + ': ' + kind:<29}|\n", "text")
+        for row in _vc_rows(lv, G["theta"], G["Vth"], x["sd"], z):
+            _re_row(out, *row)
+        out.write("-" * 78 + "\n", "text")
     if lrtest:
         lr_line(out, sp["vs"], x["chi2_c"], x["nvc"])
 
@@ -984,3 +1094,11 @@ def cmd_meoprobit(s, args):
 
 def cmd_meglm(s, args):
     cmd_me(s, args, "meglm")
+
+
+def cmd_meqrlogit(s, args):
+    cmd_me(s, args, "meqrlogit")
+
+
+def cmd_meqrpoisson(s, args):
+    cmd_me(s, args, "meqrpoisson")
