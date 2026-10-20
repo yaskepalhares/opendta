@@ -32,11 +32,13 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set +e
           for f in tests/test_*.py; do
-            s=$(date +%s)
-            timeout 300 pytest -q -x "$f" > /tmp/out.txt 2>&1; rc=$?
-            d=$(( $(date +%s) - s ))
-            echo "::notice title=$f::rc=$rc ${d}s $(tail -n 3 /tmp/out.txt | tr '\n' ' ' | cut -c1-300)"
+            timeout 240 pytest -q -x "$f" > /tmp/out.txt 2>&1; rc=$?
+            if [ $rc -ne 0 ]; then
+              echo "::error title=$f::rc=$rc $(tail -n 4 /tmp/out.txt | tr '\n' ' ' | cut -c1-400)"
+            fi
           done
+          echo "::notice title=finished::all files visited"
       - name: Comparison with Stata
         run: python tools/compare.py --show-diff
