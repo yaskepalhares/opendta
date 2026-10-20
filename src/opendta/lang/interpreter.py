@@ -141,11 +141,21 @@ class Interpreter:
             # VERIFY: numbering of the body in the echo of program define
             out = self.s.output
             out.echo_command(lines[i].echo_lines)
-            for k, ln in enumerate(lines[i + 1:j + 1], start=1):
+            # VERIFY: comments do not advance the count, and the prompt after a
+            # comment is "." until the next command (observed in the reference log)
+            k, after_comment = 1, False
+            for ln in lines[i + 1:j + 1]:
                 first, *rest = ln.echo_lines
-                out.write(f"{k:>3}. {first}\n", "command")
+                is_comment = ln.kind == "comment"
+                prompt = "." if after_comment else f"{k:>3}."
+                out.write(f"{prompt} {first}\n", "command")
                 for cont in rest:
                     out.write(f"> {cont}\n", "command")
+                if is_comment:
+                    after_comment = True
+                else:
+                    after_comment = False
+                    k += 1
         if name in self.s.programs:
             raise StataError(110, f"{name} already defined")
         self.s.programs[name] = make_program(name, options, list(lines[i + 1:j]),

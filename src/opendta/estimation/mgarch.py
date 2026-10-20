@@ -389,7 +389,7 @@ def cmd_mgarch(s: "Session", args: str) -> None:
             if lab == "_cons" and lastgrp is not None:
                 rows.append(CoefRow("blank"))
                 lastgrp = None
-            rows.append(CoefRow("coef", lab, b[k], se[k], name=name))
+            rows.append(CoefRow("coef", lab, b[k], se[k], name=name, tight=lab.startswith("corr(")))
     est = Estimates("mgarch", " ".join(deps), names, b, V, T, "z", None)
     est.eqnames = [q[1] or "_" for q in P]
     est.rows = rows

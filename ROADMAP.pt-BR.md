@@ -243,7 +243,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Variância condicional e memória longa: `arch` (ARCH, GARCH e os demais termos de variância, ARCH-M, erros ARMA, distribuições t e GED, `het()`), `arfima` (ML exata) e `mgarch` (`dvech`, `ccc` e `dcc`)
 - [x] `arima` com `sarima()`, `mar()`, `mma()`, `condition` e `diffuse`
 - [x] Modelos de espaço de estados pelo filtro de Kalman com estados iniciais difusos: `ucm`, `sspace` e `dfactor`
-- Conferido com o log do Stata 14: o caso `1904` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: o caso `1904` confere, exceto pelas diferenças em `compat/known_differences.txt` (os valores críticos do `dfgls` por defasagem, os logs de iteração de `prais, ssesearch` e `svar`, os erros padrão do `fcast` a partir do quarto passo, as tabelas bootstrap do `irf`, e as estimativas do `ucm` com `cycle()` e do `mgarch dcc`, em que o Stata chega a outro ponto)
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 

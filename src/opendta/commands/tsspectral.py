@@ -94,7 +94,7 @@ def cmd_pergram(s: "Session", args: str) -> None:
     om, pg, var = periodogram(x)
     if isinstance(lopts.get("generate"), str):
         col = np.full(s.data.nobs, np.nan)
-        col[:len(pg)] = pg
+        col[:len(pg)] = pg * len(x)     # VERIFY: the stored values are n times n C_k^2 (reference log)
         new_variable(s, lopts["generate"], col, vtype="double")
     if lopts.get("nograph"):
         return
@@ -218,8 +218,9 @@ def bartlett_b(x: np.ndarray):
     q = n // 2 + 1
     F = np.cumsum(pg[:q]) / pg[:q].sum()
     k = np.arange(1, q + 1)
-    dev = np.abs(F - k / q)
-    B = math.sqrt(n / 2) * float(dev.max())
+    # VERIFY: B = sqrt(q) max|F_k - (k-1)/(q-1)| reproduces the reference log (n even)
+    dev = np.abs(F - (k - 1) / (q - 1))
+    B = math.sqrt(q) * float(dev.max())
     return B, kolmogorov_sf(B), om[:q], F, q
 
 
@@ -252,8 +253,8 @@ def cmd_wntestb(s: "Session", args: str) -> None:
             lo_ = mid
         else:
             hi_ = mid
-    a = (lo_ + hi_) / 2 / math.sqrt(n / 2)
-    k = np.arange(1, q + 1) / q
+    a = (lo_ + hi_) / 2 / math.sqrt(q)
+    k = np.arange(q) / (q - 1)
     layers = [Layer("connected", om.tolist(), F.tolist(), {}, _own(lopts, {"table", "level", "noplot"}), ""),
               Layer("line", om.tolist(), k.tolist(), {}, {"lcolor": "gs8"}, ""),
               Layer("line", om.tolist(), (k + a).tolist(), {}, {"lcolor": "gs8", "lpattern": "dash"}, ""),

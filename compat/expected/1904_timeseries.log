@@ -1,0 +1,1980 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1904_timeseries.log
+  log type:  text
+ opened on:  20 Oct 2026, 16:27:59
+
+. * Phase 18: time series (data tools, filters and smoothers, spectral analysis, unit-root tests,
+. * prais, VAR postestimation, vec, svar, irf extensions, arch, arfima, arima extensions,
+. * state-space models and mgarch). Every command runs under capture noisily so that a difference
+. * in one command does not stop the rest of the case; the layouts marked VERIFY in the code are
+. * settled by the reference log.
+. * The data are built from rounded draws, so that the last digit of the draws does not matter.
+. program define mkts
+  1.     clear
+  2.     set seed 1904
+  3.     set obs 160
+  4.     gen int t = _n + 599
+  5.     format t %tm
+  6.     tsset t
+  7.     gen double e1 = round(invnormal(runiform()), .01)
+  8.     gen double e2 = round(invnormal(runiform()), .01)
+  9.     gen double e3 = round(invnormal(runiform()), .01)
+ 10.     gen double x = round(invnormal(runiform()), .01)
+ 11.     gen double w = round(sum(e3), .01)
+ 12.     gen double c1 = round(w + .5*e1, .01)
+ 13.     gen double c2 = round(.5*w + .5*e2, .01)
+ 14.     gen double y = 0
+ 15.     gen double z = 0
+ 16.     forvalues i = 2/160 {
+ 17.         quietly replace y = round(.5*y[`i'-1] + .2*z[`i'-1] + e1, .01) in `i'
+ 18.         quietly replace z = round(.1*y[`i'-1] + .4*z[`i'-1] + e2, .01) in `i'
+ 19.     }
+ 20.     gen double u = 0
+ 21.     forvalues i = 2/160 {
+ 22.         quietly replace u = round(.6*u[`i'-1] + e3 + .3*e3[`i'-1], .01) in `i'
+ 23.     }
+ 24.     gen double r = round(2 + .5*x + u, .01)
+ 25.     * GARCH(1,1) series
+.     gen double h = 1
+ 26.     gen double g = 0
+ 27.     forvalues i = 2/160 {
+ 28.         quietly replace h = .2 + .2*g[`i'-1]^2 + .5*h[`i'-1] in `i'
+ 29.         quietly replace g = round(sqrt(h)*e1, .01) in `i'
+ 30.     }
+ 31.     * GARCH(1,1) series with a shock correlated with e1
+.     gen double h2 = 1
+ 32.     gen double g2 = 0
+ 33.     forvalues i = 2/160 {
+ 34.         quietly replace h2 = .1 + .2*g2[`i'-1]^2 + .6*h2[`i'-1] in `i'
+ 35.         quietly replace g2 = round(sqrt(h2)*(.5*e1 + .87*e2), .01) in `i'
+ 36.     }
+ 37.     * seasonal series (quarterly pattern)
+.     gen double sa = round(10 + 2*mod(_n, 4) + .1*_n + e2, .01)
+ 38.     * the series below are for the commands that need data with the feature they estimate
+.     * fat-tailed GARCH(1,1) series (arch with t errors, egarch)
+.     gen double eh = round(e1*(1 + 2*(e3 > 1.2)), .01)
+ 39.     gen double hh0 = 1
+ 40.     gen double gt = 0
+ 41.     forvalues i = 2/160 {
+ 42.         quietly replace hh0 = .2 + .2*gt[`i'-1]^2 + .5*hh0[`i'-1] in `i'
+ 43.         quietly replace gt = round(sqrt(hh0)*eh, .01) in `i'
+ 44.     }
+ 45.     * cycle (AR(2) with complex roots)
+.     gen double cy = 0
+ 46.     forvalues i = 3/160 {
+ 47.         quietly replace cy = round(1.2*cy[`i'-1] - .6*cy[`i'-2] + e2, .01) in `i'
+ 48.     }
+ 49.     * local linear trend plus noise
+.     gen double lv = 0
+ 50.     gen double sl = 0
+ 51.     forvalues i = 2/160 {
+ 52.         quietly replace sl = sl[`i'-1] + .1*e2 in `i'
+ 53.         quietly replace lv = lv[`i'-1] + sl[`i'-1] + .3*e1 in `i'
+ 54.     }
+ 55.     gen double tr = round(lv + e3, .01)
+ 56.     * stochastic seasonal series
+.     gen double ss = 0
+ 57.     forvalues i = 5/160 {
+ 58.         quietly replace ss = round(ss[`i'-4] + e1 + .5*e1[`i'-4], .01) in `i'
+ 59.     }
+ 60.     * two series whose correlation moves (dynamic conditional correlation)
+.     gen double q11 = 1
+ 61.     gen double q12 = .4
+ 62.     gen double q22 = 1
+ 63.     gen double z1 = 0
+ 64.     gen double z2 = 0
+ 65.     gen double hd1 = 1
+ 66.     gen double hd2 = 1
+ 67.     gen double d1 = 0
+ 68.     gen double d2 = 0
+ 69.     forvalues i = 2/160 {
+ 70.         local j = `i' - 1
+ 71.         quietly replace q11 = .05 + .15*z1[`j']^2 + .8*q11[`j'] in `i'
+ 72.         quietly replace q12 = .02 + .15*z1[`j']*z2[`j'] + .8*q12[`j'] in `i'
+ 73.         quietly replace q22 = .05 + .15*z2[`j']^2 + .8*q22[`j'] in `i'
+ 74.         quietly replace z1 = e1 in `i'
+ 75.         quietly replace z2 = q12/sqrt(q11*q22)*e1 + sqrt(1 - q12^2/(q11*q22))*e2 in `i'
+ 76.         quietly replace hd1 = .1 + .2*d1[`j']^2 + .6*hd1[`j'] in `i'
+ 77.         quietly replace hd2 = .15 + .25*d2[`j']^2 + .5*hd2[`j'] in `i'
+ 78.         quietly replace d1 = round(sqrt(hd1)*z1, .01) in `i'
+ 79.         quietly replace d2 = round(sqrt(hd2)*z2, .01) in `i'
+ 80.     }
+ 81. end
+
+. set more off
+
+. set linesize 255
+
+. mkts
+number of observations (_N) was 0, now 160
+        time variable:  t, 2010m1 to 2023m4
+                delta:  1 month
+
+. 
+. * --- data tools ---
+. preserve
+
+. drop if mod(t, 7) == 0 in 20/60
+(6 observations deleted)
+
+. capture noisily tsreport
+
+Time variable:    t
+-------------------------
+Starting period =  2010m1
+Ending period   =  2023m4
+Observations    =     154
+Number of gaps  =       6
+
+. capture noisily tsreport y z, detail
+
+Variable:         y
+Time variable:    t
+-------------------------
+Starting period =  2010m1
+Ending period   =  2023m4
+Observations    =     154
+Number of gaps  =       6
+
+Gap report
+--------------------------------------------------
+Obs.         |      Start         End      N. Obs.
+-------------+------------------------------------
+       23--24|    2011m12     2011m12            1
+       29--30|     2012m7      2012m7            1
+       35--36|     2013m2      2013m2            1
+       41--42|     2013m9      2013m9            1
+       47--48|     2014m4      2014m4            1
+       53--54|    2014m11     2014m11            1
+--------------------------------------------------
+
+Variable:         z
+Time variable:    t
+-------------------------
+Starting period =  2010m1
+Ending period   =  2023m4
+Observations    =     154
+Number of gaps  =       6
+
+Gap report
+--------------------------------------------------
+Obs.         |      Start         End      N. Obs.
+-------------+------------------------------------
+       23--24|    2011m12     2011m12            1
+       29--30|     2012m7      2012m7            1
+       35--36|     2013m2      2013m2            1
+       41--42|     2013m9      2013m9            1
+       47--48|     2014m4      2014m4            1
+       53--54|    2014m11     2014m11            1
+--------------------------------------------------
+
+. capture noisily tsfill
+
+. capture noisily tsreport
+
+Time variable:    t
+-------------------------
+Starting period =  2010m1
+Ending period   =  2023m4
+Observations    =     160
+Number of gaps  =       0
+
+. restore
+
+. preserve
+
+. capture noisily tsappend, add(6)
+
+. capture noisily list t y in -8/l
+
+     +-----------------+
+     |       t       y |
+     |-----------------|
+159. |  2023m3     .01 |
+160. |  2023m4   -1.26 |
+161. |  2023m5       . |
+162. |  2023m6       . |
+163. |  2023m7       . |
+     |-----------------|
+164. |  2023m8       . |
+165. |  2023m9       . |
+166. | 2023m10       . |
+     +-----------------+
+
+. restore
+
+. preserve
+
+. capture noisily rolling _b _se, window(80) step(40) clear: regress y x
+(running regress on estimation sample)
+
+Rolling replications (3)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+...
+
+. capture noisily list
+
+     +----------------------------------------------------------------+
+     |  start       end        _b_x     _b_cons      _se_x   _se_cons |
+     |----------------------------------------------------------------|
+  1. | 2010m1    2016m8   -.0085753   -.2788023   .1374279   .1472758 |
+  2. | 2013m5   2019m12   -.0226105   -.3826972   .1109442   .1177631 |
+  3. | 2016m9    2023m4    -.047311   -.1058548   .1067202   .1130945 |
+     +----------------------------------------------------------------+
+
+. restore
+
+. preserve
+
+. capture noisily rolling mean=r(mean), window(60) recursive clear: summarize y
+(running summarize on estimation sample)
+
+Rolling replications (101)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..................................................    50
+..................................................   100
+.
+
+. capture noisily list in 1/5
+
+     +------------------------------+
+     |  start       end        mean |
+     |------------------------------|
+  1. | 2010m1   2014m12   -.1311667 |
+  2. | 2010m1    2015m1   -.1398361 |
+  3. | 2010m1    2015m2   -.1433871 |
+  4. | 2010m1    2015m3   -.1639683 |
+  5. | 2010m1    2015m4   -.1729687 |
+     +------------------------------+
+
+. restore
+
+. 
+. * --- filters and smoothers ---
+. capture noisily tsfilter hp yhp = y, smooth(100) trend(ytr)
+
+. capture noisily summarize yhp ytr
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         yhp |        160   -6.87e-10    .8849648  -2.246373   2.473107
+         ytr |        160    -.193125    .6012047  -1.095377   1.523055
+
+. capture noisily tsfilter bk ybk = y, minperiod(6) maxperiod(32) smaorder(4)
+
+. capture noisily summarize ybk
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         ybk |        152   -.0021712    .5678279  -1.151065   1.400167
+
+. capture noisily tsfilter cf ycf = y, minperiod(6) maxperiod(32)
+
+. capture noisily summarize ycf
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         ycf |        160    .0004352    .8058828  -1.866368    2.32843
+
+. capture noisily tsfilter bw ybw = y, maxperiod(32) order(2)
+
+. capture noisily summarize ybw
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         ybw |        160   -1.86e-09    .9807382  -2.780313    2.38203
+
+. capture noisily tssmooth ma ma1 = y, window(2 1 2)
+The smoother applied was
+     (1/5)*[x(t-2) + x(t-1) + 1*x(t) + x(t+1) + x(t+2)]; x(t)= y
+
+. capture noisily tssmooth exponential ex1 = y, parms(.4)
+
+exponential coefficient  =       0.4000
+sum-of-squared residuals =       179.75
+root mean squared error  =       1.0599
+
+. capture noisily tssmooth exponential ex2 = y
+
+computing optimal exponential  coefficient (0,1)
+
+optimal exponential coefficient =        0.4905
+sum-of-squared residuals        =     178.74965
+root mean squared error         =     1.0569699
+
+. capture noisily tssmooth dexponential dx1 = y, parms(.3)
+
+double-exponential coefficient  =       0.3000
+sum-of-squared residuals        =        170.2
+root mean squared error         =       1.0314
+
+. capture noisily tssmooth hwinters hw1 = sa, parms(.4 .1)
+
+Specified weights:
+                   alpha = 0.4000
+                    beta = 0.1000
+sum-of-squared residuals = 1503.764 
+ root mean squared error = 3.065701 
+
+. capture noisily tssmooth shwinters sw1 = sa, period(4) parms(.4 .1 .1)
+
+Specified weights:
+                   alpha = 0.4000
+                    beta = 0.1000
+                   gamma = 0.1000
+sum-of-squared residuals = 321.1202 
+ root mean squared error = 1.416687 
+
+. capture noisily tssmooth nl nl1 = y, smoother(4253h)
+
+. capture noisily summarize ma1 ex1 ex2 dx1 hw1 sw1 nl1
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         ma1 |        160      -.1917    .7955161      -1.69      2.524
+         ex1 |        160    -.188902      .80234  -1.948419   2.294416
+         ex2 |        160   -.1887999    .8653913  -2.243405   2.482859
+         dx1 |        160   -.1689774    .5826999  -1.152344   1.650604
+         hw1 |        160     21.1323    4.761807     12.137   31.17157
+-------------+---------------------------------------------------------
+         sw1 |        160    21.17452    5.446654   10.90224   33.75243
+         nl1 |        160   -.1618984    .7660601      -1.49      2.305
+
+. 
+. * --- spectral analysis and white-noise tests ---
+. capture noisily pergram y, gen(pg) nograph
+
+. capture noisily list pg in 1/5
+
+     +-----------+
+     |        pg |
+     |-----------|
+  1. | 1.055e-30 |
+  2. |  263.9673 |
+  3. | 678.32672 |
+  4. | 1130.9224 |
+  5. | 1198.9274 |
+     +-----------+
+
+. capture noisily cumsp y, gen(cs)
+
+. capture noisily xcorr y z, lags(4) table noplot
+
+ LAG      CORR
+---------------
+-4       0.2144   
+-3       0.2199   
+-2       0.2397   
+-1       0.3635   
+0        0.2194   
+1        0.2071   
+2        0.1547   
+3        0.0456   
+4       -0.0271   
+
+. capture noisily wntestb y, table
+
+Cumulative periodogram white-noise test
+---------------------------------------
+ Bartlett's (B) statistic  =     3.3621
+ Prob > B                  =     0.0000
+
+. capture noisily wntestq y
+
+Portmanteau test for white noise
+---------------------------------------
+ Portmanteau (Q) statistic =   110.4143
+ Prob > chi2(40)           =     0.0000
+
+. capture noisily wntestq y, lags(5)
+
+Portmanteau test for white noise
+---------------------------------------
+ Portmanteau (Q) statistic =    66.6653
+ Prob > chi2(5)            =     0.0000
+
+. capture noisily arima r x, ar(1) ma(1) nolog
+
+ARIMA regression
+
+Sample:  2010m1 - 2023m4                        Number of obs     =        160
+                                                Wald chi2(3)      =     197.88
+Log likelihood = -239.7545                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+r            |
+           x |   .5721722   .0581169     9.85   0.000     .4582652    .6860793
+       _cons |   1.790077    .221685     8.07   0.000     1.355583    2.224572
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .4022691   .1134881     3.54   0.000     .1798365    .6247016
+             |
+          ma |
+         L1. |    .474089   .1042365     4.55   0.000     .2697893    .6783887
+-------------+----------------------------------------------------------------
+      /sigma |   1.080174   .0579906    18.63   0.000     .9665142    1.193833
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. capture noisily psdensity pd omega
+
+. capture noisily summarize pd omega
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          pd |        160    .1597752    .1611053   .0116822   .5051242
+       omega |        160    1.570796    .9154509          0   3.141593
+
+. 
+. * --- unit roots and prais ---
+. capture noisily dfgls w, maxlag(4)
+ 
+DF-GLS for w                                             Number of obs =   155
+ 
+               DF-GLS tau      1% Critical       5% Critical      10% Critical
+  [lags]     Test Statistic        Value             Value             Value
+------------------------------------------------------------------------------
+    4            -1.260           -3.508            -2.925            -2.638
+    3            -1.612           -3.508            -2.936            -2.648
+    2            -1.693           -3.508            -2.946            -2.657
+    1            -1.873           -3.508            -2.955            -2.666
+ 
+Opt Lag (Ng-Perron seq t) =  4 with RMSE  1.074166
+Min SC   =  .2561108 at lag  1 with RMSE  1.100228
+Min MAIC =  .2181527 at lag  4 with RMSE  1.074166
+
+. capture noisily dfgls w, maxlag(4) notrend
+ 
+DF-GLS for w                                             Number of obs =   155
+ 
+               DF-GLS mu       1% Critical       5% Critical      10% Critical
+  [lags]     Test Statistic        Value             Value             Value
+------------------------------------------------------------------------------
+    4            -0.210           -2.592            -2.035            -1.724
+    3            -0.475           -2.592            -2.041            -1.730
+    2            -0.533           -2.592            -2.048            -1.736
+    1            -0.653           -2.592            -2.053            -1.741
+ 
+Opt Lag (Ng-Perron seq t) =  4 with RMSE  1.082447
+Min SC   =  .2776367 at lag  1 with RMSE  1.112133
+Min MAIC =  .2106764 at lag  4 with RMSE  1.082447
+
+. capture noisily pperron w
+
+Phillips-Perron test for unit root                 Number of obs   =       159
+                                                   Newey-West lags =         4
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(rho)           -4.101           -19.997           -13.818           -11.079
+ Z(t)             -1.671            -3.490            -2.886            -2.576
+------------------------------------------------------------------------------
+MacKinnon approximate p-value for Z(t) = 0.4464
+
+. capture noisily pperron w, trend regress lags(3)
+
+Phillips-Perron test for unit root                 Number of obs   =       159
+                                                   Newey-West lags =         3
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(rho)           -7.260           -27.793           -20.936           -17.697
+ Z(t)             -1.800            -4.020            -3.442            -3.142
+------------------------------------------------------------------------------
+MacKinnon approximate p-value for Z(t) = 0.7047
+
+------------------------------------------------------------------------------
+w            |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           w |
+         L1. |   .9504838   .0263016    36.14   0.000     .8985307    1.002437
+      _trend |  -.0027299   .0028754    -0.95   0.344    -.0084097    .0029499
+       _cons |  -.2789462   .1849099    -1.51   0.133    -.6441963     .086304
+------------------------------------------------------------------------------
+
+. capture noisily pperron y, noconstant
+
+Phillips-Perron test for unit root                 Number of obs   =       159
+                                                   Newey-West lags =         4
+
+                               ---------- Interpolated Dickey-Fuller ---------
+                  Test         1% Critical       5% Critical      10% Critical
+               Statistic           Value             Value             Value
+------------------------------------------------------------------------------
+ Z(rho)          -79.592           -13.418            -7.939            -5.639
+ Z(t)             -7.129            -2.592            -1.950            -1.614
+
+. capture noisily prais r x
+
+Iteration 0:  rho = 0.0000
+Iteration 1:  rho = 0.6520
+Iteration 2:  rho = 0.6529
+Iteration 3:  rho = 0.6529
+
+Prais-Winsten AR(1) regression -- iterated estimates
+
+      Source |       SS           df       MS      Number of obs   =       160
+-------------+----------------------------------   F(1, 158)       =     59.90
+       Model |  78.6588154         1  78.6588154   Prob > F        =    0.0000
+    Residual |  207.484605       158   1.3131937   R-squared       =    0.2749
+-------------+----------------------------------   Adj R-squared   =    0.2703
+       Total |   286.14342       159  1.79964415   Root MSE        =    1.1459
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5538568   .0722203     7.67   0.000     .4112151    .6964985
+       _cons |   1.803561   .2581392     6.99   0.000     1.293712     2.31341
+-------------+----------------------------------------------------------------
+         rho |    .652882
+------------------------------------------------------------------------------
+Durbin-Watson statistic (original)    0.699189
+Durbin-Watson statistic (transformed) 1.588152
+
+. capture noisily prais r x, corc
+
+Iteration 0:  rho = 0.0000
+Iteration 1:  rho = 0.6520
+Iteration 2:  rho = 0.6529
+Iteration 3:  rho = 0.6529
+
+Cochrane-Orcutt AR(1) regression -- iterated estimates
+
+      Source |       SS           df       MS      Number of obs   =       159
+-------------+----------------------------------   F(1, 157)       =     58.22
+       Model |  76.9387136         1  76.9387136   Prob > F        =    0.0000
+    Residual |  207.474142       157  1.32149135   R-squared       =    0.2705
+-------------+----------------------------------   Adj R-squared   =    0.2659
+       Total |  284.412855       158  1.80008136   Root MSE        =    1.1496
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5535269   .0725435     7.63   0.000     .4102398     .696814
+       _cons |    1.79961   .2627076     6.85   0.000     1.280713    2.318508
+-------------+----------------------------------------------------------------
+         rho |   .6528549
+------------------------------------------------------------------------------
+Durbin-Watson statistic (original)    0.699189
+Durbin-Watson statistic (transformed) 1.587372
+
+. capture noisily prais r x, rhotype(dw) twostep
+
+Iteration 0:  rho = 0.0000
+Iteration 1:  rho = 0.6504
+
+Prais-Winsten AR(1) regression -- twostep estimates
+
+      Source |       SS           df       MS      Number of obs   =       160
+-------------+----------------------------------   F(1, 158)       =     59.76
+       Model |   78.474259         1   78.474259   Prob > F        =    0.0000
+    Residual |  207.486839       158  1.31320784   R-squared       =    0.2744
+-------------+----------------------------------   Adj R-squared   =    0.2698
+       Total |  285.961098       159  1.79849747   Root MSE        =     1.146
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5538092   .0723012     7.66   0.000     .4110077    .6966107
+       _cons |   1.803313    .256346     7.03   0.000     1.297006     2.30962
+-------------+----------------------------------------------------------------
+         rho |   .6504053
+------------------------------------------------------------------------------
+Durbin-Watson statistic (original)    0.699189
+Durbin-Watson statistic (transformed) 1.584752
+
+. capture noisily prais r x, ssesearch
+
+Iteration 1:  rho = 0.8944 , criterion =  -228.18477
+Iteration 2:  rho = 0.6527 , criterion =  -207.48462
+Iteration 3:  rho = 0.6528 , criterion =  -207.48461
+Iteration 4:  rho = 0.6529 , criterion =  -207.4846
+Iteration 5:  rho = 0.6529 , criterion =  -207.4846
+Iteration 6:  rho = 0.6529 , criterion =  -207.4846
+Iteration 7:  rho = 0.6529 , criterion =  -207.4846
+Iteration 8:  rho = 0.6529 , criterion =  -207.4846
+Iteration 9:  rho = 0.6529 , criterion =  -207.4846
+Iteration 10:  rho = 0.6529 , criterion =  -207.4846
+
+Prais-Winsten AR(1) regression -- SSE search estimates
+
+      Source |       SS           df       MS      Number of obs   =       160
+-------------+----------------------------------   F(1, 158)       =     59.90
+       Model |   78.661303         1   78.661303   Prob > F        =    0.0000
+    Residual |  207.484604       158   1.3131937   R-squared       =    0.2749
+-------------+----------------------------------   Adj R-squared   =    0.2703
+       Total |  286.145907       159  1.79965979   Root MSE        =    1.1459
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5538574   .0722192     7.67   0.000     .4112179     .696497
+       _cons |   1.803565   .2581636     6.99   0.000     1.293668    2.313461
+-------------+----------------------------------------------------------------
+         rho |   .6529144
+------------------------------------------------------------------------------
+Durbin-Watson statistic (original)    0.699189
+Durbin-Watson statistic (transformed) 1.588196
+
+. capture noisily prais r x, rhotype(theil) nodw
+
+Iteration 0:  rho = 0.0000
+Iteration 1:  rho = 0.6370
+Iteration 2:  rho = 0.6381
+Iteration 3:  rho = 0.6381
+Iteration 4:  rho = 0.6381
+
+Prais-Winsten AR(1) regression -- iterated estimates
+
+      Source |       SS           df       MS      Number of obs   =       160
+-------------+----------------------------------   F(1, 158)       =     59.05
+       Model |  77.5671662         1  77.5671662   Prob > F        =    0.0000
+    Residual |  207.562144       158  1.31368446   R-squared       =    0.2720
+-------------+----------------------------------   Adj R-squared   =    0.2674
+       Total |   285.12931       159   1.7932661   Root MSE        =    1.1462
+
+------------------------------------------------------------------------------
+           r |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .5535648   .0727126     7.61   0.000     .4099507     .697179
+       _cons |   1.802136   .2478564     7.27   0.000     1.312596    2.291675
+-------------+----------------------------------------------------------------
+         rho |   .6381354
+------------------------------------------------------------------------------
+
+. 
+. * --- VAR postestimation ---
+. capture noisily var y z, lags(1/2)
+
+Vector autoregression
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+Log likelihood =  -448.8924                     AIC               =   5.808765
+FPE            =   1.142311                     HQIC              =   5.887484
+Det(Sigma_ml)  =   1.006449                     SBIC              =     6.0026
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+y                     5     .959422   0.3298   77.75202   0.0000
+z                     5     1.08039   0.1578   29.61164   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           y |
+         L1. |   .4514335    .079617     5.67   0.000     .2953872    .6074799
+         L2. |   .0124359   .0763944     0.16   0.871    -.1372944    .1621661
+             |
+           z |
+         L1. |   .2841314   .0715135     3.97   0.000     .1439675    .4242954
+         L2. |  -.0251666   .0748132    -0.34   0.737    -.1717978    .1214646
+             |
+       _cons |  -.1325604   .0779485    -1.70   0.089    -.2853366    .0202157
+-------------+----------------------------------------------------------------
+z            |
+           y |
+         L1. |   .1420541   .0896554     1.58   0.113    -.0336672    .3177754
+         L2. |   .0178842   .0860265     0.21   0.835    -.1507247     .186493
+             |
+           z |
+         L1. |   .3616296   .0805302     4.49   0.000     .2037933     .519466
+         L2. |  -.0493264   .0842459    -0.59   0.558    -.2144454    .1157926
+             |
+       _cons |   .0887207   .0877765     1.01   0.312     -.083318    .2607595
+------------------------------------------------------------------------------
+
+. capture noisily varlmar
+
+   Lagrange-multiplier test
+  +--------------------------------------+
+  | lag  |      chi2    df   Prob > chi2 |
+  |------+-------------------------------|
+  |   1  |    2.8968     4     0.57525   |
+  |   2  |    4.7512     4     0.31379   |
+  +--------------------------------------+
+   H0: no autocorrelation at lag order
+
+. capture noisily varlmar, mlag(3)
+
+   Lagrange-multiplier test
+  +--------------------------------------+
+  | lag  |      chi2    df   Prob > chi2 |
+  |------+-------------------------------|
+  |   1  |    2.8968     4     0.57525   |
+  |   2  |    4.7512     4     0.31379   |
+  |   3  |    3.3846     4     0.49563   |
+  +--------------------------------------+
+   H0: no autocorrelation at lag order
+
+. capture noisily varnorm
+
+   Jarque-Bera test
+  +--------------------------------------------------------+
+  |           Equation |            chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y |            0.117   2    0.94306   |
+  |                  z |            0.515   2    0.77281   |
+  |                ALL |            0.633   4    0.95936   |
+  +--------------------------------------------------------+
+
+   Skewness test
+  +--------------------------------------------------------+
+  |           Equation | Skewness   chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y | -.04435    0.052   1    0.81998   |
+  |                  z | -.13939    0.512   1    0.47441   |
+  |                ALL |            0.563   2    0.75448   |
+  +--------------------------------------------------------+
+
+   Kurtosis test
+  +--------------------------------------------------------+
+  |           Equation | Kurtosis   chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y |  2.9003    0.065   1    0.79806   |
+  |                  z |  2.9761    0.004   1    0.95102   |
+  |                ALL |            0.069   2    0.96598   |
+  +--------------------------------------------------------+
+
+. capture noisily varnorm, jbera skewness kurtosis
+
+   Jarque-Bera test
+  +--------------------------------------------------------+
+  |           Equation |            chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y |            0.117   2    0.94306   |
+  |                  z |            0.515   2    0.77281   |
+  |                ALL |            0.633   4    0.95936   |
+  +--------------------------------------------------------+
+
+   Skewness test
+  +--------------------------------------------------------+
+  |           Equation | Skewness   chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y | -.04435    0.052   1    0.81998   |
+  |                  z | -.13939    0.512   1    0.47441   |
+  |                ALL |            0.563   2    0.75448   |
+  +--------------------------------------------------------+
+
+   Kurtosis test
+  +--------------------------------------------------------+
+  |           Equation | Kurtosis   chi2   df  Prob > chi2 |
+  |--------------------+-----------------------------------|
+  |                  y |  2.9003    0.065   1    0.79806   |
+  |                  z |  2.9761    0.004   1    0.95102   |
+  |                ALL |            0.069   2    0.96598   |
+  +--------------------------------------------------------+
+
+. capture noisily varstable, amat(compmat)
+
+   Eigenvalue stability condition
+  +----------------------------------------+
+  |        Eigenvalue        |   Modulus   |
+  |--------------------------+-------------|
+  |   .6014425               |   .601442   |
+  |   .1097756 +  .1489733i  |   .185051   |
+  |   .1097756 -  .1489733i  |   .185051   |
+  | -.00793044               |    .00793   |
+  +----------------------------------------+
+   All the eigenvalues lie inside the unit circle.
+   VAR satisfies stability condition.
+
+. capture noisily matrix list compmat
+
+compmat[4,4]
+            c1          c2          c3          c4
+r1   .45143355   .28413141   .01243586  -.02516658
+r2   .14205413   .36162961   .01788419   -.0493264
+r3           1           0           0           0
+r4           0           1           0           0
+
+. capture noisily varwle
+
+   Equation: y
+  +------------------------------------+
+  | lag |    chi2      df  Prob > chi2 |
+  |-----+------------------------------|
+  |   1 |   48.9086     2     0.000    |
+  |   2 |  .1404818     2     0.932    |
+  +------------------------------------+
+
+   Equation: z
+  +------------------------------------+
+  | lag |    chi2      df  Prob > chi2 |
+  |-----+------------------------------|
+  |   1 |  22.98679     2     0.000    |
+  |   2 |  .3878687     2     0.824    |
+  +------------------------------------+
+
+   Equation: All
+  +------------------------------------+
+  | lag |    chi2      df  Prob > chi2 |
+  |-----+------------------------------|
+  |   1 |  70.18637     4     0.000    |
+  |   2 |  .5138523     4     0.972    |
+  +------------------------------------+
+
+. capture noisily fcast compute f_, step(6)
+
+. capture noisily list t y f_y f_y_SE in -8/l
+
+     +------------------------------------------+
+     |       t       y          f_y      f_y_SE |
+     |------------------------------------------|
+159. |  2023m3     .01            .           . |
+160. |  2023m4   -1.26        -1.26           . |
+161. |  2023m5       .    -1.378205   .95894111 |
+162. |  2023m6       .   -.97298563   1.0990657 |
+163. |  2023m7       .    -.6633619   1.1475796 |
+     |------------------------------------------|
+164. |  2023m8       .   -.47885035   1.1516076 |
+165. |  2023m9       .   -.37051052   1.1497211 |
+166. | 2023m10       .   -.30586993    1.148779 |
+     +------------------------------------------+
+
+. capture noisily varbasic y z, lags(1/2) nograph
+
+Vector autoregression
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+Log likelihood =  -448.8924                     AIC               =   5.808765
+FPE            =   1.142311                     HQIC              =   5.887484
+Det(Sigma_ml)  =   1.006449                     SBIC              =     6.0026
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+y                     5     .959422   0.3298   77.75202   0.0000
+z                     5     1.08039   0.1578   29.61164   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           y |
+         L1. |   .4514335    .079617     5.67   0.000     .2953872    .6074799
+         L2. |   .0124359   .0763944     0.16   0.871    -.1372944    .1621661
+             |
+           z |
+         L1. |   .2841314   .0715135     3.97   0.000     .1439675    .4242954
+         L2. |  -.0251666   .0748132    -0.34   0.737    -.1717978    .1214646
+             |
+       _cons |  -.1325604   .0779485    -1.70   0.089    -.2853366    .0202157
+-------------+----------------------------------------------------------------
+z            |
+           y |
+         L1. |   .1420541   .0896554     1.58   0.113    -.0336672    .3177754
+         L2. |   .0178842   .0860265     0.21   0.835    -.1507247     .186493
+             |
+           z |
+         L1. |   .3616296   .0805302     4.49   0.000     .2037933     .519466
+         L2. |  -.0493264   .0842459    -0.59   0.558    -.2144454    .1157926
+             |
+       _cons |   .0887207   .0877765     1.01   0.312     -.083318    .2607595
+------------------------------------------------------------------------------
+
+. 
+. * --- vecrank, vec ---
+. capture noisily vecrank c1 c2, lags(2)
+
+                       Johansen tests for cointegration                        
+Trend: constant                                         Number of obs =     158
+Sample:  2010m3 - 2023m4                                         Lags =       2
+-------------------------------------------------------------------------------
+                                                         5%
+maximum                                      trace    critical
+  rank    parms       LL       eigenvalue  statistic    value
+    0      6      -425.64144           .     77.5498    15.41
+    1      9      -388.34994     0.37627      2.9668*    3.76
+    2      10     -386.86654     0.01860
+-------------------------------------------------------------------------------
+
+. capture noisily vecrank c1 c2, lags(2) trend(rconstant) max
+
+                       Johansen tests for cointegration                        
+Trend: rconstant                                        Number of obs =     158
+Sample:  2010m3 - 2023m4                                         Lags =       2
+-------------------------------------------------------------------------------
+                                                         5%
+maximum                                      trace    critical
+  rank    parms       LL       eigenvalue  statistic    value
+    0      4      -425.92616           .     78.1192    19.96
+    1      8      -388.62192     0.37637      3.5108*    9.42
+    2      10     -386.86654     0.02197
+-------------------------------------------------------------------------------
+                                                         5%
+maximum                                       max     critical
+  rank    parms       LL       eigenvalue  statistic    value
+    0      4      -425.92616           .     74.6085    15.67
+    1      8      -388.62192     0.37637      3.5108     9.24
+    2      10     -386.86654     0.02197
+-------------------------------------------------------------------------------
+
+. capture noisily vecrank c1 c2, lags(2) ic
+
+                       Johansen tests for cointegration                        
+Trend: constant                                         Number of obs =     158
+Sample:  2010m3 - 2023m4                                         Lags =       2
+-------------------------------------------------------------------------------
+                                                         5%
+maximum                                      trace    critical
+  rank    parms       LL       eigenvalue  statistic    value
+    0      6      -425.64144           .     77.5498    15.41
+    1      9      -388.34994     0.37627      2.9668*    3.76
+    2      10     -386.86654     0.01860
+-------------------------------------------------------------------------------
+maximum
+  rank    parms       LL       eigenvalue     SBIC       HQIC       AIC
+    0      6      -425.64144                5.580117   5.511047   5.463816
+    1      9      -388.34994     0.37627    5.204198*  5.100593*  5.029746
+    2      10     -386.86654     0.01860    5.217462   5.102346   5.023627
+-------------------------------------------------------------------------------
+
+. capture noisily vec c1 c2, rank(1) lags(2)
+
+Vector error-correction model
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+                                                AIC               =   5.029746
+Log likelihood = -388.3499                      HQIC              =   5.100593
+Det(Sigma_ml)  =  .4676982                      SBIC              =   5.204198
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+D_c1                  4      1.2114   0.0395   6.330132   0.1758
+D_c2                  4     .850742   0.3250   74.14808   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+D_c1         |
+        _ce1 |
+         L1. |  -.0171893   .1248078    -0.14   0.890    -.2618081    .2274295
+             |
+          c1 |
+         LD. |  -.2198217   .1088084    -2.02   0.043    -.4330822   -.0065613
+             |
+          c2 |
+         LD. |   .1702396   .1689545     1.01   0.314    -.1609051    .5013843
+             |
+       _cons |   -.071393   .0969902    -0.74   0.462    -.2614904    .1187044
+-------------+----------------------------------------------------------------
+D_c2         |
+        _ce1 |
+         L1. |   .5662761     .08765     6.46   0.000     .3944852     .738067
+             |
+          c1 |
+         LD. |      -.167   .0764139    -2.19   0.029    -.3167685   -.0172314
+             |
+          c2 |
+         LD. |    .155156   .1186534     1.31   0.191    -.0774004    .3877123
+             |
+       _cons |  -.0021671   .0681143    -0.03   0.975    -.1356688    .1313345
+------------------------------------------------------------------------------
+
+Cointegrating equations
+
+Equation           Parms    chi2     P>chi2
+-------------------------------------------
+_ce1                  1   3998.677   0.0000
+-------------------------------------------
+
+Identification:  beta is exactly identified
+
+                 Johansen normalization restriction imposed
+------------------------------------------------------------------------------
+        beta |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+_ce1         |
+          c1 |          1          .        .       .            .           .
+          c2 |  -2.019234   .0319322   -63.24   0.000     -2.08182   -1.956648
+       _cons |  -.0154994          .        .       .            .           .
+------------------------------------------------------------------------------
+
+. capture noisily vec c1 c2, rank(1) lags(2) trend(rconstant) noidtest
+
+Vector error-correction model
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+                                                AIC               =   5.020531
+Log likelihood = -388.6219                      HQIC              =   5.083506
+Det(Sigma_ml)  =  .4693112                      SBIC              =   5.175599
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+D_c1                  3     1.20957   0.0362   5.779042   0.1229
+D_c2                  3     .848783   0.3237   73.72381   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+D_c1         |
+        _ce1 |
+         L1. |  -.0152396   .1249906    -0.12   0.903    -.2602167    .2297374
+             |
+          c1 |
+         LD. |  -.2175485    .108949    -2.00   0.046    -.4310847   -.0040123
+             |
+          c2 |
+         LD. |    .172198   .1692258     1.02   0.309    -.1594784    .5038745
+-------------+----------------------------------------------------------------
+D_c2         |
+        _ce1 |
+         L1. |   .5672664    .087709     6.47   0.000     .3953599    .7391729
+             |
+          c1 |
+         LD. |  -.1658081   .0764523    -2.17   0.030    -.3156517   -.0159644
+             |
+          c2 |
+         LD. |    .156177     .11875     1.32   0.188    -.0765687    .3889226
+------------------------------------------------------------------------------
+
+Cointegrating equations
+
+Equation           Parms    chi2     P>chi2
+-------------------------------------------
+_ce1                  1   3998.684   0.0000
+-------------------------------------------
+
+Identification:  beta is exactly identified
+
+                 Johansen normalization restriction imposed
+------------------------------------------------------------------------------
+        beta |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+_ce1         |
+          c1 |          1          .        .       .            .           .
+          c2 |  -2.019324   .0319336   -63.24   0.000    -2.081913   -1.956735
+       _cons |   .0449289   .1614923     0.28   0.781    -.2715901    .3614479
+------------------------------------------------------------------------------
+
+. capture noisily vec c1 c2, rank(1) lags(2) alpha
+
+Vector error-correction model
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+                                                AIC               =   5.029746
+Log likelihood = -388.3499                      HQIC              =   5.100593
+Det(Sigma_ml)  =  .4676982                      SBIC              =   5.204198
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+D_c1                  4      1.2114   0.0395   6.330132   0.1758
+D_c2                  4     .850742   0.3250   74.14808   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+D_c1         |
+        _ce1 |
+         L1. |  -.0171893   .1248078    -0.14   0.890    -.2618081    .2274295
+             |
+          c1 |
+         LD. |  -.2198217   .1088084    -2.02   0.043    -.4330822   -.0065613
+             |
+          c2 |
+         LD. |   .1702396   .1689545     1.01   0.314    -.1609051    .5013843
+             |
+       _cons |   -.071393   .0969902    -0.74   0.462    -.2614904    .1187044
+-------------+----------------------------------------------------------------
+D_c2         |
+        _ce1 |
+         L1. |   .5662761     .08765     6.46   0.000     .3944852     .738067
+             |
+          c1 |
+         LD. |      -.167   .0764139    -2.19   0.029    -.3167685   -.0172314
+             |
+          c2 |
+         LD. |    .155156   .1186534     1.31   0.191    -.0774004    .3877123
+             |
+       _cons |  -.0021671   .0681143    -0.03   0.975    -.1356688    .1313345
+------------------------------------------------------------------------------
+
+Cointegrating equations
+
+Equation           Parms    chi2     P>chi2
+-------------------------------------------
+_ce1                  1   3998.677   0.0000
+-------------------------------------------
+
+Identification:  beta is exactly identified
+
+                 Johansen normalization restriction imposed
+------------------------------------------------------------------------------
+        beta |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+_ce1         |
+          c1 |          1          .        .       .            .           .
+          c2 |  -2.019234   .0319322   -63.24   0.000     -2.08182   -1.956648
+       _cons |  -.0154994          .        .       .            .           .
+------------------------------------------------------------------------------
+
+Adjustment parameters
+
+Equation           Parms    chi2     P>chi2
+-------------------------------------------
+D_c1                  1   .0189685   0.8905
+D_c2                  1   41.73999   0.0000
+-------------------------------------------
+------------------------------------------------------------------------------
+       alpha |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+D_c1         |
+        _ce1 |
+         L1. |  -.0171893   .1248078    -0.14   0.890    -.2618081    .2274295
+-------------+----------------------------------------------------------------
+D_c2         |
+        _ce1 |
+         L1. |   .5662761     .08765     6.46   0.000     .3944852     .738067
+------------------------------------------------------------------------------
+
+. capture noisily fcast compute v_, step(4)
+
+. capture noisily list t c1 v_c1 in -5/l
+
+     +---------------------------+
+     |       t   c1         v_c1 |
+     |---------------------------|
+162. |  2023m6    .   -11.289553 |
+163. |  2023m7    .   -11.387629 |
+164. |  2023m8    .   -11.456552 |
+165. |  2023m9    .            . |
+166. | 2023m10    .            . |
+     +---------------------------+
+
+. capture noisily irf create vecirf, set(odta_vec) replace step(6)
+(file odta_vec.irf created)
+(file odta_vec.irf now active)
+irfname vecirf not found in odta_vec.irf
+(file odta_vec.irf updated)
+
+. capture noisily irf table irf, irf(vecirf) impulse(c1) response(c2)
+
+Results from vecirf
+
++--------------------+
+|        |    (1)    |
+|  step  |   irf     |
+|--------+-----------|
+|0       | 0         |
+|1       | .399276   |
+|2       | .47632    |
+|3       | .42393    |
+|4       | .426707   |
+|5       | .430241   |
+|6       | .429498   |
++--------------------+
+(1) irfname = vecirf, impulse = c1, and response = c2
+
+. 
+. * --- svar and irf extensions ---
+. matrix A1 = (1, 0 \ ., 1)
+
+. matrix B1 = (., 0 \ 0, .)
+
+. capture noisily svar y z, lags(1/2) aeq(A1) beq(B1)
+Estimating short-run parameters
+
+Iteration 0:   log likelihood = -517.98362  
+Iteration 1:   log likelihood = -466.48854  
+Iteration 2:   log likelihood = -449.07864  
+Iteration 3:   log likelihood = -448.89252  
+Iteration 4:   log likelihood = -448.89244  
+Iteration 5:   log likelihood = -448.89244  
+
+Structural vector autoregression
+
+ ( 1)  [a_1_1]_cons = 1
+ ( 2)  [a_1_2]_cons = 0
+ ( 3)  [a_2_2]_cons = 1
+ ( 4)  [b_1_2]_cons = 0
+ ( 5)  [b_2_1]_cons = 0
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+Exactly identified model                        Log likelihood    =  -448.8924
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      /a_1_1 |          1  (constrained)
+      /a_2_1 |  -.0364883   .0895394    -0.41   0.684    -.2119823    .1390056
+      /a_1_2 |          0  (constrained)
+      /a_2_2 |          1  (constrained)
+-------------+----------------------------------------------------------------
+      /b_1_1 |   .9441189   .0531108    17.78   0.000     .8400235    1.048214
+      /b_2_1 |          0  (constrained)
+      /b_1_2 |          0  (constrained)
+      /b_2_2 |   1.062599   .0597758    17.78   0.000     .9454402    1.179757
+------------------------------------------------------------------------------
+
+. capture noisily irf create sv, set(odta_sv) replace step(6)
+(file odta_sv.irf created)
+(file odta_sv.irf now active)
+irfname sv not found in odta_sv.irf
+(file odta_sv.irf updated)
+
+. capture noisily irf table oirf, irf(sv) impulse(y) response(z)
+
+              Results from sv
+
++--------------------------------------------+
+|        |    (1)         (1)         (1)    |
+|  step  |   oirf       Lower       Upper    |
+|--------+-----------------------------------|
+|0       | .034449     -.131281    .20018    |
+|1       | .146574     -.030531    .323679   |
+|2       | .130126     -.024237    .284489   |
+|3       | .083045     -.035615    .201705   |
+|4       | .04956      -.03328     .132401   |
+|5       | .029559     -.02879     .087908   |
+|6       | .017737     -.023018    .058492   |
++--------------------------------------------+
+95% lower and upper bounds reported
+(1) irfname = sv, impulse = y, and response = z
+
+. capture noisily var y z, lags(1/2)
+
+Vector autoregression
+
+Sample:  2010m3 - 2023m4                        Number of obs     =        158
+Log likelihood =  -448.8924                     AIC               =   5.808765
+FPE            =   1.142311                     HQIC              =   5.887484
+Det(Sigma_ml)  =   1.006449                     SBIC              =     6.0026
+
+Equation           Parms      RMSE     R-sq      chi2     P>chi2
+----------------------------------------------------------------
+y                     5     .959422   0.3298   77.75202   0.0000
+z                     5     1.08039   0.1578   29.61164   0.0000
+----------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+           y |
+         L1. |   .4514335    .079617     5.67   0.000     .2953872    .6074799
+         L2. |   .0124359   .0763944     0.16   0.871    -.1372944    .1621661
+             |
+           z |
+         L1. |   .2841314   .0715135     3.97   0.000     .1439675    .4242954
+         L2. |  -.0251666   .0748132    -0.34   0.737    -.1717978    .1214646
+             |
+       _cons |  -.1325604   .0779485    -1.70   0.089    -.2853366    .0202157
+-------------+----------------------------------------------------------------
+z            |
+           y |
+         L1. |   .1420541   .0896554     1.58   0.113    -.0336672    .3177754
+         L2. |   .0178842   .0860265     0.21   0.835    -.1507247     .186493
+             |
+           z |
+         L1. |   .3616296   .0805302     4.49   0.000     .2037933     .519466
+         L2. |  -.0493264   .0842459    -0.59   0.558    -.2144454    .1157926
+             |
+       _cons |   .0887207   .0877765     1.01   0.312     -.083318    .2607595
+------------------------------------------------------------------------------
+
+. capture noisily irf create vv, set(odta_sv) replace step(6) bs reps(50) nodots
+(file odta_sv.irf now active)
+irfname vv not found in odta_sv.irf
+(file odta_sv.irf updated)
+
+. capture noisily irf table oirf, irf(vv) impulse(y) response(z)
+
+              Results from vv
+
++--------------------------------------------+
+|        |    (1)         (1)         (1)    |
+|  step  |   oirf       Lower       Upper    |
+|--------+-----------------------------------|
+|0       | .034449     -.15587     .224769   |
+|1       | .146574     -.037595    .330743   |
+|2       | .130126     -.028974    .289226   |
+|3       | .083045     -.042296    .208387   |
+|4       | .04956      -.030439    .12956    |
+|5       | .029559     -.022893    .082011   |
+|6       | .017737     -.019396    .05487    |
++--------------------------------------------+
+95% lower and upper bounds reported
+(1) irfname = vv, impulse = y, and response = z
+
+. capture noisily irf create vv2, set(odta_sv) replace step(6)
+(file odta_sv.irf now active)
+irfname vv2 not found in odta_sv.irf
+(file odta_sv.irf updated)
+
+. capture noisily irf ctable (vv2 y z irf) (vv2 y z oirf), noci
+
++--------------------------------+
+|        |    (1)    |    (1)    |
+|  step  |   irf     |   oirf    |
+|--------+-----------+-----------|
+|0       | 0         | .034449   |
+|1       | .142054   | .146574   |
+|2       | .133383   | .130126   |
+|3       | .085751   | .083045   |
+|4       | .051148   | .04956    |
+|5       | .030479   | .029559   |
+|6       | .018284   | .017737   |
++--------------------------------+
+(1) irfname = vv2, impulse = y, and response = z
+
+. capture noisily irf describe
+Contains irf results from odta_sv.irf (dated 20 Oct 2026 16:28)
+
+       irfname | model    endogenous variables and order (*)
+---------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+            sv | sr svar  y z
+            vv | var      y z
+           vv2 | var      y z
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  (*) order is relevant only when model is var
+
+. capture noisily irf drop vv2
+(vv2 dropped)
+file odta_sv.irf updated
+
+. capture erase odta_vec.irf
+
+. capture erase odta_sv.irf
+
+. 
+. * --- arima extensions ---
+. capture noisily arima ss, arima(1,0,0) sarima(0,1,1,4) nolog
+
+ARIMA regression
+
+Sample:  2010m5 - 2023m4                        Number of obs     =        156
+                                                Wald chi2(2)      =      33.94
+Log likelihood = -213.4062                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+       S4.ss |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ss           |
+       _cons |   -.172516   .1091346    -1.58   0.114    -.3864158    .0413839
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |  -.0466655   .0830315    -0.56   0.574    -.2094042    .1160732
+-------------+----------------------------------------------------------------
+ARMA4        |
+          ma |
+         L1. |   .4781702   .0823458     5.81   0.000     .3167754    .6395649
+-------------+----------------------------------------------------------------
+      /sigma |   .9471628   .0556804    17.01   0.000     .8380313    1.056294
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. capture noisily arima sa, ar(1) mar(1, 4) nolog
+
+ARIMA regression
+
+Sample:  2010m1 - 2023m4                        Number of obs     =        160
+                                                Wald chi2(2)      =    2501.40
+Log likelihood = -306.3662                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+          sa |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+sa           |
+       _cons |   20.85181   2.545436     8.19   0.000     15.86284    25.84077
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .0047797   .0825753     0.06   0.954    -.1570648    .1666242
+-------------+----------------------------------------------------------------
+ARMA4        |
+          ar |
+         L1. |   .9712422   .0197498    49.18   0.000     .9325334    1.009951
+-------------+----------------------------------------------------------------
+      /sigma |   1.584039    .088668    17.86   0.000     1.410253    1.757825
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. capture noisily arima r x, ar(1) ma(1) condition nolog
+
+Time-series regression -- ARMA disturbances
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(3)    =     199.63
+Log likelihood = -239.4074                        Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+r            |
+           x |   .5728482   .0580557     9.87   0.000     .4590611    .6866353
+       _cons |   1.798653    .223812     8.04   0.000      1.35999    2.237317
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .4060376   .1131511     3.59   0.000     .1842655    .6278097
+             |
+          ma |
+         L1. |   .4746065   .1035017     4.59   0.000      .271747    .6774661
+-------------+----------------------------------------------------------------
+     /SIGMA2 |   1.167292   .1254674     9.30   0.000     .9213803    1.413204
+------------------------------------------------------------------------------
+
+. capture noisily arima r x, ar(1) diffuse nolog
+
+ARIMA regression
+
+Sample:  2010m1 - 2023m4                        Number of obs     =        160
+                                                Wald chi2(2)      =     148.79
+Log likelihood = -258.0469                      Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+r            |
+           x |   .5534871   .0677092     8.17   0.000     .4207795    .6861946
+       _cons |   1.799475   .2644107     6.81   0.000     1.281239     2.31771
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |   .6529006   .0710353     9.19   0.000     .5136739    .7921273
+-------------+----------------------------------------------------------------
+      /sigma |    1.14224   .0684887    16.68   0.000     1.008005    1.276476
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. 
+. * --- arch family ---
+. * (the periods added by fcast and tsappend are dropped: the sample of these commands is the data)
+. keep in 1/160
+(6 observations deleted)
+
+. capture noisily arch g, arch(1) garch(1) nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -177.7113                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |                 OPG
+           g |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+g            |
+       _cons |  -.0890042   .0586973    -1.52   0.129    -.2040487    .0260404
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |   .2442433   .1382407     1.77   0.077    -.0267035    .5151901
+             |
+       garch |
+         L1. |   .4798431   .2208159     2.17   0.030     .0470518    .9126344
+             |
+       _cons |   .1636519   .0955434     1.71   0.087    -.0236098    .3509136
+------------------------------------------------------------------------------
+
+. capture noisily arch gt, arch(1) garch(1) distribution(t) nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: t                                   Wald chi2(.)    =          .
+Log likelihood = -248.1209                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |                 OPG
+          gt |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+gt           |
+       _cons |  -.1716614    .074618    -2.30   0.021      -.31791   -.0254127
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |   .5484231   .2426647     2.26   0.024     .0728091    1.024037
+             |
+       garch |
+         L1. |   .2961103    .178855     1.66   0.098     -.054439    .6466597
+             |
+       _cons |   .5037473   .2762854     1.82   0.068    -.0377622    1.045257
+-------------+----------------------------------------------------------------
+     /lndfm2 |   .8049113   .8322307     0.97   0.333    -.8262309    2.436053
+-------------+----------------------------------------------------------------
+          df |   4.236498   1.861282                      2.437696    13.42785
+------------------------------------------------------------------------------
+
+. capture noisily arch g, arch(1/2) nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood =  -175.329                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |                 OPG
+           g |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+g            |
+       _cons |  -.0729533    .054681    -1.33   0.182    -.1801261    .0342196
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |   .1628251   .1388574     1.17   0.241    -.1093303    .4349806
+         L2. |   .3561188   .1652006     2.16   0.031     .0323315     .679906
+             |
+       _cons |   .2930789   .0778191     3.77   0.000     .1405563    .4456015
+------------------------------------------------------------------------------
+
+. capture noisily arch gt, earch(1) egarch(1) nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -255.3441                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |                 OPG
+          gt |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+gt           |
+       _cons |  -.2143302   .0813027    -2.64   0.008    -.3736806   -.0549798
+-------------+----------------------------------------------------------------
+ARCH         |
+       earch |
+         L1. |    .111766   .0853329     1.31   0.190    -.0554835    .2790154
+             |
+     earch_a |
+         L1. |   .7814313   .1258064     6.21   0.000     .5348552    1.028007
+             |
+      egarch |
+         L1. |    .701132   .1141436     6.14   0.000     .4774147    .9248493
+             |
+       _cons |   .1441164   .0834895     1.73   0.084    -.0195201    .3077529
+------------------------------------------------------------------------------
+
+. capture noisily arch g, arch(1) garch(1) tarch(1) nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -177.2791                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |                 OPG
+           g |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+g            |
+       _cons |  -.1060609   .0589608    -1.80   0.072    -.2216219       .0095
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |   .3588958    .235842     1.52   0.128    -.1033461    .8211376
+             |
+       tarch |
+         L1. |  -.1806709   .2315253    -0.78   0.435    -.6344521    .2731103
+             |
+       garch |
+         L1. |   .4690276   .2212253     2.12   0.034      .035434    .9026213
+             |
+       _cons |   .1616438   .0945664     1.71   0.087     -.023703    .3469906
+------------------------------------------------------------------------------
+
+. capture noisily arch g, arch(1) garch(1) archm nolog
+
+ARCH family regression
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(1)    =       2.62
+Log likelihood = -176.0755                        Prob > chi2     =     0.1054
+
+------------------------------------------------------------------------------
+             |                 OPG
+           g |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+g            |
+       _cons |  -.3101789   .1433044    -2.16   0.030    -.5910504   -.0293074
+-------------+----------------------------------------------------------------
+ARCHM        |
+      sigma2 |   .4552303   .2811204     1.62   0.105    -.0957556    1.006216
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |     .25546   .1305687     1.96   0.050    -.0004499      .51137
+             |
+       garch |
+         L1. |   .4991144   .1956838     2.55   0.011     .1155811    .8826476
+             |
+       _cons |   .1446346   .0760372     1.90   0.057    -.0043957    .2936648
+------------------------------------------------------------------------------
+
+. capture noisily arch r x, arch(1) garch(1) ar(1) nolog
+
+ARCH family regression -- AR disturbances
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(2)    =     202.75
+Log likelihood = -246.0049                        Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |                 OPG
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+r            |
+           x |   .5533437   .0681737     8.12   0.000     .4197258    .6869616
+       _cons |   1.739968   .2584495     6.73   0.000     1.233416     2.24652
+-------------+----------------------------------------------------------------
+ARMA         |
+          ar |
+         L1. |     .65321   .0579795    11.27   0.000     .5395722    .7668478
+-------------+----------------------------------------------------------------
+ARCH         |
+        arch |
+         L1. |  -.1195376   .0700437    -1.71   0.088    -.2568208    .0177456
+             |
+       garch |
+         L1. |   .6355034   .3987405     1.59   0.111    -.1460137    1.417021
+             |
+       _cons |   .6317794   .5289629     1.19   0.232     -.404969    1.668528
+------------------------------------------------------------------------------
+
+. capture noisily predict hh, variance
+
+. 
+. * --- arfima ---
+. capture noisily arfima g, nolog
+
+ARFIMA regression
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(1)      =       2.48
+Log likelihood = -181.56978                     Prob > chi2       =     0.1155
+------------------------------------------------------------------------------
+             |                 OIM
+           g |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+g            |
+       _cons |  -.0808088   .0366713    -2.20   0.028    -.1526831   -.0089344
+-------------+----------------------------------------------------------------
+ARFIMA       |
+           d |  -.1072811   .0681635    -1.57   0.116     -.240879    .0263169
+-------------+----------------------------------------------------------------
+     /sigma2 |   .5662549     .06331     8.94   0.000     .4421695    .6903403
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. capture noisily arfima r x, ar(1) nolog
+
+ARFIMA regression
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(3)      =     162.38
+Log likelihood = -247.75249                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+             |                 OIM
+           r |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+r            |
+           x |   .5560107   .0704808     7.89   0.000      .417871    .6941505
+       _cons |   1.816104    .361429     5.02   0.000     1.107717    2.524492
+-------------+----------------------------------------------------------------
+ARFIMA       |
+          ar |
+         L1. |   .5804966   .1041824     5.57   0.000     .3763029    .7846902
+             |
+           d |   .1093416   .1320742     0.83   0.408     -.149519    .3682022
+-------------+----------------------------------------------------------------
+     /sigma2 |   1.290131   .1442604     8.94   0.000     1.007386    1.572876
+------------------------------------------------------------------------------
+Note: The test of the variance against zero is one sided, and the two-sided
+      confidence interval is truncated at zero.
+
+. 
+. * --- state-space models ---
+. capture noisily ucm y, model(llevel) nolog
+
+Unobserved-components model
+Components: local level
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+Log likelihood = -235.98434
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   var(level)|   .2773011   .1138417     2.44   0.007     .0541754    .5004268
+       var(y)|    .565871   .1266042     4.47   0.000     .3177313    .8140106
+------------------------------------------------------------------------------
+Note: Model is not stationary.
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily ucm y, model(rwalk) nolog
+
+Unobserved-components model
+Components: random walk
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+Log likelihood = -247.66917
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   var(level)|   1.304604   .1463171     8.92   0.000     1.017828     1.59138
+------------------------------------------------------------------------------
+Note: Model is not stationary.
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily ucm tr, model(lltrend) nolog
+
+Unobserved-components model
+Components: local linear trend
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+Log likelihood = -283.94919
+------------------------------------------------------------------------------
+             |                 OIM
+          tr |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   var(level)|   .2507428   .1627064     1.54   0.062            0    .5696415
+   var(slope)|   .0041576   .0033608     1.24   0.108            0    .0107445
+      var(tr)|   1.138992   .1947207     5.85   0.000     .7573468    1.520638
+------------------------------------------------------------------------------
+Note: Model is not stationary.
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily ucm ss, model(llevel) seasonal(4) nolog
+
+Unobserved-components model
+Components: local level, seasonal(4)
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+Log likelihood = -241.17788
+-------------------------------------------------------------------------------
+              |                 OIM
+           ss |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+--------------+----------------------------------------------------------------
+    var(level)|   .0695613    .015126     4.60   0.000      .039915    .0992077
+ var(seasonal)|   .5074133    .068711     7.38   0.000     .3727423    .6420843
+       var(ss)|   4.36e-14          .        .       .            .           .
+-------------------------------------------------------------------------------
+Note: Model is not stationary.
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily ucm y x, model(ntrend) nolog
+
+Unobserved-components model
+Components:
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(1)      =       0.41
+Log likelihood = -251.01031                     Prob > chi2       =     0.5214
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |  -.0552543    .086177    -0.64   0.521     -.224158    .1136495
+-------------+----------------------------------------------------------------
+       var(y)|   1.349524   .1508813     8.94   0.000     1.053802    1.645246
+------------------------------------------------------------------------------
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily ucm cy, model(ntrend) cycle(1) nolog
+
+Unobserved-components model
+Components: order 1 cycle
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(2)      =     564.61
+Log likelihood = -237.45338                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+             |                 OIM
+          cy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   frequency |   .6835115   .0573889    11.91   0.000     .5710313    .7959917
+     damping |   .7721961   .0404399    19.09   0.000     .6929353    .8514568
+-------------+----------------------------------------------------------------
+  var(cycle1)|   1.132813   .1266638     8.94   0.000      .884556    1.381069
+      var(cy)|   3.84e-10   3.69e-09     0.10   0.459            0    7.61e-09
+------------------------------------------------------------------------------
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily sspace (z1 L.z1, state noconstant) (y z1, noconstant), covstate(identity) nolog
+
+State-space model
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(2)      =     254.48
+Log likelihood = -225.86052                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+             |                 OIM
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+z1           |
+          z1 |
+         L1. |   .6262915   .1245639     5.03   0.000     .3821506    .8704323
+-------------+----------------------------------------------------------------
+y            |
+          z1 |   .8221271   .1779018     4.62   0.000     .4734461    1.170808
+-------------+----------------------------------------------------------------
+       var(y)|   .2370409   .2171142     1.09   0.137            0     .662577
+------------------------------------------------------------------------------
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. capture noisily dfactor (y z = , noconstant) (f = , ar(1)), nolog
+
+Dynamic-factor model
+
+Sample: 2010m1 - 2023m4                         Number of obs     =        160
+                                                Wald chi2(3)      =     341.70
+Log likelihood = -469.56932                     Prob > chi2       =     0.0000
+------------------------------------------------------------------------------
+             |                 OIM
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+f            |
+           f |
+         L1. |   .7552701   .0809276     9.33   0.000     .5966549    .9138853
+-------------+----------------------------------------------------------------
+y            |
+           f |   .6055388   .1188365     5.10   0.000     .3726236     .838454
+-------------+----------------------------------------------------------------
+z            |
+           f |   .2716947    .071425     3.80   0.000     .1317044     .411685
+-------------+----------------------------------------------------------------
+     var(e.y)|   .4953495   .1474863     3.36   0.000     .2062817    .7844173
+     var(e.z)|   1.162824   .1451882     8.01   0.000     .8782599    1.447387
+------------------------------------------------------------------------------
+Note: Tests of variances against zero are one sided, and the two-sided
+      confidence intervals are truncated at zero.
+
+. 
+. * --- mgarch ---
+. capture noisily mgarch ccc (g g2 = , noconstant), arch(1) garch(1) nolog
+
+Constant conditional correlation MGARCH model
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -334.1724                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ARCH_g       |
+        arch |
+         L1. |   .1916495     .10239     1.87   0.061    -.0090312    .3923302
+             |
+       garch |
+         L1. |   .4750018   .1953012     2.43   0.015     .0922185    .8577852
+             |
+       _cons |   .1925465   .0965172     1.99   0.046     .0033762    .3817168
+-------------+----------------------------------------------------------------
+ARCH_g2      |
+        arch |
+         L1. |   .3443106   .1296835     2.66   0.008     .0901357    .5984856
+             |
+       garch |
+         L1. |   .2983163   .2050364     1.45   0.146    -.1035477    .7001803
+             |
+       _cons |   .2175585   .0954186     2.28   0.023     .0305414    .4045755
+-------------+----------------------------------------------------------------
+   corr(g,g2)|   .4699166   .0620346     7.58   0.000     .3483311    .5915021
+------------------------------------------------------------------------------
+
+. capture noisily mgarch dcc (d1 d2 = , noconstant), arch(1) garch(1) nolog
+
+Dynamic conditional correlation MGARCH model
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -322.6141                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ARCH_d1      |
+        arch |
+         L1. |   .1867403   .0846242     2.21   0.027     .0208799    .3526006
+             |
+       garch |
+         L1. |   .5595807    .153863     3.64   0.000     .2580147    .8611467
+             |
+       _cons |   .1066747   .0496023     2.15   0.032      .009456    .2038935
+-------------+----------------------------------------------------------------
+ARCH_d2      |
+        arch |
+         L1. |   .3820513   .1227128     3.11   0.002     .1415385    .6225641
+             |
+       garch |
+         L1. |   .2209101   .1487645     1.48   0.138    -.0706629    .5124831
+             |
+       _cons |   .2956188   .0960154     3.08   0.002      .107432    .4838056
+-------------+----------------------------------------------------------------
+  corr(d1,d2)|   .3476636   .1339322     2.60   0.009     .0851613    .6101658
+-------------+----------------------------------------------------------------
+Adjustment   |
+     lambda1 |   .3421312   .1239111     2.76   0.006     .0992698    .5849925
+     lambda2 |   .4251914   .2463206     1.73   0.084    -.0575881    .9079709
+------------------------------------------------------------------------------
+
+. capture noisily mgarch dvech (g g2 = , noconstant), arch(1) garch(1) nolog
+
+Diagonal vech MGARCH model
+
+Sample: 2010m1 - 2023m4                           Number of obs   =        160
+Distribution: Gaussian                            Wald chi2(.)    =          .
+Log likelihood = -334.0478                        Prob > chi2     =          .
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+Sigma0       |
+         1_1 |   .1977499   .0997829     1.98   0.048     .0021791    .3933207
+         2_1 |   .1102084   .0586372     1.88   0.060    -.0047185    .2251352
+         2_2 |   .2289214   .0851331     2.69   0.007     .0620636    .3957792
+-------------+----------------------------------------------------------------
+L.ARCH       |
+         1_1 |   .1656102   .0933462     1.77   0.076     -.017345    .3485653
+         2_1 |   .2065501   .0913589     2.26   0.024       .02749    .3856102
+         2_2 |   .3359687    .125478     2.68   0.007     .0900363     .581901
+-------------+----------------------------------------------------------------
+L.GARCH      |
+         1_1 |   .4819293   .2033698     2.37   0.018     .0833318    .8805268
+         2_1 |   .3280548   .2606742     1.26   0.208    -.1828573     .838967
+         2_2 |   .2795333   .1778897     1.57   0.116    -.0691241    .6281907
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1904_timeseries.log
+  log type:  text
+ closed on:  20 Oct 2026, 16:28:07
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -236,7 +236,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Conditional variance and long memory: `arch` (ARCH, GARCH and the other variance terms, ARCH-M, ARMA errors, t and GED distributions, `het()`), `arfima` (exact ML) and `mgarch` (`dvech`, `ccc` and `dcc`)
 - [x] `arima` with `sarima()`, `mar()`, `mma()`, `condition` and `diffuse`
 - [x] State-space models by the Kalman filter with diffuse initial states: `ucm`, `sspace` and `dfactor`
-- Checked against the Stata 14 log: case `1904` awaits the Stata run
+- Checked against the Stata 14 log: case `1904` matches except for the differences in `compat/known_differences.txt` (the `dfgls` critical values by lag, the iteration logs of `prais, ssesearch` and `svar`, the `fcast` standard errors from the fourth step on, the bootstrap tables of `irf`, and the estimates of `ucm` with `cycle()` and of `mgarch dcc`, where Stata reaches a different point)
 
 ## Distribution and documentation
 

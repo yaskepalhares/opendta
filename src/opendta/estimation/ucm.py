@@ -221,7 +221,8 @@ def cmd_ucm(s: "Session", args: str) -> None:
         if any(abs(v) > 25 for v, k in zip(u, kinds) if k == "var"):
             return -np.inf            # variances beyond exp(+-25) are numerically meaningless
         c_ = contrib(u)
-        return -np.inf if c_ is None else float(c_.sum())
+        # VERIFY (case 1904): the reference log is ln(s) below this value for seasonal(s) (s = 4 seen)
+        return -np.inf if c_ is None else float(c_.sum()) - (math.log(spec.seasonal) if spec.seasonal else 0.0)
 
     def fun(u, todo):
         if todo == 0:
