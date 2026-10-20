@@ -210,7 +210,8 @@ def archpath(spec: ArchSpec, par: np.ndarray, y: np.ndarray, X: np.ndarray, Z: n
 
 def archloglik(spec: ArchSpec, par: np.ndarray, y, X, Z, pos, prime0=None) -> np.ndarray | None:
     """Log-likelihood contributions (None when infeasible)."""
-    pth = archpath(spec, par, y, X, Z, pos, prime0)
+    with np.errstate(over="ignore", invalid="ignore"):      # wild trial points are rejected below
+        pth = archpath(spec, par, y, X, Z, pos, prime0)
     if pth is None:
         return None
     s2, e = pth["s2"], pth["e"]

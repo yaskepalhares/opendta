@@ -557,3 +557,21 @@ def _fcast_vec(s: "Session", est, prefix: str, o: dict) -> None:
             put("_UB", path[:, j] + z * se[:, j])
             put("_SE", se[:, j])
     s.notify_state()
+
+
+def cmd_varbasic(s: "Session", args: str) -> None:
+    """varbasic: var, then the orthogonalized impulse-response graphs (irf and fevd on request)."""
+    import os
+    import tempfile
+    p = parse_standard(args)
+    o = match_options(p.options, {"lags": 3, "irf": 1, "fevd": 2, "nograph": 3, "step": 2}) if p.options.strip() else {}
+    ifin = (f" if {p.if_}" if p.if_ else "") + (f" in {p.in_}" if p.in_ else "")
+    lags = f"lags({o['lags']})" if isinstance(o.get("lags"), str) else ""
+    s.run(f"var {p.varlist}{ifin}" + (f", {lags}" if lags else ""), echo=False)
+    if o.get("nograph"):
+        return
+    step = o["step"] if isinstance(o.get("step"), str) else "8"
+    path = os.path.join(tempfile.gettempdir(), "varbasic_opendta")      # VERIFY: Stata's file name
+    s.run(f"quietly irf create __varbasic, set({path}) replace step({step})", echo=False)
+    stat = "fevd" if o.get("fevd") else ("irf" if o.get("irf") else "oirf")
+    s.run(f"irf graph {stat}, irf(__varbasic)", echo=False)

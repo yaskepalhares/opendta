@@ -8,9 +8,13 @@
 {title:Syntax}
 
 {p 8 16 2}{cmd:irf set} {it:filename} [{cmd:,} {opt replace}]{p_end}
-{p 8 16 2}{cmd:irf create} {it:irfname} [{cmd:,} {opt set(filename)} {opt replace} {opt step(#)} {opt order(varlist)} {opt nose}]{p_end}
+{p 8 16 2}{cmd:irf create} {it:irfname} [{cmd:,} {opt set(filename)} {opt replace} {opt step(#)} {opt order(varlist)} {opt nose} {opt bs} {opt bsp} {opt reps(#)} {opt nodots}]{p_end}
 {p 8 16 2}{cmd:irf table} [{it:stats}] [{cmd:,} {opt irf(irfnames)} {opt imp:ulse(varlist)} {opt res:ponse(varlist)} {opt noci} {opt std:error} {opt l:evel(#)}]{p_end}
 {p 8 16 2}{cmd:irf graph} [{it:stats}] [{cmd:,} {opt irf(irfnames)} {opt imp:ulse(varlist)} {opt res:ponse(varlist)} {opt noci} {opt l:evel(#)} {it:graph options}]{p_end}
+{p 8 16 2}{cmd:irf ctable} {cmd:(}{it:irfname impulse response stat}{cmd:)} ... [{cmd:,} {opt noci} {opt std:error} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:irf cgraph} {cmd:(}{it:irfname impulse response stat}{cmd:)} ... [{cmd:,} {opt noci} {opt l:evel(#)} {opt individual}]{p_end}
+{p 8 16 2}{cmd:irf ograph} {cmd:(}{it:irfname impulse response stat}{cmd:)} ... [{cmd:,} {opt noci} {opt l:evel(#)}]{p_end}
+{p 8 16 2}{cmd:irf add} {c -(}{cmd:_all}|{it:irfnames}{c )-} {cmd:,} {opt using(filename)}{p_end}
 {p 8 16 2}{cmd:irf describe}  |  {cmd:irf drop} {it:irfnames}  |  {cmd:irf rename} {it:old} {it:new}{p_end}
 
 {p 4 4 2}{it:stats}: {cmd:irf}, {cmd:oirf}, {cmd:cirf}, {cmd:coirf}, {cmd:fevd}{p_end}
@@ -18,11 +22,11 @@
 {title:Description}
 
 {pstd}
-After {help var}, {cmd:irf create} computes the impulse-response functions up to
+After {help var}, {cmd:svar} and {cmd:vec} ({cmd:vec} without standard errors, as the orthogonalization uses the Cholesky factor of the residual covariance), {cmd:irf create} computes the impulse-response functions up to
 {cmd:step()} periods (default 8): simple ({cmd:irf}), orthogonalized with the Cholesky factor
 of {cmd:e(Sigma)} in the order of the variables or of {cmd:order()} ({cmd:oirf}), their
 cumulative sums ({cmd:cirf}, {cmd:coirf}) and the forecast-error variance decomposition
-({cmd:fevd}), with asymptotic standard errors. The results are saved in the active
+({cmd:fevd}), with asymptotic standard errors or, with {cmd:bs} (residual resampling) or {cmd:bsp} (parametric), bootstrap standard errors. The results are saved in the active
 {cmd:.irf} file, chosen with {cmd:irf set} or {cmd:set()}; one file holds several sets of
 results, each with its {it:irfname}.
 {p_end}

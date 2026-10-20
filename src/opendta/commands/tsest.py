@@ -36,7 +36,7 @@ def _varpost(name):
     return run
 
 
-for _n in ("varlmar", "varnorm", "varstable", "varwle"):
+for _n in ("varlmar", "varnorm", "varstable", "varwle", "varbasic"):
     command(_n, _n)(_varpost(_n))
 
 

@@ -105,7 +105,7 @@ Done in phase 17 (compat case 1903), except the pieces listed under Base statist
 
 ### 9. Time series (3–4 h, ~150k tokens)
 
-`arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (state space: share one Kalman filter with `arima` in `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+Done in phase 18 (compat case 1904), except the pieces listed under Time series in [Missing for 1.0](../ROADMAP.md#missing-for-10) (constraints in `vec`, `svar`, `arch`, `ucm` and `sspace`, `mgarch vcc`, `predict` after the state-space commands…). The original plan: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (state space: share one Kalman filter with `arima` in `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
 
 ### 10. Models (6–8 h, ~285k tokens; can be split)
 
