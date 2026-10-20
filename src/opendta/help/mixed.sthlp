@@ -12,7 +12,7 @@
 {title:Description}
 
 {pstd}
-Fits linear models with random intercepts and random coefficients at one or more nested levels ({cmd:|| school: || class:}), by maximum likelihood (default) or restricted maximum likelihood ({cmd:reml}). The fixed effects are shown first; the random-effects parameters (variances, or standard deviations with {cmd:stddeviations}, and covariances or correlations) follow, with an LR test against the linear regression. {cmd:xtmixed} is a synonym. Crossed effects ({cmd:_all:}) and weights are not available.
+Fits linear models with random intercepts and random coefficients at one or more nested levels ({cmd:|| school: || class:}), by maximum likelihood (default) or restricted maximum likelihood ({cmd:reml}). The fixed effects are shown first; the random-effects parameters (variances, or standard deviations with {cmd:stddeviations}, and covariances or correlations) follow, with an LR test against the linear regression. {cmd:xtmixed} is a synonym. Crossed effects are fitted with {cmd:|| _all: R.}{it:factor} equations (one factor per equation, identity covariance; {cmd:predict, reffects} is not available for them). Weights are not available.
 
 {title:Postestimation}
 
