@@ -54,6 +54,6 @@ regress renda idade i.sexo
 
 Quando um comando falha, o OpenDTA mostra a mensagem e o código do Stata e, logo abaixo, uma explicação para quem está começando: o que deu errado com os dados em uso, por quê, como corrigir e um link para a página de ajuda. Para desligar, use `set hints off`.
 
-A interface pode ficar em inglês ou em português (**Settings**, ou `set language pt`). Os resultados e as mensagens no formato do Stata continuam em inglês, a menos que você peça a tradução (`set messages translated`).
+Na janela Command, o OpenDTA pergunta antes de um comando que descarta boa parte dos dados (`clear` com alterações não salvas, `drop` ou `keep` removendo muitas observações, `save, replace` sobre um arquivo bem maior); cada um tem seu próprio interruptor em **Settings → General → Safety**. A interface pode ficar em inglês ou em português (**Settings**, ou `set language pt`). Os resultados e as mensagens no formato do Stata continuam em inglês, a menos que você peça a tradução (`set messages translated`).
 
 Digite `help` para ver a lista de comandos, ou veja [o que o OpenDTA faz](features.pt-BR.md).

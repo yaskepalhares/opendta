@@ -12,7 +12,7 @@ and column after the data create new observations and variables.
 
 from __future__ import annotations
 
-from ..i18n import tr
+from ..i18n import L, tr
 
 from typing import TYPE_CHECKING, Callable
 
@@ -300,10 +300,11 @@ class DataBrowser(QMainWindow):
     def refresh(self) -> None:
         self.model.refresh()
         ds = self.model.ds
-        filt = "On" if self.model.rows is not None else "Off"
-        mode = "Edit" if self.model.editable else "Browse"
+        filt = L("On", "Ligado") if self.model.rows is not None else L("Off", "Desligado")
+        mode = L("Edit", "Edição") if self.model.editable else L("Browse", "Navegação")
         nvars = len(self.model._cols)
-        self.info.setText(f"Vars: {nvars:,}    Obs: {ds.nobs:,}    Filter: {filt}    Mode: {mode}")
+        self.info.setText(L(f"Vars: {nvars:,}    Obs: {ds.nobs:,}    Filter: {filt}    Mode: {mode}",
+                            f"Vars: {nvars:,}    Obs: {ds.nobs:,}    Filtro: {filt}    Modo: {mode}"))
 
     def _show_cell(self, current: QModelIndex, _prev=None) -> None:
         if not current.isValid() or self.model._is_extra(current):

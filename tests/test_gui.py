@@ -376,3 +376,302 @@ def test_error_explanation_links_open_help(app):
     QTest.mouseClick(w.results.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(rect.right() + 2, rect.center().y()))
     assert ran == ["help operators"]
     w.close()
+
+
+def test_results_highlights_deleted_observations(app):
+    from opendta.gui.panes import ResultsView
+
+    rv = ResultsView()
+    rv.append_styled("(519,227 observations deleted)\n(0 observations deleted)\n", "text")
+    doc = rv.document()
+
+    def color_at(block: int) -> str:
+        cur = rv.textCursor()
+        cur.setPosition(doc.findBlockByNumber(block).position() + 1)
+        cur.movePosition(cur.MoveOperation.Right, cur.MoveMode.KeepAnchor)
+        return cur.charFormat().foreground().color().name()
+
+    assert color_at(0) == rv._scheme.colors["alert"]
+    assert color_at(1) == rv._scheme.colors["text"]       # nothing deleted: no highlight
+    assert rv.toPlainText().startswith("(519,227 observations deleted)")
+
+
+def test_dofile_editor_line_tools(app):
+    from PySide6.QtGui import QTextCursor
+
+    from opendta.gui.dofile_editor import indent_lines, outdent_lines, toggle_comment
+    from opendta.gui.main_window import MainWindow
+
+    assert toggle_comment(["a", "  b", ""]) == ["// a", "  // b", ""]
+    assert toggle_comment(["// a", "  // b", ""]) == ["a", "  b", ""]
+    assert indent_lines(["a", ""]) == ["\ta", ""]
+    assert outdent_lines(["\ta", "      b", "c"]) == ["a", "  b", "c"]
+
+    w = MainWindow()
+    w.show_dofile_editor("")
+    de = w.dofile_editor
+    ed = de.current()
+    text = "display 1\ndisplay 2 ///\n  + 3\ndisplay 4\n"
+    ed.setPlainText(text)
+    cur = ed.textCursor()
+    cur.setPosition(len("display 1\ndisp"))
+    ed.setTextCursor(cur)
+    assert ed.current_line_code() == "display 2 ///\n  + 3"
+    de.do_line()
+    out = w.results.toPlainText()
+    assert "\n5\n" in out and "\n1\n" not in out
+    # comment two lines: one undo step, and the selection is kept
+    cur = ed.textCursor()
+    cur.setPosition(0)
+    cur.setPosition(len("display 1\ndisp"), QTextCursor.MoveMode.KeepAnchor)
+    ed.setTextCursor(cur)
+    de.tool_actions["comment"].trigger()
+    assert ed.toPlainText().startswith("// display 1\n// display 2 ///\n  + 3")
+    assert ed.textCursor().hasSelection()
+    de.tool_actions["comment"].trigger()
+    assert ed.toPlainText() == text
+    ed.undo()
+    ed.undo()
+    assert ed.toPlainText() == text
+    assert de.tool_actions["redo"].isEnabled()
+    ed.document().setModified(False)
+    de.cleanup()
+    w.close()
+
+
+def test_toolbar_settings_button_is_last(app):
+    from PySide6.QtWidgets import QToolBar
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    act = w.toolbar_actions["settings"]
+    assert w.findChild(QToolBar, "Toolbar").actions()[-1] is act
+    act.trigger()
+    assert w._settings is not None and w._settings.isVisible()
+    w._settings.close()
+    w.close()
+
+
+def test_color_schemes_for_results_and_editor(app):
+    from opendta.gui import theme
+    from opendta.gui.main_window import MainWindow
+
+    assert theme.results_scheme("light", "monokai").background == "#272822"
+    assert theme.results_scheme("light", "high_contrast").background != theme.results_scheme("dark", "high_contrast").background
+    assert theme.results_scheme("light") is theme.STANDARD and theme.results_scheme("dark", "classic") is theme.DARK_RESULTS
+    w = MainWindow()
+    assert w.prefs.results_palette == "classic" and w.prefs.editor_palette == "classic"
+    w.prefs.results_palette = "dracula"
+    w.prefs.editor_palette = "nord"
+    w.prefs.results_palette = "no such scheme"          # an invalid key falls back to classic
+    assert w.prefs.results_palette == "classic"
+    w.prefs.results_palette = "dracula"
+    w.show_dofile_editor("")
+    w.apply_preferences()
+    assert w.results._scheme.background == "#282a36"
+    ed = w.dofile_editor.current()
+    assert ed.colors["bg"] == "#2e3440" and "#2e3440" in ed.styleSheet()
+    w.prefs.editor_palette = "classic"
+    w.apply_preferences()
+    assert ed.styleSheet() == "" and "bg" not in ed.colors
+    w.dofile_editor.cleanup()
+    w.close()
+
+
+def test_editor_reopens_last_session_files(app, tmp_path):
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.settings import Preferences
+
+    a, b = tmp_path / "a.do", tmp_path / "b.do"
+    a.write_text("display 1\n")
+    b.write_text("display 2\n")
+    prefs = Preferences()
+    prefs.editor_files = [str(a), str(tmp_path / "gone.do")]
+    prefs.sync()
+    w = MainWindow()
+    w.show_dofile_editor("")                       # off by default: nothing is reopened
+    assert w.dofile_editor.open_paths() == []
+    w.dofile_editor.cleanup()
+    w.close()
+
+    prefs.reopen_files = True
+    prefs.sync()
+    w = MainWindow()
+    w.show_dofile_editor("")
+    assert w.dofile_editor.open_paths() == [str(a)]      # files that no longer exist are skipped
+    w.dofile_editor.open_path(b)
+    assert w.prefs.editor_files == [str(a), str(b)]      # the list follows the open tabs
+    w.dofile_editor.close()                              # closing the window keeps it for next time
+    assert w.prefs.editor_files == [str(a), str(b)]
+    w.dofile_editor.cleanup()
+    w.close()
+
+
+def test_initial_folder_and_automatic_log(app, tmp_path, monkeypatch):
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.settings import Preferences
+
+    monkeypatch.chdir(tmp_path)
+    work = tmp_path / "project"
+    work.mkdir()
+    w = MainWindow()                                # defaults: no initial folder, no log
+    assert os.path.samefile(os.getcwd(), tmp_path) and not (work / "logs").exists()
+    w.close()
+
+    prefs = Preferences()
+    prefs.start_dir = str(work)
+    prefs.auto_log = True
+    prefs.sync()
+    w = MainWindow()
+    assert os.path.samefile(os.getcwd(), work)
+    logs = list((work / "logs").glob("opendta-*.log"))
+    assert len(logs) == 1
+    w.run_command("display 6 * 7")
+    w.close()
+    assert "42" in logs[0].read_text()
+    assert not getattr(w.session, "logs", None)    # closed with the window
+
+
+def test_confirmation_before_risky_commands(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from opendta import guard
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.run_command("set obs 20000")
+    w.run_command("generate year = 2000 + mod(_n, 20)")
+    asked = []
+    answer = {"run": False}
+    with monkeypatch.context() as m:
+        m.setattr(MainWindow, "_ask_risk", lambda self, risk, line: asked.append(risk.kind) or answer["run"])
+        w.run_command("keep if year >= 2016")       # declined: nothing happens
+        assert asked == ["drop_obs"] and w.session.data.nobs == 20000
+        assert "not run" in w.results.toPlainText()
+        answer["run"] = True
+        w.run_command("keep if year >= 2016")
+        assert w.session.data.nobs == 4000
+        w.run_command("generate z = 1")             # dirty again so that clear is risky
+        w.prefs.set_confirm("keep", False)          # each command has its own switch
+        w.run_command("keep if year >= 2019")
+        assert asked == ["drop_obs", "drop_obs"] and w.session.data.nobs == 1000    # keep: no question
+        w.run_command("clear")
+        assert asked == ["drop_obs", "drop_obs", "clear"] and w.session.data.nobs == 0
+        w.prefs.set_confirm("clear", False)
+        w.run_command("set obs 5")
+        w.run_command("clear")
+        assert asked[-1] == "clear" and len(asked) == 3 and w.session.data.nobs == 0
+    w.close()
+
+    # the first confirmation says where to turn it off, with a way to open Settings there
+    w = MainWindow()
+    seen = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: seen.append(
+        (self.informativeText(), [b.text() for b in self.buttons()])) or 0)
+    risk = guard.Risk("clear", "clear", "The data in memory have unsaved changes.")
+    assert w._ask_risk(risk, "clear") is False
+    assert w._ask_risk(risk, "clear") is False
+    assert "Settings > General > Safety" in seen[0][0] and "Cancel and open Settings" in seen[0][1]
+    assert "Settings" not in seen[1][0] and "Cancel and open Settings" not in seen[1][1]
+    w.close()
+
+
+def test_settings_new_options_and_reveal(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show_preferences("general", reveal="confirm")
+    dlg = w._settings
+    assert all(sw.isChecked() for sw in dlg.confirms.values()) and set(dlg.confirms) == {"clear", "drop", "keep", "save"}
+    assert not dlg.autolog.isChecked() and not dlg.reopen.isChecked()
+    dlg.reveal("confirm_keep")
+    assert dlg.stack.currentWidget() is [p for k, p, _ in dlg.pages if k == "general"][0]
+    dlg.rpalette.setCurrentIndex(dlg.rpalette.findData("monokai"))
+    dlg.epalette.setCurrentIndex(dlg.epalette.findData("gruvbox_dark"))
+    assert (w.prefs.results_palette, w.prefs.editor_palette) == ("monokai", "gruvbox_dark")
+    assert w.results._scheme.background == "#272822"
+    dlg.confirms["keep"].setChecked(False)
+    dlg.reopen.setChecked(True)
+    dlg.autolog.setChecked(True)
+    assert not w.prefs.confirm_enabled("keep") and w.prefs.confirm_enabled("drop")      # one at a time
+    assert w.prefs.reopen_files and w.prefs.auto_log
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    dlg._reset()                                    # Restore Defaults
+    assert (w.prefs.results_palette, w.prefs.editor_palette) == ("classic", "classic")
+    assert w.prefs.confirm_enabled("keep") and not w.prefs.reopen_files and not w.prefs.auto_log
+    assert dlg.confirms["keep"].isChecked() and not dlg.reopen.isChecked() and not dlg.autolog.isChecked()
+    assert dlg.rpalette.currentData() == "classic" and dlg.epalette.currentData() == "classic"
+    dlg.close()
+    w.close()
+
+
+def test_qt_own_texts_follow_the_interface_language(app):
+    from PySide6.QtCore import QCoreApplication
+
+    from opendta import i18n
+    from opendta.gui import qt_i18n
+
+    def select_all() -> str:
+        return QCoreApplication.translate("QWidgetTextControl", "Select All")
+
+    try:
+        i18n.set_language("pt")
+        qt_i18n.apply("pt")
+        assert select_all() != "Select All"             # Qt's right-click menu and buttons, in Portuguese
+        qt_i18n.apply("en")
+        assert select_all() == "Select All"
+    finally:
+        i18n.set_language("en")
+        qt_i18n.apply("en")
+
+
+def test_side_windows_open_and_return_at_their_default_place(app):
+    from PySide6.QtCore import Qt
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    w.dock_review.setFloating(True)
+    w.dock_variables.hide()
+    w.dock_properties.hide()
+    w.close()                                       # the layout is saved with the windows moved and closed
+
+    w = MainWindow()
+    w.show()
+    assert all(d.isVisible() and not d.isFloating()
+               for d in (w.dock_review, w.dock_variables, w.dock_properties))
+    assert w.dockWidgetArea(w.dock_review) == Qt.DockWidgetArea.LeftDockWidgetArea
+    assert w.dockWidgetArea(w.dock_variables) == Qt.DockWidgetArea.RightDockWidgetArea
+    # closed and moved, they come back to their place when chosen again in the Window menu
+    for dock, area in ((w.dock_review, Qt.DockWidgetArea.LeftDockWidgetArea),
+                       (w.dock_variables, Qt.DockWidgetArea.RightDockWidgetArea),
+                       (w.dock_properties, Qt.DockWidgetArea.RightDockWidgetArea)):
+        dock.setFloating(True)
+        dock.hide()
+        dock.toggleViewAction().trigger()
+        assert dock.isVisible() and not dock.isFloating() and w.dockWidgetArea(dock) == area
+    w.close()
+
+
+def test_dofile_editor_toolbar_layout(app):
+    from PySide6.QtWidgets import QToolBar
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show_dofile_editor("")
+    de = w.dofile_editor
+    names = [a.data()[0] for a in de.findChild(QToolBar, "DoToolbar").actions() if a.data()]
+    assert names[-3:] == ["play-line", "play-quiet", "play"]        # Do at the far right
+    assert "floppy" in names and "floppy-saveas" in names
+    assert de.tabs.count() == 1
+    de.new_tab_button.click()                                       # the + at the end of the tab bar
+    assert de.tabs.count() == 2 and de.tabs.currentIndex() == 1
+    for i in (1, 0):
+        de.tabs.widget(i).document().setModified(False)
+    de.cleanup()
+    w.close()
