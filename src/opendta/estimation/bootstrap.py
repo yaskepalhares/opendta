@@ -312,11 +312,11 @@ def _wrap(text: str, width: int, first: str, rest: str) -> list[str]:
     return lines
 
 
-def _warn_rclass(s: "Session", cmdname: str) -> None:
+def _warn_rclass(s: "Session", cmdname: str, prefix: str = "bootstrap") -> None:
     """bootstrap warning for a command that does not store e(sample) (compat 0803)."""
-    width = int(s.settings.get("linesize", 80)) - 1
+    width = int(s.settings.get("linesize", 80)) - 2          # VERIFY: 253 at linesize 255 (compat 1903)
     out = s.output
-    p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), bootstrap has no "
+    p1 = (f"Because {cmdname} is not an estimation command or does not set e(sample), {prefix} has no "
           "way to determine which observations are used in calculating the statistics and so assumes "
           "that all observations are used.  This means that no observations will be excluded from the "
           "resampling because of missing values or other reasons.")
@@ -331,14 +331,11 @@ def _warn_rclass(s: "Session", cmdname: str) -> None:
 
 
 def _quiet(s: "Session", command: str, noisy: bool) -> None:
-    out = s.output
-    if not noisy:
-        out.quiet_depth += 1
-    try:
+    if noisy:
         s.interp._execute_expanded(command)
-    finally:
-        if not noisy:
-            out.quiet_depth -= 1
+    else:
+        with s.output.quietly():
+            s.interp._execute_expanded(command)
 
 
 # ---------------------------------------------------------------------------

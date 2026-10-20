@@ -213,6 +213,18 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Crossed random effects in `mixed` (`|| _all: R.factor`)
 - Checked against the Stata log: case `1902` awaits the Stata run
 
+## Phase 17: base statistics ✅
+
+- [x] Resampling prefixes `jackknife` (observations or clusters, `mse`, `dof()`), `permute` and `simulate`
+- [x] `ml` with the `lf`, `d0`, `d1` and `d2` evaluators (`ml model`, `init`, `search`, `maximize`, `display`, `clear`, `score`; `oim`, `opg`, `robust` and `cluster()` variances; numerical derivatives), `mleval`, `mlsum`, `mlvecsum`, `mlmatsum` and `mlexp`
+- [x] Model building: `mkspline` (linear, `pctile`, `cubic`, `marginal`), `xi`, `nestreg`, `stepwise` and `fp`/`mfp`
+- [x] After estimation: `testnl`, `predictnl`, `linktest`, `contrast`, `pwcompare`, `pwmean` and `suest`; `margins` after `tobit`, `ologit` and `oprobit`
+- [x] Transformations: `boxcox` (left-hand-side model), `ladder`, `gladder` and `lnskew0`
+- [x] Tests and correlations: `bitest`/`bitesti`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau` and `pcorr`
+- [x] Agreement and effect sizes: `icc`, `loneway`, `esize`/`esizei` and `ameans`
+- [x] Displays and graphs: `cumul`, `stem`, `lv`, `smooth`, `quantile`, `symplot`, `serrbar`, `dotplot`, `sunflower`, `lpoly`, `cusum`
+- Checked against the Stata 14 log: case `1903` matches except for the differences in `compat/known_differences.txt` (starting steps of `ml`/`ologit`, the `lnskew0` search, the depth-1 pseudosigma of `lv`, `permute`/`simulate` draws and the `sunflower` bin table)
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -236,7 +248,7 @@ Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of
 
 - **Data management**: `table` with three or more variables; `import haver`; `import sasxport` with `describe`, `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`; `list` with `string()` and `display`; `icd9p` with the ICD-9-CM procedure code list.
 - **Epidemiology**: `rocreg` with the `ml` and `cluster()` options.
-- **Base statistics**: the `ml` command (the engine exists), `mlexp`, `jackknife`, `permute`, `simulate`, `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`/`mfp`, `contrast`, `pwcompare`, `pwmean`, `margins` after more commands, `suest`, `predictnl`, `testnl`, `linktest`, `boxcox`, `ladder`/`gladder`, `lnskew0`, `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `cusum`, `serrbar`, `tetrachoric`, `ktau`, `pcorr`, `icc`, `loneway`, `esize`, `ameans`, `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `sunflower`, `symplot`, `quantile`.
+- **Base statistics**: `margins` after more commands; `ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `constraints()` and `svy`; `boxcox` with `model(lhsrhs)`, `rhsonly` and `notrans()`; `icc` with `testvalue()` and unbalanced data; `loneway` with `median` and `exact`; `esize` with `unequal` and `welch`; `pwmean` with `unequal`; `ameans` with weights; `lv` with `generate()` and `tail()`; `stem` with `width()`; `cusum` with the test statistics.
 - **Models**: `clogit`, `cloglog`, `scobit`, `hetprobit`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`, `ivprobit`, `ivtobit`, `ivpoisson`, `intreg`, `truncreg`, `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`, `fracreg`, `binreg`, `glogit`, `asclogit`, `asmprobit`, `asroprobit`, `mprobit`, `rologit`, `slogit`, `exlogistic`, `expoisson`, `cnsreg` and `constraint`, `nl`, `nlsur`, `gmm`, `rreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `frontier`; `ivregress liml` and `gmm`; `teffects`, `stteffects`, `etregress`, `etpoisson`, `eteffects`.
 - **Panel data**: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `xtivreg`, `xtabond`, `xtdpd`, `xtdpdsys`, `xthtaylor`, `xtfrontier`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtunitroot`, `xtline`, `xttab`, `xtdata`, `quadchk`.
 - **Time series**: `arch`, `arfima`, `dfactor`, `sspace`, `ucm`, `mgarch`, `vec` and `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph` and `add`.

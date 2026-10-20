@@ -10,6 +10,8 @@ Styles follow Stata's categories: "text", "result", "error",
 
 from __future__ import annotations
 
+import contextlib
+
 from typing import Callable
 
 Listener = Callable[[str, str], None]
@@ -32,6 +34,19 @@ class Output:
     def remove_listener(self, fn: Listener) -> None:
         if fn in self._listeners:
             self._listeners.remove(fn)
+
+    @contextlib.contextmanager
+    def quietly(self):
+        """Silences everything inside, even when an enclosing noisily is active (as a nested
+        quietly does in Stata)."""
+        self.quiet_depth += 1
+        saved = self.noisy_depth
+        self.noisy_depth = 0
+        try:
+            yield
+        finally:
+            self.quiet_depth -= 1
+            self.noisy_depth = saved
 
     # -- silence state -----------------------------------------------
     @property

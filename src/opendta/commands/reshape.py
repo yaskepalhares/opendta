@@ -107,9 +107,14 @@ def _table(s: "Session", frm: str, to: str, n0: int, n1: int, k0: int, k1: int,
         text_line(jl, "", jname)
     else:
         text_line(jl, jname, "(dropped)")
+    def short(names: str) -> str:
+        # VERIFY: more than three names are shown as "first second ... last"
+        ws = names.split()
+        return " ".join(ws[:2] + ["...", ws[-1]]) if len(ws) > 3 else names
+
     w("xij variables:\n", "text")
     for left, right in rows:
-        text_line("", left, right)
+        text_line("", short(left), short(right))
     w("-" * 77 + "\n", "text")
 
 

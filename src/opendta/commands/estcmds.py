@@ -233,6 +233,114 @@ def cmd_bootstrap(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("jackknife", "jack", prefix=True)
+def cmd_jackknife(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_jackknife as run
+    run(s, args)
+
+
+@command("permute", "permute", prefix=True)
+def cmd_permute(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_permute as run
+    run(s, args)
+
+
+@command("simulate", "sim", prefix=True)
+def cmd_simulate(s: "Session", args: str) -> None:
+    from ..estimation.resample import cmd_simulate as run
+    run(s, args)
+
+
+@command("ml", "ml")
+def cmd_ml(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_ml as run
+    run(s, args)
+
+
+@command("mlexp", "mlexp")
+def cmd_mlexp(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlexp as run
+    run(s, args)
+
+
+@command("mleval", "mleval")
+def cmd_mleval(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mleval as run
+    run(s, args)
+
+
+@command("mlsum", "mlsum")
+def cmd_mlsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlsum as run
+    run(s, args)
+
+
+@command("mlvecsum", "mlvecsum")
+def cmd_mlvecsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlvecsum as run
+    run(s, args)
+
+
+@command("mlmatsum", "mlmatsum")
+def cmd_mlmatsum(s: "Session", args: str) -> None:
+    from ..estimation.mlcmd import cmd_mlmatsum as run
+    run(s, args)
+
+
+@command("fp", "fp", prefix=True)
+def cmd_fp(s: "Session", args: str) -> None:
+    from ..estimation.fpoly import cmd_fp as run
+    run(s, args)
+
+
+@command("mfp", "mfp", prefix=True)
+def cmd_mfp(s: "Session", args: str) -> None:
+    from ..estimation.fpoly import cmd_mfp as run
+    run(s, args)
+
+
+@command("testnl", "testnl")
+def cmd_testnl(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_testnl as run
+    run(s, args)
+
+
+@command("predictnl", "predictnl")
+def cmd_predictnl(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_predictnl as run
+    run(s, args)
+
+
+@command("linktest", "linktest")
+def cmd_linktest(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_linktest as run
+    run(s, args)
+
+
+@command("contrast", "contrast")
+def cmd_contrast(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_contrast as run
+    run(s, args)
+
+
+@command("pwcompare", "pwcompare")
+def cmd_pwcompare(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_pwcompare as run
+    run(s, args)
+
+
+@command("pwmean", "pwmean")
+def cmd_pwmean(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_pwmean as run
+    run(s, args)
+
+
+@command("suest", "suest")
+def cmd_suest(s: "Session", args: str) -> None:
+    from ..estimation.postest2 import cmd_suest as run
+    run(s, args)
+
+
 @command("lrtest", "lrtest")
 def cmd_lrtest(s: "Session", args: str) -> None:
     from ..estimation.extra import cmd_lrtest as run
