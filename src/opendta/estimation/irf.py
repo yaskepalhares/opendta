@@ -75,14 +75,16 @@ def _phis(A: list[np.ndarray], steps: int) -> list[np.ndarray]:
     return out
 
 
-def _all_stats(A, Sig, steps):
-    """Arrays [step, response, impulse] for each statistic."""
+def _all_stats(A, Sig, steps, P=None):
+    """Arrays [step, response, impulse] for each statistic. P: matrix with Sigma = P P' for the
+    orthogonalized responses (default: the Cholesky factor; svar: A^-1 B)."""
     K = Sig.shape[0]
     Ph = np.array(_phis(A, steps))
-    try:
-        P = np.linalg.cholesky(Sig)
-    except np.linalg.LinAlgError:
-        P = np.linalg.cholesky(Sig + 1e-12 * np.eye(K))
+    if P is None:
+        try:
+            P = np.linalg.cholesky(Sig)
+        except np.linalg.LinAlgError:
+            P = np.linalg.cholesky(Sig + 1e-12 * np.eye(K))
     Th = Ph @ P
     res = {"irf": Ph, "oirf": Th, "cirf": np.cumsum(Ph, axis=0), "coirf": np.cumsum(Th, axis=0)}
     fevd = np.zeros_like(Ph)
@@ -99,7 +101,20 @@ def _vech_idx(K):
     return [(i, j) for j in range(K) for i in range(j, K)]
 
 
+def _stats_of(A, Sig, steps, perm, P=None):
+    """Statistics with the variables ordered by `perm` for the Cholesky factorization."""
+    Ap = [a[np.ix_(perm, perm)] for a in A]
+    out = _all_stats(Ap, Sig[np.ix_(perm, perm)], steps, P)
+    inv = np.argsort(perm)
+    return {k: x[:, inv][:, :, inv] for k, x in out.items()}
+
+
 def _compute(est, steps: int, order: list[str], se: bool):
+    if est.cmd == "vec":
+        from .irfext import vec_inputs
+        deps, A, Sig = vec_inputs(est)
+        point = _stats_of(A, Sig, steps, [deps.index(n) for n in order])
+        return deps, point, {k: np.full_like(x, np.nan) for k, x in point.items()}
     v = est.var
     deps = list(v["deps"])
     lags = list(v["lags"])
@@ -114,33 +129,38 @@ def _compute(est, steps: int, order: list[str], se: bool):
     K = len(deps)
     pos = [j * m + r for j in range(K) for r in lag_rows]
     theta_a = np.array([B[r, j] for j in range(K) for r in lag_rows])
-    Va = est.V[np.ix_(pos, pos)]
+    Vall = est.V if est.cmd == "var" else np.kron(Sig, v["XtXi"])
+    Va = Vall[np.ix_(pos, pos)]
     vi = _vech_idx(K)
     sig_v = np.array([Sig[i, j] for i, j in vi])
+    sv = getattr(est, "svar", None)
     # var(vech Sigma) = 2 D+ (Sigma x Sigma) D+' / T
     Vs = np.zeros((len(vi), len(vi)))
     for a, (i, j) in enumerate(vi):
         for b, (k, l) in enumerate(vi):
             Vs[a, b] = (Sig[i, k] * Sig[j, l] + Sig[i, l] * Sig[j, k]) / T
 
-    def build(ta, sv):
+    def build(ta, sv_):
         Bc = B.copy()
         q = 0
         for j in range(K):
             for r in lag_rows:
                 Bc[r, j] = ta[q]
                 q += 1
-        S = np.zeros((K, K))
-        for val, (i, j) in zip(sv, vi):
-            S[i, j] = S[j, i] = val
         A = _lag_matrices(Bc, xnames, deps, lags)
+        if sv is not None:
+            # svar: orthogonalize with A^-1 B (order() does not apply)
+            from .svar import unpack
+            Am, Bm, *_ = unpack(sv_, sv["Afix"], sv["Bfix"])
+            return _stats_of(A, Sig, steps, list(range(K)), np.linalg.solve(Am, Bm))
+        S = np.zeros((K, K))
+        for val, (i, j) in zip(sv_, vi):
+            S[i, j] = S[j, i] = val
         # order(): permute the variables before the Cholesky factorization
-        Ap = [a[np.ix_(perm, perm)] for a in A]
-        Sp = S[np.ix_(perm, perm)]
-        out = _all_stats(Ap, Sp, steps)
-        inv = np.argsort(perm)
-        return {k: x[:, inv][:, :, inv] for k, x in out.items()}
+        return _stats_of(A, S, steps, perm)
 
+    if sv is not None:
+        sig_v, Vs = sv["phi"], sv["V"]
     point = build(theta_a, sig_v)
     ses = {k: np.full_like(x, np.nan) for k, x in point.items()}
     if se:
@@ -275,7 +295,14 @@ def cmd_irf(s: "Session", args: str) -> None:
     if sub is None:
         raise StataError(198, f"invalid subcommand {head}")   # VERIFY
     if sub in ("ctable", "cgraph", "ograph", "add"):
-        raise StataError(198, f"irf {sub} is not available in OpenDTA")   # OpenDTA
+        from . import irfext
+        if sub == "add":
+            irfext.cmd_add(s, rest)
+        elif sub == "ctable":
+            irfext.cmd_ctable(s, rest)
+        else:
+            irfext.cmd_cgraph(s, rest, overlay=(sub == "ograph"))
+        return
     {"set": _set, "create": _create, "table": _table, "graph": _graph, "describe": _describe,
      "drop": _drop, "rename": _rename}[sub](s, rest)
 
@@ -306,33 +333,40 @@ def _create(s: "Session", rest: str) -> None:
     from .postest import current
     p = parse_standard(rest)
     o = match_options(p.options, {"set": 3, "replace": 7, "step": 4, "order": 3, "nose": 4,
-                                  "level": 1, "bs": 2, "bsp": 3, "reps": 4})
+                                  "level": 1, "bs": 2, "bsp": 3, "reps": 4, "nodots": 4})
     name = p.varlist.strip()
     if not name or len(name.split()) != 1:
         raise StataError(198, "irfname required")   # VERIFY
-    if o.get("bs") or o.get("bsp"):
-        raise StataError(198, "bootstrap standard errors are not available in OpenDTA; the "
-                              "asymptotic ones are used")   # OpenDTA
     est = current(s)
-    if est.cmd != "var" or not hasattr(est, "var"):
-        raise StataError(321, "irf create works after var")   # VERIFY: also after svar, vec
+    if est.cmd not in ("var", "svar", "vec"):
+        raise StataError(321, "irf create works after var, svar and vec")   # VERIFY
     if isinstance(o.get("set"), str):
         _set(s, o["set"])
     path = _active(s)
     if path is None:
         raise StataError(198, "no irf file active; use irf set or the set() option")   # VERIFY
     steps = int(float(o["step"])) if isinstance(o.get("step"), str) else 8
-    deps = list(est.var["deps"])
+    mv = est.vec if est.cmd == "vec" else est.var
+    deps = list(mv["deps"])
     order = s.expand_varlist(o["order"]) if isinstance(o.get("order"), str) else deps
     if sorted(order) != sorted(deps):
         raise StataError(198, "order() must contain the endogenous variables")   # VERIFY
-    deps, point, ses = _compute(est, steps, order, not o.get("nose"))
+    boot = bool(o.get("bs") or o.get("bsp"))
+    deps, point, ses = _compute(est, steps, order, not (o.get("nose") or boot))
+    if boot:
+        from .irfext import bootstrap_se
+        perm = [deps.index(n) for n in order]
+        reps = int(float(o["reps"])) if isinstance(o.get("reps"), str) else 200
+        ses = bootstrap_se(s, est, steps, perm, reps, bool(o.get("bsp")), not o.get("nodots"),
+                           lambda A, Sig, P: _stats_of(A, Sig, steps, perm if P is None else list(range(len(deps))), P))
+        for k in ("irf", "cirf", "fevd"):
+            ses[k][0] = 0.0
+    std = "bootstrap" if boot else ("none" if o.get("nose") or est.cmd == "vec" else "asymptotic")
     data = _load(path)
     if name in data and not o.get("replace"):
         raise StataError(110, f"irfname {name} already exists in {path.name}")   # VERIFY
-    meta = {"model": "var", "vars": deps, "order": order, "step": steps, "lags": est.var["lags"],
-            "exog": est.var.get("exog", []), "std": "asymptotic" if not o.get("nose") else "none",
-            "cmdline": s.e.get("cmdline", "")}
+    meta = {"model": est.cmd, "vars": deps, "order": order, "step": steps, "lags": mv["lags"],
+            "exog": mv.get("exog", []), "std": std, "cmdline": s.e.get("cmdline", "")}
     data[name] = {"meta": meta, "stats": point, "se": ses}
     _save(path, data)
     s.output.write(f"(file {path.name} updated)\n", "text")
@@ -398,6 +432,10 @@ def _table(s: "Session", rest: str) -> None:
             raise StataError(198, f"statistic {k} not allowed")   # VERIFY: sirf, dm, cdm...
     data = _need_file(s)
     picks = _select(s, data, o)
+    _table_render(s, data, picks, [stats] * len(picks), o)
+
+
+def _table_render(s: "Session", data: dict, picks: list, stat_lists: list, o: dict) -> None:
     level = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", "95"))
     z = float(st.norm.isf((1 - level / 100) / 2))
     out = s.output
@@ -406,7 +444,7 @@ def _table(s: "Session", rest: str) -> None:
     # standard error; groups separated by "|" (compat 1303)
     groups = []
     for q, pick in enumerate(picks, start=1):
-        for k in stats:
+        for k in stat_lists[q - 1]:
             cols = [(q, k, "est")]
             if not o.get("noci"):
                 cols += [(q, k, "lo"), (q, k, "hi")]
@@ -466,9 +504,27 @@ def _table(s: "Session", rest: str) -> None:
         out.write(f"({q}) irfname = {n}, impulse = {a}, and response = {r}\n", "text")
 
 
+def _spec_layers(data: dict, n: str, a: str, r: str, k: str, pal: int, level: float, noci: bool) -> list:
+    """Confidence band and line of one statistic of one (irfname, impulse, response)."""
+    from ..graphics.model import Layer
+    z = float(st.norm.isf((1 - level / 100) / 2))
+    res = data[n]
+    deps = res["meta"]["vars"]
+    i, j = deps.index(r), deps.index(a)
+    xs = list(range(res["meta"]["step"] + 1))
+    b = res["stats"][k][:, i, j]
+    se_ = res["se"][k][:, i, j]
+    layers = []
+    if not noci and np.isfinite(se_).any():
+        layers.append(Layer("rarea", xs, list(b - z * se_), {"y2": list(b + z * se_)},
+                            {"_pal": pal, "_ci": True}, f"{level:g}% CI"))
+    layers.append(Layer("line", xs, list(b), {}, {"_pal": pal}, _LABELS[k]))
+    return layers
+
+
 def _graph(s: "Session", rest: str) -> None:
     from ..commands.graphcmd import finish
-    from ..graphics.model import Graph, Layer, Panel
+    from ..graphics.model import Graph, Panel
     from ..graphics.opts import graph_options, split_layer_graph
     p = parse_standard(rest)
     lopts, graw = split_layer_graph(p.options, {"irf": 3, "impulse": 3, "response": 3, "noci": 4,
@@ -480,22 +536,11 @@ def _graph(s: "Session", rest: str) -> None:
     data = _need_file(s)
     picks = _select(s, data, lopts)
     level = float(lopts["level"]) if isinstance(lopts.get("level"), str) else float(s.settings.get("level", "95"))
-    z = float(st.norm.isf((1 - level / 100) / 2))
     panels = []
     for n, a, r in picks:
-        res = data[n]
-        deps = res["meta"]["vars"]
-        i, j = deps.index(r), deps.index(a)
-        steps = res["meta"]["step"]
-        xs = list(range(steps + 1))
         layers = []
         for pal, k in enumerate(stats):
-            b = res["stats"][k][:, i, j]
-            se_ = res["se"][k][:, i, j]
-            if not lopts.get("noci") and np.isfinite(se_).any():
-                layers.append(Layer("rarea", xs, list(b - z * se_), {"y2": list(b + z * se_)},
-                                    {"_pal": pal, "_ci": True}, f"{level:g}% CI"))
-            layers.append(Layer("line", xs, list(b), {}, {"_pal": pal}, _LABELS[k]))
+            layers += _spec_layers(data, n, a, r, k, pal, level, bool(lopts.get("noci")))
         panels.append(Panel(f"{n}, {a}, {r}", layers))
     opts = graph_options(graw)
     opts["_xtitle"] = "step"

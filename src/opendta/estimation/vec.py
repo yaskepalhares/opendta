@@ -92,6 +92,35 @@ def loglik(S00: np.ndarray, lam: np.ndarray, r: int, T: int, K: int) -> float:
                        + float(np.sum(np.log1p(-lam[:r]))))
 
 
+def fit_vecm(Y: np.ndarray, p: int, trend: str, r: int) -> dict:
+    """Johansen estimates for rank r: beta (normalized), alpha, the coefficients of the short-run
+    equations given beta (rows: error-correction terms, lagged differences, unrestricted terms) and
+    the ML covariance of the residuals."""
+    J = johansen(Y, p, trend)
+    T = J["T"]
+    beta = normalize_beta(J["V"], r)
+    alpha = J["S01"] @ beta @ np.linalg.inv(beta.T @ J["S11"] @ beta)
+    W = np.hstack([J["Z1"] @ beta, J["Z2"]])
+    coef = np.linalg.lstsq(W, J["Z0"], rcond=None)[0]
+    U = J["Z0"] - W @ coef
+    return {"J": J, "T": T, "beta": beta, "alpha": alpha, "W": W, "coef": coef, "U": U,
+            "Om": U.T @ U / T}
+
+
+def var_matrices(coef: np.ndarray, alpha: np.ndarray, beta: np.ndarray, K: int, p: int) -> list[np.ndarray]:
+    """A_1..A_p of the levels VAR implied by the VECM: A_1 = I + Pi + Gamma_1,
+    A_i = Gamma_i - Gamma_{i-1}, A_p = -Gamma_{p-1}."""
+    r = alpha.shape[1]
+    Pi = alpha @ beta[:K].T
+    G = [coef[r + i * K:r + (i + 1) * K].T for i in range(p - 1)]       # Gamma_i[j, k]
+    A = [np.eye(K) + Pi + (G[0] if p > 1 else 0)]
+    for i in range(1, p - 1):
+        A.append(G[i] - G[i - 1])
+    if p > 1:
+        A.append(-G[p - 2])
+    return A
+
+
 def n_parms(K: int, p: int, trend: str, r: int) -> int:
     n_unr = {"constant": 1, "rconstant": 0, "trend": 2, "rtrend": 1, "none": 0}[trend]
     m1 = {"rconstant": 1, "rtrend": 1}.get(trend, 0)
@@ -266,16 +295,9 @@ def cmd_vec(s: "Session", args: str) -> None:
     K = Y.shape[1]
     if not 0 < r < K:
         raise StataError(198, "rank() must be between 1 and the number of variables minus one")   # VERIFY
-    J = johansen(Y, lags, trend)
-    T = J["T"]
-    beta = normalize_beta(J["V"], r)                     # (K + m1) x r
-    S00, S11, S01 = J["S00"], J["S11"], J["S01"]
-    alpha = S01 @ beta @ np.linalg.inv(beta.T @ S11 @ beta)
-    # all equations by least squares given beta: ECT, lagged differences, unrestricted terms
-    W = np.hstack([J["Z1"] @ beta, J["Z2"]])
-    coef = np.linalg.lstsq(W, J["Z0"], rcond=None)[0]     # (r + q) x K
-    U = J["Z0"] - W @ coef
-    Om = U.T @ U / T
+    F_ = fit_vecm(Y, lags, trend, r)
+    J, T, beta, alpha, W, coef, U, Om = (F_[k] for k in ("J", "T", "beta", "alpha", "W", "coef", "U", "Om"))
+    S00, S11 = J["S00"], J["S11"]
     mpar = W.shape[1]
     nparms = n_parms(K, lags, trend, r)
     ll = loglik(S00, J["lam"], r, T, K)
