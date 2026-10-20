@@ -473,6 +473,24 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtabond", "xtabond")
+def cmd_xtabond(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtabond as run
+    run(s, args)
+
+
+@command("xtdpdsys", "xtdpdsys")
+def cmd_xtdpdsys(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtdpdsys as run
+    run(s, args)
+
+
+@command("xtdpd", "xtdpd")
+def cmd_xtdpd(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtdpd as run
+    run(s, args)
+
+
 @command("quadchk", "quadchk")
 def cmd_quadchk(s: "Session", args: str) -> None:
     from ..estimation.xtre import cmd_quadchk as run
