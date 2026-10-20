@@ -57,18 +57,18 @@ class _Prep:
     """Sample, weights and columns of the independent variables (without a constant)."""
 
     def __init__(self, s: "Session", args: str, spec: dict[str, int], weights=("fweight", "iweight",
-                 "pweight"), constant: bool | None = None):
+                 "pweight"), constant: bool | None = None, need_dep: bool = True):
         full = dict(spec)
         full.update({"nolog": 4, "log": 3, "iterate": 4, "tolerance": 3, "ltolerance": 4,
                      "nrtolerance": 4, "difficult": 4, "technique": 4, "noheader": 6})
-        smp = Sample(s, args, opts_spec=full, weights=weights)
+        smp = Sample(s, args, opts_spec=full, weights=weights, need_dep=need_dep)
         self.s = s
         self.smp = smp
         self.o = smp.o
         w = smp.w[smp.mask].astype(np.float64) if smp.w is not None else np.ones(smp.n)
         self.w = w
         self.N = float(w.sum()) if smp.wtype in ("fweight", "iweight") else float(smp.n)
-        self.y = smp.y.astype(np.float64)
+        self.y = smp.y.astype(np.float64) if smp.y is not None else None
         self.constant = smp.constant if constant is None else constant
         self.notes = fvars.drop_collinear(smp.cols, self.constant, w)
         self.est_cols = [c for c in smp.cols if c.values is not None]

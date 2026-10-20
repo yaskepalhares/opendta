@@ -383,6 +383,54 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtprobit", "xtprob")
+def cmd_xtprobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtprobit as run
+    run(s, args)
+
+
+@command("xtcloglog", "xtcloglog")
+def cmd_xtcloglog(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtcloglog as run
+    run(s, args)
+
+
+@command("xtologit", "xtologit")
+def cmd_xtologit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtologit as run
+    run(s, args)
+
+
+@command("xtoprobit", "xtoprobit")
+def cmd_xtoprobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtoprobit as run
+    run(s, args)
+
+
+@command("xttobit", "xttobit")
+def cmd_xttobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xttobit as run
+    run(s, args)
+
+
+@command("xtintreg", "xtintreg")
+def cmd_xtintreg(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtintreg as run
+    run(s, args)
+
+
+@command("xtnbreg", "xtnbreg")
+def cmd_xtnbreg(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtnbreg as run
+    run(s, args)
+
+
+@command("quadchk", "quadchk")
+def cmd_quadchk(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_quadchk as run
+    run(s, args)
+
+
 @command("stset", "stset")
 def cmd_stset(s: "Session", args: str) -> None:
     from ..estimation.st import cmd_stset as run
