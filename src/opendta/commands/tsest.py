@@ -71,3 +71,9 @@ def cmd_arch(s: "Session", args: str) -> None:
 def cmd_arfima(s: "Session", args: str) -> None:
     from ..estimation.arfima import cmd_arfima as run
     run(s, args)
+
+
+@command("ucm", "ucm")
+def cmd_ucm(s: "Session", args: str) -> None:
+    from ..estimation.ucm import cmd_ucm as run
+    run(s, args)
