@@ -26,6 +26,10 @@ jobs:
       - name: Instalar
         run: pip install -e ".[dev]"
       - name: pytest
-        run: pytest -q
+        shell: bash
+        run: |
+          pytest -q --tb=line > pytest_out.txt 2>&1; rc=$?
+          grep -E "^(FAILED|ERROR)|Error|assert" pytest_out.txt | head -12 | cut -c1-400 | sed 's/^/::error::/'
+          exit $rc
       - name: Comparison with Stata
         run: python tools/compare.py --show-diff
