@@ -8,7 +8,6 @@ modules and carry a VERIFY mark there."""
 
 from __future__ import annotations
 
-import math
 
 import numpy as np
 

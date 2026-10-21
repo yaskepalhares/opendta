@@ -16,7 +16,7 @@ from ..core import multivariate as mv
 from ..core.dataset import Variable
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options, parse_standard
-from .mvcommon import chi2_p, f as fnum, g as gnum, matrix, numeric_names, post_e, sample
+from .mvcommon import chi2_p, g as gnum, matrix, numeric_names, post_e, sample
 from .registry import command
 
 if TYPE_CHECKING:
