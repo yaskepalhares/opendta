@@ -246,6 +246,43 @@ PT: dict[str, str] = {
         "Executa a seleção, ou o arquivo inteiro, sem mostrar os comandos (run)",
     "Do-files (*.do);;Ado-files (*.ado)": "Do-files (*.do);;Ado-files (*.ado)",
     "Untitled": "Sem título",
+    "Session": "Sessão", "Safety": "Segurança", "Initial folder": "Pasta inicial", "Choose...": "Escolher...",
+    "Default": "Padrão", "Not set": "Não definida", "Color scheme": "Esquema de cores",
+    "The working directory OpenDTA starts in. Takes effect the next time OpenDTA opens.":
+        "A pasta de trabalho em que o OpenDTA começa. Vale na próxima vez que o OpenDTA abrir.",
+    "Save a log of each session": "Salvar um log de cada sessão",
+    "Starts a text log when OpenDTA opens, in a logs folder inside the initial folder (or your home folder). "
+    "Takes effect the next time OpenDTA opens.":
+        "Inicia um log em texto ao abrir o OpenDTA, numa pasta logs dentro da pasta inicial (ou da sua pasta "
+        "pessoal). Vale na próxima vez que o OpenDTA abrir.",
+    "Confirm clear": "Confirmar clear", "Confirm drop": "Confirmar drop", "Confirm keep": "Confirmar keep",
+    "Confirm save, replace": "Confirmar save, replace",
+    "In the Command window, ask before clear when the data in memory have unsaved changes.":
+        "Na janela Command, pergunta antes do clear quando os dados na memória têm alterações não salvas.",
+    "In the Command window, ask before drop removes many observations or most of the variables.":
+        "Na janela Command, pergunta antes do drop remover muitas observações ou a maior parte das variáveis.",
+    "In the Command window, ask before keep removes many observations or most of the variables.":
+        "Na janela Command, pergunta antes do keep remover muitas observações ou a maior parte das variáveis.",
+    "In the Command window, ask before save, replace overwrites a file much larger than the data in memory.":
+        "Na janela Command, pergunta antes do save, replace sobrescrever um arquivo bem maior que os dados "
+        "na memória.",
+    "Colors of the Results window and the Review list: the classic look, high contrast, a soft one, or a "
+    "scheme common in code editors.":
+        "Cores da janela Results e da lista Review: o visual clássico, alto contraste, um suave, ou um esquema "
+        "comum em editores de código.",
+    "Syntax colors and background of the Do-file Editor, independent of the Results window.":
+        "Cores de sintaxe e fundo do Editor de do-files, independentes da janela Results.",
+    "Reopen last session's files": "Reabrir os arquivos da última sessão",
+    "When the Do-file Editor opens, reopen the files that were open when it was last used.":
+        "Ao abrir o Editor de do-files, reabre os arquivos que estavam abertos na última vez que foi usado.",
+    "Confirm command": "Confirmar comando", "Run anyway": "Executar mesmo assim",
+    "Cancel and open Settings": "Cancelar e abrir Configurações",
+    "You can turn these confirmations off in Settings > General > Safety.":
+        "Você pode desligar estas confirmações em Configurações > Geral > Segurança.",
+    "New tab": "Nova aba",
+    "Undo": "Desfazer", "Redo": "Refazer", "Comment/uncomment": "Comentar/descomentar",
+    "Indent": "Aumentar recuo", "Outdent": "Diminuir recuo", "Do line": "Executar linha",
+    "Execute the current line (do)": "Executa a linha atual (do)",
     # Graph window / editor
     "Save...": "Salvar...", "Export...": "Exportar...", "Save graph": "Salvar gráfico",
     "OpenDTA graph (*.gph)": "Gráfico do OpenDTA (*.gph)", "Edit graph": "Editar gráfico",
