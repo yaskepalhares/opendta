@@ -314,3 +314,59 @@ def heckoprobit(sel, yi, ncat, eta, zeta, cuts, athrho):
         dn = obs & (yi == j + 1)
         d_cut[:, j] = np.where(up, Fhb / P, 0.0) - np.where(dn, Flb / P, 0.0)
     return ll, d_eta, d_zeta, d_ath, d_cut
+
+
+# ---------------------------------------------------------------------------
+# endogenous regressor: ivprobit, ivtobit (y2 = eta2 + v, v ~ N(0, sigma_v^2), corr(u, v) = rho)
+# ---------------------------------------------------------------------------
+
+def ivprobit(y, y2, eta1, eta2, athrho, lnsigma):
+    """ll_obs and derivatives wrt eta1, eta2, athrho and lnsigma (sigma = sd of y2's error);
+    the probit error has variance one."""
+    n = len(y)
+    r = np.tanh(athrho) * np.ones(n)
+    c = np.sqrt(1 - r * r)
+    sv = np.exp(lnsigma) * np.ones(n)
+    v = y2 - eta2
+    u = v / sv
+    q = 2 * y - 1
+    t = (eta1 + r * u) / c
+    z = q * t
+    lcdf = np.where(z > -30, special.log_ndtr(z), -0.5 * z * z - np.log(-z) - 0.5 * np.log(2 * np.pi))
+    ll = -0.5 * u * u - lnsigma - 0.5 * np.log(2 * np.pi) + lcdf
+    lam = q * np.exp(-0.5 * z * z - 0.5 * np.log(2 * np.pi) - lcdf)
+    d1 = lam / c
+    d2 = u / sv - lam * r / (sv * c)
+    da = lam * (c * u + t * r)
+    dls = u * u - 1 - lam * r * u / c
+    return ll, d1, d2, da, dls
+
+
+def ivtobit(y, y2, eta1, eta2, athrho, lnsigma, lnsigv, lower, upper):
+    """Tobit with an endogenous regressor: derivatives wrt eta1, eta2, athrho, ln sigma_u and
+    ln sigma_v; lower/upper are the censoring limits (+-inf when absent)."""
+    n = len(y)
+    r = np.tanh(athrho) * np.ones(n)
+    c = np.sqrt(1 - r * r)
+    su = np.exp(lnsigma) * np.ones(n)
+    sv = np.exp(lnsigv) * np.ones(n)
+    v = y2 - eta2
+    u = v / sv
+    m = eta1 + r * su * u
+    S = su * c
+    left = y <= lower
+    right = y >= upper
+    unc = ~(left | right)
+    zz = np.where(left, (lower - m) / S, np.where(right, (m - upper) / S, (y - m) / S))
+    lcdf = np.where(zz > -30, special.log_ndtr(zz), -0.5 * zz * zz - np.log(np.abs(zz) + 1e-300) - 0.5 * np.log(2 * np.pi))
+    h = np.exp(-0.5 * zz * zz - 0.5 * np.log(2 * np.pi) - lcdf)
+    llc = np.where(unc, -0.5 * zz * zz - np.log(S) - 0.5 * np.log(2 * np.pi), lcdf)
+    Dm = np.where(unc, zz / S, np.where(left, -h / S, h / S))
+    DS = np.where(unc, (zz * zz - 1) / S, -h * zz / S)
+    ll = llc - 0.5 * u * u - lnsigv - 0.5 * np.log(2 * np.pi)
+    d1 = Dm
+    d2 = Dm * (-r * su / sv) + u / sv
+    da = Dm * (c * c * su * u) + DS * (-su * r * c)
+    dls = Dm * (r * su * u) + DS * S
+    dlv = Dm * (-r * su * u) + u * u - 1
+    return ll, d1, d2, da, dls, dlv
