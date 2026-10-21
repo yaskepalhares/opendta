@@ -42,6 +42,12 @@ Notas para sessões que rodam na nuvem:
 - Para descobrir o que é uma diferença numérica, salve os dados do caso em csv e teste hipóteses fora do Stata: avalie a verossimilhança do OpenDTA nas estimativas de referência. Uma diferença constante (por exemplo `ln 4`) é uma constante da verossimilhança; uma diferença que some quando um valor pré-amostral vira zero ou a média da amostra é uma regra de pré-amostra; uma verossimilhança maior no OpenDTA nas mesmas estimativas, com estimativas diferentes, é o otimizador ou outro modelo, e vai para a diferença conhecida.
 - Numa diferença conhecida, `ignore(/REGEX/)` tira linhas dos dois logs, então linhas que existem em só um deles (logs de iteração do Stata) não atrapalham; uma tabela que aparece várias vezes não se delimita por posição, então case os valores que diferem e deixe o `tolerance()` para os últimos dígitos.
 
+- Faça o push sem `-q` e confirme com `git ls-remote --heads origin <branch>`. O aviso "commits não enviados" do hook de parada pode ser uma referência de rastreamento velha: `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>` resolve.
+- Para descobrir por que o CI falha quando os logs não baixam, leia as anotações job a job, rode os arquivos de teste um por vez e defina `faulthandler_timeout`. O CI de um PR roda no merge com o `main`; um travamento em teste de GUI costuma ser um `QMessageBox` modal.
+- Linhas que dependem da plataforma (uma verossimilhança plana numa fronteira, uma Hessiana numérica) diferem entre Linux, macOS e Windows: ignore-as com `ignore(/REGEX/)`. Quando a saída inteira de um comando é instável ou o comando ainda não existe, use `skip(/REGEX/)` na linha `. comando` dele, que tira a saída desse comando dos dois logs.
+- Depois de uma edição por script que corta um arquivo, confira a lista de funções e o `git diff --stat`: uma âncora que casa com uma função anterior apaga código sem aviso.
+- Achados de painel do caso 1905: os comandos do tipo `xtabond` estimam a constante por uma equação em nível separada (instrumento só `_cons`); o sigma2 de um passo é a soma dos quadrados dos resíduos diferenciados sobre `2(n_d - k)`, com `k` contando a constante; o `xtivreg, fd` tem constante, e as estatísticas dele vêm dos níveis das linhas que têm defasagem.
+
 Próximos números livres: casos de comparação a partir de **1907**, fases do roadmap a partir de **21**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
