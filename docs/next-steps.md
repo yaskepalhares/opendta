@@ -42,7 +42,13 @@ Notes for sessions that run in the cloud:
 - To find what a numeric difference is, dump the case data to a csv and test hypotheses offline: evaluate OpenDTA's likelihood at the reference estimates. A constant gap (for example `ln 4`) is a constant of the likelihood; a gap that disappears when a presample value is set to zero or to the sample mean is a presample rule; a likelihood that is higher in OpenDTA at the same estimates, with other estimates, is the optimizer or a different model, and goes into the known difference.
 - In a known difference, `ignore(/REGEX/)` removes lines from both logs, so lines that exist in only one (Stata's iteration logs) are fine; a table that appears several times cannot be scoped by position, so match the values that differ instead and keep `tolerance()` for the last digits.
 
-Next free numbers: compat cases from **1905**, roadmap phases from **19**.
+- Push without `-q` and confirm with `git ls-remote --heads origin <branch>`. The Stop hook's "unpushed commits" warning can be a stale tracking ref: `git fetch origin +refs/heads/<branch>:refs/remotes/origin/<branch>` clears it.
+- To see why CI fails when the logs cannot be downloaded, read the annotations job by job, run test files one at a time, and set `faulthandler_timeout`. A PR's CI runs on the merge with `main`; a hang in a GUI test is usually a modal `QMessageBox`.
+- Lines that depend on the platform (a likelihood that is flat at a boundary, a numerical Hessian) differ between Linux, macOS and Windows: ignore them with `ignore(/REGEX/)`. When a whole command's output is unstable or the command is not implemented yet, use `skip(/REGEX/)` on its `. command` line, which drops that command's output from both logs.
+- After a scripted edit that slices a file, check the list of functions and `git diff --stat`: an anchor that matches an earlier function deletes code silently.
+- Panel findings from case 1905: `xtabond`-type commands estimate the constant through a separate level equation (instrument `_cons` only); the one-step sigma2 is the sum of squared differenced residuals over `2(n_d - k)`, with `k` counting the constant; `xtivreg, fd` has a constant, and its statistics come from the levels of the rows that have a lag.
+
+Next free numbers: compat cases from **1906**, roadmap phases from **20**.
 
 ## Rule: statistics in the core, Stata in the command
 
