@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 HELP_DIR = Path(__file__).resolve().parents[1] / "help"
 
 ALIASES = {
+    "cloglog": "binmodels", "scobit": "binmodels", "hetprobit": "binmodels", "fracreg": "binmodels", "glogit": "binmodels", "binreg": "binmodels", "zip": "binmodels", "zinb": "binmodels", "tpoisson": "binmodels", "tnbreg": "binmodels", "gnbreg": "binmodels",
+    "intreg": "censmodels", "truncreg": "censmodels", "heckman": "censmodels", "heckprobit": "censmodels", "heckoprobit": "censmodels", "biprobit": "censmodels",
+    "ivprobit": "ivmodels", "ivtobit": "ivmodels", "ivpoisson": "ivmodels",
     "xtprobit": "xtquad", "xtcloglog": "xtquad", "xtologit": "xtquad", "xtoprobit": "xtquad", "xttobit": "xtquad", "xtintreg": "xtquad", "xtnbreg": "xtquad", "quadchk": "xtquad", "xtgls": "xtlinear", "xtpcse": "xtlinear", "xtregar": "xtlinear", "xtrc": "xtlinear", "xthtaylor": "xtlinear", "xtivreg": "xtlinear", "xtabond": "xtdpd", "xtdpdsys": "xtdpd", "estat_abond": "xtdpd", "estat_sargan": "xtdpd", "xtline": "xtdesc", "xttab": "xtdesc", "xtdata": "xtdesc",
     "jackknife": "resample", "permute": "resample", "simulate": "resample",
     "mlexp": "ml", "mleval": "ml", "mlsum": "ml", "mlvecsum": "ml", "mlmatsum": "ml",
