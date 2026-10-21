@@ -222,7 +222,7 @@ def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: 
     est = Estimates(cmd, depvar_name or smp.depname, names, b, V, smp.n, "z", None)
     est.rows = rows
     est.eqnames = list(eqnames)
-    est.cols, est.constant, est.terms, est.depcomp = smp.cols, constant, smp.terms, smp.depcomp
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, constant, smp.terms, getattr(smp, "depcomp", None)
     est.level = smp.level
     est.vcetype = "Robust" if pr.robust else ""
     est.clustvar = smp.clustvar

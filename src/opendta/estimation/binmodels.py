@@ -435,7 +435,7 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
                        aux_rows_fn=aux_rows, hdr_fn=hdr, footer=footer, k_eq=3 if nb else 2,
                        extra_scalars=extra_scalars,
                        extra_macros=[("inflate", link)], test_idx=list(range(main.nslopes)),
-                       wald=pr.robust)
+                       wald=pr.robust, predict_opts={"xbinflate": 3})
     est.n_zero = (n_zero, n_nonzero)
 
     def pred(what, etas, th, e):

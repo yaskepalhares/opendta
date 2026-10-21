@@ -22,3 +22,5 @@ def _register(module: str, names: list[str]) -> None:
 
 
 _register("binmodels", ["scobit", "hetprobit", "fracreg", "zip", "zinb", "tpoisson", "tnbreg", "gnbreg", "binreg", "glogit"])
+
+_register("censmodels", ["intreg", "truncreg", "heckman", "heckprobit", "heckoprobit", "biprobit"])

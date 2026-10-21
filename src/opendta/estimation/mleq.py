@@ -230,7 +230,8 @@ def finish_model(s, pr, cmd: str, args: str, *, title: str, blocks: list[Block],
                  hdr_fn: Callable, depvar_cell: str | None = None, footer: Callable | None = None,
                  wald: bool = False, extra_scalars=(), extra_macros=(), mats=(), order=None,
                  test_idx: list[int] | None = None, df_m: int | None = None, k_eq: int | None = None,
-                 heads: bool | None = None, noeform_after_first: bool = True, r2p: float | None = None):
+                 heads: bool | None = None, noeform_after_first: bool = True, r2p: float | None = None,
+                 predict_opts: dict | None = None):
     """Lays out e(b)/e(V), tests the slopes of the first equation, posts the results and returns
     the Estimates (display is `display_eq`). `aux_rows_fn(level)` gives the rows after the
     coefficient blocks (ancillary parameters and their transformations)."""
@@ -268,6 +269,7 @@ def finish_model(s, pr, cmd: str, args: str, *, title: str, blocks: list[Block],
     est.depvar_cell = pr.smp.depname if depvar_cell is None else depvar_cell
     est.footer = footer
     est.blocks = blocks
+    est.predict_opts = predict_opts or {}
     est.n_coef = sum(len(b.cols) + (1 if b.constant else 0) for b in blocks)
     return est
 
