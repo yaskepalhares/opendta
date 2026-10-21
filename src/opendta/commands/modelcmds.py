@@ -26,3 +26,5 @@ _register("binmodels", ["scobit", "hetprobit", "fracreg", "zip", "zinb", "tpoiss
 _register("censmodels", ["intreg", "truncreg", "heckman", "heckprobit", "heckoprobit", "biprobit"])
 
 _register("ivmodels", ["ivprobit", "ivtobit", "ivpoisson"])
+
+_register("sysmodels", ["constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3", "rreg"])
