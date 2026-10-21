@@ -59,8 +59,10 @@ def suff_dist_poisson(X: np.ndarray, total: int) -> dict:
     A[(0,) + tuple(int(-l) for l in lo)] = 1.0
     for r, ng in zip(R, counts):
         new = np.zeros(shape)
+        lw = np.array([m * math.log(ng) - math.lgamma(m + 1) for m in range(total + 1)])
+        lw -= lw.max()                       # a common factor: the distribution is renormalized
         for m in range(total + 1):
-            w = float(ng) ** m / math.factorial(m)
+            w = float(np.exp(lw[m]))
             shifts = (m,) + tuple(int(m * v) for v in r)
             dst, src = [], []
             for sh, size in zip(shifts, shape):

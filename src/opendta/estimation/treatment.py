@@ -28,7 +28,7 @@ SYS = M.SYSMISS
 def _treat_spec(args: str):
     """(rewritten args with the treatment variable at the end of the outcome varlist, treatment
     variable, its varlist, noconstant flag)."""
-    o = peek(args, {"treat": 3, "twostep": 3, "cfunc": 4})
+    o = peek(args, {"treat": 3, "twostep": 3})
     txt = o.get("treat")
     if txt in (None, True) or "=" not in str(txt):
         raise StataError(198, "option treat() required")
@@ -56,7 +56,7 @@ def _setup(s, args, spec):
 def cmd_etregress(s: "Session", args: str) -> None:
     if _replay(s, "etregress", args):
         return
-    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "twostep": 3, "cfunc": 4})
+    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "twostep": 3})
     w = pr.w
     n = len(y)
     if o.get("twostep"):
@@ -190,7 +190,7 @@ def _twostep(s, args, pr, y, t, main, trt, tname):
 def cmd_etpoisson(s: "Session", args: str) -> None:
     if _replay(s, "etpoisson", args):
         return
-    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "cfunc": 4, "intpoints": 3})
+    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "intpoints": 3})
     w = pr.w
     K = int(o["intpoints"]) if o.get("intpoints") else 32
     if np.any(y < 0) or np.any(y != np.round(y)):
