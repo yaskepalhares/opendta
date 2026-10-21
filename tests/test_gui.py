@@ -307,8 +307,13 @@ def test_graph_window_tabs(app):
     w.close()
 
 
-def test_dofile_editor_runs_selection(app, tmp_path):
+def test_dofile_editor_runs_selection(app, tmp_path, monkeypatch):
     from PySide6.QtGui import QTextCursor
+    from PySide6.QtWidgets import QMessageBox
+
+    # a modal "Save changes?" box would block forever without a screen (macOS, Windows)
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **k: QMessageBox.StandardButton.Discard)
 
     from opendta.gui.main_window import MainWindow
 
