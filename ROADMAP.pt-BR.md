@@ -262,7 +262,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Análise de agrupamentos: `cluster` (`kmeans`, `kmedians`, as sete ligações hierárquicas, `generate`, `dendrogram`, `stop` com `calinski` e `duda`, `list`, `dir`, `drop`, `rename`, `notes`) e `matrix dissimilarity`
 - [x] Análise discriminante: `discrim` (`lda`, `qda`, `knn`, `logistic`) e `candisc`, com `estat` (`classtable`, `errorrate`, `list`, `grdistances`, `covariance`) e `predict`
 - [x] Análise de correspondência e escalonamento: `ca`, `mca`, `mds` e `mdsmat` (clássico e moderno), `procrustes` ortogonal e `biplot`, com `estat` e `predict` onde se aplicam
-- Conferido com o log do Stata 14: o caso `1906` ainda não foi rodado no Stata
+- Conferido com o log do Stata 14: o caso `1906` confere, exceto pelas diferenças em `compat/known_differences.txt` (os caminhos de iteração de `factor, ml`, `discrim logistic` e `mds, method(modern)`, e os números do `factor, ml` que decorrem de onde o `ml` do Stata para)
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 

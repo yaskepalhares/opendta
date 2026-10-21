@@ -16,7 +16,8 @@ from ..core import multivariate as mv
 from ..core import mvtests as T
 from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
-from .mvcommon import chi2_p, g as gnum, matrix, numeric_names, post_e, sample
+from .mvcommon import chi2_p, g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
+from .mvfactor import _g6
 from .registry import command
 
 if TYPE_CHECKING:
@@ -29,16 +30,19 @@ def _fp(p: float) -> str:
     return f"{p:.4f}" if np.isfinite(p) else "."
 
 
-def _summary_table(out, ds, names, X, w=None) -> None:
-    out.write("\n    Variable |       Obs        Mean    Std. Dev.       Min        Max\n", "text")
-    out.write("-------------+" + "-" * 56 + "\n", "text")
+def _summary_table(out, ds, names, X, w=None, wtype="") -> None:
+    """The table of `summarize`: observations, mean, standard deviation, minimum and maximum."""
+    from ..core import stats as S
+    from .summarize import g9
+    out.write("\n    Variable |        Obs        Mean    Std. Dev.       Min        Max\n", "text")
+    out.write("-------------+" + "-" * 57 + "\n", "text")
     for j, n_ in enumerate(names):
-        x = X[:, j]
-        n = len(x) if w is None else float(w.sum())
-        m = float(np.average(x, weights=w))
-        sd = math.sqrt(float(np.average((x - m) ** 2, weights=w)) * n / (n - 1)) if n > 1 else float("nan")
-        out.write(f"{n_[:12]:>12} |{int(n):>10}{gnum(m, '%9.0g'):>12}{gnum(sd, '%9.0g'):>12}"
-                  f"{gnum(float(x.min()), '%9.0g'):>11}{gnum(float(x.max()), '%9.0g'):>11}\n", "text")
+        m = S.moments(X[:, j], w, wtype)
+        # the mean is accumulated in extended precision, so that a mean that is exactly -.86921875 shows as Stata does
+        xj = X[:, j].astype(np.longdouble)
+        wj = np.ones(len(xj), dtype=np.longdouble) if w is None else np.asarray(w, dtype=np.longdouble)
+        mean = float((wj * xj).sum() / wj.sum())
+        out.write(f"{n_[:12]:>12} | {m.N:>10,.0f}   {g9(mean):>9}   {g9(m.sd):>9}  {g9(m.min):>9}  {g9(m.max):>9}\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -59,14 +63,15 @@ def cmd_hotelling(s: "Session", args: str) -> None:
         mean, S, R, sw = mv.weighted_moments(X, w)
         n = sw
         if not o.get("notable"):
-            _summary_table(out, ds, names, X, w)
+            _summary_table(out, ds, names, X, w, wtype)
         r = T.hotelling_one(mean, S, n)
-        out.write(f"\n1-group Hotelling's T-squared = {r['T2']:.4f}\n", "text")
-        out.write(f"F test statistic: (({int(n)}-{k})/({int(n)}-1)({k})) x {r['T2']:.4f} = {r['F']:.4f}\n", "text")
+        t2, f_ = gnum(r["T2"], "%10.0g"), gnum(r["F"], "%10.0g")
+        out.write(f"\n1-group Hotelling's T-squared = {t2}\n", "text")
+        out.write(f"F test statistic: (({int(n)}-{k})/({int(n)}-1)({k})) x {t2} = {f_}\n", "text")
         out.write("\nH0: Vector of means is equal to a vector of zeros\n", "text")
-        out.write(f"{'F(' + str(k) + ', ' + gnum(r['df2']) + ') =':>25}{r['F']:>10.4f}\n", "text")
-        out.write(f"{'Prob > F(' + str(k) + ', ' + gnum(r['df2']) + ') =':>25}{r['p']:>10.4f}\n", "text")
-        s.r = {"T2": r["T2"], "F": r["F"], "df": float(k), "df_r": r["df2"], "p": r["p"]}
+        out.write(f"{'F(' + str(k) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.4f}\n", "text")
+        out.write(f"{'Prob > F(' + str(k) + ',' + gnum(r['df2']) + ') =':>24}{r['p']:>10.4f}\n", "text")
+        s.r = {"N": float(n), "k": float(k), "df": r["df2"], "T2": r["T2"]}
         return
     g = s.data.get(by).data[mask]
     levels = sorted(set(g.tolist()))
@@ -81,17 +86,19 @@ def cmd_hotelling(s: "Session", args: str) -> None:
         if not o.get("notable"):
             from .inspect import cell_text
             lab = cell_text(ds, ds.get(by), int(np.flatnonzero(mask)[np.flatnonzero(sel)[0]]))
-            out.write(f"\n-> {by} = {lab}\n", "text")
-            _summary_table(out, ds, names, X[sel], ww)
+            out.write("\n" + "-" * int(s.settings.get("linesize", 80)) + "\n", "text")
+            out.write(f"-> {by} = {lab}\n", "text")
+            _summary_table(out, ds, names, X[sel], ww, wtype)
     (m1, S1, n1, _), (m2, S2, n2, _) = parts
     r = T.hotelling_two(m1, S1, n1, m2, S2, n2)
-    out.write(f"\n2-group Hotelling's T-squared = {r['T2']:.4f}\n", "text")
-    out.write(f"F test statistic: (({int(n1)}+{int(n2)}-{k}-1)/({int(n1)}+{int(n2)}-2)({k})) x {r['T2']:.4f} = {r['F']:.4f}\n", "text")
+    t2, f_ = gnum(r["T2"], "%10.0g"), gnum(r["F"], "%10.0g")
+    out.write(f"\n2-group Hotelling's T-squared = {t2}\n", "text")
+    out.write(f"F test statistic: (({int(n1 + n2)}-{k}-1)/({int(n1 + n2)}-2)({k})) x {t2} = {f_}\n", "text")
     out.write("\nH0: Vectors of means are equal for the two groups\n", "text")
     d2 = gnum(r["df2"])
-    out.write(f"{'F(' + str(k) + ', ' + d2 + ') =':>25}{r['F']:>10.4f}\n", "text")
-    out.write(f"{'Prob > F(' + str(k) + ', ' + d2 + ') =':>25}{r['p']:>10.4f}\n", "text")
-    s.r = {"T2": r["T2"], "F": r["F"], "df": float(k), "df_r": r["df2"], "p": r["p"]}
+    out.write(f"{'F(' + str(k) + ',' + d2 + ') =':>24}{r['F']:>10.4f}\n", "text")
+    out.write(f"{'Prob > F(' + str(k) + ',' + d2 + ') =':>24}{r['p']:>10.4f}\n", "text")
+    s.r = {"N": float(n1 + n2), "k": float(k), "df": r["df2"], "T2": r["T2"]}
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +168,9 @@ def cmd_mvreg(s: "Session", args: str) -> None:
         if constant:
             bmap["_cons"] = bfull[-1]
             semap["_cons"] = math.sqrt(Sigma[e_i, e_i] * XtWXi[-1, -1])
-        rows.append(CoefRow("header", d_))
+        if e_i:
+            rows.append(CoefRow("sep"))
+        rows.append(CoefRow("header", d_, left=True))
         rows += rows_from_columns(cols, bmap, semap, ds, constant=constant)
         b_all.append(bfull)
         names_all += names_one
@@ -195,12 +204,18 @@ def cmd_mvreg(s: "Session", args: str) -> None:
                  "rank": k}
     est.predict = _mvreg_predict
     est.predict_opts = {}
-    scalars = [("N", N), ("k", kk * q), ("k_eq", q), ("k_dv", q), ("df_r", df_r), ("chi2", SYS)]
-    for i, (d_, ob, parms, rmse, r2, F, pF) in enumerate(eq_stats, start=1):
-        scalars += [(f"rmse_{i}", rmse), (f"r2_{i}", r2), (f"F_{i}", F), (f"df_m{i}", float(df_m))]
-    macros = [("cmdline", "mvreg " + args.strip()), ("cmd", "mvreg"), ("depvar", " ".join(deps)),
-              ("eqnames", " ".join(deps)), ("title", "Multivariate regression"), ("predict", "mvreg_p"),
-              ("marginsnotok", "_ALL"), ("properties", "b V"), ("wtype", wtype)]
+    scalars = [("k", kk), ("df_r", df_r), ("k_eq", q), ("N", N), ("rank", kk * q)]
+    if o.get("corr") and q > 1:
+        Rr = Sigma / np.sqrt(np.outer(np.diag(Sigma), np.diag(Sigma)))
+        scalars += [("df_chi2", q * (q - 1) / 2.0), ("chi2", float(N * sum(Rr[i, j] ** 2 for i in range(q) for j in range(i))))]
+    strs = lambda vals, fmt: "".join(" " + fmt(v) for v in vals)
+    g7 = lambda v: gnum(v, "%9.0g")
+    macros = [("cmd", "mvreg"), ("cmdline", "mvreg " + args.strip()), ("estat_cmd", "mvreg_estat"),
+              ("marginsdefault", " ".join(f"predict(xb equation({d_}))" for d_ in deps)), ("marginsok", "XB default"),
+              ("marginsnotok", "stdp Residuals stddp"), ("predict", "reg3_p"), ("depvar", " ".join(deps)),
+              ("eqnames", " ".join(deps)), ("F", strs([x[5] for x in eq_stats], g7)),
+              ("rmse", strs([x[3] for x in eq_stats], g7)), ("p_F", strs([x[6] for x in eq_stats], lambda v: f"{v:.4f}")),
+              ("r2", strs([x[4] for x in eq_stats], lambda v: f"{v:.4f}")), ("properties", "b V"), ("wtype", wtype)]
     post(s, est, scalars, macros, mask, extra_mats=[("Sigma", matrix(Sigma, deps, deps))])
     est.no_b = False
     _display_mvreg(s, est, eq_stats, o, deps, N)
@@ -210,24 +225,21 @@ def _display_mvreg(s, est, eq_stats, o, deps, N) -> None:
     from ..estimation.results import coef_table
     out = s.output
     out.write("\n", "text")
-    out.write('Equation          Obs  Parms        RMSE    "R-sq"          F        P\n', "text")
-    out.write("-" * 70 + "\n", "text")
+    out.write(f"{'Equation':<21}{'Obs':>3}{'Parms':>8}{'RMSE':>12}{'\"R-sq\"':>10}{'F':>11}{'P':>9}\n", "text")
+    out.write("-" * 74 + "\n", "text")
     for d_, ob, parms, rmse, r2, F, pF in eq_stats:
-        out.write(f"{d_[:14]:<14}{int(ob):>7}{parms:>7}{rmse:>12.7g}{r2:>10.4f}{F:>11.2f}{_fp(pF):>9}\n", "text")
+        out.write(f"{d_[:21]:<21}{int(ob):>3}{parms:>8}{gnum(rmse, '%9.0g'):>12}{r2:>10.4f}{gnum(F, '%9.0g'):>11}{pF:>9.4f}\n", "text")
     out.write("\n", "text")
-    if o.get("corr"):
+    coef_table(s, "", est.rows, stat="t", df=est.df_r, level=est.level)
+    if o.get("corr") and len(deps) > 1:
         q = len(deps)
         Sg = est.extra["Sigma"]
         R = Sg / np.sqrt(np.outer(np.diag(Sg), np.diag(Sg)))
         chi2 = float(N * sum(R[i, j] ** 2 for i in range(q) for j in range(i)))
         df = q * (q - 1) / 2.0
-        out.write("Correlation matrix of residuals:\n\n", "text")
-        out.write(f"{'':>13}" + "".join(f"{d_[:8]:>10}" for d_ in deps) + "\n", "text")
-        for i, d_ in enumerate(deps):
-            out.write(f"{d_[:12]:>12} " + "".join(f"{R[i, j]:>10.4f}" for j in range(i + 1)) + "\n", "text")
-        out.write(f"\nBreusch-Pagan test of independence: chi2({int(df)}) = {chi2:8.3f}, Pr = {T.st.chi2.sf(chi2, df):.4f}\n\n"
-                  if q > 1 else "", "text")
-    coef_table(s, "", est.rows, stat="t", df=est.df_r, level=est.level)
+        out.write("\nCorrelation matrix of residuals:\n\n", "text")
+        lower_matrix(out, deps, R)
+        out.write(f"\nBreusch-Pagan test of independence: chi2({int(df)}) = {chi2:9.3f}, Pr = {T.st.chi2.sf(chi2, df):.4f}\n", "text")
 
 
 def _mvreg_predict(s, est, stat, mask):
@@ -275,9 +287,9 @@ def _resid_sscp(X: np.ndarray, Y: np.ndarray, w: np.ndarray):
 def _stat_rows(out, label: str, stats: list[dict], df_h: float) -> None:
     for i, r in enumerate(stats):
         src = label if i == 0 else ""
-        dfc = f"{int(df_h):>5}" if i == 0 else f"{'':>5}"
-        out.write(f"{src:>20} | {r['name']} {r['stat']:>8.4f} {dfc} {r['df1']:>7.1f} {r['df2']:>7.1f} "
-                  f"{r['F']:>8.2f} {_fp(r['p']):>7} {r['flag']}\n", "text")
+        dfc = f"{int(df_h):>10}" if i == 0 else f"{'':>10}"
+        out.write(f"{src:>20} |{r['name']}{r['stat']:>9.4f}{dfc}{r['df1']:>9.1f}{r['df2']:>9.1f}"
+                  f"{r['F']:>9.2f} {r['p']:.4f} {r['flag']}\n", "text")
 
 
 @command("manova", "manova")
@@ -329,16 +341,17 @@ def cmd_manova(s: "Session", args: str) -> None:
     q = len(deps)
     df_m, df_r = rank - 1, N - rank
     out = s.output
-    out.write(f"\n{'Number of obs =':>40}{int(N):>9}\n\n", "text")
-    out.write(f"{'':>26}W = Wilks' lambda      L = Lawley-Hotelling trace\n", "text")
-    out.write(f"{'':>26}P = Pillai's trace     R = Roy's largest root\n\n", "text")
-    out.write(f"{'Source':>20} | Statistic     df   F(df1,    df2) =   F   Prob>F\n", "text")
-    rule = f"{'-' * 21}+{'-' * 52}"
+    out.write(f"\n{'':>23}Number of obs = {int(N):>10}\n\n", "text")
+    out.write(f"{'':>23}W = Wilks' lambda      L = Lawley-Hotelling trace\n", "text")
+    out.write(f"{'':>23}P = Pillai's trace     R = Roy's largest root\n\n", "text")
+    out.write(f"{'Source':>20} | Statistic        df    F(df1,     df2) =   F   Prob>F\n", "text")
+    rule = f"{'':>10}{'-' * 11}+{'-' * 55}"
+    sep = f"{'':>21}|{'-' * 55}"
     out.write(rule + "\n", "text")
     res = {}
     lam_m = T.eig_ratio(E, Hm)
     res["model"] = (T.mv_statistics(lam_m, q, df_m, df_r), df_m, Hm)
-    rows = [("model", res["model"])]
+    rows = [("Model", res["model"])]
     prev_E, prev_rank = _resid_sscp(one, Y, ww)
     for k_, t_ in enumerate(terms):
         if sequential:
@@ -350,12 +363,16 @@ def cmd_manova(s: "Session", args: str) -> None:
             H, dfh = Er - E, rank - rk
         lam = T.eig_ratio(E, H) if dfh > 0 else np.zeros(0)
         rows.append((t_.name, (T.mv_statistics(lam, q, dfh, df_r) if dfh > 0 else [], dfh, H)))
-    for label, (stats, dfh, H) in rows:
+    shown = rows if len(terms) > 1 else rows[1:]
+    resid = f"{'Residual':>20} |{int(df_r):>20}\n"
+    for i_, (label, (stats, dfh, H)) in enumerate(shown):
         _stat_rows(out, label, stats, dfh)
-        out.write(rule + "\n", "text")
-    out.write(f"{'Residual':>20} | {'':>9} {int(df_r):>5}\n{rule}\n", "text")
-    out.write(f"{'Total':>20} | {'':>9} {int(N - 1):>5}\n{'-' * 74}\n", "text")
-    out.write(f"{'':>20}   e = exact, a = approximate, u = upper bound on F\n", "text")
+        out.write(sep + "\n", "text")
+        if label == "Model":
+            out.write(resid + rule + "\n", "text")
+    out.write(resid + rule + "\n", "text")
+    out.write(f"{'Total':>20} |{int(N - 1):>20}\n{'':>10}{'-' * 67}\n", "text")
+    out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
     names_cols = ["statistic", "df1", "df2", "F", "p"]
     mats = [("E", matrix(E, deps, deps)), ("H_m", matrix(Hm, deps, deps)),
             ("eigvals_m", matrix(lam_m.reshape(1, -1), ["eigvals"], [f"c{i + 1}" for i in range(len(lam_m))])),
@@ -428,39 +445,66 @@ def cmd_canon(s: "Session", args: str) -> None:
     S11, S22, S12 = C[:p1, :p1], C[p1:, p1:], C[:p1, p1:]
     cc = T.canonical(S11, S22, S12)
     r, A1, A2 = cc["r"], cc["A1"], cc["A2"]
-    # sign convention: the first element of each coefficient column is positive (VERIFY)
+    # sign convention: the largest coefficient (in absolute value) of each first-set column is positive (VERIFY)
     for j in range(len(r)):
-        if A1[0, j] < 0:
+        if A1[np.argmax(np.abs(A1[:, j])), j] < 0:
             A1[:, j] *= -1
             A2[:, j] *= -1
     k = len(r)
-    if o.get("stdcoef"):
-        A1 = A1 * np.sqrt(np.diag(S11))[:, None]
-        A2 = A2 * np.sqrt(np.diag(S22))[:, None]
+    sd1, sd2 = np.sqrt(np.diag(S11)), np.sqrt(np.diag(S22))
+    R11, R22 = S11 / np.outer(sd1, sd1), S22 / np.outer(sd2, sd2)
+    R12 = S12 / np.outer(sd1, sd2)
+    Z1, Z2 = A1 * sd1[:, None], A2 * sd2[:, None]
+    shown1, shown2 = (Z1, Z2) if o.get("stdcoef") else (A1, A2)
     out = s.output
-    out.write(f"\nCanonical correlation analysis{'':>20}Number of obs    ={N:>11}\n", "text")
+    out.write(f"\nCanonical correlation analysis{'':>22}Number of obs ={N:>11}\n", "text")
     cn = [str(j + 1) for j in range(k)]
-    for title, nm, A_ in (("first", n1, A1), ("second", n2, A2)):
+    for title, nm, A_ in (("first", n1, shown1), ("second", n2, shown2)):
         out.write(f"\n{'Standardized' if o.get('stdcoef') else 'Raw'} coefficients for the {title} variable set\n\n", "text")
-        out.write(f"{'':>16} |" + "".join(f"{c_:>10}" for c_ in cn) + "\n", "text")
-        out.write("-" * 17 + "+" + "-" * (10 * k + 1) + "\n", "text")
+        out.write(f"{'':>17}|" + "".join(f"{c_:>9} " for c_ in cn) + "\n", "text")
+        out.write(f"{'':>4}{'-' * 13}+{'-' * 10 * k}\n", "text")
         for i, n_ in enumerate(nm):
-            out.write(f"{n_[:15]:>16} |" + "".join(f"{A_[i, j]:>10.4f}" for j in range(k)) + "\n", "text")
-    out.write("\n" + "-" * 76 + "\nCanonical correlations:\n  " + "  ".join(f"{x:.4f}" for x in r) + "\n", "text")
-    out.write("-" * 76 + "\nTests of significance of all canonical correlations\n\n", "text")
-    out.write(f"{'':>25}{'Statistic':>10}{'df1':>8}{'df2':>10}{'F':>10}{'Prob>F':>9}\n", "text")
+            out.write(f"{n_[:15]:>16} |" + "".join(f"{A_[i, j]:>9.4f} " for j in range(k)) + "\n", "text")
+        out.write(f"{'':>4}{'-' * (14 + 10 * k)}\n", "text")
+    rule = "-" * 76
+    out.write(f"\n{rule}\nCanonical correlations:\n  " + "  ".join(f"{x:.4f}" for x in r) + "\n", "text")
+    out.write(f"\n{rule}\nTests of significance of all canonical correlations\n\n", "text")
+    out.write(f"{'Statistic':>34}{'df1':>9}{'df2':>9}{'F':>13}{'Prob>F':>11}\n", "text")
     lam = r ** 2 / (1.0 - r ** 2)
     v = N - 1.0 - p2 if not noconstant else N - p2
     stats = T.mv_statistics(lam, p1, p2, v)
     names_full = {"W": "Wilks' lambda", "P": "Pillai's trace", "L": "Lawley-Hotelling trace", "R": "Roy's largest root"}
     for r_ in stats:
-        out.write(f"{names_full[r_['name']]:>24} {r_['stat']:>10.4f}{r_['df1']:>8.0f}{r_['df2']:>10.1f}"
-                  f"{r_['F']:>10.4f}{_fp(r_['p']):>9} {r_['flag']}\n", "text")
-    out.write(f"{'':>45}e = exact, a = approximate, u = upper bound on F\n", "text")
-    sc = [("N", N), ("n_lc", k), ("df_m", p1 * p2), ("df_r", v)]
-    mats = [("ccorr", matrix(r.reshape(1, -1), ["ccorr"], cn)), ("coef1", matrix(A1, n1, cn)), ("coef2", matrix(A2, n2, cn))]
-    macros = [("cmdline", "canon " + args.strip()), ("cmd", "canon"), ("varlist1", " ".join(n1)), ("varlist2", " ".join(n2)),
-              ("title", "Canonical correlation analysis"), ("properties", "nob noV"), ("wtype", wtype)]
+        out.write(f"{names_full[r_['name']]:>22}{_g6(r_['stat']):>12}{_g6(r_['df1']):>9}{_g6(r_['df2']):>9}"
+                  f"{_g6(r_['F']):>13}{r_['p']:>11.4f} {r_['flag']}\n", "text")
+    out.write(f"{rule}\n{'':>28}e = exact, a = approximate, u = upper bound on F\n", "text")
+    # e(b), e(V), e(stat_#) and e(stat_m) have the dimensions of Stata's; their contents are not documented (VERIFY)
+    type_code = {"e": 1.0, "a": 2.0, "u": 3.0}
+    cols = ["statistic", "df1", "df2", "F", "p", "type"]
+    def _row(r_):
+        return [r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"], type_code[r_["flag"]]]
+    stat_m = np.array([_row(r_) for r_ in stats])
+    stat_j = []
+    for j in range(k):
+        w_ = T.mv_statistics(lam[j:], p1 - j, p2 - j, v)[0]
+        stat_j.append(np.array([[r[j]] + _row(w_)[:5]]))
+    b = np.concatenate([A1.T.ravel(), A2.T.ravel()]).reshape(1, -1)
+    sc = [("df_r", N - 1.0), ("N", N), ("df", N - 1.0), ("n_cc", k), ("df1", stats[0]["df1"]),
+          ("df2", stats[0]["df2"]), ("rank", b.shape[1])]
+    mats = [("b", matrix(b, ["y1"], [f"c{i + 1}" for i in range(b.shape[1])])),
+            ("V", matrix(np.zeros((b.shape[1], b.shape[1])), [f"c{i + 1}" for i in range(b.shape[1])],
+                         [f"c{i + 1}" for i in range(b.shape[1])]))]
+    mats += [(f"stat_{j + 1}", matrix(stat_j[j], ["stat"], cols)) for j in reversed(range(k))]
+    mats += [("stat_m", matrix(stat_m, ["W", "P", "L", "R"], cols)),
+             ("canload11", matrix(R11 @ Z1, n1, cn)), ("canload22", matrix(R22 @ Z2, n2, cn)),
+             ("canload12", matrix(R12 @ Z2, n1, cn)), ("canload21", matrix(R12.T @ Z1, n2, cn)),
+             ("rawcoef_var1", matrix(A1, n1, cn)), ("rawcoef_var2", matrix(A2, n2, cn)),
+             ("stdcoef_var1", matrix(Z1, n1, cn)), ("stdcoef_var2", matrix(Z2, n2, cn)),
+             ("ccorr", matrix(r.reshape(1, -1), ["ccorr"], cn)),
+             ("corr_var1", matrix(R11, n1, n1)), ("corr_var2", matrix(R22, n2, n2)),
+             ("corr_mixed", matrix(R12, n1, n2))]
+    macros = [("cmdline", "canon " + args.strip()), ("marginsnotok", "_ALL"), ("cmd", "canon"),
+              ("predict", "canon_p"), ("estat_cmd", "canon_estat"), ("properties", "b V")]
     post_e(s, "canon", sc, macros, mats, mask, N)
 
 
@@ -504,9 +548,9 @@ def _groups(s, p, names, o, allowed=("fweight", "aweight")):
     return X, w, g, mask, by
 
 
-def _chi_lines(out, title: str, chi2: float, df: float, p: float) -> None:
+def _chi_lines(out, title: str, label: str, chi2: float, df: float, p: float) -> None:
     out.write(f"\n{title}\n\n", "text")
-    out.write(f"{'chi2(' + gnum(df) + ') =':>25}{chi2:>10.4f}\n{'Prob > chi2 =':>25}{p:>10.4f}\n", "text")
+    out.write(f"{label + '(' + gnum(df) + ') =':>24}{chi2:>10.2f}\n{'Prob > chi2 =':>24}{p:>10.4f}\n", "text")
 
 
 def _mvtest_means(s, rest: str) -> None:
@@ -531,12 +575,12 @@ def _mvtest_means(s, rest: str) -> None:
                 raise StataError(102, "too few variables specified")
             Cm = np.hstack([np.eye(k - 1), -np.ones((k - 1, 1))])
             r = T.hotelling_one(Cm @ mean, Cm @ S @ Cm.T, n)
-            what = "Test that all means are equal"
+            what = "Test that all means are the same"
             df1 = k - 1
         out.write(f"\n{what}\n\n", "text")
-        out.write(f"{'Hotelling T2 =':>25}{r['T2']:>12.4f}\n", "text")
-        out.write(f"{'F(' + str(df1) + ',' + gnum(r['df2']) + ') =':>25}{r['F']:>12.4f}\n", "text")
-        out.write(f"{'Prob > F(' + str(df1) + ',' + gnum(r['df2']) + ') =':>25}{r['p']:>12.4f}\n", "text")
+        out.write(f"{'Hotelling T2 =':>24}{r['T2']:>10.2f}\n", "text")
+        out.write(f"{'Hotelling F(' + str(df1) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.2f}\n", "text")
+        out.write(f"{'Prob > F =':>24}{r['p']:>10.4f}\n", "text")
         s.r = {"T2": r["T2"], "F": r["F"], "df_m": float(df1), "df_r": r["df2"], "p_F": r["p"]}
         return
     levels = sorted(set(g.tolist()))
@@ -556,11 +600,14 @@ def _mvtest_means(s, rest: str) -> None:
         H += ww.sum() * np.outer(d, d)
     dfh, dfe = len(levels) - 1, N - len(levels)
     stats = T.mv_statistics(T.eig_ratio(E, H), k, dfh, dfe)
-    out.write(f"\nTest of equality of means across the groups of {by}\n\n", "text")
-    out.write(f"{'':>26}{'Statistic':>10}{'F(df1,':>9}{'df2)':>9}{'=':>3}{'F':>9}{'Prob>F':>9}\n", "text")
+    out.write(f"\nTest for equality of {len(levels)} group means, assuming homogeneity\n\n", "text")
+    out.write(f"{'':>28}| Statistic   F(df1,     df2)   =  F      Prob>F\n", "text")
+    out.write(f"{'':>5}{'-' * 23}+{'-' * 47}\n", "text")
     nm = {"W": "Wilks' lambda", "P": "Pillai's trace", "L": "Lawley-Hotelling trace", "R": "Roy's largest root"}
     for r_ in stats:
-        out.write(f"{nm[r_['name']]:>25} {r_['stat']:>9.4f}{r_['df1']:>9.1f}{r_['df2']:>9.1f}   {r_['F']:>9.4f}{_fp(r_['p']):>9} {r_['flag']}\n", "text")
+        out.write(f"{nm[r_['name']]:>27} |{r_['stat']:>10.4f}{r_['df1']:>8.1f}{r_['df2']:>10.1f}{r_['F']:>10.2f}"
+                  f"{r_['p']:>9.4f} {r_['flag']}\n", "text")
+    out.write(f"{'':>5}{'-' * 71}\n{'':>28}e = exact, a = approximate, u = upper bound on F\n", "text")
     s.r = {"p_F": stats[0]["p"], "F": stats[0]["F"], "df_r": stats[0]["df2"], "df_m": stats[0]["df1"]}
 
 
@@ -582,16 +629,20 @@ def _mvtest_cov(s, rest: str) -> None:
             Ss.append(S_)
             ns.append(sw)
         r = T.box_m(Ss, ns)
-        _chi_lines(out, f"Test of equality of covariance matrices across {len(levels)} samples", r["chi2"], r["df"], r["p"])
-        s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
+        out.write(f"\nTest of equality of covariance matrices across {len(levels)} samples\n\n", "text")
+        out.write(f"{'Modified LR chi2 =':>24}{r['M']:>10.5f}\n", "text")
+        out.write(f"{'Box F(' + gnum(r['df']) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.2f}"
+                  f"{'Prob > F =':>16}{r['p_F']:>8.4f}\n", "text")
+        out.write(f"{'Box chi2(' + gnum(r['df']) + ') =':>24}{r['chi2']:>10.2f}{'Prob > chi2 =':>16}{r['p']:>8.4f}\n", "text")
+        s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"], "F": r["F"], "df_r": r["df2"], "p_F": r["p_F"]}
         return
     mean, S, R, n = mv.weighted_moments(X, w)
     if o.get("spherical"):
         r = T.lr_spherical(S, n)
-        _chi_lines(out, "Test that the covariance matrix is spherical", r["chi2"], r["df"], r["p"])
+        _chi_lines(out, "Test that covariance matrix is spherical", "Adjusted LR chi2", r["chi2"], r["df"], r["p"])
     else:
         r = T.lr_diagonal(R, n)
-        _chi_lines(out, "Test that the covariance matrix is diagonal", r["chi2"], r["df"], r["p"])
+        _chi_lines(out, "Test that covariance matrix is diagonal", "Adjusted LR chi2", r["chi2"], r["df"], r["p"])
     s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
 
 
@@ -613,11 +664,16 @@ def _mvtest_corr(s, rest: str) -> None:
             Rs.append(R_)
             ns.append(sw)
         r = T.lr_equal_correlations(Rs, ns)
-        _chi_lines(out, f"Test of equality of correlation matrices across {len(levels)} samples", r["chi2"], r["df"], r["p"])
+        _chi_lines(out, f"Test of equality of correlation matrices across {len(levels)} samples", "chi2", r["chi2"], r["df"], r["p"])
     else:
         mean, S, R, n = mv.weighted_moments(X, w)
-        r = T.lr_diagonal(R, n)
-        _chi_lines(out, "Test that all correlations are zero", r["chi2"], r["df"], r["p"])
+        if o.get("zero"):
+            r = T.lr_diagonal(R, n)
+            _chi_lines(out, "Test that all correlations are zero", "chi2", r["chi2"], r["df"], r["p"])      # VERIFY
+        else:
+            r = T.lawley(R, n)
+            _chi_lines(out, "Test that correlation matrix is compound symmetric (all correlations equal)",
+                       "Lawley chi2", r["chi2"], r["df"], r["p"])
     s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
 
 
@@ -628,22 +684,30 @@ def _mvtest_norm(s, rest: str) -> None:
     for opt in ("univariate", "bivariate", "by"):
         if o.get(opt):
             raise StataError(198, f"option {opt} is not available yet in OpenDTA")
-    want = str(o.get("stats", "mardia hz")).split() if isinstance(o.get("stats"), str) else ["mardia", "hz"]
+    want = str(o.get("stats", "dhansen")).split() if isinstance(o.get("stats"), str) else ["dhansen"]
     if want == ["all"]:
-        want = ["mardia", "hz"]
-    if any(w_.startswith("dh") or w_.startswith("doornik") for w_ in want):
-        raise StataError(198, "stats(dhansen) is not available yet in OpenDTA")
+        want = ["dhansen", "skewness", "kurtosis", "hzirkler"]
+    for w_ in want:
+        if not any(w_ == n_[:len(w_)] for n_ in ("dhansen", "skewness", "kurtosis", "hzirkler", "mardia")) or len(w_) < 2:
+            raise StataError(198, f"stats({w_}) invalid")
     X, w, wtype, mask = sample(s, p, names, ("fweight",))
     out = s.output
     out.write("\nTest for multivariate normality\n\n", "text")
     sres = {}
-    if any(x.startswith("mar") for x in want):
+    mat = {}
+    if any("dhansen".startswith(x) for x in want):
+        d = T.doornik_hansen(X)
+        out.write(f"{'Doornik-Hansen':>18}{'':>19}chi2({gnum(d['df'])}) = {d['chi2']:>8.3f}   Prob>chi2 = {d['p']:>7.4f}\n", "text")
+        sres.update({"chi2_dh": d["chi2"], "df_dh": d["df"], "p_dh": d["p"]})
+        mat["U_dh"] = matrix(d["U"], names, ["skewness", "kurtosis", "z1", "z2"])     # VERIFY: column contents
+    if any(x in ("mardia", "skewness", "kurtosis") or "skewness".startswith(x) or "kurtosis".startswith(x) for x in want):
         m = T.mardia(X)
-        out.write(f"{'Mardia mSkewness =':>25}{m['b1']:>12.6f}   chi2({gnum(m['df_skew'])}) = {m['chi2_skew']:>9.3f}   Prob>chi2 = {m['p_skew']:.4f}\n", "text")
-        out.write(f"{'Mardia mKurtosis =':>25}{m['b2']:>12.6f}   chi2(1) = {m['z_kurt'] ** 2:>11.3f}   Prob>chi2 = {m['p_kurt']:.4f}\n", "text")
+        out.write(f"{'Mardia mSkewness =':>25}{m['b1']:>12.6f}   chi2({gnum(m['df_skew'])}) = {m['chi2_skew']:>9.3f}   Prob>chi2 = {m['p_skew']:.4f}\n", "text")   # VERIFY
+        out.write(f"{'Mardia mKurtosis =':>25}{m['b2']:>12.6f}   chi2(1) = {m['z_kurt'] ** 2:>11.3f}   Prob>chi2 = {m['p_kurt']:.4f}\n", "text")   # VERIFY
         sres.update({"p_skew": m["p_skew"], "p_kurt": m["p_kurt"]})
-    if any(x.startswith("hz") or x.startswith("henze") for x in want):
+    if any("hzirkler".startswith(x) for x in want):
         h = T.henze_zirkler(X)
-        out.write(f"{'Henze-Zirkler =':>25}{h['hz']:>12.6f}   chi2(1) = {h['z'] ** 2:>11.3f}   Prob>chi2 = {h['p']:.4f}\n", "text")
+        out.write(f"{'Henze-Zirkler =':>25}{h['hz']:>12.6f}   chi2(1) = {h['z'] ** 2:>11.3f}   Prob>chi2 = {h['p']:.4f}\n", "text")   # VERIFY
         sres["p_hz"] = h["p"]
+    sres.update(mat)
     s.r = sres

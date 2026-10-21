@@ -106,13 +106,12 @@ def factor_pf(R: np.ndarray, k: int | None, mineigen: float = 0.0, psi0: np.ndar
     return {"L": L, "ev": ev, "psi": 1.0 - (L ** 2).sum(1), "trace": float(np.trace(Rr)), "iter": 0}
 
 
-def factor_ipf(R: np.ndarray, k: int | None, mineigen: float = 0.0, tol: float = 1e-6,
+def factor_ipf(R: np.ndarray, k: int | None, mineigen: float = 0.0, tol: float = 1e-4,
                maxiter: int = 1000, heywood: bool = False) -> dict:
-    """Iterated principal factors: the communalities are updated from the loadings until they
-    stop changing (the maximum change is below `tol`)."""
+    """Iterated principal factors: the communalities are updated from the loadings until the
+    largest change is below `tol`; the solution is the one of the last iteration (VERIFY)."""
     p = R.shape[0]
     h = smc(R)
-    L = None
     for it in range(1, maxiter + 1):
         Rr = R.copy()
         Rr[np.diag_indices(p)] = h
@@ -124,11 +123,8 @@ def factor_ipf(R: np.ndarray, k: int | None, mineigen: float = 0.0, tol: float =
         h = hn
         if done:
             break
-    Rr = R.copy()
-    Rr[np.diag_indices(p)] = h
-    L, ev, _ = _loadings_from_reduced(Rr, k, mineigen)
     L = flip_columns(L)
-    return {"L": L, "ev": ev, "psi": 1.0 - (L ** 2).sum(1), "trace": float(np.trace(Rr)), "iter": it}
+    return {"L": L, "ev": ev, "psi": 1.0 - h, "trace": float(np.trace(Rr)), "iter": it}
 
 
 def factor_pcf(R: np.ndarray, k: int | None, mineigen: float = 1.0) -> dict:
@@ -187,26 +183,27 @@ def factor_ml(R: np.ndarray, k: int, heywood: bool = False, tol: float = 1e-6, m
         return np.diag(Si @ (S - R) @ Si)
 
     lo = floor if not heywood else 1e-8
+    history = [f(psi0)]
     res = so.minimize(f, psi0, jac=g, method="L-BFGS-B", bounds=[(lo, 1.0)] * p,
-                      options={"maxiter": maxiter, "ftol": 1e-14, "gtol": 1e-9})
+                      callback=lambda x: history.append(f(x)), options={"maxiter": maxiter, "ftol": 1e-14, "gtol": 1e-9})
     psi = res.x
     L, th = _ml_loadings(R, psi, k)
     L = flip_columns(L)
     # factor eigenvalues of the scaled reduced matrix, as reported by Stata for ml
-    return {"L": L, "psi": psi, "ev": th, "F": ml_discrepancy(R, L, psi), "iter": int(res.nit),
+    return {"L": L, "psi": psi, "ev": th, "F": ml_discrepancy(R, L, psi), "iter": int(res.nit), "history": history,
             "heywood": bool(np.any(psi <= floor * (1 + 1e-6)))}
 
 
 def lr_independence(R: np.ndarray, n: float) -> tuple[float, int]:
-    """LR test of independence vs saturated: -(n - 1 - (2p+5)/6) ln|R| on p(p-1)/2 df."""
+    """LR test of independence vs saturated: -(n - (2p+5)/6) ln|R| on p(p-1)/2 df."""
     p = R.shape[0]
     sign, ld = np.linalg.slogdet(R)
-    return float(-(n - 1.0 - (2 * p + 5) / 6.0) * ld), p * (p - 1) // 2
+    return float(-(n - (2 * p + 5) / 6.0) * ld), p * (p - 1) // 2
 
 
 def lr_factors(F: float, n: float, p: int, k: int) -> tuple[float, int]:
     """LR test of k factors vs saturated (Bartlett's correction) and its degrees of freedom."""
-    chi2 = (n - 1.0 - (2 * p + 5) / 6.0 - 2.0 * k / 3.0) * F
+    chi2 = (n - (2 * p + 5) / 6.0 - 2.0 * k / 3.0) * F
     df = ((p - k) ** 2 - (p + k)) // 2
     return float(chi2), int(df)
 
@@ -239,28 +236,47 @@ def anti_image(R: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 # rotation
 # ---------------------------------------------------------------------------
 
-def orthomax(A: np.ndarray, gamma: float, normalize: bool = False, tol: float = 1e-8,
+def orthomax(A: np.ndarray, gamma: float, normalize: bool = False, eps: float = 1e-6,
              maxiter: int = 1000) -> tuple[np.ndarray, np.ndarray, int]:
     """Orthogonal rotation of the loadings A (p x k) by the orthomax family: gamma = 1 varimax,
-    0 quartimax, k/2 equamax, p(k-1)/(p+k-2) parsimax. Returns (rotated loadings, rotation
+    0 quartimax, k/2 equamax, p(k-1)/(p+k-2) parsimax. Gradient projection (Bernaards and
+    Jennrich, 2005) stopped when the norm of the projected gradient is below eps, so that the
+    solution is the one the manual's algorithm reaches. Returns (rotated loadings, rotation
     matrix T with rotated = A T, iterations)."""
     p, k = A.shape
     if normalize:
         h = np.sqrt((A ** 2).sum(1))
         h[h == 0] = 1.0
         A = A / h[:, None]
+
+    def crit(L):
+        Q = L ** 3 - (gamma / p) * L * (L ** 2).sum(0)
+        return -float(((L ** 4).sum() - (gamma / p) * ((L ** 2).sum(0) ** 2).sum()) / 4.0), -Q
+
+    # VERIFY: the criterion scale that makes the stopping point agree with the reference log (varimax
+    # stops one iteration after quartimax at the same eps)
+    scale = 2.0 * (1.0 + gamma)
     T = np.eye(k)
-    d = 0.0
+    f, Gq = crit(A @ T)
+    G = A.T @ Gq
+    al = 1.0
     it = 0
     for it in range(1, maxiter + 1):
-        L = A @ T
-        B = A.T @ (L ** 3 - (gamma / p) * L @ np.diag((L ** 2).sum(0)))
-        U, S, Vt = np.linalg.svd(B)
-        T = U @ Vt
-        dn = float(S.sum())
-        if dn < d * (1 + tol):
+        M = T.T @ G
+        Gp = G - T @ ((M + M.T) / 2.0)
+        s = float(np.linalg.norm(Gp))
+        if s * scale < eps:
             break
-        d = dn
+        al *= 2.0
+        for _ in range(11):
+            U, _, Vt = np.linalg.svd(T - al * Gp)
+            Tt = U @ Vt
+            ft, Gqt = crit(A @ Tt)
+            if ft < f - 0.5 * s * s * al:
+                break
+            al /= 2.0
+        T, f = Tt, ft
+        G = A.T @ Gqt
     L = A @ T
     if normalize:
         L = L * h[:, None]
@@ -295,7 +311,7 @@ def oblimin(A: np.ndarray, gamma: float = 0.0, normalize: bool = False, eps: flo
     for it in range(1, maxiter + 1):
         Gp = G - T @ np.diag((T * G).sum(0))
         s = float(np.linalg.norm(Gp))
-        if s < eps:
+        if 2.0 * s < eps:                       # VERIFY: criterion scale, as in orthomax
             break
         al *= 2.0
         for _ in range(11):

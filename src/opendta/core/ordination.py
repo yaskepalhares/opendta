@@ -85,6 +85,7 @@ def mca_fit(codes: list[np.ndarray], sizes: list[int]) -> dict:
         Z[np.arange(n), off + codes[q]] = 1.0
         off += sizes[q]
     fit = ca_fit(Z)
+    _fix_signs(fit["B"], fit["A"])           # the first nonzero category coordinate of every dimension is positive
     lam = fit["inertia"]
     J = sum(sizes)
     burt_total = float(np.sum(lam ** 2))
@@ -92,6 +93,20 @@ def mca_fit(codes: list[np.ndarray], sizes: list[int]) -> dict:
     adj = np.where(keep, (Q / (Q - 1.0) * (lam - 1.0 / Q)) ** 2, 0.0)
     fit.update({"Q": Q, "J": J, "adjusted": adj, "adj_total": Q / (Q - 1.0) * (burt_total - (J - Q) / Q ** 2)})
     return fit
+
+
+def mca_point_stats(fit: dict, dims: int) -> dict:
+    """Statistics of the categories of an MCA by the Burt method with adjusted inertias: the
+    inertia of a category is that of the Burt table minus its share of the diagonal blocks,
+    scaled by q / (q - 1); the squared correlations use the adjusted principal inertias."""
+    Q, c, B, lam, adj = fit["Q"], fit["c"], fit["B"], fit["inertia"], fit["adjusted"]
+    burt = c * (B ** 2 * (lam ** 2)[None, :]).sum(1)
+    D = Q / (Q - 1.0) * (burt - (1.0 / Q ** 2 - c / Q))
+    part = c[:, None] * B ** 2
+    with np.errstate(invalid="ignore", divide="ignore"):
+        sq = np.where(D[:, None] > 0, part * adj[None, :] / D[:, None], 0.0)
+    return {"mass": c, "inertia": D / D.sum(), "quality": sq[:, :dims].sum(1), "sqcorr": sq[:, :dims],
+            "contrib": part[:, :dims]}
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +140,11 @@ def stress1(D: np.ndarray, Y: np.ndarray) -> float:
     return float(np.sqrt(((D[iu] - d[iu]) ** 2).sum() / (D[iu] ** 2).sum()))
 
 
-def mds_modern(D: np.ndarray, Y0: np.ndarray, maxiter: int = 1000, tol: float = 1e-10) -> tuple[np.ndarray, int]:
+def mds_modern(D: np.ndarray, Y0: np.ndarray, maxiter: int = 1000, tol: float = 1e-10,
+               trace: list | None = None) -> tuple[np.ndarray, int]:
     """Metric modern scaling by SMACOF majorization from the start configuration Y0, minimizing
-    the raw stress. Returns the configuration (centered) and the iterations used."""
+    the raw stress. Returns the configuration (centered) and the iterations used; `trace`, when
+    given, receives the stress-1 after each iteration."""
     n = D.shape[0]
     Y = Y0 - Y0.mean(0)
     prev = np.inf
@@ -140,6 +157,8 @@ def mds_modern(D: np.ndarray, Y0: np.ndarray, maxiter: int = 1000, tol: float = 
         np.fill_diagonal(Bm, -Bm.sum(1))
         Y = Bm @ Y / n
         s = float(np.sum(np.triu((D - d) ** 2, 1)))
+        if trace is not None:
+            trace.append(stress1(D, Y))
         if abs(prev - s) < tol * max(prev, 1e-300):
             break
         prev = s
@@ -161,7 +180,12 @@ def procrustes_orthogonal(Y: np.ndarray, X: np.ndarray, scale: bool = True) -> d
     fitted = c * Xc @ T + my
     rss = float(((Y - fitted) ** 2).sum())
     ss = float((Yc ** 2).sum())
-    return {"T": T, "c": c, "trans": my - c * mx @ T, "fitted": fitted, "rss": rss, "ss": ss}
+    n, k = Y.shape
+    ss_i, rss_i = (Yc ** 2).sum(0), ((Y - fitted) ** 2).sum(0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr_i = np.array([np.corrcoef(Y[:, j], fitted[:, j])[0, 1] for j in range(k)])
+    return {"T": T, "c": c, "trans": my - c * mx @ T, "fitted": fitted, "rss": rss, "ss": ss,
+            "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
 
 
 # ---------------------------------------------------------------------------

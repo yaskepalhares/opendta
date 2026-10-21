@@ -255,7 +255,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Cluster analysis: `cluster` (`kmeans`, `kmedians`, the seven hierarchical linkages, `generate`, `dendrogram`, `stop` with `calinski` and `duda`, `list`, `dir`, `drop`, `rename`, `notes`) and `matrix dissimilarity`
 - [x] Discriminant analysis: `discrim` (`lda`, `qda`, `knn`, `logistic`) and `candisc`, with `estat` (`classtable`, `errorrate`, `list`, `grdistances`, `covariance`) and `predict`
 - [x] Correspondence analysis and scaling: `ca`, `mca`, `mds` and `mdsmat` (classical and modern), orthogonal `procrustes` and `biplot`, with `estat` and `predict` where they apply
-- Checked against the Stata 14 log: case `1906` has not been run in Stata yet
+- Checked against the Stata 14 log: case `1906` matches except for the differences in `compat/known_differences.txt` (the iteration paths of `factor, ml`, `discrim logistic` and `mds, method(modern)`, and the maximum-likelihood factor numbers that follow from where Stata's `ml` stops)
 
 ## Distribution and documentation
 

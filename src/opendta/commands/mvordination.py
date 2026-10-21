@@ -60,41 +60,82 @@ def _dims(o: dict, available: int, default: int = 2) -> int:
 # points tables shared by ca and mca
 # ---------------------------------------------------------------------------
 
-def _point_table(out, title: str, labs: list[str], st: dict, C: np.ndarray, f: int) -> None:
+_PAD = " " * 4
+
+
+def _center(text: str, width: int) -> str:
+    left = (width - len(text)) // 2
+    return " " * left + text + " " * (width - len(text) - left)
+
+
+def _point_table(out, title: str, sections: list, labs: list[str], st: dict, C: np.ndarray, f: int) -> None:
     """Mass, quality and inertia share of every category and, for each retained dimension, its
-    coordinate, squared correlation and contribution (VERIFY: layout)."""
+    coordinate, squared correlation and contribution. `sections` lists (variable, first, last + 1)
+    of the categories that belong together."""
     out.write(f"\n{title}\n\n", "text")
-    out.write(f"{'':>15} |{'overall':^30}|" + "|".join(f"{'dimension_' + str(j + 1):^30}" for j in range(f)) + "|\n", "text")
-    out.write(f"{'Categories':>15} |{'mass':>9}{'quality':>10}{'%inert':>10} |"
-              + " |".join(f"{'coord':>9}{'sqcorr':>10}{'contrib':>10}" for _ in range(f)) + " |\n", "text")
-    out.write("-" * 16 + "+" + "-" * 30 + ("+" + "-" * 30) * f + "\n", "text")
-    for i, lab in enumerate(labs):
-        line = f"{lab[:15]:>15} |{st['mass'][i]:>9.3f}{st['quality'][i]:>10.3f}{st['inertia'][i]:>10.3f} |"
-        line += " |".join(f"{C[i, j]:>9.3f}{st['sqcorr'][i, j]:>10.3f}{st['contrib'][i, j]:>10.3f}" for j in range(f)) + " |"
-        out.write(line + "\n", "text")
+    out.write(f"{'':>17}|{_center('overall', 27)}|" + "|".join(_center(f"dimension_{j + 1}", 27) for j in range(f)) + "\n", "text")
+    cells = lambda *h: "".join(f"{x:>8} " for x in h)
+    out.write(f"{'Categories':>16} |{cells('mass', 'quality', '%inert')}|"
+              + "|".join(cells("coord", "sqcorr", "contrib") for _ in range(f)) + "\n", "text")
+    rule = f"{_PAD}{'-' * 13}+{'-' * 27}" + ("+" + "-" * 27) * f
+    out.write(rule + "\n", "text")
+    num = lambda *v: "".join(f"{x:>8.3f} " for x in v)
+    for k_, (var, lo, hi) in enumerate(sections):
+        if k_:
+            out.write(rule + "\n", "text")
+        out.write(f"{_PAD}{var[:12]:<12} |{'':>27}" + f"|{'':>27}" * f + "\n", "text")
+        for i in range(lo, hi):
+            out.write(f"{labs[i][:15]:>16} |{num(st['mass'][i], st['quality'][i], st['inertia'][i])}|"
+                      + "|".join(num(C[i, j], st['sqcorr'][i, j], st['contrib'][i, j]) for j in range(f)) + "\n", "text")
+    out.write(f"{_PAD}{'-' * (13 + 1 + 27 * (f + 1) + f)}\n", "text")
 
 
-def _coord_table(out, title: str, labs: list[str], C: np.ndarray, f: int) -> None:
-    out.write(f"\n{title}\n\n{'Categories':>15} |" + "".join(f"{'dim ' + str(j + 1):>10}" for j in range(f)) + "\n", "text")
-    out.write("-" * 16 + "+" + "-" * (10 * f + 1) + "\n", "text")
-    for i, lab in enumerate(labs):
-        out.write(f"{lab[:15]:>15} |" + "".join(f"{C[i, j]:>10.4f}" for j in range(f)) + "\n", "text")
+def _matlist(out, title: str, corner: str, cols: list[str], rows: list[str], M_, fmt, *, lower: bool = False,
+             bottom: bool = True) -> None:
+    """Matrix with a stub of 12 characters and cells of 10 followed by a space (estat tables)."""
+    out.write(f"\n{title}\n\n{_PAD}{corner:>12} |" + "".join(f"{c:>10} " for c in cols) + "\n", "text")
+    out.write(f"{_PAD}{'-' * 13}+{'-' * (11 * len(cols))}\n", "text")
+    for i, r_ in enumerate(rows):
+        m = i + 1 if lower else len(cols)
+        out.write(f"{_PAD}{r_[:12]:>12} |" + "".join(f"{fmt(M_[i, j]):>10} " for j in range(m)) + "\n", "text")
+    if bottom:
+        out.write(f"{_PAD}{'-' * (13 + 1 + 11 * len(cols))}\n", "text")
 
 
 def _estat_table(s, est, rest):
     ctx = est.extra["ord"]
-    for title, labs, st, C in ctx["tables"]:
-        _point_table(s.output, title, labs, st, C, ctx["f"])
+    fit, f = ctx["fit"], ctx["f"]
+    P = np.outer(fit["r"], fit["c"]) * (1.0 + (fit["A"][:, :f] * fit["sv"][:f]) @ fit["B"][:, :f].T)
+    _matlist(s.output, f"Approximation for dim = {f} (normalized to overall sum = 1)", "",
+             ctx["labels"][1], ctx["labels"][0], P, lambda x: f"{x:.4f}")
     s.output.write("\n", "text")
 
 
 def _estat_coordinates(s, est, rest):
     ctx = est.extra["ord"]
-    for title, labs, st, C in ctx["tables"]:
-        _coord_table(s.output, "Coordinates in " + title.split(" in ", 1)[-1], labs, C, ctx["f"])
-    s.output.write("\n", "text")
-    s.r = {f"{k}": matrix(C, labs, [f"dim_{j + 1}" for j in range(ctx["f"])])
-           for k, (_, labs, _, C) in zip(ctx["keys"], ctx["tables"])}
+    out = s.output
+    f = ctx["f"]
+    cols = [f"dim{j + 1}" for j in range(f)]
+    if ctx["cmd"] == "ca":
+        for side, var, labs, C in zip(("row", "column"), ctx["vars"], ctx["labels"], ctx["coords"]):
+            _matlist(out, f"Coordinates in {side} space in {ctx['norm']} normalization", var, cols, labs, C, lambda x: f"{x:.4f}")
+        s.r = {"coord_row": matrix(ctx["coords"][0], ctx["labels"][0], cols), "coord_col": matrix(ctx["coords"][1], ctx["labels"][1], cols)}
+    else:
+        C = ctx["coords"]
+        w = 14
+        out.write(f"\nColumn {ctx['norm']} coordinates\n\n", "text")
+        out.write(f"{_PAD}+{'-' * (w + 1 + 11 * f)}+\n", "text")
+        out.write(f"{_PAD}|{'Categories':>13} |" + "".join(f"{c:>10} " for c in cols) + "|\n", "text")
+        out.write(f"{_PAD}|{'-' * w}+{'-' * (11 * f)}|\n", "text")
+        for k_, (var, lo, hi) in enumerate(ctx["sections"]):
+            if k_:
+                out.write(f"{_PAD}|{'-' * w}+{'-' * (11 * f)}|\n", "text")
+            out.write(f"{_PAD}|{var[:w]:<{w}}|{'':>{11 * f}}|\n", "text")
+            for i in range(lo, hi):
+                out.write(f"{_PAD}|{ctx['labels'][i][:13]:>13} |" + "".join(f"{gnum(C[i, j]):>10} " for j in range(f)) + "|\n", "text")
+        out.write(f"{_PAD}+{'-' * (w + 1 + 11 * f)}+\n", "text")
+        s.r = {"coord": matrix(C, ctx["labels"], cols)}
+    out.write("\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -125,37 +166,54 @@ def cmd_ca(s: "Session", args: str) -> None:
     n, total = fit["n"], fit["total"]
     df = (R - 1) * (Cn - 1)
     chi2 = n * total
+    nd = len(fit["sv"])
+    expl = 100.0 * fit["inertia"][:f].sum() / total
     out = s.output
-    _header(out, "Correspondence analysis", [
-        ("", _right("Number of obs", gnum(n, "%10.0g"))), ("", _right(f"Pearson chi2({df})", f"{chi2:.2f}")),
-        ("", _right("Prob > chi2", f"{chi2_p(chi2, df):.4f}")), ("", _right("Total inertia", f"{total:.4f}"))])
-    out.write(f"\n{R:>12} active rows{'':>25}{Cn:>6} active columns\n{0:>12} supplementary rows{'':>18}{0:>6} supplementary columns\n"
-              f"{f:>12} dimensions\n", "text")                                            # VERIFY
-    out.write(f"\n{'':>14}{'singular':>10}{'principal':>12}{'':>9}{'':>9}{'cumulative':>12}\n"
-              f"{'Dimension':>14}{'value':>10}{'inertia':>12}{'chi2':>9}{'percent':>9}{'percent':>12}\n", "text")
-    rule = "  " + "-" * 66
+    blk = lambda lab, val: f"{lab:<19}={val:>11}"
+    out.write(f"\n{'Correspondence analysis':<46}{blk('Number of obs', gnum(n, '%10.0g'))}\n", "text")
+    out.write(f"{'':<46}{blk(f'Pearson chi2({df})', f'{chi2:.2f}')}\n{'':<46}{blk('Prob > chi2', f'{chi2_p(chi2, df):.4f}')}\n", "text")
+    out.write(f"{'':<46}{blk('Total inertia', f'{total:.4f}')}\n", "text")
+    out.write(f"{f'{R} active rows':<46}{blk('Number of dim.', str(f))}\n{f'{Cn} active columns':<46}{blk('Expl. inertia (%)', f'{expl:.2f}')}\n".replace("\n    ", "\n    ").replace(f"\n{R} active", f"\n{R} active"), "text") if False else None
+    out.write(f"{f'    {R} active rows':<46}{blk('Number of dim.', str(f))}\n", "text")
+    out.write(f"{f'    {Cn} active columns':<46}{blk('Expl. inertia (%)', f'{expl:.2f}')}\n", "text")
+    out.write(f"\n{'':>16}|   singular    principal                             cumul\n", "text")
+    out.write(f"{'Dimension':>15} |    value       inertia           chi2    percent   percent\n", "text")
+    rule = f"{_PAD}{'-' * 12}+{'-' * 60}"
     out.write(rule + "\n", "text")
     cum = 0.0
-    for j in range(len(fit["sv"])):
-        pct = fit["inertia"][j] / total
+    for j in range(nd):
+        pct = 100.0 * fit["inertia"][j] / total
         cum += pct
-        out.write(f"{'dim ' + str(j + 1):>14}{fit['sv'][j]:>10.4f}{fit['inertia'][j]:>12.4f}{n * fit['inertia'][j]:>9.2f}"
-                  f"{100 * pct:>9.2f}{100 * cum:>12.2f}\n", "text")
-    out.write(f"{rule}\n{'total':>14}{'':>10}{total:>12.4f}{chi2:>9.2f}{100.0:>9.2f}\n", "text")
-    tables = [(f"Statistics for row categories in {norm} normalization", [str(x) for x in labels[0]], rs, Rc[:, :f]),
-              (f"Statistics for column categories in {norm} normalization", [str(x) for x in labels[1]], cs, Cc[:, :f])]
-    for title, labs, st, C in tables:
-        _point_table(out, title, labs, st, C, f)
+        out.write(f"{'dim ' + str(j + 1):>15} |{gnum(fit['sv'][j]):>11}{gnum(fit['inertia'][j]):>12}{n * fit['inertia'][j]:>15.2f}"
+                  f"{pct:>11.2f}{cum:>10.2f}\n", "text")
+    out.write(f"{rule}\n{'total':>15} |{'':>11}{gnum(total):>12}{chi2:>15.2f}{'100':>8}\n", "text")
+    labs = [str(x) for x in labels[0]] + [str(x) for x in labels[1]]
+    st = {k: np.concatenate([rs[k], cs[k]]) for k in ("mass", "inertia", "quality", "sqcorr", "contrib")}
+    C = np.vstack([Rc[:, :f], Cc[:, :f]])
+    _point_table(out, f"Statistics for row and column categories in {norm} normalization",
+                 [(names[0], 0, R), (names[1], R, R + Cn)], labs, st, C, f)
     out.write("\n", "text")
-    ctx = {"tables": tables, "f": f, "keys": ["row", "col"]}
-    scalars = [("N", n), ("f", f), ("inertia", total), ("pchi2", chi2), ("df", df)]
-    macros = [("cmdline", "ca " + args.strip()), ("cmd", "ca"), ("rowvar", names[0]), ("colvar", names[1]),
-              ("normalize", norm), ("title", "Correspondence analysis"), ("estat_cmd", "ca_estat"), ("properties", "nob noV"),
-              ("wtype", wtype)]
-    mats = [("sv", matrix(fit["sv"].reshape(1, -1), ["sv"], [f"dim{j + 1}" for j in range(len(fit["sv"]))])),
-            ("Ev", matrix(fit["inertia"].reshape(1, -1), ["Ev"], [f"dim{j + 1}" for j in range(len(fit["sv"]))])),
-            ("rcoord", matrix(Rc[:, :f], labels[0], [f"dim{j + 1}" for j in range(f)])),
-            ("ccoord", matrix(Cc[:, :f], labels[1], [f"dim{j + 1}" for j in range(f)]))]
+    ctx = {"cmd": "ca", "fit": fit, "f": f, "norm": norm, "vars": names, "labels": [[str(x) for x in labels[0]], [str(x) for x in labels[1]]],
+           "coords": [Rc[:, :f], Cc[:, :f]]}
+    scalars = [("N", n), ("inertia", total), ("f", f), ("pinertia", expl / 100.0), ("X2", chi2), ("X2_df", df), ("X2_p", chi2_p(chi2, df))]
+    macros = [("cmdline", "ca " + args.strip()), ("ca_data", "variables"), ("varlist", " ".join(names)), ("cmd", "ca"),
+              ("marginsnotok", "_ALL"), ("estat_cmd", "ca_estat"), ("predict", "ca_p"), ("title", "correspondence analysis"),
+              ("Cname", names[1]), ("Rname", names[0]), ("norm", norm), ("sv_unique", "1"), ("properties", "nob noV eigen")]
+    dn = [f"dim{j + 1}" for j in range(nd)]
+    gs = lambda stt, Cx: np.column_stack([stt["mass"], stt["quality"], stt["inertia"]]
+                                         + [np.column_stack([Cx[:, j], stt["sqcorr"][:, j], stt["contrib"][:, j]]) for j in range(f)])
+    gcols = ["mass", "quality", "inertia"] + [f"{k_}{j + 1}" for j in range(f) for k_ in ("coord", "sqcorr", "contrib")]
+    P = N / n
+    mats = [("Ccoding", matrix(np.arange(1, Cn + 1, dtype=float).reshape(1, -1), ["Ccoding"], [str(x) for x in labels[1]])),
+            ("Rcoding", matrix(np.arange(1, R + 1, dtype=float).reshape(1, -1), ["Rcoding"], [str(x) for x in labels[0]])),
+            ("GSC", matrix(gs(cs, Cc[:, :f]), [str(x) for x in labels[1]], gcols)),
+            ("GSR", matrix(gs(rs, Rc[:, :f]), [str(x) for x in labels[0]], gcols)),
+            ("TC", matrix(fit["B"], [str(x) for x in labels[1]], dn)), ("TR", matrix(fit["A"], [str(x) for x in labels[0]], dn)),
+            ("C", matrix(Cc, [str(x) for x in labels[1]], dn)), ("R", matrix(Rc, [str(x) for x in labels[0]], dn)),
+            ("Sv", matrix(fit["sv"].reshape(1, -1), ["Sv"], dn)),
+            ("c", matrix(fit["c"].reshape(-1, 1), [str(x) for x in labels[1]], ["c"])),
+            ("r", matrix(fit["r"].reshape(-1, 1), [str(x) for x in labels[0]], ["r"])),
+            ("P", matrix(P, [str(x) for x in labels[0]], [str(x) for x in labels[1]]))]       # VERIFY: contents
     post_e(s, "ca", scalars, macros, mats, mask, int(round(n)),
            estat={"table": (3, _estat_table), "coordinates": (5, _estat_coordinates)}, extra={"ord": ctx})
 
@@ -174,53 +232,67 @@ def cmd_mca(s: "Session", args: str) -> None:
     codes, labels, w, wtype, mask = _cat_sample(s, p, names)
     if w is not None:
         raise StataError(101, "weights not allowed")                                      # VERIFY
-    norm = str(o.get("normalize", "adjusted")).strip()
-    if norm not in ("adjusted", "principal"):
+    norm = str(o.get("normalize", "standard")).strip()
+    if norm not in ("standard", "principal"):
         raise StataError(198, "invalid normalize()")                                      # VERIFY
     fit = O.mca_fit(codes, [len(x) for x in labels])
     f = _dims(o, len(fit["sv"]))
     n = len(codes[0])
-    if norm == "adjusted":
-        pin, total = fit["adjusted"], fit["adj_total"]
-        shown = max(int(np.sum(pin > 0)), 1)
-        coord = fit["B"] * np.sqrt(pin)
-    else:
-        pin, total = fit["inertia"], fit["total"]
-        shown = len(pin)
-        coord = fit["B"] * fit["sv"]
-    cats = [f"{nm}:{lb}" for nm, labs in zip(names, labels) for lb in labs]
-    st = O.ca_point_stats(fit["c"], fit["B"], fit["sv"], f)
+    pin, total = fit["adjusted"], fit["adj_total"]
+    shown = max(int(np.sum(pin > 0)), 1)
+    coord = fit["B"] if norm == "standard" else fit["B"] * np.sqrt(pin)          # VERIFY: principal coordinates
+    cats = [lb for labs in labels for lb in labs]
+    bounds = np.cumsum([0] + [len(x) for x in labels])
+    sections = [(nm, int(bounds[i]), int(bounds[i + 1])) for i, nm in enumerate(names)]
+    st = O.mca_point_stats(fit, f)
     out = s.output
-    _header(out, "Multiple correspondence analysis", [
-        ("", _right("Number of obs", gnum(n, "%10.0g"))), ("", _right("Total inertia", f"{total:.4f}")),
-        ("", _right("Number of axes", str(f)))])                                            # VERIFY
-    out.write(f"\nMethod: Burt/{norm} inertias\n", "text")
-    out.write(f"\n{'':>14}{'principal':>12}{'cumul':>10}\n{'Dimension':>14}{'inertia':>12}{'percent':>10}\n", "text")
-    rule = "  " + "-" * 34
+    blk = lambda lab, val: f"{lab:<18}={val:>11}"
+    out.write(f"\n{'Multiple/Joint correspondence analysis':<47}{blk('Number of obs', gnum(n, '%10.0g'))}\n", "text")
+    out.write(f"{'':<47}{blk('Total inertia', gnum(total, '%10.0g'))}\n", "text")
+    out.write(f"{'    Method: Burt/adjusted inertias':<47}{blk('Number of axes', str(f))}\n", "text")
+    out.write(f"\n{'':>16}|   principal               cumul\n{'Dimension':>15} |    inertia     percent   percent\n", "text")
+    rule = f"{_PAD}{'-' * 12}+{'-' * 34}"
     out.write(rule + "\n", "text")
     cum = 0.0
     for j in range(shown):
-        cum += pin[j] / total
-        out.write(f"{'dim ' + str(j + 1):>14}{pin[j]:>12.4f}{100 * cum:>10.2f}\n", "text")
-    out.write(f"{rule}\n{'total':>14}{total:>12.4f}\n", "text")
+        cum += 100.0 * pin[j] / total
+        out.write(f"{'dim ' + str(j + 1):>15} |{gnum(pin[j]):>12}{100.0 * pin[j] / total:>10.2f}{cum:>11.2f}\n", "text")
+    out.write(f"{rule}\n{'Total':>15} |{gnum(total):>12}{100.0:>10.2f}\n", "text")
     title = f"Statistics for column categories in {norm} normalization"
-    _point_table(out, title, cats, st, coord[:, :f], f)
+    _point_table(out, title, sections, cats, st, coord[:, :f], f)
     out.write("\n", "text")
-    ctx = {"tables": [(title, cats, st, coord[:, :f])], "f": f, "keys": ["coord"]}
-    scalars = [("N", n), ("f", f), ("inertia", total), ("k_active", len(names))]
-    macros = [("cmdline", "mca " + args.strip()), ("cmd", "mca"), ("varlist", " ".join(names)), ("normalize", norm),
-              ("title", "Multiple correspondence analysis"), ("estat_cmd", "ca_estat"), ("properties", "nob noV")]
-    mats = [("Ev", matrix(pin[:shown].reshape(1, -1), ["Ev"], [f"dim{j + 1}" for j in range(shown)])),
-            ("coord", matrix(coord[:, :f], cats, [f"dim{j + 1}" for j in range(f)]))]
+    ctx = {"cmd": "mca", "f": f, "norm": norm, "labels": cats, "coords": coord[:, :f], "sections": sections}
+    scalars = [("f", f), ("ev_unique", 1), ("inertia", total), ("adjust", 1), ("N", n)]
+    macros = [("cmdline", "mca " + args.strip()), ("cmd", "mca"), ("marginsnotok", "_ALL"),
+              ("title", "Multiple/Joint correspondence analysis"), ("method", "burt"), ("estat_cmd", "mca_estat"),
+              ("predict", "mca_p"), ("crossed", "0"), ("defs", " / ".join(names)), ("names", " ".join(names)),
+              ("norm", norm), ("properties", "nob noV eigen")]
+    dn = [f"dim{j + 1}" for j in range(f)]
+    J = len(cats)
+    gen = np.column_stack([st["mass"], st["quality"], st["inertia"]]
+                          + [np.column_stack([coord[:, j], st["sqcorr"][:, j], st["contrib"][:, j]]) for j in range(f)])
+    gcols = ["mass", "quality", "inertia"] + [f"{k_}{j + 1}" for j in range(f) for k_ in ("coord", "sqcorr", "contrib")]
+    mats = [(f"Coding{i + 1}", matrix(np.arange(1, len(labels[i]) + 1, dtype=float).reshape(-1, 1), labels[i], ["Coding"]))
+            for i in reversed(range(len(names)))]
+    mats += [("inertia_e", matrix(pin[:shown].reshape(1, -1), ["inertia_e"], [f"dim{j + 1}" for j in range(shown)])),
+             ("Ev", matrix(pin[:shown].reshape(1, -1), ["Ev"], [f"dim{j + 1}" for j in range(shown)])),
+             ("rSCW", matrix(fit["B"][:, :f] * np.sqrt(fit["c"])[:, None], cats, dn)),
+             ("cGS", matrix(gen, cats, gcols)), ("F", matrix(fit["B"][:, :f] * fit["sv"][:f], cats, dn)),
+             ("A", matrix(fit["B"][:, :f], cats, dn)),
+             ("cInertia", matrix((fit["c"] * (fit["B"] * fit["sv"]) .__pow__(2).sum(1)).reshape(-1, 1), cats, ["cInertia"])),
+             ("cDist", matrix(((fit["B"] * fit["sv"]) ** 2).sum(1).reshape(-1, 1), cats, ["cDist"])),
+             ("cMass", matrix(fit["c"].reshape(-1, 1), cats, ["cMass"]))]               # VERIFY: contents
     post_e(s, "mca", scalars, macros, mats, mask, n,
-           estat={"table": (3, _estat_table), "coordinates": (5, _estat_coordinates)}, extra={"ord": ctx})
+           estat={"coordinates": (5, _estat_coordinates)}, extra={"ord": ctx})
 
 
 # ---------------------------------------------------------------------------
 # mds, mdsmat
 # ---------------------------------------------------------------------------
 
-def _mds_run(s: "Session", D: np.ndarray, ids: list[str], o: dict, desc: str, cmdline: str, cmd: str, mask: np.ndarray) -> None:
+def _mds_run(s: "Session", D: np.ndarray, ids: list[str], o: dict, desc: str, cmdline: str, cmd: str, mask: np.ndarray,
+             meta: dict | None = None) -> None:
+    meta = meta or {}
     n = D.shape[0]
     method = str(o.get("method", "classical")).strip()
     if method not in ("classical", "modern"):
@@ -231,43 +303,63 @@ def _mds_run(s: "Session", D: np.ndarray, ids: list[str], o: dict, desc: str, cm
     out = s.output
     ev = cl["ev"]
     Y = cl["Y"]
-    scalars = [("N", n), ("p", dims)]
-    mats = []
     if method == "classical":
-        npos = int(np.sum(ev > 0))
+        npos = int(np.sum(ev > 1e-12 * ev[0]))                           # VERIFY: tolerance
         m1, m2 = O.mardia(ev, dims)
         a, sq = np.abs(ev).sum(), (ev ** 2).sum()
-        out.write(f"\nClassical metric multidimensional scaling\n    dissimilarity: {desc}\n\n", "text")
-        out.write(f"{'Eigenvalues > 0':<45}{_right('Number of obs', gnum(n, '%10.0g'))}\n", "text")
-        out.write(f"{'Retained dimensions = ' + str(dims):<45}\n", "text")
-        out.write(f"\n   {'-' * 70}\n{'':>24}|{'abs(eigenvalue)':>26}{'(eigenvalue)^2':>20}\n"
-                  f"{'Dimension':>24}|{'Eigenvalue':>12}{'Percent':>9}{'Cumul.':>9}{'Percent':>9}{'Cumul.':>9}\n"
-                  f"   {'-' * 21}+{'-' * 48}\n", "text")                                  # VERIFY
+        out.write(f"\nClassical metric multidimensional scaling\n    {desc}\n\n", "text")
+        out.write(f"{'':>45}{'Number of obs':<21}={gnum(n, '%10.0g'):>11}\n", "text")
+        out.write(f"    {'Eigenvalues > 0':<21}={npos:>10}         {'Mardia fit measure 1':<21}={m1:>11.4f}\n", "text")
+        out.write(f"    {'Retained dimensions':<21}={dims:>10}         {'Mardia fit measure 2':<21}={m2:>11.4f}\n", "text")
+        rule = "-" * 74
+        out.write(f"\n    {rule}\n{'':>17}|{'abs(eigenvalue)':>34}{'(eigenvalue)^2':>24}\n"
+                  f"{'Dimension':>15}  |{'Eigenvalue':>12}{'Percent':>13}{'Cumul.':>10}{'Percent':>14}{'Cumul.':>10}\n"
+                  f"    {'-' * 13}+{'-' * 60}\n", "text")                               # VERIFY
         c1 = c2 = 0.0
-        for j in range(dims):
+        for j in range(npos):
+            if j == dims and j > 0:
+                out.write(f"    {'-' * 13}+{'-' * 60}\n", "text")
             c1 += 100 * abs(ev[j]) / a
             c2 += 100 * ev[j] ** 2 / sq
-            out.write(f"{j + 1:>24}|{ev[j]:>12.5g}{100 * abs(ev[j]) / a:>9.2f}{c1:>9.2f}{100 * ev[j] ** 2 / sq:>9.2f}{c2:>9.2f}\n", "text")
-        out.write(f"   {'-' * 70}\n   Mardia fit measure 1 = {m1:.4f}\n   Mardia fit measure 2 = {m2:.4f}\n\n", "text")
-        scalars += [("np", npos), ("trace", float(ev[ev > 0].sum())), ("mardia1", m1), ("mardia2", m2)]
-        mats.append(("Ev", matrix(ev.reshape(1, -1), ["Ev"], [f"c{j + 1}" for j in range(n)])))
+            out.write(f"{j + 1:>15}  |{format(ev[j], '.8g'):>12}{100 * abs(ev[j]) / a:>13.2f}{c1:>10.2f}"
+                      f"{100 * ev[j] ** 2 / sq:>14.2f}{c2:>10.2f}\n", "text")
+        out.write(f"    {rule}\n", "text")
+        scalars = [("mardia2", m2), ("mardia1", m1), ("np", npos), ("p", dims), ("addcons", 0), ("rc", 0), ("N", n)]
+        mats = []
     else:
-        Y, iters = O.mds_modern(D, Y)
+        out.write("(loss(stress) assumed)\n(transform(identity) assumed)\n\n", "text")
+        trace: list[float] = []
+        Y, iters = O.mds_modern(D, Y, trace=trace)
         U, sv, Vt = np.linalg.svd(Y, full_matrices=False)
         Y = Y @ Vt.T
         st = O.stress1(D, Y)
-        out.write(f"\nModern multidimensional scaling\n    dissimilarity: {desc}\n    Loss criterion: stress = raw_stress/norm(D)\n"
+        for k_, v_ in enumerate(trace, 1):
+            out.write(f"Iteration {k_}:   stress = {gnum(v_, '%10.0g'):>10}\n", "text")
+        out.write(f"\nModern multidimensional scaling\n    {desc}\n\n"
+                  f"    Loss criterion: stress = raw_stress/norm(distances)\n"
                   f"    Transformation: identity (no transformation)\n\n", "text")
-        out.write(f"{'':>45}{_right('Number of obs', gnum(n, '%10.0g'))}\n{'':>45}{_right('Dimensions', str(dims))}\n"
-                  f"{'':>45}{_right('Loss criterion', f'{st:.4f}')}\n\n", "text")           # VERIFY
-        scalars += [("stress", st), ("iter", iters)]
+        out.write(f"{'':>49}{'Number of obs':<17}={gnum(n, '%10.0g'):>11}\n{'':>49}{'Dimensions':<17}={dims:>11}\n"
+                  f"{'    Normalization: principal':<49}{'Loss criterion':<17}={st:>11.4f}\n", "text")      # VERIFY
+        scalars = [("stress", st), ("iter", iters), ("p", dims), ("N", n)]
+        mats = []
     cn = [f"dim{j + 1}" for j in range(dims)]
-    mats += [("Y", matrix(Y, ids, cn)), ("D", matrix(D, ids, ids))]
-    macros = [("cmdline", f"{cmd} " + cmdline.strip()), ("cmd", cmd), ("method", method), ("title", f"{method.capitalize()} multidimensional scaling"),
-              ("estat_cmd", "mds_estat"), ("predict", "mds_p"), ("properties", "nob noV")]
+    macros = [("cmdline", f"{cmd} " + cmdline.strip()), ("estat_cmd", "mds_estat"), ("cmd", cmd), ("marginsnotok", "_ALL"),
+              ("predict", "mds_p"), ("dtype", meta.get("dtype", "dissimilarity")), ("dname", meta.get("dname", "")),
+              ("duplicates", "0")]
+    if cmd == "mds":
+        macros += [("idtype", meta.get("idtype", "int")), ("id", meta.get("idname", "")), ("varlist", meta.get("varlist", ""))]
+    macros += [("method", method), ("unique", "1"), ("norm", "principal"),
+               ("properties", "nob noV eigen" if method == "classical" else "nob noV")]
+    if cmd == "mds":
+        mats += [("idcoding", matrix(np.arange(1.0, n + 1).reshape(-1, 1), ids, ["idcoding"])),
+                 ("coding", matrix(np.tile([0.0, 1.0], (len(meta.get("names", [])), 1)), meta.get("names", []), ["shift", "scale"]))]
+    mats += [("D", matrix(D, ids, ids)), ("Y", matrix(Y, ids, cn)),
+             ("linearf", matrix(np.array([[0.0, 1.0]]), ["linearf"], ["c1", "c2"]))]                  # VERIFY
+    if method == "classical":
+        mats.append(("Ev", matrix(ev.reshape(1, -1), ["Ev"], [f"c{j + 1}" for j in range(n)])))
     post_e(s, cmd, scalars, macros, mats, mask, n, estat={"config": (3, _estat_config)},
            predict_multi={"": lambda ss, ee: _mds_predict(ss, ee), "config": lambda ss, ee: _mds_predict(ss, ee)},
-           predict_opts={"config": 3}, extra={"mds": {"Y": Y, "ids": ids, "mask": mask}})
+           predict_opts={"config": 3}, extra={"mds": {"Y": Y, "ids": ids, "mask": mask, "idname": meta.get("idname", "")}})
 
 
 @command("mds", "mds")
@@ -283,8 +375,11 @@ def cmd_mds(s: "Session", args: str) -> None:
         ids = [str(x) if iv.is_string else gnum(x) for x in (iv.raw if iv.is_string else iv.data)[mask]]
     else:
         ids = [str(i + 1) for i in np.flatnonzero(mask)]
-    desc = f"{meas}, computed on {len(names)} variable{'s' if len(names) != 1 else ''}"
-    _mds_run(s, D, ids, o, desc, args, "mds", mask)
+    desc = f"dissimilarity: {meas}, computed on {len(names)} variable{'s' if len(names) != 1 else ''}"
+    meta = {"dname": meas, "varlist": " ".join(names), "names": names, "idname": s.expand_varlist(o["id"])[0] if isinstance(o.get("id"), str) else ""}
+    if isinstance(o.get("id"), str) and iv.is_string:
+        meta["idtype"] = "str"
+    _mds_run(s, D, ids, o, desc, args, "mds", mask, meta)
 
 
 @command("mdsmat", "mdsmat")
@@ -295,18 +390,21 @@ def cmd_mdsmat(s: "Session", args: str) -> None:
     mat = get_matrix(s, p.varlist.strip())
     if mat.rows != mat.cols or not np.allclose(mat.data, mat.data.T):
         raise StataError(505, "matrix not symmetric")
-    _mds_run(s, mat.data, list(mat.colnames), o, "matrix " + p.varlist.strip(), args, "mdsmat", np.zeros(s.data.nobs, dtype=bool))
+    _mds_run(s, mat.data, list(mat.colnames), o, "dissimilarity matrix: " + p.varlist.strip(), args, "mdsmat", np.zeros(s.data.nobs, dtype=bool),
+             {"dname": p.varlist.strip()})
 
 
 def _estat_config(s, est, rest):
     d = est.extra["mds"]
     Y = d["Y"]
+    k = Y.shape[1]
     out = s.output
-    out.write(f"\nConfiguration\n\n{'':>15} |" + "".join(f"{'dim' + str(j + 1):>10}" for j in range(Y.shape[1])) + "\n", "text")
-    out.write("-" * 16 + "+" + "-" * (10 * Y.shape[1] + 1) + "\n", "text")
+    out.write(f"\nConfiguration in {k}-dimensional Euclidean space (principal normalization)\n\n"
+              f"{d['idname'] or 'obs':>9} |" + "".join(f"{'dim' + str(j + 1):>13} " for j in range(k)) + "\n", "text")     # VERIFY
+    out.write(f"    {'-' * 6}+{'-' * (14 * k)}\n", "text")
     for i, idn in enumerate(d["ids"]):
-        out.write(f"{idn[:15]:>15} |" + "".join(f"{Y[i, j]:>10.4f}" for j in range(Y.shape[1])) + "\n", "text")
-    out.write("\n", "text")
+        out.write(f"{idn[:9]:>9} |" + "".join(f"{Y[i, j]:>13.4f} " for j in range(k)) + "\n", "text")
+    out.write(f"    {'-' * (7 + 14 * k)}\n", "text")
 
 
 def _mds_predict(s, est):
@@ -329,6 +427,23 @@ def _mds_predict(s, est):
 # procrustes
 # ---------------------------------------------------------------------------
 
+def _g7(x: float) -> str:
+    """Seven significant digits, no leading zero: how Stata's matrix tables show a number."""
+    if not np.isfinite(x):
+        return "."
+    r = f"{x:.7g}"
+    return r.replace("0.", ".", 1) if r.startswith("0.") else r.replace("-0.", "-.", 1)
+
+
+def _proc_matrix(out, title: str, corner: str, rows: list[str], cols: list[str], M_) -> None:
+    w = 13 + 1 + 11 * len(cols)
+    out.write(f"{title}\n\n    {'-' * w}\n{corner:>16} |" + "".join(f"{c_:>10} " for c_ in cols) + "\n"
+              f"    {'-' * 13}+{'-' * (11 * len(cols))}\n", "text")
+    for i, r_ in enumerate(rows):
+        out.write(f"{r_:>16} |" + "".join(f"{_g7(M_[i, j]):>10} " for j in range(len(cols))) + "\n", "text")
+    out.write(f"    {'-' * w}\n\n", "text")
+
+
 @command("procrustes", "procrustes")
 def cmd_procrustes(s: "Session", args: str) -> None:
     m = re.match(r"\s*\(([^)]*)\)\s*\(([^)]*)\)(.*)$", args, re.S)
@@ -336,7 +451,7 @@ def cmd_procrustes(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     tgt, src = s.expand_varlist(m.group(1)), s.expand_varlist(m.group(2))
     p = parse_standard(m.group(3))
-    o = match_options(p.options, {"transform": 5, "noscale": 3}) if p.options.strip() else {}
+    o = match_options(p.options, {"transform": 5, "norho": 3, "noscale": 3}) if p.options.strip() else {}
     if str(o.get("transform", "orthogonal")).strip() != "orthogonal":
         raise StataError(198, "only transform(orthogonal) is available in OpenDTA")      # VERIFY
     if len(tgt) != len(src):
@@ -347,34 +462,54 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     X, _, _, mask = sample(s, p, tgt + src, allowed=())
     k = len(tgt)
     Yt, Xs = X[:, :k], X[:, k:]
-    r = O.procrustes_orthogonal(Yt, Xs, scale=not o.get("noscale"))
+    r = O.procrustes_orthogonal(Yt, Xs, scale=not o.get("norho"))          # VERIFY: noscale is accepted and ignored
     n = X.shape[0]
     out = s.output
-    _header(out, "Procrustes analysis: orthogonal transformation", [
-        ("", _right("Number of obs", gnum(n, "%10.0g"))), ("", _right("Dilation (c)", f"{r['c']:.4f}"))])   # VERIFY
-    out.write(f"\n    Target: {' '.join(tgt)}\n    Source: {' '.join(src)}\n", "text")
-    out.write(f"\n    Sum of squared differences (rss) = {r['rss']:.6g}\n    Total sum of squares (ss)        = {r['ss']:.6g}\n"
-              f"    Procrustes statistic (rss/ss)    = {r['rss'] / r['ss'] if r['ss'] else float('nan'):.6g}\n", "text")
-    from .mvfactor import _print_matrix
-    _print_matrix(out, "Orthogonal rotation matrix", src, r["T"], tgt)
-    out.write("\n", "text")
-    fitted = r["fitted"]
-    scalars = [("N", n), ("ss", r["ss"]), ("rss", r["rss"]), ("P", r["rss"] / r["ss"] if r["ss"] else SYS),
-               ("rmse", float(np.sqrt(r["rss"] / (n * k)))), ("c", r["c"])]
-    macros = [("cmdline", "procrustes " + args.strip()), ("cmd", "procrustes"), ("transform", "orthogonal"),
-              ("title", "Procrustes analysis"), ("predict", "procrustes_p"), ("properties", "nob noV")]
-    mats = [("A", matrix(r["T"], src, tgt)), ("trans", matrix(r["trans"].reshape(1, -1), ["trans"], tgt))]
+    df_m = k * k - k * (k + 1) // 2 + k + (0 if o.get("norho") else 1)
+    df_r = n * k - df_m
+    P = r["rss"] / r["ss"] if r["ss"] else float("nan")
+    rmse = float(np.sqrt(r["rss"] / df_r)) if df_r > 0 else float("nan")
+    urmse = float(np.sqrt(r["rss"] / (n * k)))
+    lab = " " * 43
 
-    def pred(ss, ee, resid=False):
+    def row(label, val):
+        out.write(f"{lab}{label:<23}={val:>11}\n", "text")
+    out.write(f"{'Procrustes analysis (orthogonal)':<43}{'Number of observations':<23}={n:>11}\n", "text")
+    row("Model df (df_m)", df_m)
+    row("Residual df (df_r)", df_r)
+    row("SS(target)", f"{r['ss']:.4f}")
+    row("RSS(target)", f"{r['rss']:.4f}")
+    row("RMSE = root(RSS/df_r)", f"{rmse:.7g}")
+    row("Procrustes = RSS/SS", f"{P:.4f}")
+    _proc_matrix(out, "Translation c", "", ["_cons"], tgt, r["trans"].reshape(1, -1))
+    _proc_matrix(out, "Rotation & reflection matrix A (orthogonal)", "", src, tgt, r["T"])
+    out.write(f"Dilation factor\n\n{'rho =':>18}{r['c']:>10.4f}\n\n", "text")
+    ddf = df_r / k if k else float("nan")
+    ys = np.vstack([r["ss_i"], r["rss_i"], np.sqrt(r["rss_i"] / ddf), r["rss_i"] / r["ss_i"], r["corr_i"]])
+    _proc_matrix(out, "Fit statistics by target variable", "Statistics", ["SS", "RSS", "RMSE", "Procrustes", "Corr_y_yhat"], tgt, ys)
+    scalars = [("rho", r["c"]), ("N", n), ("ss", r["ss"]), ("rss", r["rss"]), ("P", P), ("rmse", rmse), ("urmse", urmse),
+               ("df_m", df_m), ("df_r", df_r), ("ny", k)]
+    macros = [("cmdline", "procrustes " + args.strip()), ("cmd", "procrustes"), ("marginsnotok", "_ALL"),
+              ("estat_cmd", "procrustes_estat"), ("predict", "procrustes_p"), ("uniqueA", "1"), ("transform", "orthogonal"),
+              ("xlist", " ".join(src)), ("ylist", " ".join(tgt)), ("properties", "nob noV")]
+    mats = [("ystats", matrix(ys, ["SS", "RSS", "RMSE", "Procrustes", "Corr_y_yhat"], tgt)),
+            ("c", matrix(r["trans"].reshape(1, -1), ["c"], tgt)), ("A", matrix(r["T"], src, tgt))]
+
+    def pred(ss, ee, resid=False, note=False):
         ds = ss.data
         X2 = np.column_stack([ds.get(n_).data.astype(float) for n_ in src])
         ok = np.all(X2 < SYS, axis=1)
         F = r["c"] * X2 @ r["T"] + r["trans"]
         if resid:
             F = np.column_stack([ds.get(n_).data.astype(float) for n_ in tgt]) - F
-        return k, (lambda m: [np.where(ok, F[:, j], SYS) for j in range(k)])
+
+        def fn(m):
+            if note:
+                ss.output.write("(fitted assumed)\n", "text")
+            return [np.where(ok, F[:, j], SYS) for j in range(k)]
+        return k, fn
     post_e(s, "procrustes", scalars, macros, mats, mask, n,
-           predict_multi={"": lambda ss, ee: pred(ss, ee), "fitted": lambda ss, ee: pred(ss, ee),
+           predict_multi={"": lambda ss, ee: pred(ss, ee, note=True), "fitted": lambda ss, ee: pred(ss, ee),
                           "residuals": lambda ss, ee: pred(ss, ee, True)}, predict_opts={"fitted": 3})
 
 
@@ -411,6 +546,11 @@ def cmd_biplot(s: "Session", args: str) -> None:
         layers.append(Layer("line", xs, ys, {}, {}, ""))
         layers.append(Layer("scatter", c[:, 0].tolist(), c[:, 1].tolist(), {"mlabel": list(names)}, {}, ""))
     tot = (b["sv"] ** 2).sum()
+    e1, e2 = (b["sv"][pair[0]] ** 2) / tot, (b["sv"][pair[1]] ** 2) / tot
+    s.output.write(f"\nBiplot of {X.shape[0]} observations and {len(names)} variables\n\n"
+                   f"    Explained variance by component {pair[0] + 1}  {e1:.4f}\n"
+                   f"    Explained variance by component {pair[1] + 1}  {e2:.4f}\n"
+                   f"{'Total explained variance':>37}  {e1 + e2:.4f}\n", "text")             # VERIFY
     opts = {"_xtitle": f"Dimension {pair[0] + 1} ({100 * b['sv'][pair[0]] ** 2 / tot:.1f}%)",
             "_ytitle": f"Dimension {pair[1] + 1} ({100 * b['sv'][pair[1]] ** 2 / tot:.1f}%)",
             "title": {"lines": ["Biplot"]}, "legend": {"off": True}}

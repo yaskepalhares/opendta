@@ -83,7 +83,7 @@ def mv_statistics(lam: np.ndarray, p: int, q: float, v: float) -> list[dict]:
     df1 = float(d)
     df2 = v - d + q
     F = l1 * df2 / d
-    out.append({"name": "R", "stat": l1 / (1.0 + l1), "df1": df1, "df2": df2, "F": F,
+    out.append({"name": "R", "stat": l1, "df1": df1, "df2": df2, "F": F,
                 "p": float(st.f.sf(F, df1, df2)) if df2 > 0 else float("nan"), "flag": "e" if s == 1 else "u"})
     return out
 
@@ -122,15 +122,38 @@ def canonical(S11: np.ndarray, S22: np.ndarray, S12: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def box_m(Ss: list[np.ndarray], ns: list[float]) -> dict:
-    """Box's M test of equality of covariance matrices across groups (chi2 approximation)."""
+    """Modified LR statistic (Box's M with n-1 weights) for equality of covariance matrices across
+    groups, with its chi2 and F approximations."""
     g = len(Ss)
     p = Ss[0].shape[0]
     dfs = [n - 1.0 for n in ns]
-    Sp = sum(d * S for d, S in zip(dfs, Ss)) / sum(dfs)
-    M = sum(dfs) * np.linalg.slogdet(Sp)[1] - sum(d * np.linalg.slogdet(S)[1] for d, S in zip(dfs, Ss))
-    c = (sum(1.0 / d for d in dfs) - 1.0 / sum(dfs)) * (2.0 * p * p + 3.0 * p - 1.0) / (6.0 * (p + 1.0) * (g - 1.0))
-    chi2 = float(M * (1.0 - c))
+    tot = sum(dfs)
+    Sp = sum(d * S for d, S in zip(dfs, Ss)) / tot
+    M = tot * np.linalg.slogdet(Sp)[1] - sum(d * np.linalg.slogdet(S)[1] for d, S in zip(dfs, Ss))
+    c1 = (sum(1.0 / d for d in dfs) - 1.0 / tot) * (2.0 * p * p + 3.0 * p - 1.0) / (6.0 * (p + 1.0) * (g - 1.0))
+    c2 = (sum(1.0 / d ** 2 for d in dfs) - 1.0 / tot ** 2) * (p - 1.0) * (p + 2.0) / (6.0 * (g - 1.0))
     df = p * (p + 1) * (g - 1) / 2.0
+    chi2 = float(M * (1.0 - c1))
+    if c2 > c1 * c1:
+        df2 = (df + 2.0) / (c2 - c1 * c1)
+        F = M * (1.0 - c1 - df / df2) / df
+    else:
+        df2 = (df + 2.0) / (c1 * c1 - c2)
+        b = df2 / (1.0 - c1 + 2.0 / df2)
+        F = df2 * M / (df * (b - M))
+    return {"M": float(M), "chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df)),
+            "F": float(F), "df2": float(df2), "p_F": float(st.f.sf(F, df, df2))}
+
+
+def lawley(R: np.ndarray, n: float) -> dict:
+    """Lawley's chi2 test that all correlations are equal (compound symmetry of the correlation matrix)."""
+    p = R.shape[0]
+    iu = np.triu_indices(p, 1)
+    rbar = float(R[iu].mean())
+    rk = (R.sum(1) - 1.0) / (p - 1.0)
+    gam = (p - 1.0) ** 2 * (1.0 - (1.0 - rbar) ** 2) / (p - (p - 2.0) * (1.0 - rbar) ** 2)
+    chi2 = float((n - 1.0) / (1.0 - rbar) ** 2 * (((R[iu] - rbar) ** 2).sum() - gam * ((rk - rbar) ** 2).sum()))
+    df = p * (p - 1) / 2.0 - 1.0
     return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
 
 
@@ -184,6 +207,38 @@ def mardia(X: np.ndarray) -> dict:
     return {"b1": b1, "b2": b2, "chi2_skew": chi_s, "df_skew": df_s, "p_skew": float(st.chi2.sf(chi_s, df_s)),
             "z_kurt": z_k, "p_kurt": float(2 * st.norm.sf(abs(z_k))),
             "chi2_joint": chi_s + z_k * z_k, "p_joint": float(st.chi2.sf(chi_s + z_k * z_k, df_s + 1))}
+
+
+def doornik_hansen(X: np.ndarray) -> dict:
+    """Doornik-Hansen omnibus test of multivariate normality: the data are orthogonalised with the
+    correlation matrix, the skewness and kurtosis of each column are transformed to normal deviates
+    and their squares are added up (chi2 with 2p degrees of freedom). `U` has one row per variable:
+    skewness, kurtosis and the two transformed deviates."""
+    n, p = X.shape
+    S = np.cov(X.T, ddof=1).reshape(p, p)
+    V = np.diag(1.0 / np.sqrt(np.diag(S)))
+    lam, H = np.linalg.eigh(V @ S @ V)
+    Z = (X - X.mean(0)) @ V @ (H @ np.diag(lam ** -0.5) @ H.T)
+    beta = 3.0 * (n * n + 27.0 * n - 70.0) * (n + 1.0) * (n + 3.0) / ((n - 2.0) * (n + 5.0) * (n + 7.0) * (n + 9.0))
+    w2 = -1.0 + math.sqrt(2.0 * (beta - 1.0))
+    delta = 1.0 / math.sqrt(math.log(math.sqrt(w2)))
+    d = (n - 3.0) * (n + 1.0) * (n * n + 15.0 * n - 4.0)
+    a = (n - 2.0) * (n + 5.0) * (n + 7.0) * (n * n + 27.0 * n - 70.0) / (6.0 * d)
+    c = (n - 7.0) * (n + 5.0) * (n + 7.0) * (n * n + 2.0 * n - 5.0) / (6.0 * d)
+    k = (n + 5.0) * (n + 7.0) * (n ** 3 + 37.0 * n * n + 11.0 * n - 313.0) / (12.0 * d)
+    U = np.zeros((p, 4))
+    for j in range(p):
+        z = Z[:, j] - Z[:, j].mean()
+        m2, m3, m4 = (z ** 2).mean(), (z ** 3).mean(), (z ** 4).mean()
+        sb1, b2 = m3 / m2 ** 1.5, m4 / m2 ** 2
+        y = sb1 * math.sqrt((w2 - 1.0) * (n + 1.0) * (n + 3.0) / (12.0 * (n - 2.0)))
+        z1 = delta * math.log(y + math.sqrt(y * y + 1.0))
+        al = a + sb1 ** 2 * c
+        z2 = (np.cbrt((b2 - 1.0 - sb1 ** 2) * 2.0 * k / (2.0 * al)) - 1.0 + 1.0 / (9.0 * al)) * math.sqrt(9.0 * al)
+        U[j] = (sb1, b2, z1, z2)
+    chi2 = float((U[:, 2:] ** 2).sum())
+    df = 2.0 * p
+    return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df)), "U": U}
 
 
 def henze_zirkler(X: np.ndarray) -> dict:

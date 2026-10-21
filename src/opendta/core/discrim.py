@@ -146,11 +146,21 @@ def error_rates(T: np.ndarray, priors: np.ndarray) -> tuple[np.ndarray, float]:
     return err, float((err * priors).sum())
 
 
-def smoothed_error_rates(P: np.ndarray, codes: np.ndarray, g: int, priors: np.ndarray) -> tuple[np.ndarray, float]:
-    """Posterior-probability (smoothed) error-rate estimates: the average over the observations
-    of a group of 1 - P(own group | x)."""
-    err = np.array([1.0 - P[codes == k, k].mean() for k in range(g)])
-    return err, float((err * priors).sum())
+def smoothed_error_rates(P: np.ndarray, codes: np.ndarray, g: int, priors: np.ndarray,
+                         w: np.ndarray | None = None) -> dict:
+    """Posterior-probability error-rate estimates (Stata's estat errorrate, pp). With P_ji the sum of
+    the posterior probabilities of group i over the observations of group j assigned to group i,
+    the unstratified rate of group i is 1 - sum_j P_ji / (N q_i) and the stratified rate is
+    1 - sum_j (q_j / N_j) P_ji / q_i. Returns (rates, total) for each of the two."""
+    ww = np.ones(len(codes)) if w is None else w
+    pred = np.argmax(P, axis=1)
+    Pji = np.zeros((g, g))
+    np.add.at(Pji, (codes, pred), ww * P[np.arange(len(codes)), pred])
+    Nj = np.bincount(codes, weights=ww, minlength=g)
+    unstrat = 1.0 - Pji.sum(0) / (Nj.sum() * priors)
+    strat = 1.0 - ((priors / Nj)[:, None] * Pji).sum(0) / priors
+    return {"unstratified": (unstrat, float((priors * unstrat).sum())),
+            "stratified": (strat, float((priors * strat).sum()))}
 
 
 def candisc(st: dict) -> dict:

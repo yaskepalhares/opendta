@@ -16,7 +16,7 @@
 {cmd:mds} varlist [if] [in] [{cmd:,} {cmd:id(}varname{cmd:)} {cmd:dimension(}#{cmd:)} {cmd:measure(}measure{cmd:)} {cmd:method(}classical|modern{cmd:)}]   {cmd:mdsmat} matname [{cmd:,} {cmd:dimension(}#{cmd:)} {cmd:method()}]
 
 {p 8 16 2}
-{cmd:procrustes} ({it:target varlist}) ({it:source varlist}) [if] [in] [{cmd:,} {cmd:noscale}]
+{cmd:procrustes} ({it:target varlist}) ({it:source varlist}) [if] [in] [{cmd:,} {cmd:norho}]
 
 {p 8 16 2}
 {cmd:biplot} varlist [if] [in] [{cmd:,} {cmd:std} {cmd:dim(}# #{cmd:)} {cmd:rowlabel(}varname{cmd:)} {cmd:norow} {cmd:nocolumn}]

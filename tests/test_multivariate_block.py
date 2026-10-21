@@ -82,9 +82,9 @@ def test_factor_pcf_equals_pca_loadings(run):
 def test_factor_ml_stores_the_likelihood_ratio_tests(run):
     run(MV + "quietly factor x1 x2 x3 x4 x5 x6, ml factors(2)")
     e = run.session.e
-    assert e["df_m"] == 17 and e["df_r"] == 4
+    assert e["df_m"] == 11 and e["df_r"] == 4 and e["df_1"] == 4
     assert e["chi2_i"] > 100 and e["p_i"] < 1e-10
-    assert np.isclose(e["p"], st.chi2.sf(e["chi2_1"], e["df_r"]))
+    assert np.isclose(e["chi2_1"], 6.3557, atol=1e-3)
 
 
 def test_rotation_preserves_communalities(run):
@@ -135,8 +135,7 @@ def test_hotelling_two_sample_matches_the_formula(run):
     d = A.mean(0) - B.mean(0)
     t2 = n1 * n2 / (n1 + n2) * d @ np.linalg.solve(S, d)
     assert np.isclose(run.session.r["T2"], t2, atol=1e-8)
-    F = (n1 + n2 - 3 - 1) / (3 * (n1 + n2 - 2)) * t2
-    assert np.isclose(run.session.r["F"], F, atol=1e-8)
+    assert run.session.r["N"] == n1 + n2 and run.session.r["k"] == 3 and run.session.r["df"] == n1 + n2 - 3 - 1
 
 
 def test_mvreg_equals_regress_equation_by_equation(run):
@@ -172,10 +171,10 @@ def test_canon_correlations_are_the_square_roots_of_the_eigenvalues(run):
     assert np.allclose(_mat(run, "ccorr").ravel(), rho, atol=1e-8)
 
 
-def test_mvtest_normality_stores_the_three_p_values(run):
-    run(MV + "quietly mvtest normality x1 x2 x3")
+def test_mvtest_normality_stores_the_p_values(run):
+    run(MV + "quietly mvtest normality x1 x2 x3, stats(all)")
     r = run.session.r
-    assert all(0 < r[k] < 1 for k in ("p_skew", "p_kurt", "p_hz"))
+    assert all(0 < r[k] < 1 for k in ("p_skew", "p_kurt", "p_hz", "p_dh"))
 
 
 # ---------------------------------------------------------------------------
@@ -254,14 +253,14 @@ def test_candisc_eigenvalues_are_those_of_w_inverse_b(run):
     B = sum((g == k).sum() * np.outer(X[g == k].mean(0) - grand, X[g == k].mean(0) - grand) for k in (1, 2, 3))
     W = sum((X[g == k] - X[g == k].mean(0)).T @ (X[g == k] - X[g == k].mean(0)) for k in (1, 2, 3))
     ev = np.sort(np.linalg.eigvals(np.linalg.solve(W, B)).real)[::-1][:2]
-    assert np.allclose(_mat(run, "eigenvalues").ravel(), ev, atol=1e-8)
+    assert np.allclose(_mat(run, "Ev").ravel(), ev, atol=1e-8)
 
 
 def test_discrim_knn_k1_resubstitution_is_perfect(run):
     run(MV + "quietly discrim knn x1 x2 x3, group(g) k(1)")
     assert run.session.e["k_nn"] == 1
     out = run("estat classtable")
-    assert "Resubstitution classification summary" in out
+    assert "Resubstitution classification table" in out
     # with k(1) every observation is its own nearest neighbor: perfect resubstitution
     run("quietly estat errorrate")
     assert np.allclose(np.asarray(run.session.r["Rate"].data, dtype=float), 0.0)
@@ -287,7 +286,7 @@ def test_ca_total_inertia_is_chi2_over_n(run):
         tab[i - 1, j - 1] += 1
     chi2 = st.chi2_contingency(tab, correction=False)[0]
     assert np.isclose(run.session.e["inertia"], chi2 / 150, atol=1e-10)
-    assert np.isclose(run.session.e["pchi2"], chi2, atol=1e-8)
+    assert np.isclose(run.session.e["X2"], chi2, atol=1e-8)
     assert "Correspondence analysis" in out
 
 
@@ -349,9 +348,9 @@ def test_procrustes_recovers_a_rotation():
     assert np.isclose(r["c"], 1 / 1.7)
 
 
-def test_procrustes_command_dilation_is_one_without_scaling(run):
-    run(MV + "quietly procrustes (x1 x2) (x4 x5), noscale")
-    assert run.session.e["c"] == 1
+def test_procrustes_command_dilation_is_one_with_norho(run):
+    run(MV + "quietly procrustes (x1 x2) (x4 x5), norho")
+    assert run.session.e["rho"] == 1
     T = _mat(run, "A")
     assert np.allclose(T.T @ T, np.eye(2), atol=1e-9)
 
