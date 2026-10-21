@@ -33,13 +33,14 @@ jobs:
           for f in sorted(glob.glob("tests/test_*.py")):
               s = time.time()
               try:
-                  r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-x", "-v", f], capture_output=True, text=True, timeout=240)
+                  r = subprocess.run([sys.executable, "-m", "pytest", "-x", "-v", "-o", "faulthandler_timeout=90", f], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=240)
                   rc, out = r.returncode, r.stdout
               except subprocess.TimeoutExpired as e:
                   rc, out = 124, (e.stdout or b"").decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
               if rc != 0:
-                  lines = [l for l in out.splitlines() if l.strip()]
-                  print("::error title=%s::rc=%s %ds last=%s" % (f, rc, time.time() - s, " | ".join(lines[-3:])[:400]), flush=True)
+                  lines = [l.strip() for l in out.splitlines() if l.strip()]
+                  keep = [l for l in lines if "::test_" in l][-2:] + [l for l in lines if l.startswith("File ")][:12]
+                  print("::error title=%s::rc=%s %ds %s" % (f, rc, time.time() - s, " | ".join(keep)[:1500]), flush=True)
           print("::notice title=finished::all files visited", flush=True)
           PY
           python /tmp/runone.py
