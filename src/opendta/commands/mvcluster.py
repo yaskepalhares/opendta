@@ -491,7 +491,7 @@ def matrix_dissimilarity(s: "Session", rest: str) -> None:
         if similarity:
             D = 1.0 - D
             np.fill_diagonal(D, 1.0)
-        return D
+        return np.tril(D) + np.tril(D, -1).T        # exactly symmetric: BLAS rounding may break it
 
     if o.get("variables"):
         mstore(s)[mat] = Matrix(dissimilarities(X.T), names, names)
