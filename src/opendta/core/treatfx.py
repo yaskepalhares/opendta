@@ -60,6 +60,67 @@ def glm_fit(kind, X, y, w=None, tol=1e-12, maxit=100):
     return b
 
 
+class GLMOutcome:
+    """Outcome model of a GLM: fit with case weights, mean and score of the linear index."""
+
+    def __init__(self, kind, y):
+        self.kind, self.y = kind, y
+
+    def fit(self, X, w):
+        m = w > 0
+        return glm_fit(self.kind, X[m], self.y[m], w[m])
+
+    def mean(self, X, b):
+        return glm_mean(self.kind, X, b)
+
+    def score(self, X, b):
+        return glm_score(self.kind, X, self.y, b)
+
+
+class LikOutcome:
+    """Outcome model given by a log likelihood lf(u, th) -> (l, l_u, l_th, ...) per observation
+    (a parametric survival model) with an optional ancillary parameter th, and the mean of the
+    outcome mean_fn(u, th). The parameters are (beta, th)."""
+
+    def __init__(self, lf, mean_fn, kaux, start):
+        self.lf, self.mean_fn, self.kaux, self.start = lf, mean_fn, kaux, start
+
+    def _split(self, X, b):
+        k = X.shape[1]
+        return X @ b[:k], (b[k] if self.kaux else 0.0)
+
+    def fit(self, X, w):
+        from scipy import optimize
+        k = X.shape[1]
+        sw = w.sum()
+
+        def fun(b):
+            u, th = self._split(X, b)
+            with np.errstate(all="ignore"):
+                l, lu, lt = self.lf(u, th)[:3]
+            val = -np.sum(w * l) / sw
+            if not np.isfinite(val):
+                return 1e300, np.zeros_like(b)
+            g = np.concatenate([X.T @ (w * lu), [np.sum(w * lt)] if self.kaux else []])
+            return val, -g / sw
+
+        b0 = np.zeros(k + self.kaux)
+        b0[k - 1] = self.start[0]
+        if self.kaux and len(self.start) > 1:
+            b0[k] = self.start[1]
+        r = optimize.minimize(fun, b0, jac=True, method="BFGS", options={"gtol": 1e-11, "maxiter": 500})
+        return r.x
+
+    def mean(self, X, b):
+        u, th = self._split(X, b)
+        return self.mean_fn(u, th)
+
+    def score(self, X, b):
+        u, th = self._split(X, b)
+        _l, lu, lt = self.lf(u, th)[:3]
+        return np.column_stack([X * lu[:, None]] + ([lt[:, None]] if self.kaux else []))
+
+
 # ---------------------------------------------------------------------------
 # M-estimation variance
 # ---------------------------------------------------------------------------
@@ -105,13 +166,15 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
     with constant); stat: ate, atet or pomeans. Returns (theta, V, layout) where layout gives the
     slices of mu (2), beta0, beta1, gamma."""
     n, ko = Xo.shape
+    om = GLMOutcome(omodel, y) if isinstance(omodel, str) else omodel
     kz = Z.shape[1] if est != "ra" else 0
     d = np.ones(n) if stat != "atet" else t.copy()
     use_out = est != "ipw"
     use_trt = est != "ra"
     sl_mu = slice(0, 2)
-    sl_b0 = slice(2, 2 + ko) if use_out else slice(2, 2)
-    sl_b1 = slice(sl_b0.stop, sl_b0.stop + ko) if use_out else slice(2, 2)
+    kb = ko + getattr(om, "kaux", 0)
+    sl_b0 = slice(2, 2 + kb) if use_out else slice(2, 2)
+    sl_b1 = slice(sl_b0.stop, sl_b0.stop + kb) if use_out else slice(2, 2)
     sl_g = slice(sl_b1.stop, sl_b1.stop + kz)
     t0 = 1 - t
 
@@ -131,15 +194,13 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
     b0 = b1 = np.zeros(0)
     if use_out:
         if est == "ra":
-            b0 = glm_fit(omodel, Xo[t0 > 0], y[t0 > 0])
-            b1 = glm_fit(omodel, Xo[t > 0], y[t > 0])
+            b0, b1 = om.fit(Xo, t0), om.fit(Xo, t)
         else:
-            b0 = glm_fit(omodel, Xo[t0 > 0], y[t0 > 0], w0[t0 > 0])
-            b1 = glm_fit(omodel, Xo[t > 0], y[t > 0], w1[t > 0])
+            b0, b1 = om.fit(Xo, w0), om.fit(Xo, w1)
     if est == "ipw":
         mu = np.array([np.sum(w0 * y) / np.sum(w0), np.sum(w1 * y) / np.sum(w1)])
     else:
-        m0, m1 = glm_mean(omodel, Xo, b0), glm_mean(omodel, Xo, b1)
+        m0, m1 = om.mean(Xo, b0), om.mean(Xo, b1)
         if est == "aipw":
             a0 = m0 + w0 * (y - m0)
             a1 = m1 + w1 * (y - m1)
@@ -153,9 +214,9 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
         mu_, b0_, b1_, g_ = th[sl_mu], th[sl_b0], th[sl_b1], th[sl_g]
         cols = []
         if est == "ra":
-            cols.append(t0[:, None] * glm_score(omodel, Xo, y, b0_))
-            cols.append(t[:, None] * glm_score(omodel, Xo, y, b1_))
-            m0_, m1_ = glm_mean(omodel, Xo, b0_), glm_mean(omodel, Xo, b1_)
+            cols.append(t0[:, None] * om.score(Xo, b0_))
+            cols.append(t[:, None] * om.score(Xo, b1_))
+            m0_, m1_ = om.mean(Xo, b0_), om.mean(Xo, b1_)
             mom = np.column_stack([d * (m0_ - mu_[0]), d * (m1_ - mu_[1])])
         else:
             pp = prob(g_)
@@ -164,9 +225,9 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
             if est == "ipw":
                 mom = np.column_stack([ww0 * (y - mu_[0]), ww1 * (y - mu_[1])])
             else:
-                cols.append(ww0[:, None] * glm_score(omodel, Xo, y, b0_))
-                cols.append(ww1[:, None] * glm_score(omodel, Xo, y, b1_))
-                m0_, m1_ = glm_mean(omodel, Xo, b0_), glm_mean(omodel, Xo, b1_)
+                cols.append(ww0[:, None] * om.score(Xo, b0_))
+                cols.append(ww1[:, None] * om.score(Xo, b1_))
+                m0_, m1_ = om.mean(Xo, b0_), om.mean(Xo, b1_)
                 if est == "ipwra":
                     mom = np.column_stack([d * (m0_ - mu_[0]), d * (m1_ - mu_[1])])
                 else:

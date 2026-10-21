@@ -41,19 +41,22 @@ def _treat_spec(args: str):
     return f"{head.strip()} {tname}{sep}{opts}", tname, zvars, noc, o
 
 
-def cmd_etregress(s: "Session", args: str) -> None:
-    if _replay(s, "etregress", args):
-        return
+def _setup(s, args, spec):
     args2, tname, zvars, noc, o = _treat_spec(args)
-    spec = {"treat": 3, "twostep": 3, "cfunc": 4}
     pr = _Prep(s, args2, spec, extra_vars=names_in(zvars, tname))
     pr.write_notes(s.output)
-    y = pr.y
     t = (s.data.get(tname).data[pr.smp.mask] != 0).astype(float)
     main = block_from_pr(pr, pr.smp.depname)
     trt = block_from_text(pr, tname, zvars, constant=not noc)
     for nm in trt.notes:
         s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
+    return pr, pr.y, t, main, trt, tname, o
+
+
+def cmd_etregress(s: "Session", args: str) -> None:
+    if _replay(s, "etregress", args):
+        return
+    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "twostep": 3, "cfunc": 4})
     w = pr.w
     n = len(y)
     if o.get("twostep"):
@@ -181,4 +184,59 @@ def _twostep(s, args, pr, y, t, main, trt, tname):
                        predict_opts={"xbtrt": 4, "ptrt": 4})
     est.predict = make_predict(_predict, "xb")
     est.pred_label = "fitted values"
+    display_eq(s, est)
+
+
+def cmd_etpoisson(s: "Session", args: str) -> None:
+    if _replay(s, "etpoisson", args):
+        return
+    pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "cfunc": 4, "intpoints": 3})
+    w = pr.w
+    K = int(o["intpoints"]) if o.get("intpoints") else 32
+    if np.any(y < 0) or np.any(y != np.round(y)):
+        raise StataError(459, f"{pr.smp.depname} must be a nonnegative integer")   # VERIFY wording
+
+    def lik(etas, th):
+        ll, d_eta, d_zeta, d_ath, d_ls = L.etpois(t, y, etas[0], etas[1], th[0], th[1], K)
+        return ll, [d_eta, d_zeta], np.column_stack([d_ath, d_ls])
+
+    eng = Engine(lik, [main, trt], w, 2)
+    from ..core.treatfx import glm_fit
+    rp = _weighted_probit(t, trt.X, w)
+    bo = glm_fit("poisson", main.X, y, w)
+    b0 = np.concatenate([bo, rp.b, [0.0, np.log(0.5)]])
+    res = pr.maximize(eng.fun, b0)
+    _log(s, pr, res)
+    V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
+    ath, lns = float(res.b[-2]), float(res.b[-1])
+    se_a, se_l = float(np.sqrt(V[-2, -2])), float(np.sqrt(V[-1, -1]))
+    w_rho = ath ** 2 / V[-2, -2]
+    p_w = _chi2p(w_rho, 1)
+
+    def aux_rows(level):
+        return [CoefRow("sep"), aux_row("/athrho", ath, se_a, level, name="_cons"),
+                aux_row("/lnsigma", lns, se_l, level, name="_cons"), CoefRow("sep"),
+                transformed_row("rho", np.tanh, lambda x: 1 - np.tanh(x) ** 2, ath, se_a, level),
+                transformed_row("sigma", np.exp, np.exp, lns, se_l, level)]
+
+    def hdr(est):
+        x = est.extra
+        left_ = [est.title, "", "", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g'):>9}"]
+        right = [("Number of obs", comma(x["N"])), ("", ""), ("", ""), ("", ""),
+                 (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
+                 ("Prob > chi2", g(x["p"], "%10.4f"))]
+        return left_, right   # VERIFY layout
+
+    def footer(s_, est):
+        s_.output.write(f"Wald test of indep. eqns. (rho = 0): chi2(1) = {w_rho:8.2f}   Prob > chi2 = {p_w:6.4f}\n", "text")
+
+    est = finish_model(s, pr, "etpoisson", args, title="Poisson regression with endogenous treatment",
+                       blocks=[main, trt], eng=eng, res=res, V=V, n_clust=n_clust, ll0=SYS,
+                       aux_names=[("athrho", "_cons"), ("lnsigma", "_cons")], aux_rows_fn=aux_rows, hdr_fn=hdr,
+                       depvar_cell="", footer=footer, wald=True, k_eq=4, test_idx=list(range(main.nslopes)),
+                       extra_scalars=[("rho", float(np.tanh(ath))), ("sigma", float(np.exp(lns))),
+                                      ("chi2_c", w_rho), ("p_c", p_w)],
+                       predict_opts={"xbtrt": 4, "ptrt": 4})
+    est.predict = make_predict(_predict, "xb")
+    est.pred_label = "linear prediction"
     display_eq(s, est)

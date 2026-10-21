@@ -462,3 +462,59 @@ def test_nnmatch_one_dimension_matches_manual(run):
         yi = y[nb].mean()
         d.append((y[i] - yi) if t[i] == 1 else (yi - y[i]))
     assert np.isclose(run.session.e["b"].data.ravel()[0], np.mean(d), atol=1e-8)
+
+
+def test_stteffects_ra_exponential_matches_streg_arms(run):
+    run("""
+clear
+set seed 4321
+set obs 500
+gen double x = round(invnormal(runiform()), .01)
+gen byte t = runiform() < invnormal(.5 + .1*x) * 0 + .5
+gen double tt = round(-ln(runiform()) * exp(.5 - .3*x - .4*t), .001) + .001
+gen double cens = 4
+gen byte fail = tt < cens
+replace tt = min(tt, cens)
+stset tt, failure(fail)
+quietly stteffects ra (x, exponential) (t)
+matrix bt = e(b)
+quietly streg x if t == 0, dist(exponential) nohr
+matrix b0 = e(b)
+quietly streg x if t == 1, dist(exponential) nohr
+matrix b1 = e(b)
+""")
+    x = _col(run, "x")
+    b0 = np.asarray(run.session.matrices["b0"].data).ravel()
+    b1 = np.asarray(run.session.matrices["b1"].data).ravel()
+    m0, m1 = np.exp(-(b0[0] * x + b0[1])).mean(), np.exp(-(b1[0] * x + b1[1])).mean()
+    bt = np.asarray(run.session.matrices["bt"].data).ravel()
+    assert np.allclose(bt, [m1 - m0, m0], atol=1e-6)
+
+
+def test_etpoisson_likelihood_is_the_quadrature_integral(run):
+    from scipy import integrate, stats
+    from opendta.estimation import likelihoods as L
+    t = np.array([1.0, 0.0, 1.0])
+    y = np.array([2.0, 0.0, 5.0])
+    eta = np.array([.3, -.2, 1.0])
+    zeta = np.array([.4, -.1, .8])
+    ath, lns = .5, -.6
+    ll = L.etpois(t, y, eta, zeta, ath, lns)[0]
+    rho, sg = np.tanh(ath), np.exp(lns)
+    for i in range(3):
+        q = 2 * t[i] - 1
+
+        def f(s):
+            mu = np.exp(eta[i] + sg * s)
+            return (stats.poisson.pmf(y[i], mu) * stats.norm.pdf(s)
+                    * stats.norm.cdf(q * (zeta[i] + rho * s) / np.sqrt(1 - rho ** 2)))
+        assert np.isclose(ll[i], np.log(integrate.quad(f, -12, 12)[0]), atol=1e-8)
+
+
+def test_etpoisson_runs_and_is_better_than_independent_fits(run):
+    run(TREAT.replace("gen double y = round(1 + 2*x + 1.5*t + .6*u + .8*invnormal(runiform()), .01)",
+                      "gen double mu = exp(.3 + .4*x + .5*t + .5*(.6*u + .8*invnormal(runiform())))\n"
+                      "gen double y = 0\nforvalues k = 1/30 {\n    quietly replace y = y + (runiform() < mu/30)\n}")
+        + "quietly etpoisson y x, treat(t = z x)")
+    assert 0.0 < run.session.e["rho"] < 1.0
+    assert run.session.e["sigma"] > 0

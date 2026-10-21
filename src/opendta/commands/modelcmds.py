@@ -38,5 +38,5 @@ _register("exact", ["exlogistic", "expoisson"])
 _register("nonlin", ["nl", "nlsur", "gmm"])
 
 _register("frontier", ["frontier"])
-_register("treatment", ["etregress"])
-_register("teffects", ["teffects", "eteffects"])
+_register("treatment", ["etregress", "etpoisson"])
+_register("teffects", ["teffects", "eteffects", "stteffects"])
