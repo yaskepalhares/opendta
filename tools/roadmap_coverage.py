@@ -34,6 +34,8 @@ sys.path.insert(0, str(ROOT / "src"))
 MODULE_AREA = {
     "tsest": "Time series", "tsspectral": "Time series", "tsdata": "Time series", "tsfilters": "Time series",
     "tshelp": "Time series",
+    "mvfactor": "Multivariate statistics", "mvtests": "Multivariate statistics", "mvcluster": "Multivariate statistics",
+    "mvdiscrim": "Multivariate statistics", "mvordination": "Multivariate statistics",
     "stcmds": "Survival analysis",
     "stdata": "Survival analysis",
     "strates": "Survival analysis",

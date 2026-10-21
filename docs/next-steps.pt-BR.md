@@ -42,7 +42,7 @@ Notas para sessões que rodam na nuvem:
 - Para descobrir o que é uma diferença numérica, salve os dados do caso em csv e teste hipóteses fora do Stata: avalie a verossimilhança do OpenDTA nas estimativas de referência. Uma diferença constante (por exemplo `ln 4`) é uma constante da verossimilhança; uma diferença que some quando um valor pré-amostral vira zero ou a média da amostra é uma regra de pré-amostra; uma verossimilhança maior no OpenDTA nas mesmas estimativas, com estimativas diferentes, é o otimizador ou outro modelo, e vai para a diferença conhecida.
 - Numa diferença conhecida, `ignore(/REGEX/)` tira linhas dos dois logs, então linhas que existem em só um deles (logs de iteração do Stata) não atrapalham; uma tabela que aparece várias vezes não se delimita por posição, então case os valores que diferem e deixe o `tolerance()` para os últimos dígitos.
 
-Próximos números livres: casos de comparação a partir de **1905**, fases do roadmap a partir de **19**.
+Próximos números livres: casos de comparação a partir de **1907**, fases do roadmap a partir de **21**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -103,9 +103,9 @@ Feito na fase 19 (caso 1905), exceto as peças listadas em Dados em painel em [F
 
 Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `boxcox` com outros modelos, estatísticas de teste do `cusum`…). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
-### 8. Estatística multivariada (2–3 h, ~90 mil tokens)
+### 8. Estatística multivariada
 
-`pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
+Feito na fase 20 (caso 1906), exceto as peças listadas em Estatística multivariada em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (as medidas binárias de similaridade do `cluster`, pontos suplementares em `ca` e `mca`, `mds` com `method(nonmetric)`, `procrustes` com transformações oblíquas e irrestritas, e alguns subcomandos de `estat`). O plano original: `pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
 
 ### 9. Séries temporais (3–4 h, ~150 mil tokens)
 

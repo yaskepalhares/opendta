@@ -42,7 +42,7 @@ Notes for sessions that run in the cloud:
 - To find what a numeric difference is, dump the case data to a csv and test hypotheses offline: evaluate OpenDTA's likelihood at the reference estimates. A constant gap (for example `ln 4`) is a constant of the likelihood; a gap that disappears when a presample value is set to zero or to the sample mean is a presample rule; a likelihood that is higher in OpenDTA at the same estimates, with other estimates, is the optimizer or a different model, and goes into the known difference.
 - In a known difference, `ignore(/REGEX/)` removes lines from both logs, so lines that exist in only one (Stata's iteration logs) are fine; a table that appears several times cannot be scoped by position, so match the values that differ instead and keep `tolerance()` for the last digits.
 
-Next free numbers: compat cases from **1905**, roadmap phases from **19**.
+Next free numbers: compat cases from **1907**, roadmap phases from **21**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -103,9 +103,9 @@ Done in phase 19 (compat case 1905), except the pieces listed under Panel data i
 
 Done in phase 17 (compat case 1903), except the pieces listed under Base statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `boxcox` with other models, `cusum` test statistics…). The original plan: prefixes and resampling: `jackknife`, `permute`, `simulate` (reuse `estimation/bootstrap.py`); `ml` (the command around `estimation/ml.py`), `mlexp`; model building: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; after estimation: `contrast`, `pwcompare`, `pwmean`, `margins` after more commands (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformations: `boxcox`, `ladder`, `gladder`, `lnskew0`; tests: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; agreement and effect sizes: `icc`, `loneway`, `esize`, `ameans`; displays: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
-### 8. Multivariate statistics (2–3 h, ~90k tokens)
+### 8. Multivariate statistics
 
-`pca`, `factor`, `rotate`, `alpha`, `cluster` (linkages, dendrogram, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, each with its `estat` subcommands. New `core/multivariate.py`.
+Done in phase 20 (compat case 1906), except the pieces listed under Multivariate statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (the binary similarity measures of `cluster`, supplementary points in `ca` and `mca`, `mds` with `method(nonmetric)`, `procrustes` with oblique and unrestricted transformations, and some `estat` subcommands). The original plan: `pca`, `factor`, `rotate`, `alpha`, `cluster` (linkages, dendrogram, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, each with its `estat` subcommands. New `core/multivariate.py`.
 
 ### 9. Time series (3–4 h, ~150k tokens)
 
