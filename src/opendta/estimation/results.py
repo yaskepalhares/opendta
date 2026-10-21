@@ -118,7 +118,7 @@ def datasignature(s: "Session", varnames: list[str], sample: np.ndarray) -> str:
 def current(s: "Session") -> Estimates:
     from ..core.errors import StataError
     est = getattr(s, "_estimates", None)
-    if est is None or "b" not in s.e:
+    if est is None or ("b" not in s.e and not getattr(est, "no_b", False)):
         raise StataError(301, "last estimates not found")
     return est
 
