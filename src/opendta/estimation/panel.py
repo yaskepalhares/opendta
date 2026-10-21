@@ -648,9 +648,9 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         b, e, V, wm_label, n_clust_w = _gmm_two_step(smp, y, X, Z, A @ (QX.T @ y), small)
         rss = float(e @ e)
         s2 = rss / (N - k) if small else rss / N
-        if smp.vce in ("robust", "cluster"):
+        if smp.vce in ("robust", "cluster") or wm_label != "Unadjusted":
             vcetype = "Robust"
-            n_clust = n_clust_w if smp.vce == "cluster" else None
+            n_clust = n_clust_w if (smp.vce == "cluster" or wm_label.startswith("Cluster")) else None
     elif smp.vce in ("robust", "cluster"):
         sc = QX * e[:, None]
         if smp.vce == "cluster":
@@ -825,8 +825,9 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
     b = Ainv @ (ZX.T @ W @ (Z.T @ y))
     e = y - X @ b
     V = Ainv
-    if smp.vce in ("robust", "cluster"):
-        S2 = meat(e, "cluster" if smp.vce == "cluster" else "robust")
+    if smp.vce in ("robust", "cluster") or kind[:3] in ("rob", "clu"):
+        # a robust or cluster weight matrix gives the sandwich variance (compat 1907)
+        S2 = meat(e, "cluster" if (smp.vce == "cluster" or kind.startswith("clu")) else "robust")
         V = Ainv @ (ZX.T @ W @ S2 @ W @ ZX) @ Ainv
     label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
     return b, e, (V + V.T) / 2, label, n_cl

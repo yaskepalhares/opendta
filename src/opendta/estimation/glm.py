@@ -5,6 +5,7 @@ cloglog, loglog, logc, power #, opower #."""
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -240,7 +241,28 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
                 b0 = b0 / 2
                 if np.isfinite(fun(b0, 0)[0]):
                     break
-    res = pr.maximize(fun, b0)
+    irls = bool(o.get("irls"))
+    if irls:
+        # iteratively reweighted least squares on the deviance (Stata's "MQL Fisher scoring"); the
+        # variance comes from the expected information (EIM). VERIFY the stopping rule
+        out.write("\n", "text")
+        b_it, dev_old = b0, None
+        for it in range(1, 101):
+            mu_it = mu_of(b_it)
+            dev_it = float(w @ deviance_i(mu_it))
+            if not pr.o.get("nolog"):
+                out.write(f"Iteration {it}:   deviance = {g(dev_it, '%9.0g'):>9}\n", "text")
+            if dev_old is not None and abs(dev_old - dev_it) < 1e-6:
+                break
+            dev_old = dev_it
+            eta_it = X @ b_it + off
+            z_it = eta_it + (y - mu_it) / dmu(eta_it) - off
+            sw_it = w * dmu(eta_it) ** 2 / var(mu_it)
+            b_it = np.linalg.lstsq(X * np.sqrt(sw_it)[:, None], z_it * np.sqrt(sw_it), rcond=None)[0]
+        res = pr.maximize(fun, b_it)
+        res = dataclasses.replace(res, b=b_it, iterations=it, converged=True)
+    else:
+        res = pr.maximize(fun, b0)
     mu = mu_of(res.b)
     N = pr.N
     df = N - k
@@ -253,7 +275,9 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
     ll_rep = float(w @ loglik(mu, phi if fam != "gaussian" else dev / N))
     # iteration log: for families without a scale, the NR objective is the likelihood itself.
     # VERIFY Stata's log for gaussian, gamma and igaussian
-    if fam in ("binomial", "poisson", "nbinomial"):
+    if irls:
+        pass
+    elif fam in ("binomial", "poisson", "nbinomial"):
         _log(s, pr, res)
     elif fam == "gaussian" and link_name.lower() == "identity":
         # the initial IRLS step is already the OLS solution: Stata shows only iteration 0, with the
@@ -261,7 +285,12 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
         res.log = [(0, ll_rep, "")]
         res.iterations = 0
         _log(s, pr, res)
-    H = hess(res.b)
+    if irls:
+        eta_f = X @ res.b + off
+        wt_f = w * dmu(eta_f) ** 2 / var(mu)
+        H = -(X * wt_f[:, None]).T @ X
+    else:
+        H = hess(res.b)
     V, n_clust = pr.vce(H, None)
     V = V * phi
     if pr.robust:
@@ -312,12 +341,12 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
     mv = [("cmdline", f"glm {args.strip()}"), ("cmd", "glm"), ("predict", "glim_p"),
           ("marginsnotok", "stdp Anscombe Cooksd Deviance Hat Likelihood Pearson Response Score Working "
                            "ADJusted STAndardized STUdentized MODified"),
-          ("marginsok", "default"), ("hac_lag", f"{int(N) - 2}"), ("vcetype", "Robust" if pr.robust else "OIM"),
-          ("vce", pr.smp.vce if pr.robust else "oim")]
+          ("marginsok", "default"), ("hac_lag", f"{int(N) - 2}"), ("vcetype", "Robust" if pr.robust else "EIM" if irls else "OIM"),
+          ("vce", pr.smp.vce if pr.robust else "eim" if irls else "oim")]
     if pr.smp.clustvar:
         mv.append(("clustvar", pr.smp.clustvar))
     mv += [("linkt", link_name), ("linkf", linkf), ("varfunct", fam_text[1]), ("varfuncf", varf),
-           ("opt1", "ML"), ("m", "1" if np.all(m_trials == 1) else str(fam_words[1]) if len(fam_words) > 1 else "1"),
+           ("opt1", "IRLS" if irls else "ML"), ("m", "1" if np.all(m_trials == 1) else str(fam_words[1]) if len(fam_words) > 1 else "1"),
            ("varfunc", f"glim_v{fam_code}"), ("link", f"glim_l{link_code:02d}"), ("chi2type", "Wald"),
            ("opt", "moptimize"), ("title", "Generalized linear models"), ("user", "glim_lf"),
            ("ml_method", "e2"), ("technique", "nr"), ("which", "max")]
@@ -335,6 +364,7 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
     s.e["ll"] = ll_rep
     est.extra.update({"ll": ll_rep, "dev": dev, "pearson": pearson, "df": df, "phi": phi, "aic": aic,
                       "bic": bic, "fam_text": fam_text, "link_text": link_text, "link_name": link_name})
+    est.extra["irls"] = irls
     est.glm_ginv, est.glm_fam = ginv, fam
     est.predict = _predict_glm
     if titles is not None:
@@ -358,8 +388,9 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         L = 50   # VERIFY colunas
         rows = [
             (f"{est.title}", ("No. of obs", g(x["N"], "%10.0fc") if False else f"{int(x['N']):,}")),
-            ("Optimization     : ML", ("Residual df", f"{int(x['df']):,}")),
-            ("", ("Scale parameter", g(x["phi"], "%9.0g"))),
+            ("Optimization     : MQL Fisher scoring" if x.get("irls") else "Optimization     : ML",
+             ("Residual df", f"{int(x['df']):,}")),
+            ("                   (IRLS EIM)" if x.get("irls") else "", ("Scale parameter", g(x["phi"], "%9.0g"))),
             (f"Deviance         = {g(x['dev'], '%12.0g'):>12}", ("(1/df) Deviance", g(x["dev"] / x["df"], "%9.0g"))),
             (f"Pearson          = {g(x['pearson'], '%12.0g'):>12}", ("(1/df) Pearson", g(x["pearson"] / x["df"], "%9.0g"))),
         ]
@@ -371,17 +402,21 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write(f"{'Variance function: ' + vf:<{L}}[{vn}]\n", "text")
         out.write(f"{'Link function    : ' + x['link_text']:<{L}}[{x['link_name']}]\n", "text")
         out.write("\n", "text")
-        out.write(f"{'':<{L}}{'AIC':<16}= ", "text")
-        out.write(f"{g(x['aic'], '%9.0g'):>10}\n", "result")
-        lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
-        out.write(f"{(lab + '   = ' + g(x['ll'], '%12.0g')) if not est.robust else (lab + ' = ' + g(x['ll'], '%12.0g')):<{L}}"
-                  f"{'BIC':<16}= ", "text")
-        out.write(f"{g(x['bic'], '%9.0g'):>10}\n", "result")
+        if x.get("irls"):
+            out.write(f"{'':<{L}}{'BIC':<16}= ", "text")
+            out.write(f"{g(x['bic'], '%9.0g'):>10}\n", "result")
+        else:
+            out.write(f"{'':<{L}}{'AIC':<16}= ", "text")
+            out.write(f"{g(x['aic'], '%9.0g'):>10}\n", "result")
+            lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
+            out.write(f"{(lab + '   = ' + g(x['ll'], '%12.0g')) if not est.robust else (lab + ' = ' + g(x['ll'], '%12.0g')):<{L}}"
+                      f"{'BIC':<16}= ", "text")
+            out.write(f"{g(x['bic'], '%9.0g'):>10}\n", "result")
         out.write("\n", "text")
     if table:
         _cluster_note(s, est)
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level,
-                   vcetype=est.vcetype or "OIM", coef_title=getattr(est, "coef_title", "Coef."),
+                   vcetype=est.vcetype or ("EIM" if x.get("irls") else "OIM"), coef_title=getattr(est, "coef_title", "Coef."),
                    eform=getattr(est, "eform_on", False))
 
 

@@ -347,7 +347,7 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
             v_ = y2 - Z @ pi_
             X2_ = np.column_stack([X, v_])
             mu = np.exp(np.clip(X2_ @ be, -30, 30))
-            return np.column_stack([Z * v_[:, None], X2_ * (y - mu)[:, None]])
+            return np.column_stack([Z * v_[:, None], X2_ * (y / mu - 1.0)[:, None]])   # multiplicative residual
 
         def jac(theta):
             h = 1e-6

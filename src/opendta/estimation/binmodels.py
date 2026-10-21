@@ -145,16 +145,16 @@ def cmd_scobit(s: "Session", args: str) -> None:
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, "", f"{lab(est)} = {ll4}"]
+        left = [est.title, "", f"{lab(est)} = {ll4:>9}"]
         right = [("Number of obs", comma(x["N"])), ("Zero outcomes", comma(n0)),
                  ("Nonzero outcomes", comma(n1))]
         if est.robust:     # VERIFY: with vce(robust) the Wald test is shown
-            left = [est.title, "", "", "", f"{lab(est)} = {ll4}"]
+            left = [est.title, "", "", "", f"{lab(est)} = {ll4:>9}"]
             right += [(f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")), ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left, right
 
     def footer(s_, est):
-        s_.output.write(f"Likelihood-ratio test of alpha=1:   chi2(1) = {lr:9.2f}    Prob > chi2 = {p_lr:6.4f}\n",
+        s_.output.write(f"Likelihood-ratio test of alpha=1:   chi2(1) = {lr:8.2f}    Prob > chi2 = {p_lr:6.4f}\n",
                         "text")
         s_.output.write("\nNote: Likelihood-ratio tests are recommended for inference with scobit models.\n", "text")
 
@@ -226,7 +226,7 @@ def cmd_hetprobit(s: "Session", args: str) -> None:
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, "", "", "", "", f"{lab(est)} = {ll4}"]
+        left = [est.title, "", "", "", "", f"{lab(est)} = {ll4:>9}"]
         right = [("Number of obs", comma(x["N"])), ("Zero outcomes", comma(n0)),
                  ("Nonzero outcomes", comma(n1)), ("", ""), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
@@ -428,7 +428,7 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [title, "", "", "", f"Inflation model = {link}", f"{lab(est):<16}= {ll4}"]
+        left = [title, "", "", "", f"Inflation model = {link}", f"{lab(est):<16}= {ll4:>9}"]
         right = [("Number of obs", comma(x["N"])), ("Nonzero obs", comma(n_nonzero)), ("Zero obs", comma(n_zero)),
                  ("", ""), (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]   # VERIFY layout
@@ -538,6 +538,12 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
         eng0 = Engine(lik, [constant_only(main)], w, n_theta)
         c0 = float(np.log(max(np.sum(w * y) / np.sum(w) - lower, 0.5)))
         null = maximize(eng0.fun, np.array([c0] + ([float(res.b[-1])] if nb else [])), maxiter=300)
+        if not nb:
+            # Stata takes the constant-only log likelihood of tpoisson at the untruncated mean,
+            # not at the maximum (compat 1907)
+            import dataclasses
+            c_mean = float(np.log(np.sum(w * y) / np.sum(w)))
+            null = dataclasses.replace(null, ll=float(eng0.fun(np.array([c_mean]), 0)[0]))
     ll0 = null.ll if null else SYS
     ptr = None
     if nb:
@@ -643,11 +649,12 @@ def cmd_gnbreg(s: "Session", args: str) -> None:
     g0[-1] = np.log(_alpha_start(y, mu0, w))
     res = pr.maximize(eng.fun, np.concatenate([pres.b, g0]))
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
-    # constant-only model: both equations with the constant only
+    # constant-only model: the mean equation with the constant only, the lnalpha equation complete
+    # (Stata's reference model for the LR test of the mean equation; compat 1907)
     null = None
     if main.constant:
-        e0 = Engine(lik, [constant_only(main), constant_only(la)], w, 0)
-        null = maximize(e0.fun, np.array([res.b[main.k - 1], res.b[-1]]), maxiter=300)
+        e0 = Engine(lik, [constant_only(main), la], w, 0)
+        null = maximize(e0.fun, np.concatenate([[res.b[main.k - 1]], res.b[main.k:]]), maxiter=300)
     if null is not None:
         fit_log(s, pr, "Fitting constant-only model:", null)
     fit_log(s, pr, "Fitting full model:", res)

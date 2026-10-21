@@ -205,7 +205,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             continue
         if r.kind == "value":
             # a single number without standard error (rho in prais)
-            out.write(f"  {g9(r.b):>9}\n", "result")
+            out.write(f"  {r.eq or g9(r.b):>9}\n", "result")   # r.eq: text already formatted
             continue
         if r.kind == "fixed":
             # exposure()/offset(): coefficient fixed at 1 (compat 0507)

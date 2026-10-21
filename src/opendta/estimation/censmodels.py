@@ -151,7 +151,7 @@ def cmd_intreg(s: "Session", args: str) -> None:
     est = finish_model(s, pr, "intreg", args, title="Interval regression", blocks=[main] + ([hetb] if hetb else []),
                        eng=eng, res=res, V=V, n_clust=n_clust, ll0=null.ll if null else SYS,
                        aux_names=[] if hetb else [("lnsigma", "_cons")],
-                       aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="" if not hetb else None, footer=footer,
+                       aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="", footer=footer,
                        wald=pr.robust or hetb is not None, k_eq=2, r2p=None,
                        extra_scalars=([] if hetb else [("sigma", float(np.exp(lns)))])
                        + [("N_lc", counts[0]), ("N_unc", counts[1]), ("N_rc", counts[2]), ("N_int", counts[3])],
@@ -354,16 +354,23 @@ def cmd_heckman(s: "Session", args: str) -> None:
     def hdr(est):
         x = est.extra
         left_ = [est.title, "(regression model with sample selection)", "", "", "",
-                 f"{lab(est)} = {g(x['ll'], '%9.0g')}"]
+                 f"{lab(est)} = {g(x['ll'], '%9.0g'):>9}"]
         right = [("Number of obs", comma(x["N"])), ("Censored obs", comma(n_cens)),
                  ("Uncensored obs", comma(n_unc)), ("", ""),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left_, right
 
+    w_rho = (ath / float(np.sqrt(V[-2, -2]))) ** 2
+    p_w = _chi2p(w_rho, 1)
+
     def footer(s_, est):
-        s_.output.write(f"LR test of indep. eqns. (rho = 0):   chi2(1) = {lr:8.2f}   Prob > chi2 = {p_lr:6.4f}\n",
-                        "text")   # VERIFY
+        if pr.robust:    # with robust or cluster, the LR test is not valid: Wald test of /athrho (compat 1907)
+            s_.output.write(f"Wald test of indep. eqns. (rho = 0): chi2(1) = {w_rho:8.2f}   Prob > chi2 = {p_w:6.4f}\n",
+                            "text")
+        else:
+            s_.output.write(f"LR test of indep. eqns. (rho = 0):   chi2(1) = {lr:8.2f}   Prob > chi2 = {p_lr:6.4f}\n",
+                            "text")   # VERIFY
 
     rho, sg = float(np.tanh(ath)), float(np.exp(lns))
     est = finish_model(s, pr, "heckman", args, title="Heckman selection model", blocks=[main, sel_blk],
@@ -455,7 +462,8 @@ def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name=None):
 
     def aux_rows(level):
         return [CoefRow("sep"), CoefRow("eq", "mills"), CoefRow("coef", "lambda", theta, se_l, name="lambda"),
-                CoefRow("sep"), CoefRow("value", "rho", rho), CoefRow("value", "sigma", sig)]
+                CoefRow("sep"), CoefRow("value", "rho", rho, eq=f"{rho:.5f}"),
+                CoefRow("value", "sigma", sig, eq=g(sig, "%10.8g"))]
 
     def hdr(est):
         x = est.extra
@@ -495,7 +503,7 @@ def _predict_heckman_two(what, etas, th, est):
 def _sel_header(title, n_cens, n_unc, line2=""):
     def hdr(est):
         x = est.extra
-        left_ = [title] + ([line2] if line2 else [""]) + ["", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g')}"]
+        left_ = [title] + ([line2] if line2 else [""]) + ["", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g'):>9}"]
         right = [("Number of obs", comma(x["N"])), ("Censored obs", comma(n_cens)),
                  ("Uncensored obs", comma(n_unc)), ("", ""),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
