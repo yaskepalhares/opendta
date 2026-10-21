@@ -95,9 +95,9 @@ Done in phase 15 (compat case 1901), except the options that stop with error 198
 
 Done in phase 16 (compat case 1902), except more than one level of random effects in the `me` commands, weights, `vce(robust)` and the `predict` options `median` and `mean` of `mestreg` (and `hazard` after its lognormal, loglogistic and gamma distributions). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
 
-### 6. Panel data (2–3 h, ~100k tokens)
+### 6. Panel data ✅
 
-Random-effects models by quadrature: `xtprobit`, `xtcloglog`, `xtnbreg`, `xttobit`, `xtintreg`, `xtologit`, `xtoprobit`, `quadchk`; dynamic panels (GMM): `xtabond`, `xtdpd`, `xtdpdsys`; `xtivreg`, `xthtaylor`, `xtgls`, `xtpcse`, `xtregar`, `xtrc`, `xtfrontier`, `xtunitroot`; description: `xtline`, `xttab`, `xtdata`. Reuse `estimation/panel.py`, `panel2.py`, `xtgee.py`, the quadrature of `meglm.py`.
+Done in phase 19 (compat case 1905), except the pieces listed under Panel data in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`xtunitroot llc` and `ips`, which need the tabulated moments of the original papers, and some options of the dynamic-panel, `xtregar`, `xtrc`, `xtivreg` and `xtdata` commands). The original plan: random-effects models by quadrature, `quadchk`, dynamic panels by GMM, the linear panel estimators, `xtfrontier`, `xtunitroot` and the description commands.
 
 ### 7. Base statistics (3–4 h, ~135k tokens)
 

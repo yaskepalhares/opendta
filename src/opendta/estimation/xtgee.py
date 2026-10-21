@@ -99,7 +99,8 @@ def run_pa(s: "Session", cmd: str, args: str) -> bool:
     if not has_option(args, "pa"):
         return False
     family, link = {"xtreg": ("gaussian", "identity"), "xtlogit": ("binomial", "logit"),
-                    "xtpoisson": ("poisson", "log"), "xtprobit": ("binomial", "probit")}[cmd]
+                    "xtpoisson": ("poisson", "log"), "xtprobit": ("binomial", "probit"),
+                    "xtcloglog": ("binomial", "cloglog"), "xtnbreg": ("nbinomial", "log")}[cmd]
     cmd_xtgee(s, pa_args(args, family, link), cmd2=cmd, cmdline=f"{cmd} {args.strip()}")
     return True
 

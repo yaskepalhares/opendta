@@ -1,0 +1,1635 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1905_panel.log
+  log type:  text
+ opened on:  20 Oct 2026, 21:52:11
+
+. * Phase 19: panel data (random-effects models by quadrature, linear panel estimators, frontier,
+. * unit-root tests, dynamic panel GMM and panel description). Every command runs under capture
+. * noisily so that a difference in one command does not stop the rest of the case; the layouts
+. * marked VERIFY in the code are settled by the reference log.
+. * The data are built from rounded draws, so that the last digit of the draws does not matter.
+. program define mkpanel
+  1.     clear
+  2.     set seed 1905
+  3.     set obs 480
+  4.     gen int id = ceil(_n/8)
+  5.     gen int t = _n - (id-1)*8 + 1999
+  6.     xtset id t
+  7.     gen double u = round(invnormal(runiform()), .01)
+  8.     bysort id (t): replace u = u[1]
+  9.     gen double e = round(invnormal(runiform()), .01)
+ 10.     gen double x1 = round(invnormal(runiform()), .01)
+ 11.     gen double z = round(invnormal(runiform()), .01)
+ 12.     gen double x2 = round(.5*z + invnormal(runiform()) + .5*u, .01)
+ 13.     gen double w = round(id/20, .01)
+ 14.     gen double y = round(1 + .5*x1 + .3*x2 + .2*w + u + e, .01)
+ 15.     gen byte yb = runiform() < invlogit(-.2 + .8*x1 + .7*u)
+ 16.     gen double lat = round(.5*x1 + .6*u + e, .01)
+ 17.     gen byte yo = (lat > -.4) + (lat > .6)
+ 18.     gen double yt = max(0, lat)
+ 19.     gen double ylo = floor(lat)
+ 20.     gen double yhi = ylo + 1
+ 21.     gen double yc = floor(-ln(runiform()) * exp(.3*x1 + .5*u) * 3)
+ 22.     gen double ly = round(1 + .5*x1 + .3*x2 + .3*e - .3*abs(invnormal(runiform())), .01)
+ 23. end
+
+. 
+. program define mkroot
+  1.     clear
+  2.     set seed 19051
+  3.     set obs 360
+  4.     gen int id = ceil(_n/30)
+  5.     gen int t = _n - (id-1)*30
+  6.     xtset id t
+  7.     gen double e = round(invnormal(runiform()), .01)
+  8.     gen double rw = e
+  9.     bysort id (t): replace rw = round(rw[_n-1] + e, .01) if _n > 1
+ 10.     gen double st = e
+ 11.     bysort id (t): replace st = round(.5*st[_n-1] + e, .01) if _n > 1
+ 12. end
+
+. 
+. program define mkdyn
+  1.     clear
+  2.     set seed 19052
+  3.     set obs 1200
+  4.     gen int id = ceil(_n/6)
+  5.     gen int t = _n - (id-1)*6
+  6.     xtset id t
+  7.     gen double u = round(invnormal(runiform()), .01)
+  8.     bysort id (t): replace u = u[1]
+  9.     gen double x = round(invnormal(runiform()), .01)
+ 10.     gen double w = round(invnormal(runiform()), .01)
+ 11.     gen double y = round(u + x + invnormal(runiform()), .01)
+ 12.     bysort id (t): replace y = round(.5*y[_n-1] + x + .3*w + u + invnormal(runiform()), .01) if _n > 1
+ 13. end
+
+. 
+. * ---- random effects by quadrature
+. mkpanel
+number of observations (_N) was 0, now 480
+       panel variable:  id (strongly balanced)
+        time variable:  t, 2000 to 2007
+                delta:  1 unit
+(418 real changes made)
+
+. capture noisily xtprobit yb x1, re
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -331.77254  
+Iteration 1:   log likelihood =  -302.9646  
+Iteration 2:   log likelihood = -302.94208  
+Iteration 3:   log likelihood = -302.94208  
+
+Fitting full model:
+
+rho =  0.0     log likelihood = -302.94208
+rho =  0.1     log likelihood = -292.37051
+rho =  0.2     log likelihood =   -288.677
+rho =  0.3     log likelihood = -288.23446
+rho =  0.4     log likelihood = -289.83382
+
+Iteration 0:   log likelihood = -288.23355  
+Iteration 1:   log likelihood = -287.03047  
+Iteration 2:   log likelihood = -287.02854  
+Iteration 3:   log likelihood = -287.02854  
+
+Random-effects probit regression                Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      58.46
+Log likelihood  = -287.02854                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5542754   .0724913     7.65   0.000     .4121951    .6963556
+       _cons |  -.0950704   .1051806    -0.90   0.366    -.3012206    .1110799
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.8808421   .3414998                     -1.550169   -.2115148
+-------------+----------------------------------------------------------------
+     sigma_u |   .6437653   .1099229                      .4606647    .8996429
+         rho |   .2930033   .0707425                      .1750618    .4473176
+------------------------------------------------------------------------------
+LR test of rho=0: chibar2(01) = 31.83                  Prob >= chibar2 = 0.000
+
+. capture noisily xtprobit yb x1, re intmethod(ghermite) intpoints(8)
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -331.77254  
+Iteration 1:   log likelihood =  -302.9646  
+Iteration 2:   log likelihood = -302.94208  
+Iteration 3:   log likelihood = -302.94208  
+
+Fitting full model:
+
+rho =  0.0     log likelihood = -302.94208
+rho =  0.1     log likelihood = -292.37051
+rho =  0.2     log likelihood = -288.67742
+rho =  0.3     log likelihood = -288.24051
+rho =  0.4     log likelihood = -289.86853
+
+Iteration 0:   log likelihood = -288.24051  
+Iteration 1:   log likelihood = -287.03047  
+Iteration 2:   log likelihood =  -287.0285  
+Iteration 3:   log likelihood =  -287.0285  
+
+Random-effects probit regression                Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: ghermite                    Integration pts.  =          8
+
+                                                Wald chi2(1)      =      58.22
+Log likelihood  =  -287.0285                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5547364   .0727056     7.63   0.000      .412236    .6972368
+       _cons |  -.0922808   .1051218    -0.88   0.380    -.2983157    .1137542
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.8810359   .3411318                     -1.549642   -.2124298
+-------------+----------------------------------------------------------------
+     sigma_u |   .6437029   .1097938                      .4607863    .8992314
+         rho |   .2929632   .0706606                       .175138    .4470914
+------------------------------------------------------------------------------
+LR test of rho=0: chibar2(01) = 31.83                  Prob >= chibar2 = 0.000
+
+. capture noisily quadchk
+
+Refitting model intpoints() = 12
+
+
+Iteration 0:   log likelihood = -287.02909  
+Iteration 1:   log likelihood =  -287.0288  
+Iteration 2:   log likelihood =  -287.0288  
+
+Random-effects probit regression                Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: ghermite                    Integration pts.  =         12
+
+                                                Wald chi2(1)      =      58.44
+Log likelihood  =  -287.0288                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5543063   .0725089     7.64   0.000     .4121915    .6964212
+       _cons |  -.0947223   .1051633    -0.90   0.368    -.3008385     .111394
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.8809683   .3414473                     -1.550193    -.211744
+-------------+----------------------------------------------------------------
+     sigma_u |   .6437247    .109899                      .4606594    .8995398
+         rho |   .2929772   .0707279                      .1750584    .4472609
+------------------------------------------------------------------------------
+
+Refitting model intpoints() = 16
+
+
+Iteration 0:   log likelihood = -287.02894  
+Iteration 1:   log likelihood = -287.02857  
+Iteration 2:   log likelihood = -287.02857  
+
+Random-effects probit regression                Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: ghermite                    Integration pts.  =         16
+
+                                                Wald chi2(1)      =      58.46
+Log likelihood  = -287.02857                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5542768   .0724924     7.65   0.000     .4121943    .6963592
+       _cons |  -.0950422   .1051789    -0.90   0.366    -.3011891    .1111047
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.8808653     .34148                     -1.550154   -.2115768
+-------------+----------------------------------------------------------------
+     sigma_u |   .6437579   .1099152                      .4606684     .899615
+         rho |   .2929985   .0707377                      .1750641    .4473022
+------------------------------------------------------------------------------
+
+                         Quadrature check
+
+               Fitted       Comparison     Comparison
+             quadrature     quadrature     quadrature
+             8 points       12 points      16 points
+-----------------------------------------------------
+Log           -287.0285      -287.0288     -287.02857
+likelihood                  -.00029931     -.00006294   Difference
+                             1.043e-06      2.193e-07   Relative difference
+-----------------------------------------------------
+yb:           .55473638      .55430632      .55427676
+      x1                    -.00043006     -.00045962   Difference
+                            -.00077524     -.00082854   Relative difference
+-----------------------------------------------------
+yb:          -.09228078     -.09472226     -.09504222
+   _cons                    -.00244148     -.00276144   Difference
+                             .02645709      .02992431   Relative difference
+-----------------------------------------------------
+lnsig2u:      -.8810359     -.88096832     -.88086526
+   _cons                     .00006758      .00017064   Difference
+                             -.0000767     -.00019368   Relative difference
+-----------------------------------------------------
+
+. capture noisily xtprobit yb x1, re vce(robust)
+
+Fitting comparison model:
+
+Iteration 0:   log pseudolikelihood = -331.77254  
+Iteration 1:   log pseudolikelihood =  -302.9646  
+Iteration 2:   log pseudolikelihood = -302.94208  
+Iteration 3:   log pseudolikelihood = -302.94208  
+
+Fitting full model:
+
+rho =  0.0     log pseudolikelihood = -302.94208
+rho =  0.1     log pseudolikelihood = -292.37051
+rho =  0.2     log pseudolikelihood =   -288.677
+rho =  0.3     log pseudolikelihood = -288.23446
+rho =  0.4     log pseudolikelihood = -289.83382
+
+Iteration 0:   log pseudolikelihood = -288.23355  
+Iteration 1:   log pseudolikelihood = -287.03047  
+Iteration 2:   log pseudolikelihood = -287.02854  
+Iteration 3:   log pseudolikelihood = -287.02854  
+
+Calculating robust standard errors:
+
+Random-effects probit regression                Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      58.46
+Log pseudolikelihood  = -287.02854              Prob > chi2       =     0.0000
+
+                                    (Std. Err. adjusted for 60 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5542754   .0757752     7.31   0.000     .4057588     .702792
+       _cons |  -.0950704   .1062154    -0.90   0.371    -.3032487    .1131079
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.8808421   .3631496                     -1.592602   -.1690819
+-------------+----------------------------------------------------------------
+     sigma_u |   .6437653   .1168916                       .450994     .918934
+         rho |   .2930033   .0752273                      .1690181    .4578299
+------------------------------------------------------------------------------
+
+. capture noisily xtcloglog yb x1, re
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -330.32033  
+Iteration 1:   log likelihood = -302.94587  
+Iteration 2:   log likelihood =  -302.8404  
+Iteration 3:   log likelihood = -302.84038  
+
+Fitting full model:
+
+tau =  0.0     log likelihood = -302.84038
+tau =  0.1     log likelihood = -294.33985
+tau =  0.2     log likelihood = -290.30886
+tau =  0.3     log likelihood =   -288.966
+tau =  0.4     log likelihood = -289.54258
+
+Iteration 0:   log likelihood = -288.96318  
+Iteration 1:   log likelihood = -287.93357  
+Iteration 2:   log likelihood = -287.93126  
+Iteration 3:   log likelihood = -287.93126  
+
+Random-effects complementary log-log model      Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      53.91
+Log likelihood  = -287.93126                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .6432512   .0876051     7.34   0.000     .4715484    .8149541
+       _cons |  -.5629964   .1239538    -4.54   0.000    -.8059414   -.3200515
+-------------+----------------------------------------------------------------
+    /lnsig2u |  -.6284294   .3497782                     -1.313982    .0571232
+-------------+----------------------------------------------------------------
+     sigma_u |   .7303622   .1277324                      .5184089    1.028973
+         rho |   .2448761   .0646781                      .1404349    .3916035
+------------------------------------------------------------------------------
+LR test of rho=0: chibar2(01) = 29.82                  Prob >= chibar2 = 0.000
+
+. capture noisily xtologit yo x1
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -524.98399  
+Iteration 1:   log likelihood = -490.20921  
+Iteration 2:   log likelihood =  -490.0513  
+Iteration 3:   log likelihood = -490.05115  
+Iteration 4:   log likelihood = -490.05115  
+
+Refining starting values:
+
+Grid node 0:   log likelihood =  -467.4382
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -467.4382  
+Iteration 1:   log likelihood = -463.33316  
+Iteration 2:   log likelihood = -463.30486  
+Iteration 3:   log likelihood = -463.30485  
+
+Random-effects ordered logistic regression      Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      71.77
+Log likelihood  = -463.30485                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yo |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .9176697    .108322     8.47   0.000     .7053625    1.129977
+-------------+----------------------------------------------------------------
+       /cut1 |  -.7967873   .1856079    -4.29   0.000    -1.160572   -.4330026
+       /cut2 |   .8617656   .1860079     4.63   0.000     .4971968    1.226334
+-------------+----------------------------------------------------------------
+   /sigma2_u |   1.272835   .3759213                      .7134713     2.27074
+------------------------------------------------------------------------------
+LR test vs. ologit model: chibar2(01) = 53.49         Prob >= chibar2 = 0.0000
+
+. capture noisily xtoprobit yo x1
+
+Fitting comparison model:
+
+Iteration 0:   log likelihood = -524.98399  
+Iteration 1:   log likelihood = -489.66142  
+Iteration 2:   log likelihood = -489.56302  
+Iteration 3:   log likelihood = -489.56301  
+
+Refining starting values:
+
+Grid node 0:   log likelihood = -473.36722
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -473.36722  (not concave)
+Iteration 1:   log likelihood = -467.54508  
+Iteration 2:   log likelihood = -463.50724  
+Iteration 3:   log likelihood = -463.37644  
+Iteration 4:   log likelihood =  -463.3759  
+Iteration 5:   log likelihood =  -463.3759  
+
+Random-effects ordered probit regression        Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      78.47
+Log likelihood  =  -463.3759                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yo |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5446816   .0614891     8.86   0.000     .4241652    .6651979
+-------------+----------------------------------------------------------------
+       /cut1 |  -.4708606   .1080148    -4.36   0.000    -.6825656   -.2591555
+       /cut2 |   .5057465   .1080143     4.68   0.000     .2940424    .7174506
+-------------+----------------------------------------------------------------
+   /sigma2_u |   .4308745   .1235064                      .2456752     .755684
+------------------------------------------------------------------------------
+LR test vs. oprobit model: chibar2(01) = 52.37        Prob >= chibar2 = 0.0000
+
+. capture noisily xttobit yt x1, ll(0)
+
+Obtaining starting values for full model:
+
+Iteration 0:   log likelihood = -492.07407
+Iteration 1:   log likelihood = -492.04188
+Iteration 2:   log likelihood = -492.04187
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -600.04088  
+Iteration 1:   log likelihood = -519.57533  
+Iteration 2:   log likelihood = -516.49784  
+Iteration 3:   log likelihood = -516.37264  
+Iteration 4:   log likelihood = -516.37231  
+Iteration 5:   log likelihood = -516.37231  
+
+Random-effects tobit regression                 Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =      83.42
+Log likelihood  = -516.37231                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yt |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .4974434   .0544639     9.13   0.000     .3906961    .6041908
+       _cons |   .0918315   .0994079     0.92   0.356    -.1030043    .2866673
+-------------+----------------------------------------------------------------
+    /sigma_u |   .6231845   .0838749     7.43   0.000     .4587927    .7875762
+    /sigma_e |   .9757578   .0492417    19.82   0.000     .8792459     1.07227
+-------------+----------------------------------------------------------------
+         rho |   .2897201   .0574794                      .1884921    .4110137
+------------------------------------------------------------------------------
+           229  left-censored observations
+           251     uncensored observations
+             0 right-censored observations
+
+. capture noisily xtintreg ylo yhi x1
+
+Obtaining starting values for full model:
+Iteration 0:   log likelihood = -735.88659
+Iteration 1:   log likelihood = -735.78657
+Iteration 2:   log likelihood = -735.78654
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -736.38661  
+Iteration 1:   log likelihood = -735.78623  
+Iteration 2:   log likelihood = -735.78053  
+Iteration 3:   log likelihood = -735.78053  
+
+Random-effects interval regression              Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Gaussian                   Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+Integration method: mvaghermite                 Integration pts.  =         12
+
+                                                Wald chi2(1)      =     125.97
+Log likelihood  = -735.78053                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5330235   .0474917    11.22   0.000     .4399416    .6261055
+       _cons |   .0692614   .0961626     0.72   0.471    -.1192138    .2577366
+-------------+----------------------------------------------------------------
+    /sigma_u |   .6509531   .0781432     8.33   0.000     .4977951     .804111
+    /sigma_e |   .9824802   .0367688    26.72   0.000     .9104146    1.054546
+-------------+----------------------------------------------------------------
+         rho |   .3050667   .0546429                      .2073633    .4191136
+------------------------------------------------------------------------------
+             0  left-censored observations
+             0     uncensored observations
+             0 right-censored observations
+           480       interval observations
+
+. capture noisily xtnbreg yc x1, re
+
+Fitting negative binomial (constant dispersion) model:
+
+Iteration 0:   log likelihood = -1781.2088  
+Iteration 1:   log likelihood = -1781.2088  
+
+Iteration 0:   log likelihood = -1319.0119  
+Iteration 1:   log likelihood =  -1130.534  
+Iteration 2:   log likelihood =  -1129.426  
+Iteration 3:   log likelihood =  -1129.426  
+
+Iteration 0:   log likelihood =  -1129.426  
+Iteration 1:   log likelihood = -1117.0501  
+Iteration 2:   log likelihood = -1116.6925  
+Iteration 3:   log likelihood = -1116.6923  
+Iteration 4:   log likelihood = -1116.6923  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -1188.502  
+Iteration 1:   log likelihood = -1176.9344  (not concave)
+Iteration 2:   log likelihood =  -1107.805  
+Iteration 3:   log likelihood = -1096.6744  
+Iteration 4:   log likelihood = -1095.9468  
+Iteration 5:   log likelihood =  -1095.921  
+Iteration 6:   log likelihood =  -1095.921  
+
+Random-effects negative binomial regression     Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Beta                       Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(1)      =      33.04
+Log likelihood  =  -1095.921                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .2763008   .0480677     5.75   0.000     .1820898    .3705119
+       _cons |  -.0696222   .1026226    -0.68   0.497    -.2707588    .1315145
+-------------+----------------------------------------------------------------
+       /ln_r |    1.42287   .2721554                      .8894554    1.956285
+       /ln_s |   2.452993    .328687                      1.808778    3.097208
+-------------+----------------------------------------------------------------
+           r |   4.149012   1.129176                      2.433804    7.073002
+           s |   11.62308   3.820356                      6.102988    22.13605
+------------------------------------------------------------------------------
+LR test vs. pooled: chibar2(01) = 41.54                Prob >= chibar2 = 0.000
+
+. capture noisily xtnbreg yc x1, fe
+
+Iteration 0:   log likelihood =  -908.1973  
+Iteration 1:   log likelihood = -888.23447  
+Iteration 2:   log likelihood = -841.89996  
+Iteration 3:   log likelihood = -841.84413  
+Iteration 4:   log likelihood = -841.84413  
+
+Conditional FE negative binomial regression     Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(1)      =      32.38
+Log likelihood  = -841.84413                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .2783455   .0489155     5.69   0.000      .182473    .3742181
+       _cons |  -.0644017   .1018528    -0.63   0.527    -.2640295    .1352261
+------------------------------------------------------------------------------
+
+. capture noisily xtnbreg yc x1, re irr
+
+Fitting negative binomial (constant dispersion) model:
+
+Iteration 0:   log likelihood = -1781.2088  
+Iteration 1:   log likelihood = -1781.2088  
+
+Iteration 0:   log likelihood = -1319.0119  
+Iteration 1:   log likelihood =  -1130.534  
+Iteration 2:   log likelihood =  -1129.426  
+Iteration 3:   log likelihood =  -1129.426  
+
+Iteration 0:   log likelihood =  -1129.426  
+Iteration 1:   log likelihood = -1117.0501  
+Iteration 2:   log likelihood = -1116.6925  
+Iteration 3:   log likelihood = -1116.6923  
+Iteration 4:   log likelihood = -1116.6923  
+
+Fitting full model:
+
+Iteration 0:   log likelihood =  -1188.502  
+Iteration 1:   log likelihood = -1176.9344  (not concave)
+Iteration 2:   log likelihood =  -1107.805  
+Iteration 3:   log likelihood = -1096.6744  
+Iteration 4:   log likelihood = -1095.9468  
+Iteration 5:   log likelihood =  -1095.921  
+Iteration 6:   log likelihood =  -1095.921  
+
+Random-effects negative binomial regression     Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Random effects u_i ~ Beta                       Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(1)      =      33.04
+Log likelihood  =  -1095.921                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yc |        IRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   1.318244    .063365     5.75   0.000     1.199722    1.448476
+       _cons |   .9327462   .0957209    -0.68   0.497     .7628004    1.140554
+-------------+----------------------------------------------------------------
+       /ln_r |    1.42287   .2721554                      .8894554    1.956285
+       /ln_s |   2.452993    .328687                      1.808778    3.097208
+-------------+----------------------------------------------------------------
+           r |   4.149012   1.129176                      2.433804    7.073002
+           s |   11.62308   3.820356                      6.102988    22.13605
+------------------------------------------------------------------------------
+LR test vs. pooled: chibar2(01) = 41.54                Prob >= chibar2 = 0.000
+
+. 
+. * ---- linear panel estimators
+. mkpanel
+number of observations (_N) was 0, now 480
+       panel variable:  id (strongly balanced)
+        time variable:  t, 2000 to 2007
+                delta:  1 unit
+(418 real changes made)
+
+. capture noisily xtgls y x1 x2, panels(iid)
+
+Cross-sectional time-series FGLS regression
+
+Coefficients:  generalized least squares
+Panels:        homoskedastic
+Correlation:   no autocorrelation
+
+Estimated covariances      =         1          Number of obs     =        480
+Estimated autocorrelations =         0          Number of groups  =         60
+Estimated coefficients     =         3          Time periods      =          8
+                                                Wald chi2(2)      =     217.69
+Log likelihood             = -834.9988          Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5247283   .0612334     8.57   0.000      .404713    .6447436
+          x2 |   .6208328   .0494781    12.55   0.000     .5238575    .7178081
+       _cons |    1.39999   .0630166    22.22   0.000     1.276479      1.5235
+------------------------------------------------------------------------------
+
+. capture noisily xtgls y x1 x2, panels(hetero)
+
+Cross-sectional time-series FGLS regression
+
+Coefficients:  generalized least squares
+Panels:        heteroskedastic
+Correlation:   no autocorrelation
+
+Estimated covariances      =        60          Number of obs     =        480
+Estimated autocorrelations =         0          Number of groups  =         60
+Estimated coefficients     =         3          Time periods      =          8
+                                                Wald chi2(2)      =     265.35
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5228653   .0487577    10.72   0.000     .4273019    .6184286
+          x2 |   .5663227   .0423442    13.37   0.000     .4833297    .6493157
+       _cons |   1.422009    .051149    27.80   0.000     1.321759    1.522259
+------------------------------------------------------------------------------
+
+. capture noisily xtgls y x1 x2, panels(correlated)
+
+Cross-sectional time-series FGLS regression
+
+Coefficients:  generalized least squares
+Panels:        heteroskedastic with cross-sectional correlation
+Correlation:   no autocorrelation
+
+Estimated covariances      =      1830          Number of obs     =        480
+Estimated autocorrelations =         0          Number of groups  =         60
+Estimated coefficients     =         3          Time periods      =          8
+                                                Wald chi2(2)      =      40.12
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5299352   .1058424     5.01   0.000     .3224879    .7373825
+          x2 |   .2933818   .1154016     2.54   0.011     .0671988    .5195649
+       _cons |   1.666355     .17959     9.28   0.000     1.314365    2.018345
+------------------------------------------------------------------------------
+Note: When the number of periods is greater than or equal to the number
+      of panels, results are based on a generalized inverse of a
+      singular matrix.
+Note: You estimated at least as many quantities as you have observations.
+
+. capture noisily xtgls y x1 x2, panels(hetero) corr(ar1)
+
+Cross-sectional time-series FGLS regression
+
+Coefficients:  generalized least squares
+Panels:        heteroskedastic
+Correlation:   common AR(1) coefficient for all panels  (0.2736)
+
+Estimated covariances      =        60          Number of obs     =        480
+Estimated autocorrelations =         1          Number of groups  =         60
+Estimated coefficients     =         3          Time periods      =          8
+                                                Wald chi2(2)      =     260.14
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5333987   .0444402    12.00   0.000     .4462974    .6204999
+          x2 |    .457635   .0396279    11.55   0.000     .3799658    .5353043
+       _cons |   1.444948   .0638615    22.63   0.000     1.319782    1.570115
+------------------------------------------------------------------------------
+
+. capture noisily xtgls y x1 x2, panels(iid) corr(psar1) igls
+Iteration 1: tolerance = 0
+
+
+Cross-sectional time-series FGLS regression
+
+Coefficients:  generalized least squares
+Panels:        homoskedastic
+Correlation:   panel-specific AR(1)
+
+Estimated covariances      =         1          Number of obs     =        480
+Estimated autocorrelations =        60          Number of groups  =         60
+Estimated coefficients     =         3          Time periods      =          8
+                                                Wald chi2(2)      =     207.03
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .4932154    .045602    10.82   0.000     .4038372    .5825936
+          x2 |   .4014399    .039636    10.13   0.000     .3237548     .479125
+       _cons |   1.386411   .0605969    22.88   0.000     1.267643    1.505178
+------------------------------------------------------------------------------
+
+. capture noisily xtpcse y x1 x2
+
+Linear regression, correlated panels corrected standard errors (PCSEs)
+
+Group variable:   id                            Number of obs     =        480
+Time variable:    t                             Number of groups  =         60
+Panels:           correlated (balanced)         Obs per group:
+Autocorrelation:  no autocorrelation                          min =          8
+                                                              avg =          8
+                                                              max =          8
+Estimated covariances      =      1830          R-squared         =     0.3120
+Estimated autocorrelations =         0          Wald chi2(2)      =     134.62
+Estimated coefficients     =         3          Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |           Panel-corrected
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5247283   .0554713     9.46   0.000     .4160065    .6334501
+          x2 |   .6208328     .10509     5.91   0.000     .4148601    .8268054
+       _cons |    1.39999   .0374066    37.43   0.000     1.326674    1.473305
+------------------------------------------------------------------------------
+
+. capture noisily xtpcse y x1 x2, corr(ar1)
+(note: estimates of rho outside [-1,1] bounded to be in the range [-1,1])
+
+Prais-Winsten regression, correlated panels corrected standard errors (PCSEs)
+
+Group variable:   id                            Number of obs     =        480
+Time variable:    t                             Number of groups  =         60
+Panels:           correlated (balanced)         Obs per group:
+Autocorrelation:  common AR(1)                                min =          8
+                                                              avg =          8
+                                                              max =          8
+Estimated covariances      =      1830          R-squared         =     0.2876
+Estimated autocorrelations =         1          Wald chi2(2)      =     155.81
+Estimated coefficients     =         3          Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |           Panel-corrected
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5203248   .0497264    10.46   0.000     .4228629    .6177868
+          x2 |   .4804764   .0798826     6.01   0.000     .3239094    .6370434
+       _cons |   1.412694   .0478302    29.54   0.000     1.318949     1.50644
+-------------+----------------------------------------------------------------
+         rho |   .2733996
+------------------------------------------------------------------------------
+
+. capture noisily xtpcse y x1 x2, hetonly
+
+Linear regression, heteroskedastic panels corrected standard errors
+
+Group variable:   id                            Number of obs     =        480
+Time variable:    t                             Number of groups  =         60
+Panels:           heteroskedastic (balanced)    Obs per group:
+Autocorrelation:  no autocorrelation                          min =          8
+                                                              avg =          8
+                                                              max =          8
+Estimated covariances      =        60          R-squared         =     0.3120
+Estimated autocorrelations =         0          Wald chi2(2)      =     187.49
+Estimated coefficients     =         3          Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |            Het-corrected
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5247283   .0600253     8.74   0.000     .4070808    .6423758
+          x2 |   .6208328   .0531046    11.69   0.000     .5167497    .7249159
+       _cons |    1.39999   .0629589    22.24   0.000     1.276592    1.523387
+------------------------------------------------------------------------------
+
+. capture noisily xtregar y x1 x2, fe
+
+FE (within) regression with AR(1) disturbances  Number of obs     =        420
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2934                                         min =          7
+     between = 0.3711                                         avg =        7.0
+     overall = 0.2560                                         max =          7
+
+                                                F(2,358)          =      74.33
+corr(u_i, Xb)  = 0.1838                         Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5376461   .0502618    10.70   0.000     .4388005    .6364916
+          x2 |   .2741164   .0448994     6.11   0.000     .1858167     .362416
+       _cons |   1.233742   .0484897    25.44   0.000     1.138382    1.329103
+-------------+----------------------------------------------------------------
+      rho_ar | -.07201156
+     sigma_u |  1.1553224
+     sigma_e |   .9905153
+     rho_fov |  .57635277   (fraction of variance because of u_i)
+------------------------------------------------------------------------------
+F test that all u_i=0: F(59,358) = 7.00                      Prob > F = 0.0000
+
+. capture noisily xtregar y x1 x2, re
+
+RE GLS regression with AR(1) disturbances       Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2927                                         min =          8
+     between = 0.4606                                         avg =        8.0
+     overall = 0.2775                                         max =          8
+
+                                                Wald chi2(3)      =     187.55
+corr(u_i, Xb)      = 0 (assumed)                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .536982   .0469325    11.44   0.000     .4449959    .6289681
+          x2 |   .3323699   .0416033     7.99   0.000     .2508289    .4139109
+       _cons |   1.424628    .121261    11.75   0.000      1.18696    1.662295
+-------------+----------------------------------------------------------------
+      rho_ar | -.07201156   (estimated autocorrelation coefficient)
+     sigma_u |  .78687936
+     sigma_e |  1.0531547
+     rho_fov |  .35825617   (fraction of variance due to u_i)
+       theta |   .5933149
+------------------------------------------------------------------------------
+
+. capture noisily xtrc y x1 x2
+
+Random-coefficients regression                  Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =        8.0
+                                                              max =          8
+
+                                                Wald chi2(2)      =      63.23
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .513357   .0822369     6.24   0.000     .3521756    .6745385
+          x2 |   .3270552   .0692863     4.72   0.000     .1912565    .4628539
+       _cons |   1.420824   .1738316     8.17   0.000      1.08012    1.761527
+------------------------------------------------------------------------------
+Test of parameter constancy:    chi2(177) =  1376.16      Prob > chi2 = 0.0000
+
+. capture noisily xtivreg y x1 (x2 = z), fe
+
+Fixed-effects (within) IV regression            Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2794                                         min =          8
+     between = 0.5096                                         avg =        8.0
+     overall = 0.2915                                         max =          8
+
+                                                Wald chi2(2)      =    1179.03
+corr(u_i, Xb)  = 0.2301                         Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x2 |    .396257   .0885973     4.47   0.000     .2226094    .5699045
+          x1 |   .5495353   .0465407    11.81   0.000     .4583172    .6407533
+       _cons |   1.417767   .0454907    31.17   0.000     1.328607    1.506927
+-------------+----------------------------------------------------------------
+     sigma_u |  1.0753331
+     sigma_e |  .98524058
+         rho |  .54363863   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+F  test that all u_i=0:     F(59,418) =     6.42          Prob > F    = 0.0000
+------------------------------------------------------------------------------
+Instrumented:   x2
+Instruments:    x1 z
+------------------------------------------------------------------------------
+
+. capture noisily xtivreg y x1 (x2 = z)
+
+G2SLS random-effects IV regression              Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2868                                         min =          8
+     between = 0.5064                                         avg =        8.0
+     overall = 0.2906                                         max =          8
+
+                                                Wald chi2(2)      =     161.86
+corr(u_i, X)       = 0 (assumed)                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x2 |   .3902894   .0850397     4.59   0.000     .2236147    .5569641
+          x1 |   .5471241   .0446883    12.24   0.000     .4595366    .6347116
+       _cons |   1.418201   .2066581     6.86   0.000     1.013159    1.823243
+-------------+----------------------------------------------------------------
+     sigma_u |  1.6252649
+     sigma_e |  .98524058
+         rho |  .73127095   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+Instrumented:   x2
+Instruments:    x1 z
+------------------------------------------------------------------------------
+
+. capture noisily xtivreg y x1 (x2 = z), ec2sls
+
+EC2SLS random-effects IV regression             Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2864                                         min =          8
+     between = 0.5084                                         avg =        8.0
+     overall = 0.2912                                         max =          8
+
+                                                Wald chi2(2)      =     162.07
+corr(u_i, X)       = 0 (assumed)                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x2 |   .3931075   .0850085     4.62   0.000     .2264939     .559721
+          x1 |   .5472627   .0447053    12.24   0.000      .459642    .6348835
+       _cons |   1.417984   .2067378     6.86   0.000     1.012785    1.823182
+-------------+----------------------------------------------------------------
+     sigma_u |  1.6252649
+     sigma_e |  .98524058
+         rho |  .73127095   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+Instrumented:   x2
+Instruments:    x1 z
+------------------------------------------------------------------------------
+
+. capture noisily xtivreg y x1 (x2 = z), be
+
+Between-effects IV regression:                  Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.1349                                         min =          8
+     between =      .                                         avg =        8.0
+     overall = 0.2711                                         max =          8
+
+                                                Wald chi2(2)      =       0.27
+sd(u_i + avg(e_i.))=  1.662174                  Prob > chi2       =     0.8716
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x2 |  -.6327859   1.210337    -0.52   0.601    -3.005002     1.73943
+          x1 |  -.1965601   .7542048    -0.26   0.794    -1.674774    1.281654
+       _cons |   1.488585   .2324037     6.41   0.000     1.033082    1.944088
+------------------------------------------------------------------------------
+Instrumented:   x2
+Instruments:    x1 z
+------------------------------------------------------------------------------
+
+. capture noisily xtivreg y x1 (x2 = z), fd
+
+First-differenced IV regression
+Group variable:    id                           Number of obs     =        420
+Time variable:     t                            Number of groups  =         60
+
+R-sq:                                           Obs per group:
+     within  = 0.2843                                         min =          7
+     between = 0.3648                                         avg =        7.0
+     overall = 0.2988                                         max =          7
+
+                                                Wald chi2(2)      =     137.96
+corr(u_i, Xb)  = 0.2427                         Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+         D.y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x2 |
+         D1. |   .3971751   .0934426     4.25   0.000      .214031    .5803192
+             |
+          x1 |
+         D1. |   .5209106   .0478495    10.89   0.000     .4271273    .6146939
+             |
+       _cons |  -.0021087   .0702529    -0.03   0.976    -.1398019    .1355844
+-------------+----------------------------------------------------------------
+     sigma_u |  1.0908567
+     sigma_e |  1.4393833
+         rho |  .36482037   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+Instrumented:   x2
+Instruments:    x1 z
+------------------------------------------------------------------------------
+
+. capture noisily xthtaylor y x1 x2 w, endog(x2)
+
+Hausman-Taylor estimation                       Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+                                                Obs per group:
+                                                              min =          8
+                                                              avg =          8
+                                                              max =          8
+
+Random effects u_i ~ i.i.d.                     Wald chi2(3)      =     176.02
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+TVexogenous  |
+          x1 |   .5374814   .0456698    11.77   0.000     .4479703    .6269926
+TVendogenous |
+          x2 |   .2677663    .041336     6.48   0.000     .1867493    .3487833
+TIexogenous  |
+           w |   .2273655   .1667246     1.36   0.173    -.0994087    .5541398
+             |
+       _cons |   1.080881   .2924179     3.70   0.000     .5077521    1.654009
+-------------+----------------------------------------------------------------
+     sigma_u |  1.0592676
+     sigma_e |  .97144879
+         rho |  .54316451   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+Note: TV refers to time varying; TI refers to time invariant.
+
+. capture noisily xthtaylor y x1 x2 w, endog(x2) amacurdy
+
+Amemiya-MaCurdy estimation                      Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Time variable: t                                Obs per group:
+                                                              min =          8
+                                                              avg =          8
+                                                              max =          8
+
+Random effects u_i ~ i.i.d.                     Wald chi2(3)      =     178.54
+                                                Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+TVexogenous  |
+          x1 |   .5378239   .0456535    11.78   0.000     .4483448     .627303
+TVendogenous |
+          x2 |   .2744826   .0412003     6.66   0.000     .1937315    .3552338
+TIexogenous  |
+           w |   .2275571    .166666     1.37   0.172    -.0991023    .5542166
+             |
+       _cons |    1.08007   .2923149     3.69   0.000     .5071434    1.652997
+-------------+----------------------------------------------------------------
+     sigma_u |  1.0592676
+     sigma_e |  .97144879
+         rho |  .54316451   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+Note: TV refers to time varying; TI refers to time invariant.
+
+. 
+. * ---- stochastic frontier
+. mkpanel
+number of observations (_N) was 0, now 480
+       panel variable:  id (strongly balanced)
+        time variable:  t, 2000 to 2007
+                delta:  1 unit
+(418 real changes made)
+
+. capture noisily xtfrontier ly x1 x2
+either ti or tvd must be specified
+
+. capture noisily xtfrontier ly x1 x2, tvd
+
+Iteration 0:   log likelihood = -206.01367  (not concave)
+Iteration 1:   log likelihood = -165.52367  (not concave)
+Iteration 2:   log likelihood = -164.33121  
+Iteration 3:   log likelihood = -163.99821  (not concave)
+Iteration 4:   log likelihood = -163.96909  
+Iteration 5:   log likelihood = -163.94425  (not concave)
+Iteration 6:   log likelihood = -163.94298  
+Iteration 7:   log likelihood = -163.93774  (not concave)
+Iteration 8:   log likelihood = -163.93755  
+Iteration 9:   log likelihood = -163.93741  
+Iteration 10:  log likelihood = -163.93654  
+Iteration 11:  log likelihood = -163.93643  
+Iteration 12:  log likelihood = -163.93489  (not concave)
+Iteration 13:  log likelihood = -163.93387  (not concave)
+Iteration 14:  log likelihood = -163.93241  
+Iteration 15:  log likelihood = -163.92909  (not concave)
+Iteration 16:  log likelihood = -163.92859  
+Iteration 17:  log likelihood = -163.92798  (not concave)
+Iteration 18:  log likelihood = -163.92789  
+Iteration 19:  log likelihood =  -163.9278  (not concave)
+Iteration 20:  log likelihood = -163.92779  
+Iteration 21:  log likelihood = -163.92777  
+
+Time-varying decay inefficiency model           Number of obs     =        480
+Group variable: id                              Number of groups  =         60
+
+Time variable: t                                Obs per group:
+                                                              min =          8
+                                                              avg =          8
+                                                              max =          8
+
+                                                Wald chi2(2)      =    1609.67
+Log likelihood  = -163.92777                    Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          ly |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5129317   .0151468    33.86   0.000     .4832445    .5426189
+          x2 |    .289417   .0122257    23.67   0.000     .2654552    .3133789
+       _cons |   .8121989   1.054096     0.77   0.441    -1.253792     2.87819
+-------------+----------------------------------------------------------------
+         /mu |   .0435415   1.048403     0.04   0.967     -2.01129    2.098373
+        /eta |   .0276457   .6045249     0.05   0.964    -1.157201    1.212493
+   /lnsigma2 |  -2.154844   .0645498   -33.38   0.000    -2.281359   -2.028329
+  /ilgtgamma |  -14.78745   672.5748    -0.02   0.982     -1333.01    1303.435
+-------------+----------------------------------------------------------------
+      sigma2 |   .1159212   .0074827                      .1021453    .1315552
+       gamma |   3.78e-07   .0002545                             .           1
+    sigma_u2 |   4.39e-08   .0000295                     -.0000578    .0000579
+    sigma_v2 |   .1159212   .0074828                      .1012552    .1305872
+------------------------------------------------------------------------------
+
+. capture noisily xtfrontier ly x1 x2, cost
+either ti or tvd must be specified
+
+. 
+. * ---- unit-root tests
+. mkroot
+number of observations (_N) was 0, now 360
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 30
+                delta:  1 unit
+(346 real changes made)
+(344 real changes made)
+
+. capture noisily xtunitroot ht rw
+
+Harris-Tzavalis unit-root test for rw
+-------------------------------------
+Ho: Panels contain unit roots               Number of panels  =     12
+Ha: Panels are stationary                   Number of periods =     30
+
+AR parameter: Common                        Asymptotics: N -> Infinity
+Panel means:  Included                                   T Fixed
+Time trend:   Not included
+------------------------------------------------------------------------------
+                    Statistic         z         p-value
+------------------------------------------------------------------------------
+ rho                  0.8876       -0.5350       0.2963
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot ht st
+
+Harris-Tzavalis unit-root test for st
+-------------------------------------
+Ho: Panels contain unit roots               Number of panels  =     12
+Ha: Panels are stationary                   Number of periods =     30
+
+AR parameter: Common                        Asymptotics: N -> Infinity
+Panel means:  Included                                   T Fixed
+Time trend:   Not included
+------------------------------------------------------------------------------
+                    Statistic         z         p-value
+------------------------------------------------------------------------------
+ rho                  0.3658      -18.4155       0.0000
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot breitung rw
+
+Breitung unit-root test for rw
+--------------------------------
+Ho: Panels contain unit roots               Number of panels  =     12
+Ha: Panels are stationary                   Number of periods =     30
+
+AR parameter: Common                        Asymptotics:  T,N -> Infinity
+Panel means:  Included                                        sequentially
+Time trend:   Not included                  Prewhitening: Not performed
+------------------------------------------------------------------------------
+                    Statistic      p-value
+------------------------------------------------------------------------------
+ lambda              -0.0828        0.4670
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot breitung st, trend
+
+Breitung unit-root test for st
+--------------------------------
+Ho: Panels contain unit roots               Number of panels  =     12
+Ha: Panels are stationary                   Number of periods =     30
+
+AR parameter: Common                        Asymptotics:  T,N -> Infinity
+Panel means:  Included                                        sequentially
+Time trend:   Included                      Prewhitening: Not performed
+------------------------------------------------------------------------------
+                    Statistic      p-value
+------------------------------------------------------------------------------
+ lambda              -5.1038        0.0000
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot hadri rw
+
+Hadri LM test for rw
+----------------------
+Ho: All panels are stationary               Number of panels  =     12
+Ha: Some panels contain unit roots          Number of periods =     30
+
+Time trend:         Not included            Asymptotics: T, N -> Infinity
+Heteroskedasticity: Not robust                                sequentially
+LR variance:        (not used)
+------------------------------------------------------------------------------
+                    Statistic      p-value
+------------------------------------------------------------------------------
+ z                   41.4026        0.0000
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot hadri st, trend
+
+Hadri LM test for st
+----------------------
+Ho: All panels are stationary               Number of panels  =     12
+Ha: Some panels contain unit roots          Number of periods =     30
+
+Time trend:         Included                Asymptotics: T, N -> Infinity
+Heteroskedasticity: Not robust                                sequentially
+LR variance:        (not used)
+------------------------------------------------------------------------------
+                    Statistic      p-value
+------------------------------------------------------------------------------
+ z                    8.1519        0.0000
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot fisher rw, lags(1)
+must specify one of dfuller or pperron
+
+. capture noisily xtunitroot fisher st, lags(1) trend
+must specify one of dfuller or pperron
+
+. capture noisily xtunitroot llc rw
+
+Levin-Lin-Chu unit-root test for rw
+-----------------------------------
+Ho: Panels contain unit roots               Number of panels  =     12
+Ha: Panels are stationary                   Number of periods =     30
+
+AR parameter: Common                        Asymptotics: N/T -> 0
+Panel means:  Included
+Time trend:   Not included
+
+ADF regressions: 1 lag
+LR variance:     Bartlett kernel, 9.00 lags average (chosen by LLC)
+------------------------------------------------------------------------------
+                    Statistic      p-value
+------------------------------------------------------------------------------
+ Unadjusted t        -4.1822
+ Adjusted t*         -0.3447        0.3652
+------------------------------------------------------------------------------
+
+. capture noisily xtunitroot ips rw
+
+Im-Pesaran-Shin unit-root test for rw
+-------------------------------------
+Ho: All panels contain unit roots           Number of panels  =     12
+Ha: Some panels are stationary              Number of periods =     30
+
+AR parameter: Panel-specific                Asymptotics: T,N -> Infinity
+Panel means:  Included                                        sequentially
+Time trend:   Not included
+
+ADF regressions: No lags included
+------------------------------------------------------------------------------
+                                              Fixed-N exact critical values
+                    Statistic      p-value         1%      5%      10%
+------------------------------------------------------------------------------
+ t-bar               -1.5864                     -2.050  -1.900  -1.820
+ t-tilde-bar         -1.4913
+ Z-t-tilde-bar       -0.2294        0.4093
+------------------------------------------------------------------------------
+
+. 
+. * ---- dynamic panel-data estimation
+. mkdyn
+number of observations (_N) was 0, now 1,200
+       panel variable:  id (strongly balanced)
+        time variable:  t, 1 to 6
+                delta:  1 unit
+(995 real changes made)
+(999 real changes made)
+
+. capture noisily xtabond y x
+
+Arellano-Bond dynamic panel-data estimation     Number of obs     =        800
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          4
+                                                              avg =          4
+                                                              max =          4
+
+Number of instruments =     12                  Wald chi2(2)      =     452.83
+                                                Prob > chi2       =     0.0000
+One-step results
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .6103129   .0757989     8.05   0.000     .4617498     .758876
+             |
+           x |   1.099322   .0538317    20.42   0.000     .9938133     1.20483
+       _cons |   .0175351   .0350184     0.50   0.617    -.0510997    .0861698
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/.).y
+        Standard: D.x
+Instruments for level equation
+        Standard: _cons
+
+. capture noisily estat abond
+artests not computed for one-step system estimator with vce(gmm)
+
+. capture noisily estat sargan
+Sargan test of overidentifying restrictions
+        H0: overidentifying restrictions are valid
+
+        chi2(9)      =   6.74183
+        Prob > chi2  =    0.6640
+
+. capture noisily xtabond y x, lags(2) pre(w) maxldep(3)
+
+Arellano-Bond dynamic panel-data estimation     Number of obs     =        600
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          3
+                                                              avg =          3
+                                                              max =          3
+
+Number of instruments =     22                  Wald chi2(4)      =     394.57
+                                                Prob > chi2       =     0.0000
+One-step results
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |    .517279    .097712     5.29   0.000      .325767    .7087909
+         L2. |  -.0416641   .0467144    -0.89   0.372    -.1332227    .0498944
+             |
+           w |   .2784316   .0517005     5.39   0.000     .1771004    .3797627
+           x |   1.069556    .072621    14.73   0.000     .9272216    1.211891
+       _cons |   .0277766   .0410408     0.68   0.499    -.0526619    .1082152
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/4).y L(1/.).w
+        Standard: D.x
+Instruments for level equation
+        Standard: _cons
+
+. capture noisily xtabond y x, twostep vce(robust)
+
+Arellano-Bond dynamic panel-data estimation     Number of obs     =        800
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          4
+                                                              avg =          4
+                                                              max =          4
+
+Number of instruments =     12                  Wald chi2(2)      =     424.67
+                                                Prob > chi2       =     0.0000
+Two-step results
+                                     (Std. Err. adjusted for clustering on id)
+------------------------------------------------------------------------------
+             |              WC-Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .5647723   .0934106     6.05   0.000     .3816908    .7478538
+             |
+           x |   1.084948   .0609339    17.81   0.000     .9655198    1.204377
+       _cons |   .0254966   .0691731     0.37   0.712    -.1100802    .1610734
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/.).y
+        Standard: D.x
+Instruments for level equation
+        Standard: _cons
+
+. capture noisily estat abond
+
+Arellano-Bond test for zero autocorrelation in first-differenced errors
+  +-----------------------+
+  |Order |  z     Prob > z|
+  |------+----------------|
+  |   1  |-6.0234  0.0000 |
+  |   2  |-.72742  0.4670 |
+  +-----------------------+
+   H0: no autocorrelation 
+
+. capture noisily xtdpdsys y x
+
+System dynamic panel-data estimation            Number of obs     =      1,000
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          5
+                                                              avg =          5
+                                                              max =          5
+
+Number of instruments =     16                  Wald chi2(2)      =     842.37
+                                                Prob > chi2       =     0.0000
+One-step results
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .6956594   .0305432    22.78   0.000     .6357958     .755523
+             |
+           x |   1.132686   .0464854    24.37   0.000     1.041576    1.223796
+       _cons |   .0037753   .0347052     0.11   0.913    -.0642457    .0717963
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/.).y
+        Standard: D.x
+Instruments for level equation
+        GMM-type: LD.y
+        Standard: _cons
+
+. capture noisily estat abond
+artests not computed for one-step system estimator with vce(gmm)
+
+. capture noisily xtdpdsys y x, twostep vce(robust)
+
+System dynamic panel-data estimation            Number of obs     =      1,000
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          5
+                                                              avg =          5
+                                                              max =          5
+
+Number of instruments =     16                  Wald chi2(2)      =     648.88
+                                                Prob > chi2       =     0.0000
+Two-step results
+------------------------------------------------------------------------------
+             |              WC-Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .7332556   .0411369    17.82   0.000     .6526288    .8138823
+             |
+           x |   1.154945   .0500623    23.07   0.000     1.056825    1.253065
+       _cons |   .0102726   .0668062     0.15   0.878    -.1206651    .1412104
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/.).y
+        Standard: D.x
+Instruments for level equation
+        GMM-type: LD.y
+        Standard: _cons
+
+. capture noisily xtdpd y L.y x, dgmmiv(y) div(x)
+
+Dynamic panel-data estimation                   Number of obs     =      1,000
+Group variable: id                              Number of groups  =        200
+Time variable: t
+                                                Obs per group:
+                                                              min =          5
+                                                              avg =          5
+                                                              max =          5
+
+Number of instruments =     12                  Wald chi2(2)      =     452.83
+                                                Prob > chi2       =     0.0000
+One-step results
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           y |
+         L1. |   .6103129   .0757989     8.05   0.000     .4617498     .758876
+             |
+           x |   1.099322   .0538317    20.42   0.000     .9938133     1.20483
+       _cons |   .0175351   .0350184     0.50   0.617    -.0510997    .0861698
+------------------------------------------------------------------------------
+Instruments for differenced equation
+        GMM-type: L(2/.).y
+        Standard: D.x
+Instruments for level equation
+        Standard: _cons
+
+. 
+. * ---- panel description
+. mkpanel
+number of observations (_N) was 0, now 480
+       panel variable:  id (strongly balanced)
+        time variable:  t, 2000 to 2007
+                delta:  1 unit
+(418 real changes made)
+
+. capture noisily xttab yo
+
+                  Overall             Between            Within
+       yo |    Freq.  Percent      Freq.  Percent        Percent
+----------+-----------------------------------------------------
+        0 |     173     36.04        51     85.00          42.40
+        1 |     138     28.75        56     93.33          30.80
+        2 |     169     35.21        57     95.00          37.06
+----------+-----------------------------------------------------
+    Total |     480    100.00       164    273.33          36.59
+                                (n = 60)
+
+. capture noisily xtdata y x1, fe clear
+
+. summarize y x1
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+           y |        480    1.441792    1.084222  -1.736958   4.816792
+          x1 |        480    -.012375    .9712411  -2.676125   2.727625
+
+. mkpanel
+number of observations (_N) was 0, now 480
+       panel variable:  id (strongly balanced)
+        time variable:  t, 2000 to 2007
+                delta:  1 unit
+(418 real changes made)
+
+. capture noisily xtdata y x1, be clear
+
+. summarize y x1
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+           y |         60    1.441792    1.270397    -1.6225    4.76625
+          x1 |         60    -.012375    .3468765     -.7125     .85125
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1905_panel.log
+  log type:  text
+ closed on:  20 Oct 2026, 21:52:16
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

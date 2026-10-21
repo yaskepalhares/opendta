@@ -57,6 +57,7 @@ class CoefRow:
     noeform: bool = False         # never exponentiated (e.g. /ln_p in streg)
     tight: bool = False           # label over 13 columns, touching the bar (var(_cons)| in me)
     zero_lo: bool = False         # variance: the lower confidence limit is truncated at zero
+    left: bool = False            # header label aligned to the left (xthtaylor blocks)
 
 
 @dataclass
@@ -177,7 +178,7 @@ def coef_table(s: "Session", depvar: str, rows: list[CoefRow], *, stat: str, df:
             out.write(("  " + r.eq if r.eq else "") + "\n", "text")   # ex.: (base outcome)
             continue
         if r.kind == "header":
-            out.write(f"{abbrev(r.label):>{X}} |\n", "text")
+            out.write(f"{abbrev(r.label):<{X}} |\n" if r.left else f"{abbrev(r.label):>{X}} |\n", "text")
             continue
         if r.kind == "blank":
             out.write(f"{'':>{X}} |\n", "text")

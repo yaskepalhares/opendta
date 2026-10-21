@@ -49,7 +49,7 @@ def set_obs(s: "Session", value: str) -> None:
     if n < old:
         raise StataError(198, f"obs must be at least {old}" if old else "invalid syntax")
     s.data.set_obs(n)
-    _note(s, f"number of observations (_N) was {old}, now {n}")
+    _note(s, f"number of observations (_N) was {old:,}, now {n:,}")
 
 
 # ---------------------------------------------------------------------------

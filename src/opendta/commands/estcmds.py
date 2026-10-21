@@ -383,6 +383,138 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("xtprobit", "xtprob")
+def cmd_xtprobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtprobit as run
+    run(s, args)
+
+
+@command("xtcloglog", "xtcloglog")
+def cmd_xtcloglog(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtcloglog as run
+    run(s, args)
+
+
+@command("xtologit", "xtologit")
+def cmd_xtologit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtologit as run
+    run(s, args)
+
+
+@command("xtoprobit", "xtoprobit")
+def cmd_xtoprobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtoprobit as run
+    run(s, args)
+
+
+@command("xttobit", "xttobit")
+def cmd_xttobit(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xttobit as run
+    run(s, args)
+
+
+@command("xtintreg", "xtintreg")
+def cmd_xtintreg(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtintreg as run
+    run(s, args)
+
+
+@command("xtnbreg", "xtnbreg")
+def cmd_xtnbreg(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_xtnbreg as run
+    run(s, args)
+
+
+@command("xtgls", "xtgls")
+def cmd_xtgls(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtgls as run
+    run(s, args)
+
+
+@command("xtpcse", "xtpcse")
+def cmd_xtpcse(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtpcse as run
+    run(s, args)
+
+
+@command("xtregar", "xtregar")
+def cmd_xtregar(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtregar as run
+    run(s, args)
+
+
+@command("xtrc", "xtrc")
+def cmd_xtrc(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtrc as run
+    run(s, args)
+
+
+@command("xthtaylor", "xthtaylor")
+def cmd_xthtaylor(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xthtaylor as run
+    run(s, args)
+
+
+@command("xtivreg", "xtivreg")
+def cmd_xtivreg(s: "Session", args: str) -> None:
+    from ..estimation.xtlin import cmd_xtivreg as run
+    run(s, args)
+
+
+@command("xtfrontier", "xtfrontier")
+def cmd_xtfrontier(s: "Session", args: str) -> None:
+    from ..estimation.xtfrontier import cmd_xtfrontier as run
+    run(s, args)
+
+
+@command("xtunitroot", "xtunitroot")
+def cmd_xtunitroot(s: "Session", args: str) -> None:
+    from ..estimation.xtroot import cmd_xtunitroot as run
+    run(s, args)
+
+
+@command("xtabond", "xtabond")
+def cmd_xtabond(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtabond as run
+    run(s, args)
+
+
+@command("xtdpdsys", "xtdpdsys")
+def cmd_xtdpdsys(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtdpdsys as run
+    run(s, args)
+
+
+@command("xtdpd", "xtdpd")
+def cmd_xtdpd(s: "Session", args: str) -> None:
+    from ..estimation.xtdpd import cmd_xtdpd as run
+    run(s, args)
+
+
+@command("xtline", "xtline")
+def cmd_xtline(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xtline as run
+    run(s, args)
+
+
+@command("xttab", "xttab")
+def cmd_xttab(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xttab as run
+    run(s, args)
+
+
+@command("xtdata", "xtdata")
+def cmd_xtdata(s: "Session", args: str) -> None:
+    from ..estimation.xtdesc import cmd_xtdata as run
+    run(s, args)
+
+
+@command("quadchk", "quadchk")
+def cmd_quadchk(s: "Session", args: str) -> None:
+    from ..estimation.xtre import cmd_quadchk as run
+    run(s, args)
+
+
 @command("stset", "stset")
 def cmd_stset(s: "Session", args: str) -> None:
     from ..estimation.st import cmd_stset as run

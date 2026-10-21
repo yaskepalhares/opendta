@@ -84,6 +84,7 @@ AREA_OF = {
     "xtset": "Panel data", "xtreg": "Panel data", "xtlogit": "Panel data",
     "xtpoisson": "Panel data", "xtgee": "Panel data", "xtsum": "Panel data",
     "xtdescribe": "Panel data",
+    "xtprobit": "Panel data", "xtcloglog": "Panel data", "xtologit": "Panel data", "xtoprobit": "Panel data", "xttobit": "Panel data", "xtintreg": "Panel data", "xtnbreg": "Panel data", "quadchk": "Panel data", "xtgls": "Panel data", "xtpcse": "Panel data", "xtregar": "Panel data", "xtrc": "Panel data", "xthtaylor": "Panel data", "xtivreg": "Panel data", "xtfrontier": "Panel data", "xtunitroot": "Panel data", "xtabond": "Panel data", "xtdpdsys": "Panel data", "xtdpd": "Panel data", "xtline": "Panel data", "xttab": "Panel data", "xtdata": "Panel data",
     "st": "Survival analysis", "stset": "Survival analysis", "stcox": "Survival analysis",
     "streg": "Survival analysis", "streset": "Survival analysis", "sts": "Survival analysis",
     "stsum": "Survival analysis", "stdescribe": "Survival analysis",

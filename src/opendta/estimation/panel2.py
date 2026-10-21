@@ -53,12 +53,14 @@ def _num_grad(f, b, h=1e-5):
 
 
 class _Panel:
-    def __init__(self, s: "Session", cmd: str, args: str):
+    def __init__(self, s: "Session", cmd: str, args: str, extra_opts: dict | None = None,
+                 constant: bool | None = None, need_dep: bool = True):
         from .tsops import panel_info
         self.s = s
-        self.pr = _Prep(s, args, {"fe": 2, "re": 2, "pa": 2, "i": 1, "or": 2, "irr": 3, "exposure": 3,
-                                  "offset": 3, "normal": 4, "intpoints": 4, "intmethod": 4,
-                                  "mle": 3})
+        spec = {"fe": 2, "re": 2, "pa": 2, "i": 1, "or": 2, "irr": 3, "exposure": 3,
+                "offset": 3, "normal": 4, "intpoints": 4, "intmethod": 4, "mle": 3}
+        spec.update(extra_opts or {})
+        self.pr = _Prep(s, args, spec, constant=constant, need_dep=need_dep)
         o = self.pr.o
         ds = s.data
         pvar = str(o["i"]).strip() if isinstance(o.get("i"), str) else panel_info(ds)
@@ -68,7 +70,7 @@ class _Panel:
         ids = ds.get(pvar).data[self.pr.smp.mask]
         self.uniq, self.inv = np.unique(ids, return_inverse=True)
         self.fe = bool(o.get("fe"))
-        self.y = self.pr.y.astype(float)
+        self.y = self.pr.y.astype(float) if self.pr.y is not None else None
 
 
 def _obs_per_group(inv: np.ndarray):
@@ -79,25 +81,26 @@ def _obs_per_group(inv: np.ndarray):
 def _header(s, title: str, sub: str, x: dict) -> None:
     out = s.output
     out.write("\n", "text")
+    # VERIFY: xtfrontier, tvd prints the average without decimals (1905 log)
     rows = [(title, ("Number of obs", f"{x['N']:,}")), (f"Group variable: {x['pvar']}", ("Number of groups", f"{x['G']:,}"))]
     for lft, (rl, rv) in rows:
         out.write(f"{lft:<48}{rl:<18}= ", "text")
         out.write(f"{rv:>10}\n", "result")
     out.write("\n", "text")
     out.write(f"{sub:<48}Obs per group:\n", "text")
-    for lab, val in (("min", f"{x['tmin']:,}"), ("avg", f"{x['tavg']:.1f}"), ("max", f"{x['tmax']:,}")):
+    for lab, val in (("min", f"{x['tmin']:,}"), ("avg", f"{x['tavg']:g}" if title.startswith("Time-varying decay") else f"{x['tavg']:.1f}"), ("max", f"{x['tmax']:,}")):
         out.write(f"{'':<62}{lab} = ", "text")
         out.write(f"{val:>10}\n", "result")
     out.write("\n", "text")
     if x.get("intpoints"):
         # xtlogit, re: integration method and points (compat 0804)
-        out.write(f"{'Integration method: mvaghermite':<48}{'Integration pts.':<18}= ", "text")
+        out.write(f"{'Integration method: ' + x.get('intmethod', 'mvaghermite'):<48}{'Integration pts.':<18}= ", "text")
         out.write(f"{x['intpoints']:>10}\n", "result")
         out.write("\n", "text")
     chi = f"{x['chi2type']} chi2({x['df_m']})"
     out.write(f"{'':<48}{chi:<18}= ", "text")
     out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
-    lab = "Log likelihood  = "
+    lab = "Log pseudolikelihood  = " if x.get("pseudo") else "Log likelihood  = "
     ll_txt = format(_g(x["ll"]).strip(), ">10")     # "Log likelihood  =  -394.4428" (compat 0804)
     out.write(f"{lab + ll_txt:<48}{'Prob > chi2':<18}= ", "text")
     out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
@@ -105,13 +108,15 @@ def _header(s, title: str, sub: str, x: dict) -> None:
 
 
 def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, sub, keep_groups, ll0=None,
-            chibar=None, aux_rows=(), eform="", lr0=None, intpoints=None):
+            chibar=None, aux_rows=(), eform="", lr0=None, intpoints=None, intmethod="mvaghermite",
+            robust=None, extra_scalars=(), extra_macros=(), footer=None, chi2_V=None):
     pr = P.pr
     smp = pr.smp
-    k = pr.X.shape[1] + (0 if P.fe else (1 if pr.constant else 0))
+    fe = P.fe and not getattr(P, "fe_cons", False)      # xtnbreg, fe reports _cons (compat 1905)
+    k = pr.X.shape[1] + (0 if fe else (1 if pr.constant else 0))
     slopes = list(range(pr.X.shape[1]))
     bs = b[slopes]
-    Vs = V[np.ix_(slopes, slopes)]
+    Vs = (V if chi2_V is None else chi2_V)[np.ix_(slopes, slopes)]
     try:
         chi2 = float(bs @ np.linalg.solve(Vs, bs)) if slopes else SYS
     except np.linalg.LinAlgError:
@@ -121,10 +126,10 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         # xtlogit, fe: LR test against the model without covariates (compat 0804)
         chi2, chi2type = max(2 * (res.ll - lr0), 0.0), "LR"
     p = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
-    names = [c.name for c in smp.cols] + ([] if P.fe or not pr.constant else ["_cons"])
+    names = [c.name for c in smp.cols] + ([] if fe or not pr.constant else ["_cons"])
     from .models2 import _bmap, _expand, _semap
-    kx = pr.X.shape[1] + (0 if P.fe or not pr.constant else 1)
-    if P.fe:
+    kx = pr.X.shape[1] + (0 if fe or not pr.constant else 1)
+    if fe:
         bmap = {}
         j = 0
         for c in smp.cols:
@@ -140,7 +145,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         rows = rows_from_columns(smp.cols, _bmap(pr, b, kx), _semap(pr, V, kx), s.data, constant=pr.constant)
     rows += list(aux_rows)
     layout = [(c.name if not c.omitted else fvars.omitted_name(c.name), c.values is not None) for c in smp.cols]
-    if not P.fe and pr.constant:
+    if not fe and pr.constant:
         layout.append(("_cons", True))
     for nm in names_extra:
         layout.append((nm, True))
@@ -151,14 +156,17 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
                     b_full, V_full, int(keep_groups.sum()), "z", None)
     est.rows = rows
     est.eqnames = eqs
-    est.cols, est.constant, est.terms, est.depcomp = smp.cols, (not P.fe and pr.constant), smp.terms, smp.depcomp
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, (not fe and pr.constant), smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = ""
+    if robust is not None:
+        # vce(robust) / vce(cluster): robust = (clustvar, number of clusters)
+        est.vcetype, est.clustvar, est.n_clust = "Robust", robust[0], robust[1]
     inv = P.inv[keep_groups]
     tmin, tavg, tmax = _obs_per_group(np.unique(inv, return_inverse=True)[1])
     x = {"N": int(keep_groups.sum()), "G": len(np.unique(inv)), "pvar": P.pvar, "tmin": tmin, "tavg": tavg,
          "tmax": tmax, "chi2": chi2, "p": p, "df_m": len(slopes), "ll": res.ll, "chi2type": chi2type,
-         "intpoints": intpoints}
+         "intpoints": intpoints, "intmethod": intmethod, "pseudo": robust is not None}
     est.extra = x
     est.coef_title = eform or "Coef."
     est.eform_on = bool(eform)
@@ -167,13 +175,18 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         if header:
             _header(ss, title, sub, ee.extra)
         if table:
-            coef_table(ss, ee.depvar, ee.rows, stat="z", df=None, level=level or ee.level,
-                       coef_title=ee.coef_title, eform=ee.eform_on)
+            if robust is not None:
+                ss.output.write(f"{'(Std. Err. adjusted for ' + format(int(ee.n_clust), ',') + ' clusters in ' + ee.clustvar + ')':>78}\n", "text")
+            coef_table(ss, "" if ee.cmd == "xtintreg" else ee.depvar, ee.rows, stat="z", df=None,
+                       level=level or ee.level, coef_title=ee.coef_title, eform=ee.eform_on, vcetype=ee.vcetype)
+            if footer is not None:
+                footer(ss, ee)
             if chibar is not None:
-                lab, val, pv = chibar
+                lab, val, pv, *fmt = chibar
+                wd, dec = fmt if fmt else (55, 3)      # ordered models: width 54 and four decimals (compat 1905)
                 # "LR test of rho=0: chibar2(01) = 8.21" with Prob at column 56 (compat 0804)
-                ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(55)
-                                + f"Prob >= chibar2 = {pv:5.3f}\n", "text")
+                ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(wd)
+                                + f"Prob >= chibar2 = {pv:.{dec}f}\n", "text")
     est.display = disp
     scalars = [("N", float(x["N"])), ("N_g", float(x["G"])), ("g_min", float(tmin)), ("g_avg", tavg),
                ("g_max", float(tmax)), ("df_m", float(len(slopes))), ("ll", res.ll), ("chi2", chi2), ("p", p),
@@ -185,9 +198,10 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         scalars.append(("ll_0", lr0))
     if chibar is not None:
         scalars += [("chi2_c", chibar[1]), ("p_c", chibar[2])]
+    scalars += list(extra_scalars)
     macros = [("cmdline", f"{cmd} {args.strip()}"), ("cmd", cmd), ("ivar", P.pvar), ("model", "fe" if P.fe else "re"),
-              ("depvar", smp.depname), ("chi2type", chi2type), ("vce", "oim"), ("title", title),
-              ("properties", "b V"), ("predict", f"{cmd}_p")]
+              ("depvar", smp.depname), ("chi2type", chi2type), ("vce", "robust" if robust else "oim"), ("title", title),
+              ("properties", "b V"), ("predict", f"{cmd}_p")] + list(extra_macros)
     sample = np.zeros(s.data.nobs, dtype=bool)
     sample[np.flatnonzero(smp.mask)[keep_groups]] = True
     post(s, est, list(reversed(scalars)), list(reversed(macros)), sample)
@@ -410,9 +424,6 @@ def _clogit_ll(eta: np.ndarray, y: np.ndarray) -> float:
     return float(eta @ y - f[k])
 
 
-_GH_X, _GH_W = np.polynomial.hermite.hermgauss(12)
-
-
 def cmd_xtlogit(s: "Session", args: str) -> None:
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
@@ -468,35 +479,17 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         return
     Xc = np.column_stack([X, np.ones(len(y))]) if pr.constant else X
     k = Xc.shape[1]
-    G = inv.max() + 1
+    from ..core import panelquad as pq
+    from .xtre import _quad_options
+    nq, adaptive, meth = _quad_options(P)
+    grp = pq.Groups(inv)
     sign = 2 * y - 1
-    order = np.argsort(inv, kind="stable")
-    bounds = np.searchsorted(inv[order], np.arange(G + 1))
+
+    def f(u):
+        return pq.ll_logit(u, sign)
 
     def ll_re(par):
-        b, lns2 = par[:k], par[k]
-        sig = math.exp(0.5 * lns2)
-        eta = Xc @ b
-        tot = 0.0
-        for g in range(G):
-            ix = order[bounds[g]:bounds[g + 1]]
-            e, sg = eta[ix], sign[ix]
-            # mode and curvature of the integrand in nu (adaptive)
-            mu, tau = 0.0, sig
-            for _ in range(8):
-                p = special.expit(sg * (e + mu))
-                d1 = float((sg * (1 - p)).sum()) - mu / sig ** 2
-                d2 = -float((p * (1 - p)).sum()) - 1 / sig ** 2
-                mu -= d1 / d2
-                tau = 1 / math.sqrt(-d2)
-                if abs(d1) < 1e-10:
-                    break
-            nodes = mu + math.sqrt(2) * tau * _GH_X
-            vals = (special.log_expit(sg[None, :] * (e[None, :] + nodes[:, None]))).sum(axis=1) \
-                - 0.5 * (nodes / sig) ** 2 - math.log(sig * math.sqrt(2 * math.pi))
-            terms = np.log(_GH_W) + _GH_X ** 2 + vals
-            tot += math.log(math.sqrt(2) * tau) + float(special.logsumexp(terms))
-        return tot
+        return pq.re_loglik(f, Xc @ par[:k], grp, math.exp(0.5 * par[k]), nq, adaptive)
 
     def fun(par, todo):
         ll = ll_re(par)
@@ -516,26 +509,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     # Gauss-Hermite quadrature, until the likelihood falls; the full model starts from the best tau
     # (compat 0804)
 
-    def ll_grid(t):
-        if t == 0:
-            return rl.ll
-        sig = math.sqrt(t / (1 - t))
-        eta = Xc @ rl.b
-        tot = 0.0
-        for g in range(G):
-            ix = order[bounds[g]:bounds[g + 1]]
-            e, sg = eta[ix], sign[ix]
-            nodes = math.sqrt(2) * sig * _GH_X
-            vals = special.log_expit(sg[None, :] * (e[None, :] + nodes[:, None])).sum(axis=1)
-            tot += float(special.logsumexp(np.log(_GH_W) + vals)) - 0.5 * math.log(math.pi)
-        return tot
-    grid = []
-    t = 0.0
-    while t < 0.95:
-        grid.append((t, ll_grid(t)))
-        if len(grid) > 1 and grid[-1][1] < grid[-2][1]:
-            break
-        t = round(t + 0.1, 1)
+    grid = pq.tau_grid(f, Xc @ rl.b, grp, rl.ll, nq)
     best_t = max(grid, key=lambda tv: tv[1])[0]
     start_l2 = math.log(best_t / (1 - best_t)) if best_t > 0 else 0.0
     res = pr.maximize(fun, np.concatenate([rl.b, [start_l2]]))
@@ -544,7 +518,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         print_log(out, rl, "log likelihood")
         out.write("\nFitting full model:\n\n", "text")
         for tv, lv in grid:
-            out.write(f"tau = {tv:4.1f}     log likelihood = {_g(lv).strip()}\n", "text")
+            out.write(f"tau = {tv:4.1f}     log likelihood = {_g(lv).strip():>10}\n", "text")
         out.write("\n", "text")
         print_log(out, res, "log likelihood")
     V = np.linalg.inv(-res.H)
@@ -566,4 +540,5 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
     pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
     _finish(s, P, "xtlogit", args, res.b, V, res, ["/lnsig2u"], "Random-effects logistic regression",
             "Random effects u_i ~ Gaussian", np.ones(len(y), bool), chibar=("LR test of rho=0", chib, pchib),
-            aux_rows=aux, eform="Odds Ratio" if eform else "", intpoints=12)
+            aux_rows=aux, eform="Odds Ratio" if eform else "", intpoints=nq, intmethod=meth)
+    s._quadchk = {"cmd": "xtlogit", "args": args, "nq": nq, "adaptive": adaptive, "ll": res.ll}
