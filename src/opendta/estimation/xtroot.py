@@ -66,9 +66,9 @@ def _matrix(s: "Session", name: str, mask: np.ndarray, require_balanced: bool):
     return None, series
 
 
-def _header(out, title: str, name: str, left: list[str], right: list[str]) -> None:
+def _header(out, title: str, name: str, left: list[str], right: list[str], extra_rule: int = 0) -> None:
     out.write(f"\n{title} for {name}\n", "text")
-    out.write("-" * len(f"{title} for {name}") + "\n", "text")
+    out.write("-" * (len(f"{title} for {name}") + extra_rule) + "\n", "text")
     for lft, rgt in zip(left, right):
         out.write(f"{lft:<44}{rgt}".rstrip() + "\n", "text")
 
@@ -100,6 +100,8 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
         raise StataError(198, "option not available yet in OpenDTA")
     if o.get("drift"):
         raise StataError(198, "option drift is not available yet in OpenDTA")
+    if sub == "fisher" and not o.get("dfuller") and not o.get("pperron"):
+        raise StataError(198, "must specify one of dfuller or pperron")
     mask = touse(s, p)
     out = s.output
     trend, const = bool(o.get("trend")), not o.get("noconstant")
@@ -122,9 +124,9 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
                 [f"Number of panels  = {N:>6}", f"Number of periods = {T:>6}", "",
                  "Asymptotics: N -> Infinity", "             T Fixed", ""])
         out.write("-" * 78 + "\n", "text")
-        out.write("   Statistic           z         p-value\n", "text")
+        out.write("                    Statistic         z         p-value\n", "text")
         out.write("-" * 78 + "\n", "text")
-        out.write(f" rho {r['rho']:>14.4f}   {r['z']:>11.4f}   {r['p']:>9.4f}\n", "result")
+        out.write(f"{' rho':<20}{r['rho']:>8.4f}{r['z']:>14.4f}{r['p']:>13.4f}\n", "result")
         out.write("-" * 78 + "\n", "text")
         s.r = {"N_g": float(N), "N_t": float(T), "rho": r["rho"], "z": r["z"], "p": r["p"]}
     elif sub == "breitung":
@@ -137,24 +139,26 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
                 ["Ho: Panels contain unit roots", "Ha: Panels are stationary", "",
                  "AR parameter: Common", f"Panel means:  {means}", f"Time trend:   {tr}"],
                 [f"Number of panels  = {N:>6}", f"Number of periods = {T:>6}", "",
-                 "Asymptotics: T,N -> Infinity", "             sequentially", ""])
+                 "Asymptotics:  T,N -> Infinity", " " * 18 + "sequentially", "Prewhitening: Not performed"],
+                extra_rule=2)
         out.write("-" * 78 + "\n", "text")
-        out.write("   Statistic           p-value\n", "text")
+        out.write("                    Statistic      p-value\n", "text")
         out.write("-" * 78 + "\n", "text")
-        out.write(f" lambda {r['lambda']:>11.4f}   {r['p']:>9.4f}\n", "result")
+        out.write(f"{' lambda':<20}{r['lambda']:>8.4f}{r['p']:>14.4f}\n", "result")
         out.write("-" * 78 + "\n", "text")
         s.r = {"N_g": float(N), "N_t": float(T), "lambda": r["lambda"], "p": r["p"]}
     elif sub == "hadri":
         r = pr.hadri(Y, trend, bool(o.get("robust")))
         _header(out, "Hadri LM test", name,
                 ["Ho: All panels are stationary", "Ha: Some panels contain unit roots", "",
-                 "Time trend:   " + tr, "Heteroskedasticity: " + ("Robust" if o.get("robust") else "Homoskedastic")],
+                 f"{'Time trend:':<20}{tr}", f"{'Heteroskedasticity:':<20}" + ("Robust" if o.get("robust") else "Not robust"),
+                 f"{'LR variance:':<20}(not used)"],
                 [f"Number of panels  = {N:>6}", f"Number of periods = {T:>6}", "",
-                 "Asymptotics: T, N -> Infinity", "             sequentially"])
+                 "Asymptotics: T, N -> Infinity", " " * 18 + "sequentially", ""], extra_rule=2)
         out.write("-" * 78 + "\n", "text")
-        out.write("   Statistic           z         p-value\n", "text")
+        out.write("                    Statistic      p-value\n", "text")
         out.write("-" * 78 + "\n", "text")
-        out.write(f" z {r['z']:>16.4f}   {r['p']:>9.4f}\n", "result")
+        out.write(f"{' z':<20}{r['z']:>8.4f}{r['p']:>14.4f}\n", "result")
         out.write("-" * 78 + "\n", "text")
         s.r = {"N_g": float(N), "N_t": float(T), "z": r["z"], "p": r["p"]}
     else:

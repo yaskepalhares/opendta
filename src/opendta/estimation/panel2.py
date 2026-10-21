@@ -81,13 +81,14 @@ def _obs_per_group(inv: np.ndarray):
 def _header(s, title: str, sub: str, x: dict) -> None:
     out = s.output
     out.write("\n", "text")
+    # VERIFY: xtfrontier, tvd prints the average without decimals (1905 log)
     rows = [(title, ("Number of obs", f"{x['N']:,}")), (f"Group variable: {x['pvar']}", ("Number of groups", f"{x['G']:,}"))]
     for lft, (rl, rv) in rows:
         out.write(f"{lft:<48}{rl:<18}= ", "text")
         out.write(f"{rv:>10}\n", "result")
     out.write("\n", "text")
     out.write(f"{sub:<48}Obs per group:\n", "text")
-    for lab, val in (("min", f"{x['tmin']:,}"), ("avg", f"{x['tavg']:.1f}"), ("max", f"{x['tmax']:,}")):
+    for lab, val in (("min", f"{x['tmin']:,}"), ("avg", f"{x['tavg']:g}" if title.startswith("Time-varying decay") else f"{x['tavg']:.1f}"), ("max", f"{x['tmax']:,}")):
         out.write(f"{'':<62}{lab} = ", "text")
         out.write(f"{val:>10}\n", "result")
     out.write("\n", "text")
@@ -99,7 +100,7 @@ def _header(s, title: str, sub: str, x: dict) -> None:
     chi = f"{x['chi2type']} chi2({x['df_m']})"
     out.write(f"{'':<48}{chi:<18}= ", "text")
     out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
-    lab = "Log pseudolikelihood = " if x.get("pseudo") else "Log likelihood  = "
+    lab = "Log pseudolikelihood  = " if x.get("pseudo") else "Log likelihood  = "
     ll_txt = format(_g(x["ll"]).strip(), ">10")     # "Log likelihood  =  -394.4428" (compat 0804)
     out.write(f"{lab + ll_txt:<48}{'Prob > chi2':<18}= ", "text")
     out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
@@ -108,13 +109,14 @@ def _header(s, title: str, sub: str, x: dict) -> None:
 
 def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, sub, keep_groups, ll0=None,
             chibar=None, aux_rows=(), eform="", lr0=None, intpoints=None, intmethod="mvaghermite",
-            robust=None, extra_scalars=(), extra_macros=(), footer=None):
+            robust=None, extra_scalars=(), extra_macros=(), footer=None, chi2_V=None):
     pr = P.pr
     smp = pr.smp
-    k = pr.X.shape[1] + (0 if P.fe else (1 if pr.constant else 0))
+    fe = P.fe and not getattr(P, "fe_cons", False)      # xtnbreg, fe reports _cons (compat 1905)
+    k = pr.X.shape[1] + (0 if fe else (1 if pr.constant else 0))
     slopes = list(range(pr.X.shape[1]))
     bs = b[slopes]
-    Vs = V[np.ix_(slopes, slopes)]
+    Vs = (V if chi2_V is None else chi2_V)[np.ix_(slopes, slopes)]
     try:
         chi2 = float(bs @ np.linalg.solve(Vs, bs)) if slopes else SYS
     except np.linalg.LinAlgError:
@@ -124,10 +126,10 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         # xtlogit, fe: LR test against the model without covariates (compat 0804)
         chi2, chi2type = max(2 * (res.ll - lr0), 0.0), "LR"
     p = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
-    names = [c.name for c in smp.cols] + ([] if P.fe or not pr.constant else ["_cons"])
+    names = [c.name for c in smp.cols] + ([] if fe or not pr.constant else ["_cons"])
     from .models2 import _bmap, _expand, _semap
-    kx = pr.X.shape[1] + (0 if P.fe or not pr.constant else 1)
-    if P.fe:
+    kx = pr.X.shape[1] + (0 if fe or not pr.constant else 1)
+    if fe:
         bmap = {}
         j = 0
         for c in smp.cols:
@@ -143,7 +145,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         rows = rows_from_columns(smp.cols, _bmap(pr, b, kx), _semap(pr, V, kx), s.data, constant=pr.constant)
     rows += list(aux_rows)
     layout = [(c.name if not c.omitted else fvars.omitted_name(c.name), c.values is not None) for c in smp.cols]
-    if not P.fe and pr.constant:
+    if not fe and pr.constant:
         layout.append(("_cons", True))
     for nm in names_extra:
         layout.append((nm, True))
@@ -154,7 +156,7 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
                     b_full, V_full, int(keep_groups.sum()), "z", None)
     est.rows = rows
     est.eqnames = eqs
-    est.cols, est.constant, est.terms, est.depcomp = smp.cols, (not P.fe and pr.constant), smp.terms, smp.depcomp
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, (not fe and pr.constant), smp.terms, smp.depcomp
     est.level = smp.level
     est.vcetype = ""
     if robust is not None:
@@ -175,15 +177,16 @@ def _finish(s, P: _Panel, cmd: str, args: str, b, V, res, names_extra, title, su
         if table:
             if robust is not None:
                 ss.output.write(f"{'(Std. Err. adjusted for ' + format(int(ee.n_clust), ',') + ' clusters in ' + ee.clustvar + ')':>78}\n", "text")
-            coef_table(ss, ee.depvar, ee.rows, stat="z", df=None, level=level or ee.level,
-                       coef_title=ee.coef_title, eform=ee.eform_on, vcetype=ee.vcetype)
+            coef_table(ss, "" if ee.cmd == "xtintreg" else ee.depvar, ee.rows, stat="z", df=None,
+                       level=level or ee.level, coef_title=ee.coef_title, eform=ee.eform_on, vcetype=ee.vcetype)
             if footer is not None:
                 footer(ss, ee)
             if chibar is not None:
-                lab, val, pv = chibar
+                lab, val, pv, *fmt = chibar
+                wd, dec = fmt if fmt else (55, 3)      # ordered models: width 54 and four decimals (compat 1905)
                 # "LR test of rho=0: chibar2(01) = 8.21" with Prob at column 56 (compat 0804)
-                ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(55)
-                                + f"Prob >= chibar2 = {pv:5.3f}\n", "text")
+                ss.output.write(f"{lab}: chibar2(01) = {val:.2f}".ljust(wd)
+                                + f"Prob >= chibar2 = {pv:.{dec}f}\n", "text")
     est.display = disp
     scalars = [("N", float(x["N"])), ("N_g", float(x["G"])), ("g_min", float(tmin)), ("g_avg", tavg),
                ("g_max", float(tmax)), ("df_m", float(len(slopes))), ("ll", res.ll), ("chi2", chi2), ("p", p),
@@ -515,7 +518,7 @@ def cmd_xtlogit(s: "Session", args: str) -> None:
         print_log(out, rl, "log likelihood")
         out.write("\nFitting full model:\n\n", "text")
         for tv, lv in grid:
-            out.write(f"tau = {tv:4.1f}     log likelihood = {_g(lv).strip()}\n", "text")
+            out.write(f"tau = {tv:4.1f}     log likelihood = {_g(lv).strip():>10}\n", "text")
         out.write("\n", "text")
         print_log(out, res, "log likelihood")
     V = np.linalg.inv(-res.H)

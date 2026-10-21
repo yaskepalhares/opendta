@@ -215,7 +215,9 @@ def cmd_xtgls(s: "Session", args: str) -> None:
             if tolv < tol:
                 break
     ysf = ys - Xs @ b
-    ll = pl.gls_loglik(ysf, pi, pkey, fit["sigma"], rho_g if corr != "independent" else None) if igls else None
+    # Stata prints the log likelihood for the OLS fit (iid, no autocorrelation) and for igls without autocorrelation
+    want_ll = corr == "independent" and (panels == "iid" or igls)
+    ll = pl.gls_loglik(ysf, pi, pkey, fit["sigma"], None) if want_ll else None
     V = fit["V"]
     chi2, df, p = L.wald(b, V)
     if igls and not o.get("nolog"):
@@ -233,7 +235,7 @@ def cmd_xtgls(s: "Session", args: str) -> None:
         cor_txt = "panel-specific AR(1)"
     N = len(y)
     x = dict(N=N, G=pi.G, T=L.ntimes, ncov=fit["ncov"], ncorr=ncorr, ncf=k, chi2=chi2, df=df, p=p, ll=ll,
-             pan_txt=pan_txt, cor_txt=cor_txt)
+             pan_txt=pan_txt, cor_txt=cor_txt, singular=bool(fit.get("singular")))
     b_full_names, bf, Vf = L.expand(b, V)
     est = Estimates("xtgls", L.smp.depname, b_full_names, bf, Vf, N, "z", None)
     est.rows = L.rows(b, V)
@@ -263,16 +265,16 @@ def _display_xtgls(s, est, *, header=True, table=True, level=None, **_kw):
         out.write("Coefficients:  generalized least squares\n", "text")
         out.write(f"Panels:        {x['pan_txt']}\n", "text")
         out.write(f"Correlation:   {x['cor_txt']}\n\n", "text")
-        left = [("Estimated covariances", comma(x["ncov"])), ("Estimated autocorrelations", comma(x["ncorr"])),
-                ("Estimated coefficients", comma(x["ncf"])), ("", ""), ("", "")]
+        left = [("Estimated covariances", str(x["ncov"])), ("Estimated autocorrelations", str(x["ncorr"])),
+                ("Estimated coefficients", str(x["ncf"])), ("", ""), ("", "")]
         right = [("Number of obs", comma(x["N"])), ("Number of groups", comma(x["G"])),
                  ("Time periods", comma(x["T"])), (f"Wald chi2({x['df']})", _g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", _g(x["p"], "%10.4f"))]
         for i, ((ll_, lv), (rl, rv)) in enumerate(zip(left, right)):
             if x["ll"] is not None and rl == "Prob > chi2":
-                out.write(f"{'Log likelihood':<27}= {_g(x['ll']):>9}{'':>11}", "text")
+                out.write(f"{'Log likelihood':<27}= {_g(x['ll'], '%9.0g'):>9}{'':>10}", "text")
             elif ll_:
-                out.write(f"{ll_:<27}= {lv:>9}{'':>11}", "text")
+                out.write(f"{ll_:<27}= {lv:>9}{'':>10}", "text")
             else:
                 out.write(f"{'':<48}", "text")
             out.write(f"{rl:<18}= ", "text")
@@ -280,6 +282,12 @@ def _display_xtgls(s, est, *, header=True, table=True, level=None, **_kw):
         out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level)
+        if x.get("singular"):
+            out.write("Note: When the number of periods is greater than or equal to the number\n"
+                      "      of panels, results are based on a generalized inverse of a\n"
+                      "      singular matrix.\n", "text")
+        if x.get("ncov", 0) >= x["N"]:
+            out.write("Note: You estimated at least as many quantities as you have observations.\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +313,10 @@ def cmd_xtpcse(s: "Session", args: str) -> None:
     ys, Xs = y, X
     if corr != "independent":
         rho_i = pl.rho_from_residuals(e, pi, rhot, k)
+        if np.any(np.abs(rho_i) > 1):
+            # the panel estimates are bounded before they are averaged (compat 1905)
+            out.write("(note: estimates of rho outside [-1,1] bounded to be in the range [-1,1])\n", "text")
+            rho_i = np.clip(rho_i, -1.0, 1.0)
         rho_g = rho_i if corr == "psar1" else np.full(pi.G, pl.common_rho(rho_i, pi, bool(o.get("np1"))))
         ro = rho_g[pi.inv]
         ys, Xs = pl.prais_winsten(y, pi, ro), pl.prais_winsten(X, pi, ro)
@@ -326,14 +338,18 @@ def cmd_xtpcse(s: "Session", args: str) -> None:
     title = {"correlated": "Linear regression, correlated panels corrected standard errors (PCSEs)",
              "hetonly": "Linear regression, heteroskedastic panels corrected standard errors",
              "independent": "Linear regression, homoskedastic panels corrected standard errors"}[mode]
+    if corr != "independent":
+        title = title.replace("Linear regression", "Prais-Winsten regression")     # VERIFY for hetonly/independent
     x = dict(N=N, G=pi.G, tmin=int(pi.counts.min()), tavg=N / pi.G, tmax=int(pi.counts.max()), ncov=ncov, ncorr=ncorr,
              ncf=k, chi2=chi2, df=df, p=p, r2=r2, pan_txt=pan_txt, cor_txt=cor_txt, title=title, pvar=L.pvar, tvar=L.tvar)
     names, bf, Vf = L.expand(b, V)
     est = Estimates("xtpcse", L.smp.depname, names, bf, Vf, N, "z", None)
     est.rows = L.rows(b, V)
+    if corr == "ar1":
+        est.rows += [CoefRow("sep"), CoefRow("value", "rho", float(rho_g[0]))]
     est.eqnames = [L.smp.depname] * len(names)
     est.cols, est.constant, est.terms, est.depcomp = L.smp.cols, L.constant, L.smp.terms, L.smp.depcomp
-    est.level, est.vcetype = L.smp.level, "Panel-corrected"
+    est.level, est.vcetype = L.smp.level, "Het-corrected" if mode == "hetonly" else "Panel-corrected"
     est.extra = x
     est.display = _display_xtpcse
     sc = [("N", float(N)), ("N_g", float(pi.G)), ("N_t", float(L.ntimes)), ("n_cf", float(k)), ("n_cv", float(ncov)),
@@ -368,12 +384,12 @@ def _display_xtpcse(s, est, *, header=True, table=True, level=None, **_kw):
             else:
                 out.write(f"{rl:<18}= ", "text")
                 out.write(f"{rv:>10}\n", "result")
-        tail = [("Estimated covariances", comma(x["ncov"])), ("Estimated autocorrelations", comma(x["ncorr"])),
-                ("Estimated coefficients", comma(x["ncf"]))]
+        tail = [("Estimated covariances", str(x["ncov"])), ("Estimated autocorrelations", str(x["ncorr"])),
+                ("Estimated coefficients", str(x["ncf"]))]
         rtail = [("R-squared", _g(x["r2"], "%10.4f")), (f"Wald chi2({x['df']})", _g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", _g(x["p"], "%10.4f"))]
         for (ll_, lv), (rl, rv) in zip(tail, rtail):
-            out.write(f"{ll_:<27}= {lv:>9}{'':>11}{rl:<18}= ", "text")
+            out.write(f"{ll_:<27}= {lv:>9}{'':>10}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")
         out.write("\n", "text")
     if table:
@@ -407,131 +423,108 @@ def cmd_xtregar(s: "Session", args: str) -> None:
     twostep = bool(o.get("twostep"))
     rho_fixed = float(o["rhof"]) if o.get("rhof") not in (None, False, True) else None
     keep = pi.has_lag
-    G_all = pi.G
+    z = crit("z", L.smp.level, None)
 
-    def sub_index():
-        inv = pi.inv[keep]
-        _, inv2 = np.unique(inv, return_inverse=True)
-        return pl.PanelIndex(inv2, pi.tidx[keep])
-    pk = sub_index()
-    Nk = int(keep.sum())
-
-    def fit_given_rho(rho):
-        ys = _co(y, pi, rho)[keep]
-        Xk = _co(Xs, pi, rho)[keep]
-        c = np.full(Nk, 1 - rho)
-        if fe:
-            yw, Xw = pk.within(ys), pk.within(Xk)
-            A = np.linalg.inv(Xw.T @ Xw)
-            b = A @ (Xw.T @ yw)
-            e = yw - Xw @ b
-            rss = float(e @ e)
-            df = Nk - pk.G - k
-            s2 = rss / df
-            cons_t = float(ys.mean() - Xk.mean(axis=0) @ b)
-            return dict(b=b, A=A, s2=s2, rss=rss, df=df, cons_t=cons_t, ys=ys, Xk=Xk, e=e, Xw=Xw, yw=yw)
-        # random effects (Swamy-Arora variance components on the transformed data)
-        yw, Xw = pk.within(ys), pk.within(Xk)
-        bw = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
-        ew = yw - Xw @ bw
-        s_e2 = float(ew @ ew) / (Nk - pk.G - k)
-        yb = pk.group_means(ys)
-        Xb = np.column_stack([pk.group_means(Xk), np.full(pk.G, 1 - rho)])
-        bb = np.linalg.lstsq(Xb, yb, rcond=None)[0]
-        eb = yb - Xb @ bb
-        Tbar = pk.G / float(np.sum(1.0 / pk.counts))
-        s_u2 = max(float(eb @ eb) / (pk.G - (k + 1)) - s_e2 / Tbar, 0.0)
-        th = 1 - np.sqrt(s_e2 / (s_e2 + pk.counts * s_u2))
-        thi = th[pk.inv]
-        R = np.column_stack([Xk, c])
-        Rs = R - thi[:, None] * np.column_stack([pk.group_means(Xk), np.full(pk.G, 1 - rho)])[pk.inv]
-        ysr = ys - thi * yb[pk.inv]
-        A = np.linalg.inv(Rs.T @ Rs)
-        b = A @ (Rs.T @ ysr)
-        e = ysr - Rs @ b
-        return dict(b=b, A=A, s_e2=s_e2, s_u2=s_u2, theta=th, ys=ys, Xk=Xk, e=e, Rs=Rs, ysr=ysr)
-
-    def rho_update(f, rho):
-        # residuals of the original-scale model, deviated from their panel means
-        if fe:
-            b = f["b"]
-            cons = f["cons_t"] / (1 - rho)
-            r = y - Xs @ b - cons
-        else:
-            b = f["b"]
-            r = y - Xs @ b[:k] - b[k] / (1 - rho) * 1.0
-        r = pi.within(r)
-        return _pooled_rho(r, pi, rhot, k)
+    # rho: Stata runs prais on the equation with the panel means removed (no constant), with rhotype()
     if rho_fixed is not None:
         rho = rho_fixed
-        f = fit_given_rho(rho)
     else:
-        rho = 0.0
-        f = fit_given_rho(rho)
-        for it in range(100):
-            new = rho_update(f, rho)
-            f = fit_given_rho(new)
-            done = abs(new - rho) < 1e-9
-            rho = new
-            if twostep or done:
-                break
-    N = Nk
-    G = pk.G
-    z = crit("z", L.smp.level, None)
+        from .prais import fit_prais
+        od = pi.order
+        yd, Xd = pi.within(y), pi.within(Xs)
+        rho = float(fit_prais(Xd[od], yd[od], pi.has_lag[od], pw=True, rhotype=rhot, twostep=twostep,
+                              ssesearch=False, maxiter=100, tol=1e-6, k_slopes=k, log=lambda *_a: None)[0])
+    # VERIFY: the data are transformed with -rho and the constant is divided by (1 - rho), as found in
+    # compat 1905 (coefficients, sigma_e and F agree with Stata to 8 digits with this sign)
+    r = -rho
+    G = pi.G
+
+    def pw_tr(v):
+        lagv = pi.lagged(v) if v.ndim == 1 else np.column_stack([pi.lagged(v[:, j]) for j in range(v.shape[1])])
+        mm = keep if v.ndim == 1 else keep[:, None]
+        return np.where(mm, v - r * lagv, np.sqrt(1 - r ** 2) * v)
     if fe:
-        b, A, s2 = f["b"], f["A"], f["s2"]
+        inv_k = pi.inv[keep]
+        _, inv2 = np.unique(inv_k, return_inverse=True)
+        pk = pl.PanelIndex(inv2, pi.tidx[keep])
+        N = int(keep.sum())
+        ys = pw_tr(y)[keep]
+        Xk = pw_tr(Xs)[keep]
+        yw, Xw = pk.within(ys), pk.within(Xk)
+        A = np.linalg.inv(Xw.T @ Xw)
+        b = A @ (Xw.T @ yw)
+        e = yw - Xw @ b
+        rss = float(e @ e)
+        df = N - pk.G - k
+        s2 = rss / df
         V = s2 * A
-        xbar = f["Xk"].mean(axis=0)
-        cons_t = f["cons_t"]
-        var_c = s2 / N + float(xbar @ V @ xbar)
+        xbar = Xk.mean(axis=0)
+        cons_t = float(ys.mean() - xbar @ b)
         cons = cons_t / (1 - rho)
-        se_c = math.sqrt(var_c) / (1 - rho)
+        se_c = math.sqrt(s2 / N + float(xbar @ V @ xbar))          # VERIFY: not divided by (1 - rho), as in Stata
         bb = np.append(b, cons)
         Vf = np.zeros((k + 1, k + 1))
         Vf[:k, :k] = V
         Vf[k, k] = se_c ** 2
-        xb_t = f["Xk"] @ b
-        u_i = pk.group_means(f["ys"]) - pk.group_means(xb_t) - cons_t
-        sigma_u = float(np.std(u_i, ddof=1)) / (1 - rho) if G > 1 else 0.0
+        yo, Xo = y[keep], Xs[keep]
+        xb_o = Xo @ b
+        u_i = pk.group_means(yo) - pk.group_means(xb_o)
+        sigma_u = float(np.std(u_i, ddof=1)) if pk.G > 1 else 0.0
         sigma_e = math.sqrt(s2)
-        corr = float(np.corrcoef(u_i[pk.inv], xb_t)[0, 1]) if k else 0.0
+        corr = float(np.corrcoef(u_i[pk.inv], xb_o)[0, 1]) if k else 0.0
         F = float(b @ np.linalg.solve(V, b)) / k if k else SYS
-        pF = float(st.f.sf(F, k, f["df"])) if F < SYS else SYS
-        Xp = np.column_stack([f["Xk"], np.full(N, 1 - rho)])
-        bp = np.linalg.lstsq(Xp, f["ys"], rcond=None)[0]
-        rss_p = float(((f["ys"] - Xp @ bp) ** 2).sum())
-        F_f = ((rss_p - f["rss"]) / (G - 1)) / (f["rss"] / f["df"])
-        p_f = float(st.f.sf(F_f, G - 1, f["df"]))
-        r2w = float(np.corrcoef(f["Xw"] @ b, f["yw"])[0, 1] ** 2) if k else 0.0
-        r2b = float(np.corrcoef(pk.group_means(xb_t), pk.group_means(f["ys"]))[0, 1] ** 2) if k else 0.0
-        r2o = float(np.corrcoef(xb_t, f["ys"])[0, 1] ** 2) if k else 0.0
+        pF = float(st.f.sf(F, k, df)) if F < SYS else SYS
+        Xp = np.column_stack([Xk, np.ones(N)])
+        bp = np.linalg.lstsq(Xp, ys, rcond=None)[0]
+        rss_p = float(((ys - Xp @ bp) ** 2).sum())
+        F_f = ((rss_p - rss) / (pk.G - 1)) / s2
+        p_f = float(st.f.sf(F_f, pk.G - 1, df))
+        r2w = 1 - rss / float(yw @ yw) if k else 0.0
+        r2b = float(np.corrcoef(pk.group_means(xb_o), pk.group_means(yo))[0, 1] ** 2) if k else 0.0
+        r2o = float(np.corrcoef(xb_o, yo)[0, 1] ** 2) if k else 0.0
         chi2 = pchi = None
         theta = None
-        stat, df_r = "t", float(f["df"])
+        stat, df_r = "t", float(df)
         title = "FE (within) regression with AR(1) disturbances"
+        tmin, tmax, tavg, Ng = int(pk.counts.min()), int(pk.counts.max()), N / pk.G, pk.G
+        f = {"df": df}
     else:
-        b_all, A = f["b"], f["A"]
-        b = b_all[:k]
-        cons = b_all[k] / (1 - rho)
-        V_all = f["s_e2"] * A
-        Vf = np.zeros((k + 1, k + 1))
-        Vf[:k, :k] = V_all[:k, :k]
-        Vf[k, k] = V_all[k, k] / (1 - rho) ** 2
-        Vf[:k, k] = Vf[k, :k] = V_all[:k, k] / (1 - rho)
-        V = Vf[:k, :k]
-        bb = np.append(b, cons)
-        sigma_u = math.sqrt(f["s_u2"]) / (1 - rho)
-        sigma_e = math.sqrt(f["s_e2"])
-        chi2 = float(b @ np.linalg.solve(V, b)) if k else SYS
-        pchi = float(chi2_tail(chi2, k)) if k else SYS
-        xb_t = f["Xk"] @ b
-        r2w = float(np.corrcoef(pk.within(xb_t), pk.within(f["ys"]))[0, 1] ** 2) if k else 0.0
-        r2b = float(np.corrcoef(pk.group_means(xb_t), pk.group_means(f["ys"]))[0, 1] ** 2) if k else 0.0
-        r2o = float(np.corrcoef(xb_t, f["ys"])[0, 1] ** 2) if k else 0.0
+        # Baltagi-Wu GLS: the transformed constant is c = (sqrt(1 - r^2), 1 - r, ..., 1 - r)
+        N = len(y)
+        ys = pw_tr(y)
+        Xt = pw_tr(Xs)
+        c = np.where(keep, 1 - r, np.sqrt(1 - r ** 2))
+        R = np.column_stack([Xt, c])
+        cc = pi.group_sums(c * c)
+        b0 = np.linalg.lstsq(R, ys, rcond=None)[0]
+        u = ys - R @ b0
+        cm = pi.group_sums(c * u) / cc
+        proj = u - c * cm[pi.inv]
+        s_e2 = float(proj @ proj) / (N - G)
+        s_u2 = max(float(np.mean(cm ** 2)) - s_e2 * float(np.mean(1 / cc)), 0.0)
+        th = 1 - np.sqrt(s_e2 / (s_e2 + cc * s_u2))
+        thi = th[pi.inv]
+        Rm = pi.group_sums(R * c[:, None]) / cc[:, None]
+        Rs = R - thi[:, None] * c[:, None] * Rm[pi.inv]
+        ym = pi.group_sums(c * ys) / cc
+        ysr = ys - thi * c * ym[pi.inv]
+        Ai = np.linalg.inv(Rs.T @ Rs)
+        bb = Ai @ (Rs.T @ ysr)
+        Vf = s_e2 * Ai
+        b, V = bb[:k], Vf[:k, :k]
+        sigma_u, sigma_e = math.sqrt(s_u2), math.sqrt(s_e2)
+        chi2 = float(bb @ np.linalg.solve(Vf, bb))
+        pchi = float(chi2_tail(chi2, k + 1))
+        xb_o = Xs @ b
+        r2w = float(np.corrcoef(pi.within(xb_o), pi.within(y))[0, 1] ** 2) if k else 0.0
+        r2b = float(np.corrcoef(pi.group_means(xb_o), pi.group_means(y))[0, 1] ** 2) if k else 0.0
+        r2o = float(np.corrcoef(xb_o, y)[0, 1] ** 2) if k else 0.0
         corr = F = pF = F_f = p_f = None
-        theta = float(f["theta"][0]) if pk.balanced else None
+        theta = float(th[0]) if pi.balanced else None
         stat, df_r = "z", None
         title = "RE GLS regression with AR(1) disturbances"
+        tmin, tmax, tavg, Ng = int(pi.counts.min()), int(pi.counts.max()), N / G, G
+        f = {}
     rho_fov = sigma_u ** 2 / (sigma_u ** 2 + sigma_e ** 2)
     names, bf, Vff = L.expand(bb, Vf)
     est = Estimates("xtregar", L.smp.depname, names, bf, Vff, N, stat, df_r)
@@ -540,13 +533,13 @@ def cmd_xtregar(s: "Session", args: str) -> None:
     est.cols, est.constant, est.terms, est.depcomp = L.smp.cols, True, L.smp.terms, L.smp.depcomp
     est.level, est.vcetype = L.smp.level, ""
     est.model = "fe" if fe else "re"
-    est.extra = dict(N=N, G=G, tmin=int(pk.counts.min()), tavg=N / G, tmax=int(pk.counts.max()), r2w=r2w, r2b=r2b, r2o=r2o,
+    est.extra = dict(N=N, G=Ng, tmin=tmin, tavg=tavg, tmax=tmax, r2w=r2w, r2b=r2b, r2o=r2o,
                      k=k, df_r=f.get("df"), F=F, pF=pF, corr=corr, chi2=chi2, p=pchi, F_f=F_f, p_f=p_f, title=title,
                      pvar=L.pvar, rho=rho, sigma_u=sigma_u, sigma_e=sigma_e, rho_fov=rho_fov, theta=theta)
     est.display = _display_xtregar
-    sc = [("N", float(N)), ("N_g", float(G)), ("df_m", float(k)), ("rho_ar", rho), ("sigma_u", sigma_u),
+    sc = [("N", float(N)), ("N_g", float(Ng)), ("df_m", float(k)), ("rho_ar", rho), ("sigma_u", sigma_u),
           ("sigma_e", sigma_e), ("rho_fov", rho_fov), ("r2_w", r2w), ("r2_b", r2b), ("r2_o", r2o),
-          ("g_min", float(pk.counts.min())), ("g_avg", N / G), ("g_max", float(pk.counts.max())),
+          ("g_min", float(tmin)), ("g_avg", tavg), ("g_max", float(tmax)),
           ("rank", float(k + 1))]
     if fe:
         sc += [("df_r", float(f["df"])), ("F", F), ("F_f", F_f), ("corr", corr)]
@@ -586,41 +579,37 @@ def _display_xtregar(s, est, *, header=True, table=True, level=None, **_kw):
     out, x = s.output, est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"{x['title']:<48}{'Number of obs':<19}= ", "text")
+        out.write(f"{x['title']:<48}{'Number of obs':<18}= ", "text")
         out.write(f"{comma(x['N']):>10}\n", "result")
-        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<19}= ", "text")
-        out.write(f"{comma(x['G']):>10}\n\n", "result")
-        rs = [("within ", x["r2w"], "min", _g(x["tmin"])), ("between", x["r2b"], "avg", _g(x["tavg"])),
+        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<18}= ", "text")
+        out.write(f"{comma(x['G']):>10}\n", "result")
+        out.write(f"{'R-sq:':<48}Obs per group:\n", "text")
+        rs = [("within ", x["r2w"], "min", _g(x["tmin"])), ("between", x["r2b"], "avg", _g(x["tavg"], "%10.1f")),
               ("overall", x["r2o"], "max", _g(x["tmax"]))]
-        for i, (nm, v, gl, gv) in enumerate(rs):
-            lead = "R-sq:  " if i == 0 else "       "
-            out.write(f"{lead}{nm} = ", "text")
-            out.write(f"{v:.4f}", "result")
-            tail = "Obs per group: " if i == 0 else "               "
-            out.write(" " * (48 - 7 - 10 - 6) + f"{tail}{gl} = ", "text")
+        for nm, v, gl, gv in rs:
+            out.write(f"{'     ' + nm + ' = ' + format(v, '.4f'):<62}{gl} = ", "text")
             out.write(f"{gv:>10}\n", "result")
-        out.write("\n", "text")
         if est.model == "fe":
-            out.write(f"{'':<48}{'F(' + str(x['k']) + ',' + str(int(x['df_r'])) + ')':<19}= ", "text")
+            out.write(f"{'':<48}{'F(' + str(x['k']) + ',' + str(int(x['df_r'])) + ')':<18}= ", "text")
             out.write(f"{_g(x['F'], '%10.2f'):>10}\n", "result")
-            out.write(f"{'corr(u_i, Xb)  = ' + format(x['corr'], '.4f'):<48}{'Prob > F':<19}= ", "text")
+            out.write(f"{'corr(u_i, Xb)  = ' + format(x['corr'], '.4f'):<48}{'Prob > F':<18}= ", "text")
             out.write(f"{_g(x['pF'], '%10.4f'):>10}\n\n", "result")
         else:
-            out.write(f"{'':<48}{'Wald chi2(' + str(x['k']) + ')':<19}= ", "text")
+            out.write(f"{'':<48}{'Wald chi2(' + str(x['k'] + 1) + ')':<18}= ", "text")
             out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
-            out.write(f"{'corr(u_i, Xb)  = 0 (assumed)':<48}{'Prob > chi2':<19}= ", "text")
+            out.write(f"{'corr(u_i, Xb)      = 0 (assumed)':<48}{'Prob > chi2':<18}= ", "text")
             out.write(f"{_g(x['p'], '%10.4f'):>10}\n\n", "result")
     if not table:
         return
     coef_table(s, est.depvar, est.rows, stat=est.stat, df=est.df_r, level=level or est.level, footer=False)
-    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+    out.write("-------------+----------------------------------------------------------------\n", "text")
     notes = {"rho_ar": "(estimated autocorrelation coefficient)",
              "rho_fov": "(fraction of variance because of u_i)" if est.model == "fe" else "(fraction of variance due to u_i)"}
     rows = [("rho_ar", x["rho"]), ("sigma_u", x["sigma_u"]), ("sigma_e", x["sigma_e"]), ("rho_fov", x["rho_fov"])]
     if x.get("theta") is not None:
         rows.append(("theta", x["theta"]))
     for nm, val in rows:
-        out.write(f"{nm:>12} | ", "text")
+        out.write(f"{nm:>12}" + " | ", "text")
         out.write(f"{_g(val):>10}", "result")
         if nm in notes and (nm == "rho_fov" or est.model == "re"):
             out.write("   " + notes[nm], "text")
@@ -686,18 +675,18 @@ def _display_xtrc(s, est, *, header=True, table=True, level=None, **_kw):
     out, x = s.output, est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"{'Random-coefficients regression':<48}{'Number of obs':<19}= ", "text")
+        out.write(f"{'Random-coefficients regression':<48}{'Number of obs':<18}= ", "text")
         out.write(f"{comma(x['N']):>10}\n", "result")
-        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<19}= ", "text")
+        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<18}= ", "text")
         out.write(f"{comma(x['G']):>10}\n\n", "result")
         out.write(f"{'':<48}Obs per group:\n", "text")
         for lab, v in (("min", _g(x["tmin"])), ("avg", _g(x["tavg"], "%10.1f")), ("max", _g(x["tmax"]))):
             out.write(f"{'':<62}{lab} = ", "text")
             out.write(f"{v:>10}\n", "result")
         out.write("\n", "text")
-        out.write(f"{'':<48}{'Wald chi2(' + str(x['df']) + ')':<19}= ", "text")
+        out.write(f"{'':<48}{'Wald chi2(' + str(x['df']) + ')':<18}= ", "text")
         out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
-        out.write(f"{'':<48}{'Prob > chi2':<19}= ", "text")
+        out.write(f"{'':<48}{'Prob > chi2':<18}= ", "text")
         out.write(f"{_g(x['p'], '%10.4f'):>10}\n\n", "result")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level)
@@ -708,6 +697,19 @@ def _display_xtrc(s, est, *, header=True, table=True, level=None, **_kw):
 # ---------------------------------------------------------------------------
 # xtivreg
 # ---------------------------------------------------------------------------
+
+def _pairs_r2_inv(xb, y, inv):
+    """Within, between and overall R-sq (squared correlations) for rows labelled 0..G-1 by `inv`."""
+    def c2(a, b):
+        if len(a) < 2 or np.std(a) == 0 or np.std(b) == 0:
+            return 0.0
+        return float(np.corrcoef(a, b)[0, 1] ** 2)
+    cnt = np.bincount(inv)
+
+    def gm(v):
+        return (np.bincount(inv, weights=v) / cnt)
+    return c2(xb - gm(xb)[inv], y - gm(y)[inv]), c2(gm(xb), gm(y)), c2(xb, y)
+
 
 def _pairs_r2(xb, y, pi):
     def c2(a, b):
@@ -761,7 +763,7 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     y = L.y
     r = pl.panel_iv(y, X, Z, pi, method, bool(o.get("nosa")))
     small = bool(o.get("small"))
-    has_cons = method != "fd"
+    has_cons = True
     b = r["b"]
     s2 = r["s2"]
     V = s2 * r["A"]
@@ -779,7 +781,8 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     if method == "fd":
         rows_i = r["rows"]
         Gn = int(len(np.unique(pi.inv[rows_i])))
-    sl = list(range(k))
+    # VERIFY: the within Wald statistic includes the constant (k degrees of freedom)
+    sl = list(range(k + 1)) if method == "fe" else list(range(k))
     W = float(b[sl] @ np.linalg.solve(V[np.ix_(sl, sl)], b[sl])) if k else SYS
     stat = "t" if small else "z"
     df_r = float(r["df"]) if small else None
@@ -791,8 +794,24 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     else:
         pv = float(chi2_tail(W, k))
     xb_all = X @ b[:k]
-    r2w, r2b, r2o = _pairs_r2(xb_all, y, pi)
-    x = dict(N=nobs, G=Gn, tmin=int(pi.counts.min()), tavg=len(y) / G, tmax=int(pi.counts.max()), k=k, W=W, F=Fv, p=pv,
+    if method == "fd":
+        # levels of the rows that have a lag, as the differenced panel is reported (VERIFY)
+        rws = r["rows"]
+        inv_r = np.unique(pi.inv[rws], return_inverse=True)[1]
+        r2w, r2b, r2o = _pairs_r2_inv(xb_all[rws], y[rws], inv_r)
+        tcounts = np.bincount(inv_r)
+    else:
+        r2w, r2b, r2o = _pairs_r2(xb_all, y, pi)
+        tcounts = pi.counts
+        if method == "be":
+            r2b = None                                  # VERIFY: Stata shows a missing between R-sq
+        elif method == "fe":
+            yw_ = pi.within(y)
+            r2w = 1.0 - float(r["e"] @ r["e"]) / float(yw_ @ yw_)   # VERIFY: 1 - rss/tss
+    if method == "be":
+        nobs = len(y)
+    x = dict(N=nobs, G=Gn, tmin=int(tcounts.min()), tavg=float(tcounts.mean()), tmax=int(tcounts.max()), k=k, W=W, F=Fv,
+             p=pv, tvar=L.tvar,
              use_F=use_F, df_r=r["df"], r2w=r2w, r2b=r2b, r2o=r2o, method=method, pvar=L.pvar,
              instd=" ".join(c.name for c in Xn), insts=" ".join([c.name for c in ex_cols] + [c.name for c in inst_cols]))
     if method in ("g2sls", "ec2sls"):
@@ -812,10 +831,26 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
         rss_p = float(fp["e"] @ fp["e"])
         Ff = ((rss_p - rss_w) / (G - 1)) / (rss_w / r["df"])
         x.update(F_f=Ff, p_f=float(st.f.sf(Ff, G - 1, r["df"])))
+    elif method == "fd":
+        # VERIFY: u_i, sigma_u and corr(u_i, Xb) come from the levels of the rows that have a lag
+        cnt = np.bincount(inv_r)
+        u_i = np.bincount(inv_r, weights=y[rws] - xb_all[rws]) / cnt - float(b[k])
+        su = float(np.std(u_i, ddof=1)) if len(u_i) > 1 else 0.0
+        se_ = math.sqrt(s2)
+        x.update(sigma_u=su, sigma_e=se_, rho=su ** 2 / (su ** 2 + se_ ** 2),
+                 corr=float(np.corrcoef(u_i[inv_r], xb_all[rws])[0, 1]) if k else 0.0, depdisp="D." + L.smp.depname)
+    elif method == "be":
+        x.update(sd_be=math.sqrt(s2))
     # coefficient order: endogenous first, then exogenous (as in ivregress)
     bmap = {nm: float(b[i]) for i, nm in enumerate(names_all)}
     semap = {nm: float(math.sqrt(max(V[i, i], 0))) for i, nm in enumerate(names_all)}
     rows = rows_from_columns(Xn + ex_cols, bmap, semap, ds, constant=has_cons)
+    if method == "fd":
+        rows = []
+        for c in Xn + ex_cols:
+            rows += [CoefRow("header", c.name), CoefRow("coef", "D1.", bmap[c.name], semap[c.name], name=c.name),
+                     CoefRow("blank")]
+        rows.append(CoefRow("coef", "_cons", bmap["_cons"], semap["_cons"], name="_cons"))
     est = Estimates("xtivreg", L.smp.depname, names_all, b, V, nobs, stat, df_r)
     est.rows = rows
     est.eqnames = [L.smp.depname] * len(names_all)
@@ -824,7 +859,7 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     est.extra = x
     est.display = _display_xtivreg
     ttl = {"g2sls": "G2SLS random-effects IV regression", "ec2sls": "EC2SLS random-effects IV regression",
-           "fe": "Fixed-effects (within) IV regression", "be": "Between regression (regressing means)",
+           "fe": "Fixed-effects (within) IV regression", "be": "Between-effects IV regression:",
            "fd": "First-differenced IV regression"}[method]
     x["title"] = ttl
     sc = [("N", float(nobs)), ("N_g", float(Gn)), ("df_m", float(k)), ("g_min", float(x["tmin"])),
@@ -844,36 +879,41 @@ def _display_xtivreg(s, est, *, header=True, table=True, level=None, **_kw):
     out, x = s.output, est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"{x['title']:<48}{'Number of obs':<19}= ", "text")
+        if x["method"] == "fd":
+            out.write(f"{x['title']}\n", "text")
+            l1, l2 = f"{'Group variable:':<19}{x['pvar']}", f"{'Time variable:':<19}{x['tvar']}"
+        else:
+            l1, l2 = x["title"], f"Group variable: {x['pvar']}"
+        out.write(f"{l1:<48}{'Number of obs':<18}= ", "text")
         out.write(f"{comma(x['N']):>10}\n", "result")
-        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<19}= ", "text")
-        out.write(f"{comma(x['G']):>10}\n\n", "result")
+        out.write(f"{l2:<48}{'Number of groups':<18}= ", "text")
+        out.write(f"{comma(x['G']):>10}\n", "result")
+        out.write(f"{'R-sq:':<48}Obs per group:\n", "text")
         rs = [("within ", x["r2w"], "min", _g(x["tmin"])), ("between", x["r2b"], "avg", _g(x["tavg"], "%10.1f")),
               ("overall", x["r2o"], "max", _g(x["tmax"]))]
-        for i, (nm, v, gl, gv) in enumerate(rs):
-            lead = "R-sq:  " if i == 0 else "       "
-            out.write(f"{lead}{nm} = ", "text")
-            out.write(f"{v:.4f}", "result")
-            tail = "Obs per group: " if i == 0 else "               "
-            out.write(" " * (48 - 7 - 10 - 6) + f"{tail}{gl} = ", "text")
+        for nm, v, gl, gv in rs:
+            vs = "     ." if v is None else f"{v:.4f}"
+            out.write(f"     {nm} = {vs}".ljust(62), "text")
+            out.write(f"{gl} = ", "text")
             out.write(f"{gv:>10}\n", "result")
-        out.write("\n", "text")
-        if x["use_F"]:
-            lab = f"F({x['k']},{int(x['df_r'])})"
-            out.write(f"{'':<48}{lab:<19}= ", "text")
-            out.write(f"{_g(x['F'], '%10.2f'):>10}\n", "result")
-            cl = f"corr(u_i, Xb)  = {x['corr']:.4f}" if "corr" in x else ""
-            out.write(f"{cl:<48}{'Prob > F':<19}= ", "text")
-            out.write(f"{_g(x['p'], '%10.4f'):>10}\n\n", "result")
+        stat_lab, stat_val, pl_, pv_ = (f"F({x['k']},{int(x['df_r'])})", x["F"], "Prob > F", x["p"]) if x["use_F"] else (
+            f"Wald chi2({x['k']})", x["W"], "Prob > chi2", x["p"])
+        out.write(f"{'':<48}{stat_lab:<18}= ", "text")
+        out.write(f"{_g(stat_val, '%10.2f'):>10}\n", "result")
+        if "corr" in x:
+            cl = f"corr(u_i, Xb)  = {x['corr']:.4f}"
+        elif x["method"] == "be":
+            cl = f"sd(u_i + avg(e_i.))={_g(x['sd_be'], '%10.7g'):>10}"
+        elif x["method"] in ("g2sls", "ec2sls"):
+            cl = "corr(u_i, X)       = 0 (assumed)"
         else:
-            out.write(f"{'':<48}{'Wald chi2(' + str(x['k']) + ')':<19}= ", "text")
-            out.write(f"{_g(x['W'], '%10.2f'):>10}\n", "result")
-            cl = f"corr(u_i, Xb)  = {x['corr']:.4f}" if "corr" in x else "corr(u_i, X)       = 0 (assumed)"
-            out.write(f"{cl if x['method'] in ('fe', 'g2sls', 'ec2sls') else '':<48}{'Prob > chi2':<19}= ", "text")
-            out.write(f"{_g(x['p'], '%10.4f'):>10}\n\n", "result")
+            cl = ""
+        out.write(f"{cl:<48}{pl_:<18}= ", "text")
+        out.write(f"{_g(pv_, '%10.4f'):>10}\n", "result")
     if not table:
         return
-    coef_table(s, est.depvar, est.rows, stat=est.stat, df=est.df_r, level=level or est.level, footer=False)
+    coef_table(s, x.get("depdisp", est.depvar), est.rows, stat=est.stat, df=est.df_r, level=level or est.level,
+               footer=False)
     if "sigma_u" in x:
         out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
         for nm in ("sigma_u", "sigma_e", "rho"):
@@ -884,8 +924,9 @@ def _display_xtivreg(s, est, *, header=True, table=True, level=None, **_kw):
             out.write("\n", "text")
     out.write("-" * 78 + "\n", "text")
     if x["method"] == "fe":
-        left = f"F test that all u_i=0:     F({int(x['G'] - 1)}, {int(x['df_r'])}) = {x['F_f']:.2f}"
-        out.write(left.ljust(58) + f"Prob > F = {x['p_f']:.4f}\n", "text")
+        out.write(f"F  test that all u_i=0:     F({int(x['G'] - 1)},{int(x['df_r'])}) = {x['F_f']:8.2f}          "
+                  f"Prob > F    = {x['p_f']:6.4f}\n", "text")
+        out.write("-" * 78 + "\n", "text")
     out.write(f"Instrumented:   {x['instd']}\n", "text")
     out.write(f"Instruments:    {x['insts']}\n", "text")
     out.write("-" * 78 + "\n", "text")
@@ -963,9 +1004,11 @@ def cmd_xthtaylor(s: "Session", args: str) -> None:
     for gname in ("TVexogenous", "TVendogenous", "TIexogenous", "TIendogenous"):
         n_g = len(grp[gname])
         if n_g:
-            out_rows.append(CoefRow("header", gname))
+            out_rows.append(CoefRow("header", gname, left=True))
             out_rows.extend(rows[pos:pos + n_g])
             pos += n_g
+    if out_rows and out_rows[-1].kind != "blank" and rows[pos:] and rows[pos].label == "_cons" and grp["TIexogenous"]:
+        out_rows.append(CoefRow("blank"))      # VERIFY: blank line before _cons after a TI block
     out_rows.extend(rows[pos:])
     est = Estimates("xthtaylor", L.smp.depname, order + ["_cons"], b, V, N, "z", None)
     est.rows = out_rows
@@ -973,13 +1016,14 @@ def cmd_xthtaylor(s: "Session", args: str) -> None:
     est.cols, est.constant, est.terms, est.depcomp = ordered_cols, True, L.smp.terms, L.smp.depcomp
     est.level, est.vcetype = L.smp.level, ""
     est.extra = dict(N=N, G=G, tmin=int(pi.counts.min()), tavg=N / G, tmax=int(pi.counts.max()), W=W, k=k, p=p,
-                     sigma_u=su, sigma_e=se_, rho=rho, pvar=L.pvar)
+                     sigma_u=su, sigma_e=se_, rho=rho, pvar=L.pvar, tvar=L.tvar,
+                     title="Amemiya-MaCurdy estimation" if o.get("amacurdy") else "Hausman-Taylor estimation")
     est.display = _display_xthtaylor
     sc = [("N", float(N)), ("N_g", float(G)), ("df_m", float(k)), ("chi2", W), ("sigma_u", su), ("sigma_e", se_),
           ("rho", rho), ("g_min", float(est.extra["tmin"])), ("g_avg", est.extra["tavg"]),
           ("g_max", float(est.extra["tmax"])), ("rank", float(k + 1))]
     mc = [("cmdline", cmdline("xthtaylor", args)), ("cmd", "xthtaylor"), ("depvar", L.smp.depname), ("ivar", L.pvar),
-          ("model", "amacurdy" if o.get("amacurdy") else "ht"), ("title", "Hausman-Taylor estimation"),
+          ("model", "amacurdy" if o.get("amacurdy") else "ht"), ("title", est.extra["title"]),
           ("properties", "b V"), ("predict", "xthtaylor_p")]
     post(s, est, list(reversed(sc)), list(reversed(mc)), L.smp.mask)
     _display_xthtaylor(s, est)
@@ -989,19 +1033,18 @@ def _display_xthtaylor(s, est, *, header=True, table=True, level=None, **_kw):
     out, x = s.output, est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"{'Hausman-Taylor estimation':<48}{'Number of obs':<19}= ", "text")
+        out.write(f"{x['title']:<48}{'Number of obs':<18}= ", "text")
         out.write(f"{comma(x['N']):>10}\n", "result")
-        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<19}= ", "text")
+        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<18}= ", "text")
         out.write(f"{comma(x['G']):>10}\n\n", "result")
-        out.write(f"{'':<48}Obs per group: min = ", "text")
-        out.write(f"{_g(x['tmin']):>10}\n", "result")
-        out.write(f"{'':<63}avg = ", "text")
-        out.write(f"{_g(x['tavg'], '%10.1f'):>10}\n", "result")
-        out.write(f"{'':<63}max = ", "text")
-        out.write(f"{_g(x['tmax']):>10}\n\n", "result")
-        out.write(f"{'Random effects u_i ~ i.i.d.':<48}{'Wald chi2(' + str(x['k']) + ')':<19}= ", "text")
+        out.write(f"{('Time variable: ' + x['tvar']) if x['title'].startswith('Amemiya') else '':<48}Obs per group:\n",
+                  "text")
+        for lab, v in (("min", x["tmin"]), ("avg", x["tavg"]), ("max", x["tmax"])):
+            out.write(f"{'':<62}{lab} = ", "text")
+            out.write(f"{_g(v):>10}\n", "result")
+        out.write(f"{'Random effects u_i ~ i.i.d.':<48}{'Wald chi2(' + str(x['k']) + ')':<18}= ", "text")
         out.write(f"{_g(x['W'], '%10.2f'):>10}\n", "result")
-        out.write(f"{'':<48}{'Prob > chi2':<19}= ", "text")
+        out.write(f"{'':<48}{'Prob > chi2':<18}= ", "text")
         out.write(f"{_g(x['p'], '%10.4f'):>10}\n\n", "result")
     if not table:
         return
@@ -1014,4 +1057,4 @@ def _display_xthtaylor(s, est, *, header=True, table=True, level=None, **_kw):
             out.write("   (fraction of variance due to u_i)", "text")
         out.write("\n", "text")
     out.write("-" * 78 + "\n", "text")
-    out.write("note: TV refers to time varying; TI refers to time invariant.\n", "text")
+    out.write("Note: TV refers to time varying; TI refers to time invariant.\n", "text")

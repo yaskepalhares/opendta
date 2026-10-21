@@ -128,28 +128,41 @@ def run_opendta(dofile: Path, outdir: Path, setup: str = "") -> Path:
     return outdir / (dofile.stem + ".log")
 
 
-_LIMIT = re.compile(r"^(ignore\(/(.*?)/\)|tolerance\(([0-9.eE+-]+)\))\s*")
+_LIMIT = re.compile(r"^(ignore\(/(.*?)/\)|skip\(/(.*?)/\)|tolerance\(([0-9.eE+-]+)\))\s*")
 
 
 @dataclass
 class Known:
     """A known difference: the reason and, optionally, its limits. ignore(/REGEX/) drops the
-    lines matching REGEX from both logs; tolerance(REL) accepts numbers that differ by at most
-    REL relative to the larger of |a|, |b| and 1. With limits, the rest of the log must still be
-    equal, so layout regressions are still caught."""
+    lines matching REGEX from both logs; skip(/REGEX/) drops, from both logs, the whole output of
+    the commands whose `. command` line matches REGEX; tolerance(REL) accepts numbers that differ
+    by at most REL relative to the larger of |a|, |b| and 1. With limits, the rest of the log must
+    still be equal, so layout regressions are still caught."""
     why: str
     ignore: re.Pattern | None = None
     tol: float | None = None
+    skip: re.Pattern | None = None
 
     def limited(self) -> bool:
-        return self.ignore is not None or self.tol is not None
+        return self.ignore is not None or self.tol is not None or self.skip is not None
+
+    def filtered(self, lines: list[str]) -> list[str]:
+        if self.skip is not None:
+            out, dropping = [], False
+            for x in lines:
+                if x.startswith(". "):
+                    dropping = bool(self.skip.search(x))
+                if not dropping:
+                    out.append(x)
+            lines = out
+        if self.ignore is not None:
+            lines = [x for x in lines if not self.ignore.search(x)]
+        return lines
 
     def accepts(self, a: list[str], b: list[str]) -> bool:
         if not self.limited():
             return True
-        if self.ignore is not None:
-            a = [x for x in a if not self.ignore.search(x)]
-            b = [x for x in b if not self.ignore.search(x)]
+        a, b = self.filtered(a), self.filtered(b)
         if len(a) != len(b):
             return False
         return all(x == y or _close_line(x, y) or (self.tol is not None and _within(x, y, self.tol))
@@ -183,8 +196,10 @@ def _known_differences() -> dict[str, Known]:
                         break
                     if m.group(2) is not None:
                         k.ignore = re.compile(m.group(2))
+                    elif m.group(3) is not None:
+                        k.skip = re.compile(m.group(3))
                     else:
-                        k.tol = float(m.group(3))
+                        k.tol = float(m.group(4))
                     k.why = k.why[m.end():]
                 out[name] = k
     return out
@@ -234,8 +249,7 @@ def main(argv: list[str] | None = None) -> int:
                     # without opening the whole CI log
                     # with a known difference that did not cover everything, only the lines it
                     # does not accept
-                    fa, fb = (a, b) if k is None or k.ignore is None else (
-                        [x for x in a if not k.ignore.search(x)], [x for x in b if not k.ignore.search(x)])
+                    fa, fb = (a, b) if k is None else (k.filtered(a), k.filtered(b))
                     ok = (lambda x, y: x == y or _close_line(x, y)
                           or (k is not None and k.tol is not None and _within(x, y, k.tol)))
                     diff = []

@@ -253,6 +253,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `xtunitroot`: `ht`, `breitung`, `hadri` e `fisher`
 - [x] Painel dinâmico por GMM: `xtabond`, `xtdpdsys` e `xtdpd` (um e dois passos, erros robustos com a correção de Windmeijer, `pre()`, `endogenous()`, `inst()`, `maxldep()`), com `estat abond` e `estat sargan`
 - [x] Descrição: `xtline` (com `overlay`), `xttab` e `xtdata` (`fe`, `be`)
+- Conferido com o log do Stata 14: o caso `1905` bate, exceto pelas diferenças de `compat/known_differences.txt` (os caminhos de iteração dos maximizadores numéricos e do `igls`, o `xtgls` com painéis correlacionados e o `igls` com `psar1`, os componentes de variância do `xtregar, re`, o teste F de `u_i` do `xtivreg, fe`, o R² entre do `xtivreg, fd`, a verossimilhança plana do `xtfrontier, tvd` e a estatística de Breitung); `xtunitroot llc` e `ips`, que o Stata 14 executa, ainda não foram implementados
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 

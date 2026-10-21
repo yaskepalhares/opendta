@@ -189,26 +189,44 @@ def _binary_re(s: "Session", cmd: str, args: str, kind: str, title: str) -> None
     fun = _numeric_fun(ll)
 
     out = s.output
-    pooled = _pooled_binary(kind, y, Xc, pr)
-    b0 = np.zeros(k)
-    if pr.constant:
-        p0 = y.mean()
-        b0[-1] = st.norm.ppf(p0) if kind == "probit" else math.log(-math.log(1 - p0))
-    rl = maximize(pooled, b0)
-    grid = pq.tau_grid(f, Xc @ rl.b, grp, rl.ll, nq)
-    best_t = max(grid, key=lambda tv: tv[1])[0]
-    start_l2 = math.log(best_t / (1 - best_t)) if best_t > 0 else 0.0
-    res = pr.maximize(fun, np.concatenate([rl.b, [start_l2]]))
-    if not pr.o.get("nolog"):
-        out.write("\nFitting comparison model:\n\n", "text")
-        print_log(out, rl, "log likelihood")
-        out.write("\nFitting full model:\n\n", "text")
-        lab = "rho" if kind == "probit" else "tau"           # VERIFY (xtcloglog)
-        for tv, lv in grid:
-            out.write(f"{lab} = {tv:4.1f}     log likelihood = {_g(lv)}\n", "text")
-        out.write("\n", "text")
-        print_log(out, res, "log likelihood")
+    llname = "log pseudolikelihood" if pr.robust else "log likelihood"
+    start = getattr(s, "_qc_start", None)
+    if start is not None:
+        # quadchk refit: starts at the fitted estimates, no comparison model and no grid
+        res = pr.maximize(fun, np.asarray(start, dtype=float))
+        if not pr.o.get("nolog"):
+            out.write("\n", "text")
+            print_log(out, res, llname)
+        rl = None
+    else:
+        pooled = _pooled_binary(kind, y, Xc, pr)
+        b0 = np.zeros(k)
+        if pr.constant:
+            p0 = y.mean()
+            b0[-1] = st.norm.ppf(p0)
+        if kind == "cloglog":
+            # the comparison cloglog starts at the pooled logit estimates (iteration 0 of compat 1905)
+            from .models import _logit
+            lf, _ = _logit(y, Xc, np.ones(len(y)))
+            b0 = maximize(lf, np.zeros(k)).b
+        rl = maximize(pooled, b0)
+        grid = pq.tau_grid(f, Xc @ rl.b, grp, rl.ll, nq)
+        best_t = max(grid, key=lambda tv: tv[1])[0]
+        start_l2 = math.log(best_t / (1 - best_t)) if best_t > 0 else 0.0
+        res = pr.maximize(fun, np.concatenate([rl.b, [start_l2]]))
+        if not pr.o.get("nolog"):
+            out.write("\nFitting comparison model:\n\n", "text")
+            print_log(out, rl, llname)
+            out.write("\nFitting full model:\n\n", "text")
+            lab = "rho" if kind == "probit" else "tau"           # VERIFY (xtcloglog)
+            for tv, lv in grid:
+                out.write(f"{lab} = {tv:4.1f}     {llname} = {_g(lv):>10}\n", "text")
+            out.write("\n", "text")
+            print_log(out, res, llname)
     V, robust = _vce(P, llg, res, grp)
+    chi2_V = np.linalg.inv(-res.H) if robust else None       # VERIFY: Stata's Wald chi2 is the model-based one
+    if robust and not pr.o.get("nolog"):
+        out.write("\nCalculating robust standard errors:\n\n", "text")
     l2, se2 = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     sig = math.exp(0.5 * l2)
     c = _RHO_C[kind]
@@ -222,11 +240,16 @@ def _binary_re(s: "Session", cmd: str, args: str, kind: str, title: str) -> None
     aux = [CoefRow("sep"), CoefRow("aux", "/lnsig2u", l2, se2, name="_cons"), CoefRow("sep"),
            CoefRow("aux", "sigma_u", sig, 0.5 * sig * se2, eq=f"{_exp(0.5 * lo2)} {_exp(0.5 * hi2)}"),
            CoefRow("aux", "rho", rho, rho * (1 - rho) * se2, eq=f"{rho_of(lo2)} {rho_of(hi2)}")]
+    if rl is None or robust:             # quadchk refit and vce(robust): Stata prints no test of rho=0
+        _finish(s, P, cmd, args, res.b, V, res, ["/lnsig2u"], title, "Random effects u_i ~ Gaussian",
+                np.ones(len(y), bool), aux_rows=aux, intpoints=nq, intmethod=meth, robust=robust, chi2_V=chi2_V,
+                extra_scalars=[("sigma_u", sig), ("rho", rho)] + ([("ll_c", rl.ll)] if rl else []), extra_macros=[("distrib", "Gaussian")])
+        return
     chib = max(2 * (res.ll - rl.ll), 0.0)
     pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
     _finish(s, P, cmd, args, res.b, V, res, ["/lnsig2u"], title, "Random effects u_i ~ Gaussian",
             np.ones(len(y), bool), chibar=("LR test of rho=0", chib, pchib), aux_rows=aux, intpoints=nq,
-            intmethod=meth, robust=robust,
+            intmethod=meth, robust=robust, chi2_V=chi2_V,
             extra_scalars=[("sigma_u", sig), ("rho", rho), ("ll_c", rl.ll), ("chi2_c", chib), ("p_c", pchib)],
             extra_macros=[("distrib", "Gaussian")])
     _remember(s, cmd, args, nq, adaptive, res.ll, res.b)
@@ -242,7 +265,7 @@ def cmd_xtprobit(s: "Session", args: str) -> None:
 
 
 def cmd_xtcloglog(s: "Session", args: str) -> None:
-    _binary_re(s, "xtcloglog", args, "cloglog", "Random-effects complementary log-log regression")
+    _binary_re(s, "xtcloglog", args, "cloglog", "Random-effects complementary log-log model")
 
 
 # ---------------------------------------------------------------------------
@@ -288,18 +311,17 @@ def _ordered_re(s: "Session", cmd: str, args: str, logistic: bool) -> None:
         return float(pq.ll_ordered(X @ b[:k], yi, cuts, logistic).sum())
     cum = np.array([np.mean(yi <= j) for j in range(J - 1)])
     rl = maximize(_numeric_fun(ll_pooled), np.concatenate([np.zeros(k), Finv(cum)]))
-    # one-dimensional search for the variance with the pooled coefficients
+    # starting value of the variance: sigma2_u = 1 with the pooled estimates ("Grid node 0" of
+    # compat 1905; for xtoprobit it is not the best of a small grid)
     base = rl.b
-
-    def ll_var(v):
-        return ll(np.concatenate([base, v]))
-    rv = maximize(_numeric_fun(ll_var), np.array([-1.0]))
-    res = pr.maximize(_numeric_fun(ll), np.concatenate([base, rv.b]))
+    best_ls = 0.0
+    best_ll = ll(np.concatenate([base, [best_ls]]))
+    res = pr.maximize(_numeric_fun(ll), np.concatenate([base, [best_ls]]))
     if not pr.o.get("nolog"):
         out.write("\nFitting comparison model:\n\n", "text")
         print_log(out, rl, "log likelihood")
-        out.write("\nRefining starting values:\n\n", "text")                   # VERIFY
-        print_log(out, rv, "log likelihood")
+        out.write("\nRefining starting values:\n\n", "text")
+        out.write(f"{'Grid node 0:':<14} log likelihood = {_g(best_ll):>10}\n", "text")
         out.write("\nFitting full model:\n\n", "text")
         print_log(out, res, "log likelihood")
     V, robust = _vce(P, llg, res, grp)
@@ -315,16 +337,18 @@ def _ordered_re(s: "Session", cmd: str, args: str, logistic: bool) -> None:
     z = crit("z", pr.smp.level, None)
     aux = [CoefRow("sep")]
     for j in range(J - 1):
-        aux.append(CoefRow("aux", f"/cut{j + 1}", float(res.b[k + j]), float(np.sqrt(V[k + j, k + j])),
+        aux.append(CoefRow("coef", f"/cut{j + 1}", float(res.b[k + j]), float(np.sqrt(V[k + j, k + j])),
                            name=f"cut{j + 1}"))
-    aux += [CoefRow("sep"), CoefRow("aux", "/sigma2_u", s2, se_s2, name="sigma2_u")]
+    se_l2 = float(np.sqrt(V[-1, -1]))
+    aux += [CoefRow("sep"), CoefRow("aux", "/sigma2_u", s2, se_s2, name="sigma2_u",
+                                    eq=f"{math.exp(l2 - z * se_l2)} {math.exp(l2 + z * se_l2)}")]
     chib = max(2 * (res.ll - rl.ll), 0.0)
     pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
     name = "ologit" if logistic else "oprobit"
     title = "Random-effects ordered logistic regression" if logistic else "Random-effects ordered probit regression"
     _finish(s, P, cmd, args, b_rep, Vl, res, [f"/cut{j + 1}" for j in range(J - 1)] + ["/sigma2_u"], title,
             "Random effects u_i ~ Gaussian", np.ones(len(y), bool),
-            chibar=(f"LR test vs. {name} model", chib, pchib), aux_rows=aux, intpoints=nq, intmethod=meth,
+            chibar=(f"LR test vs. {name} model", chib, pchib, 54, 4), aux_rows=aux, intpoints=nq, intmethod=meth,
             robust=robust, extra_scalars=[("sigma2_u", s2), ("ll_c", rl.ll), ("chi2_c", chib), ("p_c", pchib),
                                           ("k_cat", float(J))],
             extra_macros=[("distrib", "Gaussian")])
@@ -445,7 +469,11 @@ def _censored_re(s: "Session", cmd: str, args: str, interval: bool) -> None:
     start = np.concatenate([rl.b[:k], [math.log(su0), rl.b[k]]])
     res = pr.maximize(_numeric_fun(ll), start)
     if not pr.o.get("nolog"):
-        out.write("\nFitting full model:\n\n", "text")                          # VERIFY
+        # Stata first fits a model for the starting values (its likelihood is not the pooled tobit's:
+        # -492.07 where the pooled fit gives -545.44), then the full model (compat 1905)
+        out.write("\nObtaining starting values for full model:\n\n", "text")      # VERIFY
+        print_log(out, rl, "log likelihood")
+        out.write("\nFitting full model:\n\n", "text")
         print_log(out, res, "log likelihood")
     Vl, robust = _vce(P, llg, res, grp)
     su, se_ = math.exp(res.b[k]), math.exp(res.b[k + 1])
@@ -457,14 +485,16 @@ def _censored_re(s: "Session", cmd: str, args: str, interval: bool) -> None:
     rho = su ** 2 / (su ** 2 + se_ ** 2)
     g_ = np.array([2 * rho * (1 - rho), -2 * rho * (1 - rho)])
     se_rho = float(math.sqrt(g_ @ Vl[k:k + 2, k:k + 2] @ g_))
-    lr = math.log(rho / (1 - rho))
-    se_lr = se_rho / (rho * (1 - rho))
+    # the interval of rho is built on the probit scale (found in compat 1905: the logit scale does not match)
+    lr = float(st.norm.ppf(rho))
+    se_lr = se_rho / float(st.norm.pdf(lr))
     z = crit("z", pr.smp.level, None)
     aux = [CoefRow("sep"),
-           CoefRow("aux", "/sigma_u", su, float(np.sqrt(V[k, k])), name="sigma_u"),
-           CoefRow("aux", "/sigma_e", se_, float(np.sqrt(V[k + 1, k + 1])), name="sigma_e"),
+           CoefRow("coef", "/sigma_u", su, float(np.sqrt(V[k, k])), name="sigma_u"),
+           CoefRow("coef", "/sigma_e", se_, float(np.sqrt(V[k + 1, k + 1])), name="sigma_e"),
+           CoefRow("sep"),
            CoefRow("aux", "rho", rho, se_rho,
-                   eq=f"{1 / (1 + math.exp(-(lr - z * se_lr)))} {1 / (1 + math.exp(-(lr + z * se_lr)))}")]
+                   eq=f"{float(st.norm.cdf(lr - z * se_lr))} {float(st.norm.cdf(lr + z * se_lr))}")]
     chib = max(2 * (res.ll - rl.ll), 0.0)
     pchib = 0.5 * chi2_tail(chib, 1) if chib > 0 else 0.5
     counts = (int(left.sum()), int(unc.sum()), int(right.sum()), int(intv.sum()))
@@ -472,12 +502,12 @@ def _censored_re(s: "Session", cmd: str, args: str, interval: bool) -> None:
     def footer(ss, ee):
         nl, nu, nr, ni = counts
         w = ss.output
-        w.write(f"Observation summary: {nl:>12,}  left-censored observations\n", "text")
-        w.write(f"{nu:>33,}     uncensored observations\n", "text")
-        w.write(f"{nr:>33,} right-censored observations\n", "text")
+        w.write(f"{nl:>14,}  left-censored observations\n", "text")
+        w.write(f"{nu:>14,}     uncensored observations\n", "text")
+        w.write(f"{nr:>14,} right-censored observations\n", "text")
         if interval:
-            w.write(f"{ni:>33,}     interval observations\n", "text")
-    title = "Random-effects interval-data regression" if interval else "Random-effects tobit regression"
+            w.write(f"{ni:>14,}       interval observations\n", "text")
+    title = "Random-effects interval regression" if interval else "Random-effects tobit regression"
     sc = [("sigma_u", su), ("sigma_e", se_), ("rho", rho), ("ll_c", rl.ll), ("chi2_c", chib), ("p_c", pchib),
           ("N_lc", float(left.sum())), ("N_rc", float(right.sum())), ("N_unc", float(unc.sum()))]
     if interval:
@@ -488,7 +518,7 @@ def _censored_re(s: "Session", cmd: str, args: str, interval: bool) -> None:
         if hi is not None:
             sc.append(("ulopt", hi))
     _finish(s, P, cmd, args, b_rep, V, res, ["/sigma_u", "/sigma_e"], title, "Random effects u_i ~ Gaussian",
-            keep, chibar=("LR test of sigma_u=0", chib, pchib), aux_rows=aux, intpoints=nq, intmethod=meth,
+            keep, aux_rows=aux, intpoints=nq, intmethod=meth,
             robust=robust, extra_scalars=sc, extra_macros=[("distrib", "Gaussian")], footer=footer)
     _remember(s, cmd, args, nq, adaptive, res.ll, res.b)
 
@@ -538,6 +568,10 @@ def cmd_xtnbreg(s: "Session", args: str) -> None:
             out.write(f"note: {drop_g} group{'s' if drop_g > 1 else ''} ({int((~keep).sum())} obs) dropped because "
                       "of all zero outcomes\n", "text")
         Xk, yk, ok = X[keep], y[keep], off[keep]
+        if pr.constant:
+            # unlike the Poisson, the conditional negative binomial depends on the level of the means: _cons is estimated
+            Xk = np.column_stack([Xk, np.ones(len(yk))])
+            P.fe_cons = True
         _, invk = np.unique(inv[keep], return_inverse=True)
         grp = pq.Groups(invk)
 
@@ -546,9 +580,10 @@ def cmd_xtnbreg(s: "Session", args: str) -> None:
 
         def ll(b):
             return float(llg(b).sum())
-        pf, _ = _poisson(yk, np.column_stack([Xk, np.ones(len(yk))]), np.ones(len(yk)), ok)
-        rp = _max(pf, np.zeros(Xk.shape[1] + 1))
-        res = pr.maximize(_numeric_fun(ll), rp.b[:-1])
+        Xp = Xk if pr.constant else np.column_stack([Xk, np.ones(len(yk))])
+        pf, _ = _poisson(yk, Xp, np.ones(len(yk)), ok)
+        rp = _max(pf, np.zeros(Xp.shape[1]))
+        res = pr.maximize(_numeric_fun(ll), rp.b if pr.constant else rp.b[:-1])
         if not pr.o.get("nolog"):
             out.write("\n", "text")
             print_log(out, res, "log likelihood")
@@ -635,7 +670,9 @@ def cmd_quadchk(s: "Session", args: str) -> None:
         if n2 is None:
             raise StataError(198, "invalid syntax")
     else:
-        n1, n2 = max(int(round(2 * nq / 3)), 1), int(round(4 * nq / 3))
+        # VERIFY: Stata 14 gave 12 and 16 points for 8 fitted; the manual shows 8 and 16 for the
+        # default 12. The rule between is unknown: n-4 and n+4 from 12 on, n+4 and n+8 below.
+        n1, n2 = (nq - 4, nq + 4) if nq >= 12 else (nq + 4, nq + 8)
     show = "nooutput" not in opts.replace(" ", "").lower()
     snap = _snapshot(s)
     saved_info = dict(info)
@@ -649,11 +686,15 @@ def cmd_quadchk(s: "Session", args: str) -> None:
             if show:
                 out.write(f"\nRefitting model intpoints() = {n}\n", "text")
             run_args = f"{base_args}, intpoints({n})" if "," not in base_args else f"{base_args} intpoints({n})"
-            if show:
-                cmd_fn(s, run_args)
-            else:
-                with out.quietly():
+            s._qc_start = est.b.copy()
+            try:
+                if show:
                     cmd_fn(s, run_args)
+                else:
+                    with out.quietly():
+                        cmd_fn(s, run_args)
+            finally:
+                s._qc_start = None
             e2 = s._estimates
             runs.append((n, float(s.e["ll"]), e2.b.copy(), list(e2.names), list(e2.eqnames)))
     finally:
@@ -672,34 +713,34 @@ def _quad_table(s, runs, est) -> None:
     out = s.output
 
     def f(v):
-        return format_value(float(v), "%11.0g", pad=False).strip()
-
-    def e3(v):
-        return format_value(float(v), "%10.4e", pad=False).strip()
+        return format_value(float(v), "%10.0g", pad=False).strip()
     (n0, ll0, b0, names, eqs), (n1, ll1, b1, _, _), (n2, ll2, b2, _, _) = runs
+
+    def row(label, a, b, c, tail=""):
+        out.write(f"{label:<13}{a:>10}{b:>15}{c:>15}{tail}\n", "text")
+    rule = "-" * 53
     out.write("\n", "text")
-    out.write(f"{'':>25}Quadrature check\n", "text")
-    out.write(f"{'Fitted':>26}{'Comparison':>16}{'Comparison':>16}\n", "text")
-    out.write(f"{'quadrature':>26}{'quadrature':>16}{'quadrature':>16}\n", "text")
-    out.write(f"{str(n0) + ' points':>26}{str(n1) + ' points':>16}{str(n2) + ' points':>16}\n", "text")
-    out.write("-" * 79 + "\n", "text")
-    out.write(f"{'Log':<14}{f(ll0):>12}{f(ll1):>16}{f(ll2):>16}\n", "text")
-    out.write(f"{'likelihood':<14}{'':>12}{e3(ll1 - ll0):>16}{e3(ll2 - ll0):>16}  Difference\n", "text")
-    out.write(f"{'':<14}{'':>12}{e3((ll1 - ll0) / abs(ll0)):>16}{e3((ll2 - ll0) / abs(ll0)):>16}  Relative difference\n",
-              "text")
+    out.write(" " * 25 + "Quadrature check\n", "text")
+    out.write("\n", "text")
+    out.write(" " * 15 + "Fitted" + " " * 7 + "Comparison" + " " * 5 + "Comparison\n", "text")
+    out.write(" " * 13 + "quadrature" + " " * 5 + "quadrature" + " " * 5 + "quadrature\n", "text")
+    out.write(" " * 13 + f"{str(n0) + ' points':<15}{str(n1) + ' points':<15}{n2} points\n", "text")
+    out.write(rule + "\n", "text")
+    row("Log", f(ll0), f(ll1), f(ll2))
+    row("likelihood", "", f(ll1 - ll0), f(ll2 - ll0), "   Difference")
+    row("", "", f((ll1 - ll0) / ll0), f((ll2 - ll0) / ll0), "   Relative difference")
     last_eq = None
     for i, nm in enumerate(names):
         eq = eqs[i] if i < len(eqs) else ""
-        if eq != last_eq:
-            out.write("-" * 79 + "\n", "text")
-            out.write(f"{eq + ':':<14}\n", "text")
-            last_eq = eq
-        lab = {"/lnsig2u": "lnsig2u"}.get(nm, nm)
-        out.write(f"{lab:<14}{f(b0[i]):>12}{f(b1[i]):>16}{f(b2[i]):>16}\n", "text")
+        lab = {"/lnsig2u": "_cons"}.get(nm, nm)
+        if nm == "/lnsig2u":
+            eq = "lnsig2u"
+        out.write(rule + "\n", "text")
+        row(eq + ":", f(b0[i]), f(b1[i]), f(b2[i]))
         d1, d2 = b1[i] - b0[i], b2[i] - b0[i]
-        out.write(f"{'':<14}{'':>12}{e3(d1):>16}{e3(d2):>16}  Difference\n", "text")
-        rel1 = d1 / abs(b0[i]) if b0[i] else float("nan")
-        rel2 = d2 / abs(b0[i]) if b0[i] else float("nan")
-        out.write(f"{'':<14}{'':>12}{e3(rel1):>16}{e3(rel2):>16}  Relative difference\n", "text")
-    out.write("-" * 79 + "\n", "text")
+        out.write(f"{lab[:8]:>8}{'':>6}{'':>9}{f(d1):>15}{f(d2):>15}   Difference\n", "text")
+        rel1 = d1 / b0[i] if b0[i] else float("nan")
+        rel2 = d2 / b0[i] if b0[i] else float("nan")
+        row("", "", f(rel1), f(rel2), "   Relative difference")
+    out.write(rule + "\n", "text")
     out.write("\n", "text")

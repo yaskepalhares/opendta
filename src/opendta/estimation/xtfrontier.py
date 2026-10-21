@@ -34,6 +34,8 @@ def cmd_xtfrontier(s: "Session", args: str) -> None:
         return
     P = _Panel(s, "xtfrontier", args, extra_opts={"ti": 2, "tvd": 3, "cost": 2, "t": 1}, constant=None)
     o, pr, out = P.pr.o, P.pr, s.output
+    if not o.get("ti") and not o.get("tvd"):
+        raise StataError(198, "either ti or tvd must be specified")               # as in the 1905 log
     if o.get("ti") and o.get("tvd"):
         raise StataError(198, "only one of ti or tvd may be specified")           # VERIFY
     if o.get("fe") or o.get("re") or o.get("pa"):

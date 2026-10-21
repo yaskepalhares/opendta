@@ -1,4 +1,4 @@
-"""tools/compare.py: limits of the known differences (ignore and tolerance)."""
+"""tools/compare.py: limits of the known differences (ignore, skip and tolerance)."""
 
 import re
 import sys
@@ -26,11 +26,19 @@ def test_ignore_drops_lines_from_both_logs():
     assert not k.accepts(a, ["Log likelihood = -3"])
 
 
+def test_skip_drops_the_output_of_matching_commands_only():
+    k = C.Known("why", skip=re.compile(r"xtunitroot llc"))
+    a = [". xtunitroot llc rw", "Levin-Lin-Chu unit-root test", "-----", ". xtunitroot ht rw", "rho 0.5"]
+    b = [". xtunitroot llc rw", "not available yet", ". xtunitroot ht rw", "rho 0.5"]
+    assert k.accepts(a, b)
+    assert not k.accepts(a, [". xtunitroot llc rw", "not available yet", ". xtunitroot ht rw", "rho 0.6"])
+
+
 def test_parse_limits(tmp_path, monkeypatch):
     f = tmp_path / "known_differences.txt"
-    f.write_text("x  ignore(/^It/) tolerance(1e-3) reason here\ny plain reason\n", encoding="utf-8")
+    f.write_text("x  ignore(/^It/) tolerance(1e-3) skip(/llc/) reason here\ny plain reason\n", encoding="utf-8")
     monkeypatch.setattr(C, "COMPAT", tmp_path)
     known = C._known_differences()
     assert known["x"].why == "reason here" and known["x"].tol == 1e-3
-    assert known["x"].ignore.pattern == "^It"
+    assert known["x"].ignore.pattern == "^It" and known["x"].skip.pattern == "llc"
     assert not known["y"].limited()

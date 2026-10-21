@@ -97,24 +97,27 @@ def cmd_xttab(s: "Session", args: str) -> None:
         raise StataError(2000, "no observations")
     _, inv = np.unique(ds.get(pvar).data[sel], return_inverse=True)
     r = ps.xttab_counts(codes[sel], inv, len(cats))
-    W = max([12] + [len(lb) for lb in labels])
-    W = min(W, 30)
+    # VERIFY: stub width 9 as in the 1905 log (wider labels widen it)
+    title = _header_lines(v.label or v.name, 9)[-1]
+    W = min(max([9, len(title)] + [len(lb) for lb in labels]), 30)
     out = s.output
     N, G = r["N"], r["G"]
     out.write("\n", "text")
-    out.write(f"{'':>{W}}   {'Overall':>9}{'Between':>20}{'Within':>13}\n".replace("   ", "  ", 1), "text")   # VERIFY
-    title = _header_lines(v.label or v.name, W)[-1]
-    out.write(f"{title:>{W}} |{'Freq.':>10}{'Percent':>10}{'Freq.':>10}{'Percent':>10}{'Percent':>10}\n", "text")
-    out.write("-" * (W + 1) + "+" + "-" * 52 + "\n", "text")
+    out.write(f"{'Overall':>{W + 16}}{'Between':>20}{'Within':>18}\n", "text")
+    out.write(f"{title:>{W}} |{'Freq.':>9}{'Percent':>9}{'Freq.':>11}{'Percent':>9}{'Percent':>15}\n", "text")
+    rule = "-" * (W + 1) + "+" + "-" * 53 + "\n"
+    out.write(rule, "text")
     for k, lab in enumerate(labels):
         out.write(f"{lab[:W]:>{W}} |", "text")
-        out.write(f"{_fmt_freq(r['freq'][k]):>10}{100 * r['freq'][k] / N:>10.2f}{_fmt_freq(r['bfreq'][k]):>10}"
-                  f"{100 * r['bfreq'][k] / G:>10.2f}{r['within'][k]:>10.2f}\n", "result")
-    out.write("-" * (W + 1) + "+" + "-" * 52 + "\n", "text")
+        out.write(f"{_fmt_freq(r['freq'][k]):>8}{100 * r['freq'][k] / N:>10.2f}{_fmt_freq(r['bfreq'][k]):>10}"
+                  f"{100 * r['bfreq'][k] / G:>10.2f}{r['within'][k]:>15.2f}\n", "result")
+    out.write(rule, "text")
+    # VERIFY: the total of the within column is the average of its percentages weighted by the between frequencies
+    wtot = float((r["bfreq"] * r["within"]).sum() / r["bfreq"].sum())
     out.write(f"{'Total':>{W}} |", "text")
-    out.write(f"{_fmt_freq(N):>10}{100.0:>10.2f}{_fmt_freq(r['bfreq'].sum()):>10}"
-              f"{100 * r['bfreq'].sum() / G:>10.2f}{100.0:>10.2f}", "result")
-    out.write(f"  (n = {G})\n", "text")
+    out.write(f"{_fmt_freq(N):>8}{100.0:>10.2f}{_fmt_freq(r['bfreq'].sum()):>10}"
+              f"{100 * r['bfreq'].sum() / G:>10.2f}{wtot:>15.2f}\n", "result")
+    out.write(f"{'':>{W + 23}}(n = {G})\n", "text")
     s.r = {"N": N, "n": float(G), "r": float(len(cats))}
 
 
@@ -145,4 +148,11 @@ def cmd_xtdata(s: "Session", args: str) -> None:
         new = x.copy()
         new[m] = ps.panel_transform(x[m], sub_inv, modes[0])
         ds.set_numeric(v, new)
+    if modes[0] == "be":
+        # VERIFY: the between-effects data keep one observation per panel (1905 log)
+        ids_ = ds.get(pvar).data
+        first = np.zeros(ds.nobs, dtype=bool)
+        _, idx = np.unique(np.where(mask, ids_, np.nan), return_index=True)
+        first[idx] = True
+        ds.keep_obs(first & mask)
     s.notify_state()

@@ -26,6 +26,10 @@
 {p_end}
 
 {phang}
+{opt dfuller} augmented Dickey-Fuller tests of every panel; required by {cmd:fisher}.
+{p_end}
+
+{phang}
 {opt lags(#)} lags of the ADF regressions ({cmd:fisher}).
 {p_end}
 
@@ -37,7 +41,7 @@
 
 {phang2}{cmd:. xtset id year}{p_end}
 {phang2}{cmd:. xtunitroot ht y}{p_end}
-{phang2}{cmd:. xtunitroot fisher y, lags(2)}{p_end}
+{phang2}{cmd:. xtunitroot fisher y, dfuller lags(2)}{p_end}
 {phang2}{cmd:. xtunitroot hadri y, trend}{p_end}
 
 {title:Also see}

@@ -12,13 +12,17 @@
 {title:Description}
 
 {pstd}
-{cmd:xtfrontier} fits stochastic production (or cost) frontier models for panel data by maximum likelihood: the time-invariant inefficiency model ({cmd:ti}, the default) and the time-varying decay model ({cmd:tvd}) of Battese and Coelli, with a truncated-normal inefficiency term.
+{cmd:xtfrontier} fits stochastic production (or cost) frontier models for panel data by maximum likelihood: the time-invariant inefficiency model ({cmd:ti}) and the time-varying decay model ({cmd:tvd}) of Battese and Coelli, with a truncated-normal inefficiency term.
 {p_end}
 
 {title:Options}
 
 {phang}
 {opt cost} fit a cost frontier.
+{p_end}
+
+{phang}
+{opt ti} time-invariant inefficiency model; one of {opt ti} or {opt tvd} is required.
 {p_end}
 
 {phang}

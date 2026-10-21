@@ -246,6 +246,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `xtunitroot`: `ht`, `breitung`, `hadri` and `fisher`
 - [x] Dynamic panel data by GMM: `xtabond`, `xtdpdsys` and `xtdpd` (one-step and two-step, Windmeijer-corrected robust errors, `pre()`, `endogenous()`, `inst()`, `maxldep()`), with `estat abond` and `estat sargan`
 - [x] Description: `xtline` (with `overlay`), `xttab` and `xtdata` (`fe`, `be`)
+- Checked against the Stata 14 log: case `1905` matches except for the differences in `compat/known_differences.txt` (the iteration paths of the numerical maximizers and of `igls`, `xtgls` with correlated panels and `igls` with `psar1`, the variance components of `xtregar, re`, the F test of `u_i` in `xtivreg, fe`, the between R-sq of `xtivreg, fd`, the flat likelihood of `xtfrontier, tvd` and the Breitung statistic); `xtunitroot llc` and `ips`, which Stata 14 runs, are not implemented yet
 
 ## Distribution and documentation
 

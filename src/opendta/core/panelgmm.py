@@ -24,7 +24,7 @@ def _pinv(A: np.ndarray) -> np.ndarray:
     return np.linalg.pinv((A + A.T) / 2, rcond=1e-10)
 
 
-def gmm_fit(X, y, Z, H, twostep: bool = False, robust: bool = False) -> dict:
+def gmm_fit(X, y, Z, H, twostep: bool = False, robust: bool = False, nd=None) -> dict:
     """X, y, Z, H: lists with one block per panel. One-step estimator with W = (sum Z'HZ)^-1;
     the two-step estimator weights with the inverse of sum Z'e1 e1'Z. The covariance matrix of the
     two-step estimator is the asymptotic one, or with `robust` the Windmeijer (2005) correction."""
@@ -40,6 +40,10 @@ def gmm_fit(X, y, Z, H, twostep: bool = False, robust: bool = False) -> dict:
     n = sum(len(e) for e in e1)
     # sigma^2 of the idiosyncratic differenced error under Var = sigma^2 H   (VERIFY)
     sig2 = sum(float(e @ np.linalg.solve(h, e)) for e, h in zip(e1, H)) / (n - k)
+    if nd is not None:
+        # VERIFY: Stata's sigma^2 is the sum of squared differenced residuals over 2 (n_d - k), as found
+        # in the 1905 log
+        sig2 = sum(float(e[:m] @ e[:m]) for e, m in zip(e1, nd)) / (2 * (sum(nd) - k))
     Om1 = sum(np.outer(z.T @ e, z.T @ e) for z, e in zip(Z, e1))
     A1i = np.linalg.inv(A1)
     V1 = sig2 * A1i

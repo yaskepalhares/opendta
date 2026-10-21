@@ -60,8 +60,9 @@ def test_xtivreg_fd_is_first_difference_2sls(run):
     y, x1, x2, z = (s.data.get(n).data.astype(float) for n in ("y", "x1", "x2", "z"))
     dy, dx1, dx2, dz = d(y), d(x1), d(x2), d(z)
     m = ~np.isnan(dy)
-    X = np.column_stack([dx2[m], dx1[m]])
-    Z = np.column_stack([dz[m], dx1[m]])
+    one = np.ones(m.sum())
+    X = np.column_stack([dx2[m], dx1[m], one])      # the differenced equation has a constant
+    Z = np.column_stack([dz[m], dx1[m], one])
     Pz = Z @ np.linalg.solve(Z.T @ Z, Z.T)
     ref = np.linalg.solve(X.T @ Pz @ X, X.T @ Pz @ dy[m])
     assert np.allclose(b, ref, atol=1e-8)
@@ -122,7 +123,7 @@ def test_frontier_group_loglik_matches_integration():
 
 
 def test_xtfrontier_runs(run):
-    run(PANEL + "gen ly = 1 + .5*x1 + rnormal()*.3 - abs(u)*.3\nxtfrontier ly x1")
+    run(PANEL + "gen ly = 1 + .5*x1 + rnormal()*.3 - abs(u)*.3\nxtfrontier ly x1, ti")
     assert 0 < run.session.e["gamma"] < 1
 
 
@@ -142,7 +143,7 @@ def test_hadri_closed_form():
     r = pr.hadri(Y)
     E = Y - Y.mean(axis=1, keepdims=True)
     S = np.cumsum(E, axis=1)
-    lm = (S ** 2).sum() / (12 * 20 ** 2 * (E ** 2).sum() / (12 * 20))
+    lm = (S ** 2).sum() / (12 * 20 ** 2 * (E ** 2).sum() / (12 * (20 - 1)))
     assert abs(r["lm"] - lm) < 1e-12
     assert abs(r["z"] - math.sqrt(12) * (lm - 1 / 6) / math.sqrt(1 / 45)) < 1e-12
 
@@ -167,6 +168,9 @@ bysort id (t): replace st = .5*st[_n-1] + e if _n>1
     assert p_rw > 0.05 > run.session.r["p"]
     run("quietly xtunitroot hadri rw")
     assert run.session.r["p"] < 0.01
+    assert "must specify one of dfuller or pperron" in run("capture noisily xtunitroot fisher rw, lags(1)")
+    run("quietly xtunitroot fisher rw, dfuller lags(1)")
+    assert run.session.r["p_Z"] > 0.05 > 0 and "P" in run.session.r
 
 
 def test_xtabond_matches_independent_gmm(run):
@@ -208,8 +212,9 @@ quietly xtabond y, noconstant
 
 
 def test_estat_abond_and_sargan_run(run):
-    run(PANEL + "quietly xtabond y x1\nestat abond\nestat sargan")
+    run(PANEL + "quietly xtabond y x1, twostep vce(robust)\nestat abond")
     assert "Arellano-Bond test for zero autocorrelation" in run.cap.text
+    run("quietly xtabond y x1\nestat sargan")
     assert "Sargan test of overidentifying restrictions" in run.cap.text
 
 
@@ -239,6 +244,9 @@ def test_xtdata_fe_and_be(run):
     s = run.session
     x = s.data.get("x1").data.astype(float).reshape(30, 8)
     assert np.allclose(x.mean(axis=1), x.mean())
+    run(PANEL)
+    means = run.session.data.get("x1").data.astype(float).reshape(30, 8).mean(axis=1)
     run(PANEL + "xtdata x1, be clear")
-    x = run.session.data.get("x1").data.astype(float).reshape(30, 8)
-    assert np.allclose(x, x[:, [0]])
+    x = run.session.data.get("x1").data.astype(float)
+    assert len(x) == 30                                 # one observation per panel
+    assert np.allclose(x, means)

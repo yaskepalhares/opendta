@@ -150,6 +150,28 @@ def sigma_correlated(e: np.ndarray, pi: PanelIndex, pairwise: bool = False) -> t
     return S, int(full.sum())
 
 
+def invsym(A: np.ndarray, tol: float = 1e-12) -> np.ndarray:
+    """Generalized inverse of a symmetric matrix by the sweep operator, dropping (zeroing) the
+    columns whose pivot is negligible against the original diagonal; as Mata's invsym()."""
+    A = np.array(A, dtype=float)
+    n = A.shape[0]
+    diag0 = np.abs(np.diag(A)).copy()
+    dropped = []
+    for j in range(n):
+        d = A[j, j]
+        if d <= tol * max(diag0[j], 1e-300):
+            dropped.append(j)
+            A[j, :] = 0.0
+            A[:, j] = 0.0
+            continue
+        row = A[j, :].copy()
+        A -= np.outer(A[:, j], row) / d
+        A[j, :] = row / d
+        A[:, j] = row / d
+        A[j, j] = -1.0 / d
+    return -A
+
+
 def gls_fit(y: np.ndarray, X: np.ndarray, pi: PanelIndex, panels: str, e: np.ndarray,
             pairwise: bool = False, nmk: bool = False) -> dict:
     """One FGLS step from the residuals `e`: Sigma is estimated according to `panels`
@@ -171,18 +193,16 @@ def gls_fit(y: np.ndarray, X: np.ndarray, pi: PanelIndex, panels: str, e: np.nda
     S, T = sigma_correlated(e, pi, pairwise)
     S = S * scale
     G = pi.G
-    if T < G:
-        from .errors import StataError
-        raise StataError(498, "panels(correlated) requires at least as many time periods as panels")   # VERIFY
+    singular = T < G         # Stata goes on with a generalized inverse and prints a note (compat 1905)
     XtWX = np.zeros((k, k))
     XtWy = np.zeros(k)
     for obs, pan in _present_times(pi):
-        Si = np.linalg.inv(S[np.ix_(pan, pan)])
+        Si = invsym(S[np.ix_(pan, pan)]) if singular else np.linalg.inv(S[np.ix_(pan, pan)])
         Xt = X[obs]
         XtWX += Xt.T @ Si @ Xt
         XtWy += Xt.T @ Si @ y[obs]
     A = np.linalg.inv(XtWX)
-    return {"b": A @ XtWy, "V": A, "sigma": S, "ncov": G * (G + 1) // 2, "T": T}
+    return {"b": A @ XtWy, "V": A, "sigma": S, "ncov": G * (G + 1) // 2, "T": T, "singular": singular}
 
 
 def gls_loglik(e: np.ndarray, pi: PanelIndex, panels: str, sigma: np.ndarray, rho_g: np.ndarray | None) -> float:
@@ -317,7 +337,8 @@ def hausman_taylor(y: np.ndarray, X1: np.ndarray, X2: np.ndarray, Z1: np.ndarray
     yw, Xw = pi.within(y), pi.within(X)
     bw = np.linalg.solve(Xw.T @ Xw, Xw.T @ yw)
     e_w = yw - Xw @ bw
-    sigma_e2 = float(e_w @ e_w) / (n - G - kx)
+    # VERIFY: the divisor is n - G (not n - G - k), as in the 1905 log
+    sigma_e2 = float(e_w @ e_w) / (n - G)
     # between equation: d_i = ybar_i - xbar_i bw on [Z, 1] with the instruments [X1bar, Z1, 1]
     d = pi.group_means(y) - pi.group_means(X) @ bw
     # one row per group: time-invariant variables take the first row of every group
@@ -355,7 +376,9 @@ def hausman_taylor(y: np.ndarray, X1: np.ndarray, X2: np.ndarray, Z1: np.ndarray
         ins = [Xw, wide[pi.inv], Z1, ones]
     I = np.column_stack(ins)
     f2 = tsls(ys, Rs, I)
-    return {"b": f2["b"], "V": f2["A"], "sigma_u": float(np.sqrt(sigma_u2)), "sigma_e": float(np.sqrt(sigma_e2)),
+    # VERIFY: V = (e*'e*/(n - k)) (R*'Pz R*)^-1, k counting the constant (1905 log)
+    s2 = float(f2["e"] @ f2["e"]) / (n - R.shape[1])
+    return {"b": f2["b"], "V": s2 * f2["A"], "sigma_u": float(np.sqrt(sigma_u2)), "sigma_e": float(np.sqrt(sigma_e2)),
             "e": f2["e"], "theta": theta, "bw": bw}
 
 
@@ -378,10 +401,11 @@ def panel_iv(y: np.ndarray, X: np.ndarray, Z: np.ndarray, pi: PanelIndex, method
         dy = (y - pi.lagged(y))[m]
         dX = (X - np.column_stack([pi.lagged(X[:, j]) for j in range(k)]))[m]
         dZ = (Z - np.column_stack([pi.lagged(Z[:, j]) for j in range(Z.shape[1])]))[m]
-        f = tsls(dy, dX, dZ)
         ne = int(m.sum())
-        s2 = float(f["e"] @ f["e"]) / (ne - k)
-        return dict(b=f["b"], A=f["A"], e=f["e"], s2=s2, rows=np.flatnonzero(m), df=ne - k, n=ne)
+        # VERIFY: the differenced equation has a constant and s2 = e'e/(n - k - 1) (1905 log)
+        f = tsls(dy, np.column_stack([dX, np.ones(ne)]), np.column_stack([dZ, np.ones(ne)]))
+        s2 = float(f["e"] @ f["e"]) / (ne - k - 1)
+        return dict(b=f["b"], A=f["A"], e=f["e"], s2=s2, rows=np.flatnonzero(m), df=ne - k - 1, n=ne)
     if method == "be":
         yb, Xb, Zb = pi.group_means(y), pi.group_means(X), pi.group_means(Z)
         X1, Z1 = np.column_stack([Xb, np.ones(G)]), np.column_stack([Zb, np.ones(G)])
@@ -410,4 +434,7 @@ def panel_iv(y: np.ndarray, X: np.ndarray, Z: np.ndarray, pi: PanelIndex, method
     else:
         Zs = np.column_stack([Zw, pi.group_means(Z)[pi.inv], np.ones(n)])
     f = tsls(ys, Xs, Zs)
-    return dict(b=f["b"], A=f["A"], e=f["e"], s2=se2, df=n - k - 1, sigma_e2=se2, sigma_u2=su2, theta=theta, n=n)
+    # VERIFY: Stata's variance uses the residual sum of squares of the transformed equation over
+    # n - k - 1 (not sigma_e^2); matches the 1905 log
+    s2 = float(f["e"] @ f["e"]) / (n - k - 1)
+    return dict(b=f["b"], A=f["A"], e=f["e"], s2=s2, df=n - k - 1, sigma_e2=se2, sigma_u2=su2, theta=theta, n=n)

@@ -89,7 +89,8 @@ def hadri(Y: np.ndarray, trend: bool = False, robust: bool = False) -> dict:
         sig2 = (E ** 2).mean(axis=1)
         lm = float(((S ** 2).sum(axis=1) / (T ** 2 * sig2)).mean())
     else:
-        sig2 = float((E ** 2).sum()) / (N * T)
+        # VERIFY: the variance is divided by N (T - k), k = number of deterministic terms (1905 log)
+        sig2 = float((E ** 2).sum()) / (N * (T - Z.shape[1]))
         lm = float((S ** 2).sum() / (N * T ** 2 * sig2))
     xi, zeta2 = (1 / 15, 11 / 6300) if trend else (1 / 6, 1 / 45)
     z = math.sqrt(N) * (lm - xi) / math.sqrt(zeta2)

@@ -122,8 +122,13 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     uniq, inv = np.unique(ids, return_inverse=True)
     G = len(uniq)
     tv = ds.get(info.tvar).data[smp.mask].astype(float)
-    tix = np.rint((tv - tv.min()) / (info.delta or 1.0)).astype(int)
-    Tg = int(tix.max()) + 1
+    # the time axis starts at the first period of the data, not at the first period of the sample
+    # (the sample loses the first period when a lag is a regressor)
+    t_full = ds.get(info.tvar).data.astype(float)
+    t_ok = (t_full < SYS) & (ds.get(pvar).data < SYS)
+    t0 = float(t_full[t_ok].min())
+    tix = np.rint((tv - t0) / (info.delta or 1.0)).astype(int)
+    Tg = int(np.rint((t_full[t_ok].max() - t0) / (info.delta or 1.0))) + 1
 
     def grid(values):
         g = np.full((G, Tg), np.nan)
@@ -135,9 +140,21 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     reg_names: list[str] = []
     reg_series: list[np.ndarray] = []
 
+    # instruments and lagged series come from every observation of the panel, not only from the
+    # estimation sample (L.y is missing in the first period, which must still be a valid instrument)
+    ids_all, t_all = ds.get(pvar).data, ds.get(info.tvar).data.astype(float)
+    pos = np.searchsorted(uniq, ids_all)
+    pos_ok = (pos < G) & (uniq[np.minimum(pos, G - 1)] == ids_all) & (ids_all < SYS) & (t_all < SYS)
+    tix_all = np.rint((t_all - t0) / (info.delta or 1.0))
+    pos_ok &= (tix_all >= 0) & (tix_all < Tg)
+
     def raw(name):
         if name not in series:
-            series[name] = grid(ds.get(name).data[smp.mask].astype(float))
+            g_ = np.full((G, Tg), np.nan)
+            v_ = ds.get(name).data.astype(float)
+            ok_ = pos_ok & (v_ < SYS)
+            g_[pos[ok_], tix_all[ok_].astype(int)] = v_[ok_]
+            series[name] = g_
         return series[name]
 
     def shift(a, j):
@@ -151,7 +168,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     lab_lgmm: list[str] = []
     lab_liv: list[str] = []
     dname = smp.depname
-    series[dname] = y
+    series[dname] = raw(dname)
     p = 1
     if cmd == "xtdpd":
         for c in xcols:
@@ -185,12 +202,6 @@ def _run(s: "Session", cmd: str, args: str) -> None:
         for j in range(1, p + 1):
             reg_names.append(f"L{j}.{dname}" if j > 0 else dname)
             reg_series.append(shift(y, j))
-        for c in xcols:
-            reg_names.append(c.name)
-            reg_series.append(grid(c.values))
-            sp.div.append(c.name)
-            series[c.name] = reg_series[-1]
-            lab_div.append("D." + c.name)
         sp.dgmm.append((dname, 2, None if maxldep is None else maxldep + 1))
         lab_dgmm.append(_lab(2, None if maxldep is None else maxldep + 1, dname))
         for v in pre:
@@ -203,6 +214,13 @@ def _run(s: "Session", cmd: str, args: str) -> None:
             reg_series.append(raw(v))
             sp.dgmm.append((v, 2, None if maxlags is None else maxlags + 1))
             lab_dgmm.append(_lab(2, None if maxlags is None else maxlags + 1, v))
+        # VERIFY: predetermined and endogenous variables come before the strictly exogenous ones
+        for c in xcols:
+            reg_names.append(c.name)
+            reg_series.append(grid(c.values))
+            sp.div.append(c.name)
+            series[c.name] = reg_series[-1]
+            lab_div.append("D." + c.name)
         for v in inst:
             sp.div.append(v)
             raw(v)
@@ -221,6 +239,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     nstd = len(sp.div) + len(sp.liv) + (1 if sp.cons else 0)
     rows_X, rows_y, rows_Z, rows_H, rows_t = [], [], [], [], []
     sparse: list[list[tuple[int, int, float]]] = []     # (row, col, value) per panel
+    samp_counts: list[int] = []                         # observations per panel as the header reports them
     for g in range(G):
         X_i, y_i, t_i, ent = [], [], [], []
         lvl_rows = []
@@ -229,7 +248,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
             dy = y[g, t] - y[g, t - 1]
             if np.isnan(dy) or any(np.isnan(v) for v in vals):
                 continue
-            row = vals + ([1.0] if sp.cons and not sp.level else ([0.0] if sp.cons else []))
+            row = vals + ([0.0] if sp.cons else [])
             X_i.append(row)
             y_i.append(dy)
             t_i.append(t)
@@ -245,11 +264,16 @@ def _run(s: "Session", cmd: str, args: str) -> None:
             ent.append(e)
         nd = len(X_i)
         lvl_t = []
-        if sp.level:
+        n_samp = nd
+        if sp.level or sp.cons:
+            n_samp = 0
+            # VERIFY: without a level equation the constant gets its own level equation, instrumented by
+            # the constant alone (it is listed under "Instruments for level equation" in the 1905 log)
             for t in range(1, Tg):
                 vals = [r[g, t] for r in reg_series]
                 if np.isnan(y[g, t]) or any(np.isnan(v) for v in vals):
                     continue
+                n_samp += 1
                 inst_ok = True
                 e = []
                 for key, (v, a, b) in enumerate(sp.lgmm):
@@ -264,8 +288,6 @@ def _run(s: "Session", cmd: str, args: str) -> None:
                                 e.append((col, val))
                                 got = True
                     inst_ok = inst_ok and got
-                if not inst_ok:
-                    continue
                 X_i.append(vals + ([1.0] if sp.cons else []))
                 y_i.append(y[g, t])
                 lvl_t.append(t)
@@ -285,8 +307,6 @@ def _run(s: "Session", cmd: str, args: str) -> None:
                 std[r, j] = 0.0 if np.isnan(d) else d
                 j += 1
             j += len(sp.liv)
-            if sp.cons and not sp.level:
-                std[r, j] = 1.0
         for r2, t in enumerate(lvl_t):
             r = nd + r2
             j = len(sp.div)
@@ -297,6 +317,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
             if sp.cons:
                 std[r, j] = 1.0
         sparse.append((ent, std, nd, len(X_i)))
+        samp_counts.append(nd if cmd == "xtabond" else n_samp)
     if not rows_X:
         raise StataError(2001, "insufficient observations")
     ncols = len(gmm_keys)
@@ -319,11 +340,13 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     X, yv = rows_X, rows_y
     if len(keep) < k:
         raise StataError(481, "equation not identified; fewer instruments than parameters")   # VERIFY
-    fit = pg.gmm_fit(X, yv, Zs, Hs, twostep, robust)
+    fit = pg.gmm_fit(X, yv, Zs, Hs, twostep, robust, nd=[sp_[2] for sp_ in sparse])
     b, V = fit["b"], fit["V"]
     Gu = len(X)
-    nobs = sum(len(r) for r in yv)
-    counts = np.array([len(r) for r in yv])
+    # VERIFY: xtabond reports the rows of the differenced equation, xtdpd and xtdpdsys the observations of
+    # the sample (1905 log)
+    counts = np.array(samp_counts)
+    nobs = int(counts.sum())
     names = list(reg_names) + (["_cons"] if sp.cons else [])
     slopes = list(range(len(reg_names)))
     try:
@@ -333,12 +356,17 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     pchi = chi2_tail(chi2, len(slopes)) if chi2 < SYS else SYS
     # table rows: the lags of the dependent variable under its name, as Stata does
     se = np.sqrt(np.maximum(np.diag(V), 0))
-    rows = [CoefRow("header", dname)]
-    nlag = p if cmd != "xtdpd" else 0
-    for j in range(nlag):
-        rows.append(CoefRow("coef", f"L{j + 1}.", b[j], se[j]))
-    for j in range(nlag, len(names)):
-        rows.append(CoefRow("coef", names[j], b[j], se[j]))
+    rows: list[CoefRow] = []
+    last_var = None
+    for j, nm in enumerate(names):
+        mm = re.match(r"^L(\d*)\.(.+)$", nm)
+        var, lab = (mm.group(2), f"L{mm.group(1) or 1}.") if mm else (None, nm)
+        if var is not None and var != last_var:
+            rows.append(CoefRow("header", var))
+        elif var is None and last_var is not None:
+            rows.append(CoefRow("blank"))
+        rows.append(CoefRow("coef", lab, b[j], se[j]))
+        last_var = var
     est = Estimates(cmd, dname, names, b, V, nobs, "z", None)
     est.rows = rows
     est.eqnames = [dname] * len(names)
@@ -346,7 +374,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     est.cols, est.terms, est.depcomp = [], [], smp.depcomp
     L = Zs[0].shape[1]
     x = dict(N=nobs, G=Gu, tmin=int(counts.min()), tavg=float(counts.mean()), tmax=int(counts.max()), L=L,
-             chi2=chi2, p=pchi, df=len(slopes), twostep=twostep, robust=robust, title=title, pvar=pvar,
+             chi2=chi2, p=pchi, df=len(slopes), twostep=twostep, robust=robust, title=title, pvar=pvar, cmd=cmd,
              tvar=info.tvar, dgmm=lab_dgmm, div=lab_div, lgmm=lab_lgmm, liv=lab_liv, cons=sp.cons, level=sp.level)
     est.extra = x
     est.display = _display
@@ -366,22 +394,24 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
     out, x = s.output, est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"{x['title']:<45}{'Number of obs':<22}=", "text")
-        out.write(f"{comma(x['N']):>11}\n", "result")
-        out.write(f"{'Group variable: ' + x['pvar']:<45}{'Number of groups':<22}=", "text")
-        out.write(f"{comma(x['G']):>11}\n", "result")
+        out.write(f"{x['title']:<48}{'Number of obs':<18}= ", "text")
+        out.write(f"{comma(x['N']):>10}\n", "result")
+        out.write(f"{'Group variable: ' + x['pvar']:<48}{'Number of groups':<18}= ", "text")
+        out.write(f"{comma(x['G']):>10}\n", "result")
         out.write(f"Time variable: {x['tvar']}\n\n", "text")
+        out.write(f"{'':<48}Obs per group:\n", "text")
         for lab, v in (("min", _g(x["tmin"])), ("avg", _g(x["tavg"])), ("max", _g(x["tmax"]))):
-            lead = "Obs per group:" if lab == "min" else " " * 14
-            out.write(f"{'':<45}{lead}{lab:>7} =", "text")
-            out.write(f"{v:>11}\n", "result")
+            out.write(f"{'':<62}{lab} = ", "text")
+            out.write(f"{v:>10}\n", "result")
         out.write("\n", "text")
-        out.write(f"{'Number of instruments = ' + format(x['L'], '6d'):<45}"
-                  f"{'Wald chi2(' + str(x['df']) + ')':<22}=", "text")
-        out.write(f"{_g(x['chi2'], '%10.2f'):>11}\n", "result")
-        out.write(f"{'':<45}{'Prob > chi2':<22}=", "text")
-        out.write(f"{_g(x['p'], '%10.4f'):>11}\n", "result")
+        out.write(f"{'Number of instruments = ' + format(x['L'], '6d'):<48}"
+                  f"{'Wald chi2(' + str(x['df']) + ')':<18}= ", "text")
+        out.write(f"{_g(x['chi2'], '%10.2f'):>10}\n", "result")
+        out.write(f"{'':<48}{'Prob > chi2':<18}= ", "text")
+        out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
         out.write(("Two-step results" if x["twostep"] else "One-step results") + "\n", "text")
+        if x["robust"] and x["cmd"] == "xtabond":
+            out.write(f"{'(Std. Err. adjusted for clustering on ' + x['pvar'] + ')':>78}\n", "text")   # VERIFY
     if not table:
         return
     if x["twostep"] and not x["robust"]:
@@ -394,10 +424,9 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
     out.write("Instruments for differenced equation\n", "text")
     if x["dgmm"]:
         out.write("        GMM-type: " + " ".join(x["dgmm"]) + "\n", "text")
-    std = x["div"] + (["_cons"] if x["cons"] and not x["level"] else [])
-    if std:
-        out.write("        Standard: " + " ".join(std) + "\n", "text")
-    if x["level"]:
+    if x["div"]:
+        out.write("        Standard: " + " ".join(x["div"]) + "\n", "text")
+    if x["level"] or x["cons"]:
         out.write("Instruments for level equation\n", "text")
         if x["lgmm"]:
             out.write("        GMM-type: " + " ".join(x["lgmm"]) + "\n", "text")
@@ -409,6 +438,9 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
 def _estat_abond(s, est, rest, fit, X, Z, times) -> None:
     m = re.search(r"artests\(\s*(\d+)\s*\)", rest)
     top = int(m.group(1)) if m else 2
+    x_ = est.extra
+    if (x_["level"] or x_["cons"]) and not x_["twostep"] and not x_["robust"]:
+        raise StataError(321, "artests not computed for one-step system estimator with vce(gmm)")   # VERIFY
     out = s.output
     out.write("\nArellano-Bond test for zero autocorrelation in first-differenced errors\n", "text")
     out.write("  +-----------------------+\n  |Order |  z     Prob > z|\n  |------+----------------|\n", "text")
@@ -433,8 +465,8 @@ def _estat_sargan(s, est, fit, Z, twostep, robust) -> None:
     out = s.output
     out.write("\nSargan test of overidentifying restrictions\n", "text")
     out.write("        H0: overidentifying restrictions are valid\n\n", "text")
-    out.write(f"        chi2({df})     = ", "text")
-    out.write(f"{_g(stat, '%10.0g'):>9}\n", "result")
+    out.write(f"        {'chi2(' + str(df) + ')':<13}= ", "text")
+    out.write(f"{format(stat, '.6g'):>9}\n", "result")
     out.write(f"        Prob > chi2  = ", "text")
     out.write(f"{_g(pv, '%9.4f'):>9}\n", "result")
     s.r = {"chi2": stat, "df": float(df), "p": pv}
