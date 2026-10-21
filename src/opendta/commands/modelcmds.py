@@ -38,3 +38,4 @@ _register("exact", ["exlogistic", "expoisson"])
 _register("nonlin", ["nl", "nlsur", "gmm"])
 
 _register("frontier", ["frontier"])
+_register("treatment", ["etregress"])

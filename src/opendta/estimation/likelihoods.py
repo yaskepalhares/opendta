@@ -263,6 +263,28 @@ def heckman(sel, y, eta, zeta, athrho, lnsigma):
     return ll, d_eta, d_zeta, d_ath, d_ls
 
 
+def etreg(t, y, eta, zeta, athrho, lnsigma):
+    """Normal outcome with an endogenous binary treatment: y = eta + e, t = 1(zeta + u > 0),
+    e ~ N(0, sigma^2), corr(e, u) = rho. Returns ll and the derivatives with respect to eta,
+    zeta, athrho and lnsigma."""
+    n = len(y)
+    rho = np.tanh(athrho) * np.ones(n)
+    lns = lnsigma * np.ones(n)
+    sg = np.exp(lns)
+    c = np.sqrt(1 - rho * rho)
+    q = np.where(t > 0, 1.0, -1.0)
+    u = (y - eta) / sg
+    a = q * (zeta + rho * u) / c
+    lam = _lam(a)
+    ll = st.norm.logpdf(u) - lns + st.norm.logcdf(a)
+    d_eta = (u - lam * q * rho / c) / sg
+    d_zeta = lam * q / c
+    d_ls = u * u - 1 - u * lam * q * rho / c
+    da_drho = q * (u / c + (zeta + rho * u) * rho / c ** 3)
+    d_ath = lam * da_drho * c * c
+    return ll, d_eta, d_zeta, d_ath, d_ls
+
+
 def biprobit(y1, y2, eta1, eta2, athrho):
     """Bivariate probit: P(y1, y2) = Phi2(q1 eta1, q2 eta2; q1 q2 rho)."""
     rho = np.tanh(athrho)

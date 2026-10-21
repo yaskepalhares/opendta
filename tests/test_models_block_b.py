@@ -372,3 +372,48 @@ quietly frontier y x1
     ll = stats.skewnorm.logpdf(e, a=-lam, loc=0, scale=sig).sum()
     assert np.isclose(run.session.e["ll"], ll, atol=1e-8)
     assert np.isclose(run.session.e["sigma_u"], su, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# treatment effects
+# ---------------------------------------------------------------------------
+
+TREAT = """
+clear
+set seed 77
+set obs 600
+gen double x = round(invnormal(runiform()), .01)
+gen double z = round(invnormal(runiform()), .01)
+gen double u = invnormal(runiform())
+gen double t = (.3 + .8*z + .5*x + u > 0)
+gen double y = round(1 + 2*x + 1.5*t + .6*u + .8*invnormal(runiform()), .01)
+"""
+
+
+def test_etregress_ml_maximizes_the_joint_likelihood(run):
+    from scipy import optimize, stats
+    run(TREAT + "quietly etregress y x, treat(t = z x)")
+    b = _b(run)
+    y, x, z, t = (_col(run, v) for v in ("y", "x", "z", "t"))
+    X = np.column_stack([x, t, np.ones_like(x)])
+    Z = np.column_stack([z, x, np.ones_like(x)])
+
+    def nll(p):
+        eta, zeta, ath, lns = X @ p[:3], Z @ p[3:6], p[6], p[7]
+        rho, sg = np.tanh(ath), np.exp(lns)
+        q = 2 * t - 1
+        a = q * (zeta + rho * (y - eta) / sg) / np.sqrt(1 - rho ** 2)
+        return -np.sum(stats.norm.logpdf((y - eta) / sg) - lns + stats.norm.logcdf(a))
+
+    r = optimize.minimize(nll, b, method="BFGS", options={"gtol": 1e-8})
+    assert np.isclose(-r.fun, run.session.e["ll"], atol=1e-6)
+    assert np.allclose(b, r.x, atol=2e-3)
+    assert 0.2 < run.session.e["rho"] < 0.95
+
+
+def test_etregress_twostep_is_close_to_ml(run):
+    run(TREAT + "quietly etregress y x, treat(t = z x)\nmatrix bm = e(b)\n"
+        "quietly etregress y x, treat(t = z x) twostep")
+    b2 = _b(run)
+    bm = np.asarray(run.session.matrices["bm"].data).ravel()
+    assert np.allclose(b2[:3], bm[:3], atol=0.25)
