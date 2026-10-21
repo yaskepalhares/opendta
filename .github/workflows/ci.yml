@@ -28,7 +28,7 @@ jobs:
       - name: pytest
         shell: bash
         run: |
-          pytest -q --tb=line > pytest_out.txt 2>&1; rc=$?
+          rc=0; pytest -q --tb=line > pytest_out.txt 2>&1 || rc=$?
           echo "rc=$rc" ; wc -l pytest_out.txt
           tail -25 pytest_out.txt | cut -c1-300 | sed 's/^/::error::/'
           exit $rc
