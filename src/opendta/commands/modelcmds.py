@@ -34,3 +34,7 @@ _register("choice", ["clogit", "rologit", "asclogit", "slogit"])
 _register("choiceprobit", ["mprobit", "asmprobit", "asroprobit"])
 
 _register("exact", ["exlogistic", "expoisson"])
+
+_register("nonlin", ["nl", "nlsur", "gmm"])
+
+_register("frontier", ["frontier"])

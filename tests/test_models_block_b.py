@@ -301,3 +301,74 @@ quietly expoisson c x
     f = lambda b: float((p * np.exp(b * ts)) @ ts / (p * np.exp(b * ts)).sum()) - obs
     ref = optimize.brentq(f, -30, 30)
     assert np.isclose(_b(run)[0], ref, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# nonlinear estimation and frontier
+# ---------------------------------------------------------------------------
+
+def test_nl_of_a_linear_model_is_regress(run):
+    run(DATA + "quietly regress y1 x1 x2\nmatrix b0 = e(b)\nmatrix V0 = e(V)\n"
+        "quietly nl (y1 = {b1}*x1 + {b2}*x2 + {c})")
+    b0 = np.asarray(run.session.matrices["b0"].data).ravel()           # x1 x2 _cons
+    V0 = np.asarray(run.session.matrices["V0"].data)
+    b = _b(run)
+    assert np.allclose(b, b0, atol=1e-6)
+    assert np.allclose(np.sqrt(np.diag(np.asarray(run.session.e["V"].data))), np.sqrt(np.diag(V0)), atol=1e-6)
+
+
+def test_nl_exponential_decay_matches_scipy(run):
+    from scipy import optimize
+    run("""
+clear
+set seed 12
+set obs 200
+gen double x = runiform()*4
+gen double y = 2*exp(-.5*x) + 1 + .3*invnormal(runiform())
+quietly nl (y = {a=1}*exp({b=-.3}*x) + {c=0})
+""")
+    x, y = _col(run, "x"), _col(run, "y")
+    ref, cov = optimize.curve_fit(lambda x_, a, b, c: a * np.exp(b * x_) + c, x, y, p0=[1, -.3, 0])
+    assert np.allclose(_b(run), ref, atol=1e-4)
+    assert np.allclose(np.sqrt(np.diag(np.asarray(run.session.e["V"].data))), np.sqrt(np.diag(cov)), atol=1e-4)
+
+
+def test_nlsur_with_equal_regressors_is_ols(run):
+    run(DATA + "quietly regress y1 x1 x2\nmatrix b1 = e(b)\nquietly regress y2 x1 x2\nmatrix b2 = e(b)\n"
+        "quietly nlsur (y1 = {a1}*x1 + {a2}*x2 + {a0}) (y2 = {c1}*x1 + {c2}*x2 + {c0})")
+    b = _b(run)
+    b1 = np.asarray(run.session.matrices["b1"].data).ravel()
+    b2 = np.asarray(run.session.matrices["b2"].data).ravel()
+    assert np.allclose(b, np.concatenate([b1, b2]), atol=1e-5)
+
+
+def test_gmm_exactly_identified_is_iv(run):
+    run(DATA + "gen double w = z1 + .5*e1 + invnormal(runiform())\ngen double yy = 1 + .7*w + .4*x1 + e1\n"
+        "quietly ivregress 2sls yy x1 (w = z1)\nmatrix bi = e(b)\n"
+        "quietly gmm (yy - {b0} - {b1}*w - {b2}*x1), instruments(x1 z1) onestep")
+    bi = np.asarray(run.session.matrices["bi"].data).ravel()           # w x1 _cons
+    b = _b(run)                                                        # b0 b1 b2
+    assert np.allclose([b[1], b[2], b[0]], bi, atol=1e-5)
+    assert abs(run.session.e["Q"]) < 1e-12
+
+
+def test_frontier_log_likelihood_is_the_skew_normal_density(run):
+    from scipy import stats
+    run("""
+clear
+set seed 31
+set obs 400
+gen double x1 = invnormal(runiform())
+gen double v = .4*invnormal(runiform())
+gen double u = abs(.6*invnormal(runiform()))
+gen double y = 1 + .7*x1 + v - u
+quietly frontier y x1
+""")
+    b = _b(run)
+    y, x = _col(run, "y"), _col(run, "x1")
+    sv, su = np.exp(b[2] / 2), np.exp(b[3] / 2)
+    sig, lam = np.hypot(sv, su), su / sv
+    e = y - b[0] * x - b[1]
+    ll = stats.skewnorm.logpdf(e, a=-lam, loc=0, scale=sig).sum()
+    assert np.isclose(run.session.e["ll"], ll, atol=1e-8)
+    assert np.isclose(run.session.e["sigma_u"], su, atol=1e-10)

@@ -137,7 +137,7 @@ def _equations(text: str) -> tuple[list[tuple[str, str, str]], str]:
             if depth == 0 and start is not None:
                 eqs.append(t[start + 1:i])
                 end = i + 1
-        elif depth == 0 and ch not in " \t" and not eqs and ch != "(":
+        elif depth == 0 and ch not in " \t":
             break
     out = []
     for body in eqs:
