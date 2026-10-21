@@ -28,3 +28,7 @@ _register("censmodels", ["intreg", "truncreg", "heckman", "heckprobit", "heckopr
 _register("ivmodels", ["ivprobit", "ivtobit", "ivpoisson"])
 
 _register("sysmodels", ["constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3", "rreg"])
+
+_register("choice", ["clogit", "rologit", "asclogit", "slogit"])
+
+_register("choiceprobit", ["mprobit", "asmprobit", "asroprobit"])

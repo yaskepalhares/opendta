@@ -112,3 +112,124 @@ def test_reg3_2sls_equals_ivregress_when_exactly_identified(run):
     bi = np.asarray(run.session.matrices["bi"].data).ravel()
     # reg3 lists y2 x1 _cons of the first equation; ivregress lists y2 x1 _cons as well
     assert np.allclose(b3[:3], bi[:3], atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# choice models
+# ---------------------------------------------------------------------------
+
+CHOICE = """
+clear
+set seed 5
+set obs 1200
+gen id = ceil(_n/4)
+gen alt = mod(_n-1,4)+1
+gen double x1 = invnormal(runiform())
+gen double x2 = invnormal(runiform())
+gen double u = -ln(-ln(runiform()))
+gen double v = .8*x1 - .5*x2 + u
+bysort id (v): gen byte ch = (_n==4)
+bysort id (v): gen byte rk = _n
+"""
+
+
+def test_clogit_matches_direct_maximization(run):
+    from scipy import optimize as opt
+    run(CHOICE + "quietly clogit ch x1 x2, group(id)")
+    b = _b(run)
+    y, X = _col(run, "ch"), np.column_stack([_col(run, "x1"), _col(run, "x2")])
+
+    def nll(t):
+        eta = (X @ t).reshape(-1, 4)
+        return -np.sum((y.reshape(-1, 4) * eta).sum(1) - np.log(np.exp(eta).sum(1)))
+
+    ref = opt.minimize(nll, np.zeros(2), method="BFGS", options={"gtol": 1e-10}).x
+    assert np.allclose(b, ref, atol=1e-5)
+    assert abs(run.session.e["ll"] + nll(ref)) < 1e-8
+    assert abs(run.session.e["ll_0"] + 300 * np.log(4)) < 1e-9
+
+
+def test_clogit_drops_uninformative_groups(run):
+    out = run(CHOICE + "replace ch = 0 if id == 1\nclogit ch x1 x2, group(id)")
+    assert "note: 1 group (4 obs) dropped because of all positive or all negative outcomes." in out
+    assert run.session.e["N"] == 1196
+
+
+def test_rologit_without_ties_is_an_exploded_logit(run):
+    from scipy import optimize as opt
+    run(CHOICE + "quietly rologit rk x1 x2, group(id)")
+    b = _b(run)
+    r, X = _col(run, "rk").reshape(-1, 4), np.column_stack([_col(run, "x1"), _col(run, "x2")]).reshape(-1, 4, 2)
+
+    def nll(t):
+        tot = 0.0
+        for i in range(r.shape[0]):
+            order = np.argsort(-r[i])
+            e = X[i] @ t
+            for m in range(3):
+                rest = e[order[m:]]
+                tot -= e[order[m]] - np.log(np.exp(rest).sum())
+        return tot
+
+    ref = opt.minimize(nll, np.zeros(2), method="BFGS", options={"gtol": 1e-9}).x
+    assert np.allclose(b, ref, atol=1e-4)
+
+
+def test_rologit_tie_methods_agree_without_ties(run):
+    run(CHOICE + "quietly rologit rk x1 x2, group(id)\nmatrix b1 = e(b)\n"
+        "quietly rologit rk x1 x2, group(id) ties(efron)\nmatrix b2 = e(b)\n"
+        "quietly rologit rk x1 x2, group(id) ties(breslow)\nmatrix b3 = e(b)")
+    m = run.session.matrices
+    for k in ("b2", "b3"):
+        assert np.allclose(np.asarray(m["b1"].data), np.asarray(m[k].data), atol=1e-7)
+
+
+def test_asclogit_equals_clogit_on_the_expanded_design(run):
+    run(CHOICE + "gen double inc = round(invnormal(runiform()), .01)\nbysort id (alt): replace inc = inc[1]\n"
+        "quietly asclogit ch x1, case(id) alternatives(alt) casevars(inc) basealternative(1)\n"
+        "matrix ba = e(b)\n"
+        "forvalues j = 2/4 {\n gen byte d`j' = alt == `j'\n gen double i`j' = inc*d`j'\n}\n"
+        "quietly clogit ch x1 d2 d3 d4 i2 i3 i4, group(id)\nmatrix bc = e(b)")
+    ba = np.asarray(run.session.matrices["ba"].data).ravel()
+    bc = np.asarray(run.session.matrices["bc"].data).ravel()
+    # asclogit: x1, then [2]: inc, _cons, [3]: ..., [4]: ...; clogit: x1, d2..d4, i2..i4
+    assert np.isclose(ba[0], bc[0], atol=1e-6)
+    for k, j in enumerate((2, 3, 4)):
+        assert np.isclose(ba[1 + 2 * k], bc[4 + k], atol=1e-6)          # inc in alternative j
+        assert np.isclose(ba[2 + 2 * k], bc[1 + k], atol=1e-6)          # constant of alternative j
+
+
+def test_ghk_matches_the_normal_cdf():
+    from scipy import stats
+    from opendta.core import choice as C
+    S = np.array([[2.0, 1.0, .5], [1.0, 2.0, 1.0], [.5, 1.0, 2.0]])
+    L = np.linalg.cholesky(S)
+    mu = np.array([[.3, -.2, .5], [1.0, 1.2, .1]])
+    U = C.halton(4000, 3)
+    p = C.ghk_upper(mu, L, U)
+    ref = [stats.multivariate_normal.cdf(m, mean=np.zeros(3), cov=S) for m in mu]
+    assert np.allclose(p, ref, atol=2e-3)
+
+
+def test_mprobit_with_two_outcomes_is_close_to_probit(run):
+    run("""
+clear
+set seed 77
+set obs 600
+gen double x = round(invnormal(runiform()), .01)
+gen byte y = (.2 + .7*x + invnormal(runiform())) > 0
+quietly probit y x
+matrix bp = e(b)
+quietly mprobit y x, baseoutcome(0) intpoints(400)
+matrix bm = e(b)
+""")
+    bp = np.asarray(run.session.matrices["bp"].data).ravel()
+    bm = np.asarray(run.session.matrices["bm"].data).ravel()
+    # the differences of two iid N(0,1) errors have variance 2: coefficients are sqrt(2) times probit's
+    assert np.allclose(bm[[0, 1]], np.sqrt(2) * bp[[0, 1]], atol=1e-3)
+
+
+def test_slogit_fixes_phi_and_theta_of_the_base(run):
+    out = run(CHOICE.replace("rk", "rk") + "gen byte y4 = rk\nslogit y4 x1 x2, baseoutcome(4)")
+    assert "/phi1_1" in out and "(constrained)" in out and "(base outcome)" in out
+    assert run.session.e["converged"] == 1
