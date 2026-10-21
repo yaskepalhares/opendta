@@ -32,3 +32,5 @@ _register("sysmodels", ["constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3
 _register("choice", ["clogit", "rologit", "asclogit", "slogit"])
 
 _register("choiceprobit", ["mprobit", "asmprobit", "asroprobit"])
+
+_register("exact", ["exlogistic", "expoisson"])

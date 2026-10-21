@@ -233,3 +233,71 @@ def test_slogit_fixes_phi_and_theta_of_the_base(run):
     out = run(CHOICE.replace("rk", "rk") + "gen byte y4 = rk\nslogit y4 x1 x2, baseoutcome(4)")
     assert "/phi1_1" in out and "(constrained)" in out and "(base outcome)" in out
     assert run.session.e["converged"] == 1
+
+
+# ---------------------------------------------------------------------------
+# exact methods
+# ---------------------------------------------------------------------------
+
+def test_exlogistic_binary_covariate_is_fishers_conditional_odds_ratio(run):
+    from scipy import stats
+    run("""
+clear
+input byte y byte x
+1 1
+1 1
+1 1
+0 1
+0 1
+1 0
+0 0
+0 0
+0 0
+0 0
+0 0
+end
+exlogistic y x
+""")
+    est = run.session._estimates
+    tab = np.array([[3, 2], [1, 5]])               # rows x = 1, 0; columns y = 1, 0
+    res = stats.contingency.odds_ratio(tab, kind="conditional")
+    assert np.isclose(np.exp(_b(run)[0]), res.statistic, rtol=1e-6)
+    lo, hi = res.confidence_interval(0.95)
+    row = est.extra["rows"][0]
+    assert np.isclose(np.exp(row[5]), lo, rtol=1e-4) and np.isclose(np.exp(row[6]), hi, rtol=1e-4)
+    p = min(1.0, 2 * min(stats.fisher_exact(tab, alternative="greater")[1],
+                         stats.fisher_exact(tab, alternative="less")[1]))
+    assert np.isclose(row[4], p, rtol=1e-8)
+
+
+def test_expoisson_matches_brute_force_enumeration(run):
+    import itertools
+    run("""
+clear
+input byte x int c
+0 1
+0 0
+1 2
+1 1
+2 3
+2 1
+end
+quietly expoisson c x
+""")
+    x = np.array([0, 0, 1, 1, 2, 2.0])
+    total = 8
+    sup, wt = {}, {}
+    from math import factorial
+    for ys in itertools.product(range(total + 1), repeat=6):
+        if sum(ys) != total:
+            continue
+        t = int(np.dot(ys, x))
+        wt[t] = wt.get(t, 0.0) + np.prod([1.0 / factorial(v) for v in ys])
+    ts = np.array(sorted(wt))
+    p = np.array([wt[t] for t in ts])
+    p /= p.sum()
+    from scipy import optimize
+    obs = int(np.dot([1, 0, 2, 1, 3, 1], x))
+    f = lambda b: float((p * np.exp(b * ts)) @ ts / (p * np.exp(b * ts)).sum()) - obs
+    ref = optimize.brentq(f, -30, 30)
+    assert np.isclose(_b(run)[0], ref, atol=1e-6)
