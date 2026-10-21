@@ -1,8 +1,9 @@
 * Phase 21: models, part 1 (binary and fractional response, count data, censored, truncated and
 * selection models, models with endogenous regressors). Every command runs under capture noisily so
 * that a difference in one command does not stop the rest of the case; the layouts marked VERIFY in
-* the code are settled by the reference log. The data are built from rounded draws, so that the last
-* digit of the draws does not matter.
+* the code are settled by the reference log. The data are built from rounded draws and from comparisons
+* of runiform() draws (counts are sums of Bernoulli draws, because rpoisson() and rbinomial() do not
+* reproduce Stata's draws), so that the last digit of the draws does not matter.
 program define mkmod
     clear
     set seed 1907
@@ -18,9 +19,15 @@ program define mkmod
     gen byte yb = ystar > 0
     gen byte yb2 = (.2 - .6*x1 + .5*x3 + round(invnormal(runiform()), .01)) > 0
     gen double mu = exp(.4 + .3*x1 - .2*x2)
-    gen int cnt = rpoisson(mu)
+    gen int cnt = 0
+    forvalues j = 1/40 {
+        replace cnt = cnt + (runiform() < mu/40)
+    }
     gen double mu2 = exp(.6 + .3*x1)
-    gen int cnt2 = rpoisson(mu2)
+    gen int cnt2 = 0
+    forvalues j = 1/40 {
+        replace cnt2 = cnt2 + (runiform() < mu2/40)
+    }
     replace cnt2 = 0 if runiform() < .3 + .2*(x2 > 0)
     gen int ctr = cnt if cnt > 0
     gen double yfr = invlogit(.2 + .5*xs*2 - .3*x2 + .3*u)
@@ -44,7 +51,11 @@ program define mkmod
     gen double yiv = round(1 + .7*w2 + .4*x1 + u, .01)
     gen byte yivb = yiv > 1.5
     gen double yivt = max(yiv, 0)
-    gen int yivc = rpoisson(exp(.2 + .3*w2 + .2*x1 + .3*u))
+    gen double muc = exp(.2 + .3*w2 + .2*x1 + .3*u)
+    gen int yivc = 0
+    forvalues j = 1/40 {
+        replace yivc = yivc + (runiform() < muc/40)
+    }
 end
 
 * ---- binary and fractional response
@@ -57,14 +68,16 @@ capture noisily scobit yb x1 x2
 capture noisily hetprobit yb x1 x2, het(x3)
 capture noisily fracreg logit yfr xs x2
 capture noisily fracreg probit yfr xs x2
-capture noisily fracreg cloglog yfr xs x2
 capture noisily binreg yr xs, or
 capture noisily binreg yr xs, rr
 capture noisily binreg yrr xs, rd
-capture noisily binreg yrr xs, hr
+capture noisily binreg yb x1 x2, hr
 mkmod
 gen int pop = 20 + g
-gen int pos = rbinomial(pop, invlogit(-.3 + .5*xs))
+gen int pos = 0
+forvalues j = 1/25 {
+    replace pos = pos + (`j' <= pop)*(runiform() < invlogit(-.3 + .5*xs))
+}
 capture noisily glogit pos pop xs
 * ---- count data
 capture noisily zip cnt2 x1, inflate(x2)

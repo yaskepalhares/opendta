@@ -273,6 +273,8 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     est.offset_kind = "exposure" if o.get("exposure") else "offset" if o.get("offset") else ""
     est.extra = {"N": N, "ll": res.ll, "ll_0": ll0, "chi2": chi2, "p": pval, "df_m": df_m,
                  "r2_p": r2_p, "chi2type": chi2type}
+    if cmd == "cloglog":
+        est.extra.update(n1=float(np.sum(w * (y != 0))), n0=float(np.sum(w * (y == 0))))
     est.robust = robust
     est.display = display_ml
     est.predict = predict_ml
@@ -344,6 +346,10 @@ def display_ml(s: "Session", est: Estimates, *, eform: str | None = None, header
                  ("Prob > chi2", g(x["p"], "%10.4f")), ("Pseudo R2", g(x["r2_p"], "%10.4f"))]
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
         left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
+        if getattr(est, "ml_cmd", "") == "cloglog":
+            right = [right[0], ("Zero outcomes", g(x["n0"], "%10.0g")), ("Nonzero outcomes", g(x["n1"], "%10.0g")),
+                     right[1], right[2]]
+            left = [est.title, "", "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         for lft, (rl, rv) in zip(left, right):
             out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")

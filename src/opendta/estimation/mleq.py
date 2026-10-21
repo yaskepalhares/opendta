@@ -121,11 +121,13 @@ class Engine:
 
 
 def aux_row(label: str, value: float, se: float, level: float, *, ci=None, name: str = "_cons"):
-    """Row of an ancillary parameter (/athrho, rho...): `ci` = (lo, hi) when the interval comes
-    from a transformation of the estimate's own interval."""
+    """Row of an ancillary parameter (/athrho, rho...). An estimated parameter (`ci` None) has z and
+    P>|z|; one derived by a transformation (`ci` = (lo, hi), from the estimate's own interval)
+    has neither."""
+    if ci is None:
+        return CoefRow("coef", label, value, se, name=name, noeform=True)
     r = CoefRow("aux", label, value, se, name=name)
-    if ci is not None:
-        r.eq = f"{float(ci[0])!r} {float(ci[1])!r}"
+    r.eq = f"{float(ci[0])!r} {float(ci[1])!r}"
     return r
 
 
@@ -208,6 +210,16 @@ def display_eq(s, est, *, header: bool = True, table: bool = True, level: float 
         foot = getattr(est, "footer", None)
         if foot:
             foot(s, est)
+
+
+def fit_log(s, pr, title: str, res, label: str | None = None) -> None:
+    """The log of a preliminary fit under its heading ("Fitting full model:"), as the ado-file
+    commands print them."""
+    if pr.o.get("nolog"):
+        return
+    from .models2 import _log
+    s.output.write(f"\n{title}\n", "text")
+    _log(s, pr, res, label)
 
 
 def lab(est) -> str:

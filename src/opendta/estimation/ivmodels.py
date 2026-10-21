@@ -16,9 +16,9 @@ from ..core.stats import chi2_tail
 from ..lazy import lazy
 from . import likelihoods as L
 from .censmodels import _replay, _weighted_probit
-from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, lab,
-                   names_in, peek, transformed_row)
-from .models2 import _Prep, _log, g
+from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, fit_log,
+                   lab, names_in, peek, transformed_row)
+from .models2 import _Prep, _tobit_footer, g
 from .regress import comma
 from .results import CoefRow
 
@@ -92,7 +92,7 @@ def _iv_ml(s: "Session", args: str, cmd: str) -> None:
 
         eng = Engine(lik, [main, aux], w, 3)
         start = np.concatenate([b1, b2, [0.0, np.log(max(sg, 1e-6)), np.log(max(sv, 1e-6))]])
-        aux_names = [("athrho", "_cons"), ("lnsigma", "_cons"), ("lnsigv", "_cons")]
+        aux_names = [("alpha", "_cons"), ("lns", "_cons"), ("lnv", "_cons")]
         title = "Tobit model with endogenous regressors"
     else:
         y = (ylab != 0).astype(float)
@@ -112,7 +112,12 @@ def _iv_ml(s: "Session", args: str, cmd: str) -> None:
         aux_names = [("athrho", "_cons"), ("lnsigma", "_cons")]
         title = "Probit model with endogenous regressors"
     res = pr.maximize(eng.fun, start)
-    _log(s, pr, res)
+    if tobit:
+        if not pr.o.get("nolog"):
+            s.output.write("\nFitting exogenous tobit model\n", "text")
+    else:
+        fit_log(s, pr, "Fitting exogenous probit model", p1)
+    fit_log(s, pr, "Fitting full model", res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     K = len(res.b)
     n_th = 3 if tobit else 2
@@ -120,46 +125,57 @@ def _iv_ml(s: "Session", args: str, cmd: str) -> None:
     w_exog = (ath / se_ath) ** 2 if se_ath > 0 else SYS
     p_exog = float(chi2_tail(w_exog, 1)) if w_exog < SYS else SYS
     lns, se_lns = float(res.b[K - n_th + 1]), float(np.sqrt(V[K - n_th + 1, K - n_th + 1]))
-    rows_th = [lambda lv: aux_row("/athrho", ath, se_ath, lv), lambda lv: aux_row("/lnsigma", lns, se_lns, lv)]
     if tobit:
         lsv, se_lsv = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
-        rows_th.append(lambda lv: aux_row("/lnsigv", lsv, se_lsv, lv))   # VERIFY label
-    slopes = list(range(main.nslopes))
-    inst_names = " ".join(c.name for c in aux.cols if c.values is not None and not c.base
-                          and c.name not in {x.name for x in main.cols})
-    all_inst = " ".join(c.name for c in aux.cols if c.values is not None and not c.base)
 
-    def aux_rows(level):
-        out = [CoefRow("sep")]
-        for i, f in enumerate(rows_th):
-            out.append(f(level))
-        return out
+        def aux_rows(level):
+            return [CoefRow("sep"), aux_row("/alpha", ath, se_ath, level), aux_row("/lns", lns, se_lns, level),
+                    aux_row("/lnv", lsv, se_lsv, level), CoefRow("sep"),
+                    transformed_row("s", np.exp, np.exp, lns, se_lns, level),
+                    transformed_row("v", np.exp, np.exp, lsv, se_lsv, level)]
+    else:
+        def aux_rows(level):
+            return [CoefRow("sep"), aux_row("/athrho", ath, se_ath, level), aux_row("/lnsigma", lns, se_lns, level),
+                    CoefRow("sep"),
+                    transformed_row("rho", np.tanh, lambda x: 1 - np.tanh(x) ** 2, ath, se_ath, level),
+                    transformed_row("sigma", np.exp, np.exp, lns, se_lns, level)]
+    slopes = list(range(main.nslopes))
+    exog_names = [c.name for c in main.cols if c.values is not None and not c.base and c.name != endog]
+    all_inst = " ".join(exog_names + [c.name for c in aux.cols if c.values is not None and not c.base
+                                      and c.name not in exog_names])
 
     def hdr(est):
         x = est.extra
-        left_ = [est.title]
-        if tobit:
-            lo_t = "-inf" if lo is None else f"{lo:g}"
-            hi_t = "+inf" if hi is None else f"{hi:g}"
-            left_ += [f"Limit:   lower = {lo_t:>10}", f"         upper = {hi_t:>10}"]
-        left_.append(f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}")
+        left_ = [est.title, "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
         right = [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
-        return left_, right   # VERIFY layout
+        return left_, right
 
     def footer(s_, est):
-        s_.output.write(f"Wald test of exogeneity (/athrho = 0): chi2(1) = {w_exog:8.2f} "
-                        f"Prob > chi2 = {p_exog:6.4f}\n", "text")   # VERIFY
         s_.output.write(f"Instrumented:  {endog}\nInstruments:   {all_inst}\n", "text")
+        s_.output.write("-" * 78 + "\n", "text")
+        if tobit:
+            s_.output.write(f"Wald test of exogeneity (/alpha = 0): chi2(1) = {w_exog:8.2f}  "
+                            f"Prob > chi2 = {p_exog:6.4f}\n\n", "text")
+            _tobit_footer(s_, est)
+        else:
+            s_.output.write(f"Wald test of exogeneity (/athrho = 0): chi2(1) = {w_exog:8.2f} "
+                            f"Prob > chi2 = {p_exog:6.4f}\n", "text")
 
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main, aux], eng=eng, res=res, V=V,
                        n_clust=n_clust, ll0=SYS, aux_names=aux_names, aux_rows_fn=aux_rows, hdr_fn=hdr,
-                       wald=True, k_eq=len(aux_names) + 2, test_idx=slopes, footer=footer,
-                       extra_scalars=[("rho", float(np.tanh(ath))), ("chi2_exog", w_exog), ("p_exog", p_exog)],
+                       depvar_cell="", wald=True, k_eq=len(aux_names) + 2, test_idx=slopes, footer=footer,
+                       extra_scalars=([] if tobit else [("rho", float(np.tanh(ath)))]) + [("chi2_exog", w_exog), ("p_exog", p_exog)],
                        extra_macros=[("instd", endog), ("insts", all_inst), ("method", "ml"),
                                      ("depvar", dep)],
                        predict_opts={"xb": 3})
     est.depvar = dep
+    if tobit:
+        est.cens = (float(w[y <= lo_].sum()), float(w[(y > lo_) & (y < hi_)].sum()), float(w[y >= hi_].sum()),
+                    lo, hi)
+    full_rows = est.rows_fn
+    est.rows_fn = lambda lv: [r for r in full_rows(lv)[:next(i for i, r in enumerate(full_rows(lv)) if r.kind == "sep")]
+                              if r.kind != "eq"] + aux_rows(lv)
     from .mleq import make_predict
     est.predict = make_predict(lambda what, etas, th, e: etas[0] if what == "xb" else None, "xb")
     est.pred_label = "linear prediction"
@@ -274,7 +290,7 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
                 gbar = (Z * r[:, None]).mean(0)
                 G = (Z * dr[:, None]).T @ X / N
                 q = float(gbar @ W @ gbar)
-                out.write(f"Iteration {it}:   GMM criterion Q(b) = {q:10.8g}\n", "text")
+                out.write(f"Iteration {it}:   GMM criterion Q(b) = {g(q, '%10.0g'):>10}\n", "text")
                 if q_old is not None and abs(q_old - q) < 1e-9 * (1 + abs(q)) or q < 1e-30:
                     break
                 d = np.linalg.solve(G.T @ W @ G + 1e-12 * np.eye(k), G.T @ W @ gbar)
@@ -314,65 +330,108 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
         rows_names = names
         bfull = b
         Vfull = V
-        eq_extra = []
+        n_par, n_mom = k, Z.shape[1]
+        eqs_c = None
     else:
-        # control function: first-stage residual enters the exponential mean
+        # control function: first-stage residual enters the exponential mean; fitted as an
+        # exactly identified GMM problem (first-stage and mean moments together)
         if len(Xn) != 1:
             raise StataError(198, "cfunction allows one endogenous regressor in OpenDTA for now")   # VERIFY
         y2 = Xn[0].values
+        kz = Z.shape[1]
         pi = np.linalg.lstsq(Z, y2, rcond=None)[0]
-        vhat = y2 - Z @ pi
-        X2 = np.column_stack([X, vhat])
-        beta = _poisson_start(y, X2)
 
         def moms(theta):
-            pi_ = theta[:Z.shape[1]]
-            be = theta[Z.shape[1]:]
+            pi_ = theta[:kz]
+            be = theta[kz:]
             v_ = y2 - Z @ pi_
             X2_ = np.column_stack([X, v_])
             mu = np.exp(np.clip(X2_ @ be, -30, 30))
             return np.column_stack([Z * v_[:, None], X2_ * (y - mu)[:, None]])
-        theta = np.concatenate([pi, beta])
+
+        def jac(theta):
+            h = 1e-6
+            A_ = np.zeros((len(theta), len(theta)))
+            for j in range(len(theta)):
+                tp, tm = theta.copy(), theta.copy()
+                tp[j] += h
+                tm[j] -= h
+                A_[:, j] = (moms(tp).mean(0) - moms(tm).mean(0)) / (2 * h)
+            return A_
+        theta = np.concatenate([pi, _poisson_start(y, X), [0.0]])
+        M0 = moms(theta)
+        W1 = np.linalg.inv(M0.T @ M0 / N + 1e-12 * np.eye(M0.shape[1]))
+        out.write("\nStep 1\n", "text")
+        q_old = None
+        for it in range(50):
+            gb = moms(theta).mean(0)
+            q = float(gb @ W1 @ gb)
+            out.write(f"Iteration {it}:   GMM criterion Q(b) = {g(q, '%10.0g'):>10}\n", "text")
+            if q < 1e-14 or (q_old is not None and abs(q_old - q) < 1e-12 * (1 + abs(q))):
+                break
+            d = np.linalg.lstsq(jac(theta), gb, rcond=None)[0]
+            lam, tn = 1.0, theta
+            while lam > 1e-8:
+                tn = theta - lam * d
+                gn = moms(tn).mean(0)
+                if np.isfinite(gn).all() and float(gn @ W1 @ gn) <= q:
+                    break
+                lam /= 2
+            q_old, theta = q, tn
+        out.write("\nnote: model is exactly identified\n", "text")
         Gm = moms(theta)
-        h = 1e-6
-        A = np.zeros((len(theta), len(theta)))
-        for j in range(len(theta)):
-            tp, tm = theta.copy(), theta.copy()
-            tp[j] += h
-            tm[j] -= h
-            A[:, j] = (moms(tp).mean(0) - moms(tm).mean(0)) / (2 * h)
+        A = jac(theta)
         B = _cluster_meat(Gm, cl) / N
         Ainv = np.linalg.inv(A)
         Vall = Ainv @ B @ Ainv.T / N
-        sel = list(range(Z.shape[1], len(theta)))
-        bfull = theta[sel]
-        Vfull = Vall[np.ix_(sel, sel)]
-        names = names + ["c_" + Xn[0].name]
+        wm_label = f"Cluster ({smp.clustvar})" if cl is not None else "Robust"
+        n_ex, n_en = len(ex_cols), len(Xn)
+        ib = {"x": [kz + n_en + i for i in range(n_ex)], "w": [kz + i for i in range(n_en)], "c": kz + n_en + n_ex}
+        main_idx = ib["x"] + ib["w"] + [ib["c"]]
+        first_idx = [kz - 1 - n_ex + i for i in range(n_ex)] + list(range(len(Zc))) + [kz - 1]
+        c_idx = len(theta) - 1
+        order = main_idx + first_idx + [c_idx]
+        eqs_c = [smp.depname] * len(main_idx) + [Xn[0].name] * len(first_idx) + ["c_" + Xn[0].name]
+        nm_main = [c.name for c in ex_cols] + [c.name for c in Xn] + ["_cons"]
+        nm_first = [c.name for c in ex_cols] + [c.name for c in Zc] + ["_cons"]
+        rows_names = nm_main + nm_first + ["_cons"]
+        bfull = theta[order]
+        Vfull = Vall[np.ix_(order, order)]
         title = "Exponential mean model with endogenous regressors"
         Q = None
-        rows_names = names
+        n_par = n_mom = len(theta)
     Vfull = (Vfull + Vfull.T) / 2
     kk = len(bfull)
-    slopes = [i for i, nm in enumerate(rows_names) if nm != "_cons"]
-    Wd = float(bfull[slopes] @ np.linalg.solve(Vfull[np.ix_(slopes, slopes)], bfull[slopes]))
     bmap = dict(zip(rows_names, bfull))
     semap = {nm: float(np.sqrt(max(Vfull[i, i], 0))) for i, nm in enumerate(rows_names)}
     allcols = Xn + ex_cols
-    rows = rows_from_columns(allcols, {nm: bmap[nm] for nm in rows_names if nm in bmap},
-                             semap, ds, constant=True)
-    if method == "cfunction":
-        rows.append(CoefRow("coef", rows_names[-1], bfull[-1], semap[rows_names[-1]], name=rows_names[-1]))
+    if method == "gmm":
+        rows = rows_from_columns(allcols, {nm: bmap[nm] for nm in rows_names if nm in bmap},
+                                 semap, ds, constant=True)
+    else:
+        se_all = np.sqrt(np.maximum(np.diag(Vfull), 0))
+        nmain, nfirst = len(nm_main), len(nm_first)
+
+        def eq_rows(cols, lo, hi):
+            bm = {nm: float(bfull[lo + i]) for i, nm in enumerate(rows_names[lo:hi])}
+            sm = {nm: float(se_all[lo + i]) for i, nm in enumerate(rows_names[lo:hi])}
+            return rows_from_columns(cols, bm, sm, ds, constant=True)
+        rows = ([CoefRow("eq", smp.depname)] + eq_rows(ex_cols + Xn, 0, nmain) + [CoefRow("sep"),
+                CoefRow("eq", Xn[0].name)] + eq_rows(ex_cols + Zc, nmain, nmain + nfirst) + [CoefRow("sep"),
+                aux_row("/c_" + Xn[0].name, float(bfull[-1]), float(se_all[-1]), smp.level)])
     est = Estimates("ivpoisson", smp.depname, rows_names, bfull, Vfull, N, "z", None)
     est.rows = rows
+    if eqs_c is not None:
+        est.eqnames = eqs_c
     est.cols = Xn + ex_cols
     est.terms = endog_terms + smp.terms
     est.constant, est.depcomp = True, smp.depcomp
     est.level = smp.level
-    est.vcetype = "Robust" if (smp.vce in ("robust", "cluster") or method == "gmm") else ""
+    est.vcetype = "Robust"
     est.clustvar, est.n_clust = smp.clustvar, (len(np.unique(cl)) if cl is not None else None)
     inst_all = " ".join([c.name for c in ex_cols] + [c.name for c in Zc])
-    est.extra = dict(N=N, W=Wd, df_m=len(slopes), instd=" ".join(c.name for c in Xn), insts=inst_all,
-                     title=title, wm_label=wm_label, Q=gcrit)
+    est.extra = dict(N=N, df_m=kk, instd=" ".join(c.name for c in Xn), insts=inst_all,
+                     title=title, wm_label=wm_label, Q=gcrit, n_par=n_par, n_mom=n_mom)
     from .panel import _retarget
     _retarget(est, Xn, ex_cols, endog_terms, smp.terms)
 
@@ -380,14 +439,11 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
         o_ = s_.output
         x = e.extra
         if header:
-            o_.write("\n", "text")
-            right = [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["W"], "%10.2f")),
-                     ("Prob > chi2", g(float(chi2_tail(x["W"], x["df_m"])), "%10.4f"))]   # VERIFY
-            for i, (rl, rv) in enumerate(right):
-                lft = x["title"] if i == 0 else (f"GMM weight matrix: {x['wm_label']}" if i == 1 and x["wm_label"] else "")
-                o_.write(f"{lft:<50}{rl:<16}= ", "text")
-                o_.write(f"{rv:>10}\n", "result")
-            o_.write("\n", "text")
+            o_.write(f"\n{x['title']}\n\n", "text")
+            o_.write(f"Number of parameters = {x['n_par']:>3}{' ' * 25}Number of obs  = {comma(x['N']):>10}\n", "text")
+            o_.write(f"Number of moments    = {x['n_mom']:>3}\n", "text")
+            o_.write(f"Initial weight matrix: Unadjusted\n", "text")
+            o_.write(f"GMM weight matrix:     {x['wm_label']}\n\n", "text")   # VERIFY onestep
         if not table:
             return
         coef_table(s_, e.depvar, e.rows, stat="z", df=None, level=level or e.level, vcetype=e.vcetype)

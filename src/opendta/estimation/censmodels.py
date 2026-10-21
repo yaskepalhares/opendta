@@ -17,7 +17,7 @@ from . import fvars
 from . import likelihoods as L
 from .ml import maximize
 from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
-                   finish_model, lab, make_predict, names_in, peek, std_right, sub_options,
+                   finish_model, fit_log, lab, make_predict, names_in, peek, std_right, sub_options,
                    transformed_row)
 from .models import _probit
 from .models2 import _Prep, _log, g
@@ -78,66 +78,83 @@ def cmd_intreg(s: "Session", args: str) -> None:
         return
     (d1, d2), rest = _split_vars(args, 2)
     ds = s.data
-    spec = {"offset": 3}
+    spec = {"offset": 3, "het": 3}
+    o = peek(rest, spec)
+    het_vars = str(o["het"]) if o.get("het") not in (None, True) else None
     both_missing = (ds.get(d1).data >= SYS) & (ds.get(d2).data >= SYS)
-    pr = _Prep(s, rest, spec, need_dep=False, restrict=~both_missing)
+    pr = _Prep(s, rest, spec, need_dep=False, restrict=~both_missing, extra_vars=names_in(het_vars))
     pr.smp.depname = d1
     pr.write_notes(s.output)
     lo = _values(ds, d1, pr.smp.mask)
     hi = _values(ds, d2, pr.smp.mask)
     if np.any(lo > hi):
         raise StataError(498, f"{d1} > {d2} in {int(np.sum(lo > hi))} observations")   # VERIFY
-    main = block_from_pr(pr, d1)
+    main = block_from_pr(pr, "model" if het_vars else d1)
+    hetb = block_from_text(pr, "lnsigma", het_vars, constant=True) if het_vars else None
     w = pr.w
     exact = lo == hi
     left = np.isnan(lo)
     right = np.isnan(hi)
     inter = ~exact & ~left & ~right
 
-    def lik(etas, th):
-        ll, d1_, d2_ = L.intreg(lo, hi, etas[0], th[0])
-        return ll, [d1_], d2_.reshape(-1, 1)
-
-    eng = Engine(lik, [main], w, 1)
+    if hetb is None:
+        def lik(etas, th):
+            ll, d1_, d2_ = L.intreg(lo, hi, etas[0], th[0])
+            return ll, [d1_], d2_.reshape(-1, 1)
+        eng = Engine(lik, [main], w, 1)
+    else:
+        def lik(etas, th):
+            ll, d1_, d2_ = L.intreg(lo, hi, etas[0], etas[1])
+            return ll, [d1_, d2_], None
+        eng = Engine(lik, [main, hetb], w, 0)
     # start: OLS on the exact value, the interval midpoint or the censoring point
     yy = np.where(exact, lo, np.where(inter, (lo + hi) / 2, np.where(left, hi, lo)))
     sw = np.sqrt(w)
     beta = np.linalg.lstsq(main.X * sw[:, None], yy * sw, rcond=None)[0]
     sig = float(np.sqrt(np.sum(w * (yy - main.X @ beta) ** 2) / np.sum(w)))
-    res = pr.maximize(eng.fun, np.concatenate([beta, [np.log(max(sig, 1e-6))]]))
-    _log(s, pr, res)
+    if hetb is None:
+        b0 = np.concatenate([beta, [np.log(max(sig, 1e-6))]])
+    else:
+        h0 = np.zeros(hetb.k)
+        h0[-1] = np.log(max(sig, 1e-6))
+        b0 = np.concatenate([beta, h0])
+    res = pr.maximize(eng.fun, b0)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
-    lns, se_lns = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     null = None
-    if main.constant:
+    if main.constant and hetb is None:
         e0 = Engine(lik, [constant_only(main)], w, 1)
         mu0 = float(np.sum(w * yy) / np.sum(w))
         null = maximize(e0.fun, np.array([mu0, np.log(max(float(np.std(yy)), 1e-6))]), maxiter=300)
+        fit_log(s, pr, "Fitting constant-only model:", null)
+    fit_log(s, pr, "Fitting full model:", res)
     counts = [float(w[m].sum()) for m in (left, exact, right, inter)]
+    if hetb is None:
+        lns, se_lns = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
 
-    def aux_rows(level):
-        return [CoefRow("sep"), aux_row("/lnsigma", lns, se_lns, level), CoefRow("sep"),
-                transformed_row("sigma", np.exp, np.exp, lns, se_lns, level)]
+        def aux_rows(level):
+            return [CoefRow("sep"), aux_row("/lnsigma", lns, se_lns, level), CoefRow("sep"),
+                    transformed_row("sigma", np.exp, np.exp, lns, se_lns, level)]
+    else:
+        def aux_rows(level):
+            return []
 
     def hdr(est):
         x = est.extra
-        left_ = [est.title, "", "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
-        return left_, std_right({**x, "r2_p": None})   # VERIFY layout
+        left_ = [est.title, "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        return left_, std_right({**x, "r2_p": None})
 
     def footer(s_, est):
         out = s_.output
-        out.write("\n", "text")
-        out.write(f"{'Observation summary:':>46}{int(counts[0]):>7}  left-censored observations\n", "text")
-        out.write(f"{int(counts[1]):>53}  uncensored observations\n", "text")
-        out.write(f"{int(counts[2]):>53}  right-censored observations\n", "text")
-        out.write(f"{int(counts[3]):>53}  interval observations\n", "text")   # VERIFY layout
+        for n_, lbl in zip(counts, ("left-censored", "uncensored", "right-censored", "interval")):
+            out.write(f"{int(n_):>14}{lbl:>15} observations\n", "text")
 
-    est = finish_model(s, pr, "intreg", args, title="Interval regression", blocks=[main], eng=eng, res=res,
-                       V=V, n_clust=n_clust, ll0=null.ll if null else SYS, aux_names=[("lnsigma", "_cons")],
-                       aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="", footer=footer, wald=pr.robust,
-                       k_eq=2, r2p=None,
-                       extra_scalars=[("sigma", float(np.exp(lns))), ("N_lc", counts[0]), ("N_unc", counts[1]),
-                                      ("N_rc", counts[2]), ("N_int", counts[3])],
+    est = finish_model(s, pr, "intreg", args, title="Interval regression", blocks=[main] + ([hetb] if hetb else []),
+                       eng=eng, res=res, V=V, n_clust=n_clust, ll0=null.ll if null else SYS,
+                       aux_names=[] if hetb else [("lnsigma", "_cons")],
+                       aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="" if not hetb else None, footer=footer,
+                       wald=pr.robust or hetb is not None, k_eq=2, r2p=None,
+                       extra_scalars=([] if hetb else [("sigma", float(np.exp(lns)))])
+                       + [("N_lc", counts[0]), ("N_unc", counts[1]), ("N_rc", counts[2]), ("N_int", counts[3])],
                        extra_macros=[("depvar", f"{d1} {d2}")])
     est.depvar = d1
     est.predict = make_predict(lambda what, etas, th, e: etas[0] if what == "xb" else None, "xb")
@@ -160,18 +177,23 @@ def cmd_truncreg(s: "Session", args: str) -> None:
         return
     spec = {"ll": 2, "ul": 2, "offset": 3}
     o = peek(args, spec)
-    pr = _Prep(s, args, spec, extra_vars=names_in(o.get("offset")))
-    pr.write_notes(s.output)
     lower = _limit(s, o.get("ll"))
     upper = _limit(s, o.get("ul"))
     if lower is None and upper is None:
         raise StataError(198, "must specify at least one of ll() and ul()")   # VERIFY
     lo_ = -np.inf if lower is None else lower
     hi_ = np.inf if upper is None else upper
+    pr = _Prep(s, args, spec, extra_vars=names_in(o.get("offset")))
+    out_ = (pr.y <= lo_) | (pr.y >= hi_)
+    n_trunc = int(out_.sum())
+    if n_trunc:        # observations outside the limits are dropped
+        yfull = s.data.get(args.split()[0]).data
+        pr = _Prep(s, args, spec, extra_vars=names_in(o.get("offset")),
+                   restrict=~((yfull < SYS) & ((yfull <= lo_) | (yfull >= hi_))))
+    pr.write_notes(s.output)
+    s.output.write(f"(note: {n_trunc} obs. truncated)\n", "text")
     y = pr.y
-    if np.any(y <= lo_) or np.any(y >= hi_):
-        raise StataError(498, "dependent variable outside the truncation limits")   # VERIFY
-    main = block_from_pr(pr, "eq1")
+    main = block_from_pr(pr, pr.smp.depname)
     w = pr.w
 
     def lik(etas, th):
@@ -183,7 +205,7 @@ def cmd_truncreg(s: "Session", args: str) -> None:
     beta = np.linalg.lstsq(main.X * sw[:, None], y * sw, rcond=None)[0]
     sig = float(np.sqrt(np.sum(w * (y - main.X @ beta) ** 2) / np.sum(w)))
     res = pr.maximize(eng.fun, np.concatenate([beta, [np.log(max(sig, 1e-6))]]))
-    _log(s, pr, res)
+    fit_log(s, pr, "Fitting full model:", res)
     Vl, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     # Stata's e(b) holds sigma, not ln sigma: delta method
     sg = float(np.exp(res.b[-1]))
@@ -200,7 +222,7 @@ def cmd_truncreg(s: "Session", args: str) -> None:
     se_sg = float(np.sqrt(V[-1, -1]))
 
     def aux_rows(level):
-        return [CoefRow("sep"), CoefRow("eq", "sigma"), CoefRow("coef", "_cons", sg, se_sg, name="_cons")]
+        return [CoefRow("sep"), aux_row("/sigma", sg, se_sg, level)]
 
     def hdr(est):
         x = est.extra
@@ -215,7 +237,7 @@ def cmd_truncreg(s: "Session", args: str) -> None:
     est = finish_model(s, pr, "truncreg", args, title="Truncated regression", blocks=[main], eng=eng,
                        res=res2, V=V, n_clust=n_clust, ll0=null.ll if null else SYS,
                        aux_names=[("sigma", "_cons")], aux_rows_fn=aux_rows, hdr_fn=hdr, wald=True, k_eq=2,
-                       heads=True,
+                       heads=False,
                        extra_scalars=[("sigma", sg)] + ([("llopt", lower)] if lower is not None else [])
                        + ([("ulopt", upper)] if upper is not None else []))
     est.predict = make_predict(lambda what, etas, th, e: etas[0] if what == "xb" else None, "xb")
@@ -260,12 +282,12 @@ def spec_with_select(spec: dict) -> dict:
     return {**spec, "select": 3}
 
 
-def _selection_common(s, pr, dep, sel_vars, selected, ncat=None):
+def _selection_common(s, pr, dep, sel_vars, selected, ncat=None, sel_name=None):
     ds = s.data
     yfull = ds.get(dep).data[pr.smp.mask].astype(float)
     y = np.where(selected & (yfull < SYS), yfull, 0.0)
     main = block_from_pr(pr, dep)
-    sel_blk = block_from_text(pr, "select", sel_vars, constant=True)
+    sel_blk = block_from_text(pr, sel_name or "select", sel_vars, constant=True)
     for nm in sel_blk.notes:
         s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
     return y, main, sel_blk
@@ -291,9 +313,9 @@ def cmd_heckman(s: "Session", args: str) -> None:
     spec = {"twostep": 3, "offset": 3, "mills": 3}
     dep, sel_name, sel_vars, pr, selected, o = _selection_setup(s, args, spec)
     if o.get("twostep"):
-        return _heckman_twostep(s, args, dep, sel_vars, pr, selected, o)
+        return _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name)
     pr.write_notes(s.output)
-    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected)
+    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     sel = selected.astype(float)
     w = pr.w
     n = len(y)
@@ -331,8 +353,8 @@ def cmd_heckman(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left_ = [est.title, "(regression model with sample selection)", "", "",
-                 f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        left_ = [est.title, "(regression model with sample selection)", "", "", "",
+                 f"{lab(est)} = {g(x['ll'], '%9.0g')}"]
         right = [("Number of obs", comma(x["N"])), ("Censored obs", comma(n_cens)),
                  ("Uncensored obs", comma(n_unc)), ("", ""),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
@@ -389,7 +411,7 @@ def _heckman_start(y, main, sel_blk, sel, w):
     return np.concatenate([beta, rp.b, [np.arctanh(rho), np.log(sig)]])
 
 
-def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o):
+def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name=None):
     """Heckman's two-step estimates: probit for the selection, then OLS of the outcome on the
     covariates and the inverse Mills ratio, with the variance corrected for the estimated
     lambda (Heckman 1979; Greene, Econometric Analysis)."""
@@ -398,7 +420,7 @@ def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o):
     if pr.smp.wtype:
         raise StataError(101, "weights not allowed")   # VERIFY
     pr.write_notes(s.output)
-    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected)
+    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     sel = selected.astype(float)
     n = len(y)
     w = np.ones(n)
@@ -447,7 +469,7 @@ def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o):
     eng = Engine(lambda e_, th: (np.zeros(n), [np.zeros(n)], None), [main], w, 0)
     order = (["N", "N_selected", "N_nonselected", "df_m", "chi2", "p", "rho", "sigma", "lambda"],
              ["cmdline", "cmd", "title", "chi2type", "vce", "depvar", "properties"], [])
-    idx = list(range(main.nslopes)) + [k1 + k2]
+    idx = list(range(main.nslopes))
     est = finish_model(s, pr, "heckman", args, title="Heckman selection model -- two-step estimates",
                        blocks=[main, sel_blk], eng=eng, res=res, V=V_all, n_clust=None, ll0=SYS,
                        aux_names=[("mills", "lambda")], aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="",
@@ -473,7 +495,7 @@ def _predict_heckman_two(what, etas, th, est):
 def _sel_header(title, n_cens, n_unc, line2=""):
     def hdr(est):
         x = est.extra
-        left_ = [title] + ([line2] if line2 else [""]) + ["", "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        left_ = [title] + ([line2] if line2 else [""]) + ["", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g')}"]
         right = [("Number of obs", comma(x["N"])), ("Censored obs", comma(n_cens)),
                  ("Uncensored obs", comma(n_unc)), ("", ""),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
@@ -502,7 +524,7 @@ def cmd_heckprobit(s: "Session", args: str) -> None:
         return
     dep, sel_name, sel_vars, pr, selected, o = _selection_setup(s, args, {"offset": 3})
     pr.write_notes(s.output)
-    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected)
+    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     yb = np.where(selected, (y != 0).astype(float), 0.0)
     if np.all(yb[selected] == yb[selected][0]):
         raise StataError(2000, "outcome does not vary; remember:\n"
@@ -519,7 +541,17 @@ def cmd_heckprobit(s: "Session", args: str) -> None:
     ps = _weighted_probit(sel, sel_blk.X, w)
     po = _weighted_probit(yb[selected], main.X[selected], w[selected])
     res = pr.maximize(eng.fun, np.concatenate([po.b, ps.b, [0.0]]))
-    _log(s, pr, res)
+    fit_log(s, pr, "Fitting probit model:", po)
+    fit_log(s, pr, "Fitting selection model:", ps)
+    s.output.write(f"\nComparison:    log likelihood = {g(ps.ll + po.ll, '%10.0g'):>10}\n", "text")
+    # starting values: the outcome probit with the inverse Mills ratio of the selection equation
+    zg = sel_blk.X @ ps.b
+    lam_ = np.exp(st.norm.logpdf(zg) - st.norm.logcdf(zg))
+    ysel_ = yb[selected]
+    pf_, _ = _probit(ysel_, np.column_stack([main.X[selected], lam_[selected]]), w[selected])
+    pst = maximize(pf_, np.concatenate([po.b, [0.0]]), maxiter=300)
+    fit_log(s, pr, "Fitting starting values:", pst)
+    fit_log(s, pr, "Fitting full model:", res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     ath, se_ath = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     lr = max(2 * (res.ll - (ps.ll + po.ll)), 0.0)
@@ -560,7 +592,7 @@ def cmd_heckoprobit(s: "Session", args: str) -> None:
         return
     dep, sel_name, sel_vars, pr, selected, o = _selection_setup(s, args, {"offset": 3}, outcome_constant=False)
     pr.write_notes(s.output)
-    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected)
+    y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     levels = sorted(set(y[selected].tolist()))
     J = len(levels)
     if J < 3:
@@ -697,11 +729,19 @@ def cmd_biprobit(s: "Session", args: str) -> None:
     p1 = _weighted_probit(y1, b1.X, w)
     p2 = _weighted_probit(y2, b2.X, w)
     res = pr.maximize(eng.fun, np.concatenate([p1.b, p2.b, [0.0]]))
-    _log(s, pr, res)
+    fit_log(s, pr, "Fitting comparison equation 1:", p1)
+    fit_log(s, pr, "Fitting comparison equation 2:", p2)
+    s.output.write(f"\nComparison:    log likelihood = {g(p1.ll + p2.ll, '%10.0g'):>10}\n", "text")
+    fit_log(s, pr, "Fitting full model:", res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     ath, se_ath = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     lr = max(2 * (res.ll - (p1.ll + p2.ll)), 0.0)
     p_lr = _chi2p(lr, 1)
+    title_bp = "Seemingly unrelated bivariate probit" if eqs is not None else "Bivariate probit regression"
+
+    def bp_footer(s_, est):
+        s_.output.write(f"Likelihood-ratio test of rho=0:     chi2(1) ={g(lr, '%8.0g'):>9}    Prob > chi2 = {p_lr:6.4f}\n",
+                        "text")
     slopes = list(range(b1.nslopes)) + [b1.k + i for i in range(b2.nslopes)]
 
     def hdr(est):
@@ -711,11 +751,11 @@ def cmd_biprobit(s: "Session", args: str) -> None:
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left_, right   # VERIFY layout
 
-    est = finish_model(s, pr, "biprobit", args, title="Seemingly unrelated bivariate probit", blocks=[b1, b2],
+    est = finish_model(s, pr, "biprobit", args, title=title_bp, blocks=[b1, b2],
                        eng=eng, res=res, V=V, n_clust=n_clust, ll0=SYS, aux_names=[("athrho", "_cons")],
                        aux_rows_fn=lambda lv: [CoefRow("sep")] + _rho_rows(ath, se_ath, lv), hdr_fn=hdr,
                        depvar_cell="", wald=True, k_eq=3, test_idx=slopes,
-                       footer=_lr_footer_rho(lr, p_lr, "Likelihood-ratio test of rho=0:  "),
+                       footer=bp_footer,
                        extra_scalars=[("rho", float(np.tanh(ath))), ("chi2_c", lr), ("p_c", p_lr)],
                        extra_macros=[("depvar", f"{d1} {d2}")],
                        predict_opts={"xb1": 3, "xb2": 3, "pmarg1": 6, "pmarg2": 6, "p11": 3, "p10": 3, "p01": 3, "p00": 3})

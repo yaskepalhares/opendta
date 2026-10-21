@@ -342,31 +342,29 @@ def ivprobit(y, y2, eta1, eta2, athrho, lnsigma):
     return ll, d1, d2, da, dls
 
 
-def ivtobit(y, y2, eta1, eta2, athrho, lnsigma, lnsigv, lower, upper):
-    """Tobit with an endogenous regressor: derivatives wrt eta1, eta2, athrho, ln sigma_u and
-    ln sigma_v; lower/upper are the censoring limits (+-inf when absent)."""
+def ivtobit(y, y2, eta1, eta2, alpha, lns, lnv, lower, upper):
+    """Tobit with an endogenous regressor, in Stata's parameters: y* = eta1 + alpha*v + e with
+    v = y2 - eta2 ~ N(0, exp(lnv)^2) and e ~ N(0, exp(lns)^2). Derivatives wrt eta1, eta2, alpha,
+    lns and lnv; lower/upper are the censoring limits (+-inf when absent)."""
     n = len(y)
-    r = np.tanh(athrho) * np.ones(n)
-    c = np.sqrt(1 - r * r)
-    su = np.exp(lnsigma) * np.ones(n)
-    sv = np.exp(lnsigv) * np.ones(n)
+    s_ = np.exp(lns) * np.ones(n)
+    sv = np.exp(lnv) * np.ones(n)
     v = y2 - eta2
     u = v / sv
-    m = eta1 + r * su * u
-    S = su * c
+    m = eta1 + alpha * v
     left = y <= lower
     right = y >= upper
     unc = ~(left | right)
-    zz = np.where(left, (lower - m) / S, np.where(right, (m - upper) / S, (y - m) / S))
+    zz = np.where(left, (lower - m) / s_, np.where(right, (m - upper) / s_, (y - m) / s_))
     lcdf = np.where(zz > -30, special.log_ndtr(zz), -0.5 * zz * zz - np.log(np.abs(zz) + 1e-300) - 0.5 * np.log(2 * np.pi))
     h = np.exp(-0.5 * zz * zz - 0.5 * np.log(2 * np.pi) - lcdf)
-    llc = np.where(unc, -0.5 * zz * zz - np.log(S) - 0.5 * np.log(2 * np.pi), lcdf)
-    Dm = np.where(unc, zz / S, np.where(left, -h / S, h / S))
-    DS = np.where(unc, (zz * zz - 1) / S, -h * zz / S)
-    ll = llc - 0.5 * u * u - lnsigv - 0.5 * np.log(2 * np.pi)
+    llc = np.where(unc, -0.5 * zz * zz - np.log(s_) - 0.5 * np.log(2 * np.pi), lcdf)
+    Dm = np.where(unc, zz / s_, np.where(left, -h / s_, h / s_))
+    DS = np.where(unc, (zz * zz - 1) / s_, -h * zz / s_)
+    ll = llc - 0.5 * u * u - lnv - 0.5 * np.log(2 * np.pi)
     d1 = Dm
-    d2 = Dm * (-r * su / sv) + u / sv
-    da = Dm * (c * c * su * u) + DS * (-su * r * c)
-    dls = Dm * (r * su * u) + DS * S
-    dlv = Dm * (-r * su * u) + u * u - 1
+    d2 = -alpha * Dm + u / sv
+    da = Dm * v
+    dls = DS * s_
+    dlv = u * u - 1
     return ll, d1, d2, da, dls, dlv

@@ -17,7 +17,7 @@ from ..lazy import lazy
 from . import likelihoods as L
 from .ml import maximize
 from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
-                   finish_model, lab, make_predict, names_in, offset_values, peek, std_right,
+                   finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right,
                    sub_options, transformed_row)
 from .models import _logit, _poisson, _probit
 from .models2 import _header, _Prep, _log, g
@@ -121,6 +121,7 @@ def cmd_scobit(s: "Session", args: str) -> None:
     off = main.offset if main.offset is not None else np.zeros(len(y))
     # starting values: the logit fit (alpha = 1), whose log likelihood is the model of the LR test
     rl = maximize(_offset_logit(y, main.X, w, off), np.zeros(main.k))
+    rl_res = rl
 
     def lik(etas, th):
         ll, d_eta, d_la = L.scobit(y, etas[0], th[0])
@@ -128,7 +129,8 @@ def cmd_scobit(s: "Session", args: str) -> None:
 
     eng = Engine(lik, [main], w, 1)
     res = pr.maximize(eng.fun, np.concatenate([rl.b, [0.0]]))
-    _log(s, pr, res)
+    fit_log(s, pr, "Fitting logistic model:", rl_res)
+    fit_log(s, pr, "Fitting full model:", res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     lna, se_lna = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     lr = max(2 * (res.ll - rl.ll), 0.0)
@@ -142,16 +144,19 @@ def cmd_scobit(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left = [est.title, "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        ll4 = g(x["ll"], "%9.0g")
+        left = [est.title, "", f"{lab(est)} = {ll4}"]
         right = [("Number of obs", comma(x["N"])), ("Zero outcomes", comma(n0)),
-                 ("Nonzero outcomes", comma(n1)), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
-                 ("Prob > chi2", g(x["p"], "%10.4f"))]   # VERIFY layout
+                 ("Nonzero outcomes", comma(n1))]
+        if est.robust:     # VERIFY: with vce(robust) the Wald test is shown
+            left = [est.title, "", "", "", f"{lab(est)} = {ll4}"]
+            right += [(f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")), ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left, right
 
     def footer(s_, est):
-        s_.output.write("Note: likelihood-ratio tests recommended for inference with scobit model.\n", "text")   # VERIFY
-        s_.output.write(f"Likelihood-ratio test of alpha=1:  chi2(1) = {lr:7.2f}  Prob > chi2 = {p_lr:6.4f}\n",
-                        "text")   # VERIFY
+        s_.output.write(f"Likelihood-ratio test of alpha=1:   chi2(1) = {lr:9.2f}    Prob > chi2 = {p_lr:6.4f}\n",
+                        "text")
+        s_.output.write("\nNote: Likelihood-ratio tests are recommended for inference with scobit models.\n", "text")
 
     est = finish_model(s, pr, "scobit", args, title="Skewed logistic regression", blocks=[main], eng=eng,
                        res=res, V=V, n_clust=n_clust, ll0=null.ll if null else SYS,
@@ -193,7 +198,7 @@ def cmd_hetprobit(s: "Session", args: str) -> None:
     y = _binary_y(pr)
     main = block_from_pr(pr, pr.smp.depname)
     _set_offset(main, pr, o.get("offset"))
-    het = block_from_text(pr, "lnsigma", het_vars, constant=False)
+    het = block_from_text(pr, "lnsigma2", het_vars, constant=False)
     _set_offset(het, pr, het_opts.get("offset"))
     for nm in het.notes:
         s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
@@ -211,7 +216,8 @@ def cmd_hetprobit(s: "Session", args: str) -> None:
 
     eng = Engine(lik, [main, het], w, 0)
     res = pr.maximize(eng.fun, np.concatenate([rp.b, np.zeros(het.k)]))
-    _log(s, pr, res)
+    fit_log(s, pr, "Fitting probit model:", rp)
+    fit_log(s, pr, "Fitting full model:", res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     lr = max(2 * (res.ll - rp.ll), 0.0)
     p_lr = _chi2p(lr, het.k)
@@ -219,14 +225,16 @@ def cmd_hetprobit(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left = [est.title, "", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        ll4 = g(x["ll"], "%9.0g")
+        left = [est.title, "", "", "", "", f"{lab(est)} = {ll4}"]
         right = [("Number of obs", comma(x["N"])), ("Zero outcomes", comma(n0)),
-                 ("Nonzero outcomes", comma(n1)), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
-                 ("Prob > chi2", g(x["p"], "%10.4f"))]   # VERIFY layout
+                 ("Nonzero outcomes", comma(n1)), ("", ""), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
+                 ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left, right
 
     def footer(s_, est):
-        s_.output.write(f"LR test of lnsigma2=0: chi2({het.k}) = {lr:6.2f}   Prob > chi2 = {p_lr:6.4f}\n", "text")   # VERIFY
+        s_.output.write(f"Likelihood-ratio test of lnsigma2=0: chi2({het.k}) = {lr:8.2f}   Prob > chi2 = {p_lr:6.4f}\n",
+                        "text")
 
     est = finish_model(s, pr, "hetprobit", args, title="Heteroskedastic probit model", blocks=[main, het],
                        eng=eng, res=res, V=V, n_clust=n_clust, ll0=SYS, aux_names=[],
@@ -274,6 +282,8 @@ def cmd_fracreg(s: "Session", args: str) -> None:
     o = peek(rest, spec)
     pr = _Prep(s, rest, spec, extra_vars=names_in(o.get("offset")))
     pr.write_notes(s.output)
+    if not pr.robust:      # fracreg reports robust standard errors by default
+        pr.robust, pr.smp.vce = True, "robust"
     y = pr.y
     if np.any(y < 0) or np.any(y > 1):
         raise StataError(459, f"{pr.smp.depname} must be between 0 and 1 inclusive")   # VERIFY
@@ -365,9 +375,11 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
     g0[-1] = float(np.log(excess / (1 - excess))) if link == "logit" else float(st.norm.ppf(excess))
     b0 = np.concatenate([pres.b, g0] + ([[np.log(_alpha_start(y, mu0, w))]] if nb else []))
     res = pr.maximize(eng.fun, b0)
-    _log(s, pr, res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     null = _null_fit(pr, lik, [main, infl], w, n_theta, res.b)
+    if null is not None:
+        fit_log(s, pr, "Fitting constant-only model:", null)
+    fit_log(s, pr, "Fitting full model:", res)
     ll0 = null.ll if null else SYS
     k_main = main.k
     # comparison models: Poisson (zip) or zip (zinb) for the Vuong and alpha tests
@@ -415,7 +427,8 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left = [title, "", "", "", f"Inflation model = {link}", f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
+        ll4 = g(x["ll"], "%9.0g")
+        left = [title, "", "", "", f"Inflation model = {link}", f"{lab(est):<16}= {ll4}"]
         right = [("Number of obs", comma(x["N"])), ("Nonzero obs", comma(n_nonzero)), ("Zero obs", comma(n_zero)),
                  ("", ""), (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]   # VERIFY layout
@@ -425,8 +438,8 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
         out = s_.output
         if vuong:
             nm, zv, pz = vuong
-            out.write(f"{'Vuong test of ' + nm + ':':<48}z = {g(zv, '%8.2f'):>8}  Pr>z = {g(pz, '%6.4f')}\n", "text")   # VERIFY
-        if nb and not pr.robust:
+            out.write(f"{'Vuong test of ' + nm + ':':<51}z = {g(zv, '%8.2f'):>8}  Pr>z = {g(pz, '%6.4f')}\n", "text")
+        if nb and not pr.robust and lna > -10:     # VERIFY: Stata omits the test at the boundary
             out.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n",
                       "text")   # VERIFY
 
@@ -518,7 +531,6 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     mu0 = np.exp(np.clip(main.X @ pres.b + (main.offset if main.offset is not None else 0.0), -700, 700))
     b0 = np.concatenate([pres.b] + ([[np.log(_alpha_start(y, mu0, w))]] if nb else []))
     res = pr.maximize(eng.fun, b0)
-    _log(s, pr, res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     # constant-only model: start from the log of the mean
     null = None
@@ -527,6 +539,16 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
         c0 = float(np.log(max(np.sum(w * y) / np.sum(w) - lower, 0.5)))
         null = maximize(eng0.fun, np.array([c0] + ([float(res.b[-1])] if nb else [])), maxiter=300)
     ll0 = null.ll if null else SYS
+    ptr = None
+    if nb:
+        ep = Engine(lambda e, th: (lambda ll, d: (ll, [d], None))(*L.tpoisson(y, e[0], lower)), [main], w, 0)
+        ptr = maximize(ep.fun, pres.b, maxiter=300)
+        fit_log(s, pr, "Fitting truncated Poisson model:", ptr)
+        if null is not None:
+            fit_log(s, pr, "Fitting constant-only model:", null)
+        fit_log(s, pr, "Fitting full model:", res)
+    else:
+        _log(s, pr, res)
     if nb:
         lna, se_lna = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
 
@@ -540,15 +562,19 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left = [title] + (["Dispersion     = mean"] if nb else []) + \
-               [f"Limits: lower = {lower:>10g}", f"        upper = {'+inf':>10}",
-                f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]   # VERIFY layout
+        left = [title, f"Truncation point: {lower:g}", "Dispersion     = mean" if nb else "",
+                f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
         return left, std_right(x)
 
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main], eng=eng, res=res, V=V, n_clust=n_clust,
                        ll0=ll0, aux_names=[("lnalpha", "_cons")] if nb else [], aux_rows_fn=aux_rows,
                        hdr_fn=hdr, k_eq=2 if nb else 1, wald=pr.robust,
                        extra_scalars=[("llopt", lower)] + ([("alpha", float(np.exp(lna)))] if nb else []))
+    if nb and not pr.robust:
+        chibar = max(2 * (res.ll - ptr.ll), 0.0)
+        p_chibar = 0.5 * _chi2p(chibar, 1) if chibar > 0 else 0.5
+        est.footer = lambda s_, e: s_.output.write(
+            f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n", "text")
     mean_fn = _trunc_mean(nb, lower)
     est.predict = make_predict(lambda what, etas, th, e: mean_fn(np.exp(etas[0]), th) if what == "n" else None, "n")
     est.pred_label = "number of events"
@@ -616,13 +642,15 @@ def cmd_gnbreg(s: "Session", args: str) -> None:
     g0 = np.zeros(la.k)
     g0[-1] = np.log(_alpha_start(y, mu0, w))
     res = pr.maximize(eng.fun, np.concatenate([pres.b, g0]))
-    _log(s, pr, res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     # constant-only model: both equations with the constant only
     null = None
     if main.constant:
         e0 = Engine(lik, [constant_only(main), constant_only(la)], w, 0)
         null = maximize(e0.fun, np.array([res.b[main.k - 1], res.b[-1]]), maxiter=300)
+    if null is not None:
+        fit_log(s, pr, "Fitting constant-only model:", null)
+    fit_log(s, pr, "Fitting full model:", res)
     ll0 = null.ll if null else SYS
     est = finish_model(s, pr, "gnbreg", args, title="Generalized negative binomial regression", blocks=[main, la],
                        eng=eng, res=res, V=V, n_clust=n_clust, ll0=ll0, aux_names=[],
@@ -674,6 +702,8 @@ def cmd_binreg(s: "Session", args: str) -> None:
         else:
             keep.append(f"{name}({arg})" if arg is not None else name)
     link = link or "logit"
+    if not {"ml", "irls"} & set(keep):
+        keep.append("irls")        # binreg uses IRLS unless ml is given
     opts = ["family(binomial" + (f" {nbin}" if nbin else "") + ")", f"link({link})"] + keep
     cmd_glm(s, f"{head} , " + " ".join(opts), titles=title)
     if "cmdline" in s.e:
@@ -724,9 +754,14 @@ def cmd_glogit(s: "Session", args: str) -> None:
         rest = " ".join(toks[2:])
         lvl = f", level({o['level']})" if o.get("level") else ""
         # the sample is the observations where the logit is defined; if/in were applied above
-        s.run(f"regress {pos} {rest} [aw={t_w}]{lvl}")
+        s.run(f"quietly regress {pos} {rest} [aw={t_w}]{lvl}")
         if "cmdline" in s.e:
             s.e["cmdline"] = f"glogit {args.strip()}"
+        s.output.write("\nWeighted LS logistic regression for grouped data\n", "text")
+        est = s._estimates
+        est.depvar_cell = ""
+        s.run("regress")
+        del est.depvar_cell
     finally:
         ds.drop_vars([pos, t_w])
         ds.rename(t_pos, pos)
