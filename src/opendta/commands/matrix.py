@@ -703,6 +703,10 @@ def cmd_matrix(s: "Session", args: str) -> None:
         for n, mat in reversed(list(_store(s).items())):
             s.output.write(f"{n:>13}[{mat.rows},{mat.cols}]\n", "text")
         return
+    if sub in ("dissimilarity", "dissim", "dissimi", "dissimil", "dissimila", "dissimilar", "dissimilari", "dissimilarit"):
+        from .mvcluster import matrix_dissimilarity
+        matrix_dissimilarity(s, rest)
+        return
     if sub in ("rename", "ren"):
         a, b = rest.split()
         store = _store(s)
