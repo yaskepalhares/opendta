@@ -13,6 +13,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
 from ..lazy import lazy
 from . import fvars
+from . import likelihoods as L
 from .vce import bread, sandwich
 from .ml import maximize, print_log
 from .ml import options as ml_options
@@ -79,6 +80,24 @@ def _probit(y, X, w):
     return fun, scores
 
 
+def _cloglog(y, X, w, offset):
+    def fun(b, todo):
+        xb = X @ b + offset
+        ll_i, d = L.cloglog(y, xb)
+        ll = float(np.sum(w * ll_i))
+        if todo == 0:
+            return ll, None, None
+        gr = X.T @ (w * d)
+        # d2/deta2 of ln P and ln (1 - P) with u = exp(eta): by differencing the analytic score
+        h = 1e-5
+        d2 = (L.cloglog(y, xb + h)[1] - L.cloglog(y, xb - h)[1]) / (2 * h)
+        return ll, gr, (X * (w * d2)[:, None]).T @ X
+
+    def scores(b):
+        return L.cloglog(y, X @ b + offset)[1]
+    return fun, scores
+
+
 def _poisson(y, X, w, offset):
     lgy = special.gammaln(y + 1)
 
@@ -102,7 +121,8 @@ def _poisson(y, X, w, offset):
 # ---------------------------------------------------------------------------
 
 _TITLES = {"logit": "Logistic regression", "logistic": "Logistic regression",
-           "probit": "Probit regression", "poisson": "Poisson regression"}
+           "probit": "Probit regression", "poisson": "Poisson regression",
+           "cloglog": "Complementary log-log regression"}
 
 
 def _fit(s: "Session", cmd: str, args: str) -> None:
@@ -112,7 +132,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         return
     spec = {"or": 2, "irr": 3, "nolog": 4, "log": 3, "iterate": 4, "tolerance": 3, "ltolerance": 4,
             "nrtolerance": 4, "asis": 4, "offset": 3, "exposure": 3, "noheader": 6, "coef": 4,
-            "difficult": 4, "technique": 4}
+            "difficult": 4, "technique": 4, "eform": 5}
     smp = Sample(s, args, opts_spec=spec, weights=("fweight", "iweight", "pweight"))
     o = smp.o
     out = s.output
@@ -124,7 +144,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     if smp.wtype == "iweight":
         N = float(w.sum())
     y = smp.y.astype(np.float64)
-    if cmd in ("logit", "logistic", "probit"):
+    if cmd in ("logit", "logistic", "probit", "cloglog"):
         yb = (y != 0).astype(float)
         if np.all(yb == yb[0]):
             raise StataError(2000, "outcome does not vary; remember:\n"
@@ -143,7 +163,7 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     k = X.shape[1]
     offset = np.zeros(smp.n)
     off_name = ""
-    if cmd == "poisson":
+    if cmd in ("poisson", "cloglog"):
         if o.get("offset"):
             off_name = str(o["offset"]).strip()
             offset = ds.get(off_name).data[smp.mask].astype(float)
@@ -163,6 +183,10 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     elif cmd == "probit":
         fun, scores = _probit(y, X, w)
         c0 = float(st.norm.ppf(ybar))
+        ll0 = float(np.sum(w * (y * np.log(ybar) + (1 - y) * np.log(1 - ybar))))
+    elif cmd == "cloglog":
+        fun, scores = _cloglog(y, X, w, offset)
+        c0 = float(np.log(-np.log(1 - ybar)))
         ll0 = float(np.sum(w * (y * np.log(ybar) + (1 - y) * np.log(1 - ybar))))
     else:
         fun, scores = _poisson(y, X, w, offset)
@@ -249,6 +273,8 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
     est.offset_kind = "exposure" if o.get("exposure") else "offset" if o.get("offset") else ""
     est.extra = {"N": N, "ll": res.ll, "ll_0": ll0, "chi2": chi2, "p": pval, "df_m": df_m,
                  "r2_p": r2_p, "chi2type": chi2type}
+    if cmd == "cloglog":
+        est.extra.update(n1=float(np.sum(w * (y != 0))), n0=float(np.sum(w * (y == 0))))
     est.robust = robust
     est.display = display_ml
     est.predict = predict_ml
@@ -301,6 +327,8 @@ def _fit(s: "Session", cmd: str, args: str) -> None:
         eform = "Odds Ratio"
     elif o.get("irr") and cmd == "poisson":
         eform = "IRR"
+    elif o.get("eform") and cmd == "cloglog":
+        eform = "exp(b)"
     display_ml(s, est, eform=eform, header=not o.get("noheader"))
 
 
@@ -318,6 +346,10 @@ def display_ml(s: "Session", est: Estimates, *, eform: str | None = None, header
                  ("Prob > chi2", g(x["p"], "%10.4f")), ("Pseudo R2", g(x["r2_p"], "%10.4f"))]
         lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
         left = [est.title, "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
+        if getattr(est, "ml_cmd", "") == "cloglog":
+            right = [right[0], ("Zero outcomes", g(x["n0"], "%10.0g")), ("Nonzero outcomes", g(x["n1"], "%10.0g")),
+                     right[1], right[2]]
+            left = [est.title, "", "", "", f"{lab} = {g(x['ll'], '%10.0g'):>10}"]
         for lft, (rl, rv) in zip(left, right):
             out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")
@@ -368,11 +400,11 @@ def predict_ml(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         X, _ = design_all(s, est)
         sp = np.sqrt(np.maximum(np.einsum("ij,jk,ik->i", X, est.V, X), 0))
         return np.where(ok, sp, SYS), ""
-    if cmd in ("logit", "logistic", "probit"):
+    if cmd in ("logit", "logistic", "probit", "cloglog"):
         if stat in ("", "pr", "p"):
             if not stat:
                 note = f"(option pr assumed; Pr({est.depvar}))"
-            p = special.expit(xb) if cmd != "probit" else st.norm.cdf(xb)
+            p = {"probit": st.norm.cdf, "cloglog": lambda z: 1 - np.exp(-np.exp(z))}.get(cmd, special.expit)(xb)
             return np.where(ok, p, SYS), note
     if cmd == "poisson":
         if stat in ("", "n"):
@@ -399,3 +431,7 @@ def cmd_probit(s, args):
 
 def cmd_poisson(s, args):
     _fit(s, "poisson", args)
+
+
+def cmd_cloglog(s, args):
+    _fit(s, "cloglog", args)

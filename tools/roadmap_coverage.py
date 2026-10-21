@@ -36,6 +36,7 @@ MODULE_AREA = {
     "tshelp": "Time series",
     "mvfactor": "Multivariate statistics", "mvtests": "Multivariate statistics", "mvcluster": "Multivariate statistics",
     "mvdiscrim": "Multivariate statistics", "mvordination": "Multivariate statistics",
+    "binmodels": "Models", "censmodels": "Models", "ivmodels": "Models", "modelcmds": "Models",
     "stcmds": "Survival analysis",
     "stdata": "Survival analysis",
     "strates": "Survival analysis",

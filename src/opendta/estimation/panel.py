@@ -600,8 +600,6 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     if not m or m.group(1) not in ("2sls", "liml", "gmm"):
         raise StataError(198, "estimator must be 2sls, liml, or gmm")   # VERIFY
     estimator = m.group(1)
-    if estimator != "2sls":
-        raise StataError(198, f"ivregress {estimator} not yet supported by OpenDTA")
     rest = m.group(2)
     mp = re.search(r"\(([^=()]+)=([^()]*)\)", rest)
     if not mp:
@@ -609,8 +607,10 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     endog_txt, inst_txt = mp.group(1), mp.group(2)
     exog_txt = rest[:mp.start()] + " " + rest[mp.end():]
     # sample: dependent + exogenous + endogenous + instruments without missing
-    smp = Sample(s, exog_txt.strip(), opts_spec={"small": 2, "first": 3},
+    smp = Sample(s, exog_txt.strip(), opts_spec={"small": 2, "first": 3, "wmatrix": 2},
                  weights=("aweight", "fweight", "pweight"), extra_vars=endog_txt + " " + inst_txt)
+    if estimator != "gmm" and smp.o.get("wmatrix"):
+        raise StataError(198, "option wmatrix() is allowed only with gmm")   # VERIFY
     ds = s.data
     endog_terms = fvars.expand_fv(ds, endog_txt)
     inst_terms = fvars.expand_fv(ds, inst_txt)
@@ -629,8 +629,13 @@ def cmd_ivregress(s: "Session", args: str) -> None:
                          "the regression as there are instrumented variables")
     k = X.shape[1]
     PzX = Z @ np.linalg.lstsq(Z, X, rcond=None)[0]
-    A = np.linalg.inv(PzX.T @ X)
-    b = A @ (PzX.T @ y)
+    kappa = 1.0
+    QX = PzX
+    if estimator == "liml":
+        kappa = _liml_kappa(y, Xn, ex_cols, X, Z)
+        QX = X - kappa * (X - PzX)         # (I - kappa M_Z) X
+    A = np.linalg.inv(QX.T @ X)
+    b = A @ (QX.T @ y)
     e = y - X @ b
     rss = float(e @ e)
     small = bool(smp.o.get("small"))
@@ -638,8 +643,16 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     V = s2 * A
     vcetype = ""
     n_clust = None
-    if smp.vce in ("robust", "cluster"):
-        sc = PzX * e[:, None]
+    wm_label = ""
+    if estimator == "gmm":
+        b, e, V, wm_label, n_clust_w = _gmm_two_step(smp, y, X, Z, A @ (QX.T @ y), small)
+        rss = float(e @ e)
+        s2 = rss / (N - k) if small else rss / N
+        if smp.vce in ("robust", "cluster") or wm_label != "Unadjusted":
+            vcetype = "Robust"
+            n_clust = n_clust_w if (smp.vce == "cluster" or wm_label.startswith("Cluster")) else None
+    elif smp.vce in ("robust", "cluster"):
+        sc = QX * e[:, None]
         if smp.vce == "cluster":
             uniq = np.unique(smp.cluster)
             n_clust = len(uniq)
@@ -671,7 +684,8 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     est.constant, est.depcomp = True, smp.depcomp
     est.level = smp.level
     est.vcetype, est.clustvar, est.n_clust = vcetype, smp.clustvar, n_clust
-    est.extra = dict(N=N, W=W, df_m=len(slopes), r2=r2, rmse=rmse, small=small,
+    est.extra = dict(N=N, W=W, df_m=len(slopes), r2=r2, rmse=rmse, small=small, estimator=estimator,
+                     wm_label=wm_label,
                      F=W / len(slopes), instd=" ".join(c.name for c in Xn),
                      insts=" ".join([c.name for c in ex_cols] + [c.name for c in Zc]))
     est.display = display_iv
@@ -680,7 +694,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
     est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
     # e(): order observed in Stata 14 with small (compat 0510); without small, VERIFY
-    scalars = [("kappa", 1.0), ("rss", rss), ("N", float(N)), ("df_m", float(len(slopes)))]
+    scalars = [("kappa", kappa), ("rss", rss), ("N", float(N)), ("df_m", float(len(slopes)))]
     scalars += [("df_r", float(N - k))] if small else []
     scalars += [("rmse", rmse), ("mss", tss - rss), ("r2", r2), ("r2_a", r2_a)]
     scalars += [("F", W / len(slopes))] if small else [("chi2", W)]
@@ -694,14 +708,16 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         macros.append(("vcetype", vcetype))
     if smp.clustvar:
         macros.append(("clustvar", smp.clustvar))
-    macros += [("estimator", "2sls"), ("footnote", "ivreg_footnote"), ("marginsnotok", "Residuals SCores"),
+    macros += [("estimator", estimator), ("footnote", "ivreg_footnote"), ("marginsnotok", "Residuals SCores"),
                ("marginsok", "XB default"), ("predict", "ivregress_p"), ("depvar", smp.depname)]
     if exogr:
         macros.append(("exogr", exogr))
     macros += [("insts", est.extra["insts"]), ("instd", est.extra["instd"])]
     if small:
         macros.append(("small", "small"))
-    macros += [("title", "Instrumental variables (2SLS) regression"), ("properties", "b V")]
+    title = f"Instrumental variables ({estimator.upper()}) regression"
+    est.extra["title"] = title
+    macros += [("title", title), ("properties", "b V")]
     post(s, est, scalars, macros, mask)
     display_iv(s, est)
 
@@ -717,9 +733,9 @@ def _retarget(est, Xn, ex_cols, endog_terms, ex_terms):
 def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
     out = s.output
     x = est.extra
-    if header and x["small"] and not est.vcetype:
+    if header and x["small"] and not est.vcetype and not x["wm_label"]:
         # with small, ANOVA table in the old regress layout (compat 0510)
-        out.write("\n\nInstrumental variables (2SLS) regression\n\n", "text")
+        out.write(f"\n\n{x['title']}\n\n", "text")
         df_m, df_r, N = int(x["df_m"]), int(est.df_r), x["N"]
         right = [("Number of obs", comma(N)), (f"F({df_m:>3},{df_r:>6})", g(x["F"], "%10.2f")),
                  ("Prob > F", g(st.f.sf(x["F"], df_m, df_r), "%10.4f")), ("R-squared", g(x["r2"], "%10.4f")),
@@ -744,7 +760,9 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
                      ("Prob > chi2", g(_chi2_tail(x["W"], x["df_m"]), "%10.4f"))]
         right += [("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))]
         for i, (rl, rv) in enumerate(right):
-            lft = "Instrumental variables (2SLS) regression" if i == 0 else ""
+            lft = x["title"] if i == 0 else ""
+            if x["wm_label"] and i == len(right) - 1:
+                lft = f"GMM weight matrix: {x['wm_label']}"
             out.write(f"{lft:<50}{rl:<16}= ", "text")
             out.write(f"{rv:>10}\n", "result")
         out.write("\n", "text")
@@ -754,3 +772,62 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
                vcetype=est.vcetype)
     out.write(f"Instrumented:  {x['instd']}\n", "text")
     out.write(f"Instruments:   {x['insts']}\n", "text")
+
+
+def _liml_kappa(y, Xn, ex_cols, X, Z) -> float:
+    """Smallest eigenvalue of (Y' M_Z Y)^-1 (Y' M_X1 Y), Y = [y, endogenous regressors], X1 =
+    included exogenous variables with the constant (kappa >= 1)."""
+    from scipy.linalg import eigh
+    g = len(Xn)
+    Y = np.column_stack([y, X[:, :g]])
+    X1 = X[:, g:]
+
+    def resid(M, B):
+        return B - M @ np.linalg.lstsq(M, B, rcond=None)[0]
+    A_ = resid(X1, Y)
+    B_ = resid(Z, Y)
+    return float(eigh(A_.T @ A_, B_.T @ B_, eigvals_only=True)[0])
+
+
+def _gmm_two_step(smp, y, X, Z, b1, small):
+    """Two-step efficient GMM: the weight matrix comes from the 2SLS residuals (robust, cluster
+    or unadjusted); returns b, residuals, V (unadjusted: the efficient variance; robust or
+    cluster: the sandwich), the weight matrix label and the number of clusters."""
+    N = len(y)
+    o = smp.o
+    wm = str(o.get("wmatrix") or ("cluster " + smp.clustvar if smp.vce == "cluster" else "robust")).split()
+    kind = wm[0].lower()
+    e1 = y - X @ b1
+    n_cl = None
+
+    def meat(e, kind_):
+        nonlocal n_cl
+        if kind_.startswith("rob"):
+            return (Z * (e ** 2)[:, None]).T @ Z
+        if kind_.startswith("una"):
+            return float(e @ e / N) * (Z.T @ Z)
+        if kind_.startswith("clu"):
+            from ..core.varlist import resolve_name
+            cv = smp.cluster if smp.vce == "cluster" and len(wm) < 2 else \
+                smp.s.data.get(resolve_name(smp.s.data, wm[1])).data[smp.mask]
+            u = np.unique(cv)
+            n_cl = len(u)
+            H = np.zeros((Z.shape[1], Z.shape[1]))
+            for v in u:
+                t = Z[cv == v].T @ e[cv == v]
+                H += np.outer(t, t)
+            return H
+        raise StataError(198, f"wmatrix({kind_}) is not available yet in OpenDTA")
+    S1 = meat(e1, kind)
+    W = np.linalg.inv(S1)
+    ZX = Z.T @ X
+    Ainv = np.linalg.inv(ZX.T @ W @ ZX)
+    b = Ainv @ (ZX.T @ W @ (Z.T @ y))
+    e = y - X @ b
+    V = Ainv
+    if smp.vce in ("robust", "cluster") or kind[:3] in ("rob", "clu"):
+        # a robust or cluster weight matrix gives the sandwich variance (compat 1907)
+        S2 = meat(e, "cluster" if (smp.vce == "cluster" or kind.startswith("clu")) else "robust")
+        V = Ainv @ (ZX.T @ W @ S2 @ W @ ZX) @ Ainv
+    label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
+    return b, e, (V + V.T) / 2, label, n_cl

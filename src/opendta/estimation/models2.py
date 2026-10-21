@@ -57,11 +57,13 @@ class _Prep:
     """Sample, weights and columns of the independent variables (without a constant)."""
 
     def __init__(self, s: "Session", args: str, spec: dict[str, int], weights=("fweight", "iweight",
-                 "pweight"), constant: bool | None = None, need_dep: bool = True):
+                 "pweight"), constant: bool | None = None, need_dep: bool = True,
+                 extra_vars: str = "", restrict: np.ndarray | None = None):
         full = dict(spec)
         full.update({"nolog": 4, "log": 3, "iterate": 4, "tolerance": 3, "ltolerance": 4,
                      "nrtolerance": 4, "difficult": 4, "technique": 4, "noheader": 6})
-        smp = Sample(s, args, opts_spec=full, weights=weights, need_dep=need_dep)
+        smp = Sample(s, args, opts_spec=full, weights=weights, need_dep=need_dep,
+                     extra_vars=extra_vars, restrict=restrict)
         self.s = s
         self.smp = smp
         self.o = smp.o
@@ -220,7 +222,7 @@ def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: 
     est = Estimates(cmd, depvar_name or smp.depname, names, b, V, smp.n, "z", None)
     est.rows = rows
     est.eqnames = list(eqnames)
-    est.cols, est.constant, est.terms, est.depcomp = smp.cols, constant, smp.terms, smp.depcomp
+    est.cols, est.constant, est.terms, est.depcomp = smp.cols, constant, smp.terms, getattr(smp, "depcomp", None)
     est.level = smp.level
     est.vcetype = "Robust" if pr.robust else ""
     est.clustvar = smp.clustvar

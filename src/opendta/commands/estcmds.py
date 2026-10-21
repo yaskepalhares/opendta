@@ -83,6 +83,12 @@ def cmd_poisson(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("cloglog", "cloglog")
+def cmd_cloglog(s: "Session", args: str) -> None:
+    from ..estimation.models import cmd_cloglog as run
+    run(s, args)
+
+
 @command("ologit", "ologit")
 def cmd_ologit(s: "Session", args: str) -> None:
     from ..estimation.models2 import cmd_ologit as run
@@ -692,7 +698,7 @@ def cmd_mi(s: "Session", args: str) -> None:
 def _install_vce_bootstrap() -> None:
     from ..estimation.bootstrap import wrap_vce_bootstrap
     from .registry import REGISTRY
-    for name in ("regress", "logit", "logistic", "probit", "poisson", "nbreg", "ologit", "oprobit",
+    for name in ("regress", "logit", "logistic", "probit", "cloglog", "poisson", "nbreg", "ologit", "oprobit",
                  "mlogit", "tobit", "glm", "areg"):
         if name in REGISTRY:
             wrap_vce_bootstrap(name)
