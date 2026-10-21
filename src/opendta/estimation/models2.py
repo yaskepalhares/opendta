@@ -57,11 +57,13 @@ class _Prep:
     """Sample, weights and columns of the independent variables (without a constant)."""
 
     def __init__(self, s: "Session", args: str, spec: dict[str, int], weights=("fweight", "iweight",
-                 "pweight"), constant: bool | None = None, need_dep: bool = True):
+                 "pweight"), constant: bool | None = None, need_dep: bool = True,
+                 extra_vars: str = "", restrict: np.ndarray | None = None):
         full = dict(spec)
         full.update({"nolog": 4, "log": 3, "iterate": 4, "tolerance": 3, "ltolerance": 4,
                      "nrtolerance": 4, "difficult": 4, "technique": 4, "noheader": 6})
-        smp = Sample(s, args, opts_spec=full, weights=weights, need_dep=need_dep)
+        smp = Sample(s, args, opts_spec=full, weights=weights, need_dep=need_dep,
+                     extra_vars=extra_vars, restrict=restrict)
         self.s = s
         self.smp = smp
         self.o = smp.o

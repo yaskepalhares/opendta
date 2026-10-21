@@ -85,7 +85,9 @@ _FAMILY_ALIASES = {"gau": "gaussian", "gaussian": "gaussian", "normal": "gaussia
                    "igaussian": "igaussian", "inv": "igaussian", "nb": "nbinomial", "nbinomial": "nbinomial"}
 
 
-def cmd_glm(s: "Session", args: str) -> None:
+def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) -> None:
+    """`titles` = (coefficient title, exponentiate): binreg shows its own (Odds Ratio, Risk
+    Difference...) whatever the link."""
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
         replay(s, "glm", args)
@@ -227,6 +229,17 @@ def cmd_glm(s: "Session", args: str) -> None:
     z = eta0 + (y - mu0) / dmu(eta0) - off
     sw = w * dmu(eta0) ** 2 / var(mu0)
     b0 = np.linalg.lstsq(X * np.sqrt(sw)[:, None], z * np.sqrt(sw), rcond=None)[0]
+    if k and not np.isfinite(fun(b0, 0)[0]):
+        # the IRLS step leaves the feasible region (log or identity link of a binomial: mu >= 1):
+        # start from the constant-only fit, or from shrunken coefficients without a constant
+        if pr.constant:
+            b0 = np.zeros(k)
+            b0[-1] = float(gfun(np.array([ybar if fam != "binomial" else ybar / float(np.mean(m_trials))]))[0])
+        else:
+            for _ in range(40):
+                b0 = b0 / 2
+                if np.isfinite(fun(b0, 0)[0]):
+                    break
     res = pr.maximize(fun, b0)
     mu = mu_of(res.b)
     N = pr.N
@@ -324,7 +337,9 @@ def cmd_glm(s: "Session", args: str) -> None:
                       "bic": bic, "fam_text": fam_text, "link_text": link_text, "link_name": link_name})
     est.glm_ginv, est.glm_fam = ginv, fam
     est.predict = _predict_glm
-    if o.get("eform"):
+    if titles is not None:
+        est.coef_title, est.eform_on = titles
+    elif o.get("eform"):
         # observed titles: binomial/log -> Risk Ratio (compat 0509); the others VERIFY
         title_ef = {("binomial", "Logit"): "Odds Ratio", ("binomial", "Log"): "Risk Ratio",
                     ("poisson", "Log"): "IRR", ("nbinomial", "Log"): "IRR"}.get((fam, link_name), "exp(b)")
