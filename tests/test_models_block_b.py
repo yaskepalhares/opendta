@@ -417,3 +417,48 @@ def test_etregress_twostep_is_close_to_ml(run):
     b2 = _b(run)
     bm = np.asarray(run.session.matrices["bm"].data).ravel()
     assert np.allclose(b2[:3], bm[:3], atol=0.25)
+
+
+def test_teffects_ra_matches_arm_regressions(run):
+    run(TREAT + "quietly teffects ra (y x) (t)\nmatrix bt = e(b)\n"
+        "quietly regress y x if t == 0\npredict double m0\nquietly regress y x if t == 1\npredict double m1")
+    y, t = _col(run, "y"), _col(run, "t")
+    m0, m1 = _col(run, "m0"), _col(run, "m1")
+    bt = np.asarray(run.session.matrices["bt"].data).ravel()
+    assert np.isclose(bt[0], (m1 - m0).mean(), atol=1e-8)
+    assert np.isclose(bt[1], m0.mean(), atol=1e-8)
+
+
+def test_teffects_ipw_weights_and_se(run):
+    run(TREAT + "quietly teffects ipw (y) (t x z)\nmatrix bt = e(b)\nmatrix vt = e(V)")
+    y, t, x, z = (_col(run, v) for v in ("y", "t", "x", "z"))
+    from opendta.core import treatfx as T
+    Z = np.column_stack([x, z, np.ones_like(x)])
+    p = T.glm_mean("logit", Z, T.glm_fit("logit", Z, t))
+    w1, w0 = t / p, (1 - t) / (1 - p)
+    mu0, mu1 = (w0 * y).sum() / w0.sum(), (w1 * y).sum() / w1.sum()
+    bt = np.asarray(run.session.matrices["bt"].data).ravel()
+    assert np.allclose(bt, [mu1 - mu0, mu0], atol=1e-8)
+    th, V, _ = T.teffects("ipw", y, t, np.ones((len(y), 1)), Z, "linear", "logit", "ate")
+    vt = np.asarray(run.session.matrices["vt"].data)
+    assert np.isclose(vt[0, 0], V[1, 1] + V[0, 0] - 2 * V[0, 1], rtol=1e-6)
+
+
+def test_eteffects_removes_the_endogeneity_bias(run):
+    run(TREAT + "quietly eteffects (y x) (t x z)\nmatrix be = e(b)\nquietly teffects ra (y x) (t)\nmatrix br = e(b)")
+    be = np.asarray(run.session.matrices["be"].data).ravel()
+    br = np.asarray(run.session.matrices["br"].data).ravel()
+    assert abs(be[0] - 1.5) < abs(br[0] - 1.5)
+
+
+def test_nnmatch_one_dimension_matches_manual(run):
+    run(TREAT + "quietly teffects nnmatch (y x) (t), ate")
+    y, t, x = (_col(run, v) for v in ("y", "t", "x"))
+    d = []
+    for i in range(len(y)):
+        o = np.flatnonzero(t == 1 - t[i])
+        dist = np.abs(x[o] - x[i])
+        nb = o[dist <= dist.min() + 1e-12]
+        yi = y[nb].mean()
+        d.append((y[i] - yi) if t[i] == 1 else (yi - y[i]))
+    assert np.isclose(run.session.e["b"].data.ravel()[0], np.mean(d), atol=1e-8)

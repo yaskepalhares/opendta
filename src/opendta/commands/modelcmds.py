@@ -39,3 +39,4 @@ _register("nonlin", ["nl", "nlsur", "gmm"])
 
 _register("frontier", ["frontier"])
 _register("treatment", ["etregress"])
+_register("teffects", ["teffects", "eteffects"])
