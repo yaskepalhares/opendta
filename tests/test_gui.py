@@ -15,6 +15,13 @@ def isolated_prefs(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENDTA_SETTINGS", str(tmp_path / "opendta-prefs.ini"))
 
 
+@pytest.fixture(autouse=True)
+def no_modal_boxes(monkeypatch):
+    """A modal "Save changes?" box blocks forever without a screen: answer Discard."""
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Discard)
+
+
 @pytest.fixture(scope="module")
 def app():
     from PySide6.QtCore import QStandardPaths
@@ -307,13 +314,8 @@ def test_graph_window_tabs(app):
     w.close()
 
 
-def test_dofile_editor_runs_selection(app, tmp_path, monkeypatch):
+def test_dofile_editor_runs_selection(app, tmp_path):
     from PySide6.QtGui import QTextCursor
-    from PySide6.QtWidgets import QMessageBox
-
-    # a modal "Save changes?" box would block forever without a screen (macOS, Windows)
-    monkeypatch.setattr(QMessageBox, "question",
-                        lambda *a, **k: QMessageBox.StandardButton.Discard)
 
     from opendta.gui.main_window import MainWindow
 
