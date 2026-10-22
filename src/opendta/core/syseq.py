@@ -255,9 +255,10 @@ def rreg(X: np.ndarray, y: np.ndarray, *, tune: float = 7.0, tol: float = 0.01, 
     def scale(res):
         return float(np.median(np.abs(res - np.median(res)))) / 0.6745 or 1e-300
 
+    done = 0
     for kind in ("Huber", "Biweight"):
         c = huber_c if kind == "Huber" else tune
-        for it in range(1, maxit + 1):
+        for it in range(done + 1, done + maxit + 1):
             res = yk - Xk @ b
             u = res / scale(res)
             if kind == "Huber":
@@ -270,6 +271,7 @@ def rreg(X: np.ndarray, y: np.ndarray, *, tune: float = 7.0, tol: float = 0.01, 
             log.append((kind, it, diff))
             if diff < tol:
                 break
+        done = log[-1][1]
     res = yk - Xk @ b
     s = scale(res)
     u = res / s

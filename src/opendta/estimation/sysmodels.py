@@ -64,7 +64,7 @@ def cmd_constraint(s: "Session", args: str) -> None:
         wanted = _numlist(rest) if rest and rest != "_all" else sorted(cons)
         for n in sorted(wanted):
             if n in cons:
-                s.output.write(f"{n:>3}:  {cons[n]}\n", "text")   # VERIFY layout
+                s.output.write(f"{n:>6}:  {cons[n]}\n", "text")
         return
     if sub == "drop":
         if rest == "_all":
@@ -212,7 +212,8 @@ def cmd_cnsreg(s: "Session", args: str) -> None:
             row[k] = v
         R.append(row)
         r.append(rhs)
-        texts.append(cons[n])
+        from .postest import _ctext
+        texts.append(_ctext(fake, coef, rhs))
     R, r = np.array(R).reshape(-1, len(names)), np.array(r)
     beta, A, rk = syseq.restricted_ls(X, smp.y, w, R, r)
     resid = smp.y - X @ beta
@@ -265,19 +266,25 @@ def cmd_cnsreg(s: "Session", args: str) -> None:
     _display_cnsreg(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 
+def _flabel(df_m, df_r, w_m=3, w_r=10) -> str:
+    return f"F({int(df_m):>{w_m}},{int(df_r):>{w_r}})"
+
+
 def _display_cnsreg(s, est, *, header=True, table=True, level=None, **_kw) -> None:
     x = est.extra
     lev = level if level is not None else est.level
     if header:
-        right = [("Number of obs", comma(x["N"])),
-                 (f"F({int(x['df_m'])}, {int(x['df_r'])})", g(x["F"], "%10.2f")),
-                 ("Prob > F", g(st.f.sf(x["F"], x["df_m"], x["df_r"]) if x["F"] < SYS else SYS, "%10.4f")),
-                 ("Root MSE", sig5(x["rmse"]))]
-        _header(s, ["Constrained linear regression"], right)
-        for i, t in enumerate(est.cns_text, 1):   # VERIFY: Stata 14 lists the constraints here
+        out = s.output
+        pF = g(st.f.sf(x["F"], x["df_m"], x["df_r"]) if x["F"] < SYS else SYS, "%10.4f")
+        out.write("\n", "text")
+        for lft, lab, val in (("Constrained linear regression", "Number of obs", comma(x["N"])),
+                              ("", _flabel(x["df_m"], x["df_r"], 4, 7), g(x["F"], "%10.2f")),
+                              ("", "Prob > F", pF), ("", "Root MSE", sig5(x["rmse"]))):
+            out.write(f"{lft:<48}{lab:<18}= ", "text")
+            out.write(f"{val:>10}\n", "result")
+        out.write("\n", "text")
+        for i, t in enumerate(est.cns_text, 1):
             s.output.write(f" ({i:>2})  {t}\n", "text")
-        if est.cns_text:
-            s.output.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=lev)
 
@@ -292,7 +299,7 @@ def cmd_eivreg(s: "Session", args: str) -> None:
         replay(s, "eivreg", args)
         return
     from .regress import Sample, wexp_macros
-    smp = Sample(s, args, opts_spec={"reliab": 3, "noheader": 6, "notable": 5}, weights=("aweight", "fweight"))
+    smp = Sample(s, args, opts_spec={"reliab": 1, "noheader": 6, "notable": 5}, weights=("aweight", "fweight"))
     o = smp.o
     ds = s.data
     est_cols = [c for c in smp.cols if c.values is not None]
@@ -341,7 +348,10 @@ def cmd_eivreg(s: "Session", args: str) -> None:
     sl = list(range(p))
     F = float(beta @ np.linalg.solve(V[np.ix_(sl, sl)], beta)) / p if p else SYS
     rmse = float(np.sqrt(rss / df_r)) if df_r > 0 else SYS
-    est.extra = {"N": N, "df_m": p, "df_r": df_r, "F": F, "r2": r2, "rmse": rmse}
+    relrows = [(c.name, float(rel[i])) for i, c in enumerate(est_cols) if o.get("reliab") and rel[i] != 1.0 or False]
+    if len(relrows) < len(est_cols):
+        relrows.append(("*", 1.0))
+    est.extra = {"N": N, "df_m": p, "df_r": df_r, "F": F, "r2": r2, "rmse": rmse, "rel": relrows}
     est.display = _display_eivreg
     scalars = [("N", N), ("df_m", p), ("df_r", df_r), ("F", F), ("r2", r2), ("rmse", rmse)]
     macros = [("cmdline", cmdline("eivreg", args)), ("title", "Errors-in-variables regression"),
@@ -355,12 +365,26 @@ def _display_eivreg(s, est, *, header=True, table=True, level=None, **_kw) -> No
     x = est.extra
     lev = level if level is not None else est.level
     if header:
-        # VERIFY: layout of the header
-        right = [("Number of obs", comma(x["N"])),
-                 (f"F({int(x['df_m'])}, {int(x['df_r'])})", g(x["F"], "%10.2f")),
+        out = s.output
+        left = [" " * 19 + "assumed", "    variable     reliability", "-" * 28]
+        left += [f"{nm:>12}{v:>13.4f}" for nm, v in x["rel"]]
+        right = [("", ""), ("", ""), ("Number of obs", comma(x["N"])),
+                 (_flabel(x["df_m"], x["df_r"], 3, 10), g(x["F"], "%10.2f")),
                  ("Prob > F", g(st.f.sf(x["F"], x["df_m"], x["df_r"]) if x["F"] < SYS else SYS, "%10.4f")),
                  ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))]
-        _header(s, ["Errors-in-variables regression"], right)
+        out.write("\n", "text")
+        out.write(f"{left[0]:<48}Errors-in-variables regression\n", "text")
+        left, right = left[1:], right[1:]
+        m = max(len(left), len(right))
+        left += [""] * (m - len(left))
+        right += [("", "")] * (m - len(right))
+        for lft, (rl, rv) in zip(left, right):
+            if rl:
+                out.write(f"{lft:<48}{rl:<18}= ", "text")
+                out.write(f"{rv:>10}\n", "result")
+            else:
+                out.write(lft + "\n", "text")
+        out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=lev)
 
@@ -405,7 +429,7 @@ def cmd_vwls(s: "Session", args: str) -> None:
     semap = {c.name: float(np.sqrt(max(V_full[i, i], 0))) for i, c in enumerate(smp.cols)}
     if smp.constant:
         bmap["_cons"], semap["_cons"] = b_full[-1], float(np.sqrt(max(V_full[-1, -1], 0)))
-    est = Estimates("vwls", smp.depname, names_full, b_full, V_full, smp.n, "t", df_gof)   # VERIFY t vs z
+    est = Estimates("vwls", smp.depname, names_full, b_full, V_full, smp.n, "z", None)
     est.rows = rows_from_columns(smp.cols, bmap, semap, ds, constant=smp.constant)
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level, est.vcetype, est.clustvar, est.n_clust = smp.level, "", "", None
@@ -429,14 +453,13 @@ def _display_vwls(s, est, *, header=True, table=True, level=None, **_kw) -> None
         out.write(f"{comma(x['N']):>10}\n", "result")
         p_gof = chi2_tail(x["chi2_gof"], x["df_gof"])
         p_m = chi2_tail(x["chi2"], x["df_m"]) if x["df_m"] else SYS
-        # VERIFY: layout of the header
-        out.write(f"{'Goodness-of-fit chi2(' + str(int(x['df_gof'])) + ')':<24}= {g(x['chi2_gof'], '%9.2f'):>9}"
-                  f"{'':<14}{'Model chi2(' + str(int(x['df_m'])) + ')':<18}= {g(x['chi2'], '%10.2f'):>10}\n", "text")
-        out.write(f"{'Prob > chi2':<24}= {g(p_gof, '%9.4f'):>9}{'':<14}{'Prob > chi2':<18}= {g(p_m, '%10.4f'):>10}\n",
-                  "text")
-        out.write("\n", "text")
+        lab = f"Goodness-of-fit chi2({int(x['df_gof'])})"
+        out.write(f"{lab:<27}={g(x['chi2_gof'], '%8.2f'):>8}".ljust(48)
+                  + f"{'Model chi2(' + str(int(x['df_m'])) + ')':<18}= {g(x['chi2'], '%10.2f'):>10}\n", "text")
+        out.write(f"{'Prob > chi2':<27}={g(p_gof, '%8.4f'):>8}".ljust(48)
+                  + f"{'Prob > chi2':<18}= {g(p_m, '%10.4f'):>10}\n", "text")
     if table:
-        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=lev)
+        coef_table(s, est.depvar, est.rows, stat="z", df=None, level=lev)
 
 
 # ---------------------------------------------------------------------------
@@ -652,9 +675,10 @@ def cmd_rreg(s: "Session", args: str) -> None:
     if ndrop:
         out.write(f"\n   Cook's D > 1 dropped {ndrop} observations\n", "text")   # VERIFY
     if not o.get("nolog"):
+        out.write("\n", "text")
         for kind, it, diff in log:
-            out.write(f"{kind:>8} iteration {it:>2}:  maximum difference in weights = {g(diff, '%9.0g').strip()}\n",
-                      "text")   # VERIFY
+            out.write(f"{kind:>8} iteration {it}:  maximum difference in weights = {g(diff, '%9.0g').strip()}\n",
+                      "text")
     if o.get("genwt"):
         from ..core.dataset import Variable
         name = str(o["genwt"]).strip()
@@ -700,7 +724,7 @@ def _display_rreg(s, est, *, header=True, table=True, level=None, **_kw) -> None
     lev = level if level is not None else est.level
     if header:
         right = [("Number of obs", comma(x["N"])),
-                 (f"F({int(x['df_m'])}, {int(x['df_r'])})", g(x["F"], "%10.2f")),
+                 (_flabel(x["df_m"], x["df_r"], 3, 10), g(x["F"], "%10.2f")),
                  ("Prob > F", g(st.f.sf(x["F"], x["df_m"], x["df_r"]) if x["F"] < SYS else SYS, "%10.4f"))]
         _header(s, ["Robust regression"], right)
     if table:
