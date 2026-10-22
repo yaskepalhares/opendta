@@ -10,7 +10,8 @@ ordinal) whose linear predictor holds the covariates and the latent variables:
 
 The likelihood integrates z out for every unit (an observation for observation-level latent
 variables, a cluster for M[id]) by Gauss-Hermite quadrature, adaptive by default
-(intmethod(mvaghermite), centered at the mode with the curvature there). Latent variables are
+(intmethod(mvaghermite): the points start at the mode with the curvature there and move to the
+posterior mean and covariance of each unit, as in melogit; mcaghermite stays at the mode). Latent variables are
 uncorrelated unless covariance() says otherwise; the first path of each latent variable is
 fixed at 1. The standard errors come from the numerical observed information.
 
@@ -432,6 +433,7 @@ class GModel:
             self.lphi = st.norm.logpdf(self.nodes).sum(axis=1)
         self.pm_cols = [np.column_stack(c) if c else None for c in self.gcols]
         self.z_cache = None
+        self.frozen = None      # mean-variance points held fixed (adapt_mv)
         self.anchors = first_seen
         self.n = len(P.name)
 
@@ -589,7 +591,9 @@ class GModel:
             return None, None, None
         _s, ldS = np.linalg.slogdet(S)
         pm = self.pm(th)
-        if self.adaptive:
+        if self.frozen is not None and self.frozen[0].shape == pm.shape:
+            z, C = self.frozen
+        elif self.adaptive:
             z0 = self.z_cache if (self.z_cache is not None and self.z_cache.shape == pm.shape) else pm
             z, Hn = self.mode(th, S, pm, z0)
             self.z_cache = z
@@ -600,6 +604,40 @@ class GModel:
         else:
             z = pm
             C = np.broadcast_to(L, (U, q, q))
+        return self._rule(th, z, C, pm, Sinv, ldS)
+
+    def adapt_mv(self, th) -> None:
+        """Mean-variance adaptation (intmethod(mvaghermite)), as melogit: from the mode and the
+        curvature, the points move to the posterior mean and covariance of each unit; they are
+        then held fixed while the derivatives of the next Newton step are computed."""
+        self.frozen = None
+        if not (self.q and self.adaptive and self.intmethod == "mvaghermite" and len(self.lw) > 1):
+            return
+        S = self.sigma(th)
+        Sinv = np.linalg.inv(S)
+        ldS = np.linalg.slogdet(S)[1]
+        pm = self.pm(th)
+        z0 = self.z_cache if (self.z_cache is not None and self.z_cache.shape == pm.shape) else pm
+        z, Hn = self.mode(th, S, pm, z0)
+        C = np.linalg.cholesky(np.linalg.inv(Hn))
+        lL, lg, Z = self._rule(th, z, C, pm, Sinv, ldS)
+        for _ in range(100):
+            pw = np.exp(lg - lL[:, None])
+            mu = np.einsum("uk,ukq->uq", pw, Z)
+            dev = Z - mu[:, None, :]
+            cov = np.einsum("uk,uki,ukj->uij", pw, dev, dev)
+            if not np.all(np.linalg.eigvalsh(cov) > 1e-12):
+                break
+            newC = np.linalg.cholesky(cov)
+            change = max(np.max(np.abs(mu - z)), np.max(np.abs(newC - C)))
+            z, C = mu, newC
+            lL, lg, Z = self._rule(th, z, C, pm, Sinv, ldS)
+            if change < 1e-12:
+                break
+        self.frozen = (z, C)
+
+    def _rule(self, th, z, C, pm, Sinv, ldS):
+        q = self.q
         Z = z[:, None, :] + np.einsum("uij,kj->uki", C, self.nodes)
         lf = self.lf_points(th, Z)
         d = Z - pm[:, None, :]
@@ -741,13 +779,16 @@ def fit(m: GModel, s, log: bool, maxiter: int):
     cur = -f(x)
     Hll = None
     for _ in range(8):
+        m.adapt_mv(x)
+        cur = -f(x)
         g = -gfun(x)
         Hll = _num_hess(lambda y: -gfun(y), x)                    # Hessian of ll
-        if np.max(np.abs(g)) < 1e-6 * (1 + abs(cur)):
-            break
         try:
             step = np.linalg.solve(-Hll + 1e-10 * np.eye(len(x)), g)
         except np.linalg.LinAlgError:
+            break
+        # stop when the Newton step promises no gain (the points have settled with the estimates)
+        if np.max(np.abs(g)) < 1e-6 * (1 + abs(cur)) and float(g @ step) < 1e-9:
             break
         t = 1.0
         for _h in range(20):
@@ -760,6 +801,7 @@ def fit(m: GModel, s, log: bool, maxiter: int):
         x, cur = x + t * step, new
         Hll = None
     if Hll is None:
+        m.adapt_mv(x)
         Hll = _num_hess(lambda y: -gfun(y), x)
     g = gfun(x)
     try:
