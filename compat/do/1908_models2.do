@@ -53,7 +53,7 @@ expand 3
 bysort id: gen byte alt = _n
 gen double price = round(1 + runiform()*2, .01)
 gen double qual = round(invnormal(runiform()), .01)
-gen double u = round(-.8*price + .5*qual + .3*inc*(alt==2) - .4*inc*(alt==3) - ln(-ln(runiform())), .001)
+gen double u = -.8*price + .5*qual + .3*inc*(alt==2) - .4*inc*(alt==3) - ln(-ln(runiform()))
 egen double umax = max(u), by(id)
 gen byte choice = u == umax
 egen byte rk = rank(u), by(id)
@@ -69,9 +69,9 @@ set seed 190802
 set obs 500
 gen double x1 = round(invnormal(runiform()), .01)
 gen double x2 = round(invnormal(runiform()), .01)
-gen double ua = round(.5*x1 - ln(-ln(runiform())), .001)
-gen double ub = round(.6*x2 - .4*x1 - ln(-ln(runiform())), .001)
-gen double uc = round(.3*x1 + .5*x2 - ln(-ln(runiform())), .001)
+gen double ua = .5*x1 - ln(-ln(runiform()))
+gen double ub = .6*x2 - .4*x1 - ln(-ln(runiform()))
+gen double uc = .3*x1 + .5*x2 - ln(-ln(runiform()))
 gen byte yy = 1 + (ub > ua & ub > uc) + 2*(uc > ua & uc > ub)
 capture noisily slogit yy x1 x2, dim(1)
 capture noisily mprobit yy x1 x2
