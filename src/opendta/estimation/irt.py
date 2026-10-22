@@ -29,7 +29,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .gsem import Eq, GModel, _g, _post, fit
+from .gsem import Eq, GModel, _g, _post, fit, lse
 from .results import Estimates, crit
 
 st = lazy("scipy.stats")
@@ -124,14 +124,14 @@ class Cat:
     def logp(self, th, z):
         A, C = self.AC(th)
         eta = z[:, :, None] * A + C
-        lse = special.logsumexp(eta, axis=2)
+        norm = lse(eta, axis=2)
         pick = np.take_along_axis(eta, self.yi[:, None, None], axis=2)[..., 0]
-        return pick - lse
+        return pick - norm
 
     def d12(self, th, z):
         A, C = self.AC(th)
         eta = z[:, None] * A + C
-        p = np.exp(eta - special.logsumexp(eta, axis=1)[:, None])
+        p = np.exp(eta - lse(eta, axis=1)[:, None])
         m1 = p @ A
         m2 = p @ (A * A)
         return A[self.yi] - m1, -(m2 - m1 * m1)
@@ -211,7 +211,7 @@ class Item:
             return np.vstack([cum[j] - cum[j + 1] for j in range(len(cum) - 1)])
         A, C = self.c.AC(th)
         eta = A[:, None] * t[None, :] + C[:, None]
-        return np.exp(eta - special.logsumexp(eta, axis=0)[None, :])
+        return np.exp(eta - lse(eta, axis=0)[None, :])
 
     def info(self, th, t):
         h = 1e-5

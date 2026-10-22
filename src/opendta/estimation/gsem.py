@@ -44,6 +44,22 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 
+
+def lse(a: np.ndarray, axis: int) -> np.ndarray:
+    """log(sum(exp(a))) along axis; scipy's logsumexp costs milliseconds per call on small arrays,
+    which dominates the quadrature."""
+    a = np.moveaxis(a, axis, 0)
+    # a reduction over a short axis is slow in numpy: a loop over its slices is much faster
+    m = a[0].copy()
+    for k in range(1, a.shape[0]):
+        np.maximum(m, a[k], out=m)
+    m = np.where(np.isfinite(m), m, 0.0)
+    s = np.zeros_like(m)
+    for k in range(a.shape[0]):
+        s += np.exp(a[k] - m)
+    with np.errstate(divide="ignore"):
+        return m + np.log(s)
+
 _FAMS = ("gaussian", "bernoulli", "binomial", "poisson", "nbinomial", "gamma", "ordinal")
 _DEFAULT_LINK = {"gaussian": "identity", "bernoulli": "logit", "binomial": "logit",
                  "poisson": "log", "nbinomial": "log", "gamma": "log", "ordinal": "logit"}
@@ -645,7 +661,7 @@ class GModel:
         lprior = -0.5 * (q * math.log(2 * math.pi) + ldS + quad)
         ldC = np.linalg.slogdet(C)[1]
         lg = lf + lprior - self.lphi[None, :] + ldC[:, None] + self.lw[None, :]
-        lL = special.logsumexp(lg, axis=1)
+        lL = lse(lg, axis=1)
         return lL, lg, Z
 
     def loglik(self, th) -> float:

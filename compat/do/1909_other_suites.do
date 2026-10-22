@@ -69,11 +69,14 @@ sort id, stable
 gen double x = round(invnormal(runiform()), .01)
 gen double l = round(invnormal(runiform()), .01)
 gen byte yb = runiform() < invlogit(-.4 + .8*x + re)
-gen double yo0 = .8*x + re + ln(runiform()/(1 - runiform()))
+gen double u1 = runiform()
+gen double yo0 = .8*x + re + ln(u1/(1 - u1))
 gen byte yo = (yo0 > -1) + (yo0 > .4) + (yo0 > 1.6)
 gen double mu = exp(.4 + .3*x)
 gen int yc = floor(ln(runiform())/ln(mu/(1 + mu)))
-gen double yg = round(-exp(.5 + .3*x)*ln(runiform()*runiform()), .01) + .01
+gen double u2 = runiform()
+gen double u3 = runiform()
+gen double yg = round(-exp(.5 + .3*x)*ln(u2*u3), .01) + .01
 gen byte b1 = runiform() < invlogit(.2 + 1*l)
 gen byte b2 = runiform() < invlogit(-.3 + 1.4*l)
 gen byte b3 = runiform() < invlogit(.5 + .8*l)
@@ -116,8 +119,11 @@ forvalues j = 1/6 {
     drop ug uh
 }
 forvalues j = 1/4 {
-    gen double s`j' = (.8 + .2*`j')*th + ln(runiform()/(1 - runiform()))
+    gen double us = runiform()
+    gen double s`j' = (.8 + .2*`j')*th + ln(us/(1 - us))
     gen byte r`j' = (s`j' > -1.6 + .2*`j') + (s`j' > -.2 + .2*`j') + (s`j' > 1.2 + .2*`j')
+    * dropped so that r1-r4 holds only the items
+    drop s`j' us
 }
 summarize q* g* r*
 capture noisily irt 1pl q1-q6, nolog
