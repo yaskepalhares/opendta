@@ -149,6 +149,18 @@ def cmd_gsem(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("irt", "irt")
+def cmd_irt(s: "Session", args: str) -> None:
+    from ..estimation.irt import cmd_irt as run
+    run(s, args)
+
+
+@command("irtgraph", "irtgraph")
+def cmd_irtgraph(s: "Session", args: str) -> None:
+    from ..estimation.irt import cmd_irtgraph as run
+    run(s, args)
+
+
 @command("irf", "irf")
 def cmd_irf(s: "Session", args: str) -> None:
     from ..estimation.irf import cmd_irf as run

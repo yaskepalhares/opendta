@@ -76,6 +76,7 @@ class Eq:
     noconst: bool = False
     offset: str | None = None
     exposure: str | None = None
+    irt: object = None             # builder(P, name, y, q) -> custom response (see irt.py)
 
 
 def _split_group(g: str):
@@ -251,6 +252,7 @@ class Resp:
     aux: list
     S: object = None                 # unit x rows indicator
     levels: np.ndarray | None = None
+    custom: object = None            # response with its own logp(th, z) and d12(th, z) (irt)
 
 
 class GModel:
@@ -335,6 +337,16 @@ class GModel:
                 off = off + ds.get(e.offset).data[sel].astype(float)
             if e.exposure:
                 off = off + np.log(ds.get(e.exposure).data[sel].astype(float))
+            if e.irt is not None:
+                if q != 1:
+                    raise StataError(198, "internal error: custom responses need one latent variable")
+                cust = e.irt(P, e.name, y)
+                r = Resp(e, idx, y, np.zeros((len(y), 0)), np.zeros(len(y)), None, 0, False, [],
+                         [(-2, 0.0)], [], custom=cust)
+                r.S = sparse.csr_matrix((np.ones(len(idx)), (self.unit[idx], np.arange(len(idx)))),
+                                        shape=(self.U, len(idx)))
+                resp_objs.append(r)
+                continue
             fam, naux, ordered, levels = self._family(e, y, sel, ds, _family, family_of, ordinal_family)
             if e.family in ("bernoulli",):
                 y = (y != 0).astype(float)
@@ -494,6 +506,10 @@ class GModel:
         K = Z.shape[1]
         lf = np.zeros((self.U, K))
         for r in self.resps:
+            if r.custom is not None:
+                l = r.custom.logp(th, Z[self.unit[r.idx], :, 0])
+                lf += r.S @ np.nan_to_num(l, nan=-np.inf)
+                continue
             xb, c, a = self._eta_parts(th, r)
             eta = xb[:, None] + (Z[self.unit[r.idx]] @ c if self.q else 0.0)
             if eta.ndim == 1 or eta.shape[1] != K:
@@ -512,6 +528,11 @@ class GModel:
         g = np.zeros((self.U, self.q))
         H = np.zeros((self.U, self.q * self.q))
         for r in self.resps:
+            if r.custom is not None:
+                l1, l2 = r.custom.d12(th, z[self.unit[r.idx], 0])
+                g += r.S @ l1[:, None]
+                H += r.S @ l2[:, None]
+                continue
             xb, c, a = self._eta_parts(th, r)
             eta = (xb + np.einsum("nq,q->n", z[self.unit[r.idx]], c))[:, None]
             _l, s1, s2 = r.fam(eta, a)
@@ -638,6 +659,8 @@ def _start(m: GModel, s, log):
     """Starting values: every response fitted alone without latent variables."""
     th = np.array(m.P.init, float)
     for r in m.resps:
+        if r.custom is not None:
+            continue
         free = [i for i, _v in r.xref if i >= 0]
         nx = len(r.xref)
         aux = r.aux
@@ -714,13 +737,16 @@ def fit(m: GModel, s, log: bool, maxiter: int):
     res = optimize.minimize(f, th, jac=gfun, method="BFGS", callback=cb,
                             options={"gtol": 1e-7, "maxiter": maxiter})
     x = res.x
-    # Newton polishing with the numerical Hessian
+    # Newton polishing with the numerical Hessian (one Hessian when BFGS has converged)
     cur = -f(x)
-    for _ in range(20):
+    Hll = None
+    for _ in range(8):
         g = -gfun(x)
-        H = _num_hess(lambda y: -gfun(y), x)                      # Hessian of ll
+        Hll = _num_hess(lambda y: -gfun(y), x)                    # Hessian of ll
+        if np.max(np.abs(g)) < 1e-6 * (1 + abs(cur)):
+            break
         try:
-            step = np.linalg.solve(-H + 1e-10 * np.eye(len(x)), g)
+            step = np.linalg.solve(-Hll + 1e-10 * np.eye(len(x)), g)
         except np.linalg.LinAlgError:
             break
         t = 1.0
@@ -731,13 +757,11 @@ def fit(m: GModel, s, log: bool, maxiter: int):
             t /= 2
         else:
             break
-        xn = x + t * step
-        d = new - cur
-        x, cur = xn, new
-        if abs(d) < 1e-11 * (1 + abs(cur)):
-            break
+        x, cur = x + t * step, new
+        Hll = None
+    if Hll is None:
+        Hll = _num_hess(lambda y: -gfun(y), x)
     g = gfun(x)
-    Hll = _num_hess(lambda y: -gfun(y), x)
     try:
         V = np.linalg.inv(-Hll)
         V = (V + V.T) / 2
@@ -811,7 +835,7 @@ def _report(m: GModel, th, V):
     return rep, D[:, None] * V * D[None, :]
 
 
-def _post(s, args, m: GModel, th, V, ll, conv, iters, level):
+def _post(s, args, m: GModel, th, V, ll, conv, iters, level, *, hook=None, quiet=False):
     rep, Vr = _report(m, th, V)
     P = m.P
     names, eqn, ix = [], [], []
@@ -821,8 +845,12 @@ def _post(s, args, m: GModel, th, V, ll, conv, iters, level):
             eqn.append(f"var(e.{e})")
             names.append("_cons")
         elif P.kind[i] in ("cut", "aux"):
-            eqn.append(f"/{nm}")
-            names.append("_cons")
+            if any(r.eq.name == e for r in m.resps):
+                eqn.append(e)
+                names.append(nm)
+            else:
+                eqn.append(f"/{nm}")
+                names.append("_cons")
         else:
             eqn.append(e)
             names.append(nm)
@@ -845,12 +873,15 @@ def _post(s, args, m: GModel, th, V, ll, conv, iters, level):
               ("vcetype", "OIM"), ("depvar", " ".join(resp_names)),
               ("intmethod", m.intmethod if m.q else ""), ("properties", "b V")]
     for k, r in enumerate(m.resps, 1):
-        macros.append((f"family{k}", r.eq.family))
-        macros.append((f"link{k}", r.eq.link))
+        macros.append((f"family{k}", r.eq.family or ""))
+        macros.append((f"link{k}", r.eq.link or ""))
     if m.q:
         scalars.insert(4, ("n_quad", float(m.nint)))
+    if hook is not None:
+        hook(est, scalars, macros)
     post(s, est, scalars, macros, m.sample)
-    display_gsem(s, est)
+    if not quiet:
+        est.display(s, est)
 
 
 def _g(x, fmt="%9.0g"):
@@ -858,6 +889,13 @@ def _g(x, fmt="%9.0g"):
     if x is None or not np.isfinite(x) or abs(x) >= SYS:
         return "."
     return format_value(float(x), fmt, pad=False).strip()
+
+
+def _auxlabel(m: GModel, i: int) -> str:
+    """/cut1 when one response has it, cut1:y when several do (VERIFY)."""
+    P = m.P
+    same = [j for j in range(len(P.name)) if P.name[j] == P.name[i] and P.kind[j] == P.kind[i]]
+    return f"/{P.name[i]}" if len(same) == 1 else f"{P.name[i]}:{P.eq[i]}"
 
 
 def _constraint_lines(m: GModel):
@@ -933,7 +971,7 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
         elif kd == "cov":
             labels.append(P.eq[i])
         elif kd in ("cut", "aux"):
-            labels.append(f"/{P.name[i]}")
+            labels.append(_auxlabel(m, i))
     W = max([12] + [len(lb) - 1 for lb in labels])
     dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
     out.write("-" * (W + 66) + "\n", "text")
@@ -1015,7 +1053,7 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
         if P.kind[i] == "gvar":
             row(f"var(e.{P.eq[i]})", rep[i], se[i], "var")
         else:
-            row(f"/{P.name[i]}", rep[i], se[i], "aux")
+            row(_auxlabel(m, i), rep[i], se[i], "aux")
     out.write("-" * (W + 66) + "\n", "text")
 
 
