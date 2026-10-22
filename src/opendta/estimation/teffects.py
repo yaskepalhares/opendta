@@ -320,7 +320,7 @@ def cmd_stteffects(s: "Session", args: str) -> None:
                  "ipwra": "IPW regression adjustment"}[sub]
     _post(s, "stteffects", sub, args, "_t", tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o,
           title="Survival treatment-effects estimation", est_title=est_title,
-          omodel_txt=(smodel.capitalize() if smodel != "lognormal" else "lognormal") if sub != "ipw" else "weighted mean",  # VERIFY lognormal label
+          omodel_txt=("Weibull" if smodel == "weibull" else smodel) if sub != "ipw" else "weighted mean",  # VERIFY lognormal label
           tmodel_txt=tmodel if sub != "ra" else "none", cens="none")
 
 
