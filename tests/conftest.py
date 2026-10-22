@@ -53,3 +53,11 @@ def english_interface():
     yield
     i18n.set_language("en")
     i18n.set_messages("stata")
+
+
+def pytest_runtest_logreport(report):
+    """In CI, each failing test becomes an annotation (the job logs cannot always be read)."""
+    import os
+    if report.failed and os.environ.get("GITHUB_ACTIONS"):
+        msg = str(report.longrepr).splitlines()[-12:]
+        print(f"\n::error title=pytest {report.nodeid}::" + "%0A".join(m.replace("%", "%25") for m in msg))
