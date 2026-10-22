@@ -33,7 +33,8 @@ if TYPE_CHECKING:
 SYS = M.SYSMISS
 
 _TITLES = {"regress": "Linear regression", "logit": "Logistic regression", "logistic": "Logistic regression",
-           "probit": "Probit regression", "poisson": "Poisson regression"}
+           "probit": "Probit regression", "poisson": "Poisson regression",
+           "cloglog": "Complementary log-log regression"}
 
 
 def g(x, fmt):
@@ -97,14 +98,18 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
             r2_ = 1 - float(wv @ e ** 2) / float(wv @ ((y - ybar) ** 2 * inside))
             return b_, Z_, {"r2": r2_}
         from .ml import maximize
-        from .models import _logit, _poisson, _probit
-        if cmd in ("logit", "logistic", "probit"):
+        from .models import _cloglog, _logit, _poisson, _probit
+        if cmd in ("logit", "logistic", "probit", "cloglog"):
             yb = (y != 0).astype(float)
-            fun, scores = (_probit if cmd == "probit" else _logit)(yb, X, wv)
+            if cmd == "cloglog":
+                fun, scores = _cloglog(yb, X, wv, np.zeros(n))
+            else:
+                fun, scores = (_probit if cmd == "probit" else _logit)(yb, X, wv)
             p0 = float(wv @ yb) / wv.sum()
             b0 = np.zeros(k)
             if smp.constant:
-                b0[-1] = np.log(p0 / (1 - p0)) if cmd != "probit" else st.norm.ppf(p0)
+                b0[-1] = (np.log(p0 / (1 - p0)) if cmd == "logit" or cmd == "logistic"
+                          else np.log(-np.log(1 - p0)) if cmd == "cloglog" else st.norm.ppf(p0))
         else:
             fun, scores = _poisson(y, X, wv, np.zeros(n))
             b0 = np.zeros(k)

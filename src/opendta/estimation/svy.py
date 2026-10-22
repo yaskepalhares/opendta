@@ -754,6 +754,13 @@ def cmd_svydescribe(s: "Session", args: str) -> None:
 # prefixo svy:
 # ---------------------------------------------------------------------------
 
+# estimators run with the design weights and a design variance (svy_generic)
+_GENERIC = ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit", "intreg", "truncreg",
+            "heckman", "zip", "zinb", "ztp", "ztnb", "gnbreg", "hetprobit", "cnreg", "slogit",
+            "ivregress", "ivprobit", "biprobit", "treatreg", "fracreg", "hetregress", "heckprobit",
+            "scobit", "clogit", "ivtobit", "betareg", "ologit", "mprobit")
+
+
 def cmd_svy(s: "Session", args: str) -> None:
     """svy [, subpop() vce()]: comando"""
     head, colon, cmdtext = args.partition(":")
@@ -769,11 +776,11 @@ def cmd_svy(s: "Session", args: str) -> None:
         from .summaries import summary_stat
         summary_stat(s, name, rest, engine=lambda s_, req: SurveyEngine(s_, req, opts))
         return
-    if name in ("regress", "logit", "logistic", "probit", "poisson"):
+    if name in ("regress", "logit", "logistic", "probit", "poisson", "cloglog"):
         from .svyreg import svy_model
         svy_model(s, name, rest, opts)
         return
-    if name in ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit"):
+    if name in _GENERIC:
         from .svyreg import svy_generic
         svy_generic(s, name, rest, opts)
         return
