@@ -53,6 +53,14 @@ def _setup(s, args, spec):
     return pr, pr.y, t, main, trt, tname, o
 
 
+def _label_trt(est, tname: str) -> None:
+    """The maximum-likelihood tables name the treatment indicator in the outcome equation 1.t."""
+    for r in est.rows:
+        if r.kind == "coef" and r.label == tname:
+            r.label = f"1.{tname}"
+            break
+
+
 def cmd_etregress(s: "Session", args: str) -> None:
     if _replay(s, "etregress", args):
         return
@@ -93,11 +101,11 @@ def cmd_etregress(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left_ = [est.title, "Estimator: maximum likelihood", "", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g'):>9}"]
-        right = [("Number of obs", comma(x["N"])), ("", ""), ("", ""), ("", ""),
+        left_ = [est.title, "Estimator: maximum likelihood", f"{lab(est)} = {g(x['ll'], '%10.0g').strip():>9}"]
+        right = [("Number of obs", comma(x["N"])),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
-        return left_, right   # VERIFY layout
+        return left_, right
 
     def footer(s_, est):
         if pr.robust:
@@ -115,6 +123,7 @@ def cmd_etregress(s: "Session", args: str) -> None:
                        predict_opts={"xbtrt": 4, "ptrt": 4})
     est.predict = make_predict(_predict, "xb")
     est.pred_label = "fitted values"
+    _label_trt(est, tname)
     display_eq(s, est)
 
 
@@ -168,10 +177,16 @@ def _twostep(s, args, pr, y, t, main, trt, tname):
 
     def hdr(est):
         x = est.extra
-        left_ = ["Linear regression with endogenous treatment", "Estimator: two-step", "", "", ""]
-        right = [("Number of obs", comma(x["N"])), ("", ""), ("", ""), ("", ""),
-                 (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")), ("Prob > chi2", g(x["p"], "%10.4f"))]
-        return left_, right   # VERIFY layout
+        def write(s_):
+            o_ = s_.output
+            o_.write("\n", "text")
+            for lft, lb, val in (("Linear regression with endogenous treatment", "Number of obs", comma(x["N"])),
+                                 ("Estimator: two-step", f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
+                                 ("", "Prob > chi2", g(x["p"], "%10.4f"))):
+                o_.write(f"{lft:<48}{lb:<19}=", "text")
+                o_.write(f"{val:>10}\n", "result")
+            o_.write("\n", "text")
+        return write
 
     eng = Engine(lambda e_, th: (np.zeros(n), [np.zeros(n)], None), [main], np.ones(n), 0)
     order = (["N", "df_m", "chi2", "p", "rho", "sigma", "lambda"],
@@ -179,7 +194,7 @@ def _twostep(s, args, pr, y, t, main, trt, tname):
     est = finish_model(s, pr, "etregress", args, title="Linear regression with endogenous treatment",
                        blocks=[main, trt], eng=eng, res=res, V=V_all, n_clust=None, ll0=SYS,
                        aux_names=[("hazard", "lambda")], aux_rows_fn=aux_rows, hdr_fn=hdr, depvar_cell="",
-                       wald=True, k_eq=3, test_idx=list(range(main.nslopes)), order=order,
+                       wald=True, k_eq=3, test_idx=list(range(main.nslopes)) + [main.k + trt.k], order=order,
                        extra_scalars=[("rho", rho), ("sigma", sig), ("lambda", theta)],
                        predict_opts={"xbtrt": 4, "ptrt": 4})
     est.predict = make_predict(_predict, "xb")
@@ -192,7 +207,7 @@ def cmd_etpoisson(s: "Session", args: str) -> None:
         return
     pr, y, t, main, trt, tname, o = _setup(s, args, {"treat": 3, "intpoints": 3})
     w = pr.w
-    K = int(o["intpoints"]) if o.get("intpoints") else 32
+    K = int(o["intpoints"]) if o.get("intpoints") else 24
     if np.any(y < 0) or np.any(y != np.round(y)):
         raise StataError(459, f"{pr.smp.depname} must be a nonnegative integer")   # VERIFY wording
 
@@ -221,11 +236,11 @@ def cmd_etpoisson(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        left_ = [est.title, "", "", "", "", f"{lab(est)} = {g(x['ll'], '%9.0g'):>9}"]
-        right = [("Number of obs", comma(x["N"])), ("", ""), ("", ""), ("", ""),
+        left_ = [est.title, f"({K} quadrature points)", f"{lab(est)} = {g(x['ll'], '%10.0g').strip():>9}"]
+        right = [("Number of obs", comma(x["N"])),
                  (f"{x['chi2type']} chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
-        return left_, right   # VERIFY layout
+        return left_, right
 
     def footer(s_, est):
         s_.output.write(f"Wald test of indep. eqns. (rho = 0): chi2(1) = {w_rho:8.2f}   Prob > chi2 = {p_w:6.4f}\n", "text")
@@ -239,4 +254,5 @@ def cmd_etpoisson(s: "Session", args: str) -> None:
                        predict_opts={"xbtrt": 4, "ptrt": 4})
     est.predict = make_predict(_predict, "xb")
     est.pred_label = "linear prediction"
+    _label_trt(est, tname)
     display_eq(s, est)
