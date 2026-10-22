@@ -63,11 +63,13 @@ class ThreePL:
         self.ig = P.add(name, "Guess", -2.0, "aux", label="_g_3pl" if shared else None)
 
     def logp(self, th, z):
-        a, c, g = th[self.ia], th[self.ic], float(special.expit(th[self.ig]))
+        a, c, lg = th[self.ia], th[self.ic], th[self.ig]
         u = a * z + c
         y = self.y[:, None]
-        l1 = np.log(g + (1 - g) * special.expit(u))
-        l0 = math.log(1 - g) + special.log_expit(-u)
+        # in logs, so that a guessing parameter near 0 or 1 does not overflow
+        lgu, lgd = float(special.log_expit(lg)), float(special.log_expit(-lg))
+        l1 = np.logaddexp(lgu, lgd + special.log_expit(u))
+        l0 = lgd + special.log_expit(-u)
         return np.where(y, l1, l0)
 
     def d12(self, th, z):
