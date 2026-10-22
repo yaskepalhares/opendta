@@ -367,7 +367,7 @@ def _display_eivreg(s, est, *, header=True, table=True, level=None, **_kw) -> No
         right = [("", ""), ("", ""), ("Number of obs", comma(x["N"])),
                  (_flabel(x["df_m"], x["df_r"], 3, 10), g(x["F"], "%10.2f")),
                  ("Prob > F", g(st.f.sf(x["F"], x["df_m"], x["df_r"]) if x["F"] < SYS else SYS, "%10.4f")),
-                 ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))]
+                 ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", g(x["rmse"], "%8.0g"))]
         out.write("\n", "text")
         out.write(f"{left[0]:<48}Errors-in-variables regression\n", "text")
         left, right = left[1:], right[1:]

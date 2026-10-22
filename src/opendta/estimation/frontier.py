@@ -155,7 +155,7 @@ def cmd_frontier(s: "Session", args: str) -> None:
         return left, right
 
     def footer(s_, est):
-        s_.output.write(f"Likelihood-ratio test of sigma_u=0: chibar2(01) = {lr:.2f}"
+        s_.output.write(f"Likelihood-ratio test of sigma_u=0: chibar2(01) = {lr:<5.2f}"
                         f"  Prob>=chibar2 = {p_lr:.3f}\n", "text")
 
     names = [("lnsig2v", "_cons"), ("lnsig2u", "_cons")] + ([("mu", "_cons")] if dist == "tnormal" else [])

@@ -100,7 +100,7 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
         if not iterate:
             bs = bs_new
             break
-        if it > 1:                       # the first GLS step is not an iteration (Stata's log starts at its change)
+        if True:                         # Stata's log counts the step from the OLS fit
             delta = max(float(np.max(np.abs(a - c)) / max(1.0, np.max(np.abs(c)))) for a, c in zip(bs_new, bs))
             trace.append(delta)
             if delta < tol:
