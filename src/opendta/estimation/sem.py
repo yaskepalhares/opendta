@@ -62,6 +62,7 @@ class Spec:
     fixed: dict[tuple[str, str], float] = field(default_factory=dict)  # path -> value (@#)
     covs: list[tuple[str, str]] = field(default_factory=list)        # extra covariances (e.x or x)
     var_fixed: dict[str, float] = field(default_factory=dict)
+    labels: dict[tuple[str, str], str] = field(default_factory=dict)   # path -> symbolic label (@name)
 
     def all(self) -> list[str]:
         return self.observed + self.latent
@@ -82,9 +83,16 @@ def _parse_paths(s: "Session", text: str, latent_opt: set[str], nocaps: bool) ->
     if not groups:
         raise StataError(198, "no paths specified")   # VERIFY
 
-    def resolve(tok: str) -> list[tuple[str, float | None]]:
+    def resolve(tok: str) -> list[tuple[str, float | str | None]]:
         name, at, val = tok.partition("@")
-        fixed = float(val) if at else None
+        fixed: float | str | None = None
+        if at:
+            try:
+                fixed = float(val)
+            except ValueError:
+                if not re.fullmatch(r"[A-Za-z_]\w*", val):
+                    raise StataError(198, f"invalid constraint label {val}")   # VERIFY
+                fixed = val
         if _is_latent(name, latent_opt, nocaps):
             if not re.fullmatch(r"[A-Za-z_]\w*", name):
                 raise StataError(198, f"{name} invalid name")
@@ -116,7 +124,9 @@ def _parse_paths(s: "Session", text: str, latent_opt: set[str], nocaps: bool) ->
                     if (a, b) not in spec.paths:
                         spec.paths.append((a, b))
                     fv = fa if fa is not None else fb
-                    if fv is not None:
+                    if isinstance(fv, str):
+                        spec.labels[(a, b)] = fv
+                    elif fv is not None:
                         spec.fixed[(a, b)] = fv
     return spec
 
@@ -126,8 +136,10 @@ def _parse_paths(s: "Session", text: str, latent_opt: set[str], nocaps: bool) ->
 # ---------------------------------------------------------------------------
 
 class Model:
-    def __init__(self, spec: Spec, covs: list[tuple[str, str]], var_fix: dict[str, float]):
+    def __init__(self, spec: Spec, covs: list[tuple[str, str]], var_fix: dict[str, float],
+                 latent_means: tuple[str, ...] = ()):
         self.spec = spec
+        self.covs_in = list(covs)
         self.names = spec.all()
         self.p = len(spec.observed)
         self.k = len(self.names)
@@ -160,6 +172,10 @@ class Model:
         # means/intercepts: endogenous observed (intercept), exogenous observed (mean)
         for n in spec.observed:
             self.free.append(("mean", n, n))
+        # means (exogenous) or intercepts (endogenous) of latent variables: only in the groups
+        # other than the first of a multiple-group model (the first group anchors them at 0)
+        for n in latent_means:
+            self.free.append(("mean", n, n))
         # variances
         for n in self.names:
             if n in var_fix:
@@ -179,6 +195,9 @@ class Model:
                 self.free.append(key)
         self.nfree = len(self.free)
         self.hidden: set = set()
+        # paths that share a symbolic label (@name) are constrained equal
+        self.ties: dict[tuple[str, str, str], str] = {
+            ("path", a, b): lab for (a, b), lab in spec.labels.items() if ("path", a, b) in set(self.free)}
 
     # implied moments -------------------------------------------------------
     def matrices(self, theta: np.ndarray):
@@ -225,18 +244,15 @@ def _loglik(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, 
     return float(-0.5 * N * (p * math.log(2 * math.pi) + logdet + np.trace(cov @ Si) + d @ Si @ d))
 
 
-def _grad(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, N: float) -> np.ndarray:
-    """Analytic gradient of the log likelihood: dll/dmu = N Si d and
-    dll/dSigma = -N/2 (Si - Si (S + d d') Si), chained through the exact derivatives of the
-    implied moments (dB = B dA B, dSv = dB S B' + B S dB' + B dS B', dmv = dB m + B dm)."""
+def _dmoments(model: Model, theta: np.ndarray):
+    """Implied mean and covariance of the observed variables and, for each free parameter, the
+    derivative of the mean (or None) and of the covariance (or None) of the observed variables,
+    from the exact derivatives of the implied moments (dB = B dA B, dSv = dB S B' + B S dB' +
+    B dS B', dmv = dB m + B dm)."""
     mu, Sig, (A, S, m, B, Sv, mv) = model.implied(theta)
     p = model.p
-    Si = np.linalg.inv(Sig)
-    d = mean - mu
-    gmu = N * Si @ d
-    G = -0.5 * N * (Si - Si @ (cov + np.outer(d, d)) @ Si)
-    out = np.zeros(len(theta))
-    for k, (kind, a, b) in enumerate(model.free):
+    out = []
+    for kind, a, b in model.free:
         ia, ib = model.idx[a], model.idx[b]
         if kind == "path":
             dB = np.outer(B[:, ib], B[ia, :])
@@ -251,13 +267,52 @@ def _grad(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, N:
             E[ia, ib] = E[ib, ia] = 1.0
             dSv = B @ E @ B.T
             dmv = None
+        out.append((None if dmv is None else dmv[:p], None if dSv is None else dSv[:p, :p]))
+    return mu, Sig, out
+
+
+def _grad_blocks(model: Model, theta: np.ndarray, pats) -> np.ndarray:
+    """Analytic gradient of the log likelihood of the pattern summaries `pats`: for each pattern,
+    dll/dmu = n Si d and dll/dSigma = -n/2 (Si - Si (S + d d') Si) on the pattern's rows and
+    columns, chained through the derivatives of the implied moments."""
+    mu, Sig, dm = _dmoments(model, theta)
+    p = model.p
+    gmu = np.zeros(p)
+    G = np.zeros((p, p))
+    for q in pats:
+        o = q.idx
+        Si = np.linalg.inv(Sig[np.ix_(o, o)])
+        d = q.mean - mu[o]
+        gmu[o] += q.n * Si @ d
+        G[np.ix_(o, o)] += -0.5 * q.n * (Si - Si @ (q.cov + np.outer(d, d)) @ Si)
+    out = np.zeros(len(theta))
+    for k, (dmv, dSv) in enumerate(dm):
         g = 0.0
         if dmv is not None:
-            g += float(gmu @ dmv[:p])
+            g += float(gmu @ dmv)
         if dSv is not None:
-            g += float((G * dSv[:p, :p]).sum())
+            g += float((G * dSv).sum())
         out[k] = g
     return out
+
+
+def _loglik_blocks(model: Model, theta: np.ndarray, pats) -> float:
+    from ..core import mvnmiss
+    try:
+        mu, Sig, _ = model.implied(theta)
+        return mvnmiss.loglik(pats, mu, Sig)
+    except np.linalg.LinAlgError:
+        return -np.inf
+
+
+def _complete_pattern(model: Model, mean: np.ndarray, cov: np.ndarray, N: float):
+    from ..core.mvnmiss import Pattern
+    return [Pattern(np.arange(model.p), np.zeros(0, dtype=int), N, mean, cov)]
+
+
+def _grad(model: Model, theta: np.ndarray, mean: np.ndarray, cov: np.ndarray, N: float) -> np.ndarray:
+    """Analytic gradient of the log likelihood from the sample mean and covariance."""
+    return _grad_blocks(model, theta, _complete_pattern(model, mean, cov, N))
 
 
 def _start(model: Model, mean: np.ndarray, cov: np.ndarray) -> np.ndarray:
@@ -271,7 +326,7 @@ def _start(model: Model, mean: np.ndarray, cov: np.ndarray) -> np.ndarray:
         if kind == "path":
             th.append(1.0 if a in model.spec.latent and b in model.spec.observed else 0.0)
         elif kind == "mean":
-            th.append(float(mean[io[a]]))
+            th.append(float(mean[io[a]]) if a in io else 0.0)
         elif kind == "var":
             if a in io:
                 v = float(cov[io[a], io[a]])
@@ -350,12 +405,7 @@ def _fit(model: Model, mean, cov, N, s: "Session", log: bool, maxiter: int = 300
 # command
 # ---------------------------------------------------------------------------
 
-def cmd_sem(s: "Session", args: str) -> None:
-    from .postest import replay
-    if not args.strip() or args.strip().startswith(","):
-        replay(s, "sem", args)
-        return
-    from ..commands._util import touse
+def _parse_options(args: str):
     c = find_top(args, ",")
     head, opts = (args, "") if c == -1 else (args[:c], args[c + 1:])
     # if/in after the paths
@@ -365,10 +415,22 @@ def cmd_sem(s: "Session", args: str) -> None:
     o = match_options(p.options, {"standardized": 5, "method": 4, "nocapslatent": 9, "latent": 4,
                                   "covariance": 3, "variance": 3, "nolog": 4, "log": 3,
                                   "level": 1, "iterate": 4, "noheader": 6, "nodescribe": 6,
-                                  "nofootnote": 7, "coeflegend": 5})
+                                  "nofootnote": 7, "coeflegend": 5, "noxconditional": 3,
+                                  "allmissing": 3, "group": 5, "ginvariant": 2})
+    return paths_text, p, o
+
+
+def cmd_sem(s: "Session", args: str) -> None:
+    from .postest import replay
+    if not args.strip() or args.strip().startswith(","):
+        replay(s, "sem", args)
+        return
+    from ..commands._util import touse
+    from . import semfit
+    paths_text, p, o = _parse_options(args)
     meth = str(o.get("method") or "ml").strip().lower()
-    if meth != "ml":
-        raise StataError(198, f"method({meth}) not available; OpenDTA fits sem by ML")   # OpenDTA
+    if meth not in ("ml", "mlmv", "adf"):
+        raise StataError(198, f"method({meth}) not allowed")   # VERIFY
     latent_opt = set(str(o["latent"]).split()) if isinstance(o.get("latent"), str) else set()
     spec = _parse_paths(s, paths_text, latent_opt, bool(o.get("nocapslatent")))
     covs = []
@@ -382,39 +444,108 @@ def cmd_sem(s: "Session", args: str) -> None:
         name, at, val = item.partition("@")
         if at:
             var_fix[name.replace("e.", "")] = float(val)
-    model = Model(spec, covs, var_fix)
     ds = s.data
     mask = touse(s, p)
-    for n in spec.observed:
-        mask &= ds.get(n).data < SYS
-    N = int(mask.sum())
-    if N == 0:
+    cols = [ds.get(n).data for n in spec.observed]
+    for c in cols:
+        if c.dtype.kind in "OU":
+            raise StataError(109, "type mismatch")
+    if meth == "mlmv":
+        # observations with extended missing values (.a to .z) are dropped unless allmissing
+        if not o.get("allmissing"):
+            for c in cols:
+                mask &= ~(c > SYS)
+        nonmiss = np.zeros(len(mask), dtype=bool)
+        for c in cols:
+            nonmiss |= c < SYS
+        mask &= nonmiss
+    else:
+        for c in cols:
+            mask &= c < SYS
+    gname = None
+    levels = [None]
+    if o.get("group"):
+        gname = str(o["group"]).strip()
+        if not ds.has(gname):
+            raise StataError(111, f"variable {gname} not found")
+        gcol = ds.get(gname)
+        if gcol.is_string:
+            raise StataError(109, "type mismatch")
+        mask &= gcol.data < SYS
+        levels = [float(v) for v in np.unique(gcol.data[mask])]
+        if len(levels) < 2:
+            raise StataError(498, "group() requires at least two groups")   # VERIFY
+    elif o.get("ginvariant"):
+        raise StataError(198, "option ginvariant() requires option group()")   # VERIFY
+    if not mask.any():
         raise StataError(2000, "no observations")
-    X = np.column_stack([ds.get(n).data[mask].astype(float) for n in spec.observed])
-    mean = X.mean(axis=0)
-    D = X - mean
-    cov = D.T @ D / N
+    G = len(levels)
+    inv = semfit.parse_ginvariant(o.get("ginvariant") if G > 1 else None)
+    # the models: observed exogenous variables are conditioned on (Stata 14's xconditional)
+    # unless the moments of one of them are constrained, noxconditional is given, or method(mlmv)
+    # has missing values among them; method(adf) always uses all moments (VERIFY)
+    X_all = np.column_stack([c.astype(float) for c in cols])
+    X_all = np.where(np.column_stack([c >= SYS for c in cols]), np.nan, X_all)
+    models, datas = [], []
+    for g, lev in enumerate(levels):
+        mg = mask if gname is None else (mask & (ds.get(gname).data == lev))
+        Xg = X_all[mg]
+        lat_means: tuple[str, ...] = ()
+        if g > 0 and "mcons" in inv:
+            base = Model(spec, covs, var_fix)
+            lat_means = tuple(L for L in spec.latent
+                              if not (L in base.exog and "meanex" in inv)
+                              and not (L in base.endog and "scons" in inv))
+        models.append(Model(spec, covs, var_fix, lat_means))
+        datas.append(semfit.build_group_data(models[-1], Xg, meth, float(lev) if lev is not None else 0.0))
+    model = models[0]
+    N = sum(d.N for d in datas)
     pobs = model.p
-    df = pobs * (pobs + 3) // 2 - model.nfree
+    prob = semfit.Problem(models, datas, meth, inv)
+    df_s = pobs * (pobs + 3) // 2
+    df = G * df_s - prob.nglob
     level = float(o["level"]) if o.get("level") else float(s.settings.get("level", "95"))
     if not o.get("nodescribe"):
         _describe_vars(s, model)
     if df < 0:
         raise StataError(503, "the model is not identified: more parameters than "
                               "moments")   # VERIFY
-    th, ll, V, conv = _fit(model, mean, cov, N, s, not o.get("nolog"))
-    ll_s = float(-0.5 * N * (pobs * math.log(2 * math.pi) + np.linalg.slogdet(cov)[1] + pobs))
-    chi2_ms = max(2 * (ll_s - ll), 0.0)
+    th, obj, V, conv = semfit.fit_problem(prob, s, not o.get("nolog"))
+    ll_s = sum(d.ll_s for d in datas)
+    ll_b = sum(d.ll_b for d in datas)
+    ex_n = sum(1 for n in spec.observed if n in model.exog) if baseline_ex_correlated(model) else 0
+    df_bs = G * df_s - G * (2 * pobs + ex_n * (ex_n - 1) // 2)
+    if meth == "adf":
+        ll = SYS
+        chi2_ms = max(-obj, 0.0)
+        chi2_bs = sum(d.N * d.adf["F_b"] for d in datas)
+    else:
+        ll = obj
+        chi2_ms = max(2 * (ll_s - ll), 0.0)
+        chi2_bs = max(2 * (ll_s - ll_b), 0.0)
     p_ms = float(st.chi2.sf(chi2_ms, df)) if df > 0 else SYS
-    base_ll, df_bs = _baseline(model, mean, cov, N)
-    chi2_bs = max(2 * (ll_s - base_ll), 0.0)
     p_bs = float(st.chi2.sf(chi2_bs, df_bs)) if df_bs > 0 else SYS
+    mean, cov = datas[0].mean, datas[0].cov
+    base_ll = ll_b
+    if G > 1:
+        from .semgroup import finish_groups
+        finish_groups(s, args, prob, spec, th, obj, V, conv, o, dict(
+            N=N, ll=ll, df=df, chi2_ms=chi2_ms, p_ms=p_ms, chi2_bs=chi2_bs, df_bs=df_bs, p_bs=p_bs,
+            ll_s=ll_s, ll_b=ll_b, level=level, mask=mask, gname=gname, levels=levels, meth=meth))
+        return
     names = _param_names(model)
-    # observed exogenous variables are conditioned on (Stata 14's xconditional): their means,
-    # variances and covariances are not parameters of e(b) and are not shown (compat 1302)
+    th_glob, V_glob = th, V
+    if prob.nglob != model.nfree:          # paths that share a label: one global entry for several items
+        Tm = prob.expand_matrix()
+        th, V = Tm @ th, Tm @ V @ Tm.T
+    # observed exogenous variables are conditioned on: their means, variances and covariances
+    # are not parameters of e(b) and are not shown (compat 1302)
     oxset = {n for n in model.exog if n in spec.observed}
     user_cov = {v for pair in covs for v in pair} | set(var_fix)
-    xcond = bool(oxset) and not (oxset & user_cov)
+    miss_ex = meth == "mlmv" and any(bool(np.isnan(X_all[mask][:, spec.observed.index(n)]).any())
+                                     for n in oxset)
+    xcond = (bool(oxset) and not (oxset & user_cov) and not o.get("noxconditional")
+             and meth == "ml" and not miss_ex)
     keep = [i for i, (kind, a, b) in enumerate(model.free)
             if not (xcond and kind in ("mean", "var", "cov") and a in oxset and b in oxset)]
     model.hidden = set() if not xcond else {model.free[i] for i in range(model.nfree) if i not in keep}
@@ -425,32 +556,37 @@ def cmd_sem(s: "Session", args: str) -> None:
     est.level = level
     est.extra = dict(N=N, ll=ll, df=df, chi2_ms=chi2_ms, p_ms=p_ms, chi2_bs=chi2_bs, df_bs=df_bs,
                      p_bs=p_bs, mean=mean, cov=cov, ll_s=ll_s, standardized=bool(o.get("standardized")),
-                     th=th.copy(), V=V, xcond=xcond)
+                     th=th.copy(), V=V, xcond=xcond, method=meth, prob=prob, mask=mask,
+                     th_glob=th_glob, V_glob=V_glob)
     est.display = display_sem
     est.predict = _predict
     est.predict_opts = {"latent": 3, "xb": 2}
-    est.estat = {"gof": (3, estat_gof)}
+    from .semestat import ESTAT
+    est.estat = dict(ESTAT)
     lat_endog = [n for n in model.endog if n in spec.latent]
     obs_endog = [n for n in model.endog if n in spec.observed]
     lat_exog = [n for n in model.exog if n in spec.latent]
     obs_exog = [n for n in model.exog if n in spec.observed]
     # e() in Stata 14's ereturn list order (compat 1302; VERIFY the matrices' contents)
-    df_s = pobs * (pobs + 3) // 2
-    ilog = list(getattr(model, "ilog", [ll]))
+    ilog = list(prob.ilog) if prob.ilog else [ll]
     scalars = [("converged", 1.0 if conv else 0.0), ("rc", 0.0), ("ic", float(len(ilog) - 1)),
                ("N_groups", 1.0), ("modelmeans", 1.0), ("N", float(N)), ("N_missing", 0.0),
-               ("ll", ll), ("critvalue", ll), ("df_m", float(len(keep))),
+               ("ll", ll), ("critvalue", ll if meth != "adf" else -obj / max(N, 1)),
+               ("df_m", float(len(keep))),
                ("rank", float(np.linalg.matrix_rank(est.V))), ("estimates", 1.0),
                ("critvalue_s", ll_s), ("critvalue_b", base_ll), ("df_s", float(df_s)),
                ("p_bs", p_bs), ("df_bs", float(df_bs)), ("chi2_bs", chi2_bs), ("p_ms", p_ms),
                ("df_ms", float(df)), ("chi2_ms", chi2_ms), ("df_b", float(df_s - df_bs))]
+    if meth == "adf":
+        scalars = [(k, v) for k, v in scalars if k not in ("ll", "critvalue_s", "critvalue_b")]
     first = obs_endog[0] if obs_endog else ""
     macros = [("cmdline", f"sem {args.strip()}"), ("covariates", " ".join(obs_exog) if xcond else ""),
               ("cmd", "sem"), ("predict", "sem_p"), ("estat_cmd", "sem_estat"),
               ("marginsdefault", f"predict(xb({first}))" if first else ""),
               ("marginsnotok", "XBLATent1(passthru) XBLATent LATent1(passthru) LATent SCores xb"),
-              ("xconditional", "xconditional" if xcond else ""), ("vcetype", "OIM"), ("vce", "oim"),
-              ("title", "Structural equation model"), ("method", "ml"), ("data", "raw"),
+              ("xconditional", "xconditional" if xcond else ""),
+              ("vcetype", "OIM"), ("vce", "oim"),
+              ("title", "Structural equation model"), ("method", meth), ("data", "raw"),
               ("lxvars", " ".join(lat_exog)), ("oxvars", " ".join(obs_exog)),
               ("lyvars", " ".join(lat_endog)), ("oyvars", " ".join(obs_endog)),
               ("technique", "nr"), ("properties", "b V")]
@@ -461,7 +597,7 @@ def cmd_sem(s: "Session", args: str) -> None:
         mt = Matrix(np.asarray(v, float).reshape(1, -1), [rn], cn)
         mt.coleq = list(est.eqnames)
         return mt
-    g = _grad(model, th, mean, cov, N)[keep]
+    g = (prob.grad(th_glob)[prob.gmap[0]][keep] if meth != "adf" else np.zeros(len(keep)))
     bstd = _standardized(model, th)[keep]
     J = np.zeros((len(keep), len(keep)))
     for jj, i in enumerate(keep):
@@ -481,11 +617,18 @@ def cmd_sem(s: "Session", args: str) -> None:
     display_sem(s, est)
 
 
+def baseline_ex_correlated(model: Model) -> bool:
+    """The baseline model leaves the observed exogenous variables correlated only when the model
+    has observed endogenous variables; without any, every variable is uncorrelated ([SEM] methods
+    and formulas for sem)."""
+    return any(n in model.endog for n in model.spec.observed)
+
+
 def _baseline(model: Model, mean, cov, N):
     """Baseline model: observed endogenous variables uncorrelated with everything; the
     observed exogenous variables keep their covariances (VERIFY)."""
     obs = model.spec.observed
-    ex = [i for i, n in enumerate(obs) if n in model.exog]
+    ex = [i for i, n in enumerate(obs) if n in model.exog] if baseline_ex_correlated(model) else []
     p = len(obs)
     Sig = np.diag(np.diag(cov)).copy()
     for i in ex:
@@ -566,6 +709,20 @@ def _standardized(model: Model, th: np.ndarray) -> np.ndarray:
     return out
 
 
+def equality_constraints(model: Model) -> list[str]:
+    """Constraint lines of the paths that share a label: [y1]x1 - [y2]x2 = 0 (first path minus
+    each of the others; VERIFY)."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for (kind, a, b), lab in model.ties.items():
+        groups.setdefault(lab, []).append((a, b))
+    out = []
+    for lab, items in groups.items():
+        a0, b0 = items[0]
+        for a1, b1 in items[1:]:
+            out.append(f"[{b0}]{a0} - [{b1}]{a1} = 0")
+    return out
+
+
 def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, **_kw) -> None:
     out = s.output
@@ -576,15 +733,20 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
     if header:
         out.write("\n" + f"{'Structural equation model':<48}{'Number of obs':<18}= ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
-        out.write("Estimation method  = ml\n", "text")
-        out.write("Log likelihood     = ", "text")
-        out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
+        out.write(f"Estimation method  = {x.get('method', 'ml')}\n", "text")
+        if x.get("method") != "adf":
+            out.write("Log likelihood     = ", "text")
+            out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
         # endogenous latent variables first (compat 1302: [y1]G before [x1]F)
         anchors = sorted(model.anchor.items(), key=lambda la: la[0] not in model.endog)
         fixed_paths = [(a, b, v) for (a, b), v in spec.fixed.items()]
         k = 0
-        if anchors or fixed_paths:
+        eqs_ = equality_constraints(model)
+        if anchors or fixed_paths or eqs_:
             out.write("\n", "text")
+        for item in eqs_:
+            k += 1
+            out.write(f" ({k:2d})  {item}\n", "text")
         for L, a in anchors:
             k += 1
             out.write(f" ({k:2d})  [{a}]{L} = 1\n", "text")
@@ -741,6 +903,11 @@ def estat_gof(s: "Session", est: Estimates, args: str) -> None:
     x = est.extra
     model: Model = est.model
     N = x["N"]
+    prob = x.get("prob")
+    G = len(prob.data) if prob is not None else 1
+    adf = x.get("method") == "adf"
+    if adf:
+        want.discard("ic")
     out = s.output
     out.write("\n" + "-" * 76 + "\n", "text")
     out.write(f"{'Fit statistic':<21}|      Value   Description\n", "text")
@@ -777,9 +944,10 @@ def estat_gof(s: "Session", est: Estimates, args: str) -> None:
             r.update({"chi2_ms": chi, "df_ms": float(df), "p_ms": x["p_ms"], "chi2_bs": chib,
                       "df_bs": float(dfb), "p_bs": x["p_bs"]})
         elif b == "rmsea":
-            rm = math.sqrt(max(chi - df, 0) / (df * N)) if df > 0 else 0.0
-            lo, hi = _rmsea_ci(chi, df, N)
-            pclose = float(st.ncx2.sf(chi, df, 0.05 ** 2 * N * df)) if df > 0 else 1.0
+            # with several groups the formula includes G; the Browne-Cudeck p-value is not computed
+            rm = math.sqrt(G * max(chi - df, 0) / (df * N)) if df > 0 else 0.0
+            lo, hi = _rmsea_ci(chi, df, N / G)
+            pclose = float(st.ncx2.sf(chi, df, 0.05 ** 2 * (N / G) * df)) if df > 0 else 1.0
             out.write(f"{'Population error':<21}|\n", "text")
             line("RMSEA", f"{rm:.3f}", "Root mean squared error of approximation")
             line("90% CI, lower bound", f"{lo:.3f}")
@@ -787,7 +955,7 @@ def estat_gof(s: "Session", est: Estimates, args: str) -> None:
             line("pclose", f"{pclose:.3f}" if pclose < SYS else ".", "Probability RMSEA <= 0.05")
             r.update({"rmsea": rm, "lb90_rmsea": lo, "ub90_rmsea": hi, "pclose": pclose})
         elif b == "ic":
-            k = model.nfree
+            k = prob.nglob if prob is not None else model.nfree
             aic = -2 * x["ll"] + 2 * k
             bic = -2 * x["ll"] + k * math.log(N)
             out.write(f"{'Information criteria':<21}|\n", "text")
@@ -805,6 +973,11 @@ def estat_gof(s: "Session", est: Estimates, args: str) -> None:
             r.update({"cfi": cfi, "tli": tli})
         else:
             srmr, cd = _srmr_cd(est)
+            if G > 1:
+                from .semestat import _equation_fit, _srmr, _units
+                us = _units(est)
+                srmr = math.sqrt(sum(_srmr(u["model"], u["th"], u["data"]) ** 2 for u in us) / G)
+                cd = float(np.mean([_equation_fit(u["model"], u["th"])[1] for u in us]))   # VERIFY
             out.write(f"{'Size of residuals':<21}|\n", "text")
             line("SRMR", f"{srmr:.3f}", "Standardized root mean squared residual")
             line("CD", f"{cd:.3f}", "Coefficient of determination")
