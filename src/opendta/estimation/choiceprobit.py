@@ -17,7 +17,7 @@ from ..core.errors import StataError
 from ..core.varlist import resolve_name
 from . import fvars
 from .choice import (_Alt, _asc_design, _asc_finish, _cluster_by_group, _replay, _restrict, display_eq)
-from .mleq import (Block, Engine, aux_row, block_from_text, finish_model, lab, names_in, peek, std_right)
+from .mleq import (Block, Engine, add_base_row, aux_row, block_from_text, finish_model, lab, names_in, peek, std_right)
 from .models2 import _Prep, g
 from .regress import comma
 
@@ -214,6 +214,11 @@ def _cmd_asprobit(s: "Session", args: str, cmd: str) -> None:
                                     ("intmethod", "hammersley")])
     est.coef_title, est.eform_on = "Coef.", False
     est.ll_label = "Log simulated-likelihood"
+    est.int_lines = ("Hammersley", str(npts))
+    if names:
+        lb = d.lev_names
+        est.footer = lambda s_, e_: [s_.output.write(f"(alt={lb[k]} is the alternative normalizing {w})\n", "text")
+                                     for k, w in ((d.base, "location"), (min(1, J - 1) if d.base == 0 else 0, "scale"))]
     display_eq(s, est)
 
 
@@ -294,7 +299,7 @@ def cmd_mprobit(s: "Session", args: str) -> None:
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, "", f"Log simulated-likelihood = {ll4:>9}"]
+        left = [est.title, "", f"Log likelihood = {g(x['ll'], '%10.0g').strip():>9}"]
         right = [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left, right
@@ -305,5 +310,7 @@ def cmd_mprobit(s: "Session", args: str) -> None:
                        noeform_after_first=False,
                        extra_scalars=[("k_out", float(J)), ("i_base", float(base + 1)), ("N_cd", float(n))],
                        extra_macros=[("baseoutcome", lev_names[base])])
+    nxt = next((lev_names[j] for j in range(base + 1, J)), None)
+    add_base_row(est, lev_names[base], "(base outcome)", nxt)
     est.coef_title, est.eform_on = "Coef.", False
     display_eq(s, est)

@@ -10,7 +10,7 @@
 {cmd:clogit} depvar indepvars [if] [in] [weight] {cmd:, group(}varname{cmd:)} [{cmd:or} {cmd:vce(}vcetype{cmd:)}]
 
 {p 8 16 2}
-{cmd:rologit} depvar indepvars [if] [in] {cmd:, group(}varname{cmd:)} [{cmd:ties(}{cmd:exactp}|{cmd:breslow}|{cmd:efron}|{cmd:none}{cmd:)}]
+{cmd:rologit} depvar indepvars [if] [in] {cmd:, group(}varname{cmd:)} [{cmd:ties(}{cmd:exactm}|{cmd:breslow}|{cmd:efron}|{cmd:none}{cmd:)}]
 
 {p 8 16 2}
 {cmd:asclogit} depvar [indepvars] [if] [in] {cmd:, case(}varname{cmd:)} {cmd:alternatives(}varname{cmd:)} [{cmd:casevars(}varlist{cmd:)} {cmd:basealternative(}#{cmd:)} {cmd:noconstant}]

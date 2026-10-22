@@ -16,8 +16,8 @@ from ..core.errors import StataError
 from ..core.stats import chi2_tail
 from ..core.varlist import resolve_name
 from . import fvars
-from .mleq import (Block, Engine, aux_row, display_eq, finish_model, lab, names_in, peek, std_right)
-from .models2 import _Prep, g
+from .mleq import (Block, Engine, add_base_row, aux_row, display_eq, finish_model, lab, names_in, peek, std_right)
+from .models2 import _Prep, _header, g
 from .regress import comma
 
 if TYPE_CHECKING:
@@ -137,9 +137,9 @@ def cmd_clogit(s: "Session", args: str) -> None:
 
     def hdr(est):
         x = est.extra
-        ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, "", "", f"{lab(est)} = {ll4:>9}"]
-        right = std_right(x)
+        ll4 = g(x["ll"], "%10.0g").strip()
+        left = [est.title, "", "", "", "", f"{lab(est)} = {ll4:>9}"]
+        right = [("", ""), ("", "")] + std_right(x)
         if est.robust:
             right = [r for r in right if r[0] != "Pseudo R2"] + [("Pseudo R2", g(1 - x["ll"] / ll0, "%10.4f"))]
         return left, right
@@ -172,8 +172,8 @@ def cmd_rologit(s: "Session", args: str) -> None:
         return
     spec = {"group": 1, "ties": 2, "reverse": 3, "or": 2, "offset": 3, "incomplete": 3, "notestrg": 6}
     pr, o, gname, gid = _group_setup(s, args, spec, "rologit")
-    ties = str(o.get("ties", "exactp")).strip().lower()
-    for full in ("none", "exactp", "breslow", "efron"):
+    ties = str(o.get("ties", "exactm")).strip().lower()
+    for full in ("none", "exactm", "breslow", "efron"):
         if full.startswith(ties) and ties:
             ties = full
             break
@@ -215,10 +215,12 @@ def cmd_rologit(s: "Session", args: str) -> None:
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, f"Group variable: {gname}", "", f"Ties handled via the {ties} method", "", f"{lab(est)} = {ll4:>9}"]
-        right = [("Number of obs", comma(x["N"])), ("Number of groups", comma(ngroups)),
-                 ("Alts per group: min", comma(nalt.min())), ("avg", g(nalt.mean(), "%9.1f")),
-                 ("max", comma(nalt.max()))] + std_right(x)[1:]   # VERIFY layout
+        left = [est.title, f"Group variable: {gname}", "", f"Ties handled via the {ties} method", "", "", "", "", "",
+                f"{lab(est)} = {ll4:>9}"]
+        right = [("Number of obs", comma(x["N"])), ("Number of groups", comma(ngroups)), ("", ""),
+                 ("Obs per group:", None), (f"{'min':>17} ", comma(nalt.min())),
+                 (f"{'avg':>17} ", g(nalt.mean(), "%10.2f")), (f"{'max':>17} ", comma(nalt.max())),
+                 ("", "")] + [r for r in std_right(x)[1:] if r[0] != "Pseudo R2"]
         return left, right
 
     est = finish_model(s, pr, "rologit", args, title="Rank-ordered logistic regression", blocks=[main],
@@ -351,15 +353,34 @@ def _asc_design(s, args: str, spec: dict, cmd: str, *, ranking: bool = False) ->
 
 def _asc_header(d: _Alt, title: str):
     def hdr(est):
-        x = est.extra
-        ll4 = g(x["ll"], "%9.0g")
-        llab = getattr(est, "ll_label", None) or lab(est)
-        left = [est.title, f"Case variable: {d.case}", "", f"Alternative variable: {d.alt}", "", "", "", f"{llab} = {ll4:>9}"]
-        right = [("Number of obs", comma(x["N"])), ("Number of cases", comma(d.ncase)), ("", ""),
-                 ("Alts per case: min", comma(d.nalt.min())), ("avg", g(d.nalt.mean(), "%9.1f")),
-                 ("max", comma(d.nalt.max())), ("", ""),
-                 (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")), ("Prob > chi2", g(x["p"], "%10.4f"))]
-        return left, right
+        def write(s_):
+            out, x = s_.output, est.extra
+            ll = g(x["ll"], "%10.0g").strip()
+            llab = getattr(est, "ll_label", None) or lab(est)
+            out.write("\n", "text")
+            for lft, lb, val in ((est.title, "Number of obs", comma(x["N"])),
+                                 (f"Case variable: {d.case}", "Number of cases", comma(d.ncase))):
+                out.write(f"{lft:<47}{lb:<19}= ", "text")
+                out.write(f"{val:>10}\n", "result")
+            out.write("\n", "text")
+            for lft, lb, val in ((f"Alternative variable: {d.alt}", "Alts per case: min", comma(d.nalt.min())),
+                                 ("", f"{'avg':>18}", g(d.nalt.mean(), "%10.1f")),
+                                 ("", f"{'max':>18}", comma(d.nalt.max()))):
+                out.write(f"{lft:<47}{lb:<19}= ", "text")
+                out.write(f"{val:>10}\n", "result")
+            ints = getattr(est, "int_lines", None)
+            if ints:
+                out.write(f"{'Integration sequence:':<21}{ints[0]:>16}\n", "text")
+                out.write(f"{'Integration points:':<19}{ints[1]:>18}".ljust(50), "text")
+            else:
+                out.write("\n", "text")
+                out.write("".ljust(50), "text")
+            out.write(f"{f'Wald chi2({int(x['df_m'])})':<16}= ", "text")
+            out.write(f"{g(x['chi2'], '%10.2f'):>10}\n", "result")
+            out.write(f"{llab} = {ll}".ljust(50), "text")
+            out.write(f"{'Prob > chi2':<16}= ", "text")
+            out.write(f"{g(x['p'], '%10.4f'):>10}\n\n", "result")
+        return write
     return hdr
 
 
@@ -369,19 +390,18 @@ def _asc_finish(s, args, cmd, title, d: _Alt, eng, res, V, n_clust, ll0, *, aux_
     for j, blk in enumerate(d.blocks):
         idx += list(range(eng.offs[j], eng.offs[j] + blk.nslopes))
 
-    def footer(s_, est):
-        s_.output.write(f"(base alternative is {d.lev_names[d.base]})\n", "text")
-
     est = finish_model(s, d.pr, cmd, args, title=title, blocks=d.blocks, eng=eng, res=res, V=V, n_clust=n_clust,
                        ll0=ll0, aux_names=list(aux_names), aux_rows_fn=aux_rows_fn or (lambda lev: []),
                        hdr_fn=_asc_header(d, title), wald=True, test_idx=idx, df_m=len(idx),
-                       k_eq=len(d.blocks), footer=footer, heads=True, noeform_after_first=False,
+                       k_eq=len(d.blocks), heads=True, noeform_after_first=False,
                        extra_scalars=[("N_case", float(d.ncase)), ("k_alt", float(len(d.levels))),
                                       ("alt_min", float(d.nalt.min())), ("alt_avg", float(d.nalt.mean())),
                                       ("alt_max", float(d.nalt.max())), ("i_base", float(d.base + 1))]
                        + list(extra_scalars),
                        extra_macros=[("case", d.case), ("altvar", d.alt), ("base", d.lev_names[d.base])]
                        + list(extra_macros))
+    nxt = next((d.lev_names[j] for j in range(d.base + 1, len(d.levels))), None)
+    add_base_row(est, d.lev_names[d.base], "(base alternative)", nxt)
     return est
 
 
@@ -438,7 +458,7 @@ def cmd_slogit(s: "Session", args: str) -> None:
             raise StataError(459, f"baseoutcome({o['baseoutcome']}) is not an outcome")   # VERIFY
         base = int(np.flatnonzero(levels == bv)[0])
     else:
-        base = int(np.argmax(np.bincount(code)))
+        base = K - 1       # VERIFY: the highest outcome (1908 log: yy=3 is the base while mprobit takes the most frequent)
     first = 0 if base != 0 else 1                         # phi = 1
     free_phi = [k for k in range(K) if k != base and k != first]
     free_th = [k for k in range(K) if k != base]
@@ -462,14 +482,14 @@ def cmd_slogit(s: "Session", args: str) -> None:
     def lik(etas, th):
         eta = etas[0]
         phi, theta = parts(np.asarray(th))
-        S = theta[None, :] + eta[:, None] * phi[None, :]
+        S = theta[None, :] - eta[:, None] * phi[None, :]      # Stata: exp(theta_k - phi_k x b)
         lse = np.logaddexp.reduce(S, axis=1)
         P = np.exp(S - lse[:, None])
         ll = (Y * S).sum(axis=1) - lse
-        d_eta = (Y - P) @ phi
+        d_eta = -(Y - P) @ phi
         dth = np.zeros((n, nth))
         for i, k in enumerate(free_phi):
-            dth[:, i] = eta * (Y[:, k] - P[:, k])
+            dth[:, i] = -eta * (Y[:, k] - P[:, k])
         for i, k in enumerate(free_th):
             dth[:, len(free_phi) + i] = Y[:, k] - P[:, k]
         return ll, [d_eta], dth
@@ -517,7 +537,7 @@ def cmd_slogit(s: "Session", args: str) -> None:
                 rows.append(aux_row(nm, float(res.b[off + i]), float(se[off + i]), level))
             else:
                 r = CoefRow("value", nm, float(phi_all[k]))
-                r.eq = f"{phi_all[k]:>10g}  (constrained)"
+                r.eq = f"{phi_all[k]:>9g}  " + ("(base outcome)" if k == base else "(constrained)")
                 rows.append(r)
         rows.append(CoefRow("sep"))
         for k in range(K):
@@ -527,21 +547,28 @@ def cmd_slogit(s: "Session", args: str) -> None:
                 rows.append(aux_row(nm, float(res.b[off + i]), float(se[off + i]), level))
             else:
                 r = CoefRow("value", nm, 0.0)
-                r.eq = f"{0:>10g}  (base outcome)"
+                r.eq = f"{0:>9g}  (base outcome)"
                 rows.append(r)
         return rows
 
     def hdr(est):
         x = est.extra
-        ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, "", "", f"{lab(est)} = {ll4:>9}"]
-        right = std_right(x)
-        return left, right
+
+        def write(s_):
+            ll4 = g(x["ll"], "%10.0g").strip()
+            _header(s_, [est.title, "", f"{lab(est)} = {ll4:>9}"],
+                    [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
+                     ("Prob > chi2", g(x["p"], "%10.4f"))])
+            s_.output.write(" ( 1)  [phi1_1]_cons = 1\n", "text")
+        return write
+
+    def footer(s_, est):
+        s_.output.write(f"({main.name}={lev_txt[base]} is the base outcome)\n", "text")
 
     names = [("phi1_%d" % (k + 1), "_cons") for k in free_phi] + [("theta%d" % (k + 1), "_cons") for k in free_th]
     est = finish_model(s, pr, "slogit", args, title="Stereotype logistic regression", blocks=[main], eng=eng,
                        res=res, V=V, n_clust=n_clust, ll0=ll0, aux_names=names, aux_rows_fn=aux_rows, hdr_fn=hdr,
-                       k_eq=1 + len(names), test_idx=list(range(main.k)), df_m=main.k,
+                       k_eq=1 + len(names), test_idx=list(range(main.k)), df_m=main.k, wald=True, footer=footer,
                        extra_scalars=[("k_out", float(K)), ("i_base", float(base + 1)), ("dim", 1.0)],
                        extra_macros=[("baseoutcome", lev_txt[base])])
     est.coef_title, est.eform_on = "Coef.", False

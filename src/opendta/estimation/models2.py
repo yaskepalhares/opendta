@@ -116,7 +116,9 @@ def _header(s: "Session", left: list[str], right: list[tuple[str, str]]) -> None
     left = left + [""] * (n - len(left))
     right = right + [("", "")] * (n - len(right))
     for lft, (rl, rv) in zip(left, right):
-        if rl:
+        if rl and rv is None:
+            out.write(f"{lft:<48}{rl}\n", "text")
+        elif rl:
             out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")
         else:

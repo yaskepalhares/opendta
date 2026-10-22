@@ -59,9 +59,9 @@ def clogit_null(y: np.ndarray, groups: list[np.ndarray]) -> float:
     return tot
 
 
-def rologit_group(eta: np.ndarray, rank: np.ndarray, ties: str = "exactp"):
+def rologit_group(eta: np.ndarray, rank: np.ndarray, ties: str = "exactm"):
     """(ll, d ll / d eta) of one group. Higher rank = preferred; alternatives with the same rank
-    are tied. Unranked alternatives (missing) are dropped by the caller. `ties`: exactp (all
+    are tied. Unranked alternatives (missing) are dropped by the caller. `ties`: exactm (all
     orderings of a tie set), breslow (the risk set stays whole for the whole tie set), efron
     (as Breslow with the risk set reduced by the average of the tied), none (ties not allowed)."""
     d = np.zeros(len(eta))
@@ -94,7 +94,7 @@ def rologit_group(eta: np.ndarray, rank: np.ndarray, ties: str = "exactp"):
                 d[remaining] -= a[remaining] / den
                 d[T] += r / m * aT / den * (a[T] / aT)
             d[T] += 1.0
-        else:                                # exactp
+        else:                                # exactm
             ll_t, d_t = _exact_tie(a, T, remaining, shift, eta)
             ll += ll_t
             d += d_t
@@ -137,7 +137,7 @@ def _h_full(aT: np.ndarray, R: float) -> float:
     return float(h[size - 1])
 
 
-def rologit(eta: np.ndarray, rank: np.ndarray, groups: list[np.ndarray], ties: str = "exactp"):
+def rologit(eta: np.ndarray, rank: np.ndarray, groups: list[np.ndarray], ties: str = "exactm"):
     ll = np.zeros(len(eta))
     d = np.zeros(len(eta))
     for idx in groups:
