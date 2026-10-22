@@ -77,6 +77,16 @@ def _ntheta(J: int, structure: str) -> int:
     return 0 if structure == "identity" else (J - 1) * J // 2 - 1
 
 
+def _chol(S: np.ndarray) -> np.ndarray:
+    """Cholesky factor; a covariance that the optimizer pushed to the edge of positive
+    definiteness (platform-dependent rounding) is repaired by clipping its eigenvalues."""
+    try:
+        return np.linalg.cholesky(S)
+    except np.linalg.LinAlgError:
+        w, v = np.linalg.eigh((S + S.T) / 2)
+        return np.linalg.cholesky((v * np.maximum(w, 1e-10)) @ v.T)
+
+
 def _case_ll(eta: np.ndarray, kind: str, key: np.ndarray, Om: np.ndarray, U: np.ndarray) -> np.ndarray:
     """Simulated log probability per case. kind "choice": key = chosen alternative; kind "rank":
     key = (cases x J) alternatives ordered from best to worst."""
@@ -92,7 +102,7 @@ def _case_ll(eta: np.ndarray, kind: str, key: np.ndarray, Om: np.ndarray, U: np.
             for r, j in enumerate(others):
                 T[r, j], T[r, k] = 1.0, -1.0
             S = T @ Om @ T.T
-            L = np.linalg.cholesky(S + 1e-12 * np.eye(J - 1))
+            L = _chol(S + 1e-12 * np.eye(J - 1))
             mu = eta[rows][:, [k]] - eta[rows][:, others]
             out[rows] = np.log(np.maximum(C.ghk_upper(mu, L, U), 1e-300))
     else:
@@ -105,7 +115,7 @@ def _case_ll(eta: np.ndarray, kind: str, key: np.ndarray, Om: np.ndarray, U: np.
             for r in range(J - 1):
                 T[r, order[r + 1]], T[r, order[r]] = 1.0, -1.0       # u_(r+1) - u_(r) < 0
             S = T @ Om @ T.T
-            L = np.linalg.cholesky(S + 1e-12 * np.eye(J - 1))
+            L = _chol(S + 1e-12 * np.eye(J - 1))
             mu = -(eta[rows][:, [order[r + 1] for r in range(J - 1)]]
                    - eta[rows][:, [order[r] for r in range(J - 1)]])
             out[rows] = np.log(np.maximum(C.ghk_upper(mu, L, U), 1e-300))
