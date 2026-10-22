@@ -232,7 +232,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  XX {f.stem}  (OpenDTA raised {type(exc).__name__})")
             failed += 1
             if os.environ.get("GITHUB_ACTIONS"):
-                tail = traceback.format_exc().splitlines()[-6:]
+                lines = traceback.format_exc().splitlines()
+                tail = [ln for ln in lines if "opendta" in ln and "File" in ln][-4:] + lines[-2:]
                 print(f"::error title=compat {f.stem}::" + "%0A".join(ln.replace("%", "%25") for ln in tail))
             continue
         exp = Path(ns.expected) / (f.stem + ".log")
