@@ -3,7 +3,9 @@
 * command does not stop the rest of the case; the layouts marked VERIFY in the code are settled by the
 * reference log. The data are built from rounded draws and from comparisons of runiform() draws (counts
 * are sums of Bernoulli draws, because rpoisson() and rbinomial() do not reproduce Stata's draws), with
-* real overdispersion and inefficiency so that no parameter sits at the boundary.
+* real overdispersion and inefficiency so that no parameter sits at the boundary. Sums of rounded
+* terms avoid halves (even tenths as coefficients) and exact zeros, so that the rounding does not depend
+* on the last bit of a floating-point sum.
 program define mksys
     clear
     set seed 1908
@@ -15,10 +17,10 @@ program define mksys
     gen double z2 = round(invnormal(runiform()), .01)
     gen double e1 = round(invnormal(runiform()), .01)
     gen double e2 = round(.5*e1 + invnormal(runiform()), .01)
-    gen double y1 = round(1 + .8*x1 - .5*x2 + e1, .01)
+    gen double y1 = round(1 + .8*x1 - .6*x2 + e1, .01)
     gen double y2 = round(-1 + .6*x1 + .4*x3 + e2, .01)
     gen double w = round(.5*z1 + .4*z2 + .3*x1 + .5*e1 + invnormal(runiform()), .01)
-    gen double y3 = round(1 + .7*w + .4*x1 + e1, .01)
+    gen double y3 = round(1 + .8*w + .4*x1 + e1, .01)
     gen double sdv = round(.5 + runiform(), .01)
     gen double y4 = round(1 + .8*x1 - .5*x2 + sdv*invnormal(runiform()), .01)
     gen double xt = round(x1 + .5*invnormal(runiform()), .01)
@@ -114,7 +116,7 @@ set obs 900
 gen double x = round(invnormal(runiform()), .01)
 gen double z = round(invnormal(runiform()), .01)
 gen double u = round(invnormal(runiform()), .01)
-gen byte t = (.2 + .7*z + .5*x + u) > 0
+gen byte t = (.2 + .7*z + .5*x + u + .0001*runiform()) > 0
 gen double yt = round(1 + x + 1.5*t + .5*t*x + .6*u + .7*invnormal(runiform()), .01)
 capture noisily teffects ra (yt x) (t)
 capture noisily teffects ra (yt x) (t), atet
