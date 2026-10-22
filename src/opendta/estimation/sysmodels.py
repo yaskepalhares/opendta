@@ -558,7 +558,7 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk) ->
             chi2 = float(bb @ np.linalg.solve(VV, bb))
         else:
             chi2 = SYS
-        eq_info.append({"obs": n, "parms": k, "rmse": rmse, "r2": r2, "chi2": chi2, "df": len(sl), "rss": rss})
+        eq_info.append({"obs": n, "parms": blk.nslopes, "rmse": rmse, "r2": r2, "chi2": chi2, "df": len(sl), "rss": rss})
     level = smp.level
     est = Estimates(cmd, blocks[0].name, names, b_full, V_full, n, "t" if use_t else "z", None)
     est.eqnames = eqnames
@@ -599,13 +599,13 @@ def _display_system(s, est, *, header=True, table=True, level=None, **_kw) -> No
     lev = level if level is not None else est.level
     if header:
         out.write(f"\n{est.title}\n", "text")
-        bar = "-" * 70   # VERIFY width
+        bar = "-" * 74
         out.write(bar + "\n", "text")
-        out.write('Equation          Obs Parms        RMSE    "R-sq"       chi2        P\n', "text")
+        out.write('Equation             Obs   Parms        RMSE    "R-sq"       chi2        P\n', "text")
         out.write(bar + "\n", "text")
         for nm, e in zip(est.names_eq, est.eq_info):
             p = chi2_tail(e["chi2"], e["df"]) if e["chi2"] < SYS else SYS
-            out.write(f"{nm:<18}{int(e['obs']):>3}{int(e['parms']):>6}{g(e['rmse'], '%9.0g'):>12}"
+            out.write(f"{nm:<20}{int(e['obs']):>4}{int(e['parms']):>8}{g(e['rmse'], '%9.0g'):>12}"
                       f"{g(e['r2'], '%10.4f'):>10}{g(e['chi2'], '%11.2f'):>11}{g(p, '%9.4f'):>9}\n", "text")
         out.write(bar + "\n", "text")
         if est.corr_opt:

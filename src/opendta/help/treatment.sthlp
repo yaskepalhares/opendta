@@ -7,7 +7,7 @@
 {title:Syntax}
 
 {p 8 16 2}
-{cmd:teffects} {c -(}{cmd:ra}|{cmd:ipw}|{cmd:ipwra}|{cmd:aipw}|{cmd:nnmatch}|{cmd:psmatch}{c )-} {cmd:(}ovar [omvarlist] [{cmd:,} omodel]{cmd:)} {cmd:(}tvar [tmvarlist] [{cmd:,} tmodel]{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans} {cmd:nneighbors(}#{cmd:)} {cmd:metric(}{cmd:mahalanobis}|{cmd:euclidean}|{cmd:ivariance}{cmd:)} {cmd:vce(}{cmd:robust}[{cmd:, nn(}#{cmd:)}]{cmd:)}]
+{cmd:teffects} {c -(}{cmd:ra}|{cmd:ipw}|{cmd:ipwra}|{cmd:aipw}|{cmd:nnmatch}|{cmd:psmatch}{c )-} {cmd:(}ovar [omvarlist] [{cmd:,} omodel]{cmd:)} {cmd:(}tvar [tmvarlist] [{cmd:,} tmodel]{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans} {cmd:nneighbor(}#{cmd:)} {cmd:metric(}{cmd:mahalanobis}|{cmd:euclidean}|{cmd:ivariance}{cmd:)} {cmd:vce(}{cmd:robust}[{cmd:, nn(}#{cmd:)}]{cmd:)}]
 
 {p 8 16 2}
 {cmd:eteffects} {cmd:(}ovar omvarlist{cmd:)} {cmd:(}tvar tmvarlist{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans}]

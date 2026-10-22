@@ -167,7 +167,7 @@ def _run(s, cmd, sub, rest, full):
     tmv = tmv.strip()
     if cmd == "eteffects" and (omodel != "linear" or tmodel != "probit"):
         raise StataError(198, "only linear outcome and probit treatment models are available")   # VERIFY
-    spec = {"ate": 3, "atet": 4, "pomeans": 3, "control": 3, "tlevel": 3, "nneighbors": 3,
+    spec = {"ate": 3, "atet": 4, "pomeans": 3, "control": 3, "tlevel": 3, "nneighbor": 3,
             "metric": 3, "aequations": 4, "osample": 3, "logit": 4, "probit": 4, "vce": 3,
             "level": 1, "noconstant": 4}
     spec.pop("noconstant")
@@ -211,7 +211,7 @@ def _run(s, cmd, sub, rest, full):
             X = Xo
             m_ = str(o.get("metric", "maha")).lower()
             metric = "maha" if "mahalanobis".startswith(m_) else ("euclidean" if "euclidean".startswith(m_) else "ivariance")
-        nn = int(o["nneighbors"]) if o.get("nneighbors") else 1
+        nn = int(o["nneighbor"]) if o.get("nneighbor") else 1
         tau, se, mu, (mn, mx) = T.nnmatch(y, t, X, stat, nn, metric, nn_vce)
         names = [f"r{lv1}vs{lv0}.{tvar}"]
         eq = ["ATE" if stat == "ate" else "ATET"]

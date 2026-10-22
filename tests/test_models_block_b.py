@@ -57,7 +57,7 @@ def test_sureg_matches_gls_computation(run):
 def test_sureg_output_layout(run):
     out = run(DATA + "sureg (y1 x1 x2) (y2 z1), corr")
     assert "Seemingly unrelated regression" in out
-    assert 'Equation          Obs Parms        RMSE    "R-sq"       chi2        P' in out
+    assert 'Equation             Obs   Parms        RMSE    "R-sq"       chi2        P' in out
     assert "Breusch-Pagan test of independence: chi2(1)" in out
 
 

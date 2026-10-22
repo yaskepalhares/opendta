@@ -43,6 +43,7 @@ class SystemFit:
     chi2_bp: float = 0.0             # Breusch-Pagan test of independence
     df_bp: int = 0
     corr: np.ndarray = field(default_factory=lambda: np.zeros((0, 0)))
+    trace: list = field(default_factory=list)   # change in the coefficients at each iteration after the first
 
 
 def _sigma(E: np.ndarray, ks: list, dfk: str) -> np.ndarray:
@@ -91,7 +92,7 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
     bs = [np.linalg.lstsq(X, y, rcond=None)[0] for X, y in zip(Xs, ys)]
     E = _resid(Xs, ys, bs)
     sigma = _sigma(E, ks, dfk)
-    it, conv = 0, True
+    it, conv, trace = 0, True, []
     while True:
         bs_new, V = _gls(Xs, Xs, ys, sigma)
         E = _resid(Xs, ys, bs_new)
@@ -99,15 +100,18 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
         if not iterate:
             bs = bs_new
             break
-        delta = max(float(np.max(np.abs(a - c)) / max(1.0, np.max(np.abs(c)))) for a, c in zip(bs_new, bs))
+        if it > 1:                       # the first GLS step is not an iteration (Stata's log starts at its change)
+            delta = max(float(np.max(np.abs(a - c)) / max(1.0, np.max(np.abs(c)))) for a, c in zip(bs_new, bs))
+            trace.append(delta)
+            if delta < tol:
+                bs = bs_new
+                break
         bs = bs_new
-        if delta < tol:
-            break
         if it >= maxit:
             conv = False
             break
         sigma = _sigma(E, ks, dfk)
-    return _finish_system(bs, V, E, sigma, it, conv, ks, dfk)
+    return _finish_system(bs, V, E, sigma, it, conv, ks, dfk, trace)
 
 
 def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bool = False,
@@ -152,13 +156,13 @@ def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bo
     return _finish_system(bs, V, E, sigma, it, conv, ks, dfk)
 
 
-def _finish_system(bs, V, E, sigma, it, conv, ks, dfk) -> SystemFit:
+def _finish_system(bs, V, E, sigma, it, conv, ks, dfk, trace=()) -> SystemFit:
     n, m = E.shape
     S = E.T @ E / n
     d = np.sqrt(np.diag(S))
     corr = S / np.outer(d, d)
     bp = n * float(np.sum(np.tril(corr, -1) ** 2))
-    return SystemFit(bs, V, sigma, E, it, conv, bp, m * (m - 1) // 2, corr)
+    return SystemFit(bs, V, sigma, E, it, conv, bp, m * (m - 1) // 2, corr, list(trace))
 
 
 # ---------------------------------------------------------------------------
