@@ -263,6 +263,55 @@ def heckman(sel, y, eta, zeta, athrho, lnsigma):
     return ll, d_eta, d_zeta, d_ath, d_ls
 
 
+def etreg(t, y, eta, zeta, athrho, lnsigma):
+    """Normal outcome with an endogenous binary treatment: y = eta + e, t = 1(zeta + u > 0),
+    e ~ N(0, sigma^2), corr(e, u) = rho. Returns ll and the derivatives with respect to eta,
+    zeta, athrho and lnsigma."""
+    n = len(y)
+    rho = np.tanh(athrho) * np.ones(n)
+    lns = lnsigma * np.ones(n)
+    sg = np.exp(lns)
+    c = np.sqrt(1 - rho * rho)
+    q = np.where(t > 0, 1.0, -1.0)
+    u = (y - eta) / sg
+    a = q * (zeta + rho * u) / c
+    lam = _lam(a)
+    ll = st.norm.logpdf(u) - lns + st.norm.logcdf(a)
+    d_eta = (u - lam * q * rho / c) / sg
+    d_zeta = lam * q / c
+    d_ls = u * u - 1 - u * lam * q * rho / c
+    da_drho = q * (u / c + (zeta + rho * u) * rho / c ** 3)
+    d_ath = lam * da_drho * c * c
+    return ll, d_eta, d_zeta, d_ath, d_ls
+
+
+def etpois(t, y, eta, zeta, athrho, lnsigma, nodes=32):
+    """Poisson outcome with an endogenous binary treatment: y ~ Poisson(exp(eta + e)), e ~ N(0, sigma^2),
+    t = 1(zeta + u > 0), corr(e, u) = rho. The integral over e is a Gauss-Hermite quadrature.
+    Returns ll and the derivatives with respect to eta, zeta, athrho and lnsigma."""
+    from scipy.special import gammaln, logsumexp
+    x, wq = np.polynomial.hermite.hermgauss(nodes)
+    sk = np.sqrt(2.0) * x
+    lw = np.log(wq / np.sqrt(np.pi))
+    rho = np.tanh(athrho)
+    c = np.sqrt(1 - rho * rho)
+    sg = np.exp(lnsigma)
+    q = np.where(t > 0, 1.0, -1.0)[:, None]
+    mu = np.exp(np.clip(eta[:, None] + sg * sk[None, :], -50, 50))
+    a = q * (zeta[:, None] + rho * sk[None, :]) / c
+    lf = y[:, None] * np.log(mu) - mu - gammaln(y + 1)[:, None] + st.norm.logcdf(a) + lw[None, :]
+    ll = logsumexp(lf, axis=1)
+    pi = np.exp(lf - ll[:, None])
+    lam = np.exp(st.norm.logpdf(a) - st.norm.logcdf(a))
+    r = y[:, None] - mu
+    d_eta = (pi * r).sum(axis=1)
+    d_zeta = (pi * lam * q / c).sum(axis=1)
+    d_ls = (pi * r * sg * sk[None, :]).sum(axis=1)
+    da = q * (sk[None, :] / c + (zeta[:, None] + rho * sk[None, :]) * rho / c ** 3)
+    d_ath = (pi * lam * da).sum(axis=1) * c * c
+    return ll, d_eta, d_zeta, d_ath, d_ls
+
+
 def biprobit(y1, y2, eta1, eta2, athrho):
     """Bivariate probit: P(y1, y2) = Phi2(q1 eta1, q2 eta2; q1 q2 rho)."""
     rho = np.tanh(athrho)

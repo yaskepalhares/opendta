@@ -225,7 +225,16 @@ def main(argv: list[str] | None = None) -> int:
     known = _known_differences()
     passed = failed = missing = tolerated = 0
     for f in files:
-        got = run_opendta(f, COMPAT / "out", ns.setup)
+        try:
+            got = run_opendta(f, COMPAT / "out", ns.setup)
+        except Exception as exc:   # a crash in one case must not hide the others (nor the CI annotation)
+            import traceback
+            print(f"  XX {f.stem}  (OpenDTA raised {type(exc).__name__})")
+            failed += 1
+            if os.environ.get("GITHUB_ACTIONS"):
+                tail = traceback.format_exc().splitlines()[-6:]
+                print(f"::error title=compat {f.stem}::" + "%0A".join(ln.replace("%", "%25") for ln in tail))
+            continue
         exp = Path(ns.expected) / (f.stem + ".log")
         if not exp.exists():
             print(f"  ?  {f.stem:<32} no Stata reference log")

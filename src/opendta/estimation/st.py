@@ -39,7 +39,7 @@ def _count(x: float) -> str:
     significant digits (192.286). VERIFY: the exact format Stata uses for non-integer totals."""
     if float(x).is_integer():
         return f"{int(x)}"
-    return format_value(float(x), "%8.0g", pad=False).strip()
+    return format_value(round(float(x), 3), "%9.0g", pad=False).strip()   # VERIFY: three decimals (192.286, 1700.267)
 
 
 def _plural(k: int, one: str, many: str) -> str:

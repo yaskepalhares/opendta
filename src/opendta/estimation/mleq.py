@@ -120,6 +120,25 @@ class Engine:
             return ll, gr, num_hess(self.grad, b)
 
 
+def add_base_row(est, label: str, text: str, before: str | None = None) -> None:
+    """The row `label |  text` of the base alternative/outcome, between two equation blocks: ahead
+    of the block named `before`, or after the last coefficient block when there is none."""
+    old = est.rows_fn
+
+    def with_base(level: float):
+        rows = list(old(level))
+        i = len(rows)
+        for k, r in enumerate(rows):
+            if before is not None and r.kind == "eq" and r.label == before:
+                i = k - 1
+                break
+        rows[i:i] = [CoefRow("sep"), CoefRow("eq", label, eq=text)]
+        return rows
+
+    est.rows_fn = with_base
+    est.rows = with_base(est.level)
+
+
 def aux_row(label: str, value: float, se: float, level: float, *, ci=None, name: str = "_cons"):
     """Row of an ancillary parameter (/athrho, rho...). An estimated parameter (`ci` None) has z and
     P>|z|; one derived by a transformation (`ci` = (lo, hi), from the estimate's own interval)
@@ -198,10 +217,15 @@ def display_eq(s, est, *, header: bool = True, table: bool = True, level: float 
     """Header (left lines, right pairs), table and footer of a model made with `Engine`."""
     lev = level if level is not None else est.level
     if header:
-        left, right = est.hdr_fn(est)
-        _header(s, left, right)
+        hd = est.hdr_fn(est)
+        if callable(hd):
+            hd(s)
+        else:
+            _header(s, *hd)
     if table:
-        if est.vcetype and est.clustvar:
+        if est.vcetype and est.clustvar and getattr(est, "group_cluster", False):
+            s.output.write(f"{'(Std. Err. adjusted for clustering on ' + est.clustvar + ')':>78}\n", "text")
+        elif est.vcetype and est.clustvar:
             s.output.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                            "text")
         rows = est.rows_fn(lev) if getattr(est, "rows_fn", None) else est.rows

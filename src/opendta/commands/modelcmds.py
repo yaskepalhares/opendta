@@ -26,3 +26,17 @@ _register("binmodels", ["scobit", "hetprobit", "fracreg", "zip", "zinb", "tpoiss
 _register("censmodels", ["intreg", "truncreg", "heckman", "heckprobit", "heckoprobit", "biprobit"])
 
 _register("ivmodels", ["ivprobit", "ivtobit", "ivpoisson"])
+
+_register("sysmodels", ["constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3", "rreg"])
+
+_register("choice", ["clogit", "rologit", "asclogit", "slogit"])
+
+_register("choiceprobit", ["mprobit", "asmprobit", "asroprobit"])
+
+_register("exact", ["exlogistic", "expoisson"])
+
+_register("nonlin", ["nl", "nlsur", "gmm"])
+
+_register("frontier", ["frontier"])
+_register("treatment", ["etregress", "etpoisson"])
+_register("teffects", ["teffects", "eteffects", "stteffects"])
