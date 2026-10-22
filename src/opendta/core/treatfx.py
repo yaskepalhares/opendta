@@ -193,7 +193,7 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
         w1, w0 = weights(p)
     b0 = b1 = np.zeros(0)
     if use_out:
-        if est == "ra":
+        if est in ("ra", "aipw"):               # the aipw outcome models are fitted arm by arm, unweighted
             b0, b1 = om.fit(Xo, t0), om.fit(Xo, t)
         else:
             b0, b1 = om.fit(Xo, w0), om.fit(Xo, w1)
@@ -225,8 +225,9 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
             if est == "ipw":
                 mom = np.column_stack([ww0 * (y - mu_[0]), ww1 * (y - mu_[1])])
             else:
-                cols.append(ww0[:, None] * om.score(Xo, b0_))
-                cols.append(ww1[:, None] * om.score(Xo, b1_))
+                a0_, a1_ = (t0, t) if est == "aipw" else (ww0, ww1)
+                cols.append(a0_[:, None] * om.score(Xo, b0_))
+                cols.append(a1_[:, None] * om.score(Xo, b1_))
                 m0_, m1_ = om.mean(Xo, b0_), om.mean(Xo, b1_)
                 if est == "ipwra":
                     mom = np.column_stack([d * (m0_ - mu_[0]), d * (m1_ - mu_[1])])

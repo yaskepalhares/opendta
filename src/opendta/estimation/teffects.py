@@ -77,7 +77,7 @@ def _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1):
         L = np.eye(2)
         b = mu.copy()
         names = [f"0.{tvar}", f"1.{tvar}"] if levels[0] == 0 and levels[1] == 1 else [f"{lv0}.{tvar}", f"{lv1}.{tvar}"]
-        eq = ["POmean", "POmean"]
+        eq = ["POmeans", "POmeans"]
     else:
         L = np.array([[-1.0, 1.0], [1.0, 0.0]])
         b = L @ mu
@@ -86,21 +86,21 @@ def _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1):
     V = L @ Vm @ L.T
     se = np.sqrt(np.diag(V))
     if stat == "pomeans":
-        rows = [CoefRow("eq", "POmean"), CoefRow("header", tvar),
-                CoefRow("coef", lv0, b[0], se[0], name=names[0]),
-                CoefRow("coef", lv1, b[1], se[1], name=names[1])]
+        rows = [CoefRow("eq", "POmeans"), CoefRow("header", tvar),
+                CoefRow("coef", f"{lv0} ", b[0], se[0], name=names[0]),
+                CoefRow("coef", f"{lv1} ", b[1], se[1], name=names[1])]
     else:
         rows = [CoefRow("eq", eq[0]), CoefRow("header", tvar),
-                CoefRow("coef", f"({lv1} vs {lv0})", b[0], se[0], name=names[0], tight=True),
+                CoefRow("coef", f"({lv1} vs {lv0}) ", b[0], se[0], name=names[0]),
                 CoefRow("sep"), CoefRow("eq", "POmean"), CoefRow("header", tvar),
-                CoefRow("coef", lv0, b[1], se[1], name=names[1])]
+                CoefRow("coef", f"{lv0} ", b[1], se[1], name=names[1])]
     return b, V, names, eq, rows
 
 
 def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o, *, title,
           est_title, omodel_txt, tmodel_txt, match=False, extra_hdr=(), dist="", cens=""):
     est = Estimates(cmd, ovar, names, b, V, n, "z", None)
-    est.level, est.vcetype = level, "Robust"
+    est.level, est.vcetype = level, "AI Robust" if match else "Robust"
     est.rows = rows
     est.eqnames = eq
     est.extra = dict(N=n)
@@ -109,18 +109,20 @@ def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n,
         out = s_.output
         if header:
             out.write("\n", "text")
-            out.write(f"{title:<47}{'Number of obs':<19}= {comma(n):>10}\n", "text")
+            w1, w2 = (47, 19) if match else (48, 18)
+            out.write(f"{title:<{w1}}{'Number of obs':<{w2}}= {comma(n):>10}\n", "text")
             if match:
                 out.write(f"Estimator      : {est_title:<30}{'Matches: requested':<18} = {extra_hdr[0][1]:>10}\n", "text")
                 out.write(f"Outcome model  : {'matching':<30}{'min':>18} = {extra_hdr[1][1]:>10}\n", "text")
                 out.write(f"{('Distance metric: ' + dist) if dist else ('Treatment model: ' + tmodel_txt):<47}"
                           f"{'max':>18} = {extra_hdr[2][1]:>10}\n", "text")
             else:
-                out.write(f"Estimator      : {est_title}\n", "text")
+                if cmd != "eteffects":
+                    out.write(f"Estimator      : {est_title}\n", "text")
                 out.write(f"Outcome model  : {omodel_txt}\n", "text")
                 out.write(f"Treatment model: {tmodel_txt}\n", "text")
                 if cens:
-                    out.write(f"Censoring model: {cens}\n", "text")   # VERIFY
+                    out.write(f"Censoring model: {cens}\n", "text")
         if table:
             coef_table(s_, ovar, e.rows, stat="z", df=None, level=level or e.level, vcetype=e.vcetype)
     est.display = display
@@ -222,7 +224,7 @@ def _run(s, cmd, sub, rest, full):
         omodel_txt, tmodel_txt = "matching", ("none" if sub == "nnmatch" else tmodel)
         dist = mlabel if sub == "nnmatch" else ""
         rows = [CoefRow("eq", eq[0]), CoefRow("header", tvar),
-                CoefRow("coef", f"({lv1} vs {lv0})", tau, se, name=names[0], tight=True)]
+                CoefRow("coef", f"({lv1} vs {lv0}) ", tau, se, name=names[0])]
     else:
         if cmd == "eteffects":
             th, Vf, _k = T.eteffects(y, t, Xo, Z, stat, clusters)
@@ -230,7 +232,7 @@ def _run(s, cmd, sub, rest, full):
             th, Vf, _lay = T.teffects(sub, y, t, Xo, Z, omodel, tmodel, stat, clusters)
         mu, Vm = th[:2], Vf[:2, :2]
         b, V, names, eq, rows = _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1)
-        omodel_txt = omodel if sub != "ipw" else "none"
+        omodel_txt = {"ipw": "weighted mean", "aipw": "linear by ML"}.get(sub, omodel)
         tmodel_txt = tmodel if sub not in ("ra",) else "none"
         dist = ""
     title = "Endogenous treatment-effects estimation" if cmd == "eteffects" else "Treatment-effects estimation"
@@ -284,6 +286,8 @@ def cmd_stteffects(s: "Session", args: str) -> None:
     o = stx.o
     for nm in _SMODELS:
         if o.get(nm):
+            if sub == "ipw":
+                raise StataError(198, f"option {nm} not allowed")
             smodel = nm
     if stx.wtype or stx.sd.info.wtype:
         raise StataError(101, "weights not allowed")   # VERIFY
@@ -312,8 +316,9 @@ def cmd_stteffects(s: "Session", args: str) -> None:
     est_title = {"ra": "regression adjustment", "ipw": "inverse-probability weights",
                  "ipwra": "IPW regression adjustment"}[sub]
     _post(s, "stteffects", sub, args, "_t", tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o,
-          title="Treatment-effects estimation", est_title=est_title, omodel_txt=smodel.capitalize(),
-          tmodel_txt=tmodel if sub != "ra" else "none", cens="independent")
+          title="Survival treatment-effects estimation", est_title=est_title,
+          omodel_txt=smodel if sub != "ipw" else "weighted mean",
+          tmodel_txt=tmodel if sub != "ra" else "none", cens="none")
 
 
 def _design(s, stx, tvar, tmv, noc):
