@@ -143,6 +143,12 @@ def cmd_sem(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("gsem", "gsem")
+def cmd_gsem(s: "Session", args: str) -> None:
+    from ..estimation.gsem import cmd_gsem as run
+    run(s, args)
+
+
 @command("irf", "irf")
 def cmd_irf(s: "Session", args: str) -> None:
     from ..estimation.irf import cmd_irf as run
