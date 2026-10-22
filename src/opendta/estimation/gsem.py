@@ -909,7 +909,7 @@ def _post(s, args, m: GModel, th, V, ll, conv, iters, level, *, hook=None, quiet
     resp_names = [r.eq.name for r in m.resps]
     scalars = [("N", float(m.N)), ("k", float(len(th))), ("k_eq", float(len(m.resps))),
                ("k_dv", float(len(m.resps))), ("converged", 1.0 if conv else 0.0), ("rc", 0.0),
-               ("ic", float(iters)), ("ll", ll), ("rank", float(np.linalg.matrix_rank(est.V)))]
+               ("ic", float(iters)), ("ll", ll), ("rank", float(np.linalg.matrix_rank(np.nan_to_num(np.asarray(est.V, float)))))]   # a parameter at the boundary leaves NaN in V
     macros = [("cmdline", f"gsem {args.strip()}"), ("cmd", "gsem"), ("predict", "gsem_p"),
               ("title", "Generalized structural equation model"), ("vce", "oim"),
               ("vcetype", "OIM"), ("depvar", " ".join(resp_names)),
