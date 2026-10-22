@@ -294,6 +294,9 @@ def cmd_stteffects(s: "Session", args: str) -> None:
     stat = _estat(o)
     if sub == "aipw" and stat == "atet":
         raise StataError(198, "option atet not allowed")
+    if sub == "ipw" and np.any(stx.d == 0):
+        raise StataError(459, "all observations must fail for the IPW model without a censoring distribution; "
+                              "this is not the case")   # VERIFY return code
     stx.notes_and_header(s)
     mask = stx.mask
     n = stx.n
@@ -317,7 +320,7 @@ def cmd_stteffects(s: "Session", args: str) -> None:
                  "ipwra": "IPW regression adjustment"}[sub]
     _post(s, "stteffects", sub, args, "_t", tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o,
           title="Survival treatment-effects estimation", est_title=est_title,
-          omodel_txt=smodel if sub != "ipw" else "weighted mean",
+          omodel_txt=(smodel.capitalize() if smodel != "lognormal" else "lognormal") if sub != "ipw" else "weighted mean",  # VERIFY lognormal label
           tmodel_txt=tmodel if sub != "ra" else "none", cens="none")
 
 

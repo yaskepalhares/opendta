@@ -2,14 +2,16 @@
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/stata/1908_models2.log
   log type:  text
- opened on:  22 Oct 2026, 01:35:34
+ opened on:  22 Oct 2026, 08:40:03
 
 . * Phase 22: models, part 2 (systems and constraints, choice models, exact methods, nonlinear models,
 . * frontier and treatment effects). Every command runs under capture noisily so that a difference in one
 . * command does not stop the rest of the case; the layouts marked VERIFY in the code are settled by the
 . * reference log. The data are built from rounded draws and from comparisons of runiform() draws (counts
 . * are sums of Bernoulli draws, because rpoisson() and rbinomial() do not reproduce Stata's draws), with
-. * real overdispersion and inefficiency so that no parameter sits at the boundary.
+. * real overdispersion and inefficiency so that no parameter sits at the boundary. Sums of rounded
+. * terms avoid halves (even tenths as coefficients) and exact zeros, so that the rounding does not depend
+. * on the last bit of a floating-point sum.
 . program define mksys
   1.     clear
   2.     set seed 1908
@@ -21,10 +23,10 @@
   8.     gen double z2 = round(invnormal(runiform()), .01)
   9.     gen double e1 = round(invnormal(runiform()), .01)
  10.     gen double e2 = round(.5*e1 + invnormal(runiform()), .01)
- 11.     gen double y1 = round(1 + .8*x1 - .5*x2 + e1, .01)
+ 11.     gen double y1 = round(1 + .8*x1 - .6*x2 + e1, .01)
  12.     gen double y2 = round(-1 + .6*x1 + .4*x3 + e2, .01)
  13.     gen double w = round(.5*z1 + .4*z2 + .3*x1 + .5*e1 + invnormal(runiform()), .01)
- 14.     gen double y3 = round(1 + .7*w + .4*x1 + e1, .01)
+ 14.     gen double y3 = round(1 + .8*w + .4*x1 + e1, .01)
  15.     gen double sdv = round(.5 + runiform(), .01)
  16.     gen double y4 = round(1 + .8*x1 - .5*x2 + sdv*invnormal(runiform()), .01)
  17.     gen double xt = round(x1 + .5*invnormal(runiform()), .01)
@@ -44,22 +46,22 @@ Seemingly unrelated regression
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
 --------------------------------------------------------------------------
-y1                   400       2    1.037289    0.4096     296.26   0.0000
-y2                   400       2    1.047989    0.3568     225.38   0.0000
+y1                   400       2    1.037452    0.4398     340.49   0.0000
+y2                   400       2     1.04799    0.3568     225.37   0.0000
 --------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7110638   .0497927    14.28   0.000     .6134719    .8086557
-          x2 |  -.4691588   .0477974    -9.82   0.000      -.56284   -.3754777
-       _cons |   .9928005   .0518727    19.14   0.000     .8911319    1.094469
+          x1 |    .710749   .0498005    14.27   0.000     .6131419    .8083562
+          x2 |  -.5689933   .0478032   -11.90   0.000    -.6626859   -.4753007
+       _cons |   .9927694   .0518808    19.14   0.000     .8910849    1.094454
 -------------+----------------------------------------------------------------
 y2           |
-          x1 |   .4556018   .0554371     8.22   0.000      .346947    .5642566
-          x3 |   .3991395   .0502638     7.94   0.000     .3006243    .4976547
-       _cons |  -1.001192   .0526961   -19.00   0.000    -1.104475   -.8979098
+          x1 |   .4556286   .0554368     8.22   0.000     .3469745    .5642828
+          x3 |   .3990816   .0502621     7.94   0.000     .3005698    .4975935
+       _cons |  -1.001186   .0526961   -19.00   0.000    -1.104468   -.8979033
 ------------------------------------------------------------------------------
 
 . capture noisily sureg (y1 x1 x2) (y2 x1 x3), small dfk
@@ -68,50 +70,50 @@ Seemingly unrelated regression
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"     F-Stat        P
 --------------------------------------------------------------------------
-y1                   400       2    1.041201    0.4096     147.02   0.0000
-y2                   400       2    1.051942    0.3568     111.84   0.0000
+y1                   400       2    1.041364    0.4398     168.97   0.0000
+y2                   400       2    1.051943    0.3568     111.84   0.0000
 --------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7110638   .0499805    14.23   0.000     .6129543    .8091733
-          x2 |  -.4691588   .0479776    -9.78   0.000    -.5633368   -.3749808
-       _cons |   .9928005   .0520683    19.07   0.000     .8905926    1.095008
+          x1 |    .710749   .0499883    14.22   0.000     .6126242    .8088738
+          x2 |  -.5689933   .0479835   -11.86   0.000    -.6631828   -.4748038
+       _cons |   .9927694   .0520765    19.06   0.000     .8905456    1.094993
 -------------+----------------------------------------------------------------
 y2           |
-          x1 |   .4556018   .0556462     8.19   0.000     .3463707    .5648328
-          x3 |   .3991395   .0504534     7.91   0.000     .3001018    .4981772
-       _cons |  -1.001192   .0528949   -18.93   0.000    -1.105023    -.897362
+          x1 |   .4556286   .0556459     8.19   0.000     .3463982     .564859
+          x3 |   .3990816   .0504516     7.91   0.000     .3000473     .498116
+       _cons |  -1.001186   .0528948   -18.93   0.000    -1.105016   -.8973555
 ------------------------------------------------------------------------------
 
 . capture noisily sureg (y1 x1 x2) (y2 x1 x3), isure
 
-Iteration 1:   tolerance =  .01567378
-Iteration 2:   tolerance =  .00005792
-Iteration 3:   tolerance =  1.988e-07
+Iteration 1:   tolerance =  .01571449
+Iteration 2:   tolerance =  .00005829
+Iteration 3:   tolerance =  2.009e-07
 
 Seemingly unrelated regression, iterated 
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
 --------------------------------------------------------------------------
-y1                   400       2     1.03729    0.4096     296.35   0.0000
-y2                   400       2    1.047991    0.3568     225.34   0.0000
+y1                   400       2    1.037452    0.4398     340.64   0.0000
+y2                   400       2    1.047992    0.3568     225.32   0.0000
 --------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7110644   .0497963    14.28   0.000     .6134655    .8086634
-          x2 |  -.4692007   .0477714    -9.82   0.000    -.5628309   -.3755704
-       _cons |   .9928014   .0518765    19.14   0.000     .8911254    1.094477
+          x1 |   .7107497   .0498041    14.27   0.000     .6131354    .8083639
+          x2 |  -.5690353   .0477771   -11.91   0.000    -.6626768   -.4753939
+       _cons |   .9927704   .0518846    19.13   0.000     .8910785    1.094462
 -------------+----------------------------------------------------------------
 y2           |
-          x1 |   .4556395   .0554428     8.22   0.000     .3469737    .5643053
-          x3 |   .3990582   .0502434     7.94   0.000     .3005829    .4975335
-       _cons |  -1.001183   .0527068   -19.00   0.000    -1.104487   -.8978796
+          x1 |   .4556666   .0554425     8.22   0.000     .3470014    .5643318
+          x3 |   .3989998   .0502416     7.94   0.000      .300528    .4974716
+       _cons |  -1.001177   .0527069   -19.00   0.000     -1.10448    -.897873
 ------------------------------------------------------------------------------
 
 . capture noisily reg3 (y1 x1 x2) (y2 x1 x3)
@@ -120,22 +122,22 @@ Three-stage least-squares regression
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
 --------------------------------------------------------------------------
-y1                   400       2    1.037289    0.4096     296.26   0.0000
-y2                   400       2    1.047989    0.3568     225.38   0.0000
+y1                   400       2    1.037452    0.4398     340.49   0.0000
+y2                   400       2     1.04799    0.3568     225.37   0.0000
 --------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7110638   .0497927    14.28   0.000     .6134719    .8086557
-          x2 |  -.4691588   .0477974    -9.82   0.000      -.56284   -.3754777
-       _cons |   .9928005   .0518727    19.14   0.000     .8911319    1.094469
+          x1 |    .710749   .0498005    14.27   0.000     .6131419    .8083562
+          x2 |  -.5689933   .0478032   -11.90   0.000    -.6626859   -.4753007
+       _cons |   .9927694   .0518808    19.14   0.000     .8910849    1.094454
 -------------+----------------------------------------------------------------
 y2           |
-          x1 |   .4556018   .0554371     8.22   0.000      .346947    .5642566
-          x3 |   .3991395   .0502638     7.94   0.000     .3006243    .4976547
-       _cons |  -1.001192   .0526961   -19.00   0.000    -1.104475   -.8979098
+          x1 |   .4556286   .0554368     8.22   0.000     .3469745    .5642828
+          x3 |   .3990816   .0502621     7.94   0.000     .3005698    .4975935
+       _cons |  -1.001186   .0526961   -19.00   0.000    -1.104468   -.8979033
 ------------------------------------------------------------------------------
 Endogenous variables:  y1 y2 
 Exogenous variables:   x1 x2 x3 
@@ -147,7 +149,7 @@ Two-stage least-squares regression
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"     F-Stat        P
 --------------------------------------------------------------------------
-y1                   400       2    1.041126    0.4097     137.78   0.0000
+y1                   400       2    1.041289    0.4399     155.92   0.0000
 y2                   400       2    1.051722    0.3571     110.25   0.0000
 --------------------------------------------------------------------------
 
@@ -155,9 +157,9 @@ y2                   400       2    1.051722    0.3571     110.25   0.0000
              |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7108748   .0499814    14.22   0.000     .6127636    .8089861
-          x2 |  -.4566999   .0519996    -8.78   0.000    -.5587729   -.3546269
-       _cons |    .992528   .0520702    19.06   0.000     .8903166     1.09474
+          x1 |     .71056   .0499892    14.21   0.000     .6124334    .8086866
+          x2 |  -.5565303   .0520078   -10.70   0.000    -.6586192   -.4544413
+       _cons |   .9924969   .0520783    19.06   0.000     .8902694    1.094724
 -------------+----------------------------------------------------------------
 y2           |
           x1 |   .4452658   .0564996     7.88   0.000     .3343595    .5561721
@@ -174,22 +176,22 @@ Three-stage least-squares regression
 --------------------------------------------------------------------------
 Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
 --------------------------------------------------------------------------
-y3                   400       2    1.038091    0.6125   27030.12   0.0000
-y1                   400       2    1.038139    0.4087   31330.46   0.0000
+y3                   400       2    1.037935    0.6570   35008.10   0.0000
+y1                   400       2    1.038316    0.4389   44641.40   0.0000
 --------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 y3           |
-           w |   .7000081   .0042669   164.06   0.000     .6916451    .7083711
-          x1 |   .3114679   .0491927     6.33   0.000     .2150521    .4078838
-       _cons |   .9937866   .0512244    19.40   0.000     .8933886    1.094185
+           w |   .8003579   .0042856   186.76   0.000     .7919583    .8087574
+          x1 |   .3112959   .0491958     6.33   0.000     .2148739    .4077179
+       _cons |   .9933157   .0512275    19.39   0.000     .8929116     1.09372
 -------------+----------------------------------------------------------------
 y1           |
-          x1 |   .7115386   .0497874    14.29   0.000      .613957    .8091201
-          x2 |  -.5004612   .0028365  -176.44   0.000    -.5060206   -.4949018
-       _cons |    .993485   .0518622    19.16   0.000      .891837    1.095133
+          x1 |    .711229   .0497952    14.28   0.000     .6136322    .8088258
+          x2 |  -.6006387   .0028491  -210.81   0.000    -.6062229   -.5950545
+       _cons |   .9934615   .0518703    19.15   0.000     .8917975    1.095125
 ------------------------------------------------------------------------------
 Endogenous variables:  y3 w y1 
 Exogenous variables:   z1 z2 x1 x2 
@@ -203,18 +205,18 @@ Exogenous variables:   z1 z2 x1 x2
 . capture noisily cnsreg y1 x1 x2 x3, constraints(1)
 
 Constrained linear regression                   Number of obs     =        400
-                                                F(   2,    397)   =      18.61
+                                                F(   2,    397)   =      16.42
                                                 Prob > F          =     0.0000
-                                                Root MSE          =     1.2957
+                                                Root MSE          =     1.3372
 
  ( 1)  x1 - x2 = 0
 ------------------------------------------------------------------------------
           y1 |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-          x1 |   .0732159   .0469721     1.56   0.120    -.0191294    .1655611
-          x2 |   .0732159   .0469721     1.56   0.120    -.0191294    .1655611
-          x3 |   .3232528   .0635524     5.09   0.000     .1983114    .4481942
-       _cons |   .9407214   .0651383    14.44   0.000     .8126622    1.068781
+          x1 |   .0195508   .0484752     0.40   0.687    -.0757492    .1148509
+          x2 |   .0195508   .0484752     0.40   0.687    -.0757492    .1148509
+          x3 |   .3465885    .065586     5.28   0.000     .2176492    .4755277
+       _cons |   .9367211   .0672226    13.93   0.000     .8045643    1.068878
 ------------------------------------------------------------------------------
 
 . capture noisily eivreg y4 x1 x2, r(x1 .9)
@@ -311,7 +313,7 @@ number of observations (_N) was 0, now 300
 
 . gen double qual = round(invnormal(runiform()), .01)
 
-. gen double u = round(-.8*price + .5*qual + .3*inc*(alt==2) - .4*inc*(alt==3) - ln(-ln(runiform())), .001)
+. gen double u = -.8*price + .5*qual + .3*inc*(alt==2) - .4*inc*(alt==3) - ln(-ln(runiform()))
 
 . egen double umax = max(u), by(id)
 
@@ -320,108 +322,105 @@ number of observations (_N) was 0, now 300
 . egen byte rk = rank(u), by(id)
 
 . capture noisily clogit choice price qual, group(id)
-note: multiple positive outcomes within groups encountered.
 
-Iteration 0:   log likelihood = -273.46854  
-Iteration 1:   log likelihood = -272.99065  
-Iteration 2:   log likelihood = -272.98976  
-Iteration 3:   log likelihood = -272.98976  
+Iteration 0:   log likelihood = -273.53408  
+Iteration 1:   log likelihood = -273.01832  
+Iteration 2:   log likelihood = -273.01729  
+Iteration 3:   log likelihood = -273.01729  
 
 Conditional (fixed-effects) logistic regression
 
                                                 Number of obs     =        900
-                                                LR chi2(2)        =     113.19
+                                                LR chi2(2)        =     113.13
                                                 Prob > chi2       =     0.0000
-Log likelihood = -272.98976                     Pseudo R2         =     0.1717
+Log likelihood = -273.01729                     Pseudo R2         =     0.1716
 
 ------------------------------------------------------------------------------
       choice |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-       price |  -1.112736   .1457396    -7.64   0.000     -1.39838   -.8270912
-        qual |   .6666978    .096864     6.88   0.000     .4768478    .8565477
+       price |  -1.102948   .1455918    -7.58   0.000    -1.388303   -.8175932
+        qual |   .6739115   .0969566     6.95   0.000     .4838801    .8639429
 ------------------------------------------------------------------------------
 
 . capture noisily clogit choice price qual, group(id) or
-note: multiple positive outcomes within groups encountered.
 
-Iteration 0:   log likelihood = -273.46854  
-Iteration 1:   log likelihood = -272.99065  
-Iteration 2:   log likelihood = -272.98976  
-Iteration 3:   log likelihood = -272.98976  
+Iteration 0:   log likelihood = -273.53408  
+Iteration 1:   log likelihood = -273.01832  
+Iteration 2:   log likelihood = -273.01729  
+Iteration 3:   log likelihood = -273.01729  
 
 Conditional (fixed-effects) logistic regression
 
                                                 Number of obs     =        900
-                                                LR chi2(2)        =     113.19
+                                                LR chi2(2)        =     113.13
                                                 Prob > chi2       =     0.0000
-Log likelihood = -272.98976                     Pseudo R2         =     0.1717
+Log likelihood = -273.01729                     Pseudo R2         =     0.1716
 
 ------------------------------------------------------------------------------
       choice | Odds Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-       price |   .3286586   .0478986    -7.64   0.000     .2469968    .4373195
-        qual |   1.947795   .1886711     6.88   0.000     1.610988    2.355016
+       price |   .3318912   .0483207    -7.58   0.000     .2494984     .441493
+        qual |   1.961896   .1902187     6.95   0.000     1.622357    2.372497
 ------------------------------------------------------------------------------
 
 . capture noisily clogit choice price qual, group(id) vce(robust)
-note: multiple positive outcomes within groups encountered.
 
-Iteration 0:   log pseudolikelihood = -273.46854  
-Iteration 1:   log pseudolikelihood = -272.99065  
-Iteration 2:   log pseudolikelihood = -272.98976  
-Iteration 3:   log pseudolikelihood = -272.98976  
+Iteration 0:   log pseudolikelihood = -273.53408  
+Iteration 1:   log pseudolikelihood = -273.01832  
+Iteration 2:   log pseudolikelihood = -273.01729  
+Iteration 3:   log pseudolikelihood = -273.01729  
 
 Conditional (fixed-effects) logistic regression
 
                                                 Number of obs     =        900
-                                                Wald chi2(2)      =      89.27
+                                                Wald chi2(2)      =      88.98
                                                 Prob > chi2       =     0.0000
-Log pseudolikelihood = -272.98976               Pseudo R2         =     0.1717
+Log pseudolikelihood = -273.01729               Pseudo R2         =     0.1716
 
                                      (Std. Err. adjusted for clustering on id)
 ------------------------------------------------------------------------------
              |               Robust
       choice |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-       price |  -1.112736   .1410362    -7.89   0.000    -1.389162   -.8363097
-        qual |   .6666978   .0958453     6.96   0.000     .4788444    .8545511
+       price |  -1.102948   .1405406    -7.85   0.000    -1.378402   -.8274935
+        qual |   .6739115   .0963082     7.00   0.000      .485151     .862672
 ------------------------------------------------------------------------------
 
 . capture noisily rologit rk price qual, group(id)
 
-Iteration 0:   log likelihood = -536.83469
-Iteration 1:   log likelihood = -472.40464
-Iteration 2:   log likelihood = -471.12115
-Iteration 3:   log likelihood = -471.11742
+Iteration 0:   log likelihood = -537.52784
+Iteration 1:   log likelihood = -472.99668
+Iteration 2:   log likelihood = -471.70442
+Iteration 3:   log likelihood = -471.70063
 Refining estimates:
-Iteration 0:   log likelihood = -471.11742
+Iteration 0:   log likelihood = -471.70063
 
 Rank-ordered logistic regression                Number of obs     =        900
 Group variable: id                              Number of groups  =        300
 
-Ties handled via the exactm method              Obs per group:
+No ties in data                                 Obs per group:
                                                               min =          3
                                                               avg =       3.00
                                                               max =          3
 
-                                                LR chi2(2)        =     131.43
-Log likelihood = -471.1174                      Prob > chi2       =     0.0000
+                                                LR chi2(2)        =     131.65
+Log likelihood = -471.7006                      Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
           rk |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-       price |  -.8669738   .1062494    -8.16   0.000    -1.075219   -.6587288
-        qual |   .5487514   .0686509     7.99   0.000     .4141981    .6833048
+       price |  -.8654746   .1061825    -8.15   0.000    -1.073588   -.6573608
+        qual |   .5510768   .0686682     8.03   0.000     .4164896    .6856641
 ------------------------------------------------------------------------------
 
 . capture noisily asclogit choice price qual, case(id) alternatives(alt) casevars(inc)
 
-Iteration 0:   log likelihood = -375.40447  
-Iteration 1:   log likelihood = -277.80231  
-Iteration 2:   log likelihood = -269.81081  
-Iteration 3:   log likelihood = -269.68597  
-Iteration 4:   log likelihood = -269.68592  
-Iteration 5:   log likelihood = -269.68592  
+Iteration 0:   log likelihood = -373.86071  
+Iteration 1:   log likelihood = -277.27026  
+Iteration 2:   log likelihood = -270.02892  
+Iteration 3:   log likelihood = -269.93485  
+Iteration 4:   log likelihood = -269.93482  
+Iteration 5:   log likelihood = -269.93482  
 
 Alternative-specific conditional logit         Number of obs      =        900
 Case variable: id                              Number of cases    =        300
@@ -430,34 +429,34 @@ Alternative variable: alt                      Alts per case: min =          3
                                                               avg =        3.0
                                                               max =          3
 
-                                                  Wald chi2(4)    =      86.97
-Log likelihood = -269.68592                       Prob > chi2     =     0.0000
+                                                  Wald chi2(4)    =      86.68
+Log likelihood = -269.93482                       Prob > chi2     =     0.0000
 
 ------------------------------------------------------------------------------
       choice |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 alt          |
-       price |  -1.145865   .1484185    -7.72   0.000     -1.43676   -.8549698
-        qual |   .6762993   .0979781     6.90   0.000     .4842658    .8683329
+       price |  -1.134552   .1480544    -7.66   0.000    -1.424733   -.8443705
+        qual |    .683508   .0980615     6.97   0.000      .491311     .875705
 -------------+----------------------------------------------------------------
 1            |  (base alternative)
 -------------+----------------------------------------------------------------
 2            |
-         inc |   .0973238   .1662765     0.59   0.558    -.2285721    .4232198
-       _cons |   .0597442   .1559603     0.38   0.702    -.2459323    .3654208
+         inc |   .0883606   .1663264     0.53   0.595    -.2376331    .4143543
+       _cons |   .0504244   .1560419     0.32   0.747    -.2554121    .3562608
 -------------+----------------------------------------------------------------
 3            |
-         inc |  -.1947516   .1698381    -1.15   0.252    -.5276281    .1381249
-       _cons |  -.1950622   .1621335    -1.20   0.229     -.512838    .1227136
+         inc |  -.1928162    .169489    -1.14   0.255    -.5250085     .139376
+       _cons |   -.193039   .1619018    -1.19   0.233    -.5103607    .1242828
 ------------------------------------------------------------------------------
 
 . capture noisily asclogit choice price qual, case(id) alternatives(alt) casevars(inc) basealternative(2)
 
-Iteration 0:   log likelihood = -362.38983  
-Iteration 1:   log likelihood = -275.70374  
-Iteration 2:   log likelihood = -269.74019  
-Iteration 3:   log likelihood = -269.68593  
-Iteration 4:   log likelihood = -269.68592  
+Iteration 0:   log likelihood = -362.65747  
+Iteration 1:   log likelihood = -275.56466  
+Iteration 2:   log likelihood = -269.98245  
+Iteration 3:   log likelihood = -269.93483  
+Iteration 4:   log likelihood = -269.93482  
 
 Alternative-specific conditional logit         Number of obs      =        900
 Case variable: id                              Number of cases    =        300
@@ -466,74 +465,73 @@ Alternative variable: alt                      Alts per case: min =          3
                                                               avg =        3.0
                                                               max =          3
 
-                                                  Wald chi2(4)    =      86.97
-Log likelihood = -269.68592                       Prob > chi2     =     0.0000
+                                                  Wald chi2(4)    =      86.68
+Log likelihood = -269.93482                       Prob > chi2     =     0.0000
 
 ------------------------------------------------------------------------------
       choice |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 alt          |
-       price |  -1.145865   .1484185    -7.72   0.000     -1.43676   -.8549697
-        qual |   .6762993   .0979781     6.90   0.000     .4842657    .8683328
+       price |  -1.134552   .1480543    -7.66   0.000    -1.424733   -.8443704
+        qual |   .6835079   .0980615     6.97   0.000     .4913109     .875705
 -------------+----------------------------------------------------------------
 1            |
-         inc |  -.0973239   .1662765    -0.59   0.558    -.4232198     .228572
-       _cons |  -.0597442   .1559603    -0.38   0.702    -.3654207    .2459324
+         inc |  -.0883606   .1663264    -0.53   0.595    -.4143543    .2376331
+       _cons |  -.0504244   .1560419    -0.32   0.747    -.3562608    .2554121
 -------------+----------------------------------------------------------------
 2            |  (base alternative)
 -------------+----------------------------------------------------------------
 3            |
-         inc |  -.2920754   .1657613    -1.76   0.078    -.6169615    .0328107
-       _cons |  -.2548064   .1591262    -1.60   0.109     -.566688    .0570752
+         inc |  -.2811768   .1656077    -1.70   0.090     -.605762    .0434084
+       _cons |  -.2434633   .1589368    -1.53   0.126    -.5549737     .068047
 ------------------------------------------------------------------------------
 
 . capture noisily asmprobit choice price qual, case(id) alternatives(alt) casevars(inc) intpoints(100)
-note: 1 case (3 obs) dropped due to no positive outcome or multiple positive outcomes per case
 
-Iteration 0:   log simulated-likelihood = -268.66787  
-Iteration 1:   log simulated-likelihood = -268.44338  (backed up)
-Iteration 2:   log simulated-likelihood = -268.16213  
-Iteration 3:   log simulated-likelihood = -267.83763  (backed up)
-Iteration 4:   log simulated-likelihood = -267.73998  
-Iteration 5:   log simulated-likelihood = -267.68241  
-Iteration 6:   log simulated-likelihood = -267.60162  
-Iteration 7:   log simulated-likelihood = -267.52034  
-Iteration 8:   log simulated-likelihood = -267.49407  
-Iteration 9:   log simulated-likelihood = -267.36433  
-Iteration 10:  log simulated-likelihood = -267.35018  
-Iteration 11:  log simulated-likelihood = -267.34996  
-Iteration 12:  log simulated-likelihood = -267.34995  
+Iteration 0:   log simulated-likelihood =  -269.6587  
+Iteration 1:   log simulated-likelihood =   -269.437  (backed up)
+Iteration 2:   log simulated-likelihood = -269.16165  
+Iteration 3:   log simulated-likelihood = -268.84239  (backed up)
+Iteration 4:   log simulated-likelihood = -268.75094  
+Iteration 5:   log simulated-likelihood =  -268.6936  
+Iteration 6:   log simulated-likelihood = -268.62138  
+Iteration 7:   log simulated-likelihood = -268.54365  
+Iteration 8:   log simulated-likelihood = -268.52076  
+Iteration 9:   log simulated-likelihood = -268.37692  
+Iteration 10:  log simulated-likelihood = -268.36567  
+Iteration 11:  log simulated-likelihood =  -268.3655  
+Iteration 12:  log simulated-likelihood =  -268.3655  
 
-Alternative-specific multinomial probit        Number of obs      =        897
-Case variable: id                              Number of cases    =        299
+Alternative-specific multinomial probit        Number of obs      =        900
+Case variable: id                              Number of cases    =        300
 
 Alternative variable: alt                      Alts per case: min =          3
                                                               avg =        3.0
                                                               max =          3
 Integration sequence:      Hammersley
-Integration points:               100             Wald chi2(4)    =      41.94
-Log simulated-likelihood = -267.34995             Prob > chi2     =     0.0000
+Integration points:               100             Wald chi2(4)    =      41.93
+Log simulated-likelihood =  -268.3655             Prob > chi2     =     0.0000
 
 ------------------------------------------------------------------------------
       choice |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 alt          |
-       price |  -1.041109    .190249    -5.47   0.000     -1.41399   -.6682278
-        qual |   .6219268   .1063621     5.85   0.000     .4134609    .8303927
+       price |   -1.03233   .1900563    -5.43   0.000    -1.404834   -.6598264
+        qual |   .6265754   .1062971     5.89   0.000     .4182369    .8349138
 -------------+----------------------------------------------------------------
 1            |  (base alternative)
 -------------+----------------------------------------------------------------
 2            |
-         inc |   .0375456   .1346621     0.28   0.780    -.2263872    .3014784
-       _cons |   .1678937   .1986247     0.85   0.398    -.2214036     .557191
+         inc |   .0380476   .1344125     0.28   0.777    -.2253961    .3014913
+       _cons |    .168887   .1986979     0.85   0.395    -.2205537    .5583276
 -------------+----------------------------------------------------------------
 3            |
-         inc |  -.2313266    .183172    -1.26   0.207     -.590337    .1276838
-       _cons |  -.2950604   .2583999    -1.14   0.254    -.8015149     .211394
+         inc |  -.2180967   .1810899    -1.20   0.228    -.5730263     .136833
+       _cons |  -.2768087   .2547191    -1.09   0.277    -.7760489    .2224315
 -------------+----------------------------------------------------------------
-     /lnl2_2 |   .4977455   .2453549     2.03   0.042     .0168588    .9786323
+     /lnl2_2 |   .4895579   .2453822     2.00   0.046     .0086177    .9704981
 -------------+----------------------------------------------------------------
-       /l2_1 |   1.170141   .5075463     2.31   0.021     .1753688    2.164914
+       /l2_1 |   1.169489   .5014171     2.33   0.020     .1867299    2.152249
 ------------------------------------------------------------------------------
 (alt=1 is the alternative normalizing location)
 (alt=2 is the alternative normalizing scale)
@@ -549,11 +547,11 @@ number of observations (_N) was 0, now 500
 
 . gen double x2 = round(invnormal(runiform()), .01)
 
-. gen double ua = round(.5*x1 - ln(-ln(runiform())), .001)
+. gen double ua = .5*x1 - ln(-ln(runiform()))
 
-. gen double ub = round(.6*x2 - .4*x1 - ln(-ln(runiform())), .001)
+. gen double ub = .6*x2 - .4*x1 - ln(-ln(runiform()))
 
-. gen double uc = round(.3*x1 + .5*x2 - ln(-ln(runiform())), .001)
+. gen double uc = .3*x1 + .5*x2 - ln(-ln(runiform()))
 
 . gen byte yy = 1 + (ub > ua & ub > uc) + 2*(uc > ua & uc > ub)
 
@@ -1047,42 +1045,42 @@ Iteration 6:  residual SS =  107.7881
 (obs = 400)
 
 Calculating NLS estimates...
-Iteration 0:  Residual SS =  869.4546
-Iteration 1:  Residual SS =  869.4546
+Iteration 0:  Residual SS =  869.5891
+Iteration 1:  Residual SS =  869.5891
 Calculating FGNLS estimates...
-Iteration 0:  Scaled RSS =  799.7348
-Iteration 1:  Scaled RSS =  799.7348
+Iteration 0:  Scaled RSS =  799.7337
+Iteration 1:  Scaled RSS =  799.7337
 
 FGNLS regression 
 -----------------------------------------------------------------------
        Equation |        Obs   Parms       RMSE      R-sq     Constant
 ----------------+------------------------------------------------------
- 1           y1 |        400       3   1.037289    0.4096           a0
- 2           y2 |        400       3   1.047989    0.3568           c0
+ 1           y1 |        400       3   1.037452    0.4398           a0
+ 2           y2 |        400       3    1.04799    0.3568           c0
 -----------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-         /a0 |   .9928005   .0518727    19.14   0.000     .8911319    1.094469
-         /a1 |   .7110638   .0497927    14.28   0.000     .6134719    .8086557
-         /a2 |  -.4691588   .0477974    -9.82   0.000      -.56284   -.3754777
-         /c0 |  -1.001192   .0526961   -19.00   0.000    -1.104475   -.8979098
-         /c1 |   .4556018   .0554371     8.22   0.000      .346947    .5642566
-         /c2 |   .3991395   .0502638     7.94   0.000     .3006243    .4976547
+         /a0 |   .9927694   .0518808    19.14   0.000     .8910849    1.094454
+         /a1 |    .710749   .0498005    14.27   0.000     .6131419    .8083562
+         /a2 |  -.5689933   .0478032   -11.90   0.000    -.6626859   -.4753007
+         /c0 |  -1.001186   .0526961   -19.00   0.000    -1.104468   -.8979033
+         /c1 |   .4556286   .0554368     8.22   0.000     .3469745    .5642828
+         /c2 |   .3990816   .0502621     7.94   0.000     .3005698    .4975935
 ------------------------------------------------------------------------------
 
 . capture noisily gmm (y1 - {b1}*x1 - {b2}*x2 - {b0}), instruments(x1 x2 z1 z2)
 
 Step 1
-Iteration 0:   GMM criterion Q(b) =  1.7016403  
-Iteration 1:   GMM criterion Q(b) =   .0003092  
-Iteration 2:   GMM criterion Q(b) =   .0003092  
+Iteration 0:   GMM criterion Q(b) =  1.7959142  
+Iteration 1:   GMM criterion Q(b) =  .00029583  
+Iteration 2:   GMM criterion Q(b) =  .00029583  
 
 Step 2
-Iteration 0:   GMM criterion Q(b) =  .00029372  
-Iteration 1:   GMM criterion Q(b) =  .00028752  
-Iteration 2:   GMM criterion Q(b) =  .00028752  
+Iteration 0:   GMM criterion Q(b) =  .00028074  
+Iteration 1:   GMM criterion Q(b) =  .00027482  
+Iteration 2:   GMM criterion Q(b) =  .00027482  
 
 GMM estimation 
 
@@ -1095,18 +1093,18 @@ GMM weight matrix:     Robust
              |               Robust
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-         /b1 |   .7092387   .0502286    14.12   0.000     .6107924     .807685
-         /b2 |  -.4575391   .0554095    -8.26   0.000    -.5661396   -.3489385
-         /b0 |   .9943877   .0515099    19.30   0.000     .8934301    1.095345
+         /b1 |   .7089643   .0502524    14.11   0.000     .6104713    .8074572
+         /b2 |  -.5573614   .0554523   -10.05   0.000    -.6660459    -.448677
+         /b0 |    .994313   .0515172    19.30   0.000     .8933412    1.095285
 ------------------------------------------------------------------------------
 Instruments for equation 1: x1 x2 z1 z2 _cons
 
 . capture noisily gmm (y1 - {b1}*x1 - {b2}*x2 - {b0}), instruments(x1 x2 z1 z2) onestep
 
 Step 1
-Iteration 0:   GMM criterion Q(b) =  1.7016403  
-Iteration 1:   GMM criterion Q(b) =   .0003092  
-Iteration 2:   GMM criterion Q(b) =   .0003092  
+Iteration 0:   GMM criterion Q(b) =  1.7959142  
+Iteration 1:   GMM criterion Q(b) =  .00029583  
+Iteration 2:   GMM criterion Q(b) =  .00029583  
 
 GMM estimation 
 
@@ -1118,9 +1116,9 @@ Initial weight matrix: Unadjusted                 Number of obs   =        400
              |               Robust
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
-         /b1 |   .7108748    .050789    14.00   0.000     .6113303    .8104194
-         /b2 |  -.4566999   .0557159    -8.20   0.000    -.5659011   -.3474988
-         /b0 |    .992528   .0518396    19.15   0.000     .8909243    1.094132
+         /b1 |     .71056   .0508155    13.98   0.000     .6109635    .8101565
+         /b2 |  -.5565303   .0557607    -9.98   0.000    -.6658192   -.4472414
+         /b0 |   .9924969   .0518476    19.14   0.000     .8908774    1.094116
 ------------------------------------------------------------------------------
 Instruments for equation 1: x1 x2 z1 z2 _cons
 
@@ -1214,14 +1212,14 @@ number of observations (_N) was 0, now 900
 
 . gen double u = round(invnormal(runiform()), .01)
 
-. gen byte t = (.2 + .7*z + .5*x + u) > 0
+. gen byte t = (.2 + .7*z + .5*x + u + .0001*runiform()) > 0
 
 . gen double yt = round(1 + x + 1.5*t + .5*t*x + .6*u + .7*invnormal(runiform()), .01)
 
 . capture noisily teffects ra (yt x) (t)
 
-Iteration 0:   EE criterion =  4.959e-30  
-Iteration 1:   EE criterion =  1.687e-32  
+Iteration 0:   EE criterion =  6.111e-30  
+Iteration 1:   EE criterion =  4.756e-33  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : regression adjustment
@@ -1233,17 +1231,17 @@ Treatment model: none
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.308638   .0615163    37.53   0.000     2.188068    2.429208
+   (1 vs 0)  |   2.243859   .0603052    37.21   0.000     2.125663    2.362055
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .5522048   .0532728    10.37   0.000     .4477921    .6566176
+          0  |   .6346211   .0535959    11.84   0.000      .529575    .7396672
 ------------------------------------------------------------------------------
 
 . capture noisily teffects ra (yt x) (t), atet
 
-Iteration 0:   EE criterion =  4.856e-30  
-Iteration 1:   EE criterion =  2.092e-32  
+Iteration 0:   EE criterion =  6.115e-30  
+Iteration 1:   EE criterion =  2.200e-32  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : regression adjustment
@@ -1255,17 +1253,17 @@ Treatment model: none
 -------------+----------------------------------------------------------------
 ATET         |
            t |
-   (1 vs 0)  |   2.458446   .0666607    36.88   0.000     2.327793    2.589098
+   (1 vs 0)  |   2.375697   .0648726    36.62   0.000     2.248549    2.502845
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .7933157   .0626889    12.65   0.000     .6704477    .9161838
+          0  |   .9036183   .0626642    14.42   0.000     .7807987    1.026438
 ------------------------------------------------------------------------------
 
 . capture noisily teffects ra (yt x) (t), pomeans
 
-Iteration 0:   EE criterion =  4.970e-30  
-Iteration 1:   EE criterion =  1.302e-31  
+Iteration 0:   EE criterion =  6.111e-30  
+Iteration 1:   EE criterion =  4.990e-33  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : regression adjustment
@@ -1277,14 +1275,14 @@ Treatment model: none
 -------------+----------------------------------------------------------------
 POmeans      |
            t |
-          0  |   .5522048   .0532728    10.37   0.000     .4477921    .6566176
-          1  |   2.860843   .0595604    48.03   0.000     2.744107    2.977579
+          0  |   .6346211   .0535959    11.84   0.000      .529575    .7396672
+          1  |    2.87848    .061865    46.53   0.000     2.757227    2.999733
 ------------------------------------------------------------------------------
 
 . capture noisily teffects ipw (yt) (t x z)
 
 Iteration 0:   EE criterion =  9.052e-22  
-Iteration 1:   EE criterion =  4.979e-33  
+Iteration 1:   EE criterion =  4.858e-32  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : inverse-probability weights
@@ -1296,17 +1294,17 @@ Treatment model: logit
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.661327   .0808252    32.93   0.000     2.502913    2.819741
+   (1 vs 0)  |   2.516565   .0849318    29.63   0.000     2.350102    2.683028
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .3284568    .066908     4.91   0.000     .1973195    .4595941
+          0  |   .4589023   .0645974     7.10   0.000     .3322937    .5855108
 ------------------------------------------------------------------------------
 
 . capture noisily teffects ipw (yt) (t x z, probit)
 
 Iteration 0:   EE criterion =  5.140e-16  
-Iteration 1:   EE criterion =  7.275e-30  
+Iteration 1:   EE criterion =  1.542e-29  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : inverse-probability weights
@@ -1318,17 +1316,17 @@ Treatment model: probit
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.662568   .0801018    33.24   0.000     2.505572    2.819565
+   (1 vs 0)  |   2.514378   .0839409    29.95   0.000     2.349857    2.678899
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .3244298   .0677746     4.79   0.000     .1915941    .4572655
+          0  |   .4551228   .0642096     7.09   0.000     .3292743    .5809712
 ------------------------------------------------------------------------------
 
 . capture noisily teffects ipwra (yt x) (t x z)
 
 Iteration 0:   EE criterion =  9.052e-22  
-Iteration 1:   EE criterion =  1.217e-32  
+Iteration 1:   EE criterion =  1.838e-33  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : IPW regression adjustment
@@ -1340,17 +1338,17 @@ Treatment model: logit
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.627923    .077043    34.11   0.000     2.476921    2.778924
+   (1 vs 0)  |    2.47686   .0696408    35.57   0.000     2.340367    2.613354
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .3596805   .0667657     5.39   0.000     .2288222    .4905388
+          0  |   .4962689   .0628445     7.90   0.000     .3730959    .6194419
 ------------------------------------------------------------------------------
 
 . capture noisily teffects aipw (yt x) (t x z)
 
 Iteration 0:   EE criterion =  9.052e-22  
-Iteration 1:   EE criterion =  3.571e-32  
+Iteration 1:   EE criterion =  3.631e-33  
 
 Treatment-effects estimation                    Number of obs     =        900
 Estimator      : augmented IPW
@@ -1362,11 +1360,11 @@ Treatment model: logit
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.620944   .0782667    33.49   0.000     2.467544    2.774344
+   (1 vs 0)  |   2.473159   .0696542    35.51   0.000     2.336639    2.609679
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   .3656823   .0677565     5.40   0.000     .2328819    .4984826
+          0  |   .4992958   .0630581     7.92   0.000     .3757042    .6228875
 ------------------------------------------------------------------------------
 
 . capture noisily teffects nnmatch (yt x) (t)
@@ -1381,11 +1379,23 @@ Distance metric: Mahalanobis                                  max =         11
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.310778   .0632878    36.51   0.000     2.186736    2.434819
+   (1 vs 0)  |   2.256274   .0690188    32.69   0.000     2.120999    2.391548
 ------------------------------------------------------------------------------
 
-. capture noisily teffects nnmatch (yt x) (t), atet nneighbors(2)
-option nneighbors(2) is not allowed
+. capture noisily teffects nnmatch (yt x) (t), atet nneighbor(2)
+
+Treatment-effects estimation                   Number of obs      =        900
+Estimator      : nearest-neighbor matching     Matches: requested =          2
+Outcome model  : matching                                     min =          2
+Distance metric: Mahalanobis                                  max =         12
+------------------------------------------------------------------------------
+             |              AI Robust
+          yt |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATET         |
+           t |
+   (1 vs 0)  |   2.370635   .0693126    34.20   0.000     2.234785    2.506485
+------------------------------------------------------------------------------
 
 . capture noisily teffects psmatch (yt) (t x z)
 
@@ -1399,13 +1409,13 @@ Treatment model: logit                                        max =          1
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   2.699567   .1107529    24.37   0.000     2.482495    2.916638
+   (1 vs 0)  |   2.479078   .1140578    21.74   0.000     2.255529    2.702627
 ------------------------------------------------------------------------------
 
 . capture noisily eteffects (yt x) (t x z)
 
 Iteration 0:   EE criterion =  1.191e-16  
-Iteration 1:   EE criterion =  3.509e-17  
+Iteration 1:   EE criterion =  3.375e-17  
 
 Endogenous treatment-effects estimation         Number of obs     =        900
 Outcome model  : linear
@@ -1416,59 +1426,59 @@ Treatment model: probit
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |   1.450106   .1165753    12.44   0.000     1.221623    1.678589
+   (1 vs 0)  |   1.466242   .1262547    11.61   0.000     1.218788    1.713697
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   1.065421   .1001604    10.64   0.000     .8691099    1.261732
+          0  |   1.055619   .1041022    10.14   0.000     .8515825    1.259656
 ------------------------------------------------------------------------------
 
 . capture noisily etregress yt x, treat(t = z x)
 
-Iteration 0:   log likelihood = -1564.3964  
-Iteration 1:   log likelihood = -1560.7043  
-Iteration 2:   log likelihood = -1560.6701  
-Iteration 3:   log likelihood = -1560.6701  
+Iteration 0:   log likelihood = -1563.8549  
+Iteration 1:   log likelihood = -1563.3232  
+Iteration 2:   log likelihood = -1563.3223  
+Iteration 3:   log likelihood = -1563.3223  
 
 Linear regression with endogenous treatment     Number of obs     =        900
-Estimator: maximum likelihood                   Wald chi2(2)      =    2638.00
-Log likelihood = -1560.6701                     Prob > chi2       =     0.0000
+Estimator: maximum likelihood                   Wald chi2(2)      =    2675.64
+Log likelihood = -1563.3223                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 yt           |
-           x |   1.263864   .0349539    36.16   0.000     1.195356    1.332372
-         1.t |   1.535249   .1040839    14.75   0.000     1.331248    1.739249
-       _cons |   1.021777   .0659757    15.49   0.000     .8924666    1.151087
+           x |   1.338304   .0359537    37.22   0.000     1.267836    1.408772
+         1.t |   1.405263   .1115706    12.60   0.000     1.186589    1.623937
+       _cons |   1.127797   .0699285    16.13   0.000     .9907398    1.264854
 -------------+----------------------------------------------------------------
 t            |
-           z |   .7982315   .0574647    13.89   0.000     .6856029    .9108602
-           x |   .5614372   .0519537    10.81   0.000     .4596097    .6632647
-       _cons |   .2215702   .0473994     4.67   0.000      .128669    .3144713
+           z |   .7670259    .056516    13.57   0.000     .6562566    .8777952
+           x |   .5423908   .0510494    10.62   0.000     .4423357    .6424458
+       _cons |   .2235335   .0468887     4.77   0.000     .1316333    .3154337
 -------------+----------------------------------------------------------------
-     /athrho |   .7190539   .0890382     8.08   0.000     .5445423    .8935655
-    /lnsigma |  -.0817872    .030688    -2.67   0.008    -.1419346   -.0216399
+     /athrho |   .7889248   .0997606     7.91   0.000     .5933977    .9844519
+    /lnsigma |  -.0664961   .0325173    -2.04   0.041    -.1302288   -.0027633
 -------------+----------------------------------------------------------------
-         rho |   .6163229   .0552167                      .4964186    .7131503
-       sigma |    .921468    .028278                       .867678    .9785926
-      lambda |   .5679219   .0635494                      .4433673    .6924764
+         rho |   .6577995   .0565941                      .5323349    .7549866
+       sigma |   .9356666   .0304254                      .8778945    .9972405
+      lambda |    .615481   .0683381                      .4815407    .7494213
 ------------------------------------------------------------------------------
-LR test of indep. eqns. (rho = 0):   chi2(1) =    64.21   Prob > chi2 = 0.0000
+LR test of indep. eqns. (rho = 0):   chi2(1) =    62.23   Prob > chi2 = 0.0000
 
 . capture noisily etregress yt x, treat(t = z x) twostep
 
 Linear regression with endogenous treatment     Number of obs      =       900
-Estimator: two-step                             Wald chi2(3)       =   2447.07
+Estimator: two-step                             Wald chi2(3)       =   2714.94
                                                 Prob > chi2        =    0.0000
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 yt           |
-           x |    1.29269   .0389566    33.18   0.000     1.216336    1.369043
-           t |   1.355718   .1397344     9.70   0.000     1.081844    1.629593
-       _cons |   1.122465   .0846099    13.27   0.000     .9566323    1.288297
+           x |   1.339789   .0382161    35.06   0.000     1.264887    1.414692
+           t |   1.396009    .137172    10.18   0.000     1.127157    1.664861
+       _cons |   1.132987   .0830463    13.64   0.000     .9702192    1.295755
 -------------+----------------------------------------------------------------
 t            |
            z |   .7837764   .0597811    13.11   0.000     .6666076    .9009453
@@ -1476,10 +1486,10 @@ t            |
        _cons |   .1854414   .0478433     3.88   0.000     .0916703    .2792125
 -------------+----------------------------------------------------------------
 hazard       |
-      lambda |   .6982839    .089896     7.77   0.000     .5220909    .8744769
+      lambda |   .6216127   .0889557     6.99   0.000     .4472627    .7959626
 -------------+----------------------------------------------------------------
-         rho |    0.73050
-       sigma |  .95590014
+         rho |    0.66311
+       sigma |  .93741348
 ------------------------------------------------------------------------------
 
 . gen double mu = exp(.3 + .4*x + .5*t + .5*(.6*u + .8*round(invnormal(runiform()), .01)))
@@ -1489,73 +1499,72 @@ hazard       |
 . forvalues j = 1/30 {
   2.     replace cy = cy + (runiform() < mu/30)
   3. }
-(72 real changes made)
-(69 real changes made)
-(68 real changes made)
-(71 real changes made)
-(65 real changes made)
-(84 real changes made)
-(84 real changes made)
 (70 real changes made)
-(84 real changes made)
-(63 real changes made)
-(83 real changes made)
-(75 real changes made)
-(68 real changes made)
-(68 real changes made)
-(84 real changes made)
-(78 real changes made)
-(75 real changes made)
-(74 real changes made)
-(63 real changes made)
-(73 real changes made)
-(69 real changes made)
-(70 real changes made)
-(76 real changes made)
-(79 real changes made)
-(72 real changes made)
+(67 real changes made)
+(67 real changes made)
 (63 real changes made)
 (85 real changes made)
-(70 real changes made)
+(83 real changes made)
+(76 real changes made)
+(89 real changes made)
+(65 real changes made)
+(76 real changes made)
 (84 real changes made)
-(70 real changes made)
+(67 real changes made)
+(79 real changes made)
+(80 real changes made)
+(85 real changes made)
+(83 real changes made)
+(76 real changes made)
+(76 real changes made)
+(75 real changes made)
+(83 real changes made)
+(76 real changes made)
+(81 real changes made)
+(74 real changes made)
+(68 real changes made)
+(78 real changes made)
+(88 real changes made)
+(75 real changes made)
+(81 real changes made)
+(64 real changes made)
+(72 real changes made)
 
 . capture noisily etpoisson cy x, treat(t = z x)
 
-Iteration 0:   log likelihood =  -2688.037  (not concave)
-Iteration 1:   log likelihood =  -2622.299  (not concave)
-Iteration 2:   log likelihood = -2324.5941  (not concave)
-Iteration 3:   log likelihood = -2145.9581  
-Iteration 4:   log likelihood = -2107.4277  
-Iteration 5:   log likelihood = -2103.4686  
-Iteration 6:   log likelihood = -2102.8959  
-Iteration 7:   log likelihood = -2102.8937  
-Iteration 8:   log likelihood = -2102.8937  
+Iteration 0:   log likelihood = -2708.0754  (not concave)
+Iteration 1:   log likelihood = -2627.7627  (not concave)
+Iteration 2:   log likelihood = -2322.3603  (not concave)
+Iteration 3:   log likelihood =  -2170.348  (not concave)
+Iteration 4:   log likelihood = -2137.5511  
+Iteration 5:   log likelihood = -2133.6041  
+Iteration 6:   log likelihood = -2133.5519  
+Iteration 7:   log likelihood = -2133.5519  
 
 Poisson regression with endogenous treatment    Number of obs     =        900
-(24 quadrature points)                          Wald chi2(2)      =     322.50
-Log likelihood = -2102.8937                     Prob > chi2       =     0.0000
+(24 quadrature points)                          Wald chi2(2)      =     277.04
+Log likelihood = -2133.5519                     Prob > chi2       =     0.0000
 
 ------------------------------------------------------------------------------
              |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
 -------------+----------------------------------------------------------------
 cy           |
-           x |    .380811   .0342648    11.11   0.000     .3136532    .4479687
-         1.t |   .7707657   .1269888     6.07   0.000     .5218723    1.019659
-       _cons |   .1382425   .0832059     1.66   0.097    -.0248382    .3013231
+           x |   .3532016   .0339998    10.39   0.000     .2865632    .4198399
+         1.t |   .7159495   .1252215     5.72   0.000     .4705198    .9613791
+       _cons |   .2020518    .082354     2.45   0.014     .0406408    .3634627
 -------------+----------------------------------------------------------------
 t            |
-           z |   .7845183   .0595239    13.18   0.000     .6678535    .9011831
-           x |    .546393   .0536933    10.18   0.000     .4411561    .6516298
-       _cons |   .1826379   .0478145     3.82   0.000     .0889232    .2763525
+           z |   .7862983      .0596    13.19   0.000     .6694845    .9031121
+           x |   .5544908   .0538846    10.29   0.000     .4488789    .6601028
+       _cons |   .1822586    .047751     3.82   0.000     .0886684    .2758489
 -------------+----------------------------------------------------------------
-     /athrho |   .3098425   .1924456     1.61   0.107    -.0673441     .687029
-    /lnsigma |  -.7852509   .0756142   -10.38   0.000    -.9334519   -.6370499
+     /athrho |   .5005501   .1967459     2.54   0.011     .1149352     .886165
+    /lnsigma |  -.7336226   .0730361   -10.04   0.000    -.8767706   -.5904745
 -------------+----------------------------------------------------------------
-         rho |   .3002938   .1750916                     -.0672425      .59607
-       sigma |   .4560053   .0344805                      .3931941    .5288503
+         rho |   .4625497   .1546517                      .1144317    .7094944
+       sigma |   .4801664   .0350695                      .4161246    .5540643
 ------------------------------------------------------------------------------
-Wald test of indep. eqns. (rho = 0): chi2(1) =     2.59   Prob > chi2 = 0.1074
+Wald test of indep. eqns. (rho = 0): chi2(1) =     6.47   Prob > chi2 = 0.0110
 
 . gen double tt = round(exp(1 + .3*x - .5*t + .5*ln(-ln(runiform()))), .001) + .001
 
@@ -1576,7 +1585,7 @@ obs. time interval:  (0, tt]
 ------------------------------------------------------------------------------
         900  observations remaining, representing
         890  failures in single-record/single-failure data
-   1723.234  total analysis time at risk and under observation
+   1700.267  total analysis time at risk and under observation
                                                 at risk from t =         0
                                      earliest observed entry t =         0
                                           last observed exit t =         6
@@ -1586,8 +1595,8 @@ obs. time interval:  (0, tt]
          failure _d:  fl
    analysis time _t:  tt
 
-Iteration 0:   EE criterion =  1.370e-22  
-Iteration 1:   EE criterion =  2.222e-32  
+Iteration 0:   EE criterion =  3.427e-26  
+Iteration 1:   EE criterion =  5.790e-32  
 
 Survival treatment-effects estimation           Number of obs     =        900
 Estimator      : regression adjustment
@@ -1600,11 +1609,11 @@ Censoring model: none
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |  -.9721817   .0911556   -10.67   0.000    -1.150843     -.79352
+   (1 vs 0)  |  -1.053886   .0975927   -10.80   0.000    -1.245164   -.8626082
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   2.536904   .0880151    28.82   0.000     2.364398    2.709411
+          0  |   2.578495   .0942607    27.35   0.000     2.393748    2.763243
 ------------------------------------------------------------------------------
 
 . capture noisily stteffects ipwra (x, exponential) (t x z)
@@ -1612,8 +1621,8 @@ POmean       |
          failure _d:  fl
    analysis time _t:  tt
 
-Iteration 0:   EE criterion =  6.423e-20  
-Iteration 1:   EE criterion =  8.109e-32  
+Iteration 0:   EE criterion =  6.335e-20  
+Iteration 1:   EE criterion =  5.600e-32  
 
 Survival treatment-effects estimation           Number of obs     =        900
 Estimator      : IPW regression adjustment
@@ -1626,20 +1635,20 @@ Censoring model: none
 -------------+----------------------------------------------------------------
 ATE          |
            t |
-   (1 vs 0)  |  -.9759493   .1261046    -7.74   0.000     -1.22311   -.7287888
+   (1 vs 0)  |  -1.072983   .1637321    -6.55   0.000    -1.393892   -.7520743
 -------------+----------------------------------------------------------------
 POmean       |
            t |
-          0  |   2.525317   .1228432    20.56   0.000     2.284549    2.766086
+          0  |   2.602056   .1622024    16.04   0.000     2.284145    2.919967
 ------------------------------------------------------------------------------
 
-. capture noisily stteffects ipw (t x z), lognormal
-option lognormal is not allowed
+. capture noisily stteffects ipw (t x z)
+all observations must fail for the IPW model without a censoring distribution; this is not the case
 
 . 
 end of do-file
       name:  <unnamed>
        log:  /Users/yaskepalhares/opendta/compat/stata/1908_models2.log
   log type:  text
- closed on:  22 Oct 2026, 01:35:39
+ closed on:  22 Oct 2026, 08:40:08
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
