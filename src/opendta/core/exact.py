@@ -178,3 +178,15 @@ def score_test(dist: dict, obs: tuple, mean_scale: float, X: np.ndarray, kind: s
     s_obs = float((np.array(obs[1:]) - mean_scale * sx[1:]) @ Ii @ (np.array(obs[1:]) - mean_scale * sx[1:]))
     p = float(c[stat >= s_obs - 1e-9 * max(1.0, s_obs)].sum() / c.sum())
     return s_obs, p
+
+
+def score_conditional(sup, p, t_obs: float):
+    """Score statistic of one coefficient (beta_j = 0) from the conditional distribution of T_j,
+    and its exact upper-tail probability."""
+    m = float(p @ sup)
+    v = float(p @ (sup - m) ** 2)
+    if v <= 0:
+        return 0.0, 1.0
+    s = (sup - m) ** 2 / v
+    so = (t_obs - m) ** 2 / v
+    return float(so), float(p[s >= so - 1e-9].sum())
