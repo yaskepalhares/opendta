@@ -84,7 +84,17 @@ def _chol(S: np.ndarray) -> np.ndarray:
         return np.linalg.cholesky(S)
     except np.linalg.LinAlgError:
         w, v = np.linalg.eigh((S + S.T) / 2)
-        return np.linalg.cholesky((v * np.maximum(w, 1e-10)) @ v.T)
+        # the floor is relative to the scale of S, and the rebuilt matrix gets a growing ridge
+        # when its own rounding still leaves it outside the cone (case 1908 on Linux)
+        floor = 1e-10 * max(1.0, float(np.max(np.abs(w))))
+        R = (v * np.maximum(w, floor)) @ v.T
+        R = (R + R.T) / 2
+        for k in range(12):
+            try:
+                return np.linalg.cholesky(R + (floor * 10.0 ** k if k else 0.0) * np.eye(len(R)))
+            except np.linalg.LinAlgError:
+                continue
+        raise np.linalg.LinAlgError("Matrix is not positive definite")
 
 
 def _case_ll(eta: np.ndarray, kind: str, key: np.ndarray, Om: np.ndarray, U: np.ndarray) -> np.ndarray:
