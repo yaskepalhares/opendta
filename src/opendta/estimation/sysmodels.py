@@ -521,26 +521,29 @@ def _system(s: "Session", args: str, cmd: str) -> None:
         fit = syseq.sure(Xs, ys, iterate=iterate, dfk=dfk)
         Zs = Xs
     else:
-        endog_names = set(depnames)
-        if o.get("endog"):
-            endog_names |= set(str(o["endog"]).split())
-        inst_cols = []
-        seen = set()
+        rhs_names = []
         for blk in blocks:
             for c in blk.cols:
-                if c.values is not None and c.name not in endog_names and c.name not in seen:
-                    seen.add(c.name)
-                    inst_cols.append(c.values)
-        if o.get("exog"):
-            for nm in str(o["exog"]).split():
-                if nm not in seen:
-                    seen.add(nm)
-                    inst_cols.append(ds.get(nm).data[mask].astype(float))
+                if c.values is not None and c.name not in rhs_names:
+                    rhs_names.append(c.name)
+        all_vars = []
+        for dep_, blk in zip(depnames, blocks):
+            for nm in [dep_] + [c.name for c in blk.cols if c.values is not None]:
+                if nm not in all_vars:
+                    all_vars.append(nm)
         if o.get("inst"):
-            for nm in str(o["inst"]).split():
-                if nm not in seen:
-                    seen.add(nm)
-                    inst_cols.append(ds.get(nm).data[mask].astype(float))
+            # inst() is the complete list of exogenous variables; everything else is endogenous
+            exog_list = list(dict.fromkeys(str(o["inst"]).split()))
+            endog_list = [v for v in all_vars if v not in exog_list]
+        else:
+            endog_list = list(dict.fromkeys(list(depnames) + str(o.get("endog") or "").split()))
+            exog_list = [v for v in rhs_names if v not in endog_list]
+            exog_list += [v for v in dict.fromkeys(str(o.get("exog") or "").split()) if v not in exog_list]
+        endog_names = set(endog_list)
+        inst_cols = []
+        for nm in exog_list:
+            col = next((c.values for b_ in blocks for c in b_.cols if c.name == nm and c.values is not None), None)
+            inst_cols.append(col if col is not None else ds.get(nm).data[mask].astype(float))
         if smp.constant:
             inst_cols.append(np.ones(n))
         Zfull = np.column_stack(inst_cols)
@@ -554,16 +557,21 @@ def _system(s: "Session", args: str, cmd: str) -> None:
                 cols.append(np.ones(n))
             Zs.append(np.column_stack(cols))
         fit = syseq.three_sls(Xs, Zs, ys, method=method, iterate=iterate, dfk=dfk)
-    _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk)
+    foot = (endog_list, exog_list) if cmd == "reg3" else None
+    _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk, foot)
 
 
-def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk) -> None:
+def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, foot=None) -> None:
     ds = s.data
     n = smp.n
     m = len(blocks)
     b_all = np.concatenate(fit.b)
     names, eqnames, b_full, V_full, rows = assemble(SimpleNamespace(s=s), blocks, b_all, fit.V, [])
-    use_t = bool(o.get("small"))
+    use_t = bool(o.get("small")) or (cmd == "reg3" and method in ("2sls", "ols"))
+    if cmd == "sureg" and o.get("isure") and not o.get("nolog"):
+        s.output.write("\n", "text")
+        for it, d in enumerate(fit.trace, 1):
+            s.output.write(f"Iteration {it}:   tolerance = {g(d, '%10.0g'):>10}\n", "text")
     eq_info = []
     for i, blk in enumerate(blocks):
         e = fit.resid[:, i]
@@ -583,7 +591,10 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk) ->
             chi2 = SYS
         eq_info.append({"obs": n, "parms": blk.nslopes, "rmse": rmse, "r2": r2, "chi2": chi2, "df": len(sl), "rss": rss})
     level = smp.level
-    est = Estimates(cmd, blocks[0].name, names, b_full, V_full, n, "t" if use_t else "z", None)
+    est = Estimates(cmd, blocks[0].name, names, b_full, V_full, n, "t" if use_t else "z",
+                    float(m * n - sum(b.k for b in blocks)) if use_t else None)
+    est.foot = foot
+    est.iterated = bool(o.get("isure") or o.get("ireg3"))
     est.eqnames = eqnames
     est.rows = rows
     est.level, est.vcetype, est.clustvar, est.n_clust = level, "", "", None
@@ -604,7 +615,7 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk) ->
                       "ols": "Ordinary least-squares regression",
                       "sure": "Seemingly unrelated regression"}.get(method, "Three-stage least-squares regression")
              }[cmd]
-    est.title = title
+    est.title = title + (", iterated " if cmd == "sureg" and o.get("isure") else "")
     scalars = [("N", n), ("k_eq", m), ("k_dv", m), ("df_m", sum(e["df"] for e in eq_info)),
                ("df_r", n), ("ic", fit.iterations), ("rank", np.linalg.matrix_rank(fit.V)),
                ("chi2_bp", fit.chi2_bp), ("df_bp", fit.df_bp)]
@@ -624,18 +635,28 @@ def _display_system(s, est, *, header=True, table=True, level=None, **_kw) -> No
         out.write(f"\n{est.title}\n", "text")
         bar = "-" * 74
         out.write(bar + "\n", "text")
-        out.write('Equation             Obs   Parms        RMSE    "R-sq"       chi2        P\n', "text")
+        statcol = "F-Stat" if est.stat == "t" else "chi2"
+        out.write(f'Equation             Obs   Parms        RMSE    "R-sq"{statcol:>11}{"P":>9}\n', "text")
         out.write(bar + "\n", "text")
         for nm, e in zip(est.names_eq, est.eq_info):
-            p = chi2_tail(e["chi2"], e["df"]) if e["chi2"] < SYS else SYS
+            if est.stat == "t":
+                v = e["chi2"] / e["df"] if e["chi2"] < SYS else SYS
+                p = st.f.sf(v, e["df"], est.df_r) if v < SYS else SYS
+            else:
+                v = e["chi2"]
+                p = chi2_tail(v, e["df"]) if v < SYS else SYS
             out.write(f"{nm:<20}{int(e['obs']):>4}{int(e['parms']):>8}{g(e['rmse'], '%9.0g'):>12}"
-                      f"{g(e['r2'], '%10.4f'):>10}{g(e['chi2'], '%11.2f'):>11}{g(p, '%9.4f'):>9}\n", "text")
+                      f"{g(e['r2'], '%10.4f'):>10}{g(v, '%11.2f'):>11}{g(p, '%9.4f'):>9}\n", "text")
         out.write(bar + "\n", "text")
         if est.corr_opt:
             _corr_block(s, est)
         out.write("\n", "text")
     if table:
-        coef_table(s, "", est.rows, stat=est.stat, df=None, level=lev)
+        coef_table(s, "", est.rows, stat=est.stat, df=est.df_r, level=lev)
+        if est.foot:
+            out.write(f"Endogenous variables:  {' '.join(est.foot[0])} \n", "text")
+            out.write(f"Exogenous variables:   {' '.join(est.foot[1])} \n", "text")
+            out.write("-" * 78 + "\n", "text")
 
 
 def _corr_block(s, est) -> None:
