@@ -279,10 +279,12 @@ def cmd_nl(s: "Session", args: str) -> None:
         if not o.get("nolog"):
             if it == 0:
                 out.write("\n", "text")
-            out.write(f"Iteration {it}:  residual SS = {g(q, '%12.7g'):>12}\n", "text")   # VERIFY
+            out.write(f"Iteration {it}:  residual SS = {g(q, '%9.0g'):>9}\n", "text")
 
     theta, J, r, iters = gauss_newton(resid, theta0, wv, eps=float(o["eps"]) if o.get("eps") else 1e-5,
                                       maxit=int(o["iterate"]) if o.get("iterate") else 100, log=log)
+    if not o.get("nolog"):
+        out.write("\n", "text")
     rss = float(r @ (wv * r))
     df_r = N - k
     s2 = rss / df_r
@@ -349,27 +351,31 @@ def cmd_nl(s: "Session", args: str) -> None:
 
 
 def _display_nl(s, est, *, header=True, table=True, level=None, **_kw) -> None:
-    from .regress import _ss_row
     out = s.output
     x = est.extra
     lev = level if level is not None else est.level
     if header:
         out.write("\n", "text")
         msm = x["mss"] / x["df_m"] if x["df_m"] > 0 else SYS
-        left = [f"{'Source':>12} |       SS           df       MS   ",
+
+        def ss_row(nm, ss, df, ms):
+            return f"{nm:>12} |{g(ss, '%10.0g'):>11}{int(df):>11}{g(ms, '%11.0g'):>12}"
+
+        left = [f"{'Source':>12} |      SS            df       MS",
                 "-" * 13 + "+" + "-" * 34,
-                _ss_row("Model", x["mss"], x["df_m"], msm),
-                _ss_row("Residual", x["rss"], x["df_r"], x["rss"] / x["df_r"]),
+                ss_row("Model", x["mss"], x["df_m"], msm),
+                ss_row("Residual", x["rss"], x["df_r"], x["rss"] / x["df_r"]),
                 "-" * 13 + "+" + "-" * 34,
-                _ss_row("Total", x["tss"], x["df_t"], x["tss"] / x["df_t"])]
-        right = [("Number of obs", comma(x["N"])), ("R-squared", g(x["r2"], "%9.4f")),
-                 ("Adj R-squared", g(x["r2_a"], "%9.4f")), ("Root MSE", sig5(x["rmse"])),
-                 ("Res. dev.", g(x["dev"], "%9.0g")), ("", "")]
-        for lft, (lab, val) in zip(left, right):
-            out.write(f"{lft:<48}   ", "text")
-            if lab:
-                out.write(f"{lab:<16}= ", "text")
-                out.write(f"{val:>9}", "result")
+                ss_row("Total", x["tss"], x["df_t"], x["tss"] / x["df_t"])]
+        rights = {1: ("Number of obs", comma(x["N"])), 2: ("R-squared", g(x["r2"], "%9.4f")),
+                  3: ("Adj R-squared", g(x["r2_a"], "%9.4f")), 4: ("Root MSE", g(x["rmse"], "%9.0g")),
+                  5: ("Res. dev.", g(x["dev"], "%9.0g"))}
+        for i, lft in enumerate(left):
+            out.write(lft, "text")
+            if i in rights:
+                lab, val = rights[i]
+                out.write(f"{'':<{48 - len(lft)}}    {lab:<14}=", "text")
+                out.write(f"{val:>11}", "result")
             out.write("\n", "text")
         if est.title:
             out.write(f"{est.title}\n", "text")
@@ -377,7 +383,7 @@ def _display_nl(s, est, *, header=True, table=True, level=None, **_kw) -> None:
     if table:
         coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=lev, vcetype=est.vcetype)
         if x["const"]:
-            out.write(f" Parameter {x['const']} taken as constant term in model & ANOVA table\n", "text")
+            out.write(f"  Parameter {x['const']} taken as constant term in model & ANOVA table\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +441,7 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     m = len(eqs)
     Y = np.column_stack([ds.get(dn).data[mask].astype(float) for dn in deps])
     out = s.output
+    out.write(f"(obs = {comma(n)})\n\n", "text")
 
     def fit_vals(t):
         cols = []
@@ -449,7 +456,8 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     def logger(label):
         def log(it, q):
             if not o.get("nolog"):
-                out.write(f"Iteration {it}:  residual SS = {g(q, '%12.7g'):>12}\n", "text")   # VERIFY
+                lab = "Residual SS" if label == "nls" else "Scaled RSS"
+                out.write(f"Iteration {it}:  {lab} = {g(q, '%9.0g'):>9}\n", "text")
         return log
 
     if not o.get("nolog"):
@@ -489,13 +497,19 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     k = len(names)
     E = Y - fit_vals(theta)
     info = []
+    Jf = _num_jac(lambda t: -resid_vec(t), theta)
     for i in range(m):
         rss = float(E[:, i] @ E[:, i])
         yy = Y[:, i]
         tss = float(np.sum((yy - yy.mean()) ** 2))
         kp = len([nm for nm in names if nm in ses[i].names])
+        const = ""
+        for j, nm in enumerate(names):
+            if nm in ses[i].names and np.allclose(np.abs(Jf[i * n:(i + 1) * n, j]), 1.0, atol=1e-6):
+                const = nm
+                break
         info.append({"obs": n, "parms": kp, "rmse": float(np.sqrt(rss / n)), "r2": 1 - rss / tss if tss > 0 else SYS,
-                     "rss": rss})
+                     "rss": rss, "const": const})
     est = Estimates("nlsur", deps[0], list(names), theta, V, n, "z", None)
     est.level, est.vcetype, est.clustvar, est.n_clust = level, "", "", None
     est.eqnames = ["/"] * k
@@ -523,14 +537,14 @@ def _display_nlsur(s, est, *, header=True, table=True, level=None, **_kw) -> Non
     lev = level if level is not None else est.level
     if header:
         title = {"fgnls": "FGNLS regression", "ifgnls": "Iterated FGNLS regression", "nls": "NLS regression"}[x["method"]]
-        out.write(f"\n{title}\n", "text")                       # VERIFY: whole header
-        bar = "-" * 70
-        out.write(bar + "\n", "text")
-        out.write('Equation          Obs Parms        RMSE    "R-sq"\n', "text")
-        out.write(bar + "\n", "text")
-        for dn, e in zip(x["deps"], x["info"]):
-            out.write(f"{dn:<18}{e['obs']:>3}{e['parms']:>6}{g(e['rmse'], '%9.0g'):>12}{g(e['r2'], '%10.4f'):>10}\n", "text")
-        out.write(bar + "\n\n", "text")
+        out.write(f"\n{title} \n", "text")
+        out.write("-" * 71 + "\n", "text")
+        out.write(f"{'Equation':>15} |{'Obs':>11}{'Parms':>8}{'RMSE':>11}{'R-sq':>10}{'Constant':>13}\n", "text")
+        out.write("-" * 16 + "+" + "-" * 54 + "\n", "text")
+        for i, (dn, e) in enumerate(zip(x["deps"], x["info"]), 1):
+            out.write(f"{i:>2}{dn:>13} |{e['obs']:>11}{e['parms']:>8}{g(e['rmse'], '%9.0g'):>11}"
+                      f"{g(e['r2'], '%10.4f'):>10}{e['const'] or '.':>13}\n", "text")
+        out.write("-" * 71 + "\n\n", "text")
     if table:
         coef_table(s, "", est.rows, stat="z", df=None, level=lev)
 
@@ -692,7 +706,7 @@ def cmd_gmm(s: "Session", args: str) -> None:
     else:
         W1 = np.linalg.inv(S0 + 1e-12 * np.eye(n_mom))
         winit_label = "Unadjusted"
-    theta = step(theta0, W1, "Step 1" if not o.get("onestep") else "")
+    theta = step(theta0, W1, "Step 1")
     if o.get("onestep"):
         W = W1
         wm_label = winit_label
@@ -734,11 +748,14 @@ def cmd_gmm(s: "Session", args: str) -> None:
         o_ = s_.output
         x = e.extra
         if header:
-            o_.write("\nGMM estimation \n\n", "text")                # VERIFY blank/space
-            o_.write(f"Number of parameters = {x['n_par']:>3}{' ' * 25}Number of obs  = {comma(x['N']):>10}\n", "text")
+            o_.write("\nGMM estimation \n\n", "text")
+            o_.write(f"Number of parameters = {x['n_par']:>3}\n", "text")
             o_.write(f"Number of moments    = {x['n_mom']:>3}\n", "text")
-            o_.write(f"Initial weight matrix: {x['winit']}\n", "text")
-            o_.write(f"GMM weight matrix:     {x['wm_label']}\n\n", "text")
+            o_.write(f"{'Initial weight matrix: ' + x['winit']:<50}{'Number of obs':<16}=", "text")
+            o_.write(f"{comma(x['N']):>11}\n", "result")
+            if not x["onestep"]:
+                o_.write(f"GMM weight matrix:     {x['wm_label']}\n", "text")
+            o_.write("\n", "text")
         if not table:
             return
         coef_table(s_, "", e.rows, stat="z", df=None, level=level or e.level, vcetype=e.vcetype)
