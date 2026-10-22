@@ -30,6 +30,7 @@ ALIASES = {
     "clogit": "choicemodels", "rologit": "choicemodels", "asclogit": "choicemodels", "slogit": "choicemodels", "mprobit": "choicemodels", "asmprobit": "choicemodels", "asroprobit": "choicemodels",
     "exlogistic": "exactmodels", "expoisson": "exactmodels",
     "nl": "nlmodels", "nlsur": "nlmodels", "gmm": "nlmodels", "frontier": "nlmodels",
+    "irtgraph": "irt", "bayes": "bayesmh", "bayesstats": "bayesmh", "bayestest": "bayesmh", "bayesgraph": "bayesmh",
     "teffects": "treatment", "eteffects": "treatment", "stteffects": "treatment", "etregress": "treatment", "etpoisson": "treatment",
     "xtprobit": "xtquad", "xtcloglog": "xtquad", "xtologit": "xtquad", "xtoprobit": "xtquad", "xttobit": "xtquad", "xtintreg": "xtquad", "xtnbreg": "xtquad", "quadchk": "xtquad", "xtgls": "xtlinear", "xtpcse": "xtlinear", "xtregar": "xtlinear", "xtrc": "xtlinear", "xthtaylor": "xtlinear", "xtivreg": "xtlinear", "xtabond": "xtdpd", "xtdpdsys": "xtdpd", "estat_abond": "xtdpd", "estat_sargan": "xtdpd", "xtline": "xtdesc", "xttab": "xtdesc", "xtdata": "xtdesc",
     "jackknife": "resample", "permute": "resample", "simulate": "resample",
