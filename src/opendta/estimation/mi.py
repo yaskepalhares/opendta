@@ -547,7 +547,7 @@ def _draw_params(ll, start: np.ndarray) -> np.ndarray:
     def full(par, todo):
         return (ll(par), None, None) if todo == 0 else _numderiv(ll, par)
     r = maximize(full, start, maxiter=200)
-    V = np.linalg.inv(-r.H)
+    V = np.linalg.pinv(-r.H)    # a flat direction (alpha -> 0 in nbreg) must not stop the draw
     L = np.linalg.cholesky((V + V.T) / 2 + 1e-12 * np.eye(len(start)))
     return r.b + L @ _rng_normal(len(start))
 

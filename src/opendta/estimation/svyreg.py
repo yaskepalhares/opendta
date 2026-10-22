@@ -417,16 +417,15 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     cond = f"{iname}" + (f" & ({p.if_})" if p.if_ else "")
     rng = f" in {p.in_}" if p.in_ else ""
     opts = (p.options + " " if p.options else "") + "vce(robust)"
-    if cmd != "tobit":
+    if cmd not in ("tobit", "ivregress"):
         opts += " nolog"
     text = f"{cmd} {p.varlist} [pweight={wname}] if {cond}{rng}, {opts}"
     ctx = {"dd": dd, "pos": pos}
     s._svy_ctx = ctx
-    out.quiet_depth += 1
     try:
-        s.interp._execute_expanded(text)
+        with out.quietly():     # also silent under capture noisily (case 1909)
+            s.interp._execute_expanded(text)
     finally:
-        out.quiet_depth -= 1
         s._svy_ctx = None
     est = s._estimates
     b = np.asarray(est.b, dtype=float)
@@ -437,11 +436,8 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                 wv = np.zeros(ds.nobs)
                 wv[full] = ww
                 ds.get(wname).data = wv
-                out.quiet_depth += 1
-                try:
+                with out.quietly():
                     s.interp._execute_expanded(text.replace(", vce(robust)", ",").replace("vce(robust)", ""))
-                finally:
-                    out.quiet_depth -= 1
                 return np.asarray(s._estimates.b, dtype=float)
             saved = (s.e, s._estimates, ds.esample)
             V, n_rep = dd.rep_variance(estimator, b)
@@ -481,7 +477,9 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     est.extra.update(dict(N=N, pop=pop, df=df, F=F, df1=df1, df2=df2, strata=dd.n_strata, psu=dd.n_psu,
                           n_rep=n_rep, sub=(int(inside_all.sum()), float(dd.w[inside_all[full]].sum()))
                           if subpop is not None else None))
-    est.svytitle = _GENERIC_TITLES.get(cmd, cmd)
+    est.svytitle = (_GENERIC_TITLES.get(cmd) or getattr(est, "title", "") or est.extra.get("title") or cmd)
+    # VERIFY: like the commands themselves, these leave the depvar out of the table header
+    est.extra["blank_dep"] = cmd in ("intreg", "heckman", "heckprobit", "heckoprobit", "biprobit")
     est.display = _display_generic
     est.extra["no_F"] = cmd == "glm"            # svy: glm does not show the F test (compat 0602)
     est.extra["dispersion"] = getattr(est, "dispersion", "") if cmd == "nbreg" else ""
@@ -567,6 +565,6 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
             out.write(f"{rv:>10}\n", "result")
         out.write("\n", "text")
     if table:
-        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level,
+        coef_table(s, "" if est.extra.get("blank_dep") else est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level,
                    vcetype=est.vcetype, coef_title=getattr(est, "coef_title", "Coef."),
                    eform=getattr(est, "eform_on", False))

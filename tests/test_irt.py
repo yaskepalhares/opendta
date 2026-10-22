@@ -90,6 +90,16 @@ def test_3pl_guessing_in_unit_interval_and_not_worse_than_2pl(items):
             assert 0 <= g < 1
 
 
+def test_3pl_common_guessing_unless_sepguessing(items):
+    out = items("irt 3pl q1-q4, nolog")
+    gs = {ln.split("|")[1].split()[0] for ln in out.splitlines() if ln.strip().startswith("Guess")}
+    assert len(gs) == 1
+    ll_common = float(items.session.e["ll"])
+    out = items("irt 3pl q1-q4, sepguessing nolog")
+    assert sum(ln.strip().startswith("Guess") for ln in out.splitlines()) == 4
+    assert float(items.session.e["ll"]) >= ll_common - 1e-4
+
+
 def test_grm_matches_brute_force(items):
     items("quietly irt grm r1-r3, nolog")
     ll = float(items.session.e["ll"])

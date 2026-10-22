@@ -8,7 +8,7 @@
 {title:Syntax}
 
 {p 8 16 2}{cmd:irt} {cmd:1pl}|{cmd:2pl}|{cmd:3pl}|{cmd:grm}|{cmd:nrm}|{cmd:pcm}|{cmd:gpcm}|{cmd:rsm} {it:varlist} [{it:if}] [{it:in}]
-[{cmd:,} {opt list:wise} {opt intm:ethod()} {opt intp:oints(#)} {opt l:evel(#)} {cmd:nolog}]{p_end}
+[{cmd:,} {opt sepg:uessing} {opt list:wise} {opt intm:ethod()} {opt intp:oints(#)} {opt l:evel(#)} {cmd:nolog}]{p_end}
 
 {p 8 16 2}{cmd:irt hybrid} {cmd:(}{it:model} {it:varlist}{cmd:)} {cmd:(}{it:model} {it:varlist}{cmd:)} ... [{cmd:,} {it:options}]{p_end}
 
@@ -21,7 +21,7 @@
 {pstd}
 {cmd:irt} fits models for binary items (one-, two- and three-parameter logistic), ordered items
 (graded response, partial credit, generalized partial credit, rating scale) and nominal items,
-with one latent trait distributed N(0, 1). The fit is done by {help gsem}; the table reports
+with one latent trait distributed N(0, 1). The {cmd:3pl} model has one pseudoguessing parameter shared by the items; {cmd:sepguessing} estimates one per item. The fit is done by {help gsem}; the table reports
 the discrimination and the difficulties of each item (by the delta method). {cmd:irt hybrid}
 uses a different model for each group of items.
 {p_end}

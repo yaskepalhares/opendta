@@ -28,8 +28,8 @@
 {cmd:logit}, {cmd:logistic}, {cmd:probit}, {cmd:cloglog}, {cmd:poisson}, {cmd:ologit},
 {cmd:oprobit}, {cmd:mlogit}, {cmd:mprobit}, {cmd:slogit}, {cmd:clogit}, {cmd:nbreg}, {cmd:gnbreg},
 {cmd:zip}, {cmd:zinb}, {cmd:glm}, {cmd:tobit}, {cmd:intreg}, {cmd:truncreg}, {cmd:heckman},
-{cmd:heckprobit}, {cmd:hetprobit}, {cmd:scobit}, {cmd:biprobit}, {cmd:fracreg},
-{cmd:ivregress}, {cmd:ivprobit} and {cmd:ivtobit}.
+{cmd:heckprobit}, {cmd:hetprobit}, {cmd:scobit}, {cmd:biprobit}, {cmd:fracreg}
+and {cmd:ivregress}.
 
 {title:Description}
 

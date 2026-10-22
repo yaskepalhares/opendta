@@ -5,7 +5,8 @@ one response per item; the coefficients are stored in slope-intercept form, as g
 the table shows the discrimination a and the difficulties b by the delta method:
 
     1pl, 2pl   P(y = 1 | theta) = invlogit(a (theta - b)),  a common (1pl) or by item
-    3pl        P(y = 1 | theta) = g + (1 - g) invlogit(a (theta - b))
+    3pl        P(y = 1 | theta) = g + (1 - g) invlogit(a (theta - b)), g common to the items
+               unless sepguessing
     grm        P(y >= k | theta) = invlogit(a (theta - b_k))
     nrm        P(y = k | theta) proportional to exp(a_k theta + c_k), a_0 = c_0 = 0
     pcm, gpcm  P(y = k | theta) proportional to exp(sum_{j<=k} a (theta - b_j)), a common (pcm)
@@ -53,12 +54,13 @@ _KINDS = ("1pl", "2pl", "3pl", "grm", "nrm", "pcm", "gpcm", "rsm")
 class ThreePL:
     """P(1) = g + (1 - g) invlogit(a theta + c), g = invlogit(lg)."""
 
-    def __init__(self, P, name, y):
+    def __init__(self, P, name, y, shared=True):
         self.y = (y != 0)
         p = min(max(float(np.mean(self.y)), .05), .95)
         self.ia = P.add(name, "Theta", 1.0)
         self.ic = P.add(name, "_cons", math.log(p / (1 - p)))
-        self.ig = P.add(name, "Guess", -2.0, "aux")
+        # one pseudoguessing parameter for all the items unless sepguessing
+        self.ig = P.add(name, "Guess", -2.0, "aux", label="_g_3pl" if shared else None)
 
     def logp(self, th, z):
         a, c, g = th[self.ia], th[self.ic], float(special.expit(th[self.ig]))
@@ -228,13 +230,13 @@ def _expected(item: Item, th, t):
 # command
 # ---------------------------------------------------------------------------
 
-_OPTS = {"listwise": 4, "intmethod": 4, "intpoints": 4, "level": 1, "notable": 5, "noheader": 6,
+_OPTS = {"sepguessing": 5, "listwise": 4, "intmethod": 4, "intpoints": 4, "level": 1, "notable": 5, "noheader": 6,
          "nolog": 4, "log": 3, "iterate": 4, "vce": 3, "group": 5, "cns": 3, "difficult": 4,
          "technique": 4, "from": 4, "coeflegend": 5, "noci": 4, "nopvalues": 5, "tolerance": 3,
          "ltolerance": 4, "nrtolerance": 4}
 
 
-def _items_eq(s, kind: str, text: str, taken: set) -> list[Eq]:
+def _items_eq(s, kind: str, text: str, taken: set, sepguess: bool = False) -> list[Eq]:
     names = s.expand_varlist(text)
     eqs = []
     for n in names:
@@ -252,7 +254,7 @@ def _items_eq(s, kind: str, text: str, taken: set) -> list[Eq]:
             e.terms = [("lat", "Theta", None, None)]
         elif kind == "3pl":
             e.family, e.link = "bernoulli", "logit"
-            e.irt = lambda P, name, y: ThreePL(P, name, y)
+            e.irt = lambda P, name, y: ThreePL(P, name, y, shared=not sepguess)
         else:
             e.family, e.link = "nominal" if kind == "nrm" else "ordinal", "mlogit"
             e.irt = (lambda k: lambda P, name, y: Cat(P, name, y, k))(kind)
@@ -303,13 +305,13 @@ def cmd_irt(s: "Session", args: str) -> None:
             mk = mk.lower()
             if mk not in _KINDS:
                 raise StataError(198, f"irt hybrid: invalid model {mk}")   # VERIFY
-            new = _items_eq(s, mk, vl, taken)
+            new = _items_eq(s, mk, vl, taken, sepguess=bool(o.get("sepguessing")))
             eqs += new
             spec.append((mk, [e.name for e in new]))
     else:
         if not body.strip():
             raise StataError(100, "varlist required")
-        eqs = _items_eq(s, kind, body, taken)
+        eqs = _items_eq(s, kind, body, taken, sepguess=bool(o.get("sepguessing")))
         spec.append((kind, [e.name for e in eqs]))
     o2 = dict(o)
     o2["_covs"], o2["_varfix"] = [], {"Theta": 1.0}

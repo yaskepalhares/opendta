@@ -756,9 +756,8 @@ def cmd_svydescribe(s: "Session", args: str) -> None:
 
 # estimators run with the design weights and a design variance (svy_generic)
 _GENERIC = ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit", "intreg", "truncreg",
-            "heckman", "zip", "zinb", "ztp", "ztnb", "gnbreg", "hetprobit", "cnreg", "slogit",
-            "ivregress", "ivprobit", "biprobit", "treatreg", "fracreg", "hetregress", "heckprobit",
-            "scobit", "clogit", "ivtobit", "betareg", "ologit", "mprobit")
+            "heckman", "zip", "zinb", "gnbreg", "hetprobit", "slogit", "ivregress", "biprobit",
+            "fracreg", "heckprobit", "scobit", "clogit", "mprobit")
 
 
 def cmd_svy(s: "Session", args: str) -> None:

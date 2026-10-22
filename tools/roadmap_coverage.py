@@ -102,6 +102,9 @@ AREA_OF = {
     "mestreg": "Multilevel models",
     "svy": "Other suites", "svyset": "Other suites", "svydescribe": "Other suites",
     "mi": "Other suites", "sem": "Other suites",
+    "gsem": "Other suites", "irt": "Other suites", "irtgraph": "Other suites",
+    "bayesmh": "Other suites", "bayes": "Other suites", "bayesstats": "Other suites",
+    "bayestest": "Other suites", "bayesgraph": "Other suites",
 }
 # handled by the interpreter, not the registry
 INTERPRETER = {"by": "Programming", "bysort": "Programming", "capture": "Programming",
