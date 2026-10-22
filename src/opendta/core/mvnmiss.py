@@ -114,3 +114,65 @@ def em_mvn(X: np.ndarray, blocks: list[list[int]] | None = None, maxiter: int = 
             break
         prev = cur
     return mu, Sig, prev, it
+
+
+def da_mvn(Y: np.ndarray, X: np.ndarray, normal, chi2, nimp: int, burnin: int,
+           between: int) -> list[np.ndarray]:
+    """Data augmentation for the multivariate normal regression Y = X B + E (rows of E with
+    covariance Sigma) with missing values in Y (NaN) and the noninformative prior
+    |Sigma|^-(p+1)/2. P-step: Sigma from an inverse Wishart with n - k degrees of freedom and
+    scale S (the residual sums of squares of the completed data), B from its normal conditional;
+    I-step: the missing values of every pattern from their conditional normal distribution.
+    `normal(m)` returns m standard normal draws and `chi2(df)` one chi-squared draw (the caller's
+    random numbers). Returns `nimp` completed copies of Y, the first after `burnin` iterations
+    and the others `between` iterations apart."""
+    n, p = Y.shape
+    k = X.shape[1]
+    miss = np.isnan(Y)
+    Yf = np.where(miss, np.nanmean(np.where(np.isfinite(Y), Y, np.nan), axis=0)[None, :], Y)
+    XtXi = np.linalg.pinv(X.T @ X)
+    Lx = np.linalg.cholesky((XtXi + XtXi.T) / 2 + 1e-14 * np.eye(k))
+    keys, inv = np.unique(miss, axis=0, return_inverse=True)
+    inv = np.asarray(inv).ravel()
+    groups = [(keys[g], np.nonzero(inv == g)[0]) for g in range(len(keys)) if keys[g].any()]
+    nu = max(n - k, p + 1)
+    out: list[np.ndarray] = []
+    total = burnin + (nimp - 1) * between
+    for it in range(1, total + 1):
+        Bh = XtXi @ X.T @ Yf
+        R = Yf - X @ Bh
+        S = R.T @ R
+        Si = np.linalg.pinv((S + S.T) / 2)
+        Ls = np.linalg.cholesky((Si + Si.T) / 2 + 1e-14 * np.eye(p))
+        A = np.zeros((p, p))
+        for i in range(p):
+            A[i, i] = math.sqrt(chi2(nu - i))
+            for j in range(i):
+                A[i, j] = normal(1)[0]
+        La = Ls @ A
+        Sig = np.linalg.inv(La @ La.T)
+        Sig = (Sig + Sig.T) / 2
+        Lsig = np.linalg.cholesky(Sig + 1e-14 * np.eye(p))
+        B = Bh + Lx @ normal(k * p).reshape(k, p) @ Lsig.T
+        XB = X @ B
+        for mk, rows in groups:
+            o = np.nonzero(~mk)[0]
+            m = np.nonzero(mk)[0]
+            if len(o):
+                Soo = Sig[np.ix_(o, o)]
+                Bc = np.linalg.solve(Soo, Sig[np.ix_(o, m)]).T
+                mean = XB[np.ix_(rows, m)] + (Yf[np.ix_(rows, o)] - XB[np.ix_(rows, o)]) @ Bc.T
+                C = Sig[np.ix_(m, m)] - Bc @ Sig[np.ix_(o, m)]
+            else:
+                mean = XB[np.ix_(rows, m)]
+                C = Sig[np.ix_(m, m)]
+            Lc = np.linalg.cholesky((C + C.T) / 2 + 1e-14 * np.eye(len(m)))
+            Z = normal(len(rows) * len(m)).reshape(len(rows), len(m))
+            Yf[np.ix_(rows, m)] = mean + Z @ Lc.T
+        if it >= burnin and (it - burnin) % max(between, 1) == 0:
+            out.append(Yf.copy())
+    if burnin == 0 or not out:
+        out.insert(0, Yf.copy())
+    while len(out) < nimp:
+        out.append(out[-1].copy())
+    return out[:nimp]
