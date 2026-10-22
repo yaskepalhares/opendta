@@ -223,7 +223,9 @@ def display_eq(s, est, *, header: bool = True, table: bool = True, level: float 
         else:
             _header(s, *hd)
     if table:
-        if est.vcetype and est.clustvar:
+        if est.vcetype and est.clustvar and getattr(est, "group_cluster", False):
+            s.output.write(f"{'(Std. Err. adjusted for clustering on ' + est.clustvar + ')':>78}\n", "text")
+        elif est.vcetype and est.clustvar:
             s.output.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                            "text")
         rows = est.rows_fn(lev) if getattr(est, "rows_fn", None) else est.rows

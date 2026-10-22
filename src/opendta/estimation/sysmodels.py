@@ -323,12 +323,8 @@ def cmd_eivreg(s: "Session", args: str) -> None:
     beta, a, V, see = syseq.eivreg(Xs, smp.y, rel, smp.constant)
     N = float(smp.n)
     p = len(est_cols)
-    res = smp.y - Xs @ beta - (a if smp.constant else 0.0)
     df_r = N - p - (1 if smp.constant else 0)
-    rss = float(res @ res)
-    ybar = smp.y.mean() if smp.constant else 0.0
-    tss = float(np.sum((smp.y - ybar) ** 2))
-    r2 = max(1 - see * (N - 1) / ((N - 1) * float(np.var(smp.y, ddof=1))), 0.0) if smp.constant else SYS
+    r2 = max(1 - see * df_r / ((N - 1) * float(np.var(smp.y, ddof=1))), 0.0) if smp.constant else SYS   # VERIFY: matches the 1908 log
     kk = len(smp.cols) + (1 if smp.constant else 0)
     names_full = [c.name if not c.omitted else fvars.omitted_name(c.name) for c in smp.cols] \
         + (["_cons"] if smp.constant else [])
@@ -347,7 +343,7 @@ def cmd_eivreg(s: "Session", args: str) -> None:
     est.level, est.vcetype, est.clustvar, est.n_clust = smp.level, "", "", None
     sl = list(range(p))
     F = float(beta @ np.linalg.solve(V[np.ix_(sl, sl)], beta)) / p if p else SYS
-    rmse = float(np.sqrt(rss / df_r)) if df_r > 0 else SYS
+    rmse = float(np.sqrt(see)) if df_r > 0 else SYS   # VERIFY: Root MSE is sqrt(sigma_ee)
     relrows = [(c.name, float(rel[i])) for i, c in enumerate(est_cols) if o.get("reliab") and rel[i] != 1.0 or False]
     if len(relrows) < len(est_cols):
         relrows.append(("*", 1.0))
@@ -556,7 +552,9 @@ def _system(s: "Session", args: str, cmd: str) -> None:
             if blk.constant:
                 cols.append(np.ones(n))
             Zs.append(np.column_stack(cols))
-        fit = syseq.three_sls(Xs, Zs, ys, method=method, iterate=iterate, dfk=dfk)
+        # Stata scales the 2sls/ols covariance by the equation degrees of freedom (observed in the 1908 log)
+        fit = syseq.three_sls(Xs, Zs, ys, method=method, iterate=iterate,
+                              dfk="small" if method in ("2sls", "ols") and not dfk else dfk)
     foot = (endog_list, exog_list) if cmd == "reg3" else None
     _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk, foot)
 

@@ -151,6 +151,7 @@ def cmd_clogit(s: "Session", args: str) -> None:
                                       ("g_avg", float(nalt.mean())), ("g_max", float(nalt.max())),
                                       ("k_out", float(sum(1 for idx in groups if y[idx].sum() > 0)))],
                        extra_macros=[("group", gname)])
+    est.group_cluster = True
     est.coef_title, est.eform_on = ("Odds Ratio", True) if o.get("or") else ("Coef.", False)
     display_eq(s, est)
     est.coef_title, est.eform_on = "Coef.", False
@@ -212,10 +213,13 @@ def cmd_rologit(s: "Session", args: str) -> None:
     nalt = np.array([len(i) for i in groups])
     ngroups = len(groups)
 
+    no_ties = all(len(np.unique(rank[i])) == len(i) for i in groups)
+    ties_txt = "No ties in data" if no_ties else f"Ties handled via the {ties} method"   # VERIFY wording
+
     def hdr(est):
         x = est.extra
         ll4 = g(x["ll"], "%9.0g")
-        left = [est.title, f"Group variable: {gname}", "", f"Ties handled via the {ties} method", "", "", "", "", "",
+        left = [est.title, f"Group variable: {gname}", "", ties_txt, "", "", "", "", "",
                 f"{lab(est)} = {ll4:>9}"]
         right = [("Number of obs", comma(x["N"])), ("Number of groups", comma(ngroups)), ("", ""),
                  ("Obs per group:", None), (f"{'min':>17} ", comma(nalt.min())),
@@ -228,6 +232,7 @@ def cmd_rologit(s: "Session", args: str) -> None:
                        hdr_fn=hdr, k_eq=1, r2p=None, extra_scalars=[("N_g", float(ngroups)),
                        ("g_min", float(nalt.min())), ("g_avg", float(nalt.mean())), ("g_max", float(nalt.max()))],
                        extra_macros=[("group", gname), ("ties", ties)])
+    est.group_cluster = True
     est.coef_title, est.eform_on = ("Odds Ratio", True) if o.get("or") else ("Coef.", False)
     display_eq(s, est)
     est.coef_title, est.eform_on = "Coef.", False

@@ -96,6 +96,43 @@ def test_eivreg_corrects_attenuation(run):
     assert abs(_b(run)[0]) > abs(b0[0])
 
 
+def test_eivreg_variance_and_fit_follow_the_stata_log(run):
+    # 1908 log: variance see*Minv*Mxx*Minv/(n-1), constant's variance see/n + xbar'V xbar,
+    # Root MSE = sqrt(sigma_ee), R2 = 1 - sigma_ee*df_r/((n-1)*var(y))
+    run(DATA + "quietly eivreg y1 x1 x2, reliab(x1 .9)")
+    s = run.session
+    n = 300
+    x = np.column_stack([_col(run, "x1"), _col(run, "x2")])
+    y = _col(run, "y1")
+    xc, yc = x - x.mean(0), y - y.mean()
+    mxx, mxy = xc.T @ xc / (n - 1), xc.T @ yc / (n - 1)
+    svv = np.diag([.1 * mxx[0, 0], 0.0])
+    mi = np.linalg.inv(mxx - svv)
+    beta = mi @ mxy
+    see = (n - 1) / (n - 3) * (yc @ yc / (n - 1) - mxy @ beta)
+    vb = see * mi @ mxx @ mi / (n - 1)
+    V = np.asarray(s.e["V"].data, dtype=float)
+    assert np.allclose(V[:2, :2], vb, rtol=1e-8)
+    assert np.isclose(V[2, 2], see / n + x.mean(0) @ vb @ x.mean(0), rtol=1e-8)
+    assert np.isclose(s.e["rmse"], np.sqrt(see), rtol=1e-10)
+    assert np.isclose(s.e["r2"], 1 - see * (n - 3) / ((n - 1) * y.var(ddof=1)), rtol=1e-10)
+
+
+def test_reg3_2sls_covariance_uses_equation_degrees_of_freedom(run):
+    # with exogenous regressors only, 2sls equation by equation is OLS, whose V divides by n - k
+    out = run(DATA + "reg3 (y1 x1 x2) (y2 z1), 2sls")
+    assert "F-Stat" in out
+    run(DATA + "quietly regress y1 x1 x2\nmatrix Vo = e(V)\nquietly reg3 (y1 x1 x2) (y2 z1), 2sls\nmatrix V2 = e(V)")
+    vo = np.asarray(run.session.matrices["Vo"].data)
+    v2 = np.asarray(run.session.matrices["V2"].data)
+    assert np.allclose(v2[:3, :3], vo, rtol=1e-8)
+
+
+def test_rologit_header_says_when_there_are_no_ties(run):
+    out = run(CHOICE + "rologit rk x1 x2, group(id)")
+    assert "No ties in data" in out
+
+
 def test_rreg_resists_outliers_and_saves_weights(run):
     run(DATA + "replace y1 = y1 + 40 in 1/6\nquietly regress y1 x1 x2\nmatrix b0 = e(b)\n"
         "quietly rreg y1 x1 x2, nolog genwt(wt)")

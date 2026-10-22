@@ -203,13 +203,12 @@ def eivreg(X: np.ndarray, y: np.ndarray, reliab: np.ndarray, constant: bool = Tr
     beta = Mi @ mxy
     see = (den / (n - p - (1 if constant else 0))) * max(myy - float(mxy @ beta), 0.0) \
         if n - p - (1 if constant else 0) > 0 else 0.0
-    u = see + float(beta @ Svv @ beta)
-    # VERIFY: variance of Fuller (1987, 2.2.14) as the manual gives it
-    Vb = (u * Mi + Mi @ np.outer(Svv @ beta, Svv @ beta) @ Mi) / den
+    # VERIFY: variance and constant's variance found by matching Stata's reference log (1908)
+    Vb = see * (Mi @ Mxx @ Mi) / den
     if not constant:
         return beta, 0.0, Vb, see
     a = ym - float(xm @ beta)
-    var_a = 1.0 / n * u + float(xm @ Vb @ xm)
+    var_a = see / n + float(xm @ Vb @ xm)
     cov = -Vb @ xm
     V = np.zeros((p + 1, p + 1))
     V[:p, :p] = Vb
