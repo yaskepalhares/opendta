@@ -161,6 +161,36 @@ def cmd_irtgraph(s: "Session", args: str) -> None:
     run(s, args)
 
 
+@command("bayesmh", "bayesmh")
+def cmd_bayesmh(s: "Session", args: str) -> None:
+    from ..estimation.bayes import cmd_bayesmh as run
+    run(s, args)
+
+
+@command("bayes", "bayes", prefix=True)
+def cmd_bayes(s: "Session", args: str) -> None:
+    from ..estimation.bayes import cmd_bayes as run
+    run(s, args)
+
+
+@command("bayesstats", "bayesstats")
+def cmd_bayesstats(s: "Session", args: str) -> None:
+    from ..estimation.bayes import cmd_bayesstats as run
+    run(s, args)
+
+
+@command("bayestest", "bayestest")
+def cmd_bayestest(s: "Session", args: str) -> None:
+    from ..estimation.bayes import cmd_bayestest as run
+    run(s, args)
+
+
+@command("bayesgraph", "bayesgraph")
+def cmd_bayesgraph(s: "Session", args: str) -> None:
+    from ..estimation.bayes import cmd_bayesgraph as run
+    run(s, args)
+
+
 @command("irf", "irf")
 def cmd_irf(s: "Session", args: str) -> None:
     from ..estimation.irf import cmd_irf as run
