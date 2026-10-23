@@ -176,3 +176,64 @@ def da_mvn(Y: np.ndarray, X: np.ndarray, normal, chi2, nimp: int, burnin: int,
     while len(out) < nimp:
         out.append(out[-1].copy())
     return out[:nimp]
+
+
+def em_mvreg(Y: np.ndarray, X: np.ndarray, tol: float = 1e-5, maxiter: int = 100):
+    """EM estimates of the multivariate normal regression Y = X B + E with missing values (NaN)
+    in Y, for the rows with at least one observed value. Convergence when the largest relative
+    change of B and Sigma is below `tol` (mi impute mvn's default, VERIFY). Returns
+    (B, Sigma, observed log likelihood, iterations)."""
+    n, p = Y.shape
+    miss = np.isnan(Y)
+    keys, inv = np.unique(miss, axis=0, return_inverse=True)
+    inv = np.asarray(inv).ravel()
+    groups = [(keys[g], np.nonzero(inv == g)[0]) for g in range(len(keys))]
+    XtX = X.T @ X
+    XtXi = np.linalg.pinv(XtX)
+    Yf = np.where(miss, np.nanmean(Y, axis=0)[None, :], Y)
+    B = XtXi @ X.T @ Yf
+    R = Yf - X @ B
+    Sig = R.T @ R / n
+
+    def obs_ll(B, Sig):
+        ll = 0.0
+        XB = X @ B
+        for mk, rows in groups:
+            o = np.nonzero(~mk)[0]
+            if not len(o):
+                continue
+            S = Sig[np.ix_(o, o)]
+            d = Y[np.ix_(rows, o)] - XB[np.ix_(rows, o)]
+            sign, logdet = np.linalg.slogdet(S)
+            Si = np.linalg.inv(S)
+            # without the 2 pi constant, as Stata reports it (case 1909)
+            ll += -0.5 * (len(rows) * logdet + float(np.einsum("ij,jk,ik->", d, Si, d)))
+        return ll
+    it = 0
+    for it in range(1, maxiter + 1):
+        XB = X @ B
+        Ef = Y.copy()
+        Cadd = np.zeros((p, p))
+        for mk, rows in groups:
+            o = np.nonzero(~mk)[0]
+            m = np.nonzero(mk)[0]
+            if not len(m):
+                continue
+            if len(o):
+                Soo = Sig[np.ix_(o, o)]
+                Bc = np.linalg.solve(Soo, Sig[np.ix_(o, m)]).T
+                Ef[np.ix_(rows, m)] = XB[np.ix_(rows, m)] + (Y[np.ix_(rows, o)] - XB[np.ix_(rows, o)]) @ Bc.T
+                C = Sig[np.ix_(m, m)] - Bc @ Sig[np.ix_(o, m)]
+            else:
+                Ef[np.ix_(rows, m)] = XB[np.ix_(rows, m)]
+                C = Sig[np.ix_(m, m)]
+            Cadd[np.ix_(m, m)] += len(rows) * C
+        Bn = XtXi @ X.T @ Ef
+        R = Ef - X @ Bn
+        Sn = (R.T @ R + Cadd) / n
+        Sn = (Sn + Sn.T) / 2
+        ch = max(float(np.max(np.abs(Bn - B) / (np.abs(Bn) + 1))), float(np.max(np.abs(Sn - Sig) / (np.abs(Sn) + 1))))
+        B, Sig = Bn, Sn
+        if ch < tol:
+            break
+    return B, Sig, obs_ll(B, Sig), it
