@@ -70,11 +70,12 @@ _SHORT = {"regress": ("gaussian", "identity"), "logit": ("bernoulli", "logit"),
           "probit": ("bernoulli", "probit"), "cloglog": ("bernoulli", "cloglog"),
           "poisson": ("poisson", "log"), "nbreg": ("nbinomial", "log"), "ologit": ("ordinal", "logit"),
           "oprobit": ("ordinal", "probit"), "gamma": ("gamma", "log")}
-_FAM_TITLE = {"gaussian": "Gaussian", "bernoulli": "Bernoulli", "binomial": "Binomial",
-              "gamma": "Gamma", "nbinomial": "Negative binomial", "ordinal": "Ordinal",
-              "poisson": "Poisson"}                                   # VERIFY
-_LINK_TITLE = {"identity": "Identity", "logit": "Logit", "probit": "Probit", "log": "Log",
-               "cloglog": "Complementary log-log"}                    # VERIFY
+# as Stata 14 writes them (case 1909); binomial is VERIFY
+_FAM_TITLE = {"gaussian": "Gaussian", "bernoulli": "Bernoulli", "binomial": "binomial",
+              "gamma": "gamma", "nbinomial": "nbinomial", "ordinal": "ordinal",
+              "poisson": "Poisson"}
+_LINK_TITLE = {"identity": "identity", "logit": "logit", "probit": "probit", "log": "log",
+               "cloglog": "cloglog"}
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +340,17 @@ class GModel:
         resp_objs: list[Resp] = []
         anchored: set[str] = set()
         first_seen: dict[str, tuple[int, int]] = {}
+        # the anchor of each latent variable: its first free path into a response that is not
+        # Gaussian, else into the first response (case 1909: (L -> c1 c2) (L -> b1 b2 b3, logit)
+        # anchors b1; VERIFY the rule beyond that case)
+        anchor_of: dict[str, str] = {}
+        for pref in (True, False):
+            for e in resps:
+                if pref and e.family == "gaussian":
+                    continue
+                for tt in e.terms:
+                    if tt[0] in ("lat", "clat") and tt[2] is None and tt[3] is None:
+                        anchor_of.setdefault(tt[1], e.name)
         for e in resps:
             yfull = ds.get(e.name).data
             sel = valid[resps.index(e)][rows] if False else (valid[resps.index(e)] & sample)
@@ -385,7 +397,7 @@ class GModel:
                 elif t[3] is not None:
                     cref[j] = (P.add(e.name, t[1], 1.0, "coef", t[3]), 0.0)
                 else:
-                    if t[1] not in anchored and self._anchor(t[1], o):
+                    if t[1] not in anchored and anchor_of.get(t[1]) == e.name and self._anchor(t[1], o):
                         anchored.add(t[1])
                         cref[j] = (-1, 1.0)
                         first_seen[t[1]] = (len(resp_objs), j)
@@ -921,23 +933,57 @@ def _post(s, args, m: GModel, th, V, ll, conv, iters, level, *, hook=None, quiet
     est.extra = dict(N=m.N, ll=ll, th=th.copy(), V=V, rep=rep, Vr=Vr)
     est.display = display_gsem
     est.predict = _predict
-    est.predict_opts = {"mu": 2, "xb": 2, "latent": 3}
+    est.predict_opts = {"mu": 2, "eta": 3, "xb": 2, "latent": 3, "outcome": 3, "ebmeans": 3,
+                        "ebmodes": 4}
     resp_names = [r.eq.name for r in m.resps]
-    scalars = [("N", float(m.N)), ("k", float(len(th))), ("k_eq", float(len(m.resps))),
-               ("k_dv", float(len(m.resps))), ("converged", 1.0 if conv else 0.0), ("rc", 0.0),
-               ("ic", float(iters)), ("ll", ll), ("rank", float(np.linalg.matrix_rank(np.nan_to_num(np.asarray(est.V, float)))))]   # a parameter at the boundary leaves NaN in V
-    macros = [("cmdline", f"gsem {args.strip()}"), ("cmd", "gsem"), ("predict", "gsem_p"),
-              ("title", "Generalized structural equation model"), ("vce", "oim"),
-              ("vcetype", "OIM"), ("depvar", " ".join(resp_names)),
-              ("intmethod", m.intmethod if m.q else ""), ("properties", "b V")]
-    for k, r in enumerate(m.resps, 1):
-        macros.append((f"family{k}", r.eq.family or ""))
-        macros.append((f"link{k}", r.eq.link or ""))
+    # e() in Stata 14's order (case 1909). VERIFY: e(b) here leaves out the parameters that are
+    # constrained (anchors, fixed variances), which Stata keeps with e(Cns)
+    n_var = sum(1 for kd in P.kind if kd == "lvar") + sum(1 for i, _v in m.vref if i < 0)
+    n_cov = sum(1 for kd in P.kind if kd == "cov")
+    k_eq = len(dict.fromkeys(eqn)) + sum(1 for i, _v in m.vref if i < 0)
+    scalars = [("rank", float(np.linalg.matrix_rank(np.nan_to_num(np.asarray(est.V, float))))),
+               ("N", float(m.N)), ("ic", float(iters)), ("converged", 1.0 if conv else 0.0),
+               ("rc", 0.0), ("ll", ll), ("k", float(len(th))), ("k_eq", float(k_eq)),
+               ("k_rs", float(n_var)), ("k_rc", float(n_cov)), ("k_dv", float(len(m.resps)))]
     if m.q:
-        scalars.insert(4, ("n_quad", float(m.nint)))
+        scalars.append(("n_quad", float(m.nint)))
+    xs = list(dict.fromkeys(t_[1] for r in m.resps for t_ in r.eq.terms if t_[0] == "x"))
+    links = []
+    for k in range(len(m.resps), 0, -1):
+        r = m.resps[k - 1]
+        links += [(f"link{k}", r.eq.link or ""), (f"family{k}", r.eq.family or "")]
+    head = [("cmdline", f"gsem {args.strip()}"), ("cmd", "gsem"),
+            ("title", "Generalized structural equation model"), ("method", "ml")]
+    mid = [("intmethod", m.intmethod)] if m.q else []
+    mid.append(("depvar", " ".join(resp_names)))
+    if not m.q:
+        mid.append(("marginsnotok", "LATent1(passthru) LATent se(passthru)"))
+    mid.append(("covariates", " ".join(xs) if xs else "_NONE"))
+    if not m.q:
+        mid.append(("marginsdefault", " ".join(f"predict(pr outcome({n}))" if r.eq.family in
+                                                ("bernoulli", "binomial", "ordinal")
+                                                else f"predict(mu outcome({n}))"
+                                                for n, r in zip(resp_names, m.resps))))
+    tail = [("predict", "gsem_p"), ("estat_cmd", "gsem_estat"), ("footnote", "gsem_footnote"),
+            ("opt", "moptimize"), ("vce", "oim"),
+            ("user", "_gsem_eval_chol()" if m.q else "_gsem_eval_iid()"), ("ml_method", "gf2"),
+            ("technique", "nr"), ("which", "max"), ("properties", "b V")]
+    macros = head + mid + links + tail
     if hook is not None:
         hook(est, scalars, macros)
-    post(s, est, scalars, macros, m.sample)
+    from ..commands.matrix import Matrix
+    cn = list(est.names)
+
+    def row(v):
+        mt = Matrix(np.asarray(v, float).reshape(1, -1), ["r1"], cn)
+        mt.coleq = list(eqn)
+        return mt
+    cls = {"coef": 1, "cut": 2, "aux": 2, "gvar": 3, "lvar": 4, "cov": 5}      # VERIFY codes
+    nN = Matrix(np.array([[float(len(r.y)) for r in m.resps]]), ["r1"], resp_names)
+    mats = [("_N", nN), ("b_pclass", row([cls.get(P.kind[i], 1) for i in ix])),
+            ("gradient", row(np.zeros(len(ix)))),
+            ("ilog", Matrix(np.zeros((1, 20)), ["r1"], [f"c{i}" for i in range(1, 21)]))]
+    post(s, est, scalars, macros, m.sample, extra_mats=mats)
     if not quiet:
         est.display(s, est)
 
@@ -999,21 +1045,31 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
     if header:
         out.write("\n" + f"{'Generalized structural equation model':<48}{'Number of obs':<18}= ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
+        many = len(m.resps) > 1
         for r in m.resps:
             e = r.eq
-            fam = _FAM_TITLE[e.family]
-            out.write(f"\n{'Response':<15}: {e.name}\n{'Family':<15}: {fam}\n"
-                      f"{'Link':<15}: {_LINK_TITLE[e.link]}\n", "text")
-        out.write("\n", "text")
+            right = [""] * 4
+            if e.family == "gamma":
+                # VERIFY: the count and the time at risk with several responses
+                right[0] = f"{'No. of failures':<18}= {len(r.y):>10,}"
+                right[1] = f"{'Time at risk':<18}= {_g(float(np.sum(r.y)), '%10.0g'):>10}"
+            lines_ = [f"{'Response':<15}: {e.name}", f"{'Family':<15}: {_FAM_TITLE[e.family]}"]
+            if e.family == "nbinomial":
+                lines_.append(f"{'Dispersion':<15}: mean")
+            if e.family == "gamma":
+                lines_.append(f"{'Form':<15}: accelerated failure-time")
+            lines_.append(f"{'Link':<15}: {_LINK_TITLE[e.link]}")
+            if many:
+                out.write("\n", "text")
+            for k, ln in enumerate(lines_):
+                out.write((f"{ln:<48}{right[k]}" if k < len(right) and right[k] else ln) + "\n", "text")
+        if many:
+            out.write("\n", "text")
         out.write("Log likelihood = ", "text")
-        out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
-        lines = _constraint_lines(m)
-        if lines:
-            out.write("\n", "text")
-        for k, ln in enumerate(lines, 1):
+        out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+        out.write("\n", "text")
+        for k, ln in enumerate(_constraint_lines(m), 1):
             out.write(f" ({k:2d})  {ln}\n", "text")
-        if not lines:
-            out.write("\n", "text")
     if not table:
         return
     rep, Vr = x["rep"], x["Vr"]
@@ -1033,12 +1089,11 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
     W = max([12] + [len(lb) - 1 for lb in labels])
     dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
     out.write("-" * (W + 66) + "\n", "text")
-    out.write(f"{'':>{W}} |                 OIM\n", "text")
     out.write(f"{'':>{W}} |      Coef.   Std. Err.      z    P>|z|     [{lv:g}% Conf. Interval]\n", "text")
     out.write(dash, "text")
 
     def row(label, b, s_, kind="coef"):
-        if kind in ("var", "cov", "aux"):
+        if kind in ("var", "cov"):
             out.write(f"{label:>{W + 1}}|", "text")
         else:
             out.write(f"{label:>{W}} |", "text")
@@ -1053,10 +1108,6 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
                     lo, hi = float("nan"), float("nan")
                 out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(lo):>9}   {_g(hi):>9}\n",
                           "result")
-                return
-            if kind == "aux":
-                out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(b - c * s_):>9}"
-                          f"   {_g(b + c * s_):>9}\n", "result")
                 return
             z = b / s_
             pv = 2 * float(st.norm.sf(abs(z)))
@@ -1085,10 +1136,22 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
                     j = m.lat.index(t[1])
                     i, v = r.cref[j]
                     lab = f"{t[1]}[{m.cvar}]" if t[0] == "clat" else t[1]
+                    # a cluster-level latent variable sits between blank lines (case 1909)
+                    if t[0] == "clat":
+                        out.write(f"{'':>{W}} |\n", "text")
                     row(lab, rep[i], se[i]) if i >= 0 else row(lab, v, 0, "constrained")
+                    if t[0] == "clat":
+                        out.write(f"{'':>{W}} |\n", "text")
             if len(r.xref) > xi:
                 i = r.xref[xi][0]
                 row("_cons", rep[i], se[i])
+            own = [i for i in r.aux if P.kind[i] in ("cut", "aux")]
+            if own:
+                # the ancillary parameters of the response, under its name (case 1909)
+                out.write(dash, "text")
+                out.write(f"{e.name:<{W}} |\n", "text")
+                for i in own:
+                    row(f"/{P.name[i]}", rep[i], se[i])
         else:
             j = m.lat.index(e.name)
             for k, nm in enumerate(m.gnames[j]):
@@ -1105,13 +1168,10 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
     for i in covs:
         out.write(dash, "text") if i == covs[0] else None
         row(P.eq[i], rep[i], se[i], "cov")
-    aux = [i for i, kd in enumerate(P.kind) if kd in ("cut", "aux", "gvar")]
-    for n_, i in enumerate(aux):
+    gvars = [i for i, kd in enumerate(P.kind) if kd == "gvar"]
+    for n_, i in enumerate(gvars):
         out.write(dash, "text") if n_ == 0 else None
-        if P.kind[i] == "gvar":
-            row(f"var(e.{P.eq[i]})", rep[i], se[i], "var")
-        else:
-            row(_auxlabel(m, i), rep[i], se[i], "aux")
+        row(f"var(e.{P.eq[i]})", rep[i], se[i], "var")
     out.write("-" * (W + 66) + "\n", "text")
 
 
@@ -1120,7 +1180,13 @@ def _predict(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     response (latent variables at their empirical Bayes means) and the latent means."""
     m: GModel = est.model
     th = est.extra["th"]
-    target = (getattr(est, "_pred_opts", None) or {}).get(stat)
+    opts = getattr(est, "_pred_opts", None) or {}
+    if stat in ("mu", "pr", "eta", "xb") and isinstance(opts.get(stat), str):
+        # Stata 14: predict newvar, mu outcome(y) (case 1909)
+        raise StataError(198, f"option {stat}() incorrectly specified")
+    if stat == "eta":
+        stat = "xb"
+    target = opts.get(stat) if stat == "latent" else opts.get("outcome")
     target = target.strip() if isinstance(target, str) and target.strip() else None
     n = s.data.nobs
     rows = np.nonzero(m.sample)[0]
@@ -1131,7 +1197,8 @@ def _predict(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         if L not in m.lat:
             raise StataError(198, f"{L} is not a latent variable")   # VERIFY
         out[rows] = eb[m.unit, m.lat.index(L)]
-        return out, ""
+        note = "" if opts.get("ebmeans") else "(option ebmeans assumed)\n"
+        return out, note + f"(using {m.nint} quadrature points)"
     r = next((rr for rr in m.resps if rr.eq.name == target), None) if target else m.resps[0]
     if r is None:
         raise StataError(198, f"{target} is not an outcome of the model")   # VERIFY

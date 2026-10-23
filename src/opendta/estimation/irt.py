@@ -333,12 +333,24 @@ def cmd_irt(s: "Session", args: str) -> None:
         est.estat = {"report": (3, estat_report)}
         est.irt = dict(items=items, title=title, kind=kind, spec=spec,
                        notable=bool(o.get("notable")), noheader=bool(o.get("noheader")))
-        macros.extend([("cmd2", "irt"), ("model1", kind if kind != "hybrid" else "hybrid"),
-                       ("items1", " ".join(r.eq.name for r in m.resps)),
-                       ("title", title), ("estat_cmd", "irt_estat")])
-        for i, mac in enumerate(macros):
-            if mac[0] == "cmdline":
-                macros[i] = ("cmdline", f"irt {args.strip()}")
+        # e() in Stata 14's order (case 1909); VERIFY the items and models of hybrid
+        from .results import datasignature
+        groups = spec if kind == "hybrid" else [(kind, [r.eq.name for r in m.resps])]
+        names = [r.eq.name for r in m.resps]
+        scalars.append(("irt_k_eq", float(len(groups))))
+        for g, (_k, its) in enumerate(groups, 1):
+            scalars.append((f"k_items{g}", float(len(its))))
+        drop = {"cmdline", "cmd", "title", "predict", "estat_cmd"}
+        rest = [x for x in macros if x[0] not in drop]
+        lead = [("cmdline", f"irt {args.strip()}"), ("predict", "irt_p"), ("cmd2", "irt"),
+                ("estat_cmd", "irt_estat")]
+        for g, (k_, its) in enumerate(groups, 1):
+            lead += [(f"items{g}", " ".join(its)), (f"model{g}", k_)]
+        lead += [("title", title), ("cmd", "gsem")]
+        meth = [x for x in rest if x[0] == "method"]
+        rest = [x for x in rest if x[0] != "method"]
+        sig = [("datasignaturevars", " ".join(names)), ("datasignature", datasignature(s, names, m.sample))]
+        macros[:] = lead + meth + sig + rest
     _post(s, args, m, th, V, ll, conv, iters, level, hook=hook, quiet=True)
     est = s._estimates
     display_irt(s, est, header=not o.get("noheader"), table=not o.get("notable"))
