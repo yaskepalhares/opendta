@@ -404,7 +404,9 @@ def estat_stable(s, est, args):
         A = model.implied(u["th"])[2][0][np.ix_(iy, iy)]
         ev = np.linalg.eigvals(A)
         mod = np.abs(ev)
-        order = np.argsort(-mod, kind="stable")
+        # VERIFY: ties in modulus (+-r) go negative first (compat 1909); the rounding keeps the
+        # order from depending on the platform's last bits
+        order = np.lexsort((ev.imag, ev.real, -np.round(mod, 10)))
         ev, mod = ev[order], mod[order]
         from .varpost import _cg, _cg7
         out.write("\nStability analysis of simultaneous equation systems\n\n", "text")
