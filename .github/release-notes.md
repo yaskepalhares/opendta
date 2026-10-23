@@ -1,16 +1,16 @@
 **English** · [Português](#português)
 
-## What's new in 0.4.1
+## What's new in 0.5.0
 
-Interface improvements:
+Four new groups of commands, each checked against Stata 14 output (the remaining differences, and why, are in `compat/known_differences.txt`):
 
-- **Do-file Editor**: a modern toolbar with icons (new, open, save, save as, undo and redo, find, comment/uncomment, indent and outdent), a **+** button for a new tab, and **Do**, **Run** and **Do current line** (Ctrl+Enter) on the right, as in Stata 14.
-- **Color schemes** for the Results window and for the Do-file Editor, chosen separately in **Settings**: Classic Stata, High contrast, Soft, Solarized, Monokai, Dracula, One Dark, Nord, Gruvbox and GitHub.
-- **Results**: `(N observations deleted)` is highlighted in red.
-- **Settings** button at the right end of the toolbar, with new options: an initial folder, an automatic log of each session, and reopening the Do-file Editor's files from the last session (both off by default).
-- **Confirmation before risky commands** typed in the Command window (`clear` with unsaved changes, `drop` or `keep` removing many observations or variables, `save, replace` over a much larger file), with a switch for each command in **Settings › General › Safety**.
-- **Review, Variables and Properties** open in their default place every time OpenDTA starts, and go back there when chosen again in the **Window** menu.
-- Portuguese interface: the standard buttons (Save / Don't Save / Cancel) and the right-click menus of text fields are now translated.
+- **Panel data**: random-effects models by quadrature, `quadchk`, dynamic panels by GMM (`xtabond`, `xtdpdsys`, `xtdpd`, with `estat abond` and `estat sargan`), the linear panel estimators, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` and `xtdata`.
+- **Multivariate statistics**: `pca`, `factor` and `rotate`, `alpha`, `cluster` (k-means, k-medians and the hierarchical linkages, with the dendrogram), `discrim` and `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` and `biplot`, with their `estat` subcommands.
+- **Models**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` and `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` and `etpoisson`.
+- **Other suites**: `sem` with `mlmv`, `adf`, groups and the `estat` subcommands; `gsem`; `irt` (`1pl` to `hybrid`) with `irtgraph`; `bayesmh`, the `bayes` prefix for `regress`, `logit`, `probit` and `poisson`, `bayesstats`, `bayestest` and `bayesgraph`; new `power` methods and the `graph` option; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with sixteen more estimators.
+- **Fixes**: `ivregress` now uses weights; `matrix list` shows equation names (`y:x`, `cut1:_cons`) and lists a 1×1 matrix as symmetric, and `` `:colfullnames' ``, `` `:coleq' `` and `matrix coleq`/`roweq` work with equations.
+
+What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
 ## Download
 
@@ -54,17 +54,17 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.4.1
+### Novidades da 0.5.0
 
-Melhorias na interface:
+Quatro novos grupos de comandos, cada um conferido com a saída do Stata 14 (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`):
 
-- **Do-file Editor**: barra de botões moderna, com ícones (novo, abrir, salvar, salvar como, desfazer e refazer, localizar, comentar/descomentar, aumentar e diminuir recuo), um botão **+** para nova aba e **Do**, **Run** e **Do na linha atual** (Ctrl+Enter) à direita, como no Stata 14.
-- **Esquemas de cores** para a janela Results e para o Do-file Editor, escolhidos separadamente em **Settings**: Clássico Stata, Alto contraste, Suave, Solarized, Monokai, Dracula, One Dark, Nord, Gruvbox e GitHub.
-- **Results**: `(N observations deleted)` aparece em vermelho.
-- Botão **Settings** na ponta direita da barra, com novas opções: pasta inicial, log automático de cada sessão e reabertura dos arquivos do Do-file Editor da última sessão (ambos desligados por padrão).
-- **Confirmação antes de comandos arriscados** digitados na janela Command (`clear` com alterações não salvas, `drop` ou `keep` removendo muitas observações ou variáveis, `save, replace` sobre um arquivo bem maior), com um interruptor para cada comando em **Settings › General › Safety**.
-- **Review, Variables e Properties** abrem na posição padrão a cada vez que o OpenDTA inicia e voltam para ela quando escolhidas de novo no menu **Window**.
-- Interface em português: os botões padrão (Salvar / Não salvar / Cancelar) e os menus de clique direito dos campos de texto agora estão traduzidos.
+- **Dados em painel**: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM (`xtabond`, `xtdpdsys`, `xtdpd`, com `estat abond` e `estat sargan`), os estimadores lineares de painel, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` e `xtdata`.
+- **Estatística multivariada**: `pca`, `factor` e `rotate`, `alpha`, `cluster` (k-médias, k-medianas e as ligações hierárquicas, com o dendrograma), `discrim` e `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` e `biplot`, com seus subcomandos de `estat`.
+- **Modelos**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` e `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` e `etpoisson`.
+- **Outras suítes**: `sem` com `mlmv`, `adf`, grupos e os subcomandos de `estat`; `gsem`; `irt` (do `1pl` ao `hybrid`) com `irtgraph`; `bayesmh`, o prefixo `bayes` para `regress`, `logit`, `probit` e `poisson`, `bayesstats`, `bayestest` e `bayesgraph`; novos métodos do `power` e a opção `graph`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg`; `svy:` com mais dezesseis estimadores.
+- **Correções**: o `ivregress` agora usa os pesos; o `matrix list` mostra os nomes de equação (`y:x`, `cut1:_cons`) e lista uma matriz 1×1 como simétrica, e `` `:colfullnames' ``, `` `:coleq' `` e `matrix coleq`/`roweq` funcionam com equações.
+
+O que ainda falta para a versão 1.0 está no [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10).
 
 ### Download
 

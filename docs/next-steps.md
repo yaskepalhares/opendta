@@ -2,7 +2,7 @@
 
 **English** | [Português](next-steps.pt-BR.md)
 
-A working plan for the commands still missing in [Missing for 1.0](../ROADMAP.md#missing-for-10), written so that each block can be done in a fresh session without rediscovering the code. Version 1.0 is released when every block is done; after that come the improvements listed in [After 1.0](../ROADMAP.md#after-10) and newer Stata versions.
+A working plan for the commands still missing in [Missing for 1.0](../ROADMAP.md#missing-for-10), written so that each block can be done in a fresh session without rediscovering the code. Version 1.0 is released when every item of Missing for 1.0 is covered; after that come the improvements listed in [After 1.0](../ROADMAP.md#after-10) and newer Stata versions.
 
 ## How to run a block
 
@@ -129,4 +129,6 @@ Done in phase 23 (compat case 1909), except the pieces listed under Other suites
 
 ## Before 1.0
 
-When every block is done: the Stata run of all compat cases without reference, the differences fixed, the version set to 1.0.0 in `src/opendta/__init__.py` and `pyproject.toml`, the release notes written, and the tag `v1.0.0` pushed (see [development.md](development.md#publishing-a-version)).
+Blocks 1 to 11 were released as version 0.5.0. Version 1.0 waits for what is still listed in [Missing for 1.0](../ROADMAP.md#missing-for-10): plan it as new blocks (from block 12), one area at a time, run the same way as the blocks above.
+
+When that list is empty: the Stata run of all compat cases without reference, the differences fixed, the version set to 1.0.0 in `src/opendta/__init__.py` and `pyproject.toml`, the release notes written, and the tag `v1.0.0` pushed (see [development.md](development.md#publishing-a-version)).

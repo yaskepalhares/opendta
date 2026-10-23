@@ -1,0 +1,227 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/0514_fweight_robust.log
+  log type:  text
+ opened on:  22 Oct 2026, 21:44:58
+
+. * Robust and cluster variance with frequency weights: each observation counts w times, so the
+. * variance is that of the expanded data (OpenDTA's vce.sandwich). VERIFY against Stata 14.
+. clear
+
+. set seed 514
+
+. set obs 120
+number of observations (_N) was 0, now 120
+
+. gen x = runiform()
+
+. gen g = mod(_n, 10)
+
+. gen t = ceil(-ln(runiform())/exp(-1 + x)*10)
+
+. gen d = runiform() < .8
+
+. gen fw = 1 + mod(_n, 3)
+
+. gen k = mod(_n, 3)
+
+. gen y = runiform() < invlogit(x)
+
+. logit y x [fweight=fw], vce(cluster g) nolog
+
+Logistic regression                             Number of obs     =        240
+                                                Wald chi2(1)      =       2.40
+                                                Prob > chi2       =     0.1212
+Log pseudolikelihood = -146.34958               Pseudo R2         =     0.0129
+
+                                     (Std. Err. adjusted for 10 clusters in g)
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .9534532   .6152524     1.55   0.121    -.2524193    2.159326
+       _cons |   .3975278   .4397418     0.90   0.366    -.4643503    1.259406
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[2,2]
+                    y:            y:
+                    x         _cons
+    y:x   .3785355052
+y:_cons  -.2325970738   .1933728587
+
+. ologit k x [fweight=fw], vce(cluster g) nolog
+
+Ordered logistic regression                     Number of obs     =        240
+                                                Wald chi2(1)      =       0.00
+                                                Prob > chi2       =     0.9695
+Log pseudolikelihood = -242.73543               Pseudo R2         =     0.0000
+
+                                     (Std. Err. adjusted for 10 clusters in g)
+------------------------------------------------------------------------------
+             |               Robust
+           k |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .0235704   .6160059     0.04   0.969    -1.183779     1.23092
+-------------+----------------------------------------------------------------
+       /cut1 |  -1.598837   .2768302                     -2.141414    -1.05626
+       /cut2 |    .010617   .2776662                     -.5335987    .5548328
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[3,3]
+                      k:        cut1:        cut2:
+                      x        _cons        _cons
+       k:x  .3794632598
+cut1:_cons  .1705286616  .0766349695
+cut2:_cons  .1710436346   .076866396  .0770985215
+
+. ologit k x [fweight=fw], vce(robust) nolog
+
+Ordered logistic regression                     Number of obs     =        240
+                                                Wald chi2(1)      =       0.00
+                                                Prob > chi2       =     0.9546
+Log pseudolikelihood = -242.73543               Pseudo R2         =     0.0000
+
+------------------------------------------------------------------------------
+             |               Robust
+           k |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .0235704   .4142661     0.06   0.955    -.7883763    .8355171
+-------------+----------------------------------------------------------------
+       /cut1 |  -1.598837   .2624545                     -2.113238   -1.084436
+       /cut2 |    .010617   .2300043                     -.4401831    .4614171
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[3,3]
+                      k:        cut1:        cut2:
+                      x        _cons        _cons
+       k:x  .1716164134
+cut1:_cons  .0816893451  .0688823593
+cut2:_cons  .0787925452  .0475069066   .052901961
+
+. stset t [fweight=fw], failure(d)
+
+     failure event:  d != 0 & d < .
+obs. time interval:  (0, t]
+ exit on or before:  failure
+            weight:  [fweight=fw]
+
+------------------------------------------------------------------------------
+        120  total observations
+          0  exclusions
+------------------------------------------------------------------------------
+        120  physical observations remaining, equal to
+        240  weighted observations, representing
+        196  failures in single-record/single-failure data
+       4342  total analysis time at risk and under observation
+                                                at risk from t =         0
+                                     earliest observed entry t =         0
+                                          last observed exit t =        73
+
+. stcox x, vce(cluster g) nolog
+
+         failure _d:  d
+   analysis time _t:  t
+             weight:  [fweight=fw]
+
+Cox regression -- Breslow method for ties
+
+No. of subjects      =          240             Number of obs    =         240
+No. of failures      =          196
+Time at risk         =         4342
+                                                Wald chi2(1)     =        1.26
+Log pseudolikelihood =   -886.64745             Prob > chi2      =      0.2610
+
+                                     (Std. Err. adjusted for 10 clusters in g)
+------------------------------------------------------------------------------
+             |               Robust
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   1.400711   .4199093     1.12   0.261     .7783465    2.520718
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[1,1]
+             x
+x  .0898697915
+
+. streg x, distribution(weibull) vce(robust) nolog
+
+         failure _d:  d
+   analysis time _t:  t
+             weight:  [fweight=fw]
+
+Weibull regression -- log relative-hazard form 
+
+No. of subjects      =          240             Number of obs    =         240
+No. of failures      =          196
+Time at risk         =         4342
+                                                Wald chi2(1)     =        1.16
+Log pseudolikelihood =   -348.54061             Prob > chi2      =      0.2825
+
+------------------------------------------------------------------------------
+             |               Robust
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   1.336172   .3603078     1.07   0.282     .7876444    2.266703
+       _cons |   .0409974   .0085151   -15.38   0.000     .0272875    .0615956
+-------------+----------------------------------------------------------------
+       /ln_p |  -.0091361   .0412731    -0.22   0.825    -.0900299    .0717577
+-------------+----------------------------------------------------------------
+           p |   .9909055   .0408977                      .9139039    1.074395
+         1/p |   1.009178   .0416519                      .9307564    1.094207
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[3,3]
+                      _t:           _t:         ln_p:
+                       x         _cons         _cons
+      _t:x   .0727147638
+  _t:_cons  -.0328174595   .0431387469
+ln_p:_cons  -.0001123748  -.0063296105   .0017034683
+
+. streg x, distribution(exponential) vce(cluster g) nolog
+
+         failure _d:  d
+   analysis time _t:  t
+             weight:  [fweight=fw]
+
+Exponential regression -- log relative-hazard form 
+
+No. of subjects      =          240             Number of obs    =         240
+No. of failures      =          196
+Time at risk         =         4342
+                                                Wald chi2(1)     =        0.90
+Log pseudolikelihood =   -348.55401             Prob > chi2      =      0.3435
+
+                                     (Std. Err. adjusted for 10 clusters in g)
+------------------------------------------------------------------------------
+             |               Robust
+          _t | Haz. Ratio   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   1.339311   .4130949     0.95   0.344     .7317089    2.451459
+       _cons |   .0397332   .0078271   -16.37   0.000     .0270069    .0584565
+------------------------------------------------------------------------------
+
+. matrix list e(V), format(%12.0g)
+
+symmetric e(V)[2,2]
+                    _t:           _t:
+                     x         _cons
+    _t:x   .0951342005
+_t:_cons  -.0503497723   .0388056587
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/0514_fweight_robust.log
+  log type:  text
+ closed on:  22 Oct 2026, 21:44:58
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
