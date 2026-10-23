@@ -231,7 +231,11 @@ def mi_register(s: "Session", args: str) -> None:
     key = {"imputed": "_mi_ivars", "passive": "_mi_pvars", "regular": "_mi_rvars"}[full]
     _set_list(ds, key, _list(ds, key) + names)
     if full == "imputed":
+        before = int(np.sum(_num(ds, "_mi_miss") == 1))
         _update_miss(ds)
+        now = int(np.sum(_num(ds, "_mi_miss") == 1)) - before
+        if now > 0:
+            s.output.write(f"({now} m=0 obs. now marked as incomplete)\n", "text")     # case 1909
     _touch(ds)
 
 
@@ -286,13 +290,13 @@ def mi_describe(s: "Session", args: str) -> None:
         out.write(f"  {'Vars.:  ' if title == 'imputed' else '        '}{title + ':':<9}{len(names):>2}"
                   f"{'; ' + ' '.join(parts) if parts else ''}\n\n", "text")
     lst("imputed", ivars, True)
-    lst("passive", pvars)
+    lst("passive", pvars, True)      # with the missing counts, as Stata (case 1909)
     lst("regular", rvars)
     out.write(f"          system:   3; {' '.join(SYSV)}\n\n", "text")
     unreg = [v for v in ds.names if v not in ivars + pvars + rvars and v not in SYSV]
     if unreg:
         out.write(f"         (there {'are' if len(unreg) != 1 else 'is'} {len(unreg)} unregistered "
-                  f"variable{'s' if len(unreg) != 1 else ''})\n", "text")
+                  f"variable{'s' if len(unreg) != 1 else ''}; {' '.join(unreg)})\n", "text")
     s.r = {"M": float(M_), "N": float(n0), "N_incomplete": float(n_inc), "N_complete": float(n0 - n_inc),
            "ivars": " ".join(ivars)}
 
@@ -532,7 +536,80 @@ def _impute_one(method: str, y_obs, X_obs, X_mis, opts, levels=None):
         u = _rng_uniform(len(pr))
         k_ = np.minimum(np.sum(u[:, None] > np.cumsum(pr, axis=1), axis=1), J - 1)
         return levs[k_]
+    if method == "nbreg":
+        return _impute_nbreg(y_obs, X_obs, X_mis)
+    if method in ("truncreg", "intreg"):
+        return _impute_censored(method, y_obs, X_obs, X_mis, opts)
     raise StataError(198, f"mi impute {method}: not available in OpenDTA")   # OpenDTA
+
+
+def _draw_params(ll, start: np.ndarray) -> np.ndarray:
+    """ML estimates of ll(par) and a draw from the normal approximation of the posterior."""
+    from .ml import maximize
+    from .mixed import _numderiv
+
+    def full(par, todo):
+        return (ll(par), None, None) if todo == 0 else _numderiv(ll, par)
+    r = maximize(full, start, maxiter=200)
+    V = np.linalg.pinv(-r.H)    # a flat direction (alpha -> 0 in nbreg) must not stop the draw
+    L = np.linalg.cholesky((V + V.T) / 2 + 1e-12 * np.eye(len(start)))
+    return r.b + L @ _rng_normal(len(start))
+
+
+def _impute_nbreg(y, X, Xm):
+    """Negative binomial (NB2) regression: parameters drawn from their asymptotic posterior,
+    then the counts from the gamma-Poisson mixture (VERIFY: the draws are not Stata's)."""
+    k = X.shape[1]
+    lg = special.gammaln
+
+    def ll(par):
+        mu = np.exp(np.clip(X @ par[:k], -30, 30))
+        a = math.exp(min(max(par[k], -20), 20))
+        r = 1.0 / a
+        return float(np.sum(lg(y + r) - lg(r) - lg(y + 1) + y * np.log(a * mu / (1 + a * mu))
+                            - r * np.log1p(a * mu)))
+    b0, _ = _fit_logit_like("poisson", y, X)
+    par = _draw_params(ll, np.concatenate([b0, [0.0]]))
+    mu = np.exp(np.clip(Xm @ par[:k], -30, 30))
+    a = math.exp(min(max(par[k], -20), 20))
+    r = 1.0 / a
+    return st.nbinom.ppf(np.minimum(_rng_uniform(len(mu)), 1 - 1e-12), r, 1.0 / (1.0 + a * mu))
+
+
+def _impute_censored(method, y, X, Xm, opts):
+    """truncreg: the observed values come from a normal truncated to [ll, ul]; intreg: the
+    observed values are exact and the missing ones are interval-censored in [ll_i, ul_i]. In
+    both the parameters are drawn from the normal approximation of the posterior and the
+    missing values from the truncated normal (VERIFY against Stata's draws)."""
+    k = X.shape[1]
+    ndtr, ndtri = special.ndtr, special.ndtri
+    lo_o, hi_o = opts["ll_obs"], opts["ul_obs"]
+    lo_m, hi_m = opts["ll_mis"], opts["ul_mis"]
+    b_ols = np.linalg.pinv(X.T @ X) @ X.T @ y
+    s0 = math.sqrt(max(float(np.mean((y - X @ b_ols) ** 2)), 1e-12))
+
+    def mass(z_lo, z_hi):
+        return np.maximum(ndtr(z_hi) - ndtr(z_lo), 1e-300)
+
+    def ll(par):
+        s = math.exp(min(max(par[k], -20), 20))
+        z = (y - X @ par[:k]) / s
+        v = float(np.sum(-0.5 * z * z - 0.5 * math.log(2 * math.pi) - par[k]))
+        if method == "truncreg":
+            xb = X @ par[:k]
+            v -= float(np.sum(np.log(mass((lo_o - xb) / s, (hi_o - xb) / s))))
+        else:
+            xm = Xm @ par[:k]
+            v += float(np.sum(np.log(mass((lo_m - xm) / s, (hi_m - xm) / s))))
+        return v
+    par = _draw_params(ll, np.concatenate([b_ols, [math.log(s0)]]))
+    s = math.exp(min(max(par[k], -20), 20))
+    xm = Xm @ par[:k]
+    zl, zh = (lo_m - xm) / s, (hi_m - xm) / s
+    pl, ph = ndtr(zl), ndtr(zh)
+    u = _rng_uniform(len(xm))
+    p = np.clip(pl + u * (ph - pl), 1e-15, 1 - 1e-15)
+    return xm + s * ndtri(p)
 
 
 _METHODS = {"regress": 3, "pmm": 3, "logit": 4, "ologit": 5, "mlogit": 5, "poisson": 4, "chained": 5,
@@ -554,13 +631,11 @@ def mi_impute(s: "Session", args: str) -> None:
     meth = next((m for m, k in _METHODS.items() if len(words[0]) >= k and m.startswith(words[0])), None)
     if meth is None:
         raise StataError(198, f"mi impute {words[0]}: invalid method")   # VERIFY
-    if meth in ("mvn", "monotone", "truncreg", "intreg", "nbreg"):
-        raise StataError(198, f"mi impute {meth} is not available in OpenDTA")   # OpenDTA
     rest = words[1] if len(words) > 1 else ""
     body, opts = _parse_impute(rest)
     o = match_options(opts, {"add": 3, "replace": 3, "rseed": 2, "noisily": 1, "force": 5, "knn": 3,
                              "burnin": 4, "dots": 3, "nolegend": 5, "augment": 3, "orderasis": 6,
-                             "noisure": 5}) if opts.strip() else {}
+                             "noisure": 5, "ll": 2, "ul": 2, "burnbetween": 9}) if opts.strip() else {}
     if o.get("rseed"):
         from ..core import rng
         rng.reset(int(float(o["rseed"])))
@@ -576,8 +651,17 @@ def mi_impute(s: "Session", args: str) -> None:
         M_new = M_old + add
     ivars_all = _list(ds, "_mi_ivars")
     # specification: [(method, target, opts)] and the covariates
-    if meth == "chained":
+    if meth in ("chained", "monotone"):
         specs, covars = _parse_chained(s, body)
+        if meth == "monotone":
+            _check_monotone(ds, specs)
+    elif meth == "mvn":
+        lhs, _eq, rhs = body.partition("=")
+        tg = s.expand_varlist(lhs.strip())
+        if len(tg) < 2:
+            raise StataError(102, "too few variables specified")
+        specs = [("mvn", v, {}) for v in tg]
+        covars = s.expand_varlist(rhs) if rhs.strip() else []
     else:
         if "=" in body:
             lhs, rhs = body.split("=", 1)
@@ -586,7 +670,9 @@ def mi_impute(s: "Session", args: str) -> None:
         tgt = s.expand_varlist(lhs.strip())
         if len(tgt) != 1:
             raise StataError(103, "too many variables specified")
-        specs = [(meth, tgt[0], {"knn": o.get("knn")})]
+        specs = [(meth, tgt[0], {"knn": o.get("knn"), "ll": o.get("ll"), "ul": o.get("ul")})]
+        if meth in ("truncreg", "intreg") and (o.get("ll") is None and o.get("ul") is None):
+            raise StataError(198, "option ll() or ul() required")   # VERIFY
         covars = s.expand_varlist(rhs) if rhs.strip() else []
     for _m, v, _o in specs:
         if v not in ivars_all:
@@ -600,7 +686,8 @@ def mi_impute(s: "Session", args: str) -> None:
     m0 = np.nonzero(mm == 0)[0]
     out = s.output
     counts = {}
-    for m in ms:
+    mvn_draws = None
+    for km, m in enumerate(ms):
         rows_m = _rows_of(ds, style, m)         # m=0 order, with the rows of m where they exist
         work = {v: _num(ds, v)[rows_m] for _m, v, _o in specs}
         missing = {v: _num(ds, v)[m0] >= SYS for _m, v, _o in specs}
@@ -608,6 +695,23 @@ def mi_impute(s: "Session", args: str) -> None:
         if meth == "chained":
             burn = int(o["burnin"]) if o.get("burnin") else 10
             _chained(specs, work, missing, cov, burn)
+        elif meth == "monotone":
+            done: list[str] = []
+            for mth, v, so in specs:
+                _cond(mth, v, so, work, missing, cov, done, o, ds, rows_m)
+                done.append(v)
+        elif meth == "mvn":
+            if mvn_draws is None:
+                mvn_draws = _mvn_draws(ds, specs, covars, rows_m, len(ms), o)
+                ll_em, it_em, n_omit = o["_em"]
+                out.write("\nPerforming EM optimization:\n", "text")
+                if n_omit:
+                    out.write(f"note: {n_omit} observations omitted from EM estimation because of all "
+                              "imputation variables missing\n", "text")
+                out.write(f"  observed log likelihood = {_g10(ll_em)} at iteration {it_em}\n", "text")
+                out.write("\nPerforming MCMC data augmentation ... \n", "text")
+            for v, arr in zip([sp[1] for sp in specs], mvn_draws[km].T):
+                work[v] = np.where(missing[v], np.where(np.isfinite(arr), arr, SYS), work[v])
         else:
             mth, v, so = specs[0]
             mis = missing[v]
@@ -615,6 +719,15 @@ def mi_impute(s: "Session", args: str) -> None:
             if mis.any():
                 Xo = np.column_stack([cov[ok], np.ones(int(ok.sum()))])
                 Xm = np.column_stack([cov[mis], np.ones(int(mis.sum()))])
+                so = _limits(ds, so, rows_m, ok, mis)
+                if mth == "intreg":
+                    # Stata registers the variables of ll() and ul() as passive (case 1909; VERIFY why)
+                    lim = [str(so_[k]).strip() for so_ in (specs[0][2],) for k in ("ll", "ul")
+                           if so_.get(k) is not None and ds.has(str(so_[k]).strip())]
+                    regd = set(_list(ds, "_mi_ivars") + _list(ds, "_mi_pvars") + _list(ds, "_mi_rvars"))
+                    new = [v_ for v_ in lim if v_ not in regd]
+                    if new:
+                        _set_list(ds, "_mi_pvars", _list(ds, "_mi_pvars") + new)
                 vals = _impute_one(mth, work[v][ok], Xo, Xm, so)
                 w = work[v].copy()
                 w[mis] = vals
@@ -630,10 +743,20 @@ def mi_impute(s: "Session", args: str) -> None:
     s.notify_state()
     # report
     n0 = len(m0)
-    title = "Multivariate imputation" if meth == "chained" else "Univariate imputation"
+    title = "Multivariate imputation" if meth in ("chained", "monotone", "mvn") else "Univariate imputation"
     mname = {"regress": "Linear regression", "pmm": "Predictive mean matching", "logit": "Logistic regression",
              "ologit": "Ordered logistic regression", "mlogit": "Multinomial logistic regression",
-             "poisson": "Poisson regression", "chained": "Chained equations"}[meth]
+             "poisson": "Poisson regression", "chained": "Chained equations",
+             "nbreg": "Negative binomial regression", "truncreg": "Truncated regression",
+             "intreg": "Interval regression", "monotone": "Monotone method",
+             "mvn": "Multivariate normal regression"}[meth]
+    if meth == "monotone":
+        out.write("\nConditional models:\n", "text")
+        prev: list[str] = []
+        for mth, v, _o in specs:
+            out.write(f"{v:>18}: " + " ".join([mth, v] + prev + covars) + "\n", "text")
+            prev.append(v)
+        out.write("\n", "text")
     out.write("\n", "text")
     out.write(f"{title:<44}Imputations = ", "text")
     out.write(f"{M_new:>8,}\n", "result")
@@ -649,8 +772,25 @@ def mi_impute(s: "Session", args: str) -> None:
         out.write("\n", "text")
         for mth, v, _o in specs:
             out.write(f"{v:>17}: {mth} {v} {' '.join([w for _m, w, _o in specs if w != v] + covars)}\n", "text")
+    if meth == "mvn":
+        burn = int(o["burnin"]) if o.get("burnin") else 100
+        btw = int(o["burnbetween"]) if o.get("burnbetween") else 100
+        out.write(f"\n{'Prior: uniform':<45}Iterations = {burn + (len(ms) - 1) * btw:>8}\n", "text")
+        out.write(f"{'burn-in = ':>58}{burn:>8}\n{'between = ':>58}{btw:>8}\n", "text")
+    elif meth == "monotone":
+        names = {"regress": "linear regression", "pmm": "predictive mean matching", "logit": "logistic regression",
+                 "ologit": "ordered logistic regression", "mlogit": "multinomial logistic regression",
+                 "poisson": "Poisson regression", "nbreg": "negative binomial regression",
+                 "truncreg": "truncated regression", "intreg": "interval regression"}     # VERIFY all but regress
+        out.write("\n", "text")
+        for mth, v, _o in specs:
+            out.write(f"{v:>18}: {names.get(mth, mth)}\n", "text")
+    elif meth == "nbreg":
+        out.write("\nDispersion: mean\n", "text")
+    elif meth in ("truncreg", "intreg"):
+        out.write(_limit_lines(ds, specs[0], m0, o), "text")
     out.write("\n" + "-" * 66 + "\n", "text")
-    out.write(f"{'':19}|{'Observations per m':^46}\n", "text")
+    out.write(f"{'':19}|{'':15}Observations per m{'':13}\n", "text")
     out.write(f"{'':19}|" + "-" * 46 + "\n", "text")
     out.write(f"{'Variable':>18} |   Complete   Incomplete   Imputed |     Total\n", "text")
     out.write("-" * 19 + "+" + "-" * 35 + "+" + "-" * 10 + "\n", "text")
@@ -661,6 +801,108 @@ def mi_impute(s: "Session", args: str) -> None:
     out.write("-" * 66 + "\n", "text")
     out.write("(complete + incomplete = total; imputed is the minimum across m\n"
               " of the number of filled-in observations.)\n", "text")
+
+
+def _g10(x: float) -> str:
+    from ..core.formats import format_value
+    return format_value(float(x), "%10.0g", pad=False).strip()
+
+
+def _limit_lines(ds, spec, m0, o) -> str:
+    """The Limit: block of mi impute truncreg and intreg (case 1909)."""
+    meth, v, so = spec
+    lo, hi = so.get("ll"), so.get("ul")
+
+    def show(x, inf):
+        if x is None:
+            return inf
+        try:
+            return _g10(float(x))
+        except ValueError:
+            return str(x)
+
+    def vals(x):
+        if x is None:
+            return None
+        try:
+            return np.full(len(m0), float(x))
+        except ValueError:
+            return _num(ds, str(x))[m0]
+    lv, hv = vals(lo), vals(hi)
+    y = _num(ds, v)[m0]
+    if meth == "truncreg":
+        left = int(np.sum((y < SYS) & (lv is not None) & (y <= (lv if lv is not None else -np.inf)))) if lv is not None else 0
+        right = int(np.sum((y < SYS) & (y >= hv))) if hv is not None else 0
+        return (f"\nLimit: lower = {show(lo, '-inf'):>12}            Number truncated = {left + right:>8}\n"
+                f"       upper = {show(hi, '+inf'):>12}{'left = ':>31}{left:>8}\n"
+                f"{'right = ':>58}{right:>8}\n")
+    mis = y >= SYS
+    lmis = lv >= SYS if lv is not None else np.ones(len(y), bool)
+    hmis = hv >= SYS if hv is not None else np.ones(len(y), bool)
+    both = mis & lmis & hmis
+    interval = int(np.sum(mis & ~lmis & ~hmis))
+    left = int(np.sum(mis & lmis & ~hmis))
+    right = int(np.sum(mis & ~lmis & hmis))
+    cens = interval + left + right
+    return (f"\nLimit: lower = {show(lo, '-inf'):>12}              Number missing = {int(both.sum()):>8}\n"
+            f"       upper = {show(hi, '+inf'):>12}{'Number censored = ':>31}{cens:>8}\n"
+            f"{'interval = ':>58}{interval:>8}\n{'left = ':>58}{left:>8}\n{'right = ':>58}{right:>8}\n")
+
+
+def _limits(ds, so: dict, rows_m, ok, mis) -> dict:
+    """truncreg and intreg: the limits ll() and ul() (a number or a variable) of the observed
+    and of the missing rows."""
+    if so.get("ll") is None and so.get("ul") is None:
+        return so
+
+    def get(spec, sign):
+        if spec is None:
+            return np.full(len(rows_m), sign * np.inf)
+        try:
+            return np.full(len(rows_m), float(spec))
+        except ValueError:
+            v = _num(ds, str(spec).strip())[rows_m]
+            return np.where(v >= SYS, sign * np.inf, v)
+    lo, hi = get(so.get("ll"), -1), get(so.get("ul"), 1)
+    out = dict(so)
+    out.update(ll_obs=lo[ok], ul_obs=hi[ok], ll_mis=lo[mis], ul_mis=hi[mis])
+    return out
+
+
+def _check_monotone(ds, specs) -> None:
+    """The missing values must be nested in the order given: v1 observed whenever v2 is."""
+    prev = None
+    for _m, v, _o in specs:
+        cur = _num(ds, v)[_num(ds, "_mi_m") == 0] >= SYS
+        if prev is not None and np.any(prev & ~cur):
+            raise StataError(459, "nonmonotone missing-value pattern")   # VERIFY
+        prev = cur
+
+
+def _mvn_draws(ds, specs, covars, rows_m, nimp, o):
+    """Completed data of mi impute mvn: data augmentation started from the observed data, with
+    burnin() iterations (default 100) before the first imputation and burnbetween() (default
+    100) between the others (VERIFY: the sampler is not Stata's)."""
+    from ..core import mvnmiss
+    Y = np.column_stack([_num(ds, v)[rows_m] for _m, v, _o in specs])
+    Y = np.where(Y >= SYS, np.nan, Y)
+    cov = _design_rows(ds, covars, rows_m)
+    if cov.shape[1] == 0 or not np.any(np.all(cov == 1.0, axis=0)):
+        cov = np.column_stack([cov, np.ones(len(rows_m))])
+    good = np.all(np.isfinite(cov), axis=1)
+    # the EM estimates (the starting values of Stata's data augmentation) and their report
+    usable = good & ~np.all(np.isnan(Y), axis=1)
+    _B, _S, ll_em, it_em = mvnmiss.em_mvreg(Y[usable], cov[usable])
+    o["_em"] = (ll_em, it_em, int(np.sum(good & ~usable)))
+    burn = int(o["burnin"]) if o.get("burnin") else 100
+    btw = int(o["burnbetween"]) if o.get("burnbetween") else 100
+    comp = mvnmiss.da_mvn(Y[good], cov[good], _rng_normal, _rng_chi2, nimp, burn, btw)
+    out = []
+    for Yc in comp:
+        full = Y.copy()
+        full[good] = Yc
+        out.append(full)
+    return out
 
 
 def _parse_chained(s, body: str):
@@ -727,7 +969,7 @@ def _chained(specs, work, missing, cov, burn):
             _cond(mth, v, so, work, missing, cov, [w for w in names if w != v])
 
 
-def _cond(mth, v, so, work, missing, cov, preds):
+def _cond(mth, v, so, work, missing, cov, preds, o=None, ds=None, rows_m=None):
     mis = missing[v]
     if not mis.any():
         return
@@ -737,6 +979,8 @@ def _cond(mth, v, so, work, missing, cov, preds):
     fill = mis & np.all(np.isfinite(X), axis=1) & np.all(X < SYS, axis=1)
     if not fill.any():
         return
+    if ds is not None:
+        so = _limits(ds, so, rows_m, ok, fill)
     vals = _impute_one(mth, work[v][ok], X[ok], X[fill], so)
     w = work[v].copy()
     w[fill] = vals

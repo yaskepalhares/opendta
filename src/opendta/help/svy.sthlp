@@ -25,8 +25,11 @@
 {it:vcetype} is {cmd:linearized} (default), {cmd:jackknife}, {cmd:brr},
 {cmd:bootstrap} or {cmd:sdr}. {it:command} is one of {cmd:mean},
 {cmd:proportion}, {cmd:total}, {cmd:ratio}, {cmd:tabulate}, {cmd:regress},
-{cmd:logit}, {cmd:logistic}, {cmd:probit}, {cmd:poisson}, {cmd:ologit},
-{cmd:oprobit}, {cmd:mlogit}, {cmd:nbreg}, {cmd:glm} and {cmd:tobit}.
+{cmd:logit}, {cmd:logistic}, {cmd:probit}, {cmd:cloglog}, {cmd:poisson}, {cmd:ologit},
+{cmd:oprobit}, {cmd:mlogit}, {cmd:mprobit}, {cmd:slogit}, {cmd:clogit}, {cmd:nbreg}, {cmd:gnbreg},
+{cmd:zip}, {cmd:zinb}, {cmd:glm}, {cmd:tobit}, {cmd:intreg}, {cmd:truncreg}, {cmd:heckman},
+{cmd:heckprobit}, {cmd:hetprobit}, {cmd:scobit}, {cmd:biprobit}, {cmd:fracreg}
+and {cmd:ivregress}.
 
 {title:Description}
 

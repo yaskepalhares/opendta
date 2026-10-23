@@ -55,7 +55,8 @@ Sample sizes are rounded up unless {cmd:nfractional} is given.
 {title:OpenDTA notes}
 
 {pstd}
-The {cmd:lrchi2} and {cmd:fisher} tests of {cmd:twoproportions}, the other methods of
-[PSS] ({cmd:onevariance}, {cmd:oneway}, {cmd:cox}, {cmd:logrank}...) and the {cmd:graph}
-option are not available yet.
+{cmd:onevariance}, {cmd:twovariances}, {cmd:pairedproportions} and {cmd:oneway}, the
+{cmd:lrchi2} and {cmd:fisher} tests of {cmd:twoproportions} and the {cmd:graph} option are
+available. The other methods ({cmd:twoway}, {cmd:repeated}, {cmd:cmh}, {cmd:mcc},
+{cmd:trend}, {cmd:cox}, {cmd:exponential}, {cmd:logrank}) are not available yet.
 {p_end}

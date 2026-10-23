@@ -50,7 +50,7 @@ Notes for sessions that run in the cloud:
 - Right after a push, `gh api repos/<owner>/<repo>/commits/<sha>/check-runs` is empty until the jobs are created: a loop that waits for `status != completed` ends at once. Wait until the three jobs exist.
 - Models findings from case 1908: build rounded data with even-tenth coefficients and avoid comparisons with exact zero (`round(sum, .01)` creates exact halves that Stata and OpenDTA can round differently); avoid `rpoisson()`, `rbinomial()` and `rnormal()` and parameters at the boundary (a flat likelihood differs by platform). Validate that the case data is identical in both programs before spending the Stata run, and check what Stata rejects (`nneighbors()` is not an option, `stteffects ipw` takes no survival-model option and needs every observation to fail). Layout first, then numbers: a hypothesis for a formula (`eivreg` variance, `rreg` scale) is tested offline on a csv of the case data against the reference log, and an undocumented algorithm that does not close in a few tries goes into the known difference with its reason. A failure that shows no annotation in one CI job can be a crash inside a case: `tools/compare.py` now reports it as `XX` with an annotation.
 
-Next free numbers: compat cases from **1909**, roadmap phases from **23**.
+Next free numbers: compat cases from **1910**, roadmap phases from **24**.
 
 ## Rule: statistics in the core, Stata in the command
 
@@ -123,9 +123,9 @@ Done in phase 18 (compat case 1904), except the pieces listed under Time series 
 
 Done in phases 21 and 22 (compat cases 1907 and 1908), except the pieces listed under Models in [Missing for 1.0](../ROADMAP.md#missing-for-10). Part 10a (binary and count, censored and selection, instrumental variables) lives in `estimation/binmodels.py`, `censmodels.py` and `ivmodels.py`, on the engine `estimation/mleq.py` and the log likelihoods of `estimation/likelihoods.py`. Part 10b: systems in `estimation/sysmodels.py` (algebra in `core/syseq.py`), choice models in `estimation/choice.py` and `choiceprobit.py` (`core/choice.py`), exact methods in `estimation/exact.py` (`core/exact.py`), nonlinear models in `estimation/nonlin.py` and `frontier.py`, and treatment effects in `estimation/teffects.py` and `treatment.py` (`core/treatfx.py`).
 
-### 11. Other suites (3–4 h, ~130k tokens)
+### 11. Other suites (done)
 
-`gsem`, `bayesmh` and the `bayes` prefix, `irt`; `sem` with `mlmv`, `adf`, `group()` and the other `estat` subcommands (`estimation/sem.py`); the other `power` methods, the `lrchi2` and `fisher` tests and graphs (`commands/power.py`); `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg` (`estimation/mi.py`); `svy:` with more estimators (`estimation/svy.py`).
+Done in phase 23 (compat case 1909), except the pieces listed under Other suites in [Missing for 1.0](../ROADMAP.md#missing-for-10). `sem` fits in `estimation/semfit.py` (methods `ml`, `mlmv`, `adf`; normal data with missing values in `core/mvnmiss.py`), with groups in `estimation/semgroup.py` and the `estat` subcommands in `estimation/semestat.py`; `gsem` in `estimation/gsem.py` (adaptive quadrature, "custom" responses), with `irt` on top of it in `estimation/irt.py`; `bayesmh` and the `bayes` commands in `estimation/bayes.py` on the sampler of `core/mcmc.py`; the new `power` methods and the graph in `commands/power2.py`.
 
 ## Before 1.0
 

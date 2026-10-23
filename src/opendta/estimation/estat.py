@@ -40,6 +40,8 @@ def cmd_estat(s: "Session", args: str) -> None:
         raise StataError(321, "estat requires a subcommand")   # VERIFY
     sub = words[0].rstrip(",")
     rest = words[1] if len(words) > 1 else ""
+    if sub.endswith(":"):          # estat stdize: command
+        sub, rest = sub[:-1], ": " + rest
     if "," in words[0]:
         rest = words[0][words[0].index(","):] + " " + rest
     est = current(s)

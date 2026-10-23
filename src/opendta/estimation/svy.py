@@ -664,7 +664,13 @@ class SurveyEngine:
 
 
 def format_size(x: float) -> str:
-    return f"{x:,.0f}" if abs(x - round(x)) < 1e-6 else format_value(x, "%11.0g", pad=False).strip()
+    if abs(x - round(x)) < 1e-6:
+        return f"{x:,.0f}"
+    s_ = format_value(x, "%11.0g", pad=False).strip()
+    if "e" in s_ or "." not in s_:
+        return s_
+    whole, frac = s_.split(".")
+    return f"{int(whole):,}.{frac}" if whole not in ("", "-") else s_      # %11.0gc (case 1909)
 
 
 def parse_svy_opts(text: str) -> dict:
@@ -754,6 +760,12 @@ def cmd_svydescribe(s: "Session", args: str) -> None:
 # prefixo svy:
 # ---------------------------------------------------------------------------
 
+# estimators run with the design weights and a design variance (svy_generic)
+_GENERIC = ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit", "intreg", "truncreg",
+            "heckman", "zip", "zinb", "gnbreg", "hetprobit", "slogit", "ivregress", "biprobit",
+            "fracreg", "heckprobit", "scobit", "clogit", "mprobit")
+
+
 def cmd_svy(s: "Session", args: str) -> None:
     """svy [, subpop() vce()]: comando"""
     head, colon, cmdtext = args.partition(":")
@@ -769,11 +781,11 @@ def cmd_svy(s: "Session", args: str) -> None:
         from .summaries import summary_stat
         summary_stat(s, name, rest, engine=lambda s_, req: SurveyEngine(s_, req, opts))
         return
-    if name in ("regress", "logit", "logistic", "probit", "poisson"):
+    if name in ("regress", "logit", "logistic", "probit", "poisson", "cloglog"):
         from .svyreg import svy_model
         svy_model(s, name, rest, opts)
         return
-    if name in ("ologit", "oprobit", "mlogit", "nbreg", "glm", "tobit"):
+    if name in _GENERIC:
         from .svyreg import svy_generic
         svy_generic(s, name, rest, opts)
         return

@@ -50,7 +50,7 @@ Notas para sessões que rodam na nuvem:
 - Logo depois de um push, `gh api repos/<dono>/<repo>/commits/<sha>/check-runs` vem vazio até os jobs serem criados: um laço que espera `status != completed` termina na hora. Espere até existirem os três jobs.
 - Achados dos modelos (caso 1908): monte dados arredondados com coeficientes em décimos pares e evite comparações com zero exato (`round(soma, .01)` cria metades exatas que o Stata e o OpenDTA podem arredondar de modo diferente); evite `rpoisson()`, `rbinomial()` e `rnormal()` e parâmetros na fronteira (uma verossimilhança plana difere por plataforma). Confira que os dados do caso são idênticos nos dois programas antes de gastar a rodada do Stata, e veja o que o Stata rejeita (`nneighbors()` não é opção, `stteffects ipw` não aceita opção de modelo de sobrevivência e exige que toda observação tenha a falha). Primeiro o layout, depois os números: uma hipótese para uma fórmula (variância do `eivreg`, escala do `rreg`) se testa fora do programa num csv dos dados do caso contra o log de referência, e um algoritmo não documentado que não fecha em poucas tentativas vai para a diferença conhecida com o motivo. Uma falha sem anotação num job do CI pode ser uma exceção dentro de um caso: o `tools/compare.py` agora a mostra como `XX` com anotação.
 
-Próximos números livres: casos de comparação a partir de **1909**, fases do roadmap a partir de **23**.
+Próximos números livres: casos de comparação a partir de **1910**, fases do roadmap a partir de **24**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -123,9 +123,9 @@ Feito na fase 18 (caso 1904), exceto as peças listadas em Séries temporais em 
 
 Feito nas fases 21 e 22 (casos de compatibilidade 1907 e 1908), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
 
-### 11. Outras suítes (3–4 h, ~130 mil tokens)
+### 11. Outras suítes (pronto)
 
-`gsem`, `bayesmh` e o prefixo `bayes`, `irt`; `sem` com `mlmv`, `adf`, `group()` e os outros subcomandos de `estat` (`estimation/sem.py`); os outros métodos do `power`, os testes `lrchi2` e `fisher` e os gráficos (`commands/power.py`); `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg` (`estimation/mi.py`); `svy:` com mais estimadores (`estimation/svy.py`).
+Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras suítes em [Faltam para a 1.0](../ROADMAP.pt-BR.md). O ajuste do `sem` está em `estimation/semfit.py` (métodos `ml`, `mlmv`, `adf`; dados normais com valores ausentes em `core/mvnmiss.py`), com os grupos em `estimation/semgroup.py` e os subcomandos de `estat` em `estimation/semestat.py`; o `gsem` em `estimation/gsem.py` (quadratura adaptativa, respostas "custom"), com o `irt` sobre ele em `estimation/irt.py`; o `bayesmh` e os comandos `bayes` em `estimation/bayes.py`, sobre o amostrador de `core/mcmc.py`; os novos métodos do `power` e o gráfico em `commands/power2.py`.
 
 ## Antes da 1.0
 
