@@ -11,6 +11,9 @@
 - The plan for the commands still missing, block by block, with what to reuse, is docs/next-steps.md.
 - Before opening a PR: `pytest` passing and `python tools/compare.py` with no regressions.
 - Work on a branch and open a PR for review. Do not push directly to main.
+- At the end of each step, write the state to `progresso.md` (local, not in the repository) and
+  give a ready-to-paste prompt to continue the work in a new chat: where the state is, what was
+  done, what the next step is and how to finish it (branch, PR, CI, merge commit).
 
 ## Working guidelines
 
