@@ -56,6 +56,8 @@ class _OneVariance(_VarBase):
 
     def __init__(self, pos, o):
         super().__init__(pos, o)
+        if self.sdscale:
+            self.title = "a one-sample standard-deviation test"      # case 1909
         v = "s" if self.sdscale else "v"
         self.hyp = f"Ho: {v} = {v}0  versus  Ha: {v} {{op}} {v}0"
 
@@ -102,6 +104,8 @@ class _TwoVariances(_VarBase):
 
     def __init__(self, pos, o):
         super().__init__(pos, o)
+        if self.sdscale:
+            self.title = "a two-sample standard-deviations test"     # VERIFY
         v = "s" if self.sdscale else "v"
         self.hyp = f"Ho: {v}2 = {v}1  versus  Ha: {v}2 {{op}} {v}1"
 
@@ -158,7 +162,13 @@ class _PairedProportions(_Method):
     effect_name = "p21"
 
     def test(self, c):
-        return "McNemar's test"
+        return "Large-sample McNemar's test"
+
+    def hypothesis(self, c):
+        # with the marginal proportions (corr()), Stata states the test on the margins (case 1909)
+        if "pmarg1" in c:
+            return "Ho: p+1 = p1+  versus  Ha: p+1 {op} p1+"
+        return self.hyp
 
     @staticmethod
     def prepare(c):
@@ -205,7 +215,10 @@ class _PairedProportions(_Method):
     def up(self, c):
         return c["p21"] > c["p12"]
 
-    delta_note = ""
+    @property
+    def delta_note(self):
+        eff = str(self.o.get("effect") or "diff").lower()
+        return "  (ratio)" if eff.startswith("r") else "  (difference)"     # VERIFY ratio
 
     def power(self, c):
         n, a = c["N"], c["alpha"]
@@ -221,10 +234,9 @@ class _PairedProportions(_Method):
         return float(st.norm.cdf((d - z * math.sqrt(pdisc)) / s) + st.norm.cdf((-d - z * math.sqrt(pdisc)) / s))
 
     def params(self, c):
-        rows = [("delta", self.delta(c)), ("p12", c["p12"]), ("p21", c["p21"])]
         if "pmarg1" in c:
-            rows += [("pmarg1", c["pmarg1"]), ("pmarg2", c["pmarg2"]), ("corr", c["corr"])]
-        return rows
+            return [("delta", self.delta(c)), ("p1+", c["pmarg1"]), ("p+1", c["pmarg2"]), ("corr", c["corr"])]
+        return [("delta", self.delta(c)), ("p12", c["p12"]), ("p21", c["p21"])]
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +337,8 @@ def _tp_note(self):
 
 def _tp_check(self, what):
     if _tp_test(self) == "fisher" and what != "power":
-        raise StataError(198, "only power can be computed for Fisher's exact test")   # VERIFY wording
+        raise StataError(198, "Fisher's exact method is not allowed with sample-size determination or "
+                              "effect-size determination")
     if self.o.get("continuity") and _tp_test(self) != "chi2":
         raise StataError(198, "option continuity is not allowed with test(" + _tp_test(self) + ")")
 
@@ -428,22 +441,21 @@ def cmd_oneway(s: "Session", pos, o) -> None:
         power = oneway_power(f2, g, n, alpha)
     out.write("\nPerforming iteration ...\n" if what == "n" else "", "text")
     out.write(f"\nEstimated {'sample size' if what == 'n' else 'power'} for one-way ANOVA\n", "text")
-    out.write("F test for one-way analysis of variance\n", "text")
-    out.write("Ho: m1 = m2 = ... = m" + str(g) + "  versus  Ha: at least one mean is different\n", "text")
+    out.write("F test for group effect\n", "text")
+    out.write("Ho: delta = 0  versus  Ha: delta != 0\n", "text")
     out.write("\nStudy parameters:\n\n", "text")
-    rows = [("alpha", alpha)]
+    P._line(s, "alpha", P._f4(alpha))
     if what == "n":
-        rows.append(("power", pw))
-    rows += [("delta", math.sqrt(f2))]
-    for name, val in rows:
-        P._line(s, name, P._f4(val))
-    if what == "power":
+        P._line(s, "power", P._f4(pw))
+    else:
         P._line(s, "N", f"{P._nfmt(n_tot):>9}")
+        P._line(s, "N per group", f"{P._nfmt(n):>9}")
+    P._line(s, "delta", P._f4(math.sqrt(f2)))
     P._line(s, "N_g", f"{g:>9}")
     for name, val in [(f"m{i}", m) for i, m in enumerate(means, 1)] + [("Var_m", var_m), ("Var_e", var_e)]:
         P._line(s, name, P._f4(val))
     if what == "n":
-        out.write("\nEstimated sample size:\n\n", "text")
+        out.write("\nEstimated sample sizes:\n\n", "text")
         P._line(s, "N", f"{P._nfmt(n * g):>9}")
         P._line(s, "N per group", f"{P._nfmt(n):>9}")
     else:

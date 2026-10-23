@@ -660,6 +660,10 @@ def _compute(M: _Method, method: str, c: dict, what: str) -> None:
                     # starting value: the normal-approximation sample size (compat 1301)
                     z = st.norm.ppf(1 - c["alpha"] / _sides(c)) + st.norm.ppf(target)
                     c["_init"] = float((z / abs(M.delta(c))) ** 2)
+                if method == "onevariance":
+                    # starting value: 2 ((z_a + z_b) / ln(va/v0))^2 (case 1909)
+                    z = st.norm.ppf(1 - c["alpha"] / _sides(c)) + st.norm.ppf(target)
+                    c["_init"] = float(2 * (z / math.log(c["va"] / c["v0"])) ** 2)
                 if not c.get("nfractional"):
                     n = math.ceil(n - 1e-9)
             c["N"] = n
@@ -734,7 +738,7 @@ def _header(s: "Session", M: _Method, c: dict, what: str) -> None:
     else:
         up = getattr(M, "up", None)
         op = ">" if ((up(c) if up else M.delta(c) > 0) if what != "effect" else _direction(c) > 0) else "<"
-    hyp = M.hyp.format(op=op)
+    hyp = (M.hypothesis(c) if hasattr(M, "hypothesis") else M.hyp).format(op=op)
     if what == "effect" and _sides(c) == 2:
         # the direction of the computed effect (compat 1301; VERIFY other than onemean)
         e, nul = _EFFECT_PAIR[M.effect_name]
@@ -807,7 +811,7 @@ def _single(s: "Session", M: _Method, c: dict, what: str) -> None:
 
 
 def _nfmt(n: float) -> str:
-    return f"{n:,.0f}" if float(n).is_integer() else format_value(float(n), "%10.2f", pad=False).strip()
+    return f"{n:.0f}" if float(n).is_integer() else format_value(float(n), "%10.2f", pad=False).strip()
 
 
 def _table(s: "Session", M: _Method, rows: list[dict], what: str) -> None:
@@ -860,6 +864,21 @@ def _returns(s: "Session", method: str, M: _Method, c: dict, what: str) -> None:
             r.append(("sd", c["sd1"]))
         r += [("diff", c["m2"] - c["m1"]), ("m2", c["m2"]), ("m1", c["m1"]),
               ("nratio", c["N2"] / c["N1"]), ("N2", float(c["N2"])), ("N1", float(c["N1"]))]
+    elif method == "onevariance":
+        # case 1909
+        r = [("N", float(c["N"])), ("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"])] + flags + solver
+        r += [("v0", c["v0"]), ("delta", M.delta(c)), ("ratio", c["va"] / c["v0"]), ("va", c["va"]),
+              ("type", "test"), ("method", method), ("scale", "sd" if M.sdscale else "variance")]
+        if what == "effect":
+            r.insert(-3, ("target", float(c[M.effect_name])))
+        s.r = dict(reversed(r))
+        return
+    elif method == "twoproportions" and str(M.o.get("test") or "chi2").lower().startswith("f"):
+        # Fisher's exact test (case 1909)
+        r = [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", M.delta(c))] + flags + solver
+        r += [("N", float(c["N"])), ("N1", float(c["N1"])), ("N2", float(c["N2"])), ("nratio", c["N2"] / c["N1"]),
+              ("p1", c["p1"]), ("p2", c["p2"]), ("alpha_a", float(c.get("actual_alpha", 8.98846567431158e307))),
+              ("test", "fisher"), ("effect", str(M.o.get("effect") or "diff"))]
     elif method == "twoproportions":
         r = [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", M.delta(c))] + flags + solver
         r += [("N", float(c["N"])), ("continuity", 1.0 if c.get("continuity") else 0.0), ("p2", c["p2"]),
@@ -900,7 +919,9 @@ def cmd_power(s: "Session", args: str) -> None:
         _compute(M, method, c, w)
         rows.append(c)
     show_table = (multi or o.get("table")) and not o.get("notable")
-    if show_table:
+    if o.get("graph") and not o.get("table"):
+        pass                    # graph() shows only the graph (case 1909)
+    elif show_table:
         _table(s, M, rows, what)
     else:
         _single(s, M, rows[-1], what)
