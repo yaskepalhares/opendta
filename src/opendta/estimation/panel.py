@@ -628,6 +628,13 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         raise StataError(481, "equation not identified; must have at least as many instruments not in\n"
                          "the regression as there are instrumented variables")
     k = X.shape[1]
+    wfit = None
+    if smp.wtype:
+        # weighted estimation: every row scaled by the square root of its (normalized) weight,
+        # which gives weighted 2SLS, LIML and GMM (case 1909: svy: ivregress)
+        wfit, N = smp.weights_for_fit()
+        sq = np.sqrt(wfit)
+        y, X, Z = y * sq, X * sq[:, None], Z * sq[:, None]
     PzX = Z @ np.linalg.lstsq(Z, X, rcond=None)[0]
     kappa = 1.0
     QX = PzX
@@ -651,6 +658,18 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         if smp.vce in ("robust", "cluster") or wm_label != "Unadjusted":
             vcetype = "Robust"
             n_clust = n_clust_w if (smp.vce == "cluster" or wm_label.startswith("Cluster")) else None
+    elif smp.vce in ("robust", "cluster") and getattr(s, "_svy_ctx", None) is not None:
+        # svy: the linearized variance from the scores (QX e, already weighted) carried to the
+        # design observations, as the other estimators under svy_generic (case 1909)
+        ctx = s._svy_ctx
+        dd = ctx["dd"]
+        Zl = (QX * e[:, None]) @ A.T
+        pos = ctx["pos"][np.flatnonzero(mask)]
+        Zf = np.zeros((dd.n, Zl.shape[1]))
+        Zf[pos] = Zl
+        ctx["Z"] = Zf
+        V = dd.variance(Zf)
+        vcetype = "Robust"
     elif smp.vce in ("robust", "cluster"):
         sc = QX * e[:, None]
         if smp.vce == "cluster":
@@ -666,8 +685,13 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     V = (V + V.T) / 2
     slopes = list(range(k - 1))
     W = float(b[slopes] @ np.linalg.solve(V[np.ix_(slopes, slopes)], b[slopes]))
-    ybar = y.mean()
-    tss = float(np.sum((y - ybar) ** 2))
+    if wfit is None:
+        ybar = y.mean()
+        tss = float(np.sum((y - ybar) ** 2))
+    else:
+        yo = y / np.sqrt(wfit)
+        ybar = float(np.sum(wfit * yo) / np.sum(wfit))
+        tss = float(np.sum(wfit * (yo - ybar) ** 2))
     r2 = 1 - rss / tss
     rmse = np.sqrt(rss / (N - k) if small else rss / N)
     names = [c.name for c in Xn] + [c.name for c in ex_cols] + ["_cons"]

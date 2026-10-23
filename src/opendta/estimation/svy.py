@@ -664,7 +664,13 @@ class SurveyEngine:
 
 
 def format_size(x: float) -> str:
-    return f"{x:,.0f}" if abs(x - round(x)) < 1e-6 else format_value(x, "%11.0g", pad=False).strip()
+    if abs(x - round(x)) < 1e-6:
+        return f"{x:,.0f}"
+    s_ = format_value(x, "%11.0g", pad=False).strip()
+    if "e" in s_ or "." not in s_:
+        return s_
+    whole, frac = s_.split(".")
+    return f"{int(whole):,}.{frac}" if whole not in ("", "-") else s_      # %11.0gc (case 1909)
 
 
 def parse_svy_opts(text: str) -> dict:

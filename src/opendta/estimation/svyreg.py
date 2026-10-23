@@ -401,6 +401,17 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                     hadamard=so.get("hadamard"))
     subpop = subpop_mask(s, str(so["subpop"])) if so.get("subpop") else None
     full = dd.mask
+    if cmd == "clogit":
+        import re as _re
+        mg = _re.search(r"\bgr(?:oup)?\(\s*(\w+)\s*\)", p.options or "")
+        if mg and ds.has(mg.group(1)):
+            gv = ds.get(mg.group(1)).data[full]
+            pairs = {}
+            for gval, ps in zip(gv, dd.psu):
+                if pairs.setdefault(gval, ps) != ps:
+                    # case 1909; VERIFY the return code
+                    raise StataError(459, "the group() variable is not nested within the final stage sampling units")
+
     inside_all = full & (subpop if subpop is not None else True)
     pos = np.full(ds.nobs, -1)
     pos[np.flatnonzero(full)] = np.arange(dd.n)
@@ -455,7 +466,11 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     slopes = [j for j, (nm, eq) in enumerate(zip(names, eqs))
               if nm != "_cons" and V[j, j] > 0 and not eq.startswith("cut") and eq not in aux_eq
               and "b." not in nm and "o." not in nm]
+    if cmd in ("heckman", "heckprobit", "zip", "zinb", "hetprobit") and eqs:
+        # the model test covers the main equation only (case 1909)
+        slopes = [j for j in slopes if eqs[j] == eqs[0]]
     F, df1, df2 = _adjusted_F(b, V, slopes, df)
+    _svy_aux_ci(est, df)
     N = int(np.count_nonzero(ds.esample)) if ds.esample is not None else int(inside_all.sum())
     pop = float(dd.w[(ds.esample if ds.esample is not None else inside_all)[full]].sum())
     if subpop is not None:
@@ -481,6 +496,12 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     # VERIFY: like the commands themselves, these leave the depvar out of the table header
     est.extra["blank_dep"] = cmd in ("intreg", "heckman", "heckprobit", "heckoprobit", "biprobit")
     est.display = _display_generic
+    # pieces of the command's own output that Stata keeps under svy (case 1909)
+    if cmd == "heckman":
+        est.extra["subtitle"] = "(regression model with sample selection)"
+    if cmd == "ivregress":
+        est.extra["svy_r2"] = est.extra.get("r2")
+    est.extra["svy_cmd"] = cmd
     est.extra["no_F"] = cmd == "glm"            # svy: glm does not show the F test (compat 0602)
     est.extra["dispersion"] = getattr(est, "dispersion", "") if cmd == "nbreg" else ""
     # under svy the cut points get t and P>|t| (compat 0602)
@@ -523,6 +544,25 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     _display_generic(s, est)
 
 
+def _svy_aux_ci(est, df) -> None:
+    """Transformed ancillary rows (sigma, rho, alpha) get the interval of their parameter with the
+    design degrees of freedom (case 1909: svy: intreg)."""
+    import math as _m
+    from .results import crit as _crit
+    c = _crit("t", est.level, df)
+    rows = est.rows
+    by = {r.label.lstrip("/"): r for r in rows if r.kind == "coef"}
+    tf = {"sigma": ("lnsigma", _m.exp), "alpha": ("lnalpha", _m.exp), "rho": ("athrho", _m.tanh)}
+    for r in rows:
+        if r.kind != "aux" or r.label not in tf:
+            continue
+        par = by.get(tf[r.label][0])
+        if par is None or not (par.se > 0):
+            continue
+        f = tf[r.label][1]
+        r.eq = f"{f(par.b - c * par.se)!r} {f(par.b + c * par.se)!r}"
+
+
 def _refresh_rows(est) -> None:
     """Standard errors of the table rows from est.V (same order as e(b))."""
     se = np.sqrt(np.maximum(np.diag(est.V), 0))
@@ -545,7 +585,10 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
     x = est.extra
     if header:
         out.write("\n", "text")
-        out.write(f"Survey: {est.svytitle}\n\n", "text")
+        out.write(f"Survey: {est.svytitle}\n", "text")
+        if x.get("subtitle"):
+            out.write(x["subtitle"] + "\n", "text")
+        out.write("\n", "text")
         right = [("Number of obs", f"{x['N']:,}"), ("Population size", format_size(x["pop"]))]
         if x.get("sub"):
             right += [("Subpop. no. obs", f"{x['sub'][0]:,}"), ("Subpop. size", format_size(x["sub"][1]))]
@@ -555,6 +598,8 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
         if not x.get("no_F"):
             right += [(f"F({x['df1']:>4},{x['df2']:>7})", g(x["F"], "%10.2f")),
                       ("Prob > F", g(st.f.sf(x["F"], x["df1"], x["df2"]) if x["F"] < SYS else SYS, "%10.4f"))]
+        if x.get("svy_r2") is not None:
+            right.append(("R-squared", g(x["svy_r2"], "%10.4f")))
         left = [f"Number of strata   = {x['strata']:>9,}", f"Number of PSUs     = {x['psu']:>9,}"]
         if x.get("dispersion"):
             # "Dispersion         = mean" on the Prob > F line (compat 0602)
@@ -564,7 +609,15 @@ def _display_generic(s: "Session", est, *, header: bool = True, table: bool = Tr
             out.write(f"{lft:<48}{rl:<18}= ", "text")
             out.write(f"{rv:>10}\n", "result")
         out.write("\n", "text")
+        if x.get("svy_cmd") == "slogit":
+            out.write(" ( 1)  [phi1_1]_cons = 1\n", "text")
     if table:
         coef_table(s, "" if est.extra.get("blank_dep") else est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level,
                    vcetype=est.vcetype, coef_title=getattr(est, "coef_title", "Coef."),
                    eform=getattr(est, "eform_on", False))
+        if x.get("svy_cmd") == "ivregress":
+            out.write(f"Instrumented:  {x['instd']}\n", "text")
+            out.write(f"Instruments:   {x['insts']}\n", "text")
+            out.write("-" * 78 + "\n", "text")
+        elif x.get("svy_cmd") in ("intreg", "slogit") and getattr(est, "footer", None):
+            est.footer(s, est)

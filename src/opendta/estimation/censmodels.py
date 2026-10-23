@@ -127,7 +127,8 @@ def cmd_intreg(s: "Session", args: str) -> None:
         null = maximize(e0.fun, np.array([mu0, np.log(max(float(np.std(yy)), 1e-6))]), maxiter=300)
         fit_log(s, pr, "Fitting constant-only model:", null)
     fit_log(s, pr, "Fitting full model:", res)
-    counts = [float(w[m].sum()) for m in (left, exact, right, inter)]
+    # observation counts: weighted only with fweights (case 1909: svy: intreg)
+    counts = [float(w[m].sum()) if pr.smp.wtype == "fweight" else float(np.sum(m)) for m in (left, exact, right, inter)]
     if hetb is None:
         lns, se_lns = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
 
