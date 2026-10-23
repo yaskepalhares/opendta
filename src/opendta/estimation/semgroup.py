@@ -110,7 +110,7 @@ def constraint_lines(est: Estimates) -> list[str]:
     prob = x["prob"]
     gvar, levels = x["gvar"], x["levels"]
     models = prob.models
-    out = []
+    eqs = []
     # equalities: items sharing a global entry
     first: dict[int, tuple[int, int]] = {}
     for g, m in enumerate(models):
@@ -121,18 +121,29 @@ def constraint_lines(est: Estimates) -> list[str]:
                 g0, i0 = first[gid]
                 eq0, nm0 = _col_name(models[g0], models[g0].free[i0], levels[g0], gvar, g0 == 0)
                 eq1, nm1 = _col_name(m, m.free[i], levels[g], gvar, g == 0)
-                out.append(f"[{eq0}]{nm0} - [{eq1}]{nm1} = 0")
+                eqs.append(f"[{eq0}]{nm0} - [{eq1}]{nm1} = 0")
             else:
                 first[gid] = (g, i)
+    # Stata's order (case 1909): the fixed paths of the first group, the equalities, the fixed
+    # paths of the other groups, then the latent means fixed at 0
+    fixed = []
     for g, m in enumerate(models):
         spec = m.spec
         pre = f"{_gname(levels[g])}{'bn' if g == 0 else ''}.{gvar}"
+        lines = []
         anchors = sorted(m.anchor.items(), key=lambda la: la[0] not in m.endog)
         for L, a in anchors:
-            out.append(f"[{a}]{pre}#c.{L} = 1")
+            lines.append(f"[{a}]{pre}#c.{L} = 1")
         for (a, b), v in spec.fixed.items():
-            out.append(f"[{b}]{pre}#c.{a} = {v:g}")
-    return out
+            lines.append(f"[{b}]{pre}#c.{a} = {v:g}")
+        fixed.append(lines)
+    means = []
+    for g, m in enumerate(models):
+        pre = f"{_gname(levels[g])}{'bn' if g == 0 else ''}.{gvar}"
+        for L in m.spec.latent:
+            if L in m.exog and ("mean", L, L) not in m.free:
+                means.append(f"[mean({L})]{pre} = 0")
+    return fixed[0] + eqs + [x for lines in fixed[1:] for x in lines] + means
 
 
 def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
@@ -148,12 +159,12 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
     if header:
         out.write("\n" + f"{'Structural equation model':<48}{'Number of obs':<18}= ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
-        out.write(f"{'Grouping variable = ' + gvar:<48}{'Number of groups':<18}= ", "text")
+        out.write(f"{'Grouping variable  = ' + gvar:<48}{'Number of groups':<18}= ", "text")
         out.write(f"{G:>10,}\n", "result")
         out.write(f"Estimation method  = {x['method']}\n", "text")
         if x["method"] != "adf":
             out.write("Log likelihood     = ", "text")
-            out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
+            out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
         out.write("\n", "text")
         for k, line in enumerate(constraint_lines(est), 1):
             out.write(f" ({k:2d})  {line}\n", "text")
@@ -185,8 +196,9 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
     def val(g, item):
         i = models[g].free.index(item)
         return th_exp[offs[g] + i], se_exp[offs[g] + i]
-    W = 13
+    W = 12
     dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
+    starred = [False]
     out.write("-" * (W + 66) + "\n", "text")
     out.write(f"{'':>{W}} |                 OIM\n", "text")
     out.write(f"{'Standardized' if std else '':>{W}} |      Coef.   Std. Err.      z    P>|z|     "
@@ -194,7 +206,7 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
     out.write(dash, "text")
 
     def row(label, b, s_, kind="coef"):
-        out.write(f"{label:>{W}} |", "text")
+        out.write(f"{label:>{W}} |" if label == "[*]" else f"{label:>{W - 1}}  |", "text")
         if kind == "constrained":
             out.write(f"  {_g(b):>9}  (constrained)\n", "result")
             return
@@ -211,8 +223,18 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
         else:
             out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
 
-    def group_rows(fn):
-        out.write(f"{gvar[:W]:>{W}} |\n", "text")
+    def same(item):
+        """Constrained equal across groups: one global entry, or fixed at one value everywhere."""
+        if all(item in m.free for m in models):
+            ids = {int(prob.gmap[g][models[g].free.index(item)]) for g in range(G)}
+            return len(ids) == 1
+        return False
+
+    def group_rows(fn, item=None, fixed_same=False):
+        if fixed_same or (item is not None and same(item)):
+            starred[0] = True
+            fn(0, "[*]")
+            return
         for g in range(G):
             fn(g, f"{_gname(levels[g])}")
 
@@ -240,15 +262,17 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
                         row(lab, *val(g, it))
                     else:
                         row(lab, spec.fixed.get((a, b), 1.0), 0, "constrained")
-                group_rows(one)
+                it = ("path", a, b)
+                fixed_all = all(it not in m.free for m in models)
+                group_rows(one, it, fixed_same=fixed_all)
             if y in spec.observed:
                 out.write(f"{'_cons':>{W}} |\n", "text")
-                group_rows(lambda g, lab, y=y: row(lab, *val(g, ("mean", y, y))))
+                group_rows(lambda g, lab, y=y: row(lab, *val(g, ("mean", y, y))), ("mean", y, y))
         out.write(dash, "text")
     means = [n for n in m0.exog if n in spec.observed and ("mean", n, n) not in x["hidden"]]
     lat_means = [n for n in spec.latent if any(("mean", n, n) in m.free for m in models)]
     for n in means + lat_means:
-        out.write(f"{'mean(' + n + ')':>{W}} |\n", "text")
+        out.write(f"{'mean(' + n + ')':>{W + 1}}|\n", "text")
 
         def one(g, lab, n=n):
             it = ("mean", n, n)
@@ -256,7 +280,7 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
                 row(lab, *val(g, it))
             else:
                 row(lab, 0.0, 0, "constrained")
-        group_rows(one)
+        group_rows(one, ("mean", n, n))
     if means or lat_means:
         out.write(dash, "text")
     var_order = ([n for n in m0.names if n in m0.endog and n in spec.observed]
@@ -268,7 +292,7 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
         if it in x["hidden"]:
             continue
         lab = f"var(e.{n})" if n in m0.endog else f"var({n})"
-        out.write(f"{lab:>{W}} |\n", "text")
+        out.write(f"{lab:>{W + 1}}|\n", "text")
 
         def one(g, lg, it=it, n=n):
             m = models[g]
@@ -276,7 +300,7 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
                 row(lg, *val(g, it), "var")
             elif n in m.var_fixed:
                 row(lg, m.var_fixed[n], 0, "constrained")
-        group_rows(one)
+        group_rows(one, it)
     covs = [it for it in m0.free if it[0] == "cov" and it not in x["hidden"]]
     if covs:
         out.write(dash, "text")
@@ -284,9 +308,12 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
         _, a, b = it
         ea = f"e.{a}" if a in m0.endog else a
         eb = f"e.{b}" if b in m0.endog else b
-        out.write(f"{'cov(' + ea + ',' + eb + ')':>{W}} |\n", "text")
-        group_rows(lambda g, lab, it=it: row(lab, *val(g, it)))
+        out.write(f"{'cov(' + ea + ',' + eb + ')':>{W + 1}}|\n", "text")
+        group_rows(lambda g, lab, it=it: row(lab, *val(g, it)), it)
     out.write("-" * (W + 66) + "\n", "text")
+    if starred[0]:
+        out.write("Note: [*] identifies parameter estimates constrained to be equal across\n      groups.\n",
+                  "text")
     df = x["df"]
     pv = "     ." if df == 0 else f"{x['p_ms']:>6.4f}"
     lab = f"chi2({df})"

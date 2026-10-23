@@ -110,21 +110,21 @@ def estat_eqgof(s, est, args):
         spec = u["model"].spec
         out.write("\nEquation-level goodness of fit\n\n", "text")
         out.write("-" * 78 + "\n", "text")
-        out.write(f"{'':>15} |{'Variance':^36}|\n", "text")
-        out.write(f"{'depvars':>15} |{'fitted':>12}{'predicted':>12}{'residual':>12}|"
-                  f"{'R-squared':>11}{'mc':>9}{'mc2':>9}\n", "text")
-        out.write("-" * 16 + "+" + "-" * 61 + "\n", "text")
+        out.write(f"{'':>12} |{'':13}Variance{'':12}|\n", "text")
+        out.write(f"{'depvars':>12} |{'fitted':>10}{'predicted':>11}{'residual':>11} |"
+                  f"{'R-squared':>10}{'mc':>10}{'mc2':>9}\n", "text")
+        out.write("-" * 13 + "+" + "-" * 33 + "+" + "-" * 30 + "\n", "text")
         for sec, members in (("observed", [x for x in rows if x[0] in spec.observed]),
                              ("latent", [x for x in rows if x[0] in spec.latent])):
             if not members:
                 continue
-            out.write(f"{sec:<15} |\n", "text")
+            out.write(f"{sec:<12} |{'':33}|\n", "text")
             for n, *vals in members:
-                out.write(f"{n:>15} |", "text")
-                out.write("".join(f"{_fv(v, fmt):>12}" for v in vals[:3]) + "|", "result")
+                out.write(f"{n[-12:]:>12} |", "text")
+                out.write(f"{_fv(vals[0], fmt):>10}" + "".join(f"{_fv(v, fmt):>11}" for v in vals[1:3]) + " |", "result")
                 out.write("".join(f"{_fv(v, fmt):>10}" for v in vals[3:]) + "\n", "result")
-        out.write("-" * 16 + "+" + "-" * 61 + "\n", "text")
-        out.write(f"{'overall':<15} |{'':36}|{_fv(cd, fmt):>11}\n", "result")
+        out.write("-" * 13 + "+" + "-" * 33 + "+" + "-" * 30 + "\n", "text")
+        out.write(f"{'overall':>12} |{'':33}|{_fv(cd, fmt):>10}\n", "result")
         out.write("-" * 78 + "\n", "text")
         out.write("mc  = correlation between depvar and its prediction\n"
                   "mc2 = mc^2 is the Bentler-Raykov squared multiple correlation coefficient\n", "text")
@@ -155,18 +155,23 @@ def estat_ggof(s, est, args):
     fmt = _fmt(o)
     out = s.output
     prob = est.extra["prob"]
-    out.write("\nGroup-level goodness of fit\n\n", "text")
-    out.write("-" * 60 + "\n", "text")
-    out.write(f"{'Group':>12} |{'N':>10}{'SRMR':>12}{'CD':>12}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 46 + "\n", "text")
+    out.write("\nGroup-level fit statistics\n", "text")
+    out.write("-" * 44 + "\n", "text")
+    out.write(f"{'':12} |{'N':>8}{'SRMR':>11}{'CD':>11}\n", "text")
+    out.write("-" * 13 + "+" + "-" * 30 + "\n", "text")
+    out.write(f"{est.extra['gvar'][-12:]:>12} |\n", "text")
     rows = []
     for u in _units(est):
         srmr = _srmr(u["model"], u["th"], u["data"])
         _, cd = _equation_fit(u["model"], u["th"])
         rows.append([float(u["data"].N), srmr, cd])
-        out.write(f"{u['label']:>12g} |{u['data'].N:>10,}", "text")
-        out.write(f"{_fv(srmr, fmt):>12}{_fv(cd, fmt):>12}\n", "result")
-    out.write("-" * 60 + "\n", "text")
+        out.write(f"{u['label']:>11g}  |", "text")
+        out.write(f"{u['data'].N:>8}{_fv(srmr, '%9.3f'):>11}{_fv(cd, '%9.3f'):>11}\n", "result")
+    out.write("-" * 44 + "\n", "text")
+    if prob.inv:
+        # VERIFY: the chi-squared columns of a model without constraints between groups
+        out.write("Note: Group-level chi-squared statistics\n      are not reported because of\n"
+                  "      constraints between groups.\n", "text")
     s.r = {"N_groups": float(len(prob.data)), "nobs": _nobs(s, est),
            "gfit": Matrix(np.array(rows), [f"{u['label']:g}" for u in _units(est)], ["N", "SRMR", "CD"])}
 
@@ -197,32 +202,34 @@ def estat_eqtest(s, est, args):
         model = u["model"]
         spec = model.spec
         out.write("\nWald tests for equations\n\n", "text")
-        out.write("-" * 66 + "\n", "text")
-        out.write(f"{'':>16} |{'chi2':>12}{'df':>8}{'p':>12}\n", "text")
-        out.write("-" * 17 + "+" + "-" * 48 + "\n", "text")
+        out.write("-" * 38 + "\n", "text")
+        out.write(f"{'':>12} |{'chi2':>9}{'df':>5}{'p':>10}\n", "text")
+        out.write("-" * 13 + "+" + "-" * 24 + "\n", "text")
         data, names = [], []
         for sec, pool in (("observed", spec.observed), ("latent", spec.latent)):
             eqs = [y for y in model.endog if y in pool]
             body = []
             for y in eqs:
                 idx = [i for i, it in enumerate(model.free) if it[0] == "path" and it[2] == y]
-                if not idx:
-                    continue
-                b = u["th"][idx]
-                Vb = u["V"][np.ix_(idx, idx)]
-                w = float(b @ np.linalg.pinv(Vb) @ b)
-                df = int(np.linalg.matrix_rank(Vb))
-                p = float(st.chi2.sf(w, df))
+                if idx:
+                    b = u["th"][idx]
+                    Vb = u["V"][np.ix_(idx, idx)]
+                    w = float(b @ np.linalg.pinv(Vb) @ b)
+                    df = int(np.linalg.matrix_rank(Vb))
+                    p = float(st.chi2.sf(w, df))
+                else:
+                    # an equation whose coefficients are all constrained: chi2 0 on 0 df
+                    w, df, p = 0.0, 0, SYS
                 body.append((y, w, df, p))
             if body:
-                out.write(f"{sec:<16} |\n", "text")
+                out.write(f"{sec:<12} |\n", "text")
             for y, w, df, p in body:
-                out.write(f"{y:>16} |", "text")
-                out.write(f"{w:>12.2f}{df:>8}{p:>12.4f}\n", "result")
+                out.write(f"{y[-12:]:>12} |", "text")
+                ps = "." if p >= SYS else f"{p:.4f}"
+                out.write(f"{w:>9.2f}{df:>5}{ps:>10}\n", "result")
                 data.append([w, df, p])
                 names.append(y)
-        out.write("-" * 66 + "\n", "text")
-        out.write("H0: all coefficients of the equation, other than the intercept, are 0\n", "text")
+        out.write("-" * 38 + "\n", "text")
         if data:
             mats[_r_name("test", u, est)] = Matrix(np.array(data), names, ["chi2", "df", "p"])
     r["nobs"] = _nobs(s, est)
@@ -252,31 +259,68 @@ def estat_framework(s, est, args):
         iy = [model.idx[n] for n in Y]
         ix = [model.idx[n] for n in X]
         ey = [f"e.{n}" for n in Y]
+        obs = set(model.spec.observed)
+        grp = lambda n: "observed" if n.split(".")[-1] in obs else "latent"     # noqa: E731
         blocks = []
         if Y:
-            blocks.append(("Beta", "Coefficients of endogenous variables on endogenous variables",
-                           Matrix(A[np.ix_(iy, iy)], Y, Y)))
+            blocks.append(("Beta", "Endogenous variables on endogenous variables",
+                           Matrix(A[np.ix_(iy, iy)], Y, Y), Y, Y))
         if Y and X:
-            blocks.append(("Gamma", "Coefficients of endogenous variables on exogenous variables",
-                           Matrix(A[np.ix_(iy, ix)], Y, X)))
+            blocks.append(("Gamma", "Exogenous variables on endogenous variables",
+                           Matrix(A[np.ix_(iy, ix)], Y, X), Y, X))
         if Y:
-            blocks.append(("Psi", "Covariances of error variables", Matrix(S[np.ix_(iy, iy)], ey, ey)))
+            blocks.append(("Psi", "Covariances of error variables", Matrix(S[np.ix_(iy, iy)], ey, ey), ey, ey))
             blocks.append(("alpha", "Intercepts of endogenous variables",
-                           Matrix(m[iy].reshape(-1, 1), Y, ["_cons"])))
+                           Matrix(m[iy].reshape(1, -1), ["_cons"], Y), None, Y))
         if X:
-            blocks.append(("Phi", "Covariances of exogenous variables", Matrix(S[np.ix_(ix, ix)], X, X)))
-            blocks.append(("kappa", "Means of exogenous variables", Matrix(m[ix].reshape(-1, 1), X, ["_cons"])))
+            blocks.append(("Phi", "Covariances of exogenous variables", Matrix(S[np.ix_(ix, ix)], X, X), X, X))
+            blocks.append(("kappa", "Means of exogenous variables", Matrix(m[ix].reshape(1, -1), ["mean"], X),
+                           None, X))
         if o.get("fitted"):
-            obs = model.spec.observed
-            blocks.append(("Sigma", "Fitted covariance matrix of observed variables", Matrix(Sig, obs, obs)))
-            blocks.append(("mu", "Fitted means of observed variables", Matrix(mu.reshape(-1, 1), obs, ["_cons"])))
-        for name, title, mat in blocks:
-            out.write(f"\n{title}\n", "text")
-            list_matrix(s, name, mat, fmt, header=False)
+            ob = model.spec.observed
+            blocks.append(("Sigma", "Fitted covariances of observed variables", Matrix(Sig, ob, ob), ob, ob))
+            blocks.append(("mu", "Fitted means of observed variables", Matrix(mu.reshape(1, -1), ["mu"], ob),
+                           None, ob))
+        for name, title, mat, rows, cols in blocks:
+            out.write(f"\n{title}\n\n", "text")
+            _fw_table(out, name, mat, rows, cols, grp, fmt)
             mats[_r_name(name, u, est)] = mat
     r["nobs"] = _nobs(s, est)
     r.update(mats)
     s.r = r
+
+
+def _fw_table(out, name, mat, rows, cols, grp, fmt, lower=None):
+    """One matrix of estat framework: column and row groups (observed, latent), lower triangle
+    when the matrix is lower triangular (VERIFY: a nonrecursive Beta)."""
+    D = np.asarray(mat.data, float)
+    k = D.shape[1]
+    width = 10 + 11 * (k - 1) + 1
+    if lower is None:
+        lower = D.shape[0] == k and rows is not None and (name in ("Psi", "Phi", "Sigma") or np.allclose(np.triu(D, 1), 0))
+    if grp is not None:
+        cg = [grp(c) for c in cols]
+        head = ""
+        for j, c in enumerate(cg):
+            if j == 0 or c != cg[j - 1]:
+                pos = 0 if j == 0 else 10 + 11 * (j - 1)
+                head = head.ljust(pos) + " " + c
+        out.write(f"{'':16} |{head:<{width}}\n", "text")
+    out.write(f"{name:>16} |" + f"{cols[0][-10:]:>10}" + "".join(f"{c[-10:]:>11}" for c in cols[1:]) + " \n", "text")
+    out.write("    " + "-" * 13 + "+" + "-" * width + "\n", "text")
+    labels = rows if rows is not None else mat.rownames
+    last = None
+    for i, lab in enumerate(labels):
+        if rows is not None and grp is not None and grp(lab) != last:
+            last = grp(lab)
+            out.write(f"    {last:<12} |{'':{width}}\n", "text")
+        vals = [_fv(D[i, j], fmt) for j in range(k)]
+        if lower:
+            vals = [v if j <= i else "" for j, v in enumerate(vals)]
+        line = f"{vals[0]:>10}" + "".join(f"{v:>11}" for v in vals[1:])
+        out.write(f"{lab[-12:]:>16} |", "text")
+        out.write(f"{line:<{width}}\n", "result")
+    out.write("    " + "-" * (14 + width) + "\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +345,7 @@ def estat_residuals(s, est, args):
         S_ = data.cov * (data.N / (data.N - 1) if o.get("sample") else 1.0)
         rc = S_ - Sig
         rm = data.mean - mu
+        raw_c, raw_m = rc.copy(), rm.copy()
         if kind != "raw":
             N = data.N
             Vth = u["V"]
@@ -314,23 +359,29 @@ def estat_residuals(s, est, args):
             zc = np.zeros((p, p))
             zm = np.zeros(p)
             for i in range(p):
-                zm[i] = rm[i] / math.sqrt(max(Sig[i, i] / N - (J_mu[i] @ Vth @ J_mu[i] if kind == "standardized" else 0), 1e-300))
+                vm = Sig[i, i] / N - (J_mu[i] @ Vth @ J_mu[i] if kind == "standardized" else 0)
+                zm[i] = rm[i] / math.sqrt(vm) if vm > 1e-12 * Sig[i, i] / N else SYS
                 for j in range(i + 1):
                     v = (Sig[i, i] * Sig[j, j] + Sig[i, j] ** 2) / N
                     if kind == "standardized":
                         v = v - float(J_sig[i, j] @ Vth @ J_sig[i, j])
-                    zc[i, j] = zc[j, i] = rc[i, j] / math.sqrt(v) if v > 0 else 0.0
+                    zc[i, j] = zc[j, i] = rc[i, j] / math.sqrt(v) if v > 0 else SYS
             rc, rm = zc, zm
         rc = np.where(np.abs(rc) < zt, 0.0, rc)
         word = {"raw": "Raw", "normalized": "Normalized", "standardized": "Standardized"}[kind]
-        out.write(f"\n{word} residuals\n", "text")
-        mm = Matrix(rm.reshape(1, -1), ["r1"], obs)
-        out.write("\nMean residuals\n", "text")
-        list_matrix(s, "", mm, fmt, header=False)
-        out.write("\nCovariance residuals\n", "text")
-        list_matrix(s, "", Matrix(rc, obs, obs), fmt, header=False)
-        mats[_r_name("res_mean", u, est)] = mm
-        mats[_r_name("res_cov", u, est)] = Matrix(rc, obs, obs)
+        # VERIFY layout of normalized; the raw tables are always shown (case 1909)
+        out.write("\nResiduals of observed variables\n\n", "text")
+        mrows = [raw_m] + ([rm] if kind != "raw" else [])
+        mm = Matrix(np.vstack(mrows), ["raw"] + ([kind] if kind != "raw" else []), obs)
+        out.write("  Mean residuals\n\n", "text")
+        _fw_table(out, "", mm, None, obs, None, fmt, lower=False)
+        out.write("\n  Covariance residuals\n\n", "text")
+        _fw_table(out, "", Matrix(raw_c, obs, obs), obs, obs, None, fmt, lower=True)
+        if kind != "raw":
+            out.write(f"\n  {word} covariance residuals\n\n", "text")
+            _fw_table(out, "", Matrix(rc, obs, obs), obs, obs, None, fmt, lower=True)
+        mats[_r_name("res_mean", u, est)] = Matrix(raw_m.reshape(1, -1), ["r1"], obs)
+        mats[_r_name("res_cov", u, est)] = Matrix(raw_c, obs, obs)
     r["nobs"] = _nobs(s, est)
     r.update(mats)
     s.r = r
@@ -355,20 +406,27 @@ def estat_stable(s, est, args):
         mod = np.abs(ev)
         order = np.argsort(-mod, kind="stable")
         ev, mod = ev[order], mod[order]
+        from .varpost import _cg, _cg7
         out.write("\nStability analysis of simultaneous equation systems\n\n", "text")
-        out.write("Eigenvalue stability condition\n", "text")
-        out.write("-" * 41 + "\n", "text")
-        out.write(f"{'Eigenvalue':>24} |{'Modulus':>14}\n", "text")
-        out.write("-" * 25 + "+" + "-" * 15 + "\n", "text")
-        for e, md in zip(ev, mod):
-            sign = "+" if e.imag >= 0 else "-"
-            out.write(f"{e.real:>12.4f} {sign} {abs(e.imag):.4f}i |", "text")
-            out.write(f"{md:>14.4f}\n", "result")
-        out.write("-" * 41 + "\n", "text")
+        out.write("   Eigenvalue stability condition\n", "text")
+        out.write("  +" + "-" * 40 + "+\n", "text")
+        out.write("  |        Eigenvalue        |   Modulus   |\n", "text")
+        out.write("  |" + "-" * 26 + "+" + "-" * 13 + "|\n", "text")
+        for z, md in zip(ev, mod):
+            if abs(z.imag) < 1e-12:
+                lab = f" {_cg7(z.real):>10}" + " " * 15
+            else:
+                lab = f" {_cg7(z.real):>10} {'+' if z.imag > 0 else '-'} {_cg7(abs(z.imag)):>9}i  "
+            out.write(f"  |{lab}| {_cg(round(md, 6), 9):>9}   |\n", "result")
+        out.write("  +" + "-" * 40 + "+\n", "text")
         idx = float(mod.max()) if len(mod) else 0.0
-        out.write(f"\nStability index = {idx:.4f}\n", "text")
-        out.write("The stability index is the largest modulus; the system is stable if it is "
-                  "less than 1.\n", "text")
+        out.write(f"   stability index = {_cg(round(idx, 6), 9):>9}\n", "text")
+        if idx < 1:
+            out.write("   All the eigenvalues lie inside the unit circle.\n   SEM satisfies stability condition.\n", "text")
+        else:
+            # VERIFY
+            out.write("   At least one eigenvalue is outside the unit circle.\n"
+                      "   SEM does not satisfy stability condition.\n", "text")
         r["stindex" if u["label"] is None else f"stindex{u['g'] + 1}"] = idx
         r[_r_name("Re", u, est)] = Matrix(ev.real.reshape(-1, 1), [f"r{i}" for i in range(1, len(ev) + 1)], ["Re"])
         r[_r_name("Im", u, est)] = Matrix(ev.imag.reshape(-1, 1), [f"r{i}" for i in range(1, len(ev) + 1)], ["Im"])
@@ -411,6 +469,11 @@ def estat_stdize(s, est, args):
         h = 1e-6 * (abs(th[i]) + 1)
         e[i] = h
         J[:, i] = (_standardized(model, th + e) - _standardized(model, th - e)) / (2 * h)
+    # the moments of the observed exogenous variables are conditioned on (fixed) under xconditional
+    hid = [i for i, it in enumerate(model.free) if it in model.hidden]
+    V = V.copy()
+    V[hid, :] = 0.0
+    V[:, hid] = 0.0
     Vs = J @ V @ J.T
     keep = [i for i, it in enumerate(model.free) if it not in model.hidden]
     saved = (est.b, est.V, s.e["b"].data.copy(), s.e["V"].data.copy())
@@ -478,11 +541,12 @@ def estat_teffects(s, est, args):
             tables.append(("Indirect effects", 2))
         if not o.get("nototal"):
             tables.append(("Total effects", 1))
+        T_ = base[1]
         for title, w in tables:
             M_ = base[w]
-            out.write(f"\n{title}\n\n", "text")
-            W = 13
-            out.write("-" * (W + 66) + "\n", "text")
+            out.write(f"\n\n{title}\n", "text")
+            W = 12
+            out.write("-" * 78 + "\n", "text")
             out.write(f"{'':>{W}} |                 OIM\n", "text")
             out.write(f"{'':>{W}} |      Coef.   Std. Err.      z    P>|z|     [{lv:g}% Conf. Interval]\n", "text")
             out.write("-" * (W + 1) + "+" + "-" * 64 + "\n", "text")
@@ -494,26 +558,34 @@ def estat_teffects(s, est, args):
                 rows = []
                 for y in members:
                     iy = model.idx[y]
-                    srcs = [a for a in model.names if a != y and abs(M_[iy, model.idx[a]]) > 1e-12]
+                    # every pair with an effect is listed in all three tables (case 1909)
+                    srcs = [a for a in model.names if a != y and abs(T_[iy, model.idx[a]]) > 1e-12]
                     if srcs:
                         rows.append((y, srcs))
                 if not rows:
                     continue
                 out.write(f"{sec:<{W}} |\n", "text")
-                for y, srcs in rows:
+                for k_, (y, srcs) in enumerate(rows):
+                    if k_:
+                        out.write("  " + "-" * (W - 1) + "+" + "-" * 64 + "\n", "text")
                     out.write(f"  {y + ' <-':<{W - 2}} |\n", "text")
                     for a in srcs:
                         iy, ia = model.idx[y], model.idx[a]
                         b = M_[iy, ia]
                         se = math.sqrt(max(float(J[w][iy, ia] @ V @ J[w][iy, ia]), 0))
-                        if se > 0:
+                        if abs(b) <= 1e-12 and se == 0:
+                            out.write(f"{a[-W:]:>{W}} |", "text")
+                            out.write(f"{'0':>11}  (no path)\n", "result")
+                        elif se > 0:
                             z = b / se
                             pv = 2 * float(st.norm.sf(abs(z)))
-                            out.write(f"{a:>{W}} |  {_g(b):>9}  {_g(se):>9}  {z:>7.2f}  {pv:>6.3f}    "
+                            out.write(f"{a[-W:]:>{W}} |", "text")
+                            out.write(f"  {_g(b):>9}  {_g(se):>9}  {z:>7.2f}  {pv:>6.3f}    "
                                       f"{_g(b - c * se):>9}   {_g(b + c * se):>9}\n", "result")
                         else:
-                            out.write(f"{a:>{W}} |  {_g(b):>9}  {'.':>9}\n", "result")
-            out.write("-" * (W + 66) + "\n", "text")
+                            out.write(f"{a[-W:]:>{W}} |", "text")
+                            out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+            out.write("-" * 78 + "\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -532,10 +604,23 @@ def _theta_in(prob, th_glob, ext):
     return t
 
 
-def _lm(prob, th_glob, ext) -> tuple[float, int]:
-    t = _theta_in(prob, th_glob, ext)
+def _info(ext, t):
+    """Information of the extended problem: expected information for ml (as Stata's score tests
+    and modification indices, case 1909), minus the Hessian otherwise."""
+    if ext.method != "ml":
+        return -ext.hess(t)
+    I = np.zeros((ext.nglob, ext.nglob))
+    for g, (m, d) in enumerate(zip(ext.models, ext.data)):
+        ids = ext.gmap[g]
+        Ig = _eim(m, t[ids], d.N)
+        np.add.at(I, (ids[:, None], ids[None, :]), Ig)
+    return I
+
+
+def _lm(prob, th_glob, ext, t=None) -> tuple[float, int]:
+    t = _theta_in(prob, th_glob, ext) if t is None else t
     sc = ext.grad(t)
-    info = -ext.hess(t)
+    info = _info(ext, t)
     stat = float(sc @ np.linalg.pinv(info) @ sc)
     return max(stat, 0.0), ext.nglob - prob.nglob
 
@@ -574,16 +659,21 @@ def estat_scoretests(s, est, args):
             for it in items[1:]:
                 text = f"[{items[0][2]}]{items[0][1]} - [{it[2]}]{it[1]} = 0"
                 cons.append((text, _extended(prob, split={(g, it)})))
-    out.write("\nScore tests for linear constraints\n\n", "text")
     rows = []
     for k, (text, ext) in enumerate(cons, 1):
-        out.write(f" ({k:2d}) {text}\n", "text")
         stat, df = _lm(prob, th, ext)
         rows.append((k, stat, max(df, 1)))
     shown = [r for r in rows if r[1] >= minchi2]
     if not shown:
-        out.write(f"\n(no score tests to report; all chi2 values less than {minchi2})\n", "text")
+        from ..core.formats import format_value
+        # Stata's own value of invchi2tail(1, .05) (case 1909)
+        lim = "3.841458820694123" if not o.get("minchi2") else format_value(minchi2, "%18.0g").strip()
+        out.write(f"(no score tests to report; all chi2 values less than {lim})\n", "text")
     else:
+        # VERIFY: the layout when some test is shown
+        out.write("\nScore tests for linear constraints\n\n", "text")
+        for k, (text, _ext) in enumerate(cons, 1):
+            out.write(f" ({k:2d}) {text}\n", "text")
         out.write(f"\n{'':>8}{'chi2':>10}{'df':>6}{'P>chi2':>9}\n", "text")
         for k, stat, df in shown:
             out.write(f" ({k:2d}) ", "text")
@@ -609,6 +699,25 @@ def _augment(model: Model, item):
     return Model(spec, covs, dict(model.var_fixed))
 
 
+def _eim(model: Model, th: np.ndarray, N: int) -> np.ndarray:
+    """Expected information of the normal likelihood: N (dmu' Si dmu + tr(Si dS Si dS) / 2)."""
+    mu, Sig, dm = _dmoments(model, th)
+    Si = np.linalg.inv(Sig)
+    k = len(dm)
+    I = np.zeros((k, k))
+    for a in range(k):
+        ma, Sa = dm[a]
+        for b in range(a + 1):
+            mb, Sb = dm[b]
+            v = 0.0
+            if ma is not None and mb is not None:
+                v += float(ma @ Si @ mb)
+            if Sa is not None and Sb is not None:
+                v += 0.5 * float(np.sum((Si @ Sa) * (Si @ Sb).T))
+            I[a, b] = I[b, a] = N * v
+    return I
+
+
 def estat_mindices(s, est, args):
     from ..commands.matrix import Matrix
     from .semfit import Problem, item_class, parse_ginvariant
@@ -631,7 +740,8 @@ def estat_mindices(s, est, args):
         if to not in model.endog:
             continue
         for fr in model.names:
-            if fr == to or (fr, to) in spec.paths:
+            # VERIFY (case 1909): Stata does not consider paths out of observed endogenous variables
+            if fr == to or (fr, to) in spec.paths or (fr in spec.observed and fr in model.endog):
                 continue
             cands.append(("path", fr, to))
     err = [n for n in model.names if n in model.endog]
@@ -655,7 +765,7 @@ def estat_mindices(s, est, args):
         sub = Problem([aug], [data], prob.method, set())
         # the observed exogenous variables stay unconstrained as in the fitted model
         gr = sub.grad(th_aug)
-        info = -sub.hess(th_aug)
+        info = _eim(aug, th_aug, data.N) if prob.method == "ml" else -sub.hess(th_aug)
         p = aug.free.index(it)
         c = [i for i in range(len(th_aug)) if i != p]
         ieff = info[p, p] - info[p, c] @ np.linalg.pinv(info[np.ix_(c, c)]) @ info[c, p]
@@ -669,22 +779,43 @@ def estat_mindices(s, est, args):
             va, vb = S[model.idx[it[1]], model.idx[it[1]]], S[model.idx[it[2]], model.idx[it[2]]]
             sepc = epc / math.sqrt(va * vb) if va > 0 and vb > 0 else SYS
         rows.append((it, cls, mi, epc, sepc))
-    shown = sorted([r for r in rows if r[2] >= minchi2], key=lambda r: (r[0][0] != "path", -r[2]))
+    order = {n: i for i, n in enumerate(model.names)}
+    shown = sorted([r for r in rows if r[2] >= minchi2],
+                   key=lambda r: (r[0][0] != "path", order[r[0][2]], order[r[0][1]]))
     out = s.output
     out.write("\nModification indices\n\n", "text")
     if not shown:
         out.write(f"(no modification indices to report; all chi2 values less than {minchi2})\n", "text")
     else:
-        out.write("-" * 78 + "\n", "text")
-        out.write(f"{'':>26} |{'':>10}{'':>6}{'':>9}{'':>12}{'Standard':>12}\n", "text")
-        out.write(f"{'':>26} |{'MI':>10}{'df':>6}{'P>MI':>9}{'EPC':>12}{'EPC':>12}\n", "text")
-        out.write("-" * 27 + "+" + "-" * 50 + "\n", "text")
-        for it, cls, mi, epc, sepc in shown:
-            lab = _label(model, it)
-            out.write(f"{lab:<26} |", "text")
-            out.write(f"{mi:>10.3f}{1:>6}{float(st.chi2.sf(mi, 1)):>9.2f}{epc:>12.4f}{_fv(sepc, '%9.0g'):>12}\n",
-                      "result")
-        out.write("-" * 78 + "\n", "text")
+        line = "-" * 14 + "+" + "-" * 46
+        out.write("-" * 61 + "\n", "text")
+        out.write(f"{'':14}|{'Standard':>46}\n", "text")
+        out.write(f"{'':14}|{'MI':>10}{'df':>7}{'P>MI':>7}{'EPC':>11}{'EPC':>11}\n", "text")
+        out.write(line + "\n", "text")
+
+        def vals(mi, epc, sepc):
+            return (f"{mi:>10.3f}{1:>7}{float(st.chi2.sf(mi, 1)):>7.2f}{_fv(epc, '%9.0g'):>11}"
+                    f"{_fv(sepc, '%9.0g'):>11}\n")
+        paths = [x for x in shown if x[0][0] == "path"]
+        covs = [x for x in shown if x[0][0] != "path"]
+        # VERIFY: the Structural section (paths into latent variables) is not in case 1909
+        for sec, members in (("Structural", [x for x in paths if x[0][2] in spec.latent]),
+                             ("Measurement", [x for x in paths if x[0][2] in spec.observed])):
+            if not members:
+                continue
+            out.write(f"{sec:<14}|\n", "text")
+            cur = None
+            for it, cls, mi, epc, sepc in members:
+                if it[2] != cur:
+                    cur = it[2]
+                    out.write(f"  {cur + ' <-':<12}|\n", "text")
+                out.write(f"{it[1][-12:]:>13} |", "text")
+                out.write(vals(mi, epc, sepc), "result")
+            out.write(line + "\n", "text")
+        for it, cls, mi, epc, sepc in covs:
+            out.write(f"{_label(model, it):<14}|", "text")
+            out.write(vals(mi, epc, sepc), "result")
+        out.write("-" * 61 + "\n", "text")
         out.write("EPC = expected parameter change\n", "text")
     classes = ["scoef", "scons", "mcoef", "mcons", "serrvar", "merrvar", "smerrcov", "meanex", "covex"]
     r = {"N_groups": 1.0, "nobs": _nobs(s, est)}
@@ -702,7 +833,7 @@ def estat_mindices(s, est, args):
 
 def estat_ginvariant(s, est, args):
     from ..commands.matrix import Matrix
-    from .semfit import PCLASSES, parse_ginvariant
+    from .semfit import PCLASSES, item_class, parse_ginvariant
     if not est.extra.get("groups"):
         raise StataError(322, "estat ginvariant is only available after sem with group()")   # VERIFY
     _, o = _opts(args, {"showpclass": 5, "class": 3, "legend": 3})
@@ -717,7 +848,16 @@ def estat_ginvariant(s, est, args):
     # items present in every group, by class
     items = [it for it in m0.free if all(it in m.free for m in prob.models)
              and not (it in est.extra["hidden"])]
+    # loadings fixed for identification (same value in every group) are tested by freeing them
+    # in the groups after the first (Stata reports a score test for them, case 1909)
+    anchors = [("path", m0.names[j], m0.names[i]) for (i, j), v in m0.fixed_A.items()
+               if all(m.fixed_A.get((i, j)) == v for m in prob.models)]
     res = []
+    for it in anchors:
+        stat, df = _lm_anchor(prob, th, it)
+        cls = item_class(m0, it)
+        if cls in show:
+            res.append((it, cls, (np.nan, 0, np.nan), (stat, df, float(st.chi2.sf(stat, df)) if df > 0 else np.nan)))
     for it in items:
         i0 = m0.free.index(it)
         cls = prob.classes[0][i0]
@@ -745,18 +885,37 @@ def estat_ginvariant(s, est, args):
     if o.get("class"):
         _class_tests(s, est, prob, th, Vg, show)
     else:
-        W = 28
-        out.write("-" * (W + 52) + "\n", "text")
-        out.write(f"{'':>{W}} |{'Wald Test':^24}|{'Score Test':^24}\n", "text")
-        out.write(f"{'':>{W}} |{'chi2':>8}{'df':>6}{'p':>9} |{'chi2':>8}{'df':>6}{'p':>9}\n", "text")
-        out.write("-" * (W + 1) + "+" + "-" * 51 + "\n", "text")
-        for it, cls, wald, score in res:
-            lab = _label(m0, it)
-            out.write(f"{lab:<{W}} |", "text")
-            out.write(_tcell(wald) + " |" + _tcell(score) + "\n", "result")
-        out.write("-" * (W + 52) + "\n", "text")
-        out.write("Wald tests are for parameters that vary across groups; score tests for those "
-                  "constrained equal.\n", "text")
+        res = _ginv_order(m0, res)
+        out.write("-" * 78 + "\n", "text")
+        out.write(f"{'':12} |{'':12}Wald Test{'':23}Score Test\n", "text")
+        out.write(f"{'':12} |{'chi2':>10}{'df':>11}{'p>chi2':>10}{'chi2':>11}{'df':>12}{'p>chi2':>10}\n", "text")
+        out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+        eqs = [x for x in res if x[0][0] in ("path", "mean")]
+        rest = [x for x in res if x[0][0] not in ("path", "mean")]
+        spec = m0.spec
+        for sec, pool in (("Structural", spec.latent), ("Measurement", spec.observed)):
+            # VERIFY: the Structural section is not in case 1909
+            members = [x for x in eqs if x[0][2 if x[0][0] == "path" else 1] in pool]
+            if not members:
+                continue
+            out.write(f"{sec:<12} |\n", "text")
+            cur = None
+            for it, cls, wald, score in members:
+                y = it[2] if it[0] == "path" else it[1]
+                if y != cur:
+                    if cur is not None:
+                        out.write("  " + "-" * 11 + "+" + "-" * 64 + "\n", "text")
+                    cur = y
+                    out.write(f"  {y + ' <-':<10} |\n", "text")
+                lab = it[1] if it[0] == "path" else "_cons"
+                out.write(f"{lab[-12:]:>12} |", "text")
+                out.write(_tcell(wald) + _tcell(score, wide=True) + "\n", "result")
+        if rest:
+            out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+            for it, cls, wald, score in rest:
+                out.write(f"{_label(m0, it)[-13:]:>13}|", "text")
+                out.write(_tcell(wald) + _tcell(score, wide=True) + "\n", "result")
+        out.write("-" * 78 + "\n", "text")
     r = {"N_groups": float(G), "nobs": _nobs(s, est)}
     if res:
         r["test"] = Matrix(np.array([[x[2][0], x[2][1], x[2][2], x[3][0], x[3][1], x[3][2]] for x in res],
@@ -767,11 +926,56 @@ def estat_ginvariant(s, est, args):
     s.r = r
 
 
-def _tcell(t) -> str:
+def _tcell(t, wide=False) -> str:
+    """Wald cells are 10, 11 and 10 wide; score cells 11, 12 and 10 (case 1909)."""
     stat, df, p = t
+    w1, w2 = (11, 12) if wide else (10, 11)
     if df == 0 or not np.isfinite(stat):
-        return f"{'.':>8}{'.':>6}{'.':>9}"
-    return f"{stat:>8.3f}{df:>6}{p:>9.3f}"
+        return f"{'.':>{w1}}{'.':>{w2}}{'.':>10}"
+    return f"{stat:>{w1}.3f}{df:>{w2}}{p:>10.4f}"
+
+
+def _ginv_order(m0, res):
+    """Equations in the order of the variables, each with its paths and then its intercept;
+    variances and covariances after them."""
+    pos = {n: i for i, n in enumerate(m0.names)}
+
+    def key(x):
+        kind, a, b = x[0]
+        if kind == "path":
+            return (0, pos[b], 0, pos[a])
+        if kind == "mean":
+            return (0, pos[a], 1, 0)
+        return (1, 0 if kind == "var" else 1, pos[a], pos[b])
+    return sorted(res, key=key)
+
+
+def _lm_anchor(prob, th_glob, it):
+    """Score test of a path fixed in every group: the path becomes free (at its fixed value) in
+    the groups after the first, which leaves the model identified."""
+    from .semfit import Problem
+    kind, a, b = it
+    models = []
+    for g, m in enumerate(prob.models):
+        if g == 0:
+            models.append(m)
+            continue
+        mm = copy.copy(m)
+        mm.fixed_A = dict(m.fixed_A)
+        key = (m.idx[b], m.idx[a])
+        v = mm.fixed_A.pop(key)
+        mm.free = list(m.free) + [it]
+        mm.nfree = len(mm.free)
+        mm._anchor_value = v
+        models.append(mm)
+    ext = Problem(models, prob.data, prob.method, prob.inv,
+                  split={(g, it) for g in range(1, len(models))})
+    t = np.zeros(ext.nglob)
+    for g, m in enumerate(models):
+        local = prob.group_theta(th_glob, g)
+        vals = np.concatenate([local, [m._anchor_value]]) if g else local
+        t[ext.gmap[g]] = vals
+    return _lm(prob, th_glob, ext, t=t)
 
 
 def _class_tests(s, est, prob, th, Vg, show):

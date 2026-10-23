@@ -604,7 +604,9 @@ def cmd_lincom(s: "Session", args: str) -> None:
         ev, ese = np.exp(val), np.exp(val) * se
         _eform_line(s, est, ev, ese, tv, p, np.exp(val - c * se), np.exp(val + c * se), lev, title)
     else:
-        coef_table(s, est.depvar, [CoefRow("coef", "(1)", val, se)], stat=est.stat, df=est.df_r,
+        # a model with several dependent variables (sem, sureg) leaves the header blank (case 1909)
+        dep = est.depvar if len(str(est.depvar).split()) <= 1 else ""
+        coef_table(s, dep, [CoefRow("coef", "(1)", val, se)], stat=est.stat, df=est.df_r,
                    level=lev)
     # r(): only estimate, se and df in Stata 14 (compat 0504); the list comes out reversed
     s.r = {"estimate": val, "se": se}

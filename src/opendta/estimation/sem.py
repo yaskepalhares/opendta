@@ -486,6 +486,8 @@ def cmd_sem(s: "Session", args: str) -> None:
     # has missing values among them; method(adf) always uses all moments (VERIFY)
     X_all = np.column_stack([c.astype(float) for c in cols])
     X_all = np.where(np.column_stack([c >= SYS for c in cols]), np.nan, X_all)
+    # e(N_missing)
+    n_missing = int(np.isnan(X_all[mask]).sum())      # missing values, not observations (case 1909)
     models, datas = [], []
     for g, lev in enumerate(levels):
         mg = mask if gname is None else (mask & (ds.get(gname).data == lev))
@@ -510,6 +512,17 @@ def cmd_sem(s: "Session", args: str) -> None:
     if df < 0:
         raise StataError(503, "the model is not identified: more parameters than "
                               "moments")   # VERIFY
+    # mlmv fits the saturated and the baseline models, adf the baseline model; Stata shows their
+    # logs even with nolog (case 1909; their iteration paths are VERIFY, one line is shown)
+    if meth in ("mlmv", "adf"):
+        out = s.output
+        steps = ([("saturated", "log likelihood", sum(d.ll_s for d in datas))] if meth == "mlmv" else [])
+        steps.append(("baseline", "log likelihood" if meth == "mlmv" else "discrepancy",
+                      sum(d.ll_b for d in datas) if meth == "mlmv"
+                      else sum(d.adf["F_b"] for d in datas)))
+        for what, word, v in steps:
+            out.write(f"\nFitting {what} model:\n\n", "text")
+            out.write(f"Iteration 0:   {word} = {_g(v, '%10.0g'):>10}  \n", "text")
     th, obj, V, conv = semfit.fit_problem(prob, s, not o.get("nolog"))
     ll_s = sum(d.ll_s for d in datas)
     ll_b = sum(d.ll_b for d in datas)
@@ -570,19 +583,21 @@ def cmd_sem(s: "Session", args: str) -> None:
     # e() in Stata 14's ereturn list order (compat 1302; VERIFY the matrices' contents)
     ilog = list(prob.ilog) if prob.ilog else [ll]
     scalars = [("converged", 1.0 if conv else 0.0), ("rc", 0.0), ("ic", float(len(ilog) - 1)),
-               ("N_groups", 1.0), ("modelmeans", 1.0), ("N", float(N)), ("N_missing", 0.0),
+               ("N_groups", 1.0), ("modelmeans", 1.0), ("N", float(N)), ("N_missing", float(n_missing)),
                ("ll", ll), ("critvalue", ll if meth != "adf" else -obj / max(N, 1)),
                ("df_m", float(len(keep))),
                ("rank", float(np.linalg.matrix_rank(est.V))), ("estimates", 1.0),
-               ("critvalue_s", ll_s), ("critvalue_b", base_ll), ("df_s", float(df_s)),
+               ("critvalue_s", ll_s), ("critvalue_b", base_ll),
                ("p_bs", p_bs), ("df_bs", float(df_bs)), ("chi2_bs", chi2_bs), ("p_ms", p_ms),
-               ("df_ms", float(df)), ("chi2_ms", chi2_ms), ("df_b", float(df_s - df_bs))]
+               ("df_ms", float(df)), ("chi2_ms", chi2_ms), ("df_b", float(df_s - df_bs)), ("df_s", float(df_s))]
     if meth == "adf":
         scalars = [(k, v) for k, v in scalars if k not in ("ll", "critvalue_s", "critvalue_b")]
     first = obs_endog[0] if obs_endog else ""
-    macros = [("cmdline", f"sem {args.strip()}"), ("covariates", " ".join(obs_exog) if xcond else ""),
+    # VERIFY: _NONE when there is no observed exogenous variable (case 1909)
+    covariates = " ".join(obs_exog) if xcond else ("_NONE" if not obs_exog else "")
+    macros = [("cmdline", f"sem {args.strip()}"), ("covariates", covariates),
               ("cmd", "sem"), ("predict", "sem_p"), ("estat_cmd", "sem_estat"),
-              ("marginsdefault", f"predict(xb({first}))" if first else ""),
+              ("marginsdefault", " ".join(f"predict(xb({n}))" for n in obs_endog)),
               ("marginsnotok", "XBLATent1(passthru) XBLATent LATent1(passthru) LATent SCores xb"),
               ("xconditional", "xconditional" if xcond else ""),
               ("vcetype", "OIM"), ("vce", "oim"),
@@ -736,7 +751,10 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write(f"Estimation method  = {x.get('method', 'ml')}\n", "text")
         if x.get("method") != "adf":
             out.write("Log likelihood     = ", "text")
-            out.write(f"{_g(x['ll'], '%10.0g')}\n", "result")
+            out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+        else:
+            out.write("Discrepancy        = ", "text")
+            out.write(f"{_g(x['chi2_ms'] / x['N'], '%10.0g'):>10}\n", "result")
         # endogenous latent variables first (compat 1302: [y1]G before [x1]F)
         anchors = sorted(model.anchor.items(), key=lambda la: la[0] not in model.endog)
         fixed_paths = [(a, b, v) for (a, b), v in spec.fixed.items()]
@@ -801,7 +819,8 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
     W = max([12] + [len(lb) - 1 for lb in labels])
     dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
     out.write("-" * (W + 66) + "\n", "text")
-    out.write(f"{'':>{W}} |                 OIM\n", "text")
+    if x.get("method") != "adf":
+        out.write(f"{'':>{W}} |                 OIM\n", "text")
     out.write(f"{'Standardized' if std else '':>{W}} |      Coef.   Std. Err.      z    P>|z|     "
               f"[{lv:g}% Conf. Interval]\n", "text")
     out.write(dash, "text")
@@ -878,8 +897,12 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
     df = x["df"]
     pv = "     ." if df == 0 else f"{x['p_ms']:>6.4f}"
     lab = f"chi2({df})"
-    out.write(f"LR test of model vs. saturated: {lab:<10}= {x['chi2_ms']:>9.2f}, Prob > chi2 = {pv}\n",
-              "text")
+    if x.get("method") == "adf":
+        out.write(f"Discr. test of model vs. saturated: {lab:<10}= {x['chi2_ms']:>8.2f}, Prob > chi2 = {pv}\n",
+                  "text")
+    else:
+        out.write(f"LR test of model vs. saturated: {lab:<10}= {x['chi2_ms']:>9.2f}, Prob > chi2 = {pv}\n",
+                  "text")
 
 
 def _standardized_fixed(model, th, a, b, v):
