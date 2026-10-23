@@ -678,6 +678,7 @@ def cmd_bayesmh(s: "Session", args: str, *, title: str | None = None, lik_names:
                     iters=nburn + nsamp * thin, acc=res["acc_rate"], eff=eff, lml=lml, dic=dic,
                     hpd=bool(o.get("hpd")), level=level, draws=draws, lp=lp, N=model.N, seed=seed)
         saving = _option_values(opts, "saving")
+        info["saving"] = bool(saving)
         if saving:
             _save_draws(s, saving[0], model, draws, lp, ll_draws)
         _post(s, args, model, draws, info, summ, mask)
@@ -800,6 +801,7 @@ def _model_summary(s, model: Model, info) -> None:
         out.write(f"  {eq.depvar} ~ {name}({args})\n", "text")
     out.write("\nPriors: \n", "text")
     notes: list[str] = []
+    lines = []
     for targets, dist_t in model.prior_text:
         P = model.P
         labs = {P.eqs[i] for i in targets if P.eqs[i]}
@@ -811,7 +813,11 @@ def _model_summary(s, model: Model, info) -> None:
         else:
             lab = " ".join("{" + P.names[i] + "}" for i in targets)
             mark = ""
-        out.write(f"  {lab:>20} ~ {dist_t:<{max(60 - 24, 1)}}{mark:>4}\n".rstrip() + "\n", "text")
+        lines.append((lab, dist_t, mark))
+    wl = max([len(x[0]) for x in lines] + [1])
+    for lab, dist_t, mark in lines:
+        txt = f"  {lab:>{wl}} ~ {dist_t}"
+        out.write((f"{txt:<75}{mark}" if mark else txt) + "\n", "text")
     out.write(line + "\n", "text")
     for n in notes:
         out.write(n + "\n", "text")
@@ -841,13 +847,19 @@ def display_bayes(s: "Session", est: Estimates, *, header: bool = True, table: b
         lml = f"Log marginal likelihood = {_g(x['lml'], '%10.0g'):>10}" if np.isfinite(x["lml"]) else \
             "Log marginal likelihood =          ."
         out.write(f"{lml:<49}{'max':>16} = {num(max(eff))}\n", "text")
-        out.write("\n", "text")
+        out.write(" \n", "text")      # Stata writes a line with one space (case 1909)
     if not table:
         return
     lv = level or x["level"]
     use_hpd = x["hpd"] if hpd is None else hpd
     summ = x["summ"] if (lv == x["level"] and use_hpd == x["hpd"]) else mcmc.summarize(x["draws"], lv, use_hpd)
     _summary_table(s, est, summ, lv, use_hpd)
+
+
+def _srow(r) -> str:
+    """Mean, Std. Dev., MCSE, Median and the interval as Stata 14 writes them (case 1909)."""
+    return (f"{_g(r['mean']):>10}{_g(r['sd']):>11}{_g(r['mcse'], '%8.0g'):>10}{_g(r['median']):>11}"
+            f"{_g(r['lo']):>11}{_g(r['hi']):>11}")
 
 
 def _summary_table(s, est, summ, level, use_hpd, names=None) -> None:
@@ -887,9 +899,7 @@ def _summary_table(s, est, summ, level, use_hpd, names=None) -> None:
         elif kind == "sep":
             out.write(dash, "text")
         else:
-            r = summ[i]
-            out.write(f"{lab:>{W}} |  {_g(r['mean']):>9}  {_g(r['sd']):>9}  {_g(r['mcse'], '%9.0g'):>8}  "
-                      f"{_g(r['median']):>9}  {_g(r['lo']):>10}  {_g(r['hi']):>10}\n", "result")
+            out.write(f"{lab:>{W}} |" + _srow(summ[i]) + "\n", "result")
         first = False
     out.write("-" * (W + 66) + "\n", "text")
 
@@ -1059,31 +1069,57 @@ def cmd_bayesstats(s: "Session", args: str) -> None:
     draws = np.column_stack([d for _l, d, _i in items])
     if subs[0] == "summary":
         summ = mcmc.summarize(draws, level, bool(o.get("hpd")))
-        s.output.write("\nPosterior summary statistics" + " " * 24 + f"MCMC sample size = {_commas(draws.shape[0]):>9}\n\n", "text")
+        s.output.write("\nPosterior summary statistics" + " " * 22 + f"MCMC sample size = {_commas(draws.shape[0]):>9}\n \n", "text")
         _flat_table(s, [l for l, _d, _i in items], summ, level, bool(o.get("hpd")))
     else:
-        s.output.write("\nEfficiency summaries    " + " " * 28 + f"MCMC sample size = {_commas(draws.shape[0]):>9}\n\n", "text")
+        s.output.write("\nEfficiency summaries    " + f"MCMC sample size = {_commas(draws.shape[0]):>9}\n \n", "text")
         out = s.output
         W = 12
         out.write("-" * (W + 40) + "\n", "text")
         out.write(f"{'':>{W}} |        ESS   Corr. time    Efficiency\n", "text")
         out.write("-" * (W + 1) + "+" + "-" * 38 + "\n", "text")
-        for j, (lab, d, _i) in enumerate(items):
+
+        def one(lab, d):
             e = mcmc.ess(d)
-            out.write(f"{lab.split(':', 1)[-1] if ':' in lab else lab:>{W}} |  {e:>9.2f}  {len(d) / e:>11.2f}  {_g4(e / len(d)):>12}\n", "result")
+            out.write(f"{lab:>{W}} |", "text")
+            out.write(f"{e:>11.2f}{len(d) / e:>13.2f}{e / len(d):>14.4f}\n", "result")
+        _grouped(out, [l for l, _d, _i in items], [d for _l, d, _i in items], one, W, 38)
         out.write("-" * (W + 40) + "\n", "text")
+
+
+def _grouped(out, labels, payload, one, W, width):
+    """Rows of eq:name parameters under an equation header, the others after a separator, as
+    Stata's bayesstats tables (case 1909)."""
+    seen, done = [], False
+    for lab in labels:
+        if ":" in lab and lab.split(":", 1)[0] not in seen:
+            seen.append(lab.split(":", 1)[0])
+    for k, e in enumerate(seen):
+        if k:
+            out.write("-" * (W + 1) + "+" + "-" * width + "\n", "text")
+        out.write(f"{e:<{W}} |\n", "text")
+        for lab, pl in zip(labels, payload):
+            if ":" in lab and lab.split(":", 1)[0] == e:
+                one(lab.split(":", 1)[1], pl)
+        done = True
+    rest = [(lab, pl) for lab, pl in zip(labels, payload) if ":" not in lab]
+    if rest and done:
+        out.write("-" * (W + 1) + "+" + "-" * width + "\n", "text")
+    for lab, pl in rest:
+        one(lab, pl)
 
 
 def _flat_table(s, labels, summ, level, use_hpd) -> None:
     out = s.output
-    W = max([12] + [len(l) for l in labels])
+    W = 12
     out.write("-" * (W + 66) + "\n", "text")
     out.write(f"{'':>{W}} |" + " " * 48 + ("         HPD" if use_hpd else "Equal-tailed") + "\n", "text")
     out.write(f"{'':>{W}} |      Mean   Std. Dev.     MCSE     Median  [{level:g}% Cred. Interval]\n", "text")
     out.write("-" * (W + 1) + "+" + "-" * 64 + "\n", "text")
-    for lab, r in zip(labels, summ):
-        out.write(f"{lab:>{W}} |  {_g(r['mean']):>9}  {_g(r['sd']):>9}  {_g(r['mcse']):>8}  "
-                  f"{_g(r['median']):>9}  {_g(r['lo']):>10}  {_g(r['hi']):>10}\n", "result")
+
+    def one(lab, r):
+        out.write(f"{lab[-W:]:>{W}} |" + _srow(r) + "\n", "result")
+    _grouped(out, labels, summ, one, W, 64)
     out.write("-" * (W + 66) + "\n", "text")
 
 
@@ -1142,20 +1178,27 @@ def cmd_bayestest(s: "Session", args: str) -> None:
         o = match_options(opt, {"lower": 3, "upper": 3, "prior": 5}) if opt.strip() else {}
         items = _param_items(est, body)
         n = len(items[0][1])
-        out.write("\nInterval hypotheses" + " " * 28 + f"MCMC sample size = {_commas(n):>9}\n\n", "text")
-        W = 12
-        out.write("-" * (W + 40) + "\n", "text")
-        out.write(f"{'':>{W}} |      Mean    Std. Dev.     MCSE\n".replace("Mean    Std. Dev.     MCSE", "Prob      Std. Dev.     MCSE"), "text")
-        out.write("-" * (W + 1) + "+" + "-" * 38 + "\n", "text")
-        for lab, d, _i in items:
-            lo = float(o["lower"]) if o.get("lower") else -np.inf
-            hi = float(o["upper"]) if o.get("upper") else np.inf
-            ind = ((d >= lo) & (d <= hi)).astype(float)
+        out.write("\nInterval tests     " + f"MCMC sample size = {_commas(n):>9}\n\n", "text")
+        lo = float(o["lower"]) if o.get("lower") else -np.inf
+        hi = float(o["upper"]) if o.get("upper") else np.inf
+        res = []
+        for k, (lab, d, _i) in enumerate(items, 1):
+            cond = (f"{_g(lo)} < {{{lab}}} < {_g(hi)}" if np.isfinite(lo) and np.isfinite(hi) else
+                    f"{{{lab}}} > {_g(lo)}" if np.isfinite(lo) else f"{{{lab}}} < {_g(hi)}")
+            out.write(f"{'prob' + str(k):>12} : {cond}\n", "text")
+            ind = ((d > lo) & (d < hi)).astype(float)
             p = float(ind.mean())
-            e = mcmc.ess(ind)
             sd = float(np.std(ind, ddof=1))
-            out.write(f"{lab.split(':', 1)[-1] if ':' in lab else lab:>{W}} |  {_g(p):>9}  {_g(sd):>9}  {_g(sd / math.sqrt(e)):>9}\n", "result")
-        out.write("-" * (W + 40) + "\n", "text")
+            e = mcmc.ess(ind) if sd > 0 else float(len(ind))
+            res.append((f"prob{k}", p, sd, sd / math.sqrt(e) if e > 0 else 0.0))
+        W = 12
+        out.write(" \n" + "-" * (W + 35) + "\n", "text")
+        out.write(f"{'':>{W}} |      Mean    Std. Dev.      MCSE\n", "text")
+        out.write("-" * (W + 1) + "+" + "-" * 33 + "\n", "text")
+        for lab, p, sd, mc in res:
+            out.write(f"{lab:>{W}} |", "text")
+            out.write(f"{_g(p):>10}{sd:>12.5f}{_g(mc):>11}\n", "result")
+        out.write("-" * (W + 35) + "\n", "text")
         return
     models = _stored_models(s, body)
     if len(models) < 2:

@@ -663,6 +663,11 @@ def cmd_estimates(s: "Session", args: str) -> None:
             raise StataError(198, f"{name} invalid name")
         if not s.e or "cmd" not in s.e:
             raise StataError(301, "last estimates not found")
+        cur = getattr(s, "_estimates", None)
+        if cur is not None and cur.cmd == "bayesmh" and not (cur.extra or {}).get("saving"):
+            # as Stata 14 (case 1909); VERIFY the return code
+            raise StataError(198, "you must save simulation results using bayesmh, saving() before using "
+                                  "estimates store")
         snap = _snapshot(s)
         st_.pop(name, None)
         st_[name] = snap
