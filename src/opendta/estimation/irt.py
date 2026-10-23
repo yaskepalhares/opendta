@@ -10,7 +10,8 @@ the table shows the discrimination a and the difficulties b by the delta method:
     grm        P(y >= k | theta) = invlogit(a (theta - b_k))
     nrm        P(y = k | theta) proportional to exp(a_k theta + c_k), a_0 = c_0 = 0
     pcm, gpcm  P(y = k | theta) proportional to exp(sum_{j<=k} a (theta - b_j)), a common (pcm)
-    rsm        as pcm with b_j = b_i + kappa_j shared by the items, kappa_1 = 0
+    rsm        log P(k)/P(0) = k a theta - a (b_i + d_2 + ... + d_k): the difficulty of step k is
+               reported as b_i + d_k, d shared by the items and d_1 = 0 (as Stata 14, case 1909)
 
 1pl, 2pl and grm are written as gsem paths; the other models are "custom" responses of gsem
 (analytic derivatives with respect to theta, used by its adaptive quadrature). The names of the
@@ -43,7 +44,7 @@ _TITLES = {"1pl": "One-parameter logistic model", "2pl": "Two-parameter logistic
            "3pl": "Three-parameter logistic model", "grm": "Graded response model",
            "nrm": "Nominal response model", "pcm": "Partial credit model",
            "gpcm": "Generalized partial credit model", "rsm": "Rating scale model",
-           "hybrid": "Hybrid model"}
+           "hybrid": "Hybrid IRT model"}
 _KINDS = ("1pl", "2pl", "3pl", "grm", "nrm", "pcm", "gpcm", "rsm")
 
 
@@ -117,8 +118,10 @@ class Cat:
             return (np.concatenate([[0.0], th[self.ia]]), np.concatenate([[0.0], th[self.ic]]))
         A = th[self.ia[0]] * np.arange(J)
         if self.kind == "rsm":
+            # Stata 14's rating scale model (case 1909): log P(k)/P(0) = k a theta + c_i + sum of
+            # the shared kappa_2..kappa_k, so step k has difficulty b_i + d_k (d_1 = 0)
             e = np.concatenate([[0.0, 0.0], th[self.ie]])
-            C = th[self.ib] * np.arange(J) + np.cumsum(e)
+            C = th[self.ib] * (np.arange(J) > 0) + np.cumsum(e)
         else:
             C = np.concatenate([[0.0], np.cumsum(th[self.ic])])
         return A, C
@@ -178,23 +181,27 @@ class Item:
             a = th[self.ia]
             out = [("row", "Discrim", a), ("head", "Diff", 0.0)]
             for j, i in enumerate(self.cuts):
-                out.append(("row", f">={self.levels[j + 1]:g}", th[i] / a))
+                last = j == len(self.cuts) - 1
+                out.append(("cat", f"{'=' if last else '>='}{self.levels[j + 1]:g}", th[i] / a))
             return out
         c = self.c
         lv = self.levels
         if k == "nrm":
             out = [("head", "Discrim", 0.0)]
-            out += [("row", f"{lv[j]:g}", th[c.ia[j - 1]]) for j in range(1, len(lv))]
+            out += [("cat", f"{lv[j]:g} vs {lv[0]:g}", th[c.ia[j - 1]]) for j in range(1, len(lv))]
             out += [("head", "Diff", 0.0)]
-            out += [("row", f"{lv[j]:g}", -th[c.ic[j - 1]] / th[c.ia[j - 1]]) for j in range(1, len(lv))]
+            out += [("cat", f"{lv[j]:g} vs {lv[0]:g}", -th[c.ic[j - 1]] / th[c.ia[j - 1]])
+                    for j in range(1, len(lv))]
             return out
         a = th[c.ia[0]]
         out = [("row", "Discrim", a), ("head", "Diff", 0.0)]
         if k == "rsm":
-            out = [("row", "Discrim", a), ("row", "Diff", -th[c.ib] / a)]
+            for j in range(1, len(lv)):
+                kap = th[c.ie[j - 2]] if j >= 2 else 0.0
+                out.append(("cat", f"{lv[j]:g} vs {lv[j - 1]:g}", -(th[c.ib] + kap) / a))
             return out
         for j in range(1, len(lv)):
-            out.append(("row", f"{lv[j - 1]:g}-{lv[j]:g}", -th[c.ic[j - 1]] / a))
+            out.append(("cat", f"{lv[j]:g} vs {lv[j - 1]:g}", -th[c.ic[j - 1]] / a))
         return out
 
     def probs(self, th, t):
@@ -383,8 +390,8 @@ def _table_rows(est, items=None, byparm=False):
     return rows
 
 
-def _line(out, label, b, s_, c, W=12, left=False):
-    out.write((f"{label:<{W}} |" if left else f"{label:>{W}} |"), "text")
+def _line(out, label, b, s_, c, W=12, left=False, cat=False):
+    out.write((f"{label:<{W}} |" if left else f"{label:>{W - 1}}  |" if cat else f"{label:>{W}} |"), "text")
     if s_ > 0 and np.isfinite(s_):
         z = b / s_
         pv = 2 * float(st.norm.sf(abs(z)))
@@ -404,7 +411,7 @@ def display_irt(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("\n" + f"{info['title']:<48}{'Number of obs':<18}= ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
         out.write("Log likelihood = ", "text")
-        out.write(f"{_g(x['ll'], '%10.0g')}\n\n", "result")
+        out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
     if not table:
         return
     _print(s, est, _table_rows(est), lv)
@@ -417,8 +424,9 @@ def _print(s, est, rows, lv, byparm=False):
     dash = "-" * (W + 1) + "+" + "-" * 64 + "\n"
     out.write("-" * (W + 66) + "\n", "text")
     out.write(f"{'':>{W}} |      Coef.   Std. Err.      z    P>|z|     [{lv:g}% Conf. Interval]\n", "text")
-    out.write(dash, "text")
     its = est.irt["items"]
+    if not (est.irt.get("kind") == "hybrid" and not byparm):
+        out.write(dash, "text")
     if byparm:
         order, seen = [], []
         for it, kind, lab, b, se in rows:
@@ -444,11 +452,22 @@ def _print(s, est, rows, lv, byparm=False):
                     _line(out, it.name if lab == lbl else f"{it.name} {lab}", b, se, c)
         out.write("-" * (W + 66) + "\n", "text")
         return
-    shared = [it for it in its if it.shared_a()]
+    full = "-" * (W + 66) + "\n"
+    groups = est.irt.get("spec") if est.irt.get("kind") == "hybrid" else None
+    group_of = {n: k for k, ns in groups for n in ns} if groups else {}
+    # a pseudoguessing parameter shared by the 3pl items is shown once, after them
+    g_idx = [it.ig for it in its if it.kind == "3pl"]
+    common_guess = len(g_idx) > 1 and len(set(g_idx)) == 1
     done_shared: set = set()
     last = None
     first = True
+    cur_group = None
+    guess_row = None
     for it, kind, lab, b, se in rows:
+        if groups and group_of.get(it.name) != cur_group:
+            cur_group = group_of.get(it.name)
+            out.write(full + f"{cur_group:<{W}}\n" + full, "text")
+            first, last = True, None
         if it.shared_a() and lab == "Discrim":
             key = it.kind
             if key in done_shared:
@@ -460,6 +479,9 @@ def _print(s, est, rows, lv, byparm=False):
             _line(out, "Discrim", b, se, c)
             last = None
             continue
+        if common_guess and lab == "Guess":
+            guess_row = (b, se)
+            continue
         if last is not it:
             if not first:
                 out.write(dash, "text")
@@ -469,25 +491,10 @@ def _print(s, est, rows, lv, byparm=False):
         if kind == "head":
             out.write(f"{lab:>{W}} |\n", "text")
         else:
-            _line(out, lab, b, se, c)
-    # rating scale: the thresholds shared by the items
-    rs = next((it for it in its if it.kind == "rsm"), None)
-    if rs is not None:
-        th, V = est.extra["rep"], est.extra["Vr"]
-        ia = rs.c.ia[0]
+            _line(out, lab, b, se, c, cat=kind == "cat")
+    if guess_row is not None:
         out.write(dash, "text")
-        out.write(f"{'Kappa':<{W}} |\n", "text")
-        for j, ie in enumerate(rs.c.ie):
-            def f(t, ie=ie):
-                return -t[ie] / t[ia]
-            b = f(th)
-            g = np.zeros(len(th))
-            for i in (ie, ia):
-                e = np.zeros(len(th))
-                h = 1e-6 * (abs(th[i]) + 1)
-                e[i] = h
-                g[i] = (f(th + e) - f(th - e)) / (2 * h)
-            _line(out, f"{rs.c.levels[j + 2]:g}", b, float(np.sqrt(max(g @ V @ g, 0))), c)
+        _line(out, "Guess", guess_row[0], guess_row[1], c)
     out.write("-" * (W + 66) + "\n", "text")
 
 
@@ -523,7 +530,7 @@ def estat_report(s: "Session", est: Estimates, args: str) -> None:
             raise StataError(198, f"sort({key}) invalid")   # VERIFY
         its = sorted(its, key=keyf, reverse=bool(o.get("descending")))
     lv = float(o["level"]) if o.get("level") else est.level
-    s.output.write("\n", "text")
+    display_irt(s, est, table=False)      # estat report repeats the header (case 1909)
     _print(s, est, _table_rows(est, its), lv, byparm=bool(o.get("byparm")))
 
 
