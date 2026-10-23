@@ -2,7 +2,7 @@
 
 [English](next-steps.md) | **Português**
 
-Um plano de trabalho para os comandos que ainda faltam em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10), escrito para que cada bloco possa ser feito numa sessão nova sem redescobrir o código. A versão 1.0 sai quando todos os blocos estiverem prontos; depois vêm as melhorias de [Depois da 1.0](../ROADMAP.pt-BR.md#depois-da-10) e as versões mais recentes do Stata.
+Um plano de trabalho para os comandos que ainda faltam em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10), escrito para que cada bloco possa ser feito numa sessão nova sem redescobrir o código. A versão 1.0 sai quando todos os itens de Faltam para a 1.0 estiverem cobertos; depois vêm as melhorias de [Depois da 1.0](../ROADMAP.pt-BR.md#depois-da-10) e as versões mais recentes do Stata.
 
 ## Como executar um bloco
 
@@ -129,4 +129,6 @@ Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras s
 
 ## Antes da 1.0
 
-Quando todos os blocos estiverem prontos: a rodada no Stata de todos os casos de comparação sem referência, as diferenças corrigidas, a versão 1.0.0 em `src/opendta/__init__.py` e `pyproject.toml`, as notas de lançamento escritas e a tag `v1.0.0` enviada (veja [development.pt-BR.md](development.pt-BR.md#publicar-uma-versão)).
+Os blocos 1 a 11 saíram na versão 0.5.0. A versão 1.0 espera o que ainda consta em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10): planeje como novos blocos (a partir do bloco 12), uma área por vez, executados como os blocos acima.
+
+Quando essa lista estiver vazia: a rodada no Stata de todos os casos de comparação sem referência, as diferenças corrigidas, a versão 1.0.0 em `src/opendta/__init__.py` e `pyproject.toml`, as notas de lançamento escritas e a tag `v1.0.0` enviada (veja [development.pt-BR.md](development.pt-BR.md#publicar-uma-versão)).

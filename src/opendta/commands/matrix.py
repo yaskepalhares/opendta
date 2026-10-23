@@ -38,6 +38,8 @@ class Matrix:
     data: np.ndarray
     rownames: list[str] = field(default_factory=list)
     colnames: list[str] = field(default_factory=list)
+    roweq: list[str] = field(default_factory=list)       # "_" = no equation
+    coleq: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.data = np.atleast_2d(np.asarray(self.data, dtype=np.float64))
@@ -46,6 +48,10 @@ class Matrix:
             self.rownames = [f"r{i}" for i in range(1, r + 1)]
         if len(self.colnames) != c:
             self.colnames = [f"c{j}" for j in range(1, c + 1)]
+        if len(self.roweq) != r:
+            self.roweq = ["_"] * r
+        if len(self.coleq) != c:
+            self.coleq = ["_"] * c
 
     @property
     def rows(self) -> int:
@@ -56,7 +62,8 @@ class Matrix:
         return int(self.data.shape[1])
 
     def copy(self) -> "Matrix":
-        return Matrix(self.data.copy(), list(self.rownames), list(self.colnames))
+        return Matrix(self.data.copy(), list(self.rownames), list(self.colnames),
+                      list(self.roweq), list(self.coleq))
 
 
 def _store(s: "Session") -> dict[str, Matrix]:
@@ -95,11 +102,17 @@ def get_matrix(s: "Session", name: str) -> Matrix:
 
 def matrix_names(s: "Session", name: str, which: str) -> str:
     mat = get_matrix(s, name)
-    if which in ("rownames", "rowfullnames"):
-        return " ".join(mat.rownames)
-    if which in ("colnames", "colfullnames"):
-        return " ".join(mat.colnames)
-    return " ".join("_" for _ in (mat.rownames if which == "roweq" else mat.colnames))
+    row = which.startswith("row")
+    names, eqs = (mat.rownames, mat.roweq) if row else (mat.colnames, mat.coleq)
+    if which.endswith("eq"):
+        return " ".join(eqs)
+    if which.endswith("fullnames") and _has_eqs(eqs):
+        return " ".join(f"{q}:{n}" for q, n in zip(eqs, names))
+    return " ".join(names)
+
+
+def _has_eqs(eqs: list[str]) -> bool:
+    return any(q != "_" for q in eqs)
 
 
 # ---------------------------------------------------------------------------
@@ -562,10 +575,17 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
                 *, names: bool = True, header: bool = True, show_title: str = "") -> None:
     out = s.output
     f = parse_format(fmt)
-    sym = mat.rows == mat.cols and mat.rows > 1 and np.array_equal(mat.data, mat.data.T)
+    # a 1x1 matrix is listed as symmetric (e(V) in compat/expected/0514_fweight_robust.log;
+    # VERIFY for matrices defined by the user)
+    sym = mat.rows == mat.cols and np.array_equal(mat.data, mat.data.T)
     cells = [[format_value(float(x), f, pad=False).strip() if x < M.SYSMISS
               else M.missing_name(float(x)) for x in row] for row in mat.data]
-    rw = max([len(n) for n in mat.rownames] + [0]) if names else 0
+    # equation names: "eq:name" on the rows and an "eq:" line above the column names
+    # (compat/expected/0514_fweight_robust.log)
+    rlab = ([f"{q}:{n}" for q, n in zip(mat.roweq, mat.rownames)] if _has_eqs(mat.roweq)
+            else list(mat.rownames))
+    ceqs = [f"{q}:" for q in mat.coleq] if names and _has_eqs(mat.coleq) else []
+    rw = max([len(n) for n in rlab] + [0]) if names else 0
     shown = [cells[i][j] for i in range(mat.rows) for j in range(mat.cols) if not sym or i >= j]
     # names with operators (1b.k, L.x) take two lines: "1b." above "k"
     split = names and any("." in c for c in mat.colnames)
@@ -577,6 +597,7 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
     # all columns as wide as the largest value or name (observed in Stata 14,
     # compat/expected/0203_matrix.log)
     w_all = max([max(len(a), len(b)) for a, b in heads] if names else [0])
+    w_all = max([w_all] + [len(q) - 1 for q in ceqs])
     w_all = max([w_all] + [len(c) for c in shown])
     widths = [w_all] * mat.cols
     if header:
@@ -584,6 +605,10 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
         extra = f":  {show_title}" if show_title else ""
         out.write(f"\n{lead}{title}[{mat.rows},{mat.cols}]{extra}\n", "text")
     if names:
+        if ceqs:
+            # like the operator part, the equation sits one column to the right
+            line = " " * (rw + 1) + "".join("  " + q.rjust(w) for q, w in zip(ceqs, widths))
+            out.write(line.rstrip() + "\n", "text")
         if split:
             # the operator part sits one column to the right (compat 0502)
             line = " " * (rw + 1) + "".join("  " + a.rjust(w) for (a, _), w in zip(heads, widths))
@@ -591,7 +616,7 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
         line = " " * rw + "".join("  " + b.rjust(w) for (_, b), w in zip(heads, widths))
         out.write(line + "\n", "text")
     for i in range(mat.rows):
-        out.write((mat.rownames[i].rjust(rw) if names else ""), "text")
+        out.write((rlab[i].rjust(rw) if names else ""), "text")
         last = i + 1 if sym else mat.cols
         out.write("".join("  " + cells[i][j].rjust(widths[j]) for j in range(last)) + "\n", "result")
 
@@ -656,9 +681,11 @@ def _names_cmd(s: "Session", which: str, text: str) -> None:
     n = mat.rows if which.startswith("row") else mat.cols
     if len(names) != n:
         raise StataError(503, "conformability error")
-    if which.endswith("eq"):
-        return                                   # equations: VERIFY (phase 5)
-    if which.startswith("row"):
+    if which == "roweq":
+        mat.roweq = names
+    elif which == "coleq":
+        mat.coleq = names
+    elif which.startswith("row"):
         mat.rownames = names
     else:
         mat.colnames = names

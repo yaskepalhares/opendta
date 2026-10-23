@@ -82,3 +82,24 @@ def test_top_level_joins(run):
     assert mat(run, "B").data.tolist() == [[1, 2, 1, 2]] and mat(run, "C").data.shape == (2, 2)
     run("forvalues i = 1/3 {\n matrix R = nullmat(R) \\ (`i', `i'^2)\n}")
     assert mat(run, "R").data.tolist() == [[1, 1], [2, 4], [3, 9]]
+
+
+def test_list_equations(run):
+    # layout of compat/expected/0514_fweight_robust.log: "eq:" one column to the right of the
+    # names, "eq:name" on the rows; :colfullnames and :coleq carry the equations
+    run("matrix V = (.3794632598, .1705286616, .1710436346 \\ .1705286616, .0766349695, "
+        ".076866396 \\ .1710436346, .076866396, .0770985215)\n"
+        "matrix rownames V = x _cons _cons\nmatrix colnames V = x _cons _cons\n"
+        "matrix roweq V = k cut1 cut2\nmatrix coleq V = k cut1 cut2")
+    out = run("matrix list V, format(%12.0g)")
+    assert out.splitlines()[1:] == [
+        "symmetric V[3,3]",
+        "                      k:        cut1:        cut2:",
+        "                      x        _cons        _cons",
+        "       k:x  .3794632598",
+        "cut1:_cons  .1705286616  .0766349695",
+        "cut2:_cons  .1710436346   .076866396  .0770985215",
+    ]
+    assert run('display "`:colfullnames V\'|`:coleq V\'|`:colnames V\'"').strip() == \
+        "k:x cut1:_cons cut2:_cons|k cut1 cut2|x _cons _cons"
+    assert run("matrix A = (2)\nmatrix list A").splitlines()[1] == "symmetric A[1,1]"
