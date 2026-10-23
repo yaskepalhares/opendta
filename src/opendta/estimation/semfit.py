@@ -237,8 +237,10 @@ class Problem:
             np.add.at(out, self.gmap[g], gg)
         return out
 
-    def hess(self, th: np.ndarray) -> np.ndarray:
-        if self.method == "adf":
+    def hess(self, th: np.ndarray, exact: bool = False) -> np.ndarray:
+        """Hessian of the objective; for adf the Gauss-Newton -2N J'WiJ unless exact, which
+        differentiates the gradient numerically, as the variance of Stata's adf does (compat 1909)."""
+        if self.method == "adf" and not exact:
             H = np.zeros((self.nglob, self.nglob))
             for g, (m, d) in enumerate(zip(self.models, self.data)):
                 J = _adf_jacobian(m, self.group_theta(th, g))
@@ -311,7 +313,7 @@ def _adf_grad(model: Model, th: np.ndarray, d: GroupData) -> np.ndarray:
 def fit_problem(prob: Problem, s, log: bool, maxiter: int = 300):
     """Quasi-Newton to approach the optimum, then Newton steps (Gauss-Newton for ADF) to finish.
     Returns (theta, objective, V, converged); V is the inverse of minus the Hessian for ml and
-    mlmv, and (N J' W^-1 J)^-1 summed over groups for adf."""
+    mlmv, and twice the inverse of minus the numerical Hessian of the discrepancy for adf."""
     from scipy import optimize
     f, gr = prob.f, prob.grad
     th = prob.start()
@@ -373,12 +375,12 @@ def fit_problem(prob: Problem, s, log: bool, maxiter: int = 300):
         for i, x in enumerate(shown):
             val = -x if prob.method == "adf" else x
             out.write(f"{'Iteration ' + str(i) + ':':<14} {word} = {_g(val, '%10.0g'):>10}  \n", "text")
-    H = prob.hess(th)
+    H = prob.hess(th, exact=True)
     try:
         V = np.linalg.inv(-H)
     except np.linalg.LinAlgError:
         V = np.linalg.pinv(-H)
     if prob.method == "adf":
-        V = 2 * V        # H is -2 N J'WiJ; the covariance is (N J'WiJ)^-1
+        V = 2 * V        # the objective is -N times the discrepancy; its curvature is doubled
     prob.ilog = shown
     return th, f(th), (V + V.T) / 2, converged

@@ -546,7 +546,8 @@ def svy_generic(s: "Session", cmd: str, args: str, svyopts: str) -> None:
 
 def _svy_aux_ci(est, df) -> None:
     """Transformed ancillary rows (sigma, rho, alpha) get the interval of their parameter with the
-    design degrees of freedom (case 1909: svy: intreg)."""
+    design degrees of freedom, and lambda its own interval with them (case 1909: svy: intreg,
+    svy: heckman)."""
     import math as _m
     from .results import crit as _crit
     c = _crit("t", est.level, df)
@@ -554,6 +555,9 @@ def _svy_aux_ci(est, df) -> None:
     by = {r.label.lstrip("/"): r for r in rows if r.kind == "coef"}
     tf = {"sigma": ("lnsigma", _m.exp), "alpha": ("lnalpha", _m.exp), "rho": ("athrho", _m.tanh)}
     for r in rows:
+        if r.kind == "aux" and r.label == "lambda" and 0 < r.se < SYS:
+            r.eq = f"{r.b - c * r.se!r} {r.b + c * r.se!r}"
+            continue
         if r.kind != "aux" or r.label not in tf:
             continue
         par = by.get(tf[r.label][0])

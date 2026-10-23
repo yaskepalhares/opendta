@@ -590,6 +590,10 @@ def cmd_sem(s: "Session", args: str) -> None:
                ("critvalue_s", ll_s), ("critvalue_b", base_ll),
                ("p_bs", p_bs), ("df_bs", float(df_bs)), ("chi2_bs", chi2_bs), ("p_ms", p_ms),
                ("df_ms", float(df)), ("chi2_ms", chi2_ms), ("df_b", float(df_s - df_bs)), ("df_s", float(df_s))]
+    if meth != "mlmv":
+        # VERIFY: df_s follows critvalue_b with method(ml) (compat 1302) and comes last with
+        # method(mlmv) (compat 1909)
+        scalars.insert(14, scalars.pop())
     if meth == "adf":
         scalars = [(k, v) for k, v in scalars if k not in ("ll", "critvalue_s", "critvalue_b")]
     first = obs_endog[0] if obs_endog else ""

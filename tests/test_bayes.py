@@ -113,15 +113,20 @@ def test_bayesstats_functions_of_parameters(data):
     out = data("bayesstats ess")
     assert "ESS" in out and "Corr. time" in out
     out = data("bayestest interval {y:x}, lower(0)")
-    assert "Interval hypotheses" in out
+    assert "Interval tests" in out
 
 
-def test_model_comparison_with_stored_estimates(data):
+def test_model_comparison_with_stored_estimates(data, tmp_path):
     base = ("likelihood(normal({s2})) prior({y:}, normal(0,100)) prior({s2}, igamma(.01,.01)) "
             "rseed(3) mcmcsize(3000)")
-    data(f"quietly bayesmh y x z, {base}")
+    # as in Stata, estimates store needs the draws saved with saving()
+    assert "you must save simulation results" in data(f"capture noisily bayesmh y x z, {base}\n"
+                                                      "capture noisily estimates store full")
+    f = str(tmp_path / "full").replace("\\", "/")
+    data(f"quietly bayesmh y x z, {base} saving({f}, replace)")
     data("estimates store full")
-    data(f"quietly bayesmh y z, {base}")
+    f = str(tmp_path / "small").replace("\\", "/")
+    data(f"quietly bayesmh y z, {base} saving({f}, replace)")
     data("estimates store small")
     out = data("bayesstats ic full small")
     assert "full" in out and "small" in out and "DIC" in out

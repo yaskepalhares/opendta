@@ -211,9 +211,11 @@ def test_estat_teffects_indirect_is_product(run):
     out = run("estat teffects")
     assert "Direct effects" in out and "Indirect effects" in out and "Total effects" in out
     bm_x, by_m, by_x = _b(run, "m", "x"), _b(run, "y", "m"), _b(run, "y", "x")
-    # the indirect effect appears as the product of the two direct effects
+    # the indirect effect appears as the product of the two direct effects; as in Stata, the
+    # pairs without an indirect path are listed with 0 (no path)
     vals = [float(t) for line in out.split("Indirect effects")[1].split("Total effects")[0].splitlines()
             if "|" in line for t in line.split("|")[1].split()[:1] if t.replace(".", "", 1).replace("-", "", 1).isdigit()]
+    vals = [v for v in vals if v != 0]
     assert vals and vals[0] == pytest.approx(bm_x * by_m, abs=2e-6)
 
 
@@ -271,7 +273,7 @@ def test_estat_scoretests_and_ginvariant(two_groups):
     out = run("estat ginvariant, class")
     assert "mcons" in out
     out = run("estat ggof")
-    assert "Group-level goodness of fit" in out
+    assert "Group-level fit statistics" in out
     assert run.session.r["N_groups"] == 2
 
 
@@ -279,15 +281,15 @@ def test_estat_framework_and_residuals(cfa):
     run = cfa
     run("quietly sem (F -> x1 x2 x3) (G -> y1 y2 y3), nolog")
     out = run("estat framework, fitted")
-    assert "Covariances of error variables" in out and "Fitted covariance matrix" in out
+    assert "Covariances of error variables" in out and "Fitted covariances of observed variables" in out
     S = run.session.r["Sigma"]
     assert S.rows == 6
     out = run("estat residuals")
-    assert "Raw residuals" in out
+    assert "Covariance residuals" in out
     rc = run.session.r["res_cov"].data
     assert rc[0, 0] == pytest.approx(0, abs=1e-8)
     out = run("estat residuals, standardized")
-    assert "Standardized residuals" in out
+    assert "Standardized covariance residuals" in out
 
 
 def test_estat_stdize_runs_command_on_standardized_estimates(run):

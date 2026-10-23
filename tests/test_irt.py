@@ -141,7 +141,8 @@ def test_gpcm_matches_brute_force(items):
 
 def test_hybrid_and_estat_report(items):
     items("quietly irt hybrid (2pl q1-q3) (grm r1), nolog")
-    assert items.session.e["model1"] == "hybrid"
+    # as in Stata, one items#/model# pair per group of items
+    assert items.session.e["model1"] == "2pl" and items.session.e["model2"] == "grm"
     out = items("estat report q3 r1")
     assert "q3" in out and "r1" in out and "q1" not in out
     out = items("estat report, byparm sort(a) descending")

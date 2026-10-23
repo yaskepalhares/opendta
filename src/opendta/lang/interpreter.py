@@ -281,13 +281,20 @@ class Interpreter:
         """Loop echo: header and numbered body, before running."""
         out = self.s.output
         out.echo_command(lines[i].echo_lines)
-        k = 2
+        # VERIFY: as in the echo of program define, a comment does not advance the
+        # count and the next line gets the prompt "." (observed in case 1909)
+        k, after_comment = 2, False
         for ln in lines[i + 1:j + 1]:
             first, *rest = ln.echo_lines
-            out.write(f"{k:>3}. {first}\n", "command")
+            prompt = "." if after_comment else f"{k:>3}."
+            out.write(f"{prompt} {first}\n", "command")
             for cont in rest:
                 out.write(f"> {cont}\n", "command")
-            k += 1
+            if ln.kind == "comment":
+                after_comment = True
+            else:
+                after_comment = False
+                k += 1
 
     # ------------------------------------------------------------------
     # Blocos
