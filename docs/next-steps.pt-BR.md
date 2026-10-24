@@ -79,7 +79,7 @@ Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tok
 
 ### 1. Epidemiologia: completar ✅
 
-Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 12 e 26 (casos de comparação 1601 e 1912). O plano original:
 
 `rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
 
