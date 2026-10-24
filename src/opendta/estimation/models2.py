@@ -14,6 +14,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
 from ..lazy import lazy
 from . import fvars
+from . import likelihoods as L
 from .vce import bread, sandwich
 from .ml import maximize, print_log
 from .ml import options as ml_options
@@ -602,6 +603,10 @@ def cmd_nbreg(s: "Session", args: str) -> None:
         replay(s, "nbreg", args)
         return
     pr = _Prep(s, args, {"dispersion": 4, "irr": 3, "exposure": 3, "offset": 3})
+    disp = str(pr.o.get("dispersion") or "mean").strip().lower()
+    if not ("mean".startswith(disp) or "constant".startswith(disp)):
+        raise StataError(198, f"dispersion({disp}) invalid")   # VERIFY
+    nb1 = "constant".startswith(disp)     # variance mu (1 + delta), ln delta in the last place
     out = s.output
     pr.write_notes(out)
     y = pr.y
@@ -623,12 +628,17 @@ def cmd_nbreg(s: "Session", args: str) -> None:
 
         def ll_obs(b):
             mu = np.exp(np.clip(Xm @ b[:k] + off, -700, 700))
+            if nb1:
+                return L._nb1_terms(y, mu, b[k])[0]
             m = np.exp(-b[k])
             return (special.gammaln(y + m) - special.gammaln(m) - lgy + m * np.log(m / (m + mu))
                     + y * np.log(mu / (m + mu)))
 
         def scores(b):
             mu = np.exp(np.clip(Xm @ b[:k] + off, -700, 700))
+            if nb1:
+                _ll, de, dd = L._nb1_terms(y, mu, b[k])
+                return np.column_stack([Xm * de[:, None], dd])
             a = np.exp(b[k])
             m = 1 / a
             sx = (y - mu) / (1 + a * mu)
@@ -704,14 +714,15 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     lna, se_lna = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
     c = crit("z", pr.smp.level, None)
     alpha = np.exp(lna)
+    an = "delta" if nb1 else "alpha"
     if boundary:
-        rows.append(CoefRow("aux", "/lnalpha", lna, SYS, name="_cons"))
+        rows.append(CoefRow("aux", f"/ln{an}", lna, SYS, name="_cons"))
         rows.append(CoefRow("sep"))
-        rows.append(CoefRow("aux", "alpha", alpha, SYS))
+        rows.append(CoefRow("aux", an, alpha, SYS))
     else:
-        rows.append(CoefRow("aux", "/lnalpha", lna, se_lna, name="_cons"))
+        rows.append(CoefRow("aux", f"/ln{an}", lna, se_lna, name="_cons"))
         rows.append(CoefRow("sep"))
-        rows.append(CoefRow("aux", "alpha", alpha, alpha * se_lna,
+        rows.append(CoefRow("aux", an, alpha, alpha * se_lna,
                             eq=f"{float(np.exp(lna - c * se_lna))!r} {float(np.exp(lna + c * se_lna))!r}"))
     layout = [(nm, cc.values is not None) for nm, cc in zip(names, pr.smp.cols)]
     if pr.constant:
@@ -719,18 +730,19 @@ def cmd_nbreg(s: "Session", args: str) -> None:
         names = names + ["_cons"]
     layout.append(("_cons", True))
     b_full, V_full = _expand(pr, res.b, V, layout)
-    eqs = [pr.smp.depname] * len(names) + ["lnalpha"]
+    eqs = [pr.smp.depname] * len(names) + [f"ln{an}"]
     chibar = max(2 * (res.ll - ll_pois), 0.0)
     p_chibar = 0.5 * float(_chi2_tail(chibar, 1)) if chibar > 0 else 0.5
     est = _finish(s, pr, "nbreg", args, title="Negative binomial regression", names=names + ["_cons"],
                   eqnames=eqs, b=b_full, V=V_full, rows=rows, res=res, ll0=res0.ll, df_m=len(slope),
                   chi2kind=kind, chi2=chi2, p=pv, r2p=r2p, display=_display_std, n_clust=n_clust, k_eq=2,
-                  k_aux=1, extra_scalars=[("alpha", alpha), ("rank0", 2.0)]
+                  k_aux=1, extra_scalars=[(an, alpha), ("rank0", 2.0)]
                   + ([] if pr.robust else [("chi2_c", chibar), ("ll_c", ll_pois)]),
-                  extra_macros=[("dispers", "mean"), ("chi2_ct", "LR"), ("user", "nbreg_lf"),
+                  extra_macros=[("dispers", "constant" if nb1 else "mean"), ("chi2_ct", "LR"),
+                                ("user", "nbreg_lf"),
                                 ("ml_method", "e2")], constant=pr.constant,
                   order=_E_ORDER["nbreg"])
-    est.dispersion = "mean"
+    est.dispersion = "constant" if nb1 else "mean"
     est.chibar = (chibar, p_chibar)
     if not pr.robust:
         # with vce(robust) Stata does not show the LR test of alpha (compat 0512)
@@ -771,7 +783,8 @@ def _semap(pr, V, kx):
 
 def _nbreg_footer(s: "Session", est: Estimates) -> None:
     chibar, p = est.chibar
-    s.output.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p:5.3f}\n",
+    an = "delta" if getattr(est, "dispersion", "mean") == "constant" else "alpha"
+    s.output.write(f"Likelihood-ratio test of {an}=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p:5.3f}\n",
                    "text")
 
 

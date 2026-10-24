@@ -390,7 +390,8 @@ def display_regress(s: "Session", est: Estimates, *, header: bool = True, table:
             # VERIFY texto e alinhamento
             out.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                       "text")
-        coef_table(s, getattr(est, "depvar_cell", est.depvar), est.rows, stat="t", df=est.df_r, level=lev, vcetype=est.vcetype)
+        coef_table(s, getattr(est, "depvar_cell", est.depvar), est.rows, stat="t", df=est.df_r, level=lev, vcetype=est.vcetype,
+                   coef_title=getattr(est, "coef_title", "Coef."), eform=getattr(est, "eform_on", False))   # glogit, or
 
 
 def _anova(s: "Session", est: Estimates) -> None:

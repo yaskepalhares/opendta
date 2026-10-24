@@ -489,8 +489,6 @@ def _system(s: "Session", args: str, cmd: str) -> None:
         spec.pop("isure")
     smp = _Sample(s, tail, spec, var_terms=[t for ds_ in deps for t in [ds_[0]]] + [t for tt in terms for t in tt])
     o = smp.o
-    if o.get("constraints"):
-        raise StataError(198, "option constraints() is not available yet in sureg and reg3")   # VERIFY
     mask, n = smp.mask, smp.n
     pr = _fake_pr(s, mask, n)
     blocks, ys, depnames = [], [], []
@@ -503,6 +501,7 @@ def _system(s: "Session", args: str, cmd: str) -> None:
             s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
     Xs = [blk.X for blk in blocks]
     ks = [X.shape[1] for X in Xs]
+    cons, cns_text = _system_constraints(s, o, blocks) if o.get("constraints") else (None, [])
     dfk = "small" if o.get("small") and cmd == "sureg" else ""
     if o.get("dfk"):
         dfk = "dfk"
@@ -514,7 +513,7 @@ def _system(s: "Session", args: str, cmd: str) -> None:
             if o.get(key):
                 method = opt
     if cmd == "sureg":
-        fit = syseq.sure(Xs, ys, iterate=iterate, dfk=dfk)
+        fit = syseq.sure(Xs, ys, iterate=iterate, dfk=dfk, cons=cons)
         Zs = Xs
     else:
         rhs_names = []
@@ -554,12 +553,42 @@ def _system(s: "Session", args: str, cmd: str) -> None:
             Zs.append(np.column_stack(cols))
         # Stata scales the 2sls/ols covariance by the equation degrees of freedom (observed in the 1908 log)
         fit = syseq.three_sls(Xs, Zs, ys, method=method, iterate=iterate,
-                              dfk="small" if method in ("2sls", "ols") and not dfk else dfk)
+                              dfk="small" if method in ("2sls", "ols") and not dfk else dfk, cons=cons)
     foot = (endog_list, exog_list) if cmd == "reg3" else None
-    _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk, foot)
+    _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk, foot,
+                 cns_text=cns_text)
 
 
-def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, foot=None) -> None:
+def _system_constraints(s, o, blocks):
+    """(R, r) over the free coefficients of the equations, and the constraints as Stata lists
+    them ([eq]name)."""
+    from .postest import _constraint, _ctext
+    names, eqn = [], []
+    for blk in blocks:
+        for c in blk.cols:
+            if c.values is not None:
+                names.append(c.name)
+                eqn.append(blk.name)
+        if blk.constant:
+            names.append("_cons")
+            eqn.append(blk.name)
+    fake = SimpleNamespace(names=names, eqnames=eqn)
+    cons = _constraints(s)
+    R, r, texts = [], [], []
+    for k in _numlist(str(o["constraints"])):
+        if k not in cons:
+            raise StataError(111, f"constraint {k} not found")
+        coef, rhs = _constraint(s, fake, cons[k])
+        row = np.zeros(len(names))
+        for j, v in coef.items():
+            row[j] = v
+        R.append(row)
+        r.append(rhs)
+        texts.append(_ctext(fake, coef, rhs))
+    return (np.array(R).reshape(-1, len(names)), np.array(r, dtype=float)), texts
+
+
+def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, foot=None, cns_text=()) -> None:
     ds = s.data
     n = smp.n
     m = len(blocks)
@@ -592,6 +621,7 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, fo
     est = Estimates(cmd, blocks[0].name, names, b_full, V_full, n, "t" if use_t else "z",
                     float(m * n - sum(b.k for b in blocks)) if use_t else None)
     est.foot = foot
+    est.cns_text = list(cns_text)
     est.iterated = bool(o.get("isure") or o.get("ireg3"))
     est.eqnames = eqnames
     est.rows = rows
@@ -649,6 +679,10 @@ def _display_system(s, est, *, header=True, table=True, level=None, **_kw) -> No
         if est.corr_opt:
             _corr_block(s, est)
         out.write("\n", "text")
+        for i, t in enumerate(getattr(est, "cns_text", []), 1):      # VERIFY the place of the list
+            out.write(f" ({i:>2})  {t}\n", "text")
+        if getattr(est, "cns_text", []):
+            out.write("\n", "text")
     if table:
         coef_table(s, "", est.rows, stat=est.stat, df=est.df_r, level=lev)
         if est.foot:

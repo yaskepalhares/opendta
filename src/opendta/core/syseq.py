@@ -63,8 +63,10 @@ def _sigma(E: np.ndarray, ks: list, dfk: str) -> np.ndarray:
     return S / D
 
 
-def _gls(Xs: list, Zs: list, ys: list, sigma: np.ndarray):
-    """Stacked GLS with instruments Zs for the regressors (Zs = Xs for SUR)."""
+def _gls(Xs: list, Zs: list, ys: list, sigma: np.ndarray, cons=None):
+    """Stacked GLS with instruments Zs for the regressors (Zs = Xs for SUR). cons = (R, r): the
+    linear constraints R b = r, imposed through b = T bc + a (the normal equations are symmetric
+    because Zs are Xs or their projections on the instruments)."""
     m = len(Xs)
     ks = [X.shape[1] for X in Xs]
     offs = np.concatenate([[0], np.cumsum(ks)]).astype(int)
@@ -75,8 +77,17 @@ def _gls(Xs: list, Zs: list, ys: list, sigma: np.ndarray):
         for j in range(m):
             A[offs[i]:offs[i + 1], offs[j]:offs[j + 1]] = Si[i, j] * (Zs[i].T @ Xs[j])
             c[offs[i]:offs[i + 1]] += Si[i, j] * (Zs[i].T @ ys[j])
-    V = np.linalg.inv(A)
-    b = V @ c
+    if cons is None:
+        V = np.linalg.inv(A)
+        b = V @ c
+    else:
+        from .constraints import constraint_transform
+        R, r = cons
+        T, a = constraint_transform(np.column_stack([R, r]))
+        a = np.ravel(a)
+        Vc = np.linalg.inv(T.T @ A @ T)
+        b = T @ (Vc @ (T.T @ (c - A @ a))) + a
+        V = T @ Vc @ T.T
     return [b[offs[i]:offs[i + 1]] for i in range(m)], V
 
 
@@ -85,7 +96,7 @@ def _resid(Xs: list, ys: list, bs: list) -> np.ndarray:
 
 
 def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int = 100,
-         tol: float = 1e-6) -> SystemFit:
+         tol: float = 1e-6, cons=None) -> SystemFit:
     """Feasible GLS for seemingly unrelated regressions. The first sigma comes from the equation-by-
     equation OLS residuals; with `iterate` it is updated until the coefficients stop changing."""
     ks = [X.shape[1] for X in Xs]
@@ -94,7 +105,7 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
     sigma = _sigma(E, ks, dfk)
     it, conv, trace = 0, True, []
     while True:
-        bs_new, V = _gls(Xs, Xs, ys, sigma)
+        bs_new, V = _gls(Xs, Xs, ys, sigma, cons)
         E = _resid(Xs, ys, bs_new)
         it += 1
         if not iterate:
@@ -115,11 +126,20 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
 
 
 def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bool = False,
-              dfk: str = "", maxit: int = 100, tol: float = 1e-6) -> SystemFit:
+              dfk: str = "", maxit: int = 100, tol: float = 1e-6, cons=None) -> SystemFit:
     """Reg3 estimators with the regressors Xs and the first-stage projections Zs (instruments
     projected on every equation's regressors, i.e. X-hat). `method`: ols, 2sls, sure, 3sls."""
     ks = [X.shape[1] for X in Xs]
     m = len(Xs)
+    if method in ("ols", "2sls") and cons is not None:
+        # constrained equation-by-equation estimates: GLS with a diagonal unit sigma (VERIFY the
+        # variance scale, sigma from the constrained residuals)
+        src = Xs if method == "ols" else Zs
+        bs, _V = _gls(Xs, src, ys, np.eye(m), cons)
+        E = _resid(Xs, ys, bs)
+        sigma = _sigma(E, ks, dfk)
+        bs, V = _gls(Xs, src, ys, np.diag(np.diag(sigma)), cons)
+        return _finish_system(bs, V, E, sigma, 1, True, ks, dfk)
     if method in ("ols", "2sls"):
         src = Xs if method == "ols" else Zs
         bs = [np.linalg.solve(Z.T @ X, Z.T @ y) for Z, X, y in zip(src, Xs, ys)]
@@ -139,7 +159,7 @@ def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bo
     src = Xs if method == "sure" else Zs
     it, conv = 0, True
     while True:
-        bs_new, V = _gls(Xs, src, ys, sigma)
+        bs_new, V = _gls(Xs, src, ys, sigma, cons)
         E = _resid(Xs, ys, bs_new)
         it += 1
         if not iterate:

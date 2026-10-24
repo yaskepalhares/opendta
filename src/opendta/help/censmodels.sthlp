@@ -13,7 +13,7 @@
 {cmd:truncreg} depvar [indepvars] [if] [in] [weight] [{cmd:,} {cmd:ll(}#{cmd:)} {cmd:ul(}#{cmd:)} ...]
 
 {p 8 16 2}
-{cmd:heckman} depvar [indepvars] [if] [in] [weight] {cmd:,} {cmd:select(}[depvar_s {cmd:=}] varlist_s{cmd:)} [{cmd:twostep}|{cmd:mle}] ...
+{cmd:heckman} depvar [indepvars] [if] [in] [weight] {cmd:,} {cmd:select(}[depvar_s {cmd:=}] varlist_s{cmd:)} [{cmd:twostep} {cmd:mills(}newvar{cmd:)}|{cmd:mle}] [{cmd:offset(}varname{cmd:)}] ...
 
 {p 8 16 2}
 {cmd:heckprobit} depvar [indepvars] [if] [in] {cmd:,} {cmd:select(}...{cmd:)} [...]
@@ -22,7 +22,7 @@
 {cmd:heckoprobit} depvar [indepvars] [if] [in] {cmd:,} {cmd:select(}...{cmd:)} [...]
 
 {p 8 16 2}
-{cmd:biprobit} depvar1 depvar2 [indepvars] [if] [in] [weight] [{cmd:,} {cmd:partial} ...]{p_end}
+{cmd:biprobit} depvar1 depvar2 [indepvars] [if] [in] [weight] [{cmd:,} {cmd:offset1(}varname{cmd:)} {cmd:offset2(}varname{cmd:)} ...] ({cmd:partial} is not available yet){p_end}
 {p 8 16 2}
 {cmd:biprobit} {cmd:(}depvar1 {cmd:=} indepvars1{cmd:)} {cmd:(}depvar2 {cmd:=} indepvars2{cmd:)} [if] [in] [weight] [{cmd:,} ...]
 

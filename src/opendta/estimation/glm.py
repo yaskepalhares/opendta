@@ -94,7 +94,7 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
         replay(s, "glm", args)
         return
     pr = _Prep(s, args, {"family": 1, "link": 1, "eform": 2, "irls": 4, "offset": 3, "exposure": 3,
-                         "scale": 3})
+                         "scale": 3, "mu": 2})
     o = pr.o
     out = s.output
     pr.write_notes(out)
@@ -226,6 +226,16 @@ def cmd_glm(s: "Session", args: str, *, titles: tuple[str, bool] | None = None) 
     # Stata's iteration 0 (compat 0509)
     ybar = float(np.sum(w * y) / np.sum(w))
     mu0 = m_trials * (y + 0.5) / (m_trials + 1) if fam == "binomial" else (y + ybar) / 2
+    if isinstance(o.get("mu"), str):
+        # mu(varname|#): the starting mean of the IRLS iterations (VERIFY: # for binreg)
+        t_ = o["mu"].strip()
+        try:
+            mu0 = np.full(len(y), float(t_))
+        except ValueError:
+            from ..core.varlist import resolve_name
+            mu0 = s.data.get(resolve_name(s.data, t_)).data[pr.smp.mask].astype(float)
+            if np.any(mu0 >= SYS):
+                raise StataError(416, f"missing values encountered in {t_}")   # VERIFY
     eta0 = gfun(mu0)
     z = eta0 + (y - mu0) / dmu(eta0) - off
     sw = w * dmu(eta0) ** 2 / var(mu0)

@@ -24,4 +24,4 @@
 Parameters are written {cmd:{c -(}}{it:name}{cmd:{c )-}}, {cmd:{c -(}}{it:name}{cmd:=}{it:init}{cmd:{c )-}} or {cmd:{c -(}}{it:lc}{cmd::} {it:varlist}{cmd:{c )-}} inside the expressions, which are evaluated with the ordinary expression evaluator; derivatives are numerical.
 
 {pstd}
-Not available: the program-based forms of {cmd:nl}, {cmd:nlsur} and {cmd:gmm}, {cmd:derivatives()}, {cmd:parameters()} and {cmd:igmm} in {cmd:gmm}, and {cmd:uhet()}, {cmd:vhet()}, {cmd:cm()} and {cmd:constraints()} in {cmd:frontier}.
+Not available: the program-based forms of {cmd:nl}, {cmd:nlsur} and {cmd:gmm}, {cmd:derivatives()}, {cmd:parameters()} and {cmd:igmm} in {cmd:gmm}, and {cmd:constraints()} in {cmd:frontier} ({cmd:uhet(}varlist{cmd:)}, {cmd:vhet(}varlist{cmd:)} and, with {cmd:distribution(tnormal)}, {cmd:cm(}varlist{cmd:)} make the variances and the mean of the inefficiency linear in their own variables).
