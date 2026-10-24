@@ -505,7 +505,9 @@ def _adjust(method: str, tval: float, df, m: int, k: int, level: float):
 
 
 def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarray, Vm: np.ndarray,
-                    df, o: dict, lev: float, title_lines: list[str], lhs: str = "") -> None:
+                    df, o: dict, lev: float, title_lines: list[str], lhs: str = "",
+                    pair_df=None) -> None:
+    """pair_df(j, i): the degrees of freedom of one comparison (pwmean, unequal); otherwise df."""
     out = s.output
     method = str(o.get("mcompare") or "noadjust").lower()
     k = len(labels)
@@ -519,7 +521,8 @@ def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarra
         d = means[j] - means[i]
         se = float(np.sqrt(max(Vm[j, j] + Vm[i, i] - 2 * Vm[i, j], 0)))
         tv = d / se if se > 0 else np.nan
-        p, c = _adjust(method, tv, df, m, k, lev) if se > 0 else (np.nan, np.nan)
+        dfp = pair_df(j, i) if pair_df is not None else df
+        p, c = _adjust(method, tv, dfp, m, k, lev) if se > 0 else (np.nan, np.nan)
         rows.append((f"{labels[j]} vs {labels[i]}", d, se, tv, p, c))
     for ln in title_lines:
         out.write(ln, "text")
@@ -629,10 +632,19 @@ def cmd_pwmean(s: "Session", args: str) -> None:
     N = int(n_i.sum())
     lev = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", 95))
     if o.get("unequal"):
+        # each comparison with its own variance and Satterthwaite degrees of freedom
+        # (VERIFY: tukey, snk, duncan and dunnett with unequal variances)
         s2 = np.array([y[mask & (ids == g)].var(ddof=1) for g in range(k)])
-        Vm = np.diag(s2 / n_i)
-        df = None       # Satterthwaite df per pair is not implemented
-        raise StataError(198, "option unequal is not available yet in OpenDTA")
+        a = s2 / n_i
+
+        def pair_df(j: int, i: int) -> float:
+            return float((a[i] + a[j]) ** 2 / (a[i] ** 2 / (n_i[i] - 1) + a[j] ** 2 / (n_i[j] - 1)))
+        head = ["\nPairwise comparisons of means with unequal variances\n\n",
+                f"{'over':<13}: {' '.join(overs)}\n\n"]
+        _pairwise_table(s, "#".join(overs), labels, m_i, np.diag(a), N - k, o, lev, head, v[0].name,
+                        pair_df=pair_df)
+        s.r = {}
+        return
     df = N - k
     Vm = np.diag(np.full(k, ss / df) / n_i)
     head = ["\nPairwise comparisons of means with equal variances\n\n",
