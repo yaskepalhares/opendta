@@ -101,7 +101,7 @@ Feito na fase 15 (caso de comparação 1901), exceto as opções que param com o
 
 ### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
 
-Feito na fase 16 (caso 1902), exceto mais de um nível de efeitos aleatórios nos comandos `me`, pesos, `vce(robust)` e as opções `median` e `mean` do `predict` do `mestreg` (e `hazard` depois das distribuições lognormal, loglogística e gama). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
+Feito nas fases 16 e 30 (casos 1902 e 1916), exceto as peças listadas em Modelos multinível em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`meqrlogit` e `meqrpoisson` com mais de um nível, `intmethod(laplace)` com mais de um nível, efeitos cruzados nos comandos `me`). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
 
 ### 6. Dados em painel ✅
 

@@ -18,10 +18,10 @@
 {title:Description}
 
 {pstd}
-Fit generalized linear mixed models with one level of random effects (intercepts and slopes). {cmd:meglm} accepts {cmd:family()} gaussian, bernoulli, binomial, gamma, nbinomial (mean or constant dispersion), ordinal and poisson, with the usual links. {cmd:mecloglog} is the binary complementary log-log model, {cmd:menbreg} the negative binomial (option {cmd:dispersion(mean|constant)}), {cmd:meologit} and {cmd:meoprobit} the ordered models. {cmd:meqrlogit} and {cmd:meqrpoisson} are the QR-decomposition commands; they fit the same models as {cmd:melogit} and {cmd:mepoisson}.
+Fit generalized linear mixed models with random intercepts and slopes at one or more nested levels. {cmd:meglm} accepts {cmd:family()} gaussian, bernoulli, binomial, gamma, nbinomial (mean or constant dispersion), ordinal and poisson, with the usual links. {cmd:mecloglog} is the binary complementary log-log model, {cmd:menbreg} the negative binomial (option {cmd:dispersion(mean|constant)}), {cmd:meologit} and {cmd:meoprobit} the ordered models. {cmd:meqrlogit} and {cmd:meqrpoisson} are the QR-decomposition commands; they fit the same models as {cmd:melogit} and {cmd:mepoisson}.
 
 {pstd}
-The likelihood of each group is integrated by mean-variance adaptive Gauss-Hermite quadrature ({cmd:intmethod(mvaghermite)}, 7 points by default), non-adaptive Gauss-Hermite or the Laplace approximation ({cmd:intmethod(laplace)}). The fixed-effects model is fitted first and an LR test against it is reported.
+The likelihood of each group is integrated by mean-variance adaptive Gauss-Hermite quadrature ({cmd:intmethod(mvaghermite)}, 7 points by default), non-adaptive Gauss-Hermite or the Laplace approximation ({cmd:intmethod(laplace)}). The fixed-effects model is fitted first and an LR test against it is reported. Nested levels are written one after the other, the highest first ({cmd:|| school: || class:}); the likelihood is integrated level by level with the points of each level adapted to its groups. Weights: {cmd:fweight}s, {cmd:pweight}s and {cmd:iweight}s at the observation level and the options {cmd:fweight(}varname{cmd:)} and {cmd:pweight(}varname{cmd:)} of a random-effects equation (constant within its groups). {cmd:vce(robust)} and {cmd:vce(cluster} clustvar{cmd:)} give the sandwich variance from the scores of the highest-level groups (the clusters must contain them); sampling weights imply {cmd:vce(robust)}, and no LR test is reported then.
 
 {title:Options}
 
@@ -35,4 +35,4 @@ The likelihood of each group is integrated by mean-variance adaptive Gauss-Hermi
 {title:Limitations}
 
 {pstd}
-Only one level of random effects; weights and {cmd:vce(robust)} are not available.
+{cmd:meqrlogit} and {cmd:meqrpoisson} take one level of random effects, without weights or {cmd:vce(robust)}; {cmd:intmethod(laplace)} takes one level; crossed effects ({cmd:_all:}) are not available.
