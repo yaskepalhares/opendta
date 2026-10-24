@@ -582,9 +582,10 @@ def cmd_gmm(s: "Session", args: str) -> None:
                                  "level": 1, "nolog": 4, "log": 3, "eps": 3, "iterate": 4, "from": 3, "robust": 1,
                                  "cluster": 2, "noheader": 6, "notable": 5, "nocommonesample": 5, "quickderivatives": 5,
                                  "derivatives": 3, "variables": 3, "hasconstant": 3, "parameters": 5, "nequations": 3,
-                                 "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5}) \
+                                 "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5,
+                                 "igmmiterate": 8, "igmmeps": 7, "igmmweps": 8}) \
         if opt_text.strip() else {}
-    if o.get("derivatives") or o.get("parameters") or o.get("nparameters") or o.get("igmm"):
+    if o.get("derivatives") or o.get("parameters") or o.get("nparameters"):
         raise StataError(198, "that option of gmm is not available yet")   # VERIFY
     mask = touse(s, p)
     for se in ses:
@@ -722,6 +723,29 @@ def cmd_gmm(s: "Session", args: str) -> None:
         W = np.linalg.inv(S)
         theta = step(theta, W, "Step 2")
         wm_label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({clustvar})"}[wkind]
+        if o.get("igmm"):
+            # iterated GMM: re-estimate the weight matrix until the parameters (igmmeps()) or the
+            # weight matrix (igmmweps()) stop changing (VERIFY the defaults and the log)
+            eps = float(o["igmmeps"]) if o.get("igmmeps") else 1e-6
+            weps = float(o["igmmweps"]) if o.get("igmmweps") else 1e-6
+            maxit = int(float(o["igmmiterate"])) if o.get("igmmiterate") else 300
+            for it_ in range(3, maxit + 3):
+                if wkind in ("rob", "clu"):
+                    S = meat(theta, wkind)
+                else:
+                    e1 = resid(theta)
+                    sg = e1.T @ e1 / n
+                    S = np.zeros((n_mom, n_mom))
+                    for a in range(m):
+                        for b in range(m):
+                            S[offs[a]:offs[a + 1], offs[b]:offs[b + 1]] = sg[a, b] * (Zs[a].T @ Zs[b]) / n
+                W_new = np.linalg.inv(S)
+                t_new = step(theta, W_new, f"Step {it_}")
+                dt = float(np.max(np.abs(t_new - theta)) / (1 + np.max(np.abs(theta))))
+                dw = float(np.max(np.abs(W_new - W)) / (1 + np.max(np.abs(W))))
+                theta, W = t_new, W_new
+                if dt < eps or dw < weps:
+                    break
     gb = mbar(theta)
     G = _num_jac(mbar, theta)
     Q = float(gb @ W @ gb)
