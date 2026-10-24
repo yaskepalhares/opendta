@@ -29,7 +29,8 @@ OpenDTA covers the core commands: the do-file language, data management, descrip
 - delimited text: `import delimited`, `export delimited`, `insheet` and `outsheet`;
 - spreadsheets: `import excel` and `export excel`;
 - free-format and fixed-column text: `infile` (including `.dct` dictionaries and `byvariable()`) and `infix`; `file` for text and binary files;
-- SAS, SPSS and SAS XPORT files: `import sas`, `import spss`, `import sasxport` and `export sasxport` (through the optional `pyreadstat` package);
+- SAS, SPSS and SAS XPORT files: `import sas`, `import spss`, `import sasxport` and `export sasxport` (through the optional `pyreadstat` package), with the members of an XPORT file (`describe`, `member()`) and value labels in `formats.xpf`;
+- `table` with supercolumns and `by()`, and `list` with `string()` and the `display` format;
 - File > Open/Save/Save as, dropping a `.dta` on the window, Data Editor (`browse` and `edit`, with every edit recorded as a command) and Variables Manager (`varmanage`);
 - descriptive statistics: `summarize`, `tabstat`, `tabulate` (with `chi2`, `exact`, `gamma`, `taub`…, and `summarize()` in one- and two-way tables), `tab1`, `tab2`, `table`, `ci` (means, proportions and variances), `ttest`, `prtest` (one and two samples), `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, with `fweight`, `aweight` and `iweight`;
 - data management: `egen` (group and row functions), `collapse`, `contract`, `expand`, `fillin`, `merge` (also the old syntax), `append`, `joinby`, `cross`, `reshape` (also `reshape i/j/xij` and `reshape error`), `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;

@@ -85,7 +85,7 @@ Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `clust
 
 ### 2. Manipulação de dados: opções ✅
 
-Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato proprietário), `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), `import sasxport, describe` e `member()`, os rótulos de valores do `formats.xpf`, `export sasxport` com `rename` e `vallabfile()`, e `list` com `string()` e `display`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 13 e 25 (casos de comparação 1701 e 1911), exceto `import haver` (formato proprietário) e `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), que ficam em *Faltam para a 1.0*. O plano original:
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
