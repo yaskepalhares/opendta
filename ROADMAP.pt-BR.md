@@ -295,6 +295,13 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `svy:` com `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` e `ivregress`
 - Conferido com o log do Stata 14: caso `1909` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: a variância do `sem, method(adf)` é a Hessiana numérica da discrepância, não a aproximação de Gauss-Newton; o `ivregress` ignorava os pesos; os intervalos de confiança de `sigma`, `rho`, `alpha` e `lambda` no `svy:` usam os graus de liberdade do desenho; o `irt 3pl` tem um pseudoacerto comum, a menos que se dê `sepguessing`. Os sorteios do `bayesmh` e do `mi impute` vêm do gerador do próprio OpenDTA e não reproduzem os do Stata
 
+## Fase 25: manipulação de dados, parte 2
+
+- [x] `table` com variável de supercoluna (`table rowvar colvar supercolvar`), a opção `scol` e `by()` com até quatro variáveis
+- [x] `list` com `string()` e o formato `display` (escolhido também quando a tabela não cabe na linha)
+- [x] `import sasxport` com `describe` e `member()` (leitor próprio do OpenDTA de todos os membros de um arquivo XPORT, `io/xport.py`) e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
+- O caso `1911` aguarda a rodada do Stata
+
 ## Melhorias em relação ao Stata (ao longo das fases)
 
 - [x] Explicação dos erros: depois da mensagem e antes do r(#), uma linha diz o que deu errado no contexto do comando e outra sugere como resolver (nomes parecidos, arquivos parecidos na pasta, número de observações…). Em inglês ou português, conforme o idioma da interface; `set hints off` desliga
@@ -307,7 +314,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 
 Comandos e opções do Stata 14 que o OpenDTA ainda não tem, por área. Todos são necessários para a 1.0; a ordem é a dos blocos de [docs/next-steps.pt-BR.md](docs/next-steps.pt-BR.md), ajustada pelos pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
-- **Manipulação de dados**: `table` com três variáveis ou mais; `import haver`; `import sasxport` com `describe`, `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`; `list` com `string()` e `display`; `icd9p` com a lista de procedimentos da ICD-9-CM.
+- **Manipulação de dados**: `icd9p` com a lista de procedimentos da ICD-9-CM; `import haver`.
 - **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
 - **Estatística básica**: `margins` depois de mais comandos; `ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `constraints()` e `svy`; `boxcox` com `model(lhsrhs)`, `rhsonly` e `notrans()`; `icc` com `testvalue()` e dados não balanceados; `loneway` com `median` e `exact`; `esize` com `unequal` e `welch`; `pwmean` com `unequal`; `ameans` com pesos; `lv` com `generate()` e `tail()`; `stem` com `width()`; `cusum` com as estatísticas de teste.
 - **Modelos**: `ivprobit` e `ivtobit` com `twostep` e com mais de um regressor endógeno; `ivpoisson cfunction` com mais de um regressor endógeno; `ivregress gmm` com `wmatrix(hac)`, `center` e `igmm`; `glogit` com `or`; `tpoisson` e `tnbreg` com `ul()`; `tnbreg` com `dispersion(constant)`; `binreg` com `mu()`; `biprobit` com `partial`, `offset1()`, `offset2()` e `constraints()`; `heckman` e `heckprobit` com pesos no `twostep` e com `mills()`; `intreg` e `truncreg` com `offset()`; `sureg` e `reg3` com `constraints()`; `asmprobit` e `asroprobit` com `altwise`, alternativas não balanceadas e outras estruturas de covariância; `slogit` com `dim()` acima de 1; `exlogistic` e `expoisson` com `terms`, `group()`, `binomial()`, `condvars()`, `saving()`, `exposure()` e `offset()`; as formas com programa de `nl`, `nlsur` e `gmm`, e `gmm` com `derivatives()`, `parameters()` e `igmm`; `frontier` com `uhet()`, `vhet()`, `cm()` e `constraints()`; `teffects` com tratamentos de vários níveis, outros modelos de desfecho e `predict`; `stteffects wra`; `eteffects` com outros modelos de desfecho e de tratamento; `etregress` e `etpoisson` com `cfunc`.

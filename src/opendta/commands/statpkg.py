@@ -7,6 +7,7 @@ compat/do/1701_datamgmt_options.do (Stata 14 has import sasxport but not import 
 
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -95,23 +96,100 @@ def _enc(o: dict) -> str | None:
     return strip_outer_quotes(str(o["encoding"]).strip()) if o.get("encoding") else None
 
 
+def _formats_file(folder: Path) -> Path | None:
+    for f in ("formats.xpf", "FORMATS.xpf", "FORMATS.XPF"):
+        if (folder / f).exists():
+            return folder / f
+    return None
+
+
+def _xport_describe(s: "Session", path: Path, member: str) -> None:
+    """import sasxport, describe: the members of the file, or one member with its variables.
+    VERIFY: the whole layout (compat 1911)."""
+    from ..io import xport
+    members = xport.read(path)
+    total = len(members)
+    if member:
+        members = [_pick(members, member)]
+    out = s.output
+    out.write(f"\nSAS XPORT file {path.name}: {total} member(s)\n", "text")
+    for m in members:
+        out.write(f"\n  member {m.name}" + (f"  ({m.label})" if m.label else "") + "\n", "text")
+        out.write(f"    obs: {len(m.rows):>12,}\n   vars: {len(m.variables):>12,}\n", "text")
+        for v in m.variables:
+            kind = "numeric" if v.numeric else f"char({v.length})"
+            out.write(f"    {v.name:<8}  {kind:<10}  {v.format:<8}  {v.label}\n", "text")
+    s.r = {"n_members": float(len(members))}            # VERIFY: the stored results
+
+
+def _pick(members: list, name: str):
+    for m in members:
+        if m.name.lower() == name.lower():
+            return m
+    raise StataError(198, f"member {name} not found")              # VERIFY
+
+
 def import_sasxport(s: "Session", args: str) -> None:
     p = parse_standard(args)
     o = match_options(p.options, {"clear": 5, "novallabels": 5, "member": 6, "describe": 8})
-    if o.get("describe") or o.get("member"):
-        raise StataError(198, "options describe and member() are not available yet in OpenDTA")
     path = _file(p.varlist, ".xpt")
+    member = str(o["member"]).strip() if o.get("member") not in (None, True) else ""
+    if o.get("describe"):
+        _xport_describe(s, path, member)
+        return
     _check_replace(s, bool(o.get("clear")))
-    if not o.get("novallabels"):
-        for f in ("formats.xpf", "FORMATS.xpf"):
-            if (path.parent / f).exists():
-                raise StataError(198, f"value labels in {f} are not available yet in OpenDTA; use novallabels")
-    cols, meta = statpkg.read_xport(path)
-    _install(s, statpkg.dataset_from_columns(cols, meta, case="lower", xport=True), Parsed(), [], quiet=True)
+    fmt_file = _formats_file(path.parent) if not o.get("novallabels") else None
+    if not member and fmt_file is None:
+        cols, meta = statpkg.read_xport(path)
+        _install(s, statpkg.dataset_from_columns(cols, meta, case="lower", xport=True), Parsed(), [], quiet=True)
+        return
+    from types import SimpleNamespace
+    from ..io import xport
+    try:
+        members = xport.read(path)
+    except (IndexError, ValueError, struct.error):
+        raise StataError(610, f"file {path} not SAS XPORT format")
+    m = _pick(members, member) if member else members[0]
+    cols = {v.name: [(float("nan") if x is None else x) if v.numeric else x for x in
+                     (row[k] for row in m.rows)] for k, v in enumerate(m.variables)}
+    meta = SimpleNamespace(column_names=[v.name for v in m.variables],
+                           column_labels=[v.label or None for v in m.variables], file_label=m.label,
+                           variable_storage_width={v.name: v.length for v in m.variables if not v.numeric})
+    ds = statpkg.dataset_from_columns(cols, meta, case="lower", xport=True)
+    if fmt_file is not None:
+        # the value labels of formats.xpf go to the variables whose SAS format has their name
+        # (VERIFY: the names of the value labels)
+        labels = xport.value_labels(fmt_file)
+        for var, xv in zip(ds.vars, m.variables):
+            fname = xv.format.lower()
+            if fname in labels and not var.is_string:
+                ds.value_labels[fname] = labels[fname]
+                var.value_label = fname
+    _install(s, ds, Parsed(), [], quiet=True)
+
+
+def _sas_names(names: list[str], rename: bool, what: str) -> dict[str, str]:
+    """Names that SAS XPORT accepts: up to 8 characters, the same in upper and lower case. With
+    rename, a longer or clashing name is cut and given a number (VERIFY: Stata's rule)."""
+    out: dict[str, str] = {}
+    taken: set[str] = set()
+    for n in names:
+        new = n
+        if len(n) > 8 or n.upper() in taken:
+            if not rename:
+                raise StataError(198, f"{what} {n} has more than 8 characters or clashes with another; "
+                                      "use option rename")               # VERIFY: Stata's message
+            new, k = n[:8], 1
+            while new.upper() in taken:
+                tail = str(k)
+                new, k = n[:8 - len(tail)] + tail, k + 1
+        taken.add(new.upper())
+        out[n] = new
+    return out
 
 
 def export_sasxport(s: "Session", args: str) -> None:
-    """export sasxport [varlist using] filename [if] [in] [, rename replace vallabfile(none)]"""
+    """export sasxport [varlist using] filename [if] [in] [, rename replace vallabfile()]"""
     p = parse_standard(args)
     o = match_options(p.options, {"rename": 6, "replace": 7, "vallabfile": 6})
     ds = s.data
@@ -121,17 +199,38 @@ def export_sasxport(s: "Session", args: str) -> None:
         names, file = unique(expand(ds, p.varlist)), p.using
     else:
         names, file = list(ds.names), p.varlist
-    if str(o.get("vallabfile", "")).strip() != "none" and any(ds.get(n).value_label for n in names):
-        raise StataError(198, "formats.xpf is not available yet in OpenDTA; use vallabfile(none)")
-    if o.get("rename"):
-        raise StataError(198, "option rename is not available yet in OpenDTA")
-    bad = [n for n in names if len(n) > 8]
-    if bad:
-        # VERIFY: Stata's message; the manual says an error is issued and no file is saved
-        raise StataError(198, f"variable {bad[0]} has more than 8 characters; use shorter names")
+    vallab = str(o.get("vallabfile", "xpf")).strip() if o.get("vallabfile") not in (None, True) else "xpf"
+    if vallab not in ("xpf", "sascode", "both", "none"):
+        raise StataError(198, "option vallabfile() incorrectly specified")      # VERIFY
+    rename = bool(o.get("rename"))
+    newnames = _sas_names(names, rename, "variable")
+    used = sorted({ds.get(n).value_label for n in names if ds.get(n).value_label
+                   and ds.get(n).value_label in ds.value_labels}) if vallab != "none" else []
+    labnames = _sas_names(used, rename, "value label")
     path = _file(file, ".xpt", must_exist=False)
     if path.exists() and not o.get("replace"):
         raise StataError(602, f"file {path} already exists")
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
-    statpkg.write_xport(ds, path, names, rows)
+    formats = {newnames[n]: labnames[ds.get(n).value_label].upper() for n in names
+               if ds.get(n).value_label in labnames}
+    statpkg.write_xport(ds, path, names, rows, rename=newnames, formats=formats)
     s.output.write(f"file {path} saved\n", "text")
+    if used:
+        sets = {labnames[n]: ds.value_labels[n] for n in used}
+        if vallab in ("xpf", "both"):
+            statpkg.write_formats_xpf(path.parent / "formats.xpf", sets)
+        if vallab in ("sascode", "both"):
+            _write_sascode(path.with_suffix(".sas"), sets)
+
+
+def _write_sascode(path: Path, sets: dict[str, dict]) -> None:
+    """The value labels as a SAS program with PROC FORMAT (VERIFY: Stata's file)."""
+    lines = ["proc format;"]
+    for name, lab in sets.items():
+        lines.append(f"value {name}")
+        for k in sorted(lab):
+            text = str(lab[k]).replace('"', '""')
+            lines.append(f'  {k} = "{text}"')
+        lines.append(";")
+    lines.append("run;")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

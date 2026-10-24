@@ -600,13 +600,18 @@ def _stat_value(stat: str, x: np.ndarray, w: np.ndarray | None) -> float:
 
 @command("table", byable=True)
 def cmd_table(s: "Session", args: str) -> None:
+    """table rowvar [colvar [supercolvar]] [, contents() by(superrowvars) row col scol ...].
+    The layout of supercolumns and by() groups is VERIFY (compat 1911)."""
     p = parse_standard(args)
-    o = match_options(p.options, {"contents": 1, "format": 1, "row": 3, "col": 3, "missing": 1,
-                                  "by": 2, "center": 3, "left": 4, "cellwidth": 5,
+    o = match_options(p.options, {"contents": 1, "format": 1, "row": 3, "col": 3, "scol": 4,
+                                  "missing": 1, "by": 2, "center": 3, "left": 4, "cellwidth": 5,
                                   "stubwidth": 5}) if p.options.strip() else {}
     names = s.expand_varlist(p.varlist)
-    if not 1 <= len(names) <= 2:
-        raise StataError(198, "table with more than two variables is not yet supported by OpenDTA")
+    if not 1 <= len(names) <= 3:
+        raise StataError(103, "too many variables specified")
+    bynames = s.expand_varlist(str(o["by"])) if o.get("by") not in (None, True) else []
+    if len(bynames) > 4:
+        raise StataError(103, "too many variables specified")             # VERIFY
     contents = str(o.get("contents", "freq")).split()
     specs: list[tuple[str, str | None]] = []
     k = 0
@@ -625,17 +630,35 @@ def cmd_table(s: "Session", args: str) -> None:
     fmt = str(o.get("format", "%9.0g")).strip()
     base = touse(s, p)
     w, wtype, base = weights(s, p, base, ("fweight", "aweight", "iweight", "pweight"))
-    rv = s.data.get(names[0])
-    cv = s.data.get(names[1]) if len(names) == 2 else None
     out = s.output
-    rcats, rlabels, rok = _categories(s, rv, base, missing=bool(o.get("missing")), nolabel=False)
-    rc = _codes(rv, rcats)
-    if cv is not None:
-        ccats, clabels, cok = _categories(s, cv, base, missing=bool(o.get("missing")), nolabel=False)
-        cc = _codes(cv, ccats)
+    miss = bool(o.get("missing"))
+
+    def cats_of(name: str):
+        v = s.data.get(name)
+        cats, labels, ok = _categories(s, v, base, missing=miss, nolabel=False)
+        return v, labels, _codes(v, cats), ok
+
+    rv, rlabels, rc, ok = cats_of(names[0])
+    if len(names) >= 2:
+        cv, clabels, cc, cok = cats_of(names[1])
+        ok = ok & cok
     else:
-        ccats, clabels, cok, cc = [None], [], base, np.zeros(s.data.nobs, dtype=np.int64)
-    ok = rok & cok
+        cv, clabels, cc = None, [""], np.zeros(s.data.nobs, dtype=np.int64)
+    if len(names) == 3:
+        sv, slabels, sc, sok = cats_of(names[2])
+        ok = ok & sok
+    else:
+        sv, slabels, sc = None, [""], np.zeros(s.data.nobs, dtype=np.int64)
+    byinfo = []
+    for n in bynames:
+        bv, blabels, bc, bok = cats_of(n)
+        ok = ok & bok
+        byinfo.append((bv, blabels, bc))
+    # by() groups: the combinations present in the data, in sort order
+    if byinfo:
+        keys = sorted({tuple(int(bc[i]) for _, _, bc in byinfo) for i in np.flatnonzero(ok)})
+    else:
+        keys = [()]
 
     def cell(sel: np.ndarray) -> list[str]:
         res = []
@@ -650,24 +673,47 @@ def cmd_table(s: "Session", args: str) -> None:
                 res.append("" if val >= M.SYSMISS else format_value(val, fmt, pad=False).strip())
         return res
 
-    rows = list(range(len(rcats))) + (["Total"] if o.get("row") else [])
-    cols = list(range(len(ccats))) + (["Total"] if o.get("col") and cv is not None else [])
-    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)])   # VERIFY minimum width 9
-    title_lines = textwrap.wrap(rv.label or rv.name, W) or [rv.name]
+    # columns: (supercolumn, column) pairs; "T" is a total
+    sgroups = list(range(len(slabels))) + (["T"] if o.get("scol") and sv is not None else [])
+    cols_in = list(range(len(clabels))) + (["T"] if o.get("col") and cv is not None else [])
+    cols = [(g, c) for g in sgroups for c in cols_in]
+
+    def colsel(g, c) -> np.ndarray:
+        m = ok
+        if g != "T" and sv is not None:
+            m = m & (sc == g)
+        if c != "T" and cv is not None:
+            m = m & (cc == c)
+        return m
+
+    rows = list(range(len(rlabels))) + (["T"] if o.get("row") else [])
+    grids = []
+    for key in keys:
+        gsel = ok.copy()
+        for (_, _, bc), code in zip(byinfo, key):
+            gsel &= bc == code
+        present = [r for r in rows if r == "T" or (gsel & (rc == r)).any()] if byinfo else rows
+        grid = {}
+        for r in present:
+            rsel = gsel & (rc == r) if r != "T" else gsel
+            if cv is None:
+                grid[r] = [cell(rsel)]            # one line, the statistics side by side
+                continue
+            vals = [cell(rsel & colsel(g, c)) for g, c in cols]
+            grid[r] = [[v[line] for v in vals] for line in range(len(specs))]
+        grids.append((key, present, grid))
+
     if cv is None:
         heads = ["Freq." if st == "freq" else f"{st}({var})" for st, var in specs]
-        grid = {r: [cell(ok & (rc == r) if r != "Total" else ok)] for r in rows}
     else:
-        heads = [clabels[c] if c != "Total" else "Total" for c in cols]
-        grid = {}
-        for r in rows:
-            rsel = ok & (rc == r) if r != "Total" else ok
-            vals = [cell(rsel & (cc == c) if c != "Total" else rsel) for c in cols]
-            grid[r] = [[v[line] for v in vals] for line in range(len(specs))]
-    # single-width columns (the longest label or value, at least 4); the 1st comes after one space
-    # and the others after two (observed in Stata 14)
-    every = heads + [x for r in rows for line in grid[r] for x in line]
+        heads = [clabels[c] if c != "T" else "Total" for _, c in cols]
+    every = heads + [x for _, pr, gr in grids for r in pr for line in gr[r] for x in line]
     CW = max([4] + [len(x) for x in every])
+    parts = [b.label or b.name for b, _, _ in byinfo] + [rv.label or rv.name]
+    stub_title = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    by_texts = [", ".join(lab[code] for (_, lab, _), code in zip(byinfo, key)) for key, _, _ in grids]
+    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)] + [len(t) for t in by_texts])   # VERIFY minimum width 9
+    title_lines = textwrap.wrap(stub_title, W) or [rv.name]
 
     def row_text(values: list[str]) -> str:
         from ..core.layout import center_text
@@ -675,28 +721,42 @@ def cmd_table(s: "Session", args: str) -> None:
             return "".join((" " if k == 0 else "  ") + center_text(v, CW) for k, v in enumerate(values))
         return "".join((" " if k == 0 else "  ") + f"{v:>{CW}}" for k, v in enumerate(values))
 
-    block = len(row_text([""] * len(heads)))
+    block = len(row_text([""] * len(heads if cv is None else cols)))
     width = W + 2 + block
+    rule = "-" * (W + 1) + "+" + "-" * block + "\n"
     out.write("\n" + "-" * width + "\n", "text")
     if cv is None:
-        for k, line in enumerate(title_lines):
-            last = k == len(title_lines) - 1
-            out.write(f"{line:>{W}} |" + (row_text(heads) if last else "") + "\n", "text")
-        out.write("-" * (W + 1) + "+" + "-" * block + "\n", "text")
-        for r in rows:
-            label = rlabels[r] if r != "Total" else "Total"
-            out.write(f"{label:>{W}} |", "text")
-            out.write(row_text(grid[r][0]) + "\n", "result")
-        out.write("-" * width + "\n", "text")
-        return
-    ctitle = cv.label or cv.name
-    left = -(-(block - len(ctitle)) // 2)
-    out.write(f"{'':<{W}} |{' ' * max(0, left)}{ctitle}\n", "text")
-    out.write(f"{title_lines[-1]:>{W}} |" + row_text(heads) + "\n", "text")
-    out.write("-" * (W + 1) + "+" + "-" * block + "\n", "text")
-    for r in rows:
-        for line in range(len(specs)):
-            label = (rlabels[r] if r != "Total" else "Total") if line == 0 else ""
-            out.write(f"{label:>{W}} |", "text")
-            out.write(row_text(grid[r][line]) + "\n", "result")
+        head_lines = [row_text(heads)]
+    else:
+        ctitle = cv.label or cv.name
+        if sv is not None:
+            ctitle = f"{sv.label or sv.name} and {ctitle}"
+        left = -(-(block - len(ctitle)) // 2)
+        head_lines = [" " * max(0, left) + ctitle]
+        if sv is not None:
+            # each supercolumn: its label centered in a dashed line over its columns
+            n = len(cols_in)
+            gw = n * CW + 2 * (n - 1)
+            parts = []
+            for g in sgroups:
+                lab = f" {slabels[g] if g != 'T' else 'Total'} "
+                dl = max(0, gw - len(lab))
+                parts.append("-" * (dl // 2) + lab + "-" * (dl - dl // 2))
+            head_lines.append(" " + "  ".join(parts))
+        head_lines.append(row_text(heads))
+    # the stub title sits at the bottom of the header lines (left-aligned with by(), VERIFY)
+    n = max(len(title_lines), len(head_lines))
+    for t, h in zip([""] * (n - len(title_lines)) + title_lines, [""] * (n - len(head_lines)) + head_lines):
+        out.write((f"{t:<{W}}" if byinfo else f"{t:>{W}}") + " |" + h + "\n", "text")
+    out.write(rule, "text")
+    for gk, ((key, present, grid), btext) in enumerate(zip(grids, by_texts)):
+        if gk:
+            out.write(rule, "text")
+        if byinfo:
+            out.write(f"{btext:<{W}} |\n", "text")
+        for r in present:
+            for line in range(len(grid[r])):
+                label = (rlabels[r] if r != "T" else "Total") if line == 0 else ""
+                out.write(f"{label:>{W}} |", "text")
+                out.write(row_text(grid[r][line]) + "\n", "result")
     out.write("-" * width + "\n", "text")

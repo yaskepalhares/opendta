@@ -288,6 +288,13 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `svy:` with `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` and `ivregress`
 - Checked against the Stata 14 log: case `1909` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the variance of `sem, method(adf)` is the numerical Hessian of the discrepancy, not its Gauss-Newton approximation; `ivregress` ignored weights; the `svy:` confidence intervals of `sigma`, `rho`, `alpha` and `lambda` use the design degrees of freedom; `irt 3pl` has one common pseudoguessing parameter unless `sepguessing` is given. The draws of `bayesmh` and `mi impute` come from OpenDTA's own generator and do not reproduce Stata's
 
+## Phase 25: data management, part 2
+
+- [x] `table` with a supercolumn variable (`table rowvar colvar supercolvar`), the `scol` option and `by()` with up to four variables
+- [x] `list` with `string()` and the `display` format (also chosen when the table does not fit the line)
+- [x] `import sasxport` with `describe` and `member()` (OpenDTA's own reader of every member of an XPORT file, `io/xport.py`) and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
+- Case `1911` awaits the Stata run
+
 ## Distribution and documentation
 
 - [x] MIT License and license notices for third-party components
@@ -309,7 +316,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 
 Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of them are needed for 1.0; the order is the one of the blocks in [docs/next-steps.md](docs/next-steps.md), adjusted by the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
-- **Data management**: `table` with three or more variables; `import haver`; `import sasxport` with `describe`, `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`; `list` with `string()` and `display`; `icd9p` with the ICD-9-CM procedure code list.
+- **Data management**: `icd9p` with the ICD-9-CM procedure code list; `import haver`.
 - **Epidemiology**: `rocreg` with the `ml` and `cluster()` options.
 - **Base statistics**: `margins` after more commands; `ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `constraints()` and `svy`; `boxcox` with `model(lhsrhs)`, `rhsonly` and `notrans()`; `icc` with `testvalue()` and unbalanced data; `loneway` with `median` and `exact`; `esize` with `unequal` and `welch`; `pwmean` with `unequal`; `ameans` with weights; `lv` with `generate()` and `tail()`; `stem` with `width()`; `cusum` with the test statistics.
 - **Models**: `ivprobit` and `ivtobit` with `twostep` and with more than one endogenous regressor; `ivpoisson cfunction` with more than one endogenous regressor; `ivregress gmm` with `wmatrix(hac)`, `center` and `igmm`; `glogit` with `or`; `tpoisson` and `tnbreg` with `ul()`; `tnbreg` with `dispersion(constant)`; `binreg` with `mu()`; `biprobit` with `partial`, `offset1()`, `offset2()` and `constraints()`; `heckman` and `heckprobit` with weights in `twostep` and with `mills()`; `intreg` and `truncreg` with `offset()`; `sureg` and `reg3` with `constraints()`; `asmprobit` and `asroprobit` with `altwise`, unbalanced alternatives and other covariance structures; `slogit` with `dim()` above 1; `exlogistic` and `expoisson` with `terms`, `group()`, `binomial()`, `condvars()`, `saving()`, `exposure()` and `offset()`; the program-based forms of `nl`, `nlsur` and `gmm`, and `gmm` with `derivatives()`, `parameters()` and `igmm`; `frontier` with `uhet()`, `vhet()`, `cm()` and `constraints()`; `teffects` with multivalued treatments, other outcome models and `predict`; `stteffects wra`; `eteffects` with other outcome and treatment models; `etregress` and `etpoisson` with `cfunc`.
