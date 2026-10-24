@@ -375,3 +375,111 @@ def test_lpoly_recovers_a_line(run):
     run("clear\nset obs 40\ngen x = _n\ngen y = 2 + 3*x\nlpoly y x, degree(1) bwidth(10) nograph generate(gx gy) n(10)")
     gx, gy = _arr(run, "gx")[:10], _arr(run, "gy")[:10]
     assert np.allclose(gy, 2 + 3 * gx, atol=1e-8)
+
+
+# -- block 15 (phase 27) -----------------------------------------------------------------------
+
+_LOGIT_PROGS = """
+program lf0logit
+    args todo b lnfj
+    tempvar xb
+    mleval `xb' = `b'
+    quietly replace `lnfj' = ln(invlogit(`xb')) if $ML_y1 == 1
+    quietly replace `lnfj' = ln(invlogit(-`xb')) if $ML_y1 == 0
+end
+program lf2logit
+    args todo b lnfj g1 H
+    tempvar xb
+    mleval `xb' = `b'
+    quietly replace `lnfj' = ln(invlogit(`xb')) if $ML_y1 == 1
+    quietly replace `lnfj' = ln(invlogit(-`xb')) if $ML_y1 == 0
+    if `todo' == 0 exit
+    quietly replace `g1' = $ML_y1 - invlogit(`xb')
+    if `todo' == 1 exit
+    tempvar w
+    quietly gen double `w' = invlogit(`xb')*invlogit(-`xb')
+    mlmatsum `lnfj' `H' = -`w'
+end
+"""
+
+
+def _logit_data(run):
+    run("clear\nset seed 7\nset obs 200\ngen x1 = round(invnormal(runiform()), .01)\n"
+        "gen x2 = round(invnormal(runiform()), .01)\ngen y = runiform() < invlogit(.3 + .8*x1 - .5*x2)\n"
+        "gen st = mod(_n, 4)\ngen psu = ceil(_n/5)\ngen wt = 1 + mod(_n, 3)")
+    run(_LOGIT_PROGS)
+
+
+def test_ml_lf0_lf2_match_logit(run):
+    _logit_data(run)
+    run("quietly logit y x1 x2\nmatrix bl = e(b)\nmatrix Vl = e(V)")
+    for meth, prog in (("lf0", "lf0logit"), ("lf2", "lf2logit")):
+        run(f"ml model {meth} {prog} (y = x1 x2)\nquietly ml maximize, nolog")
+        assert run.rc == 0
+        assert run.eval("mreldif(e(b), bl)") < 1e-6
+        assert run.eval("mreldif(e(V), Vl)") < 1e-4
+        assert run.eval(f'e(ml_method) == "{meth}"') == 1
+
+
+def test_ml_constraints_and_svy(run):
+    _logit_data(run)
+    run("constraint define 1 x1 = -x2")
+    run("ml model lf2 lf2logit (y = x1 x2), constraints(1)\nquietly ml maximize, nolog")
+    assert abs(run.eval("_b[x1] + _b[x2]")) < 1e-8
+    assert run.eval("el(e(Cns), 1, 1)") == 1 and run.eval("el(e(Cns), 1, 2)") == 1
+    run("svyset psu [pw=wt], strata(st)\nquietly svy: logit y x1 x2\nmatrix bs = e(b)\nmatrix Vs = e(V)")
+    run("ml model lf2 lf2logit (y = x1 x2), svy\nquietly ml maximize, nolog")
+    assert run.eval("mreldif(e(b), bs)") < 1e-6 and run.eval("mreldif(e(V), Vs)") < 1e-4
+    assert run.eval("e(df_r)") == 156
+
+
+def test_esize_unequal_and_pwmean_unequal(run):
+    out = run("esizei 20 5 2 25 4 3, unequal")
+    assert "Cohen's d |   .3922323" in out          # (5 - 4) / sqrt((4 + 9) / 2)
+    run("clear\nset obs 30\ngen g = 1 + mod(_n, 3)\ngen y = g * 2 + mod(_n * 7, 5) * g")
+    out = run("pwmean y, over(g) unequal effects")
+    assert "unequal variances" in out
+    run("esizei 20 5 2 25 4 3, welch")
+    assert run.rc == 0
+
+
+def test_icc_testvalue_and_unbalanced(run):
+    run("clear\nset obs 40\ngen t = ceil(_n/4)\ngen j = mod(_n-1,4)+1\ngen y = t + mod(_n*7,5)*.5 + j*.3")
+    run("quietly icc y t j, testvalue(.5)")
+    assert run.eval("r(testvalue)") == .5 and run.eval("r(icc_i_F)") < run.eval("r(icc_avg_F)")
+    run("quietly icc y t")
+    f0 = run.eval("r(icc_i_F)")
+    run("quietly icc y t, testvalue(0)")
+    assert run.eval("r(icc_i_F)") == f0
+    run("drop in 3\nquietly icc y t")
+    assert run.rc == 0 and abs(run.eval("r(N_rater)") - 3.9) < .01
+
+
+def test_loneway_options_ameans_weights_lv_stem(run):
+    run("clear\nset obs 40\ngen t = ceil(_n/4)\ngen y = t + mod(_n*7,5)*.5")
+    run("quietly loneway y t")
+    r = run.eval("r(rho)")
+    run("quietly loneway y t, mean")
+    assert run.eval("r(rho)") < r
+    run("quietly loneway y t, exact")
+    assert run.rc == 0
+    run("gen w = 1 + mod(_n, 2)\nquietly ameans y [fw=w]")
+    assert run.eval("r(N)") == 60
+    run("lv y, tail(8) generate")
+    assert run.session.data.has("_mid") and run.eval("_mid[1]") == run.eval("_mid[1]")
+    run("gen x = round(1 + mod(_n*7, 13) + .25, .01)")
+    out = run("stem x, width(5)")
+    assert run.rc == 0 and "|" in out
+
+
+def test_boxcox_other_models(run):
+    run("clear\nset obs 60\ngen x = 1 + mod(_n*7, 13)\ngen z = mod(_n, 3)\n"
+        "gen y = round(exp(.5 + .1*x + .2*z + mod(_n*11,7)/20), .01)")
+    for model in ("rhsonly", "lambda", "theta"):
+        run(f"quietly boxcox y x z, model({model}) notrans(z) nolog")
+        assert run.rc == 0 and run.eval(f'e(model) == "{model}"') == 1
+    # the lambda model at lambda = 1 is the linear regression
+    run("quietly boxcox y x, model(lambda) nolog")
+    ll1 = run.eval("e(ll_t1)")
+    run("quietly regress y x")
+    assert abs(ll1 - run.eval("e(ll)")) < 1e-6
