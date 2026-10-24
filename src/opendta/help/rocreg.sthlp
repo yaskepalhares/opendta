@@ -15,7 +15,11 @@
 
 {p 8 16 2}{cmd:rocreg} {it:refvar} {it:classvar} [{it:if}] [{it:in}]{cmd:,} {opt pr:obit} [{opt rocc:ov(varlist)} {opt fprp:ts(#)} {opt ctrlf:prall} {opt ctrlc:ov(varlist)} {opt ctrlm:odel(strata|linear)} {opt pvc(empirical|normal)} {opt tie:corrected} {it:bootstrap_options}]{p_end}
 
-{pstd}{it:bootstrap_options}: {opt nobootstrap} {opt bseed(#)} {opt breps(#)} {opt nobstrata} {opt nodots} {opt l:evel(#)}{p_end}
+{pstd}Parametric ROC estimation (maximum likelihood){p_end}
+
+{p 8 16 2}{cmd:rocreg} {it:refvar} {it:classvar} [{it:if}] [{it:in}]{cmd:,} {opt pr:obit} {opt ml} [{opt rocc:ov(varlist)} {opt ctrlc:ov(varlist)} {opt cl:uster(varname)} {opt l:evel(#)}]{p_end}
+
+{pstd}{it:bootstrap_options}: {opt nobootstrap} {opt bseed(#)} {opt breps(#)} {opt nobstrata} {opt cl:uster(varname)} {opt nodots} {opt l:evel(#)}{p_end}
 
 {title:Description}
 
@@ -31,10 +35,8 @@ The nonparametric estimation reports the area under the curve ({opt auc}, the de
 The standard errors and the normal (N), percentile (P) and bias-corrected (BC) intervals come from {opt breps()} bootstrap replications (1000 by default), sampling cases and controls separately unless {opt nobstrata}; {opt bseed()} sets the random-number seed first.
 {p_end}
 
-{title:Remarks}
-
 {pstd}
-The {opt ml} and {opt cluster()} options are not available yet.
+With {opt probit ml}, the binormal model is fit by maximum likelihood: the controls' values are normal with a mean linear in the {opt ctrlcov()} variables, and the cases' values are normal with the mean and standard deviation that give the ROC curve above. The standard errors come from the information matrix ({opt cluster()} makes them robust to the clusters); without ROC covariates the AUC, Phi(i_cons / sqrt(1 + s_cons^2)), is reported with a delta-method standard error. In the bootstrap, {opt cluster()} draws whole clusters.
 {p_end}
 
 {title:Examples}

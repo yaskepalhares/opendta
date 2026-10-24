@@ -12,6 +12,8 @@ Plain functions of arrays: the command is commands/rocreg.py.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from ..lazy import lazy
@@ -100,3 +102,60 @@ def probit_glm(pv: np.ndarray, Z: np.ndarray, t: np.ndarray) -> np.ndarray:
     X = np.column_stack([np.repeat(Z, len(t), axis=0), np.ones(n * len(t)), np.tile(q, n)])
     fun, _ = _probit(y, X, np.ones(len(y)))
     return ml.maximize(fun, np.zeros(k + 2)).b
+
+
+# ---------------------------------------------------------------------------
+# parametric (binormal) ROC model by maximum likelihood: rocreg, probit ml
+# ---------------------------------------------------------------------------
+
+def binormal_obs_ll(theta: np.ndarray, y: np.ndarray, d: np.ndarray, X: np.ndarray, Z: np.ndarray) -> np.ndarray:
+    """Log likelihood of each observation. The controls are N(Z beta, s0^2); the cases are
+    N(Z beta + s0 (a + X g) / b, (s0 / b)^2), so that ROC(t) = Phi(a + X g + b invPhi(t)).
+    theta = (a, g, b, beta, ln s0); X: ROC covariates, Z: control covariates with a constant."""
+    kx, kz = X.shape[1], Z.shape[1]
+    a, g, b = theta[0], theta[1:1 + kx], theta[1 + kx]
+    beta, s0 = theta[2 + kx:2 + kx + kz], math.exp(theta[2 + kx + kz])
+    mu = Z @ beta
+    out = np.empty(len(y))
+    c = ~d
+    out[c] = st.norm.logpdf(y[c], mu[c], s0)
+    if b <= 0:
+        out[d] = -np.inf
+        return out
+    out[d] = st.norm.logpdf(y[d], mu[d] + s0 * (a + X[d] @ g) / b, s0 / b)
+    return out
+
+
+def binormal_ml(y: np.ndarray, d: np.ndarray, X: np.ndarray, Z: np.ndarray, maxiter: int = 16000):
+    """Fits the binormal model of binormal_obs_ll. Starting values: least squares of the
+    controls for beta and s0, and the moments of the standardized cases for a and b.
+    Returns the ml.MLResult and the per-observation log likelihood function."""
+    from . import ml
+    from .binormal import _num_grad_hess
+    kx = X.shape[1]
+    beta0, *_ = np.linalg.lstsq(Z[~d], y[~d], rcond=None)
+    r = y[~d] - Z[~d] @ beta0
+    s0 = float(np.sqrt(np.mean(r ** 2))) or 1.0
+    u = (y[d] - Z[d] @ beta0) / s0
+    b0 = 1.0 / (float(np.std(u)) or 1.0)
+    theta0 = np.concatenate([[float(np.mean(u)) * b0], np.zeros(kx), [b0], beta0, [math.log(s0)]])
+
+    def total(t):
+        v = binormal_obs_ll(t, y, d, X, Z).sum()
+        return float(v) if np.isfinite(v) else -np.inf
+
+    def fun(t, todo):
+        return _num_grad_hess(total, t)
+    res = ml.maximize(fun, theta0, maxiter=maxiter)
+    return res, (lambda t: binormal_obs_ll(t, y, d, X, Z))
+
+
+def obs_scores(llobs, theta: np.ndarray) -> np.ndarray:
+    """Numerical scores, one row per observation."""
+    S = np.zeros((len(llobs(theta)), len(theta)))
+    for j in range(len(theta)):
+        h = 1e-5 * max(1.0, abs(theta[j]))
+        e = np.zeros(len(theta))
+        e[j] = h
+        S[:, j] = (llobs(theta + e) - llobs(theta - e)) / (2 * h)
+    return S
