@@ -384,7 +384,84 @@ def cmd_manova(s: "Session", args: str) -> None:
     macros = [("cmdline", "manova " + args.strip()), ("cmd", "manova"), ("depvar", " ".join(deps)),
               ("title", "Multivariate model"), ("model", "ols"), ("properties", "nob noV"), ("wtype", wtype)]
     macros += [(f"term_{j}", t_.name) for j, t_ in enumerate(terms, start=1)]
-    post_e(s, "manova", scalars, macros, mats, mask, int(N))
+    post_e(s, "manova", scalars, macros, mats, mask, int(N),
+           extra={"manova": {"Y": Y, "w": ww, "blocks": blocks, "terms": [t_.name for t_ in terms],
+                             "E": E, "rank": rank, "df_r": df_r, "deps": deps}})
+
+
+def _manova_terms(text: str, names: list[str]) -> list[int]:
+    """Indices of the terms of the last manova named in text (as written in e(term_#))."""
+    out = []
+    norm = {n_.replace(" ", ""): i for i, n_ in enumerate(names)}
+    for w_ in text.split():
+        key = w_.replace(" ", "")
+        if key not in norm:
+            raise StataError(111, f"{w_} not found in model")                               # VERIFY
+        out.append(norm[key])
+    return out
+
+
+@command("manovatest", "manovatest")
+def cmd_manovatest(s: "Session", args: str) -> None:
+    """manovatest term [term ...] [/ term [term ...]] [, ytransform(matname)] after manova
+    ([MV] manova postestimation): the multivariate tests of the terms, with the residual or the
+    terms after the slash as the error. test() and showorder are not available yet."""
+    from .matrix import get_matrix
+    est = getattr(s, "_estimates", None)
+    if est is None or est.cmd != "manova":
+        raise StataError(301, "last estimates not found")
+    c = _find_comma(args)
+    body, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
+    o = match_options(opt, {"ytransform": 2, "test": 4, "showorder": 5}) if opt.strip() else {}
+    if o.get("test") or o.get("showorder"):
+        raise StataError(198, "manovatest, test() and showorder are not available yet in OpenDTA")   # OpenDTA
+    m = est.extra["manova"]
+    num, _, den = body.partition("/")
+    if not num.strip():
+        raise StataError(198, "invalid syntax")
+    Y, ww, blocks, E, rank = m["Y"], m["w"], m["blocks"], m["E"], m["rank"]
+    one = np.ones((Y.shape[0], 1))
+    q = len(m["deps"])
+
+    def hyp(idx):
+        Er, rk = _resid_sscp(np.column_stack([one] + [b for j, b in enumerate(blocks) if j not in idx]), Y, ww)
+        return Er - E, rank - rk
+    hi = _manova_terms(num, m["terms"])
+    H, dfh = hyp(hi)
+    if den.strip():
+        Eh, dfe = hyp(_manova_terms(den, m["terms"]))
+        elab = den.strip()
+    else:
+        Eh, dfe = E, m["df_r"]
+        elab = "Residual"
+    if isinstance(o.get("ytransform"), str):
+        Mt = get_matrix(s, o["ytransform"].strip()).data
+        if Mt.shape[1] != q:
+            raise StataError(503, "conformability error")
+        H, Eh = Mt @ H @ Mt.T, Mt @ Eh @ Mt.T
+        q = Mt.shape[0]
+    if np.linalg.matrix_rank(Eh) < Eh.shape[0]:
+        raise StataError(506, "error matrix is singular")                                   # VERIFY
+    lam = T.eig_ratio(Eh, H) if dfh > 0 else np.zeros(0)
+    stats = T.mv_statistics(lam, q, dfh, dfe) if dfh > 0 else []
+    out = s.output
+    if isinstance(o.get("ytransform"), str):
+        out.write(f"\n Transformation of the dependent variables\n", "text")                # VERIFY
+    out.write(f"\n{'':>23}W = Wilks' lambda      L = Lawley-Hotelling trace\n", "text")
+    out.write(f"{'':>23}P = Pillai's trace     R = Roy's largest root\n\n", "text")
+    out.write(f"{'Source':>20} | Statistic        df    F(df1,     df2) =   F   Prob>F\n", "text")
+    rule = f"{'':>10}{'-' * 11}+{'-' * 55}"
+    out.write(rule + "\n", "text")
+    _stat_rows(out, " ".join(num.split()), stats, dfh)
+    out.write(f"{'':>21}|{'-' * 55}\n", "text")
+    out.write(f"{elab:>20} |{int(dfe):>20}\n" + rule + "\n", "text")
+    out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
+    names_cols = ["statistic", "df1", "df2", "F", "p"]
+    s.r = {"df": float(dfh), "df_r": float(dfe), "H": matrix(H), "E": matrix(Eh),
+           "stat": matrix(np.array([[r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"]] for r_ in stats]),
+                          ["W", "P", "L", "R"], names_cols) if stats else None,
+           "eigvals": matrix(lam.reshape(1, -1))}                                         # VERIFY: r() contents
+    s.r = {k_: v_ for k_, v_ in s.r.items() if v_ is not None}
 
 
 # ---------------------------------------------------------------------------
