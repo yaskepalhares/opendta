@@ -64,14 +64,17 @@ def arfima_acov(d: float, ar: np.ndarray, ma: np.ndarray, sigma2: float, n: int)
     return sigma2 * full[center:center + n]
 
 
-def toeplitz_loglik(y: np.ndarray, g: np.ndarray) -> float:
+def toeplitz_loglik(y: np.ndarray, g: np.ndarray, contributions: bool = False):
     """Gaussian log likelihood of y with autocovariances g (Durbin-Levinson); -inf if not positive
-    definite."""
+    definite. contributions: the terms of the prediction-error decomposition, one per observation."""
     n = len(y)
     v = g[0]
     if v <= 0:
-        return -np.inf
+        return np.full(n, -np.inf) if contributions else -np.inf
+    terms = np.empty(n) if contributions else None
     ll = -0.5 * (math.log(2 * math.pi * v) + y[0] ** 2 / v)
+    if contributions:
+        terms[0] = ll
     phi = np.zeros(0)
     for t in range(1, n):
         if t == 1:
@@ -82,10 +85,13 @@ def toeplitz_loglik(y: np.ndarray, g: np.ndarray) -> float:
             phi = np.concatenate([phi - k * phi[::-1], [k]])
         v = v * (1 - k * k)
         if v <= 0 or not np.isfinite(v):
-            return -np.inf
+            return np.full(n, -np.inf) if contributions else -np.inf
         e = y[t] - float(phi @ y[t - 1::-1][:t])
-        ll += -0.5 * (math.log(2 * math.pi * v) + e * e / v)
-    return ll
+        term = -0.5 * (math.log(2 * math.pi * v) + e * e / v)
+        ll += term
+        if contributions:
+            terms[t] = term
+    return terms if contributions else ll
 
 
 _OPTS = {"ar": 2, "ma": 2, "noconstant": 4, "mle": 3, "mpl": 3, "smemory": 2, "vce": 3, "robust": 1,
@@ -148,6 +154,10 @@ def cmd_arfima(s: "Session", args: str) -> None:
         except (FloatingPointError, np.linalg.LinAlgError, ValueError):
             return -np.inf
 
+    def contrib(b):
+        phi, th, d, s2 = parts(b)
+        return toeplitz_loglik(y - X @ b[:k], arfima_acov(d, phi, th, s2, n), contributions=True)
+
     def fun(b, todo):
         if todo == 0:
             return ll(b), None, None
@@ -167,8 +177,15 @@ def cmd_arfima(s: "Session", args: str) -> None:
         V = np.linalg.inv(-H)
     except np.linalg.LinAlgError:
         V = np.linalg.pinv(-H)
-    if o.get("vce") not in (None, "oim") or o.get("robust"):
-        raise StataError(198, "only vce(oim) is implemented in OpenDTA")   # OpenDTA
+    vce = str(o.get("vce") or ("robust" if o.get("robust") else "oim")).strip().lower()
+    if vce.startswith("r"):
+        # sandwich with the scores of the prediction-error decomposition (VERIFY: Stata's scores)
+        from .tsmodels import _scores
+        S = _scores(contrib, b)
+        V = V @ (S.T @ S) @ V
+        vce = "robust"
+    elif vce != "oim":
+        raise StataError(198, f"vcetype {vce} not allowed")                        # VERIFY
     V = (V + V.T) / 2
     se = np.sqrt(np.maximum(np.diag(V), 0))
     idx = list(range(len(est_cols))) + list(range(k, k + na + nm + 1))     # the constant is not tested
@@ -216,7 +233,7 @@ def cmd_arfima(s: "Session", args: str) -> None:
     est.rows = rows
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = float(o["level"]) if o.get("level") else smp.level
-    est.vcetype = "OIM"
+    est.vcetype = "Robust" if vce == "robust" else "OIM"
     est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1)}
     phi, th, d, s2 = parts(b)
     g = arfima_acov(d, phi, th, s2, 2)
@@ -228,8 +245,8 @@ def cmd_arfima(s: "Session", args: str) -> None:
                ("rank", float(kk)), ("ic", float(r.iterations)), ("rc", 0.0), ("converged", 1.0 if r.converged else 0.0)]
     macros = [("cmd", "arfima"), ("cmdline", cmdline("arfima", args)), ("depvar", smp.depname),
               ("eqnames", " ".join(dict.fromkeys(eqs))), ("title", "ARFIMA regression"),
-              ("ar", " ".join(map(str, ar))), ("ma", " ".join(map(str, ma))), ("vce", "oim"),
-              ("vcetype", "OIM"), ("chi2type", "Wald"), ("tvar", info.tvar), ("properties", "b V")]
+              ("ar", " ".join(map(str, ar))), ("ma", " ".join(map(str, ma))), ("vce", vce),
+              ("vcetype", est.vcetype), ("chi2type", "Wald"), ("tvar", info.tvar), ("properties", "b V")]
     post(s, est, scalars, macros, smp.mask)
     display_arfima(s, est)
 

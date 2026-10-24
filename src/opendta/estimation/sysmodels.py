@@ -81,8 +81,8 @@ def cmd_constraint(s: "Session", args: str) -> None:
 def _numlist(text: str) -> list[int]:
     out: list[int] = []
     for tok in text.replace(",", " ").split():
-        if "-" in tok:
-            a, b = tok.split("-", 1)
+        if "-" in tok or "/" in tok:
+            a, b = re.split(r"[-/]", tok, maxsplit=1)
             out += list(range(int(a), int(b) + 1))
         else:
             out.append(int(tok))

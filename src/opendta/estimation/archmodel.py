@@ -5,6 +5,7 @@ parses the syntax, reads the data, maximizes (BHHH then BFGS, as arima) and prin
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -293,9 +294,6 @@ def cmd_arch(s: "Session", args: str) -> None:
     c = find_top(args, ",")
     body, opts = (args, "") if c == -1 else (args[:c], args[c + 1:])
     o = match_options(opts, _OPTS) if opts.strip() else {}
-    for bad in ("constraints", "from", "savespace"):
-        if o.get(bad) and bad != "savespace":
-            raise StataError(198, f"option {bad}() not implemented in OpenDTA")   # OpenDTA
     spec = ArchSpec()
     spec.ar, spec.ma = _numlist(o.get("ar")), _numlist(o.get("ma"))
     p = parse_standard(body)
@@ -421,13 +419,154 @@ def cmd_arch(s: "Session", args: str) -> None:
         c_ = contrib(b)
         return -np.inf if c_ is None else float(c_.sum())
 
+    def layout(b, se):
+        """Names, equations and rows of the coefficient table (also used before the fit, to read
+        constraints())."""
+        eqname = smp.depname.split(".")[-1]
+        names, eqs = [], []
+        rows: list[CoefRow] = []
+        bmap = {col.name: b[i] for i, col in enumerate(est_cols)}
+        semap = {col.name: se[i] for i, col in enumerate(est_cols)}
+        if smp.constant:
+            bmap["_cons"], semap["_cons"] = b[len(est_cols)], se[len(est_cols)]
+        if k:
+            rows.append(CoefRow("eq", eqname))
+            rows += rows_from_columns([c_ for c_ in smp.cols if c_.values is not None], bmap, semap, s.data,
+                                      constant=smp.constant)
+            names += [c_.name for c_ in est_cols] + (["_cons"] if smp.constant else [])
+            eqs += [eqname] * k
+        def add_group(title, labels, lo, hi, nm=None):
+            nonlocal rows
+            if rows:
+                rows.append(CoefRow("sep"))
+            rows.append(CoefRow("eq", title))
+            for j, lab in zip(range(lo, hi), labels):
+                rows.append(CoefRow("coef", lab, b[j], se[j], name=f"{title}:{lab}"))
+                names.append(lab)
+                eqs.append(title)
+        if spec.archm:
+            add_group("ARCHM", ["sigma2" if lg == 0 else f"L{lg}.sigma2" if lg > 1 else "L.sigma2" for lg in spec.archm],
+                      *pos["psi"])
+        if spec.ar or spec.ma:
+            if rows:
+                rows.append(CoefRow("sep"))
+            rows.append(CoefRow("eq", "ARMA"))
+            j = pos["ar"][0]
+            for lab, lags in (("ar", spec.ar), ("ma", spec.ma)):
+                if not lags:
+                    continue
+                if rows[-1].kind != "eq":
+                    rows.append(CoefRow("blank"))
+                rows.append(CoefRow("header", lab))
+                for lg in lags:
+                    rows.append(CoefRow("coef", f"L{lg}.", b[j], se[j], name=f"ARMA:L{lg}.{lab}"))
+                    names.append(f"L{lg}.{lab}")
+                    eqs.append("ARMA")
+                    j += 1
+        if spec.nhet:
+            hnames = [c_.name for c_ in cols if c_.values is not None]
+            hn = [h_ for h_ in hnames]
+            add_group("HET", [("_cons" if x_ == "_cons" else x_) for x_ in hn], *pos["het"])
+        if spec.terms or not spec.nhet:
+            if rows:
+                rows.append(CoefRow("sep"))
+            rows.append(CoefRow("eq", "ARCH"))
+            for kd in dict.fromkeys(kd for kd, _ in spec.terms):
+                if rows[-1].kind != "eq":
+                    rows.append(CoefRow("blank"))
+                rows.append(CoefRow("header", kd))
+                for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
+                    if kd2 != kd:
+                        continue
+                    lab = f"L{lg}."
+                    rows.append(CoefRow("coef", lab, b[a], se[a], name=f"ARCH:{lab}{kd}"))
+                    names.append(f"{lab}{kd}"); eqs.append("ARCH")
+                if kd in EXTRA:
+                    rows.append(CoefRow("blank"))
+                    rows.append(CoefRow("header", EXTRA[kd]))
+                    for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
+                        if kd2 != kd:
+                            continue
+                        lab = f"L{lg}."
+                        rows.append(CoefRow("coef", lab, b[a + 1], se[a + 1], name=f"ARCH:{lab}{EXTRA[kd]}"))
+                        names.append(f"{lab}{EXTRA[kd]}"); eqs.append("ARCH")
+            if not spec.nhet:
+                if spec.terms:
+                    rows.append(CoefRow("blank"))
+                g_ = pos["gamma0"][0]
+                rows.append(CoefRow("coef", "_cons", b[g_], se[g_], name="ARCH:_cons"))
+                names.append("_cons"); eqs.append("ARCH")
+        if spec.power:
+            add_group("POWER", ["power"], *pos["power"])
+        tdf = shape = None
+        if pos["dist"][1] > pos["dist"][0]:
+            j = pos["dist"][0]
+            rows.append(CoefRow("sep"))
+            lab = "/lndfm2" if spec.dist == "t" else "/lnshape"      # VERIFY: Stata 14 names the t parameter lndfm2
+            rows.append(CoefRow("coef", lab, b[j], se[j], name=f"{lab[1:]}:_cons"))
+            names.append("_cons"); eqs.append(lab[1:])
+            rows.append(CoefRow("sep"))
+            val = math.exp(b[j]) + 2 if spec.dist == "t" else math.exp(b[j])
+            sev = math.exp(b[j]) * se[j]
+            # VERIFY: the interval is the exponential of the interval of the log parameter (reference log, df)
+            zc_ = float(st_.norm.ppf(0.5 + (float(o["level"]) if o.get("level") else smp.level) / 200))
+            off_ = 2.0 if spec.dist == "t" else 0.0
+            ci_ = f"{math.exp(b[j] - zc_ * se[j]) + off_!r} {math.exp(b[j] + zc_ * se[j]) + off_!r}"
+            rows.append(CoefRow("aux", "df" if spec.dist == "t" else "shape", val, sev, eq=ci_))
+            if spec.dist == "t":
+                tdf = val
+            else:
+                shape = val
+        elif spec.dist_fixed is not None:
+            if spec.dist == "t":
+                tdf = spec.dist_fixed
+            else:
+                shape = spec.dist_fixed
+        return names, eqs, rows, tdf, shape
+
     if not np.isfinite(ll(b0)):
         b0[pos["terms"][0][0]:pos["gamma0"][0]] = 0.0 if spec.terms else 0.0
         if not np.isfinite(ll(b0)):
             raise StataError(430, "initial values not feasible")
     if spec.arch0 in ("xb0", "xb0wt"):
         xb0 = _prime(spec, res0, 0.0)
-    r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **ml_options(o))
+    if o.get("from") not in (None, True):
+        # from(matname [, copy]): starting values by position (VERIFY: the matching by names of
+        # Stata's default skip rule)
+        from ..commands.matrix import get_matrix
+        fm = get_matrix(s, str(o["from"]).split(",")[0].strip())
+        if fm.data.size != b0.size:
+            raise StataError(503, "initial vector: must have " + str(b0.size) + " elements")   # VERIFY
+        b0 = np.asarray(fm.data, dtype=float).ravel().copy()
+    T = a_c = None
+    if o.get("constraints") not in (None, True):
+        # constraints(): b = T bc + a, maximized over bc (core/constraints.py)
+        from types import SimpleNamespace
+        from ..core.constraints import constraint_transform
+        from .postest import _constraint
+        from .sysmodels import _constraints, _numlist as _cnumlist
+        nm0, eq0, *_ = layout(b0, np.zeros(b0.size))
+        # constraints write L.arch for the L1.arch of the table
+        fake = SimpleNamespace(names=[re.sub(r"^L1\.", "L.", x_) for x_ in nm0], eqnames=eq0)
+        defined = _constraints(s)
+        Crows = []
+        for cn_ in _cnumlist(str(o["constraints"])):
+            if cn_ not in defined:
+                raise StataError(111, f"constraint {cn_} not found")
+            coef, rhs = _constraint(s, fake, defined[cn_])
+            row = np.zeros(b0.size + 1)
+            for j, v in coef.items():
+                row[j] += v
+            row[-1] = rhs
+            Crows.append(row)
+        Cmat = np.array(Crows)
+        T, a_c = constraint_transform(Cmat)
+        a_c = a_c.ravel()
+        r = maximize_switching(lambda bc: ll(T @ bc + a_c), lambda bc: _scores(contrib, T @ bc + a_c) @ T,
+                               T.T @ (b0 - a_c), **ml_options(o))
+        r.b = T @ r.b + a_c
+    else:
+        r = maximize_switching(ll, lambda bb: _scores(contrib, bb), b0, **ml_options(o))
     _l, _g_, Hm = _numderiv(ll, r.b)
     out = s.output
     if not o.get("nolog"):
@@ -435,128 +574,42 @@ def cmd_arch(s: "Session", args: str) -> None:
         print_log(out, r, "log likelihood")
     b = r.b
     S = _scores(contrib, b)
+    Tm = T if T is not None else np.eye(b.size)
+    Sc, Hc = S @ Tm, Tm.T @ Hm @ Tm
     try:
-        Hinv = np.linalg.inv(-Hm)
+        Hinv = np.linalg.inv(-Hc)
     except np.linalg.LinAlgError:
-        Hinv = np.linalg.pinv(-Hm)
+        Hinv = np.linalg.pinv(-Hc)
     vce = str(o.get("vce") or ("robust" if o.get("robust") else "opg")).strip().lower()
     vce = "robust" if vce.startswith("r") else ("oim" if vce == "oim" else "opg")
     if vce == "opg":
-        V = np.linalg.inv(S.T @ S)
+        V = np.linalg.inv(Sc.T @ Sc)
     elif vce == "oim":
         V = Hinv
     else:
-        V = Hinv @ (S.T @ S) @ Hinv
+        V = Hinv @ (Sc.T @ Sc) @ Hinv
+    V = Tm @ V @ Tm.T
     V = (V + V.T) / 2
     se = np.sqrt(np.maximum(np.diag(V), 0))
     # Wald test of the mean equation (without the constant)
     idx = [i for i in range(len(est_cols))] + list(range(pos["psi"][0], pos["ma"][1]))
+    df_w = len(idx)
     try:
-        chi2 = float(b[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], b[idx])) if idx else SYS
+        if T is not None and idx:
+            # with constraints the test has the rank of the constrained variance (VERIFY)
+            Vi_ = V[np.ix_(idx, idx)]
+            df_w = int(np.linalg.matrix_rank(Vi_))
+            chi2 = float(b[idx] @ np.linalg.pinv(Vi_) @ b[idx]) if df_w else SYS
+        else:
+            chi2 = float(b[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], b[idx])) if idx else SYS
     except np.linalg.LinAlgError:
         chi2 = SYS
-    pv = float(chi2_tail(chi2, len(idx))) if idx and chi2 < SYS else SYS
-    # coefficient table
-    eqname = smp.depname.split(".")[-1]
-    names, eqs = [], []
-    rows: list[CoefRow] = []
-    bmap = {col.name: b[i] for i, col in enumerate(est_cols)}
-    semap = {col.name: se[i] for i, col in enumerate(est_cols)}
-    if smp.constant:
-        bmap["_cons"], semap["_cons"] = b[len(est_cols)], se[len(est_cols)]
-    if k:
-        rows.append(CoefRow("eq", eqname))
-        rows += rows_from_columns([c_ for c_ in smp.cols if c_.values is not None], bmap, semap, s.data,
-                                  constant=smp.constant)
-        names += [c_.name for c_ in est_cols] + (["_cons"] if smp.constant else [])
-        eqs += [eqname] * k
-    def add_group(title, labels, lo, hi, nm=None):
-        nonlocal rows
-        if rows:
-            rows.append(CoefRow("sep"))
-        rows.append(CoefRow("eq", title))
-        for j, lab in zip(range(lo, hi), labels):
-            rows.append(CoefRow("coef", lab, b[j], se[j], name=f"{title}:{lab}"))
-            names.append(lab)
-            eqs.append(title)
-    if spec.archm:
-        add_group("ARCHM", ["sigma2" if lg == 0 else f"L{lg}.sigma2" if lg > 1 else "L.sigma2" for lg in spec.archm],
-                  *pos["psi"])
-    if spec.ar or spec.ma:
-        if rows:
-            rows.append(CoefRow("sep"))
-        rows.append(CoefRow("eq", "ARMA"))
-        j = pos["ar"][0]
-        for lab, lags in (("ar", spec.ar), ("ma", spec.ma)):
-            if not lags:
-                continue
-            if rows[-1].kind != "eq":
-                rows.append(CoefRow("blank"))
-            rows.append(CoefRow("header", lab))
-            for lg in lags:
-                rows.append(CoefRow("coef", f"L{lg}.", b[j], se[j], name=f"ARMA:L{lg}.{lab}"))
-                names.append(f"L{lg}.{lab}")
-                eqs.append("ARMA")
-                j += 1
-    if spec.nhet:
-        hnames = [c_.name for c_ in cols if c_.values is not None]
-        hn = [h_ for h_ in hnames]
-        add_group("HET", [("_cons" if x_ == "_cons" else x_) for x_ in hn], *pos["het"])
-    if spec.terms or not spec.nhet:
-        if rows:
-            rows.append(CoefRow("sep"))
-        rows.append(CoefRow("eq", "ARCH"))
-        for kd in dict.fromkeys(kd for kd, _ in spec.terms):
-            if rows[-1].kind != "eq":
-                rows.append(CoefRow("blank"))
-            rows.append(CoefRow("header", kd))
-            for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
-                if kd2 != kd:
-                    continue
-                lab = f"L{lg}."
-                rows.append(CoefRow("coef", lab, b[a], se[a], name=f"ARCH:{lab}{kd}"))
-                names.append(f"{lab}{kd}"); eqs.append("ARCH")
-            if kd in EXTRA:
-                rows.append(CoefRow("blank"))
-                rows.append(CoefRow("header", EXTRA[kd]))
-                for (kd2, lg), (a, bq) in zip(spec.terms, pos["terms"]):
-                    if kd2 != kd:
-                        continue
-                    lab = f"L{lg}."
-                    rows.append(CoefRow("coef", lab, b[a + 1], se[a + 1], name=f"ARCH:{lab}{EXTRA[kd]}"))
-                    names.append(f"{lab}{EXTRA[kd]}"); eqs.append("ARCH")
-        if not spec.nhet:
-            if spec.terms:
-                rows.append(CoefRow("blank"))
-            g_ = pos["gamma0"][0]
-            rows.append(CoefRow("coef", "_cons", b[g_], se[g_], name="ARCH:_cons"))
-            names.append("_cons"); eqs.append("ARCH")
-    if spec.power:
-        add_group("POWER", ["power"], *pos["power"])
-    tdf = shape = None
-    if pos["dist"][1] > pos["dist"][0]:
-        j = pos["dist"][0]
-        rows.append(CoefRow("sep"))
-        lab = "/lndfm2" if spec.dist == "t" else "/lnshape"      # VERIFY: Stata 14 names the t parameter lndfm2
-        rows.append(CoefRow("coef", lab, b[j], se[j], name=f"{lab[1:]}:_cons"))
-        names.append("_cons"); eqs.append(lab[1:])
-        rows.append(CoefRow("sep"))
-        val = math.exp(b[j]) + 2 if spec.dist == "t" else math.exp(b[j])
-        sev = math.exp(b[j]) * se[j]
-        # VERIFY: the interval is the exponential of the interval of the log parameter (reference log, df)
-        zc_ = float(st_.norm.ppf(0.5 + (float(o["level"]) if o.get("level") else smp.level) / 200))
-        off_ = 2.0 if spec.dist == "t" else 0.0
-        ci_ = f"{math.exp(b[j] - zc_ * se[j]) + off_!r} {math.exp(b[j] + zc_ * se[j]) + off_!r}"
-        rows.append(CoefRow("aux", "df" if spec.dist == "t" else "shape", val, sev, eq=ci_))
-        if spec.dist == "t":
-            tdf = val
-        else:
-            shape = val
-    elif spec.dist_fixed is not None:
-        if spec.dist == "t":
-            tdf = spec.dist_fixed
-        else:
-            shape = spec.dist_fixed
+    pv = float(chi2_tail(chi2, df_w)) if idx and chi2 < SYS and df_w else SYS
+    names, eqs, rows, tdf, shape = layout(b, se)
+    if T is not None:
+        for r_ in rows:
+            if r_.kind == "coef" and r_.se == 0:
+                r_.kind = "cons"                       # fixed by a constraint
     kk = b.size
     est = Estimates("arch", smp.depname, names, b, V, n, "z", None)
     est.eqnames = eqs
@@ -564,7 +617,9 @@ def cmd_arch(s: "Session", args: str) -> None:
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = float(o["level"]) if o.get("level") else smp.level
     est.vcetype = {"opg": "OPG", "robust": "Robust", "oim": "OIM"}[vce]
-    est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1),
+    if T is not None:
+        est.cns, est.cns_names = Cmat, fake
+    est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": df_w, "sample": _sample_text(s, t0, t1),
                  "dist": {"gaussian": "Gaussian", "t": "t", "ged": "GED"}[spec.dist], "ar": bool(spec.ar),
                  "ma": bool(spec.ma)}
     est.arch = {"spec": spec, "pos": pos, "y": y, "X": X, "Z": Z, "order": order, "mask": smp.mask.copy(), "k": k}
@@ -590,7 +645,13 @@ def cmd_arch(s: "Session", args: str) -> None:
         macros.append((kd, " ".join(str(lg) for k2, lg in spec.terms if k2 == kd)))
     if spec.archm:
         macros.append(("archm", "archm"))
-    post(s, est, scalars, macros, smp.mask)
+    extra_m = []
+    if T is not None:
+        from ..commands.matrix import Matrix
+        cm = Matrix(Cmat.copy(), [f"r{i}" for i in range(1, len(Cmat) + 1)], list(names) + ["_r"])
+        cm.coleq = list(eqs) + ["_"]
+        extra_m.append(("Cns", cm))
+    post(s, est, scalars, macros, smp.mask, extra_mats=extra_m)
     display_arch(s, est)
 
 
@@ -613,6 +674,12 @@ def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bo
         _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
+        if getattr(est, "cns", None) is not None:
+            from .postest import _ctext
+            for i, row in enumerate(est.cns, 1):
+                coef = {j: float(v) for j, v in enumerate(row[:-1]) if v}
+                out.write(f" ({i:>2})  {_ctext(est.cns_names, coef, float(row[-1]))}\n", "text")
+            out.write("\n", "text")
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
 
 
