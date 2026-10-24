@@ -64,52 +64,120 @@ def cmd_checkestimationsample(s: "Session", args: str) -> None:
         raise StataError(459, "data have changed since estimation")
 
 
-def _constraint_text(row: np.ndarray, names: list[str]) -> str:
-    """'x1 - x2 = 0': the coefficients of the row (the last element is the right-hand side)."""
-    from ..core.formats import format_value
-    text = ""
-    for coef, name in zip(row[:-1], names):
-        if coef == 0:
+def _b_est(b: Matrix):
+    """The coefficient names of e(b), in the form the constraint parser of postest reads."""
+    from types import SimpleNamespace
+    eqs = ["" if q == "_" else q for q in (b.coleq or ["_"] * b.cols)]
+    return SimpleNamespace(names=list(b.colnames), eqnames=eqs if any(eqs) else [])
+
+
+def constraint_lines(b: Matrix, C: np.ndarray) -> list[str]:
+    """'x1 - x2 = 0' for each row of C = (R, r), with [eq] prefixes in multiple-equation models."""
+    from ..estimation.postest import _ctext
+    est = _b_est(b)
+    return [_ctext(est, {j: float(v) for j, v in enumerate(row[:-1]) if v != 0}, float(row[-1]))
+            for row in C]
+
+
+def _from_clist(s: "Session", b: Matrix, clist: str, notes: bool) -> tuple[np.ndarray, list[int]]:
+    """The rows of the defined constraints in clist that can be applied, in order. A constraint that
+    cannot be read, or that is redundant with or contradicts the earlier ones, is left out with a
+    note. VERIFY: the wording of the notes and r(412) for a redundant constraint."""
+    from ..estimation.postest import _constraint
+    from ..estimation.sysmodels import _constraints, _numlist
+    try:
+        numbers = _numlist(clist)
+    except ValueError:
+        raise StataError(198, "invalid numlist")
+    defined = _constraints(s)
+    est = _b_est(b)
+    rows: list[np.ndarray] = []
+    used: list[int] = []
+    for n in numbers:
+        try:
+            if n not in defined:
+                raise StataError(111, f"constraint {n} not found")
+            coef, rhs = _constraint(s, est, defined[n])
+            row = np.zeros(b.cols + 1)
+            for j, v in coef.items():
+                row[j] += v
+            row[-1] = rhs
+            if not row[:-1].any() or (rows and np.linalg.matrix_rank(np.array(rows + [row])[:, :-1])
+                                      == np.linalg.matrix_rank(np.array(rows)[:, :-1])):
+                raise StataError(412, "redundant or inconsistent constraints")
+        except StataError as e:
+            if notes:
+                s.output.write(f"(note: constraint number {n} caused error r({e.rc}))\n", "text")
             continue
-        mag = abs(float(coef))
-        term = name if mag == 1 else f"{format_value(mag, '%9.0g', pad=False).strip()}*{name}"
-        if not text:
-            text = term if coef > 0 else f"-{term}"
-        else:
-            text += f" + {term}" if coef > 0 else f" - {term}"
-    return f"{text or '0'} = {format_value(float(row[-1]), '%9.0g', pad=False).strip()}"   # VERIFY
+        rows.append(row)
+        used.append(n)
+    return np.array(rows).reshape(-1, b.cols + 1), used
 
 
 @command("makecns")
 def cmd_makecns(s: "Session", args: str) -> None:
     head, comma, opts = args.partition(",")
-    o = match_options(opts, {"nocnsnotes": 5, "displaycns": 4, "r": 1}) if comma else {}
+    o = match_options(opts, {"nocnsnotes": 5, "displaycns": 4, "r": 1, "suminfo": 3}) if comma else {}
     name = head.strip()
     if not name:
-        return                                    # VERIFY: Stata does nothing without arguments
-    if not NAME_RE.match(name):
-        raise StataError(198, "option makecns with a list of constraint numbers is not available yet "
-                              "in OpenDTA")
-    if o.get("displaycns") and not o.get("r"):
-        raise StataError(198, "option displaycns is not available yet in OpenDTA")
+        return                                    # nothing to do (compat 1801)
     b = s.e.get("b")
     if not isinstance(b, Matrix):
         raise StataError(301, "last estimates not found")
-    try:
-        C = get_matrix(s, name)
-        if C.cols != b.cols + 1:
-            raise StataError(503, "conformability error")
-    except StataError as e:
-        # a bad constraint matrix is only reported (VERIFY: the return code afterwards)
-        s.output.write(f"(note: constraint matrix '{name}' caused error r({e.rc}))\n", "text")
-        return
-    s.e["Cns"] = Matrix(C.data.copy(), list(C.rownames), list(b.colnames) + ["_r"])
+    if NAME_RE.match(name):
+        try:
+            C = get_matrix(s, name)
+            if C.cols != b.cols + 1:
+                raise StataError(503, "conformability error")
+        except StataError as e:
+            # a bad constraint matrix is only reported (VERIFY: the return code afterwards)
+            s.output.write(f"(note: constraint matrix '{name}' caused error r({e.rc}))\n", "text")
+            return
+        rows, clist, rownames = C.data.copy(), name, list(C.rownames)
+    else:
+        rows, used = _from_clist(s, b, name, not o.get("nocnsnotes"))
+        clist, rownames = " ".join(map(str, used)), [f"r{k}" for k in range(1, len(used) + 1)]
+    if len(rows):
+        s.e["Cns"] = Matrix(rows, rownames, list(b.colnames) + ["_r"], ["_"] * len(rows),
+                            list(b.coleq or ["_"] * b.cols) + ["_"])
+    else:
+        s.e.pop("Cns", None)
+    texts = constraint_lines(b, rows)
+    if o.get("displaycns"):
+        _display_cns(s, texts)
     if o.get("r"):
         # return list shows the results in the reverse order of this dictionary
-        s.r = {"k_autoCns": 0.0, "k": float(C.rows)}
-        for k in range(C.rows):
-            s.r[f"cns{k + 1}"] = _constraint_text(C.data[k], list(b.colnames))
-        s.r["clist"] = name
+        s.r = {"k_autoCns": 0.0, "k": float(len(rows))}
+        for k, t in enumerate(texts, 1):
+            s.r[f"cns{k}"] = t
+        s.r["clist"] = clist
+
+
+def _display_cns(s: "Session", texts: list[str]) -> None:
+    """' ( 1)  x1 - x2 = 0', as in the header of estimation commands with constraints."""
+    for i, t in enumerate(texts, 1):
+        s.output.write(f" ({i:>2})  {t}\n", "text")
+
+
+def dispcns(s: "Session", rest: str) -> None:
+    """matrix dispCns [, r]: the constraints of e(Cns)."""
+    head, comma, opts = rest.partition(",")
+    if head.strip():
+        raise StataError(198, "invalid syntax")
+    o = match_options(opts, {"r": 1}) if comma else {}
+    cns, b = s.e.get("Cns"), s.e.get("b")
+    if not isinstance(b, Matrix):
+        raise StataError(301, "last estimates not found")
+    texts = constraint_lines(b, cns.data) if isinstance(cns, Matrix) else []
+    if o.get("r"):
+        s.r = {"k": float(len(texts))}
+        for k, t in enumerate(texts, 1):
+            s.r[f"cns{k}"] = t
+        return
+    if not texts:
+        s.output.write("(no constraints)\n", "text")              # VERIFY
+        return
+    _display_cns(s, texts)
 
 
 @command("matcproc")
