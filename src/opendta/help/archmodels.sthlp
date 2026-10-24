@@ -12,5 +12,5 @@
 {title:Description}
 
 {pstd}
-{cmd:arch} fits regressions with ARCH, GARCH and the other conditional-variance terms, ARCH-in-mean, ARMA disturbances and Gaussian, Student t or generalized-error distributions, by maximum likelihood with BHHH steps followed by BFGS ({cmd:technique(bhhh 5 bfgs 10)}); the default variance is OPG. {cmd:narchk()} and {cmd:nparchk()} use one shift parameter per lag. {cmd:constraints()} and {cmd:from()} are not available. {cmd:arfima} fits ARFIMA models by exact maximum likelihood with the observed information matrix; {cmd:mpl}, {cmd:smemory} and robust variances are not available.
+{cmd:arch} fits regressions with ARCH, GARCH and the other conditional-variance terms, ARCH-in-mean, ARMA disturbances and Gaussian, Student t or generalized-error distributions, by maximum likelihood with BHHH steps followed by BFGS ({cmd:technique(bhhh 5 bfgs 10)}); the default variance is OPG. {cmd:narchk()} and {cmd:nparchk()} use one shift parameter per lag. {cmd:constraints()} applies linear constraints defined with {cmd:constraint} and {cmd:from(}{it:matname}{cmd:)} gives the starting values by position. {cmd:arfima} fits ARFIMA models by exact maximum likelihood with the observed information matrix; {cmd:vce(robust)} uses the scores of the prediction-error decomposition; {cmd:mpl} and {cmd:smemory} are not available.
 {p_end}

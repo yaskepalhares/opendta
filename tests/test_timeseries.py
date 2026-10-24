@@ -213,3 +213,57 @@ def test_program_echo_does_not_count_comments():
     lines = [ln for ln in out.splitlines() if "gen a" in ln or "note" in ln]
     assert lines[1].lstrip().startswith("2.") and lines[1].strip().endswith("* note")
     assert lines[2].startswith(".") and lines[3].lstrip().startswith("3.")
+
+
+# -- block 17 (phase 29) -------------------------------------------------------------------------
+
+def test_prais_robust_and_cluster(run):
+    run("clear\nset seed 19\nset obs 120\ngen t = _n\ntsset t\ngen x = round(invnormal(runiform()),.01)\n"
+        "gen e = round(invnormal(runiform()),.01)\nreplace e = .6*e[_n-1] + e in 2/l\ngen y = 1 + 2*x + e\n"
+        "gen g = ceil(_n/10)")
+    run("quietly prais y x\nmatrix b0 = e(b)")
+    out = run("prais y x, vce(robust) nolog")
+    assert "Semirobust" in out and run.eval("mreldif(e(b), b0)") < 1e-12
+    run("quietly prais y x, vce(cluster g)")
+    assert run.eval("e(N_clust)") == 12 and run.eval("e(df_r)") == 11
+
+
+def test_arch_constraints_and_from(run):
+    run("clear\nset seed 20\nset obs 300\ngen t = _n\ntsset t\ngen e = round(invnormal(runiform()),.001)\n"
+        "gen x = round(invnormal(runiform()),.01)\ngen h = 1\ngen y = 0\n"
+        "replace h = .2 + .3*(e[_n-1]*sqrt(h[_n-1]))^2 + .4*h[_n-1] in 2/l\nreplace y = 1 + .5*x + e*sqrt(h)")
+    run("quietly arch y x, arch(1) garch(1)\nmatrix b0 = e(b)")
+    run("constraint define 1 [ARCH]L.arch = .3")
+    out = run("arch y x, arch(1) garch(1) constraints(1) nolog")
+    assert "( 1)  [ARCH]L.arch = .3" in out and "(constrained)" in out
+    assert abs(run.eval("el(e(b), 1, 3)") - .3) < 1e-10
+    run("quietly arch y x, arch(1) garch(1) from(b0)")
+    assert run.rc == 0 and run.eval("mreldif(e(b), b0)") < 1e-3
+
+
+def test_arfima_robust_svar_constraints(run):
+    run("clear\nset seed 21\nset obs 200\ngen t = _n\ntsset t\ngen e1 = round(invnormal(runiform()),.01)\n"
+        "gen e2 = round(invnormal(runiform()),.01)\ngen y1 = e1\ngen y2 = e2\n"
+        "replace y1 = .5*y1[_n-1] + e1 in 2/l\nreplace y2 = .3*y1[_n-1] + .4*y2[_n-1] + .5*e1 + e2 in 2/l")
+    run("quietly arfima y1, ar(1) vce(robust)")
+    assert run.rc == 0 and run.eval('e(vcetype) == "Robust"') == 1
+    run("matrix A = (1,0\\.,1)\nmatrix B = (.,0\\0,.)\nquietly svar y1 y2, lags(1) aeq(A) beq(B)")
+    ll0 = run.eval("e(ll)")
+    run("constraint define 1 [a_1_1]_cons = 1\nconstraint define 2 [a_1_2]_cons = 0\n"
+        "constraint define 3 [a_2_2]_cons = 1\nconstraint define 4 [b_1_2]_cons = 0\n"
+        "constraint define 5 [b_2_1]_cons = 0")
+    run("quietly svar y1 y2, lags(1) aconstraints(1/3) bconstraints(4 5)")
+    assert abs(run.eval("e(ll)") - ll0) < 1e-6 and run.eval("e(N_cns)") == 5
+
+
+def test_state_space_predict_and_psdensity(run):
+    run("clear\nset seed 24\nset obs 150\ngen t = _n\ntsset t\ngen e = round(invnormal(runiform()),.01)\n"
+        "gen y = e\nreplace y = .6*y[_n-1] + e in 2/l\ngen y2 = round(y + invnormal(runiform()), .01)")
+    run("constraint define 1 [y]u = 1")
+    run("quietly sspace (u L.u, state noconstant) (y u, noerror noconstant), constraints(1)")
+    run("predict yh\npredict r, residuals")
+    assert run.rc == 0 and abs(run.eval("y[10] - yh[10] - r[10]")) < 1e-6
+    run("quietly dfactor (y y2 = , noconstant) (f = , ar(1))\npredict rs, rstandard equation(y2)")
+    assert run.rc == 0
+    run("quietly ucm y, model(rwalk) cycle(1, frequency(.5))\npredict u1\npsdensity sd w")
+    assert run.rc == 0 and run.session.data.has("sd")

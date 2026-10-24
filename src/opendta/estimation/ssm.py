@@ -85,3 +85,34 @@ def kalman_loglik(y: np.ndarray, D: np.ndarray, A: np.ndarray, S: np.ndarray, H:
     if not np.all(np.isfinite(out)):
         return None
     return (out, fa, fP) if return_states else out
+
+
+def kalman_onestep(y: np.ndarray, D: np.ndarray, A: np.ndarray, S: np.ndarray, H: np.ndarray,
+                   c: np.ndarray | None = None, d: np.ndarray | None = None,
+                   diffuse: np.ndarray | None = None):
+    """One-step-ahead predictions of y (T, m) and the variances of the prediction errors, from the
+    same filter as kalman_loglik; missing observations are predicted but do not update the
+    states."""
+    T, m = y.shape
+    r = A.shape[0]
+    a, P, _mask = initial_state(A, S, diffuse)
+    c = np.zeros(r) if c is None else c
+    d = np.zeros((T, m)) if d is None else d
+    yhat = np.full((T, m), np.nan)
+    fvar = np.full((T, m), np.nan)
+    for t in range(T):
+        a = A @ a + c
+        P = A @ P @ A.T + S
+        yhat[t] = D @ a + d[t]
+        Fall = D @ P @ D.T + H
+        fvar[t] = np.diag(Fall)
+        obs = np.isfinite(y[t])
+        if obs.any():
+            Dt = D[obs]
+            v = y[t, obs] - Dt @ a - d[t, obs]
+            F = Fall[np.ix_(obs, obs)]
+            K = P @ Dt.T @ np.linalg.inv(F)
+            a = a + K @ v
+            P = P - K @ F @ K.T
+            P = (P + P.T) / 2
+    return yhat, fvar
