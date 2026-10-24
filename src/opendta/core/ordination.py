@@ -188,6 +188,21 @@ def procrustes_orthogonal(Y: np.ndarray, X: np.ndarray, scale: bool = True) -> d
             "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
 
 
+def procrustes_unrestricted(Y: np.ndarray, X: np.ndarray) -> dict:
+    """Unrestricted Procrustes: the least-squares linear transformation T (any matrix) and the
+    translation from the source X to the target Y; the dilation is 1."""
+    my, mx = Y.mean(0), X.mean(0)
+    Yc, Xc = Y - my, X - mx
+    T = np.linalg.lstsq(Xc, Yc, rcond=None)[0]
+    fitted = Xc @ T + my
+    k = Y.shape[1]
+    ss_i, rss_i = (Yc ** 2).sum(0), ((Y - fitted) ** 2).sum(0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr_i = np.array([np.corrcoef(Y[:, j], fitted[:, j])[0, 1] for j in range(k)])
+    return {"T": T, "c": 1.0, "trans": my - mx @ T, "fitted": fitted, "rss": float(rss_i.sum()),
+            "ss": float(ss_i.sum()), "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
+
+
 # ---------------------------------------------------------------------------
 # biplot
 # ---------------------------------------------------------------------------

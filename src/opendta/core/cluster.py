@@ -41,7 +41,53 @@ def pairwise(X: np.ndarray, Y: np.ndarray | None, measure: str, power: float | N
     if m == "angular":
         s = (X @ Y.T) / np.outer(np.sqrt((X ** 2).sum(1)), np.sqrt((Y ** 2).sum(1)))
         return 1.0 - s
+    if m in BINARY:
+        return 1.0 - binary_similarity(X, Y, m)
     raise ValueError(measure)
+
+
+BINARY = ("matching", "Jaccard", "Russell", "Hamann", "Dice", "antiDice", "Sneath", "Rogers", "Ochiai",
+          "Yule", "Anderberg", "Kulczynski", "Pearson", "Gower2")
+
+
+def binary_similarity(X: np.ndarray, Y: np.ndarray, measure: str) -> np.ndarray:
+    """The similarity measures for binary data ([MV] measure_option) from the counts of each
+    pair of rows: a (both 1), b (1 in X only), c (1 in Y only) and d (both 0). A row is 1 where
+    the value is nonzero."""
+    Xb, Yb = (X != 0).astype(float), (Y != 0).astype(float)
+    a = Xb @ Yb.T
+    b = Xb @ (1 - Yb).T
+    c = (1 - Xb) @ Yb.T
+    d = (1 - Xb) @ (1 - Yb).T
+    p = a + b + c + d
+    with np.errstate(invalid="ignore", divide="ignore"):
+        if measure == "matching":
+            return (a + d) / p
+        if measure == "Jaccard":
+            return a / (a + b + c)
+        if measure == "Russell":
+            return a / p
+        if measure == "Hamann":
+            return (a + d - b - c) / p
+        if measure == "Dice":
+            return 2 * a / (2 * a + b + c)
+        if measure == "antiDice":
+            return a / (a + 2 * (b + c))
+        if measure == "Sneath":
+            return 2 * (a + d) / (2 * (a + d) + b + c)
+        if measure == "Rogers":
+            return (a + d) / (a + d + 2 * (b + c))
+        if measure == "Ochiai":
+            return a / np.sqrt((a + b) * (a + c))
+        if measure == "Yule":
+            return (a * d - b * c) / (a * d + b * c)
+        if measure == "Anderberg":
+            return (a / (a + b) + a / (a + c) + d / (c + d) + d / (b + d)) / 4
+        if measure == "Kulczynski":
+            return (a / (a + b) + a / (a + c)) / 2
+        if measure == "Pearson":
+            return (a * d - b * c) / np.sqrt((a + b) * (a + c) * (d + b) * (d + c))
+        return a * d / np.sqrt((a + b) * (a + c) * (d + b) * (d + c))   # Gower2
 
 
 def linkage(D: np.ndarray, method: str) -> list[tuple[int, int, float]]:

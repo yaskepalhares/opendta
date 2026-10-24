@@ -155,6 +155,29 @@ def cmd_ca(s: "Session", args: str) -> None:
         raise StataError(2001, "insufficient observations")                               # VERIFY
     N = np.zeros((R, Cn))
     np.add.at(N, (codes[0], codes[1]), 1.0 if w is None else w)
+    _ca_run(s, N, labels, names, o, "ca " + args.strip(), mask, "variables")
+
+
+@command("camat", "camat")
+def cmd_camat(s: "Session", args: str) -> None:
+    """camat matname: correspondence analysis of a matrix of counts ([MV] ca)."""
+    from .matrix import get_matrix
+    p = parse_standard(args)
+    o = match_options(p.options, {"dimensions": 3, "normalize": 4, "rowname": 4, "colname": 4}) if p.options.strip() else {}
+    mat = get_matrix(s, p.varlist.strip())
+    N = np.array(mat.data, dtype=float)
+    if np.any(N < 0):
+        raise StataError(498, f"matrix {p.varlist.strip()} has negative entries")         # VERIFY
+    if min(N.shape) < 2:
+        raise StataError(2001, "insufficient observations")                               # VERIFY
+    names = [str(o["rowname"]).strip() if isinstance(o.get("rowname"), str) else "rows",       # VERIFY the defaults
+             str(o["colname"]).strip() if isinstance(o.get("colname"), str) else "columns"]
+    _ca_run(s, N, [list(mat.rownames), list(mat.colnames)], names, o, "camat " + args.strip(),
+            np.zeros(s.data.nobs, dtype=bool), "matrix")
+
+
+def _ca_run(s: "Session", N: np.ndarray, labels, names: list[str], o: dict, cmdline: str, mask, data: str) -> None:
+    R, Cn = N.shape
     norm = str(o.get("normalize", "symmetric")).strip()
     if norm not in ("symmetric", "standard", "row", "column", "principal"):
         raise StataError(198, "invalid normalize()")                                      # VERIFY
@@ -194,9 +217,9 @@ def cmd_ca(s: "Session", args: str) -> None:
                  [(names[0], 0, R), (names[1], R, R + Cn)], labs, st, C, f)
     out.write("\n", "text")
     ctx = {"cmd": "ca", "fit": fit, "f": f, "norm": norm, "vars": names, "labels": [[str(x) for x in labels[0]], [str(x) for x in labels[1]]],
-           "coords": [Rc[:, :f], Cc[:, :f]]}
+           "coords": [Rc[:, :f], Cc[:, :f]], "coords_all": [Rc, Cc], "share": fit["inertia"] / total}
     scalars = [("N", n), ("inertia", total), ("f", f), ("pinertia", expl / 100.0), ("X2", chi2), ("X2_df", df), ("X2_p", chi2_p(chi2, df))]
-    macros = [("cmdline", "ca " + args.strip()), ("ca_data", "variables"), ("varlist", " ".join(names)), ("cmd", "ca"),
+    macros = [("cmdline", cmdline), ("ca_data", data), ("varlist", " ".join(names)), ("cmd", "ca"),
               ("marginsnotok", "_ALL"), ("estat_cmd", "ca_estat"), ("predict", "ca_p"), ("title", "correspondence analysis"),
               ("Cname", names[1]), ("Rname", names[0]), ("norm", norm), ("sv_unique", "1"), ("properties", "nob noV eigen")]
     dn = [f"dim{j + 1}" for j in range(nd)]
@@ -261,7 +284,8 @@ def cmd_mca(s: "Session", args: str) -> None:
     title = f"Statistics for column categories in {norm} normalization"
     _point_table(out, title, sections, cats, st, coord[:, :f], f)
     out.write("\n", "text")
-    ctx = {"cmd": "mca", "f": f, "norm": norm, "labels": cats, "coords": coord[:, :f], "sections": sections}
+    ctx = {"cmd": "mca", "f": f, "norm": norm, "labels": cats, "coords": coord[:, :f], "sections": sections,
+           "coords_all": coord, "share": pin / total}
     scalars = [("f", f), ("ev_unique", 1), ("inertia", total), ("adjust", 1), ("N", n)]
     macros = [("cmdline", "mca " + args.strip()), ("cmd", "mca"), ("marginsnotok", "_ALL"),
               ("title", "Multiple/Joint correspondence analysis"), ("method", "burt"), ("estat_cmd", "mca_estat"),
@@ -359,7 +383,7 @@ def _mds_run(s: "Session", D: np.ndarray, ids: list[str], o: dict, desc: str, cm
         mats.append(("Ev", matrix(ev.reshape(1, -1), ["Ev"], [f"c{j + 1}" for j in range(n)])))
     post_e(s, cmd, scalars, macros, mats, mask, n, estat={"config": (3, _estat_config)},
            predict_multi={"": lambda ss, ee: _mds_predict(ss, ee), "config": lambda ss, ee: _mds_predict(ss, ee)},
-           predict_opts={"config": 3}, extra={"mds": {"Y": Y, "ids": ids, "mask": mask, "idname": meta.get("idname", "")}})
+           predict_opts={"config": 3}, extra={"mds": {"Y": Y, "ids": ids, "mask": mask, "idname": meta.get("idname", ""), "D": D}})
 
 
 @command("mds", "mds")
@@ -452,9 +476,13 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     tgt, src = s.expand_varlist(m.group(1)), s.expand_varlist(m.group(2))
     p = parse_standard(m.group(3))
     o = match_options(p.options, {"transform": 5, "norho": 3, "noscale": 3}) if p.options.strip() else {}
-    if str(o.get("transform", "orthogonal")).strip() != "orthogonal":
-        raise StataError(198, "only transform(orthogonal) is available in OpenDTA")      # VERIFY
-    if len(tgt) != len(src):
+    tr = str(o.get("transform", "orthogonal")).strip().lower()
+    tr = next((f_ for f_, m_ in (("orthogonal", 1), ("oblique", 2), ("unrestricted", 1)) if len(tr) >= m_ and f_.startswith(tr)), tr)
+    if tr == "oblique":
+        raise StataError(198, "transform(oblique) is not available yet in OpenDTA")      # OpenDTA
+    if tr != "orthogonal" and tr != "unrestricted":
+        raise StataError(198, f"transform({tr}) invalid")                                 # VERIFY
+    if tr == "orthogonal" and len(tgt) != len(src):
         raise StataError(198, "the two variable lists must have the same number of variables")   # VERIFY
     for nm in tgt + src:
         if s.data.get(nm).is_string:
@@ -462,10 +490,15 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     X, _, _, mask = sample(s, p, tgt + src, allowed=())
     k = len(tgt)
     Yt, Xs = X[:, :k], X[:, k:]
-    r = O.procrustes_orthogonal(Yt, Xs, scale=not o.get("norho"))          # VERIFY: noscale is accepted and ignored
+    kx = Xs.shape[1]
+    if tr == "unrestricted":
+        r = O.procrustes_unrestricted(Yt, Xs)
+        df_m = kx * k + k                                                   # VERIFY
+    else:
+        r = O.procrustes_orthogonal(Yt, Xs, scale=not o.get("norho"))      # VERIFY: noscale is accepted and ignored
+        df_m = k * k - k * (k + 1) // 2 + k + (0 if o.get("norho") else 1)
     n = X.shape[0]
     out = s.output
-    df_m = k * k - k * (k + 1) // 2 + k + (0 if o.get("norho") else 1)
     df_r = n * k - df_m
     P = r["rss"] / r["ss"] if r["ss"] else float("nan")
     rmse = float(np.sqrt(r["rss"] / df_r)) if df_r > 0 else float("nan")
@@ -474,7 +507,7 @@ def cmd_procrustes(s: "Session", args: str) -> None:
 
     def row(label, val):
         out.write(f"{lab}{label:<23}={val:>11}\n", "text")
-    out.write(f"{'Procrustes analysis (orthogonal)':<43}{'Number of observations':<23}={n:>11}\n", "text")
+    out.write(f"{f'Procrustes analysis ({tr})':<43}{'Number of observations':<23}={n:>11}\n", "text")
     row("Model df (df_m)", df_m)
     row("Residual df (df_r)", df_r)
     row("SS(target)", f"{r['ss']:.4f}")
@@ -482,15 +515,18 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     row("RMSE = root(RSS/df_r)", f"{rmse:.7g}")
     row("Procrustes = RSS/SS", f"{P:.4f}")
     _proc_matrix(out, "Translation c", "", ["_cons"], tgt, r["trans"].reshape(1, -1))
-    _proc_matrix(out, "Rotation & reflection matrix A (orthogonal)", "", src, tgt, r["T"])
-    out.write(f"Dilation factor\n\n{'rho =':>18}{r['c']:>10.4f}\n\n", "text")
+    if tr == "unrestricted":
+        _proc_matrix(out, "Transformation matrix A (unrestricted)", "", src, tgt, r["T"])          # VERIFY
+    else:
+        _proc_matrix(out, "Rotation & reflection matrix A (orthogonal)", "", src, tgt, r["T"])
+        out.write(f"Dilation factor\n\n{'rho =':>18}{r['c']:>10.4f}\n\n", "text")
     ddf = df_r / k if k else float("nan")
     ys = np.vstack([r["ss_i"], r["rss_i"], np.sqrt(r["rss_i"] / ddf), r["rss_i"] / r["ss_i"], r["corr_i"]])
     _proc_matrix(out, "Fit statistics by target variable", "Statistics", ["SS", "RSS", "RMSE", "Procrustes", "Corr_y_yhat"], tgt, ys)
     scalars = [("rho", r["c"]), ("N", n), ("ss", r["ss"]), ("rss", r["rss"]), ("P", P), ("rmse", rmse), ("urmse", urmse),
                ("df_m", df_m), ("df_r", df_r), ("ny", k)]
     macros = [("cmdline", "procrustes " + args.strip()), ("cmd", "procrustes"), ("marginsnotok", "_ALL"),
-              ("estat_cmd", "procrustes_estat"), ("predict", "procrustes_p"), ("uniqueA", "1"), ("transform", "orthogonal"),
+              ("estat_cmd", "procrustes_estat"), ("predict", "procrustes_p"), ("uniqueA", "1"), ("transform", tr),
               ("xlist", " ".join(src)), ("ylist", " ".join(tgt)), ("properties", "nob noV")]
     mats = [("ystats", matrix(ys, ["SS", "RSS", "RMSE", "Procrustes", "Corr_y_yhat"], tgt)),
             ("c", matrix(r["trans"].reshape(1, -1), ["c"], tgt)), ("A", matrix(r["T"], src, tgt))]
@@ -508,7 +544,7 @@ def cmd_procrustes(s: "Session", args: str) -> None:
                 ss.output.write("(fitted assumed)\n", "text")
             return [np.where(ok, F[:, j], SYS) for j in range(k)]
         return k, fn
-    post_e(s, "procrustes", scalars, macros, mats, mask, n,
+    post_e(s, "procrustes", scalars, macros, mats, mask, n, extra={"proc": {"r": r, "src": src, "tgt": tgt}},
            predict_multi={"": lambda ss, ee: pred(ss, ee, note=True), "fitted": lambda ss, ee: pred(ss, ee),
                           "residuals": lambda ss, ee: pred(ss, ee, True)}, predict_opts={"fitted": 3})
 
@@ -555,3 +591,276 @@ def cmd_biplot(s: "Session", args: str) -> None:
             "_ytitle": f"Dimension {pair[1] + 1} ({100 * b['sv'][pair[1]] ** 2 / tot:.1f}%)",
             "title": {"lines": ["Biplot"]}, "legend": {"off": True}}
     finish(s, Graph(family="twoway", opts=opts, panels=[Panel("", layers)]), o)
+
+
+# ---------------------------------------------------------------------------
+# plots after ca, mca, mds and procrustes
+# ---------------------------------------------------------------------------
+
+_GOPTS = {"name": 3, "saving": 3, "nodraw": 3, "title": 1, "dim": 3, "norow": 5, "nocolumn": 5,
+          "xnegate": 4, "ynegate": 4, "origin": 3, "maxlength": 4, "variables": 3, "combine": 4,
+          "autoaspect": 4, "normalize": 4, "nolabel": 5}
+
+
+def _graph_opts(text: str) -> dict:
+    return match_options(text, _GOPTS) if text.strip() else {}
+
+
+def _last(s: "Session", cmds: tuple[str, ...]):
+    est = getattr(s, "_estimates", None)
+    if est is None or est.cmd not in cmds:
+        raise StataError(301, "last estimates not found")
+    return est
+
+
+def _pair(o: dict, avail: int) -> list[int]:
+    pr = [int(float(x)) - 1 for x in str(o["dim"]).replace(",", " ").split()] if isinstance(o.get("dim"), str) else [0, 1]
+    if len(pr) != 2 or min(pr) < 0 or max(pr) >= avail:
+        raise StataError(198, "invalid dim()")                                            # VERIFY
+    return pr
+
+
+def _signs(o: dict) -> tuple[float, float]:
+    return (-1.0 if o.get("xnegate") else 1.0), (-1.0 if o.get("ynegate") else 1.0)
+
+
+def _axis_title(share, j: int) -> str:
+    return f"Dimension {j + 1} ({100 * float(share[j]):.1f}%)"                              # VERIFY
+
+
+def _draw(s, o, opts, panels) -> None:
+    from ..graphics.model import Graph
+    from .graphcmd import finish
+    if isinstance(o.get("title"), str):
+        opts["title"] = {"lines": [o["title"].strip().strip('"')]}
+    finish(s, Graph(family="twoway", opts=opts, panels=panels), o)
+
+
+def _scatter(x, y, labels, style=None):
+    from ..graphics.model import Layer
+    return Layer("scatter", [float(v) for v in x], [float(v) for v in y], {"mlabel": list(labels)}, style or {}, "")
+
+
+def _origin_lines(xs, ys):
+    from ..graphics.model import Layer
+    lo_x, hi_x = min(xs + [0.0]), max(xs + [0.0])
+    lo_y, hi_y = min(ys + [0.0]), max(ys + [0.0])
+    return Layer("line", [lo_x, hi_x, float("nan"), 0.0, 0.0], [0.0, 0.0, float("nan"), lo_y, hi_y],
+                 {}, {"lpattern": "dash"}, "")
+
+
+@command("cabiplot", "cabiplot")
+def cmd_cabiplot(s: "Session", args: str) -> None:
+    """Biplot of the row and column coordinates after ca ([MV] ca postestimation plots)."""
+    from ..graphics.model import Panel
+    o = _graph_opts(args.lstrip(", ").strip() if args.strip().startswith(",") else args)
+    ctx = _last(s, ("ca", "camat")).extra["ord"]
+    Rc, Cc = ctx["coords_all"]
+    pr = _pair(o, Rc.shape[1])
+    sx, sy = _signs(o)
+    layers = []
+    xs, ys = [], []
+    if not o.get("norow"):
+        layers.append(_scatter(sx * Rc[:, pr[0]], sy * Rc[:, pr[1]], ctx["labels"][0], {"msymbol": "O"}))
+        xs += (sx * Rc[:, pr[0]]).tolist()
+        ys += (sy * Rc[:, pr[1]]).tolist()
+    if not o.get("nocolumn"):
+        layers.append(_scatter(sx * Cc[:, pr[0]], sy * Cc[:, pr[1]], ctx["labels"][1], {"msymbol": "T"}))
+        xs += (sx * Cc[:, pr[0]]).tolist()
+        ys += (sy * Cc[:, pr[1]]).tolist()
+    if o.get("origin"):
+        layers.insert(0, _origin_lines(xs, ys))
+    opts = {"_xtitle": _axis_title(ctx["share"], pr[0]), "_ytitle": _axis_title(ctx["share"], pr[1]),
+            "title": {"lines": ["Correspondence analysis biplot"]},
+            "note": {"lines": [f"coordinates in {ctx['norm']} normalization"]}}             # VERIFY
+    if not o.get("norow") and not o.get("nocolumn"):
+        layers[-2].label, layers[-1].label = ctx["vars"][0], ctx["vars"][1]
+    else:
+        opts["legend"] = {"off": True}
+    _draw(s, o, opts, [Panel("", layers)])
+
+
+def _projection(s, o, sections, title: str, f: int) -> None:
+    """One panel per section: the categories at their coordinates on a vertical axis per
+    dimension (x = dimension, y = coordinate), labeled by category."""
+    from ..graphics.model import Layer, Panel
+    panels = []
+    for lab, names, C in sections:
+        layers = []
+        for j in range(f):
+            y = C[:, j]
+            layers.append(Layer("line", [j + 1.0, j + 1.0], [float(y.min()), float(y.max())], {}, {"lcolor": "gs8"}, ""))
+            layers.append(_scatter(np.full(len(y), j + 1.0), y, names, {"msymbol": "d", "mcolor": "navy"}))
+        panels.append(Panel(lab, layers))
+    opts = {"_xtitle": "", "_ytitle": "score", "title": {"lines": [title]}, "legend": {"off": True},
+            "xlabel": {"ticks": [[float(j + 1), f"dimension {j + 1}"] for j in range(f)]},
+            "xscale": {"range": [0.5, f + 0.5]}}                                           # VERIFY
+    _draw(s, o, opts, panels)
+
+
+@command("caprojection", "caprojection")
+def cmd_caprojection(s: "Session", args: str) -> None:
+    o = _graph_opts(args.strip().lstrip(","))
+    ctx = _last(s, ("ca", "camat")).extra["ord"]
+    f = ctx["f"]
+    Rc, Cc = ctx["coords"]
+    secs = []
+    if not o.get("norow"):
+        secs.append((ctx["vars"][0], ctx["labels"][0], Rc))                               # VERIFY the titles
+    if not o.get("nocolumn"):
+        secs.append((ctx["vars"][1], ctx["labels"][1], Cc))
+    _projection(s, o, secs, "CA dimension projection plot", f)
+
+
+def _mca_sections(ctx, o):
+    C = ctx["coords_all"]
+    want = None
+    if isinstance(o.get("variables"), str):
+        want = o["variables"].split()
+    out = []
+    for var, lo, hi in ctx["sections"]:
+        if want is None or var in want:
+            out.append((var, ctx["labels"][lo:hi], C[lo:hi]))
+    return out
+
+
+@command("mcaplot", "mcaplot")
+def cmd_mcaplot(s: "Session", args: str) -> None:
+    """The coordinates of the categories after mca, one panel per variable."""
+    from ..graphics.model import Panel
+    c = args.find(",")
+    head, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
+    o = _graph_opts(opt)
+    if head.strip():
+        o["variables"] = " ".join(x.strip("()") for x in head.split())
+    ctx = _last(s, ("mca",)).extra["ord"]
+    pr = _pair(o, ctx["coords_all"].shape[1])
+    sx, sy = _signs(o)
+    panels = []
+    for var, labs, C in _mca_sections(ctx, o):
+        lay = [_scatter(sx * C[:, pr[0]], sy * C[:, pr[1]], labs)]
+        if o.get("origin"):
+            lay.insert(0, _origin_lines((sx * C[:, pr[0]]).tolist(), (sy * C[:, pr[1]]).tolist()))
+        panels.append(Panel(var, lay))
+    opts = {"_xtitle": f"dimension {pr[0] + 1} ({100 * float(ctx['share'][pr[0]]):.1f}%)",
+            "_ytitle": f"dimension {pr[1] + 1} ({100 * float(ctx['share'][pr[1]]):.1f}%)",
+            "title": {"lines": ["MCA coordinate plot"]}, "legend": {"off": True},
+            "note": {"lines": [f"coordinates in {ctx['norm']} normalization"]}}               # VERIFY
+    _draw(s, o, opts, panels)
+
+
+@command("mcaprojection", "mcaprojection")
+def cmd_mcaprojection(s: "Session", args: str) -> None:
+    c = args.find(",")
+    head, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
+    o = _graph_opts(opt)
+    if head.strip():
+        o["variables"] = head
+    ctx = _last(s, ("mca",)).extra["ord"]
+    f = ctx["f"]
+    _projection(s, o, [(v, lb, C[:, :f]) for v, lb, C in _mca_sections(ctx, o)], "MCA dimension projection plot", f)
+
+
+@command("mdsconfig", "mdsconfig")
+def cmd_mdsconfig(s: "Session", args: str) -> None:
+    """The configuration of the objects after mds, mdsmat and mdslong."""
+    from ..graphics.model import Panel
+    o = _graph_opts(args.strip().lstrip(","))
+    d = _last(s, ("mds", "mdsmat", "mdslong")).extra["mds"]
+    Y = d["Y"]
+    if Y.shape[1] < 2:
+        raise StataError(198, "configuration has only one dimension")                     # VERIFY
+    pr = _pair(o, Y.shape[1])
+    sx, sy = _signs(o)
+    opts = {"_xtitle": f"Dimension {pr[0] + 1}", "_ytitle": f"Dimension {pr[1] + 1}",
+            "title": {"lines": ["MDS configuration"]}, "legend": {"off": True},
+            "note": {"lines": ["Classical MDS"]}}                                          # VERIFY
+    _draw(s, o, opts, [Panel("", [_scatter(sx * Y[:, pr[0]], sy * Y[:, pr[1]], d["ids"])])])
+
+
+@command("mdsshepard", "mdsshepard")
+def cmd_mdsshepard(s: "Session", args: str) -> None:
+    """Shepard diagram after mds: the fitted Euclidean distances against the dissimilarities of
+    every pair of objects."""
+    from ..graphics.model import Layer, Panel
+    o = _graph_opts(args.strip().lstrip(","))
+    est = _last(s, ("mds", "mdsmat", "mdslong"))
+    d = est.extra["mds"]
+    Y = d["Y"]
+    D = d.get("D")
+    if D is None:
+        raise StataError(301, "last estimates not found")
+    iu = np.triu_indices(Y.shape[0], 1)
+    fit = np.sqrt(((Y[:, None, :] - Y[None, :, :]) ** 2).sum(-1))[iu]
+    dis = D[iu]
+    hi = float(max(dis.max(), fit.max()))
+    layers = [Layer("scatter", dis.tolist(), fit.tolist(), {}, {}, ""),
+              Layer("line", [0.0, hi], [0.0, hi], {}, {}, "")]
+    opts = {"_xtitle": "Dissimilarities", "_ytitle": "Distances", "title": {"lines": ["Shepard diagram"]},
+            "legend": {"off": True}}                                                       # VERIFY
+    _draw(s, o, opts, [Panel("", layers)])
+
+
+@command("mdslong", "mdslong")
+def cmd_mdslong(s: "Session", args: str) -> None:
+    """mdslong depvar, id(var1 var2): multidimensional scaling of dissimilarities given in long
+    format, one observation per pair of objects ([MV] mdslong)."""
+    p = parse_standard(args)
+    o = match_options(p.options, {"id": 2, "dimension": 3, "method": 3, "noplot": 3, "force": 5, "s2d": 3}) if p.options.strip() else {}
+    names = numeric_names(s, p.varlist, 1)
+    if len(names) != 1:
+        raise StataError(103, "too many variables specified")
+    if not isinstance(o.get("id"), str):
+        raise StataError(198, "option id() required")
+    idv = s.expand_varlist(o["id"])
+    if len(idv) != 2:
+        raise StataError(198, "id() requires two variables")                               # VERIFY
+    ds = s.data
+    X, _, _, mask = sample(s, p, names, allowed=(), extra=[v for v in idv if not ds.get(v).is_string])
+    v1, v2 = (ds.get(v) for v in idv)
+    a = [(str(x) if v1.is_string else gnum(x)) for x in (v1.raw if v1.is_string else v1.data)[mask]]
+    b = [(str(x) if v2.is_string else gnum(x)) for x in (v2.raw if v2.is_string else v2.data)[mask]]
+    numeric = not (v1.is_string or v2.is_string)
+    keys = sorted(set(a) | set(b), key=(lambda t: float(t)) if numeric else None)
+    pos = {k: i for i, k in enumerate(keys)}
+    n = len(keys)
+    D = np.full((n, n), np.nan)
+    np.fill_diagonal(D, 0.0)
+    for i, j, dv in zip(a, b, X[:, 0]):
+        ii, jj = pos[i], pos[j]
+        if ii == jj:
+            continue
+        if np.isfinite(D[ii, jj]) and not o.get("force") and D[ii, jj] != dv:
+            raise StataError(198, f"dissimilarity of {i} and {j} specified more than once")   # VERIFY
+        D[ii, jj] = D[jj, ii] = dv
+    if np.isnan(D).any():
+        raise StataError(198, "dissimilarities of some pairs of objects are missing")       # VERIFY
+    if str(o.get("s2d", "")).strip():
+        raise StataError(198, "option s2d() is not available yet in OpenDTA")             # OpenDTA
+    desc = f"dissimilarity variable: {names[0]} in long format"                            # VERIFY
+    _mds_run(s, D, keys, o, desc, args, "mdslong", mask, {"dname": names[0]})
+
+
+@command("procoverlay", "procoverlay")
+def cmd_procoverlay(s: "Session", args: str) -> None:
+    """The target and the fitted configuration after procrustes, in the first two target
+    dimensions ([MV] procrustes postestimation)."""
+    from ..graphics.model import Panel
+    p = parse_standard(args)
+    o = _graph_opts(p.options)
+    est = _last(s, ("procrustes",))
+    pc = est.extra["proc"]
+    r, src, tgt = pc["r"], pc["src"], pc["tgt"]
+    if len(tgt) < 2:
+        raise StataError(198, "procoverlay requires at least two target variables")        # VERIFY
+    pr = _pair(o, len(tgt))
+    X, _, _, mask = sample(s, p, tgt + src, allowed=())
+    k = len(tgt)
+    Yt, F = X[:, :k], r["c"] * X[:, k:] @ r["T"] + r["trans"]
+    sx, sy = _signs(o)
+    ids = [str(i + 1) for i in np.flatnonzero(mask)]
+    layers = [_scatter(sx * Yt[:, pr[0]], sy * Yt[:, pr[1]], ids, {"msymbol": "O"}),
+              _scatter(sx * F[:, pr[0]], sy * F[:, pr[1]], ids, {"msymbol": "T"})]
+    layers[0].label, layers[1].label = "Target", "Fitted"
+    opts = {"_xtitle": tgt[pr[0]], "_ytitle": tgt[pr[1]], "title": {"lines": ["Procrustes overlay"]}}   # VERIFY
+    _draw(s, o, opts, [Panel("", layers)])
