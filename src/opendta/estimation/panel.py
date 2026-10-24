@@ -607,10 +607,13 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     endog_txt, inst_txt = mp.group(1), mp.group(2)
     exog_txt = rest[:mp.start()] + " " + rest[mp.end():]
     # sample: dependent + exogenous + endogenous + instruments without missing
-    smp = Sample(s, exog_txt.strip(), opts_spec={"small": 2, "first": 3, "wmatrix": 2},
+    smp = Sample(s, exog_txt.strip(), opts_spec={"small": 2, "first": 3, "wmatrix": 2, "center": 6, "igmm": 4},
                  weights=("aweight", "fweight", "pweight"), extra_vars=endog_txt + " " + inst_txt)
     if estimator != "gmm" and smp.o.get("wmatrix"):
         raise StataError(198, "option wmatrix() is allowed only with gmm")   # VERIFY
+    for opt_ in ("center", "igmm"):
+        if estimator != "gmm" and smp.o.get(opt_):
+            raise StataError(198, f"option {opt_} is allowed only with gmm")   # VERIFY
     ds = s.data
     endog_terms = fvars.expand_fv(ds, endog_txt)
     inst_terms = fvars.expand_fv(ds, inst_txt)
@@ -656,7 +659,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         rss = float(e @ e)
         s2 = rss / (N - k) if small else rss / N
         if smp.vce in ("robust", "cluster") or wm_label != "Unadjusted":
-            vcetype = "Robust"
+            vcetype = "HAC" if wm_label.startswith("HAC") else "Robust"   # VERIFY the HAC label
             n_clust = n_clust_w if (smp.vce == "cluster" or wm_label.startswith("Cluster")) else None
     elif smp.vce in ("robust", "cluster") and getattr(s, "_svy_ctx", None) is not None:
         # svy: the linearized variance from the scores (QX e, already weighted) carried to the
@@ -813,21 +816,66 @@ def _liml_kappa(y, Xn, ex_cols, X, Z) -> float:
     return float(eigh(A_.T @ A_, B_.T @ B_, eigvals_only=True)[0])
 
 
+def _hac_weights(kernel: str, lags: int, N: int) -> list[float]:
+    """Weights of the autocovariances 1..N-1 for wmatrix(hac kernel #) ([R] ivregress)."""
+    out = []
+    for j in range(1, N):
+        if kernel == "quadraticspectral":
+            x = j / lags if lags > 0 else np.inf          # VERIFY: bandwidth = #
+            if not np.isfinite(x):
+                out.append(0.0)
+                continue
+            u = 6 * np.pi * x / 5
+            out.append(float(25 / (12 * np.pi ** 2 * x ** 2) * (np.sin(u) / u - np.cos(u))))
+            continue
+        x = j / (lags + 1)
+        if x > 1:
+            out.append(0.0)
+        elif kernel == "bartlett":
+            out.append(1 - x)
+        else:                                             # parzen
+            out.append(1 - 6 * x * x + 6 * x ** 3 if x <= .5 else 2 * (1 - x) ** 3)
+    return out
+
+
 def _gmm_two_step(smp, y, X, Z, b1, small):
-    """Two-step efficient GMM: the weight matrix comes from the 2SLS residuals (robust, cluster
-    or unadjusted); returns b, residuals, V (unadjusted: the efficient variance; robust or
-    cluster: the sandwich), the weight matrix label and the number of clusters."""
+    """Two-step (or, with igmm, iterated) efficient GMM: the weight matrix comes from the 2SLS
+    residuals (robust, cluster, HAC or unadjusted; center centers the moments); returns b,
+    residuals, V (unadjusted: the efficient variance; otherwise the sandwich with the same kind of
+    meat), the weight matrix label and the number of clusters."""
     N = len(y)
     o = smp.o
     wm = str(o.get("wmatrix") or ("cluster " + smp.clustvar if smp.vce == "cluster" else "robust")).split()
     kind = wm[0].lower()
+    center = bool(o.get("center"))
     e1 = y - X @ b1
     n_cl = None
+    hac = None
+    if kind == "hac":
+        names = {"bartlett": "bartlett", "nwest": "bartlett", "parzen": "parzen", "gallant": "parzen",
+                 "quadraticspectral": "quadraticspectral", "andrews": "quadraticspectral"}
+        if len(wm) < 2 or wm[1].lower() not in names:
+            raise StataError(198, "wmatrix(hac) requires a kernel")   # VERIFY
+        kern = names[wm[1].lower()]
+        if len(wm) > 2 and wm[2].lower() == "opt":
+            raise StataError(198, "wmatrix(hac kernel opt) is not available yet in OpenDTA")   # OpenDTA
+        lags = int(float(wm[2])) if len(wm) > 2 else N - 2          # VERIFY the default
+        hac = (kern, lags, _hac_weights(kern, lags, N))
 
     def meat(e, kind_):
         nonlocal n_cl
+        G = Z * e[:, None]
+        if center and not kind_.startswith("una"):
+            G = G - G.mean(axis=0)
+        if kind_ == "hac":
+            S = G.T @ G
+            for j, wj in enumerate(hac[2], start=1):
+                if wj != 0:
+                    Gj = G[j:].T @ G[:-j]
+                    S += wj * (Gj + Gj.T)
+            return S
         if kind_.startswith("rob"):
-            return (Z * (e ** 2)[:, None]).T @ Z
+            return G.T @ G
         if kind_.startswith("una"):
             return float(e @ e / N) * (Z.T @ Z)
         if kind_.startswith("clu"):
@@ -836,22 +884,31 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
                 smp.s.data.get(resolve_name(smp.s.data, wm[1])).data[smp.mask]
             u = np.unique(cv)
             n_cl = len(u)
-            H = np.zeros((Z.shape[1], Z.shape[1]))
-            for v in u:
-                t = Z[cv == v].T @ e[cv == v]
-                H += np.outer(t, t)
-            return H
+            T_ = np.array([G[cv == v].sum(axis=0) for v in u])
+            if center:
+                T_ = T_ - T_.mean(axis=0)
+            return T_.T @ T_
         raise StataError(198, f"wmatrix({kind_}) is not available yet in OpenDTA")
-    S1 = meat(e1, kind)
-    W = np.linalg.inv(S1)
     ZX = Z.T @ X
-    Ainv = np.linalg.inv(ZX.T @ W @ ZX)
-    b = Ainv @ (ZX.T @ W @ (Z.T @ y))
+    W = np.linalg.inv(meat(e1, kind))
+    b = None
+    for _it in range(16000 if o.get("igmm") else 1):          # VERIFY igmm's limits
+        Ainv = np.linalg.inv(ZX.T @ W @ ZX)
+        b_new = Ainv @ (ZX.T @ W @ (Z.T @ y))
+        done = b is not None and np.max(np.abs(b_new - b)) <= 1e-6 * (1 + np.max(np.abs(b)))
+        b = b_new
+        if not o.get("igmm") or done:
+            break
+        W = np.linalg.inv(meat(y - X @ b, kind))
     e = y - X @ b
     V = Ainv
-    if smp.vce in ("robust", "cluster") or kind[:3] in ("rob", "clu"):
+    if smp.vce in ("robust", "cluster") or kind[:3] in ("rob", "clu", "hac"):
         # a robust or cluster weight matrix gives the sandwich variance (compat 1907)
-        S2 = meat(e, "cluster" if (smp.vce == "cluster" or kind.startswith("clu")) else "robust")
+        k2 = "hac" if kind == "hac" else ("cluster" if (smp.vce == "cluster" or kind.startswith("clu")) else "robust")
+        S2 = meat(e, k2)
         V = Ainv @ (ZX.T @ W @ S2 @ W @ ZX) @ Ainv
-    label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
+    if hac is not None:
+        label = f"HAC {hac[0].capitalize() if hac[0] != 'quadraticspectral' else 'Quadratic spectral'} {hac[1]}"   # VERIFY
+    else:
+        label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
     return b, e, (V + V.T) / 2, label, n_cl

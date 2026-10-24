@@ -167,6 +167,54 @@ def tnbreg(y, eta, lnalpha, lower):
     return lnb - np.log(sf), d_eta + dc_eta / sf, d_la + dc_la / sf
 
 
+def _nb1_terms(y, mu, lndelta):
+    """ln NB1(y; mu, delta) (variance mu (1 + delta)) and its derivatives with respect to
+    eta = ln mu and ln delta: size r = mu/delta and probability 1/(1 + delta)."""
+    lg, dg = special.gammaln, special.digamma
+    dl = np.exp(lndelta) * np.ones_like(mu)
+    r = mu / dl
+    l1d = np.log1p(dl)
+    ll = lg(y + r) - lg(r) - lg(y + 1) - r * l1d + y * (np.log(dl) - l1d)
+    psi = dg(y + r) - dg(r)
+    d_eta = r * (psi - l1d)
+    d_ld = -r * psi + r * l1d - r * dl / (1 + dl) + y / (1 + dl)
+    return ll, d_eta, d_ld
+
+
+def trunc_count(y, eta, lnpar, lower, upper, kind):
+    """Count distribution truncated to lower < y < upper (arrays; upper may be inf): ln f(y) -
+    ln P(lower < Y < upper) and its derivatives with respect to eta and the dispersion
+    parameter. kind: "poisson", "nb2" (lnpar = ln alpha) or "nb1" (lnpar = ln delta)."""
+    mu = np.exp(np.clip(eta, -700, 700))
+
+    def terms(j):
+        jj = np.full_like(mu, j) if np.ndim(j) == 0 else j
+        if kind == "poisson":
+            return -mu + jj * np.log(mu) - special.gammaln(jj + 1), jj - mu, np.zeros_like(mu)
+        if kind == "nb2":
+            return _nb_terms(jj, mu, np.exp(-lnpar) * np.ones_like(mu))
+        return _nb1_terms(jj, mu, lnpar)
+    ll, d_eta, d_par = terms(y)
+    fin = np.isfinite(upper)
+    top = int(max(np.max(lower), np.max(np.where(fin, upper - 1, 0)))) if len(y) else 0
+    Fl, Fl_e, Fl_p = (np.zeros_like(mu) for _ in range(3))
+    Fu, Fu_e, Fu_p = (np.zeros_like(mu) for _ in range(3))
+    for j in range(top + 1):
+        lj, ej, pj_ = terms(j)
+        pj = np.exp(lj)
+        lo = j <= lower
+        up = fin & (j <= upper - 1)
+        Fl += np.where(lo, pj, 0)
+        Fl_e += np.where(lo, pj * ej, 0)
+        Fl_p += np.where(lo, pj * pj_, 0)
+        Fu += np.where(up, pj, 0)
+        Fu_e += np.where(up, pj * ej, 0)
+        Fu_p += np.where(up, pj * pj_, 0)
+    Fu = np.where(fin, Fu, 1.0)
+    P = np.maximum(Fu - Fl, 1e-300)
+    return ll - np.log(P), d_eta - (Fu_e - Fl_e) / P, d_par - (Fu_p - Fl_p) / P
+
+
 def gnbreg(y, eta, zeta):
     """Negative binomial with ln alpha = zeta, an index of its own."""
     mu = np.exp(np.clip(eta, -700, 700))

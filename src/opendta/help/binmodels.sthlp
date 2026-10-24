@@ -22,7 +22,7 @@
 {cmd:binreg} depvar [indepvars] [if] [in] [weight] [{cmd:,} {cmd:or}|{cmd:rr}|{cmd:hr}|{cmd:rd} {cmd:n(}#|varname{cmd:)} ...]
 
 {p 8 16 2}
-{cmd:glogit} pos pop [indepvars] [if] [in] [{cmd:,} ...]
+{cmd:glogit} pos pop [indepvars] [if] [in] [{cmd:,} {cmd:or} ...]
 
 {p 8 16 2}
 {cmd:zip} depvar [indepvars] [if] [in] [weight] {cmd:,} {cmd:inflate(}varlist{cmd:)} [{cmd:probit} {cmd:vuong} {cmd:irr} ...]
@@ -31,7 +31,7 @@
 {cmd:zinb} depvar [indepvars] [if] [in] [weight] {cmd:,} {cmd:inflate(}varlist{cmd:)} [{cmd:probit} {cmd:vuong} {cmd:irr} ...]
 
 {p 8 16 2}
-{cmd:tpoisson}|{cmd:tnbreg} depvar [indepvars] [if] [in] [weight] [{cmd:,} {cmd:ll(}#{cmd:)} {cmd:irr} ...]
+{cmd:tpoisson}|{cmd:tnbreg} depvar [indepvars] [if] [in] [weight] [{cmd:,} {cmd:ll(}#|varname{cmd:)} {cmd:ul(}#|varname{cmd:)} {cmd:irr} {cmd:dispersion(mean}|{cmd:constant)} ...]
 
 {p 8 16 2}
 {cmd:gnbreg} depvar [indepvars] [if] [in] [weight] [{cmd:,} {cmd:lnalpha(}varlist{cmd:)} {cmd:irr} ...]
