@@ -105,7 +105,7 @@ Done in phase 16 (compat case 1902), except more than one level of random effect
 
 ### 6. Panel data ✅
 
-Done in phase 19 (compat case 1905), except the pieces listed under Panel data in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`xtunitroot llc` and `ips`, which need the tabulated moments of the original papers, and some options of the dynamic-panel, `xtregar`, `xtrc`, `xtivreg` and `xtdata` commands). The original plan: random-effects models by quadrature, `quadchk`, dynamic panels by GMM, the linear panel estimators, `xtfrontier`, `xtunitroot` and the description commands.
+Done in phases 19 and 28 (compat cases 1905 and 1914), except the pieces listed under Panel data in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`xtunitroot llc` and `ips`, which need the tabulated moments of the original papers, and some options of the dynamic-panel commands, `xtregar` and `xtdata`). The original plan: random-effects models by quadrature, `quadchk`, dynamic panels by GMM, the linear panel estimators, `xtfrontier`, `xtunitroot` and the description commands.
 
 ### 7. Base statistics (3–4 h, ~135k tokens)
 

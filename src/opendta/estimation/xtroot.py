@@ -16,8 +16,11 @@ from ..core import panelroot as pr
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_standard
+from ..lazy import lazy
 from .tsmodels import mackinnon_p
 from .tsops import panel_info, ts_info
+
+st = lazy("scipy.stats")
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -96,10 +99,12 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
     if len(names) != 1:
         raise StataError(103 if names else 102, "too many variables specified" if names else "varlist required")
     name = names[0]
-    if o.get("pperron") or o.get("kernel") or o.get("altt"):
+    if o.get("altt"):
         raise StataError(198, "option not available yet in OpenDTA")
-    if o.get("drift"):
-        raise StataError(198, "option drift is not available yet in OpenDTA")
+    if o.get("kernel") and sub != "hadri":
+        raise StataError(198, "option kernel() not allowed")                      # VERIFY
+    if o.get("drift") and (sub != "fisher" or o.get("pperron") or o.get("trend") or o.get("noconstant")):
+        raise StataError(198, "option drift may only be specified with dfuller, without trend or noconstant")  # VERIFY
     if sub == "fisher" and not o.get("dfuller") and not o.get("pperron"):
         raise StataError(198, "must specify one of dfuller or pperron")
     mask = touse(s, p)
@@ -107,9 +112,12 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
     trend, const = bool(o.get("trend")), not o.get("noconstant")
     if trend and not const:
         raise StataError(198, "options trend and noconstant may not be combined")   # VERIFY
-    Y, series = _matrix(s, name, mask, sub != "fisher")
-    if Y is not None and o.get("demean"):
+    Y, series = _matrix(s, name, mask, sub != "fisher" or bool(o.get("demean")))
+    if o.get("demean"):
+        if Y is None:
+            raise StataError(498, "demean requires strongly balanced data")         # VERIFY
         Y = Y - Y.mean(axis=0, keepdims=True)
+        series = list(Y)
     N = len(series)
     T = Y.shape[1] if Y is not None else None
     means = "Included" if const else "Not included"
@@ -148,11 +156,21 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
         out.write("-" * 78 + "\n", "text")
         s.r = {"N_g": float(N), "N_t": float(T), "lambda": r["lambda"], "p": r["p"]}
     elif sub == "hadri":
-        r = pr.hadri(Y, trend, bool(o.get("robust")))
+        kname, klags = "", 0
+        if o.get("kernel") not in (None, True):
+            kw = str(o["kernel"]).split()
+            kname = {"ba": "bartlett", "bartlett": "bartlett", "pa": "parzen", "parzen": "parzen",
+                     "qs": "quadraticspectral", "quadraticspectral": "quadraticspectral"}.get(kw[0].lower(), "")
+            if not kname or len(kw) != 2 or not kw[1].isdigit():
+                # VERIFY: the automatic lag choices (nwest, ...) are not available
+                raise StataError(198, "kernel() must be bartlett, parzen or quadraticspectral with a number of lags")
+            klags = int(kw[1])
+        r = pr.hadri(Y, trend, bool(o.get("robust")), kname, klags)
         _header(out, "Hadri LM test", name,
                 ["Ho: All panels are stationary", "Ha: Some panels contain unit roots", "",
                  f"{'Time trend:':<20}{tr}", f"{'Heteroskedasticity:':<20}" + ("Robust" if o.get("robust") else "Not robust"),
-                 f"{'LR variance:':<20}(not used)"],
+                 f"{'LR variance:':<20}" + (f"{kname.capitalize() if kname != 'quadraticspectral' else 'Quadratic spectral'}, {klags} lags"
+                                              if kname else "(not used)")],
                 [f"Number of panels  = {N:>6}", f"Number of periods = {T:>6}", "",
                  "Asymptotics: T, N -> Infinity", " " * 18 + "sequentially", ""], extra_rule=2)
         out.write("-" * 78 + "\n", "text")
@@ -162,26 +180,40 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
         out.write("-" * 78 + "\n", "text")
         s.r = {"N_g": float(N), "N_t": float(T), "z": r["z"], "p": r["p"]}
     else:
+        pperron = bool(o.get("pperron"))
+        drift = bool(o.get("drift"))
+        if pperron and o.get("lags") in (None, False, True):
+            raise StataError(198, "option lags() required with pperron")            # VERIFY
         lags = int(o["lags"]) if o.get("lags") not in (None, False, True) else 0
         ps = []
         for y in series:
             yy = y - 0.0
-            if o.get("demean"):
-                raise StataError(198, "option demean is not available yet for fisher in OpenDTA")
             try:
-                tau, _ = pr.adf_tau(yy, lags, const, trend)
-            except ValueError:
+                if pperron:
+                    from .tsunit import pp_stats
+                    tau = pp_stats(yy, lags, trend, const)[1]
+                elif drift:
+                    tau, nn = pr.adf_tau(yy, lags, True, False)
+                    # dfuller, drift: the t distribution with n - k degrees of freedom (VERIFY)
+                    ps.append(float(st.t.cdf(tau, nn - lags - 2)))
+                    continue
+                else:
+                    tau, _ = pr.adf_tau(yy, lags, const, trend)
+            except (ValueError, np.linalg.LinAlgError):
                 raise StataError(2001, "insufficient observations")
             ps.append(mackinnon_p(tau, "ct" if trend else ("c" if const else "n")))
         r = pr.fisher_combine(np.array(ps))
         tbar = float(np.mean([len(y) for y in series]))
         _header(out, "Fisher-type unit-root test", name,
-                ["Based on augmented Dickey-Fuller tests", "-" * 36, "Ho: All panels contain unit roots",
+                ["Based on Phillips-Perron tests" if pperron else "Based on augmented Dickey-Fuller tests",
+                 "-" * (30 if pperron else 36), "Ho: All panels contain unit roots",
                  "Ha: At least one panel is stationary", "",
                  "AR parameter: Panel-specific", f"Panel means:  {means}", f"Time trend:   {tr}",
-                 "Drift term:   Not included"],
+                 ("Cross-sectional means removed" if o.get("demean") else "") if pperron else
+                 f"Drift term:   {'Included' if drift else 'Not included'}"],
                 ["", "", f"{'Number of panels':<25}= {N:>6}", f"{'Avg. number of periods':<25}= {tbar:>6.2f}", "",
-                 "Asymptotics: T -> Infinity", "", "", f"ADF regressions: {lags} lags"])
+                 "Asymptotics: T -> Infinity", "", "",
+                 f"Newey-West lags: {lags} lags" if pperron else f"ADF regressions: {lags} lags"])   # VERIFY
         out.write("-" * 78 + "\n", "text")
         out.write("                                  Statistic      p-value\n", "text")
         out.write("-" * 78 + "\n", "text")

@@ -129,8 +129,13 @@ def cmd_xtdata(s: "Session", args: str) -> None:
     modes = [m for m in ("fe", "be", "re", "fa") if o.get(m)]
     if len(modes) != 1:
         raise StataError(198, "one of fe, be, re or fa must be specified")                # VERIFY
-    if modes[0] in ("re", "fa"):
-        raise StataError(198, f"option {modes[0]} is not available yet in OpenDTA")
+    if modes[0] == "fa":
+        raise StataError(198, "option fa is not available yet in OpenDTA")
+    ratio = None
+    if modes[0] == "re":
+        if o.get("ratio") in (None, True):
+            raise StataError(198, "option ratio() required with re")               # VERIFY
+        ratio = float(s.eval(str(o["ratio"])))
     pvar, _ = _panel_vars(s, str(o["i"]).strip() if isinstance(o.get("i"), str) else None)
     ds = s.data
     if ds.changed and not o.get("clear"):
@@ -146,8 +151,27 @@ def cmd_xtdata(s: "Session", args: str) -> None:
         m = mask & (x < SYS)
         sub_inv = np.unique(ds.get(pvar).data[m], return_inverse=True)[1]
         new = x.copy()
-        new[m] = ps.panel_transform(x[m], sub_inv, modes[0])
+        if ratio is not None:
+            # GLS transform of the random-effects model: x - theta_i * mean_i(x), with
+            # theta_i = 1 - 1 / sqrt(T_i ratio^2 + 1), ratio = sigma_u / sigma_e
+            cnt = np.bincount(sub_inv).astype(float)
+            th = 1 - 1 / np.sqrt(cnt * ratio * ratio + 1)
+            mean_i = np.bincount(sub_inv, x[m]) / cnt
+            new[m] = x[m] - th[sub_inv] * mean_i[sub_inv]
+        else:
+            new[m] = ps.panel_transform(x[m], sub_inv, modes[0])
         ds.set_numeric(v, new)
+    if ratio is not None:
+        # the constant of the transformed model, 1 - theta_i: regress ..., noconstant with it
+        # (VERIFY: the name and the presence of this variable)
+        from ..core.dataset import Variable
+        cnt = np.bincount(inv).astype(float)
+        th = 1 - 1 / np.sqrt(cnt * ratio * ratio + 1)
+        const = np.full(ds.nobs, SYS)
+        const[mask] = 1 - th[inv]
+        if ds.has("constant"):
+            ds.drop_vars(["constant"])
+        ds.add(Variable("constant", "double", const))
     if modes[0] == "be":
         # VERIFY: the between-effects data keep one observation per panel (1905 log)
         ids_ = ds.get(pvar).data

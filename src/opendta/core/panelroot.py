@@ -77,15 +77,45 @@ def breitung(Y: np.ndarray, trend: bool = False) -> dict:
     return {"lambda": lam, "p": float(st.norm.cdf(lam))}
 
 
-def hadri(Y: np.ndarray, trend: bool = False, robust: bool = False) -> dict:
-    """Hadri (2000) LM test of stationarity; z is asymptotically N(0, 1), right tail."""
+def lr_variance(e: np.ndarray, kernel: str, lags: int) -> float:
+    """Long-run variance of the residuals e: sum of the autocovariances (divisor T) weighted by
+    the Bartlett, Parzen or quadratic-spectral kernel with bandwidth lags + 1."""
+    T = len(e)
+    g = [float(e[j:] @ e[:T - j]) / T for j in range(T)]
+    out = g[0]
+    b = lags + 1
+    for j in range(1, T):
+        x = j / b
+        if kernel == "bartlett":
+            w = 1 - x if x < 1 else 0.0
+        elif kernel == "parzen":
+            w = 1 - 6 * x * x + 6 * x ** 3 if x <= 0.5 else (2 * (1 - x) ** 3 if x <= 1 else 0.0)
+        else:                                                   # quadratic spectral
+            d = 6 * math.pi * x / 5
+            w = 25 / (12 * math.pi ** 2 * x * x) * (math.sin(d) / d - math.cos(d))
+        if kernel != "quadraticspectral" and w == 0.0:
+            break
+        out += 2 * w * g[j]
+    return out
+
+
+def hadri(Y: np.ndarray, trend: bool = False, robust: bool = False, kernel: str = "", lags: int = 0) -> dict:
+    """Hadri (2000) LM test of stationarity; z is asymptotically N(0, 1), right tail. kernel: the
+    variance of the residuals is their long-run variance (per panel with robust, else the mean
+    over the panels; VERIFY)."""
     N, T = Y.shape
     tt = np.arange(1, T + 1, dtype=float)
     Z = np.column_stack([np.ones(T), tt]) if trend else np.ones((T, 1))
     P = Z @ np.linalg.pinv(Z)
     E = Y - Y @ P.T
     S = np.cumsum(E, axis=1)
-    if robust:
+    if kernel:
+        lrv = np.array([lr_variance(E[i], kernel, lags) for i in range(N)])
+        if robust:
+            lm = float(((S ** 2).sum(axis=1) / (T ** 2 * lrv)).mean())
+        else:
+            lm = float((S ** 2).sum() / (N * T ** 2 * lrv.mean()))
+    elif robust:
         sig2 = (E ** 2).mean(axis=1)
         lm = float(((S ** 2).sum(axis=1) / (T ** 2 * sig2)).mean())
     else:
