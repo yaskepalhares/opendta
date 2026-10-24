@@ -682,3 +682,31 @@ def test_dofile_editor_toolbar_layout(app):
         de.tabs.widget(i).document().setModified(False)
     de.cleanup()
     w.close()
+
+
+def test_window_commands_in_the_interface(app, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.window_cmds import qt_filter
+
+    assert qt_filter("Data (*.dta)|*.dta|Text|*.txt;*.csv") == "Data (*.dta);;Text (*.txt *.csv)"
+    w = MainWindow()
+    w.run_command('window menu append submenu "stUser" "Tools"')
+    w.run_command('window menu append item "Tools" "Say hi" "display 123"')
+    w.run_command("window menu refresh")
+    tools = [a.menu() for a in w.user_menu.actions() if a.menu() and a.text() == "Tools"][0]
+    tools.actions()[0].trigger()
+    assert "\n123\n" in w.results.toPlainText()
+    w.run_command('window push display "pushed"')
+    texts = [w.review.topLevelItem(k).text(0) for k in range(w.review.topLevelItemCount())]
+    assert texts[-2:] == ['display "pushed"', 'window push display "pushed"']
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: ("/tmp/x.dta", ""))
+    w.run_command('window fopen fname "Open" "Data (*.dta)|*.dta"')
+    w.run_command('display "$fname"')
+    assert "/tmp/x.dta" in w.results.toPlainText()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Cancel)
+    w.run_command('capture window stopbox rusure "Sure?"')
+    w.run_command("display _rc")
+    assert w.results.toPlainText().rstrip().endswith("1")
+    w.run_command('window manage maintitle "My title"')
+    assert w.windowTitle() == "My title"

@@ -238,3 +238,43 @@ def test_makecns_returns(run):
     assert run("display r(k)").strip() == "1"
     out = run("makecns Zzz")
     assert "constraint matrix 'Zzz' caused error r(111)" in out
+
+
+def test_makecns_with_a_constraint_list(run):
+    run("clear\nset obs 30\nset seed 3\ngen x1 = rnormal()\ngen x2 = rnormal()\ngen y = x1 + x2 + rnormal()")
+    run("quietly regress y x1 x2")
+    run("constraint 1 x1 = x2\nconstraint define 2 _cons = 1\nconstraint 3 2*x1 = 2*x2\nconstraint 4 zz = 0")
+    out = run("makecns 1-4, displaycns r")
+    assert "(note: constraint number 3 caused error r(412))" in out      # redundant with 1
+    assert "(note: constraint number 4 caused error r(111))" in out      # zz is not a coefficient
+    assert " ( 1)  x1 - x2 = 0\n ( 2)  _cons = 1\n" in out
+    assert run('display "`r(clist)\'" " " r(k)').strip() == "1 2 2"
+    assert run("display el(e(Cns), 2, 4)").strip() == "1"
+    assert run("makecns 1 4, nocnsnotes") == ""
+    assert run("matrix dispCns") == " ( 1)  x1 - x2 = 0\n"
+    run("matrix dispCns, r")
+    assert run("display r(k) \" \" r(cns1)").strip() == "1 x1 - x2 = 0"
+
+
+def test_makecns_names_equations(run):
+    run("matrix b = (1, 2, 3, 4)\nmatrix colnames b = y:x y:_cons z:x z:_cons")
+    run("ereturn post b\nconstraint 1 [y]x = [z]x")
+    run("makecns 1, r")
+    assert run("display r(cns1)").strip() == "[y]x - [z]x = 0"
+
+
+def test_matlist_equation_options(run):
+    run("matrix A = (1,2,3,4 \\ 2,5,6,7 \\ 3,6,8,9 \\ 4,7,9,10)")
+    run("matrix rownames A = y:x1 y:_cons z:x1 z:_cons\nmatrix colnames A = y:x1 y:_cons z:x1 z:_cons")
+    out = run("matlist A, lines(eq)")
+    lines = out.splitlines()
+    assert lines[1] == "             |          y           |          z"
+    assert lines[2] == "             |        x1      _cons |        x1      _cons"
+    assert lines[4].startswith("y            |")
+    assert lines[7].startswith("-------------+")
+    out = run("matlist A, showcoleq(each) roweqonly")
+    assert out.splitlines()[1].split("|")[1].split() == ["y", "y", "z", "z"]
+    assert out.splitlines()[4].startswith("           y |")
+    assert "_cons" not in run("matlist A, coleqonly").splitlines()[1]
+    run("matlist A, showcoleq(sideways)")
+    assert run.rc == 198
