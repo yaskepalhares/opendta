@@ -498,6 +498,13 @@ class PreferencesDialog(QDialog):
                   tr("Starts a text log when OpenDTA opens, in a logs folder inside the initial folder (or "
                      "your home folder). Takes effect the next time OpenDTA opens."), self.autolog,
                   "log registro histórico"))
+        self.review_do = self._switch(self.prefs.review_do_commands)
+        self.review_do.toggled.connect(self._review_do_changed)
+        p.row(Row(tr("Show the commands of do-files in Review"),
+                  tr("After do, run or the Do button of the Do-file Editor, Review lists the commands the "
+                     "do-files ran, under the do line (click the arrow to open them; commands with errors in "
+                     "red). Off: one line per do, as in Stata."), self.review_do,
+                  "review histórico history do-file comandos commands"))
         p.section(tr("Safety"))
         self.confirms: dict[str, Switch] = {}
         for command, title, desc in (
@@ -743,6 +750,10 @@ class PreferencesDialog(QDialog):
 
     def _autolog_changed(self, on: bool) -> None:
         self.prefs.auto_log = on
+        self.prefs.sync()
+
+    def _review_do_changed(self, on: bool) -> None:
+        self.prefs.review_do_commands = on
         self.prefs.sync()
 
     def _confirm_changed(self, command: str, on: bool) -> None:

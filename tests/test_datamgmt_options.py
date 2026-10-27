@@ -308,7 +308,46 @@ def test_import_export_sasxport(run, tmp_path, monkeypatch):
     assert run.rc == 198
     run("clear\ninput x\n1\nend\nlabel define l 1 \"one\"\nlabel values x l")
     run("export sasxport odta_z")
+    assert run.rc == 0 and (tmp_path / "formats.xpf").exists()
+
+
+def test_sasxport_value_labels_members_and_rename(run, tmp_path, monkeypatch):
+    pytest.importorskip("pyreadstat")
+    pytest.importorskip("pandas")
+    monkeypatch.chdir(tmp_path)
+    run("clear\ninput id sex averylongname\n1 1 5\n2 2 .\nend")
+    run('label define sexlab 1 "Female" 2 "Male"\nlabel values sex sexlab')
+    run("export sasxport odta_y")
     assert run.rc == 198
+    run("export sasxport odta_y, rename vallabfile(both)")
+    assert run.rc == 0 and (tmp_path / "odta_y.sas").exists()
+    out = run("import sasxport odta_y, describe")
+    assert "data from odta_y.xpt, member(odta_y)" in out and "averylon" in out and "sexlab" in out
+    assert run.session.r["n_members"] == 1 and run.session.r["N"] == 2
+    run("import sasxport odta_y, clear")
+    d = run.session.data
+    assert d.names == ["id", "sex", "averylon"]
+    assert d.get("sex").value_label == "sexlab" and d.value_labels["sexlab"] == {1: "Female", 2: "Male"}
+    # novallabels keeps the name of the value label but does not define it (compat 1911)
+    run("import sasxport odta_y, clear novallabels member(odta_y)")
+    assert run.session.data.get("sex").value_label == "sexlab" and not run.session.data.value_labels
+    run("import sasxport odta_y, clear member(nope)")
+    assert run.rc == 198
+
+
+def test_xport_reader_reads_every_member(tmp_path):
+    pyreadstat = pytest.importorskip("pyreadstat")
+    pd = pytest.importorskip("pandas")
+    from opendta.io import xport
+    pyreadstat.write_xport(pd.DataFrame({"A": [1.5, None]}), str(tmp_path / "a.xpt"), table_name="ONE",
+                           file_format_version=5)
+    pyreadstat.write_xport(pd.DataFrame({"B": ["x", "yz"]}), str(tmp_path / "b.xpt"), table_name="TWO",
+                           file_format_version=5)
+    both = (tmp_path / "a.xpt").read_bytes() + (tmp_path / "b.xpt").read_bytes()[3 * 80:]
+    (tmp_path / "c.xpt").write_bytes(both)
+    members = xport.read(tmp_path / "c.xpt")
+    assert [m.name for m in members] == ["ONE", "TWO"]
+    assert members[0].rows == [[1.5], [None]] and members[1].rows == [["x"], ["yz"]]
 
 
 # -- putexcel to .xls ----------------------------------------------------------------------------------
@@ -330,3 +369,26 @@ def test_putexcel_xls(run, tmp_path, monkeypatch):
     run("matrix m = (1, 2 \\ 3, 4)\nputexcel A5=matrix(m) using t.xls")
     book = xlrd.open_workbook(str(tmp_path / "t.xls"))
     assert "three" in book.sheet_names() and book.sheet_by_index(0).cell_value(5, 1) == 4
+
+
+def test_list_string_and_display(run):
+    run('clear\ninput str20 make price\n"AMC Concord" 4099\n"Buick LeSabre" 5788\nend')
+    out = run("list, string(5)")
+    assert "AMC C" in out and "Concord" not in out
+    out = run("list in 1, display")
+    assert out.splitlines()[2] == "  1. |        make | price |"
+    assert out.splitlines()[3] == "     | AMC Concord |  4099 |"
+    run("set linesize 20")
+    out = run("list in 1")                     # wider than the line: display format
+    assert "     |------" in out
+
+
+def test_table_supercolumns_and_by(run):
+    run("clear\nset obs 12\ngen a = 1 + mod(_n,2)\ngen b = 1 + mod(_n,3)\ngen c = 1 + mod(_n,2)")
+    out = run("table a b c")
+    lines = out.splitlines()
+    assert lines[2].split("|")[1].strip() == "c and b"
+    # supercolumns 4 blanks apart, the extra dash on the left (compat 1911)
+    assert lines[3].split("|")[1] == " ------- 1 ------    ------- 2 ------"
+    out = run("table a, by(c) row")
+    assert "  c and a |" in out and "1         |" in out and "Total |" in out

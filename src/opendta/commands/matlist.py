@@ -3,8 +3,9 @@
     matlist matrix_exp [, style_options general_options]
     matlist matrix_exp, cspec(cspec) rspec(rspec) [general_options]
 
-The layout is in core/layout.py. Matrices here carry no equation names yet, so the options about
-equations (showcoleq(), roweqonly, coleqonly, keepcoleq, colorcoleq()) are not available.
+The layout is in core/layout.py. Equation names: the column equations go in a line above the
+column names (showcoleq()), and each row equation in a line of its own above its rows. VERIFY the
+whole layout with equations against Stata (compat 1910).
 """
 
 from __future__ import annotations
@@ -31,7 +32,9 @@ _OPTIONS = {"lines": 3, "border": 3, "format": 3, "twidth": 2, "left": 3, "right
             "nohalf": 3, "nodotz": 3, "underscore": 5, "aligncolnames": 5, "linesize": 5,
             "cspec": 5, "rspec": 5, "showcoleq": 5, "roweqonly": 5, "coleqonly": 5,
             "colorcoleq": 6, "keepcoleq": 5}
-_NOT_YET = ("showcoleq", "roweqonly", "coleqonly", "colorcoleq", "keepcoleq")
+# alignment of the column equation over its group (first and lcombined: left, from the first column;
+# compat 1910); combined: VERIFY
+_SHOWCOLEQ = {"first": "L", "each": "R", "combined": "C", "lcombined": "L", "rcombined": "R"}
 _LINES = ("oneline", "eq", "rowtotal", "coltotal", "rctotal", "rows", "columns", "cells", "none")
 
 
@@ -118,9 +121,12 @@ def cmd_matlist(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     mat: Matrix = evaluate_matrix(s, head.strip())
     o = match_options(opts, _OPTIONS) if opts.strip() else {}
-    for name in _NOT_YET:
-        if o.get(name):
-            raise StataError(198, f"option {name} is not available yet in OpenDTA")
+    showcoleq = str(o.get("showcoleq", "first")).strip() if o.get("showcoleq") not in (None, True) \
+        else "first"
+    if showcoleq not in _SHOWCOLEQ:
+        raise StataError(198, f"option {showcoleq} not allowed")                 # compat 1910
+    if o.get("colorcoleq") not in (None, True) and str(o["colorcoleq"]).strip() not in ("txt", "res"):
+        raise StataError(198, "option colorcoleq() incorrectly specified")        # VERIFY
     fmt = str(o.get("format", "%9.0g")).strip()
     twidth = _int(s, o["twidth"], "twidth", 1) if o.get("twidth") not in (None, True) else 12
     left = _int(s, o["left"], "left") if o.get("left") not in (None, True) else 0
@@ -140,8 +146,8 @@ def cmd_matlist(s: "Session", args: str) -> None:
     how = {"ralign": "R", "lalign": "L", "center": "C"}.get(aname)
     if how is None:
         raise StataError(198, f"option {aname} not allowed")
-    lines = str(o.get("lines", "oneline")).strip()
-    if lines not in _LINES:
+    lines = str(o.get("lines", "")).strip()
+    if lines and lines not in _LINES:
         raise StataError(198, "option lines() incorrectly specified")
     border = _border(str(o["border"]).strip()) if o.get("border") else set()
     linesize = _int(s, o["linesize"], "linesize", 1) if o.get("linesize") not in (None, True) \
@@ -149,6 +155,12 @@ def cmd_matlist(s: "Session", args: str) -> None:
 
     rown = [r.replace("_", " ") for r in mat.rownames] if o.get("underscore") else list(mat.rownames)
     coln = [c.replace("_", " ") for c in mat.colnames] if o.get("underscore") else list(mat.colnames)
+    req = [q if q != "_" else "" for q in (mat.roweq or ["_"] * mat.rows)]
+    ceq = [q if q != "_" else "" for q in (mat.coleq or ["_"] * mat.cols)]
+    has_req, has_ceq = any(req), any(ceq)
+    if not lines:
+        # with equation names, the equations are separated by lines (compat 1910)
+        lines = "eq" if (has_req or has_ceq) else "oneline"
     sym = mat.rows == mat.cols and mat.rows > 1 and np.array_equal(mat.data, mat.data.T)
     half = sym and not o.get("nohalf")
 
@@ -182,22 +194,50 @@ def cmd_matlist(s: "Session", args: str) -> None:
                     seps[k].line = True
         if lines in ("coltotal", "rctotal") and mat.cols > 1:
             seps[n - 1].line = True
+        if lines == "eq" and has_ceq:
+            off = 1 if show_rows else 0
+            for c in range(1, mat.cols):
+                if ceq[c] != ceq[c - 1]:
+                    seps[off + c].line = True
         if "left" in border:
             seps[0] = Sep(True, 0, 1)
         if "right" in border:
             seps[n] = Sep(True, 1, 0)
 
     rows: list[list[str]] = []
-    if show_cols:
+    spans: dict[int, list[tuple[int, int, str, str]]] = {}
+    off = 1 if show_rows else 0
+    eq_header = show_cols and has_ceq
+    if eq_header:
+        # the column equations: over each group of columns, or over its first column or each one
+        cells = [""] * (off + mat.cols)
+        start = 0
+        for c in range(1, mat.cols + 1):
+            if c == mat.cols or ceq[c] != ceq[start]:
+                if showcoleq == "each":
+                    for k in range(start, c):
+                        cells[off + k] = ceq[k]
+                else:
+                    spans.setdefault(0, []).append((off + start, off + c - 1, ceq[start],
+                                                    _SHOWCOLEQ[showcoleq]))
+                start = c
+        rows.append(cells)
+    if show_cols and not (o.get("coleqonly") and has_ceq):
         header = [rowtitle] if show_rows else []
         rows.append(header + [c for c in coln])
+    nh = len(rows)
+    eq_rows: list[int] = []
     for r in range(mat.rows):
-        cells = [rown[r][:fields[0].width]] if show_rows else []
+        if show_rows and has_req and (r == 0 or req[r] != req[r - 1]):
+            eq_rows.append(len(rows))
+            rows.append([req[r]] + [""] * mat.cols)
+        # roweqonly: the rows keep only the line of their equation (compat 1910)
+        stub = "" if o.get("roweqonly") and has_req else rown[r]
+        cells = [stub[:fields[0].width]] if show_rows else []
         for c in range(mat.cols):
             cells.append("" if half and c > r else text(mat.data[r, c], numfmts[c]))
         rows.append(cells)
     # widths of the columns from the cspec/format are kept; names longer than the field are cut
-    nh = 1 if show_cols else 0
     rules = [False] * (len(rows) + 1)
     if o.get("rspec"):
         spec = re.sub(r"\s", "", str(o["rspec"]))
@@ -210,8 +250,11 @@ def cmd_matlist(s: "Session", args: str) -> None:
         if "bottom" in border:
             rules[-1] = True
         if lines in ("oneline", "eq", "rowtotal", "coltotal", "rctotal", "columns", "cells",
-                     "rows") and nh and len(rows) > 1:
-            rules[1] = True
+                     "rows") and nh and len(rows) > nh:
+            rules[nh] = True
+        if lines == "eq":
+            for k in eq_rows[1:]:
+                rules[k] = True
         if lines in ("rows", "cells"):
             for k in range(1 + nh, len(rows)):
                 rules[k] = True
@@ -219,14 +262,15 @@ def cmd_matlist(s: "Session", args: str) -> None:
             rules[len(rows) - 1] = True
     # column names are aligned as asked (default: right)
     if show_cols:
-        off = 1 if show_rows else 0
         for k in range(mat.cols):
-            rows[0][off + k] = align(rows[0][off + k], fields[off + k].width, how)
+            rows[nh - 1][off + k] = align(rows[nh - 1][off + k], fields[off + k].width, how)
     out = s.output
     if not o.get("noblank"):
         out.write("\n", "text")
     if title:
         out.write(" " * tindent + title + "\n", "text")
     for line in render_table(rows, fields, seps, rules, left=left,
-                             limit=linesize - right, repeat=1 if show_rows else 0):
+                             limit=linesize - right, repeat=1 if show_rows else 0, spans=spans,
+                             groups=[None] * off + ceq if (o.get("keepcoleq") or has_ceq) else None,
+                             flush=set(eq_rows), body=nh if half else None):
         out.write(line + "\n", "text")
