@@ -478,7 +478,18 @@ class MainWindow(QMainWindow):
         self._add_review(text, rc)
         self.command.setFocus()
 
-    def _add_review(self, text: str, rc: int) -> None:
+    def _add_review(self, text: str, rc: int, children: list | None = None) -> None:
+        item = self._review_item(text, rc, children or [])
+        if children:
+            # Settings > General > Session: the commands of the do-files, under the do line
+            label = self._do_label(text)
+            if label:
+                item.setText(0, label)
+            self.review.setRootIsDecorated(True)
+        self.review.addTopLevelItem(item)
+        self.review.scrollToItem(item)
+
+    def _review_item(self, text: str, rc: int, children: list) -> QTreeWidgetItem:
         first = text.strip().splitlines()[0]
         shown = first + (" …" if "\n" in text.strip() else "")
         item = QTreeWidgetItem([shown, str(rc) if rc else ""])
@@ -486,8 +497,17 @@ class MainWindow(QMainWindow):
         item.setToolTip(0, text)
         if rc:
             _paint(item, QColor(self._scheme().colors["error"]))
-        self.review.addTopLevelItem(item)
-        self.review.scrollToItem(item)
+        for ch in children:
+            item.addChild(self._review_item(ch["text"], ch["rc"], ch["children"]))
+        return item
+
+    def _do_label(self, line: str) -> str:
+        """`do "<temporary file>"` of the Do-file Editor shown as `do (selection: name.do)`."""
+        m = re.match(r'^\s*(\w+)\s+"([^"]+)"\s*$', line)
+        if not m or self.dofile_editor is None:
+            return ""
+        src = self.dofile_editor.tmp_sources.get(m.group(2))
+        return f"{m.group(1)} ({src})" if src else ""
 
     def _startup_session(self) -> None:
         """Initial folder and automatic log (Settings > General > Session)."""
@@ -541,12 +561,19 @@ class MainWindow(QMainWindow):
     def run_command(self, line: str) -> None:
         if not self._confirm(line):
             return
+        collect = self.prefs.review_do_commands
+        if collect:
+            self.session.review_root = {"children": []}
         try:
             rc = self.session.run_command(line)
         except ExitRequest:
             self.close()
             return
-        self._add_review(line, rc)
+        finally:
+            root = self.session.review_root
+            self.session.review_root = None
+            self.session._review_stack.clear()
+        self._add_review(line, rc, root["children"] if collect and root else None)
         self.command.setFocus()
 
     @staticmethod
@@ -555,9 +582,16 @@ class MainWindow(QMainWindow):
         return full if full else item.text(0)
 
     def _filter_review(self, text: str) -> None:
+        """An item stays visible when it or one of the commands under it matches."""
+        t = text.lower()
+
+        def show(it) -> bool:
+            kids = [show(it.child(j)) for j in range(it.childCount())]
+            ok = not t or t in it.text(0).lower() or any(kids)
+            it.setHidden(not ok)
+            return ok
         for k in range(self.review.topLevelItemCount()):
-            it = self.review.topLevelItem(k)
-            it.setHidden(bool(text) and text.lower() not in it.text(0).lower())
+            show(self.review.topLevelItem(k))
 
     # -- data files ---------------------------------------------------
     def _confirm_discard(self) -> bool:
@@ -853,10 +887,14 @@ class MainWindow(QMainWindow):
         set_icon_theme(theme)
         self.results.set_scheme(self._scheme(theme))
         err = QColor(self._scheme(theme).colors["error"])
-        for k in range(self.review.topLevelItemCount()):
-            it = self.review.topLevelItem(k)
+
+        def repaint(it) -> None:
             if it.text(1):
                 _paint(it, err)
+            for j in range(it.childCount()):
+                repaint(it.child(j))
+        for k in range(self.review.topLevelItemCount()):
+            repaint(self.review.topLevelItem(k))
         for act in self.toolbar_actions.values():
             name, accent = act.data()
             act.setIcon(icon(name, accent))

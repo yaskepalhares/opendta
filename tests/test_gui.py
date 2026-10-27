@@ -403,6 +403,49 @@ def test_results_highlights_deleted_observations(app):
     assert rv.toPlainText().startswith("(519,227 observations deleted)")
 
 
+def test_review_lists_do_file_commands(app, tmp_path):
+    """Settings > General > Session: with the option on, the commands of the do-files (nested ones
+    too, and run) go under the do line in Review, with the failed ones marked; off, one line (Stata)."""
+    from PySide6.QtGui import QTextCursor
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    inner = tmp_path / "inner.do"
+    inner.write_text("display 5\n")
+    f = tmp_path / "prog.do"
+    f.write_text(f'* comment\nclear\nset obs 2\nforvalues i = 1/2 {{\n    display `i\'\n}}\ndo "{inner}"\nsummarize nothere\n')
+    w.run_command(f'do "{f}"')
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    assert top.childCount() == 0 and top.text(1) == "111"
+    w.prefs.review_do_commands = True
+    w.run_command(f'do "{f}"')
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    kids = [top.child(k).text(0) for k in range(top.childCount())]
+    assert kids == ["clear", "set obs 2", "forvalues i = 1/2 { …", f'do "{inner}"', "summarize nothere"]
+    assert top.child(4).text(1) == "111" and top.child(0).text(1) == ""
+    assert top.child(3).childCount() == 1 and top.child(3).child(0).text(0) == "display 5"
+    assert top.child(2).data(0, 256).startswith("forvalues i = 1/2 {\n    display")
+    # the filter keeps the do line when a command under it matches
+    w._filter_review("display 5")
+    assert not top.isHidden() and not top.child(3).isHidden() and top.child(0).isHidden()
+    w._filter_review("")
+    # Do-file Editor: the temporary file is shown by what it holds
+    w.run_command(f'doedit "{f}"')
+    ed = w.dofile_editor.current()
+    cur = ed.textCursor()
+    cur.setPosition(len("* comment\n"))
+    cur.setPosition(len("* comment\nclear\nset obs 2"), QTextCursor.MoveMode.KeepAnchor)
+    ed.setTextCursor(cur)
+    w.dofile_editor.do_selection()
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    assert top.text(0) == "do (selection: prog.do)" and top.childCount() == 2
+    ed.document().setModified(False)
+    w.dofile_editor.cleanup()
+    w.prefs.review_do_commands = False
+    w.close()
+
+
 def test_dofile_editor_line_tools(app):
     from PySide6.QtGui import QTextCursor
 
