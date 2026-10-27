@@ -310,4 +310,5 @@ def test_xtdpd_artests_and_hascons(run):
     out = run("estat abond")
     assert "|   3  |" in out
     run("quietly xtdpd y L.y x one, dgmmiv(y) lgmmiv(y) div(x) liv(one) hascons")
-    assert run.rc == 0 and "_cons" not in run.session.e["b"].colnames
+    # the constant regressor is dropped as collinear and the model has _cons (compat 1914)
+    assert run.rc == 0 and run.session.e["b"].colnames == ["L.y", "x", "_cons"]

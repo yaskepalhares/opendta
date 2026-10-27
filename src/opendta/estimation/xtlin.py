@@ -660,23 +660,31 @@ def cmd_xtrc(s: "Session", args: str) -> None:
     est.level, est.vcetype = L.smp.level, ""
     est.extra = x
     est.display = _display_xtrc
-    sc = [("N", float(N)), ("N_g", float(pi2.G)), ("df_m", float(df)), ("chi2", chi2), ("chi2_c", r["chi2"]),
-          ("g_min", float(x["tmin"])), ("g_avg", x["tavg"]), ("g_max", float(x["tmax"])), ("rank", float(np.linalg.matrix_rank(Vf)))]
-    mc = [("cmdline", cmdline("xtrc", args)), ("cmd", "xtrc"), ("depvar", L.smp.depname), ("ivar", L.pvar),
-          ("chi2type", "Wald"), ("title", "Random-coefficients regression"), ("properties", "b V"),
-          ("predict", "xtrc_p")]
-    extra_m = []
+    # e() in the order of Stata's ereturn list (compat 1914)
+    sc = [("N", float(N)), ("rank", float(np.linalg.matrix_rank(Vf))), ("chi2", chi2), ("df_m", float(df)),
+          ("g_min", float(x["tmin"])), ("g_avg", x["tavg"]), ("g_max", float(x["tmax"])), ("N_g", float(pi2.G)),
+          ("chi2_c", r["chi2"]), ("df_chi2c", float(r["df"]))]
+    mc = [("cmdline", cmdline("xtrc", args)), ("cmd", "xtrc"), ("predict", "xtrc_p"),
+          ("marginsnotok", "GRoup(passthru) STDP"), ("tvar", L.tvar), ("ivar", L.pvar), ("depvar", L.smp.depname),
+          ("chi2type", "Wald"), ("title", "Random-coefficients regression"), ("vce", "conventional"),
+          ("properties", "b V")]
+    from ..commands.matrix import Matrix
+    cn = [nm for nm, f in zip(*L.layout()) if f]
+    extra_m = [("Sigma", Matrix(r["delta"], cn, cn))]
     if o.get("betas"):
-        from ..commands.matrix import Matrix
         bb, VV = pl.swamy_blup(r)
         pv = s.data.get(L.pvar).data[L.smp.mask][keep]
         labels = [format_value(float(v), "%9.0g", pad=False).strip() for v in np.unique(pv)]
-        cn = [nm for nm, f in zip(*L.layout()) if f]
         x["betas"] = (labels, bb, VV, cn)
-        # e(beta_ps): one row per panel; e(V_ps): the covariances side by side (VERIFY: layout)
-        extra_m = [("beta_ps", Matrix(bb, labels, cn)),
-                   ("V_ps", Matrix(np.hstack(list(VV)), cn, [c for _ in labels for c in cn]))]
-    post(s, est, list(reversed(sc)), list(reversed(mc)), L.smp.mask, extra_mats=extra_m)
+        # e(V_ps): one row per panel with its covariance matrix row after row; e(beta_ps): rows
+        # r1, r2, ... (compat 1914)
+        rn = [f"r{g}" for g in range(1, len(labels) + 1)]
+        extra_m = [("V_ps", Matrix(np.vstack([v.ravel() for v in VV]), rn,
+                                   [f"{a}:{c}" for a in cn for c in cn])),
+                   ("beta_ps", Matrix(bb, rn, cn))] + extra_m
+    for _, m_ in extra_m:
+        m_.keep_eq = True                     # no equation names (compat 1914)
+    post(s, est, sc, mc, L.smp.mask, extra_mats=extra_m)
     _display_xtrc(s, est)
 
 
@@ -702,17 +710,25 @@ def _display_xtrc(s, est, *, header=True, table=True, level=None, **_kw):
         out.write(f"Test of parameter constancy:    chi2({x['c_df']}) = {x['c_chi2']:>8.2f}".ljust(58)
                   + f"Prob > chi2 = {x['c_p']:.4f}\n", "text")
         if "betas" in x:
-            # VERIFY: the layout of the panel-specific coefficients
+            # the layout of compat 1914
             labels, bb, VV, cn = x["betas"]
-            out.write("\n" + " " * 20 + "Group-specific coefficients\n", "text")
-            rows = []
+            lv = level or est.level
+            c = float(st.norm.ppf(0.5 + lv / 200))
+            out.write("\n" + " " * 24 + "Group-specific coefficients\n" + "-" * 78 + "\n", "text")
+            out.write(" " * 20 + f"Coef.   Std. Err.      z    P>|z|     [{lv:g}% Conf. Interval]\n" + "-" * 78 + "\n",
+                      "text")
             for g, lab in enumerate(labels):
                 if g:
-                    rows.append(CoefRow("sep"))
-                rows.append(CoefRow("eq", f"Group {lab}"))
+                    out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
+                out.write(f"{'Group ' + lab:>12} | \n" + "-" * 13 + "+" + "-" * 64 + "\n", "text")
                 for j, nm in enumerate(cn):
-                    rows.append(CoefRow("coef", nm, float(bb[g, j]), float(np.sqrt(max(VV[g][j, j], 0)))))
-            coef_table(s, "", rows, stat="z", df=None, level=level or est.level)
+                    b_, se_ = float(bb[g, j]), float(np.sqrt(max(VV[g][j, j], 0)))
+                    zz = b_ / se_
+                    out.write(f"{nm:>12} |", "text")
+                    g9_ = lambda v: _g(v, "%9.0g")             # noqa: E731
+                    out.write(f"  {g9_(b_):>9}  {g9_(se_):>9}  {zz:>7.2f}  {2 * st.norm.sf(abs(zz)):>6.3f}    "
+                              f"{g9_(b_ - c * se_):>9}   {g9_(b_ + c * se_):>9}\n", "result")
+            out.write("-" * 78 + "\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -751,8 +767,6 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     if mp:
         endog_txt, inst_txt = mp.group(1), mp.group(2)
         rest = t[:mp.start()] + " " + t[mp.end():]
-    elif getattr(s, "_xtiv_first", False):
-        endog_txt, inst_txt, rest = "", "", t            # a first-stage regression (option first)
     else:
         raise StataError(198, "equation not specified")   # VERIFY
     L = _Lin(s, "xtivreg", rest.strip(), {"re": 2, "be": 2, "fe": 2, "fd": 2, "ec2sls": 3, "nosa": 3, "small": 2,
@@ -760,23 +774,7 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
              constant=True)
     o, out, pi, ds = L.o, s.output, L.pi, s.data
     if o.get("first") and o.get("regress"):
-        raise StataError(198, "options first and regress may not be combined")      # VERIFY
-    if o.get("first"):
-        # first stage: each endogenous variable on the instruments and the exogenous regressors,
-        # with the same estimator, before the IV fit (VERIFY: titles and layout)
-        body, _, opts = rest.partition(",")
-        words = body.split()
-        opts = " ".join(w for w in opts.split() if w.lower() not in ("fir", "firs", "first"))
-        for e in fvars._split_tokens(endog_txt):
-            s._xtiv_first = True
-            try:
-                s.interp._execute_expanded(f"xtivreg {e} {inst_txt} {' '.join(words[1:])}, {opts} regress")
-            finally:
-                s._xtiv_first = False
-        L = _Lin(s, "xtivreg", rest.strip(), {"re": 2, "be": 2, "fe": 2, "fd": 2, "ec2sls": 3, "nosa": 3,
-                                              "small": 2, "regress": 3, "first": 3},
-                 extra_vars=endog_txt + " " + inst_txt, constant=True)
-        o, out, pi, ds = L.o, s.output, L.pi, s.data
+        raise StataError(198, "options first and regress may not be specified together")
     regress = bool(o.get("regress"))
     sel = [m for m in ("be", "fe", "fd") if o.get(m)]
     if len(sel) > 1 or (sel and o.get("re")):
@@ -803,6 +801,8 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
                          "the regression as there are instrumented variables")
     y = L.y
     r = pl.panel_iv(y, X, Z, pi, method, bool(o.get("nosa")))
+    if o.get("first"):
+        _xtiv_first_stage(s, method, endog_cols, ex_cols, inst_cols, pi, r, L.smp.level)
     small = bool(o.get("small"))
     has_cons = True
     b = r["b"]
@@ -845,8 +845,12 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
         r2w, r2b, r2o = _pairs_r2(xb_all, y, pi)
         tcounts = pi.counts
         if method == "be":
-            r2b = None                                  # VERIFY: Stata shows a missing between R-sq
-        elif method == "fe":
+            # 1 - rss/tss of the regression on the group means (compat 1914)
+            yb_ = pi.group_means(y)
+            rb_ = yb_ - pi.group_means(xb_all) - float(b[k])
+            r2b = 1.0 - float(rb_ @ rb_) / float(((yb_ - yb_.mean()) ** 2).sum())
+            r2b = r2b if r2b >= 0 else None          # a negative value is shown as . (compat 1905)
+        if method == "fe":
             yw_ = pi.within(y)
             r2w = 1.0 - float(r["e"] @ r["e"]) / float(yw_ @ yw_)   # VERIFY: 1 - rss/tss
     if method == "be":
@@ -854,7 +858,9 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     x = dict(N=nobs, G=Gn, tmin=int(tcounts.min()), tavg=float(tcounts.mean()), tmax=int(tcounts.max()), k=k, W=W, F=Fv,
              p=pv, tvar=L.tvar,
              use_F=use_F, df_r=r["df"], r2w=r2w, r2b=r2b, r2o=r2o, method=method, pvar=L.pvar,
-             instd=" ".join(c.name for c in Xn), insts=" ".join([c.name for c in ex_cols] + [c.name for c in inst_cols]))
+             instd=" ".join(c.name for c in Xn),
+             # with regress the endogenous variables are their own instruments (compat 1914)
+             insts=" ".join([c.name for c in ex_cols] + [c.name for c in (Xn if regress else inst_cols)]))
     if method in ("g2sls", "ec2sls"):
         su, se_ = math.sqrt(r["sigma_u2"]), math.sqrt(r["sigma_e2"])
         x.update(sigma_u=su, sigma_e=se_, rho=su ** 2 / (su ** 2 + se_ ** 2), theta=float(r["theta"][0]) if pi.balanced else None)
@@ -865,13 +871,17 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
         corr = float(np.corrcoef(u_i[pi.inv], xb_all)[0, 1]) if k else 0.0
         x.update(sigma_u=su, sigma_e=se_, rho=su ** 2 / (su ** 2 + se_ ** 2), corr=corr)
         rss_w = float(r["e"] @ r["e"])
-        # F test that all u_i = 0: pooled 2SLS against the within fit (VERIFY)
-        Xp = np.column_stack([X, np.ones(len(y))])
-        Zp = np.column_stack([Z, np.ones(len(y))])
-        fp = pl.tsls(y, Xp, Zp)
-        rss_p = float(fp["e"] @ fp["e"])
-        Ff = ((rss_p - rss_w) / (G - 1)) / (rss_w / r["df"])
-        x.update(F_f=Ff, p_f=float(st.f.sf(Ff, G - 1, r["df"])))
+        # F test that all u_i = 0: the Wald test of the group dummies in the dummy-variable 2SLS
+        # fit, with s2 = rss/df (compat 1914: 11.14, and 11.77 with regress)
+        D = (pi.inv[:, None] == np.arange(1, G)[None, :]).astype(float)
+        Xd = np.column_stack([X, D, np.ones(len(y))])
+        Zd = np.column_stack([Z, D, np.ones(len(y))])
+        Pz = Zd @ np.linalg.pinv(Zd.T @ Zd)
+        Ad = np.linalg.pinv((Xd.T @ Pz) @ (Zd.T @ Xd))
+        bd = Ad @ ((Xd.T @ Pz) @ (Zd.T @ y))
+        dd_ = bd[k:k + G - 1]
+        Ff = float(dd_ @ np.linalg.solve(s2 * Ad[k:k + G - 1, k:k + G - 1], dd_)) / (G - 1)
+        x.update(F_f=Ff, p_f=float(st.f.sf(Ff, G - 1, r["df"])), rss=rss_w)
     elif method == "fd":
         # VERIFY: u_i, sigma_u and corr(u_i, Xb) come from the levels of the rows that have a lag
         cnt = np.bincount(inv_r)
@@ -902,10 +912,6 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     ttl = {"g2sls": "G2SLS random-effects IV regression", "ec2sls": "EC2SLS random-effects IV regression",
            "fe": "Fixed-effects (within) IV regression", "be": "Between-effects IV regression:",
            "fd": "First-differenced IV regression"}[method]
-    if getattr(s, "_xtiv_first", False):
-        ttl = {"g2sls": "First-stage G2SLS random-effects regression",
-               "ec2sls": "First-stage EC2SLS random-effects regression", "fe": "First-stage within regression",
-               "be": "First-stage between regression:", "fd": "First-stage first-differenced regression"}[method]
     x["title"] = ttl
     x["regress"] = regress
     sc = [("N", float(nobs)), ("N_g", float(Gn)), ("df_m", float(k)), ("g_min", float(x["tmin"])),
@@ -917,8 +923,68 @@ def cmd_xtivreg(s: "Session", args: str) -> None:
     mc = [("cmdline", cmdline("xtivreg", args)), ("cmd", "xtivreg"), ("depvar", L.smp.depname), ("ivar", L.pvar),
           ("model", method), ("instd", x["instd"]), ("insts", x["insts"]), ("title", ttl), ("properties", "b V"),
           ("predict", "xtivreg_p")]
-    post(s, est, list(reversed(sc)), list(reversed(mc)), mask)
+    if method == "fe":
+        # Stata's e() of the within estimator, in the order of ereturn list (compat 1914, with
+        # regress; VERIFY without it)
+        sc = [("rank", float(k + 1)), ("df_rz", float(r["df"])), ("N", float(nobs)), ("rss", x["rss"]),
+              ("N_g", float(Gn)), ("N_clust", float(Gn)), ("chi2", W), ("chi2_p", pv), ("sigma_u", x["sigma_u"]),
+              ("corr", x["corr"]), ("r2_o", r2o), ("r2_b", r2b), ("sigma_e", x["sigma_e"]),
+              ("sigma", math.sqrt(x["sigma_u"] ** 2 + x["sigma_e"] ** 2)), ("rho", x["rho"]), ("r2_w", r2w),
+              ("df_b", float(k)), ("df_m", float(k + G)), ("df_a", float(G - 1)), ("g_min", float(x["tmin"])),
+              ("F_fp", x["p_f"]), ("F_f", x["F_f"]), ("g_avg", x["tavg"]), ("g_max", float(x["tmax"]))]
+        mc = [("cmdline", cmdline("xtivreg", args)), ("cmd", "xtivreg"), ("insts", x["insts"]),
+              ("instd", x["instd"]), ("marginsok", "XB default"), ("marginsnotok", "ue xbu u e"),
+              ("predict", "xtivp_1"), ("depvar", L.smp.depname), ("model", "fe"), ("tvar", L.tvar),
+              ("ivar", L.pvar), ("vce", "conventional"), ("properties", "b V")]
+        post(s, est, sc, mc, mask)
+    else:
+        post(s, est, list(reversed(sc)), list(reversed(mc)), mask)
     _display_xtivreg(s, est)
+
+
+def _xtiv_first_stage(s, method, endog_cols, ex_cols, inst_cols, pi, r, level) -> None:
+    """xtivreg, first: each endogenous variable on the exogenous regressors and the instruments
+    (compat 1914): xtreg, fe (in its older layout) or be, regress of the differences for fd, and
+    for the random-effects models the regression of the GLS-transformed variables with the theta
+    of the IV fit."""
+    out = s.output
+    regs = " ".join(c.name for c in ex_cols + inst_cols)
+    for e in endog_cols:
+        if method in ("fe", "be"):
+            out.write("\nFirst-stage " + ("within" if method == "fe" else "between") + " regression\n", "text")
+            s._xtreg_old = method == "fe"
+            try:
+                s.interp._execute_expanded(f"xtreg {e.name} {regs}, {method}")
+            finally:
+                s._xtreg_old = False
+            continue
+        if method == "fd":
+            out.write("\nFirst-stage first-differenced regression\n", "text")
+            s.interp._execute_expanded(f"regress D.{e.name} " + " ".join(f"D.{c.name}" for c in ex_cols + inst_cols))
+            continue
+        # G2SLS (EC2SLS: VERIFY) first stage: OLS of x - theta mean(x) on the transformed
+        # regressors and 1 - theta, with s2 = rss/(n - k)
+        th = np.asarray(r["theta"], dtype=float)
+        th = th[pi.inv] if th.size == pi.G else np.broadcast_to(th, (len(pi.inv),))
+        tr = lambda v: v - th * pi.group_means(v)[pi.inv]          # noqa: E731
+        Xf = np.column_stack([tr(c.values) for c in ex_cols + inst_cols] + [1 - th])
+        yf = tr(e.values)
+        A = np.linalg.inv(Xf.T @ Xf)
+        b = A @ (Xf.T @ yf)
+        res = yf - Xf @ b
+        V = float(res @ res) / (len(yf) - Xf.shape[1]) * A
+        kk = Xf.shape[1] - 1
+        W = float(b[:kk] @ np.linalg.solve(V[:kk, :kk], b[:kk]))
+        out.write("\nFirst-stage " + ("G2SLS" if method == "g2sls" else "EC2SLS") + " regression\n", "text")
+        for lab, val in (("Number of obs", f"{len(yf):,}"), (f"Wald chi({kk})", f"{W:.0f}"),
+                         ("Prob > chi2", _g(float(chi2_tail(W, kk)), "%10.4f"))):
+            out.write(f"{'':<49}{lab:<17}= ", "text")
+            out.write(f"{val:>10}\n", "result")
+        out.write("\n", "text")
+        se = np.sqrt(np.maximum(np.diag(V), 0))
+        names = [c.name for c in ex_cols + inst_cols] + ["_cons"]
+        coef_table(s, e.name, [CoefRow("coef", nm, float(b[i]), float(se[i]), name=nm) for i, nm in enumerate(names)],
+                   stat="z", df=None, level=level)
 
 
 def _display_xtivreg(s, est, *, header=True, table=True, level=None, **_kw):
@@ -949,7 +1015,7 @@ def _display_xtivreg(s, est, *, header=True, table=True, level=None, **_kw):
         if "corr" in x:
             cl = f"corr(u_i, Xb)  = {x['corr']:.4f}"
         elif x["method"] == "be":
-            cl = f"sd(u_i + avg(e_i.))={_g(x['sd_be'], '%10.7g'):>10}"
+            cl = "sd(u_i + avg(e_i.))= " + format_value(x["sd_be"], "%9.0g")
         elif x["method"] in ("g2sls", "ec2sls"):
             cl = "corr(u_i, X)       = 0 (assumed)"
         else:
@@ -973,8 +1039,6 @@ def _display_xtivreg(s, est, *, header=True, table=True, level=None, **_kw):
         out.write(f"F  test that all u_i=0:     F({int(x['G'] - 1)},{int(x['df_r'])}) = {x['F_f']:8.2f}          "
                   f"Prob > F    = {x['p_f']:6.4f}\n", "text")
         out.write("-" * 78 + "\n", "text")
-    if x.get("regress"):
-        return                              # all regressors exogenous: no instrument lines (VERIFY)
     out.write(f"Instrumented:   {x['instd']}\n", "text")
     out.write(f"Instruments:    {x['insts']}\n", "text")
     out.write("-" * 78 + "\n", "text")

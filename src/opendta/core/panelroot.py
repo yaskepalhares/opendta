@@ -134,10 +134,13 @@ def fisher_combine(p: np.ndarray) -> dict:
     N = len(p)
     P = float(-2 * np.log(p).sum())
     Z = float(st.norm.ppf(p).sum() / math.sqrt(N))
-    k = 3 * (5 * N + 4) / (math.pi ** 2 * N * (5 * N + 2))
+    # Stata's scale of L is 3(5N + 3) / (pi^2 N (5N + 2)) where Choi (2001) has 5N + 4 in the
+    # numerator (compat 1914: the ratio of the statistics is sqrt(103/104) with N = 20; VERIFY with
+    # another N); the p-values of L* and Pm are 1 - F(x), as their p_L = 4.44e-16 shows
+    k = 3 * (5 * N + 3) / (math.pi ** 2 * N * (5 * N + 2))
     L = float(math.sqrt(k) * np.log(p / (1 - p)).sum())
     Pm = (P - 2 * N) / (2 * math.sqrt(N))
     return {"P": P, "df_P": 2 * N, "p_P": float(st.chi2.sf(P, 2 * N)),
             "Z": Z, "p_Z": float(st.norm.cdf(Z)),
-            "L": L, "df_L": 5 * N + 4, "p_L": float(st.t.cdf(L, 5 * N + 4)),
-            "Pm": Pm, "p_Pm": float(st.norm.sf(Pm))}
+            "L": L, "df_L": 5 * N + 4, "p_L": float(1 - st.t.sf(L, 5 * N + 4)),
+            "Pm": Pm, "p_Pm": float(1 - st.norm.cdf(Pm))}

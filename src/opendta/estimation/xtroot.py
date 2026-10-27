@@ -103,10 +103,14 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
         raise StataError(198, "option not available yet in OpenDTA")
     if o.get("kernel") and sub != "hadri":
         raise StataError(198, "option kernel() not allowed")                      # VERIFY
+    if sub == "fisher" and o.get("lags") in (None, True):
+        raise StataError(198, "must specify lags()")                                # compat 1914
     if o.get("drift") and (sub != "fisher" or o.get("pperron") or o.get("trend") or o.get("noconstant")):
         raise StataError(198, "option drift may only be specified with dfuller, without trend or noconstant")  # VERIFY
     if sub == "fisher" and not o.get("dfuller") and not o.get("pperron"):
         raise StataError(198, "must specify one of dfuller or pperron")
+    if sub == "hadri" and o.get("kernel") and o.get("robust"):
+        raise StataError(198, "cannot specify both kernel() and robust")            # compat 1914
     mask = touse(s, p)
     out = s.output
     trend, const = bool(o.get("trend")), not o.get("noconstant")
@@ -161,16 +165,24 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
             kw = str(o["kernel"]).split()
             kname = {"ba": "bartlett", "bartlett": "bartlett", "pa": "parzen", "parzen": "parzen",
                      "qs": "quadraticspectral", "quadraticspectral": "quadraticspectral"}.get(kw[0].lower(), "")
-            if not kname or len(kw) != 2 or not kw[1].isdigit():
+            if not kname or len(kw) > 2 or (len(kw) == 2 and not kw[1].isdigit()):
                 # VERIFY: the automatic lag choices (nwest, ...) are not available
                 raise StataError(198, "kernel() must be bartlett, parzen or quadraticspectral with a number of lags")
-            klags = int(kw[1])
+            # without a number of lags Stata takes 1 with T = 20 (compat 1914; VERIFY: its rule)
+            klags = int(kw[1]) if len(kw) == 2 else 1
         r = pr.hadri(Y, trend, bool(o.get("robust")), kname, klags)
+        # with a kernel the heteroskedasticity line says Robust (compat 1914)
+        lrv = {"bartlett": "Bartlett kernel", "parzen": "Parzen kernel",
+               "quadraticspectral": "Quad. Spectral kernel"}.get(kname, "")
+        if kname == "quadraticspectral":
+            lrv += f", \n{'':<20}{klags:.2f} lags"
+        elif kname:
+            lrv += f", {klags} lag{'s' if klags != 1 else ''}"
         _header(out, "Hadri LM test", name,
                 ["Ho: All panels are stationary", "Ha: Some panels contain unit roots", "",
-                 f"{'Time trend:':<20}{tr}", f"{'Heteroskedasticity:':<20}" + ("Robust" if o.get("robust") else "Not robust"),
-                 f"{'LR variance:':<20}" + (f"{kname.capitalize() if kname != 'quadraticspectral' else 'Quadratic spectral'}, {klags} lags"
-                                              if kname else "(not used)")],
+                 f"{'Time trend:':<20}{tr}",
+                 f"{'Heteroskedasticity:':<20}" + ("Robust" if o.get("robust") or kname else "Not robust"),
+                 f"{'LR variance:':<20}" + (lrv if kname else "(not used)")],
                 [f"Number of panels  = {N:>6}", f"Number of periods = {T:>6}", "",
                  "Asymptotics: T, N -> Infinity", " " * 18 + "sequentially", ""], extra_rule=2)
         out.write("-" * 78 + "\n", "text")
@@ -178,7 +190,13 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
         out.write("-" * 78 + "\n", "text")
         out.write(f"{' z':<20}{r['z']:>8.4f}{r['p']:>14.4f}\n", "result")
         out.write("-" * 78 + "\n", "text")
-        s.r = {"N_g": float(N), "N_t": float(T), "z": r["z"], "p": r["p"]}
+        # in the order of return list (compat 1914)
+        xi, zeta2 = (1 / 15, 11 / 6300) if trend else (1 / 6, 1 / 45)
+        res = ([("lags", float(klags))] if kname else []) + [
+            ("var", zeta2), ("mu", xi), ("p", r["p"]), ("z", r["z"]), ("N_t", float(T)), ("N_g", float(N)),
+            ("N", float(N * T)), ("test", "hadri")] + ([("kernel", kname)] if kname else []) + [
+            ("deterministics", "trend" if trend else "constant")]
+        s.r = dict(reversed(res))
     else:
         pperron = bool(o.get("pperron"))
         drift = bool(o.get("drift"))
@@ -203,30 +221,37 @@ def cmd_xtunitroot(s: "Session", args: str) -> None:
                 raise StataError(2001, "insufficient observations")
             ps.append(mackinnon_p(tau, "ct" if trend else ("c" if const else "n")))
         r = pr.fisher_combine(np.array(ps))
-        tbar = float(np.mean([len(y) for y in series]))
-        _header(out, "Fisher-type unit-root test", name,
-                ["Based on Phillips-Perron tests" if pperron else "Based on augmented Dickey-Fuller tests",
-                 "-" * (30 if pperron else 36), "Ho: All panels contain unit roots",
-                 "Ha: At least one panel is stationary", "",
-                 "AR parameter: Panel-specific", f"Panel means:  {means}", f"Time trend:   {tr}",
-                 ("Cross-sectional means removed" if o.get("demean") else "") if pperron else
-                 f"Drift term:   {'Included' if drift else 'Not included'}"],
-                ["", "", f"{'Number of panels':<25}= {N:>6}", f"{'Avg. number of periods':<25}= {tbar:>6.2f}", "",
-                 "Asymptotics: T -> Infinity", "", "",
-                 f"Newey-West lags: {lags} lags" if pperron else f"ADF regressions: {lags} lags"])   # VERIFY
+        # the layout of compat 1914
+        based = "Based on Phillips-Perron tests" if pperron else "Based on augmented Dickey-Fuller tests"
+        out.write(f"\nFisher-type unit-root test for {name}\n{based}\n" + "-" * (len(based) + (2 if pperron else 0))
+                  + "\n", "text")
+        lens = [len(y) for y in series]
+        per = (f"{'Number of periods':<18}= {lens[0]:>6}" if min(lens) == max(lens) else
+               f"{'Avg. number of periods':<23}= {np.mean(lens):>6.2f}")                 # VERIFY: unbalanced
+        lab = 17 if pperron else 14
+        rows = [("Ho: All panels contain unit roots", f"{'Number of panels':<18}= {N:>6}"),
+                ("Ha: At least one panel is stationary", per), ("", ""),
+                (f"{'AR parameter:':<{lab}}Panel-specific", "Asymptotics: T -> Infinity"),
+                (f"{'Panel means:':<{lab}}{means}", ""),
+                (f"{'Time trend:':<{lab}}{tr}", "Cross-sectional means removed" if o.get("demean") else "")]
+        ls = "" if lags == 1 else "s"
+        rows.append((f"Newey-West lags: {lags} lag{ls}", "") if pperron else
+                    (f"{'Drift term:':<{lab}}{'Included' if drift else 'Not included'}", f"ADF regressions: {lags} lag{ls}"))
+        for lft, rgt in rows:
+            out.write(f"{lft:<44}{rgt}".rstrip() + "\n", "text")
+        out.write("-" * 78 + "\n" + " " * 34 + "Statistic      p-value\n" + "-" * 78 + "\n", "text")
+        for lab_, sym, key in ((f" Inverse chi-squared({r['df_P']})", "P", "P"), (" Inverse normal", "Z", "Z"),
+                               (f" Inverse logit t({r['df_L']})", "L*", "L"),
+                               (" Modified inv. chi-squared", "Pm", "Pm")):
+            out.write(f"{lab_:<27}{sym:<3}", "text")
+            out.write(f"{r[key]:>13.4f}{r['p_' + key]:>13.4f}\n", "result")
         out.write("-" * 78 + "\n", "text")
-        out.write("                                  Statistic      p-value\n", "text")
-        out.write("-" * 78 + "\n", "text")
-        out.write(f" Inverse chi-squared({r['df_P']})".ljust(26) + " P ", "text")
-        out.write(f"{r['P']:>12.4f}   {r['p_P']:>9.4f}\n", "result")
-        out.write(" Inverse normal".ljust(26) + " Z ", "text")
-        out.write(f"{r['Z']:>12.4f}   {r['p_Z']:>9.4f}\n", "result")
-        out.write(f" Inverse logit t({r['df_L']})".ljust(26) + " L*", "text")
-        out.write(f"{r['L']:>12.4f}   {r['p_L']:>9.4f}\n", "result")
-        out.write(" Modified inv. chi-squared".ljust(26) + " Pm", "text")
-        out.write(f"{r['Pm']:>12.4f}   {r['p_Pm']:>9.4f}\n", "result")
-        out.write("-" * 78 + "\n", "text")
-        out.write("P statistic requires number of panels to be finite.\n", "text")
-        out.write("Other statistics are suitable for finite or infinite number of panels.\n", "text")
-        s.r = {"N_g": float(N), "lags": float(lags), "P": r["P"], "Z": r["Z"], "L": r["L"], "Pm": r["Pm"],
-               "p_P": r["p_P"], "p_Z": r["p_Z"], "p_L": r["p_L"], "p_Pm": r["p_Pm"]}
+        out.write(" P statistic requires number of panels to be finite.\n"
+                  " Other statistics are suitable for finite or infinite number of panels.\n" + "-" * 78 + "\n", "text")
+        opts_ = [w for w in ("noconstant", "trend", "drift", "demean") if o.get(w)] + [f"lags({lags})"]   # VERIFY: order
+        # return list shows them from the last stored to the first (compat 1914)
+        res = [("N", float(sum(lens))), ("N_t", float(max(lens))), ("N_g", float(N)), ("p_Pm", r["p_Pm"]),
+               ("Pm", r["Pm"]), ("df_L", float(r["df_L"])), ("p_L", r["p_L"]), ("L", r["L"]), ("p_Z", r["p_Z"]),
+               ("Z", r["Z"]), ("df_P", float(r["df_P"])), ("p_P", r["p_P"]), ("P", r["P"]),
+               ("options", " ".join(opts_)), ("urtest", "pperron" if pperron else "dfuller"), ("test", "fisher")]
+        s.r = dict(reversed(res))

@@ -55,6 +55,8 @@ def _lagrange(txt, default: tuple[int, int | None]) -> tuple[int, int | None]:
 
 def _lab(a: int, b: int | None, name: str, diff: bool = False) -> str:
     d = "D." if diff else ""
+    if b == a and diff:
+        return f"L{a if a > 1 else ''}D.{name}"          # LD.y (compat 1914)
     return f"L({a}/{'.' if b is None else b}).{d}{name}" if (b is None or b != a) else (f"L{a}.{d}{name}" if a > 1 else f"L.{d}{name}")
 
 
@@ -176,6 +178,11 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     p = 1
     if cmd == "xtdpd":
         for c in xcols:
+            if o.get("hascons") and np.ptp(c.values) == 0:
+                # a constant regressor with hascons is dropped and the model gets _cons (compat 1914)
+                s.output.write(f"note: {c.name} dropped because of collinearity\n", "text")
+                sp.cons = not o.get("noconstant")
+                continue
             reg_names.append(c.name)
             reg_series.append(grid(c.values))
         dg, lg = o0.get("dgmmiv"), o0.get("lgmmiv")
@@ -341,6 +348,12 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     # drop instruments that are zero in every panel
     keep = np.flatnonzero(np.any([np.any(z != 0, axis=0) for z in Zs], axis=0))
     Zs = [z[:, keep] for z in Zs]
+    # and those equal to an earlier one in every panel (liv(one) with hascons, next to _cons:
+    # compat 1914)
+    stacked = np.vstack(Zs)
+    uniq_cols = [j for j in range(stacked.shape[1])
+                 if not any(np.array_equal(stacked[:, j], stacked[:, i]) for i in range(j))]
+    Zs = [z[:, uniq_cols] for z in Zs]
     X, yv = rows_X, rows_y
     if len(keep) < k:
         raise StataError(481, "equation not identified; fewer instruments than parameters")   # VERIFY
@@ -385,6 +398,24 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     est.display = _display
     est.estat = {"abond": (2, lambda ss, ee, rest: _estat_abond(ss, ee, rest, fit, X, Zs, rows_t)),
                  "sargan": (3, lambda ss, ee, rest: _estat_sargan(ss, ee, fit, Zs, twostep, robust))}
+    if cmd == "xtabond":
+        # e() in the order of Stata's ereturn list (compat 1914); rss is 2 (N - k) sigma2, the
+        # differenced errors having twice the variance (VERIFY)
+        from ..commands.datacmds import _signature
+        from .results import post as _post
+        arm = [pg.ar_test(j, fit, X, Zs, rows_t)[0] for j in range(1, artests + 1)]
+        sc = [("rank", float(k)), ("sig2", fit["sigma2"]), ("rss", 2 * (nobs - k) * fit["sigma2"]), ("N", float(nobs)),
+              ("N_g", float(Gu)), ("g_min", float(counts.min())), ("g_max", float(counts.max())),
+              ("g_avg", float(counts.mean())), ("t_min", t0), ("t_max", t0 + (Tg - 1) * (info.delta or 1.0)),
+              ("chi2", chi2), ("df_m", float(len(slopes))), ("zrank", float(L)), ("artests", float(artests))]
+        sc += [(f"arm{j}", z) for j, z in enumerate(arm, 1)]
+        mc = [("cmdline", cmdline(cmd, args)), ("cmd", cmd), ("estat_cmd", "xtdpd_estat"), ("marginsok", "XB default"),
+              ("predict", "xtdpd_p"), ("depvar", dname), ("transform", "difference"), ("hascons", "hascons"),
+              ("tvar", info.tvar), ("ivar", pvar), ("datasignature", _signature(ds)), ("system", "system"),
+              ("vce", "robust" if robust else "gmm"), ("vcetype", "Robust" if robust else ""), ("properties", "b V")]
+        _post(s, est, sc, mc, smp.mask)
+        _display(s, est)
+        return
     sc = [("N", float(nobs)), ("N_g", float(Gu)), ("df_m", float(len(slopes))), ("g_min", float(counts.min())),
           ("g_avg", float(counts.mean())), ("g_max", float(counts.max())), ("t_min", float(Tg)), ("chi2", chi2),
           ("sig2", fit["sigma2"]), ("zrank", float(L)), ("rank", float(k)), ("artests", float(artests))]   # VERIFY
@@ -415,7 +446,8 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
         out.write(f"{'':<48}{'Prob > chi2':<18}= ", "text")
         out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
         out.write(("Two-step results" if x["twostep"] else "One-step results") + "\n", "text")
-        if x["robust"] and x["cmd"] == "xtabond":
+        if x["robust"] and (x["cmd"] == "xtabond" or not x["twostep"]):
+            # xtabond, and xtdpd in one step (compat 1914; not after twostep: compat 1905)
             out.write(f"{'(Std. Err. adjusted for clustering on ' + x['pvar'] + ')':>78}\n", "text")   # VERIFY
     if not table:
         return
