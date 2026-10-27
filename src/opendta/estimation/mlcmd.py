@@ -28,8 +28,9 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-_METHODS = ("lf", "d0", "d1", "d2")
-_UNSUPPORTED = ("lf0", "lf1", "lf2", "gf0", "gf1", "gf2")
+_METHODS = ("lf", "d0", "d1", "d2", "lf0", "lf1", "lf2", "gf0", "gf1", "gf2")
+# evaluators called as "prog todo b lnfj ...": per-observation log likelihood
+_LFAMILY = ("lf0", "lf1", "lf2", "gf0", "gf1", "gf2")
 
 
 @dataclass
@@ -182,8 +183,6 @@ def _model(s: "Session", args: str) -> None:
     if len(words) < 3:
         raise StataError(198, "invalid syntax")
     method, prog, tail = words[0].lower(), words[1], words[2]
-    if method in _UNSUPPORTED:
-        raise StataError(198, f"method {method} is not available yet in OpenDTA")
     if method not in _METHODS:
         raise StataError(198, f"unknown method {method}")
     from ..lang.programs import Program      # noqa: F401
@@ -194,12 +193,21 @@ def _model(s: "Session", args: str) -> None:
         raise StataError(198, "equations required")
     p = parse_standard(rest + (", " + opt_text if opt_text.strip() else ""))
     o = match_options(p.options, _OPT) if p.options.strip() else {}
-    if o.get("constraints") or o.get("svy"):
-        raise StataError(198, "option constraints() and svy are not available yet in OpenDTA")
     from ..commands._util import touse
     from ..commands.summarize import weights
     mask = touse(s, p)
     w, wtype, mask = weights(s, p, mask, ("fweight", "aweight", "pweight", "iweight"))
+    design = None
+    if o.get("svy"):
+        # svy: the design weights (pweights) and, after the fit, the linearized design variance
+        from .svy import DesignData, require_design
+        if p.weight is not None:
+            raise StataError(101, "weights not allowed with the svy option")      # VERIFY
+        design = DesignData(s, require_design(s), np.ones(s.data.nobs, bool))
+        mask = mask & design.mask
+        w = np.zeros(s.data.nobs)
+        w[design.mask] = design.w
+        wtype = "pweight"
     ds = s.data
     # observations with missing values in any variable of the equations are out of the sample
     used = [v for e in eqs for v in e.depvars + e.indep]
@@ -218,6 +226,7 @@ def _model(s: "Session", args: str) -> None:
             var = ds.get(v)
             mask = mask & (np.array([x != "" for x in var.raw]) if var.is_string else var.data < SYS)
     m = Model(method, prog, eqs, mask, w, wtype, o, f"ml model {args}")
+    m.design = design
     m.N = int(mask.sum())
     if m.N == 0:
         raise StataError(2000, "no observations")
@@ -246,6 +255,7 @@ def _model(s: "Session", args: str) -> None:
     m.ysets = [v for e in eqs for v in e.depvars]
     if m.w is not None:
         m.w = w[mask]
+    m.cns = _constraint_rows(s, m, o.get("constraints")) if o.get("constraints") not in (None, True) else None
     s._ml = m
     if isinstance(o.get("from"), str) or isinstance(o.get("init"), str):
         _init(s, o.get("from") or o.get("init"))
@@ -336,6 +346,7 @@ def _setup(s: "Session", m: Model) -> None:
         full[m.touse] = m.w
         ds.get(m.wvar).data = full
         g["ML_w"] = m.wvar
+        m.wvar_posted = m.wvar          # e(wvar) of ml, svy (the variable is dropped at the end)
     else:
         g.pop("ML_w", None)
     s._ml_active = m
@@ -529,27 +540,169 @@ def _lf_fun(s: "Session", m: Model):
     return fun
 
 
+def _eval_l(s: "Session", m: Model, b: np.ndarray, todo: int):
+    """lf0, lf1, lf2, gf0, gf1, gf2: "prog todo b lnfj [g1 ... gK | S] [H]". Returns lnfj over the
+    sample, the per-observation scores with respect to the linear predictors (lf1, lf2; n x K) or
+    to the coefficients (gf1, gf2; S, n x nb), and the Hessian (lf2, gf2)."""
+    from ..commands.matrix import Matrix
+    from ..commands.syntaxcmd import _temp_name
+    from ..core.dataset import Variable
+    ds = s.data
+    mats = _mats(s)
+    bm = Matrix(b.reshape(1, -1), ["y1"], [c for _, c in m.names])
+    bm.coleq = [q for q, _ in m.names]
+    mats["__mlb"] = bm
+    ng = m.K if m.method in ("lf1", "lf2") else 0
+    names = getattr(m, "_tmp", None)
+    if names is None or len(names) != 1 + ng or any(not ds.has(n) for n in names):
+        names = []
+        for _ in range(1 + ng):
+            nm = _temp_name(s)
+            ds.add(Variable(nm, "double", np.full(ds.nobs, SYS)))
+            names.append(nm)
+        m._tmp = names
+    for nm in names:
+        ds.get(nm).data = np.full(ds.nobs, SYS)
+    args = f"{m.prog} {todo} __mlb {names[0]}"
+    if m.method in ("lf1", "lf2"):
+        args += " " + " ".join(names[1:])
+    elif m.method in ("gf1", "gf2"):
+        mats.pop("__mlS", None)
+        args += " __mlS"
+    if m.method in ("lf2", "gf2"):
+        mats.pop("__mlH", None)
+        args += " __mlH"
+    _call(s, args)
+    lnf = ds.get(names[0]).data[m.touse]
+    if m.method.startswith("gf"):
+        lnf = np.where(lnf >= SYS, 0.0, lnf)         # gf: rows without a contribution (VERIFY)
+    lnf = np.where(lnf >= SYS, np.nan, lnf)
+    G = S = H = None
+    if todo >= 1 and m.method in ("lf1", "lf2"):
+        G = np.column_stack([ds.get(nm).data[m.touse] for nm in names[1:]])
+        G = np.where(G >= SYS, np.nan, G)
+    if todo >= 1 and m.method in ("gf1", "gf2") and "__mlS" in mats:
+        S = np.asarray(mats["__mlS"].data, dtype=float)
+    if todo >= 2 and m.method in ("lf2", "gf2") and "__mlH" in mats:
+        H = np.asarray(mats["__mlH"].data, dtype=float)
+    return lnf, G, S, H
+
+
+def _l_fun(s: "Session", m: Model):
+    """fun(b, todo) for the lf0 ... gf2 evaluators; sets m._S, the weighted per-observation
+    scores with respect to the coefficients, for the robust variance."""
+    w = m.w if m.w is not None else np.ones(m.N)
+    nb = m.nb
+
+    def obs(b):
+        return _eval_l(s, m, b, 0)[0]
+
+    def num_scores(b):
+        S = np.zeros((m.N, nb))
+        for j in range(nb):
+            hj = 1e-4 * max(1.0, abs(b[j]))
+            e = np.zeros(nb)
+            e[j] = hj
+            S[:, j] = (obs(b + e) - obs(b - e)) / (2 * hj)
+        return S
+
+    def scores(b):
+        if m.method in ("lf0", "gf0"):
+            return num_scores(b)
+        lnf, G, S, _ = _eval_l(s, m, b, 1)
+        if m.method in ("lf1", "lf2"):
+            if G is None:
+                raise StataError(198, f"{m.prog} did not return the scores")      # VERIFY
+            return np.column_stack([e.X * G[:, [j]] for j, e in enumerate(m.eqs)])
+        if S is None or S.shape != (m.N, nb):
+            raise StataError(503, f"{m.prog} did not return a {m.N} x {nb} matrix of scores")   # VERIFY
+        return S
+
+    def fun(b, todo):
+        if todo == 0:
+            ll = _total(m, obs(b))
+            return (ll if np.isfinite(ll) else -np.inf), None, None
+        lnf = obs(b)
+        ll = _total(m, lnf)
+        if not np.isfinite(ll):
+            return -np.inf, np.zeros(nb), np.full((nb, nb), np.nan)
+        S = scores(b)
+        g = (S * w[:, None]).sum(axis=0)
+        H = None
+        if m.method in ("lf2", "gf2"):
+            H = _eval_l(s, m, b, 2)[3]
+            if H is None:
+                raise StataError(198, f"{m.prog} did not return the Hessian")    # VERIFY
+        if H is None:
+            # numerical Hessian from the gradient
+            H = np.zeros((nb, nb))
+            for j in range(nb):
+                hj = 1e-4 * max(1.0, abs(b[j]))
+                e = np.zeros(nb)
+                e[j] = hj
+                H[:, j] = ((scores(b + e) - scores(b - e)) * w[:, None]).sum(axis=0) / (2 * hj)
+            H = (H + H.T) / 2
+        m._S = S * w[:, None]
+        return ll, g, H
+    return fun
+
+
 def _fun(s: "Session", m: Model):
     _setup(s, m)
+    if m.method in _LFAMILY:
+        return _l_fun(s, m)
     return _lf_fun(s, m) if m.method in ("lf", "mlexp") else _d_fun(s, m)
+
+
+def _constraint_rows(s: "Session", m: Model, numlist) -> np.ndarray:
+    """The rows (R, r) of the constraints numbered in constraints(), read against the
+    coefficients of the model."""
+    from types import SimpleNamespace
+    from ..core.constraints import constraint_transform
+    from .postest import _constraint
+    from .sysmodels import _constraints, _numlist
+    defined = _constraints(s)
+    fake = SimpleNamespace(names=[c for _, c in m.names], eqnames=[q for q, _ in m.names])
+    rows = []
+    for n in _numlist(str(numlist)):
+        if n not in defined:
+            raise StataError(111, f"constraint {n} not found")
+        coef, rhs = _constraint(s, fake, defined[n])
+        row = np.zeros(m.nb + 1)
+        for j, v in coef.items():
+            row[j] += v
+        row[-1] = rhs
+        rows.append(row)
+    C = np.array(rows).reshape(-1, m.nb + 1)
+    m.cns_T, m.cns_a = constraint_transform(C)
+    m.cns_a = m.cns_a.ravel()
+    return C
 
 
 # ---------------------------------------------------------------------------
 # search, rescale and maximize
 # ---------------------------------------------------------------------------
 
-def _line(out, lead: str, ll: float, note: str = "") -> None:
+def _line(out, lead: str, ll: float, note: str = "", label: str = "log likelihood") -> None:
     shown = "-<inf>" if ll == -np.inf or not np.isfinite(ll) else _g10(ll)
-    out.write(f"{lead:<14} log likelihood = {shown:>10}{note}\n", "text")
+    out.write(f"{lead:<14} {label} = {shown:>10}{note}\n", "text")
 
 
-def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
+def _pseudo(m: Model, mo: dict) -> bool:
+    """The log is of a pseudolikelihood with robust or cluster variances, pweights and svy
+    (compat 1913)."""
+    vce = str(mo["vce"]).split()[0].lower() if isinstance(mo.get("vce"), str) else ""
+    return (bool(mo.get("robust")) or vce.startswith(("rob", "cl")) or bool(m.clustvar)
+            or m.wtype == "pweight" or getattr(m, "design", None) is not None)
+
+
+def _start(s: "Session", m: Model, fun, out, quiet: bool, label: str = "log likelihood") -> np.ndarray:
     """Initial point: the given one, else zeros; if the evaluator fails there, a search for a
     feasible point (VERIFY: Stata's random search is undocumented), then rescaling."""
     b = np.zeros(m.nb) if m.b0 is None else m.b0.copy()
     ll = fun(b, 0)[0]
     if not quiet:
-        _line(out, "initial:", ll, "  (could not be evaluated)" if not np.isfinite(ll) else "")
+        _line(out, "initial:", ll, "  (could not be evaluated)" if not np.isfinite(ll) else "", label)
     if not np.isfinite(ll):
         rng = np.random.default_rng(1)
         best = None
@@ -569,10 +722,11 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
             raise StataError(491, "could not find feasible values")
         b, ll = best
         if not quiet:
-            _line(out, "feasible:", ll)
+            _line(out, "feasible:", ll, label=label)
     elif m.b0 is None and any(e.cons for e in m.eqs):
-        # alternative: constants set to -.5 or .5, kept if the likelihood improves (VERIFY: the
-        # reference log shows constant -.5 for a logit with 43% of ones; Stata's rule is not documented)
+        # alternative: constants set to -.5 or .5, the better of the two, kept even when it is
+        # worse than the initial point (compat 1913: with pweights the alternative -279.10 follows
+        # the initial -277.95, and rescale starts from it; VERIFY: Stata's rule is not documented)
         best = None
         for c in (-0.5, 0.5):
             cand = b.copy()
@@ -580,12 +734,12 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
                 if e.cons:
                     cand[e.start + e.k - 1] = c
             v = fun(cand, 0)[0]
-            if np.isfinite(v) and v > ll and (best is None or v > best[1]):
+            if np.isfinite(v) and (best is None or v > best[1]):
                 best = (cand, v)
         if best is not None:
             b, ll = best
             if not quiet:
-                _line(out, "alternative:", ll)
+                _line(out, "alternative:", ll, label=label)
     # rescale: best multiple of the whole vector, then of each equation
     def rescale(idx_sets):
         nonlocal b, ll
@@ -603,11 +757,11 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
                 ll = bestv
     rescale([np.arange(m.nb)])
     if not quiet:
-        _line(out, "rescale:", ll)
+        _line(out, "rescale:", ll, label=label)
     if m.K > 1:
         rescale([np.arange(e.start, e.start + e.k) for e in m.eqs])
         if not quiet:
-            _line(out, "rescale eq:", ll)
+            _line(out, "rescale eq:", ll, label=label)
     return b
 
 
@@ -639,14 +793,27 @@ def _maximize(s: "Session", args: str) -> None:
     mo = dict(m.opts)
     mo.update(o)
     nolog = bool(mo.get("nolog"))
+    label = "log pseudolikelihood" if _pseudo(m, mo) else "log likelihood"
     try:
         fun = _fun(s, m)
-        b = _start(s, m, fun, out, nolog)
-        r = maximize(fun, b, **ml_options(mo))
+        b = _start(s, m, fun, out, nolog, label)
+        if getattr(m, "cns", None) is not None:
+            # constraints(): b = T bc + a, maximized over bc
+            T, a = m.cns_T, m.cns_a
+
+            def cfun(bc, todo):
+                ll, g, H = fun(T @ bc + a, todo)
+                if g is None:
+                    return ll, g, H
+                return ll, T.T @ g, (T.T @ H @ T if H is not None else None)
+            r = maximize(cfun, T.T @ (b - a), **ml_options(mo))
+            r.b = T @ r.b + a
+        else:
+            r = maximize(fun, b, **ml_options(mo))
         if not nolog:
             for it, ll, note in r.log:
                 lead = f"Iteration {it}:"
-                out.write(f"{lead:<14} log likelihood = {_g10(ll):>10}{note}  \n", "text")
+                out.write(f"{lead:<14} {label} = {_g10(ll):>10}{note}  \n", "text")
             if not r.converged:
                 out.write("convergence not achieved\n", "error")
         m.result = r
@@ -661,8 +828,13 @@ def _maximize(s: "Session", args: str) -> None:
 def _variance(s: "Session", m: Model, fun, mo: dict) -> None:
     r = m.result
     ll, g, H = fun(r.b, 2)
+    r.g = g
     try:
-        Vh = np.linalg.inv(-H)
+        if getattr(m, "cns", None) is not None:
+            T = m.cns_T
+            Vh = T @ np.linalg.inv(-(T.T @ H @ T)) @ T.T
+        else:
+            Vh = np.linalg.inv(-H)
     except np.linalg.LinAlgError:
         Vh = np.full_like(H, np.nan)
     vce = str(mo["vce"]).split()[0].lower() if isinstance(mo.get("vce"), str) else "oim"
@@ -671,12 +843,26 @@ def _variance(s: "Session", m: Model, fun, mo: dict) -> None:
     m.Vh = Vh
     if vce.startswith("opg"):
         robust = False
+    if getattr(m, "design", None) is not None:
+        # svy: linearized design variance of the total scores (VERIFY: replication methods)
+        dd = m.design
+        S = _scores(m)
+        Z = np.zeros((dd.n, m.nb))
+        pos = np.full(len(m.touse), -1)
+        pos[np.flatnonzero(dd.mask)] = np.arange(dd.n)
+        Z[pos[m.touse]] = S
+        m.V = Vh @ dd.variance(Z) @ Vh
+        # for e(V_srs): the linearized scores and the weights of the sample on the design rows
+        wd = np.zeros(dd.n)
+        wd[pos[m.touse]] = dd.w[pos[m.touse]]
+        from .svy import srs_variances
+        m._srs = srs_variances(Z @ Vh, wd, dd, int(m.touse.sum()))
+        m.vcetype, m.vce = "Linearized", "linearized"
+        return
     if robust or vce.startswith("opg"):
-        if m.method not in ("lf", "mlexp"):
+        if m.method not in ("lf", "mlexp") + _LFAMILY:
             raise StataError(198, f"vce({vce}) is not allowed with method {m.method}")   # VERIFY
-        w = m.w if m.w is not None else np.ones(m.N)
-        G = getattr(m, "_G", None)
-        S = np.column_stack([e.X * (w * G[:, j])[:, None] for j, e in enumerate(m.eqs)])
+        S = _scores(m)
         if vce.startswith("opg"):
             m.V = np.linalg.inv(S.T @ S)
             m.vcetype, m.vce = "OPG", "opg"
@@ -694,6 +880,17 @@ def _variance(s: "Session", m: Model, fun, mo: dict) -> None:
             m.vcetype, m.vce = "Robust", "robust"      # VERIFY: small-sample adjustment
     else:
         m.V = Vh
+
+
+def _scores(m: Model) -> np.ndarray:
+    """Weighted per-observation scores with respect to the coefficients (n x nb)."""
+    if m.method in _LFAMILY:
+        return m._S
+    if m.method not in ("lf", "mlexp"):
+        raise StataError(198, f"method {m.method} does not give the scores this variance needs")   # VERIFY
+    w = m.w if m.w is not None else np.ones(m.N)
+    G = getattr(m, "_G", None)
+    return np.column_stack([e.X * (w * G[:, j])[:, None] for j, e in enumerate(m.eqs)])
 
 
 def _post(s: "Session", m: Model, mo: dict) -> None:
@@ -716,7 +913,12 @@ def _post(s: "Session", m: Model, mo: dict) -> None:
     keep = [] if mlx else [i for i, (q, c) in enumerate(m.names) if q == m.eqs[0].name and c != "_cons"]
     dfm = len(keep)
     chi2 = SYS
-    if dfm and not skip:
+    if dfm and not skip and getattr(m, "cns", None) is not None:
+        # with constraints the test has the rank of the constrained variance (VERIFY)
+        Vk = V[np.ix_(keep, keep)]
+        dfm = int(np.linalg.matrix_rank(Vk))
+        chi2 = float(b[keep] @ np.linalg.pinv(Vk) @ b[keep]) if dfm else SYS
+    elif dfm and not skip:
         try:
             chi2 = float(b[keep] @ np.linalg.solve(V[np.ix_(keep, keep)], b[keep]))
         except np.linalg.LinAlgError:
@@ -753,11 +955,58 @@ def _post(s: "Session", m: Model, mo: dict) -> None:
     ilog[0, :len(vals)] = vals
     extra = [("ilog", Matrix(ilog, ["r1"], [str(i) for i in range(1, 21)])),
              ("gradient", Matrix(np.asarray(r.g).reshape(1, -1), ["r1"], names))]
-    if m.vcetype == "Robust":
+    if m.vcetype in ("Robust", "Linearized"):
         extra.append(("V_modelbased", Matrix(m.Vh, names, names)))
+    if getattr(m, "cns", None) is not None:
+        cm = Matrix(m.cns.copy(), [f"r{i}" for i in range(1, len(m.cns) + 1)], names + ["_r"])
+        # the last column is _Cns:_r, and e(Cns) comes right after e(V) (compat 1913)
+        cm.coleq = eqs + ["_Cns" if any(q not in ("", "_") for q in eqs) else "_"]
+        extra.insert(0, ("Cns", cm))
+    dd = getattr(m, "design", None)
+    if dd is not None:
+        # ml, svy: the results in the order of Stata's ereturn list, with the design-based F test
+        # of the first equation and no e(ll) nor e(rank) (compat 1913)
+        from .svyreg import _adjusted_F
+        d = dd.d
+        F, df1, df2 = _adjusted_F(r.b, V, keep, dd.df) if keep else (SYS, 0, 0)
+        m.svyF = (F, df1, df2)
+        scalars = [("ic", float(r.iterations)), ("k", float(m.nb)), ("k_eq", float(k_eq)),
+                   ("k_dv", float(len(m.ysets))), ("converged", 1.0 if r.converged else 0.0),
+                   ("rc", 0.0 if r.converged else 430.0), ("N_psu", float(dd.n_psu)),
+                   ("N_strata", float(dd.n_strata)), ("df_r", float(dd.df)), ("N", float(m.N)),
+                   ("N_pop", float(m.w.sum())), ("census", 0.0), ("singleton", 0.0), ("N_strata_omit", 0.0),
+                   ("stages", 1.0), ("k_eq_model", float(k_eq))]
+        if F < SYS:
+            scalars += [("df_m", float(df1)), ("F", F), ("p", float(st_f_sf(F, df1, df2)))]
+        macros = [("cmd", "ml"), ("svyml", "svyml"), ("opt", "moptimize"), ("predict", "ml_p"),
+                  ("singleunit", d.singleunit)]
+        if d.strata:
+            macros.append(("strata1", d.strata))
+        if d.psu:
+            macros.append(("su1", d.psu))
+        wv = getattr(m, "wvar_posted", "")
+        if wv:
+            # Stata's is a temporary variable (__000004 in compat 1913)
+            macros += [("wvar", wv), ("wexp", f"= {wv}")]
+        macros += [("wtype", "pweight"), ("vcetype", m.vcetype), ("vce", m.vce), ("prefix", "svy"),
+                   ("user", m.prog), ("ml_method", m.method), ("technique", "nr"), ("which", "max"),
+                   ("depvar", " ".join(m.ysets)), ("properties", "b V")]
+        Swor, Swr = m._srs
+        extra += [("V_srssubwr", Matrix(Swr, names, names)), ("V_srssub", Matrix(Swor, names, names)),
+                  ("V_srswr", Matrix(Swr, names, names)), ("V_srs", Matrix(Swor, names, names)),
+                  ("_N_strata_certain", Matrix(np.zeros((1, 1)))), ("_N_strata_single", Matrix(np.zeros((1, 1)))),
+                  ("_N_strata", Matrix(np.array([[float(dd.n_strata)]])))]
+        post(s, est, scalars, macros, m.touse.copy(), extra_mats=extra)
+        s._estimates = est
+        return
     sample = m.touse.copy()
     post(s, est, list(reversed(scalars)), list(reversed(macros)), sample, extra_mats=extra)
     s._estimates = est
+
+
+def st_f_sf(F: float, d1: float, d2: float) -> float:
+    from scipy.stats import f
+    return float(f.sf(F, d1, d2))
 
 
 def _display(s: "Session", m: Model, mo: dict) -> None:
@@ -769,6 +1018,23 @@ def _display(s: "Session", m: Model, mo: dict) -> None:
         out.write(f"\n{est.title}\n\n", "text")
         out.write(f"{lll + ' = ' + _g10(m.result.ll):<48}{'Number of obs':<18}= ", "text")
         out.write(f"{m.N:>10,}\n\n", "result")
+    elif not mo.get("noheader") and getattr(m, "design", None) is not None:
+        # svy: the design header and the design-based F test of the first equation (VERIFY)
+        from .svy import format_size
+        dd = m.design
+        F, df1, df2 = m.svyF
+        out.write(f"\n{est.title}\n\n" if est.title else "\n", "text")
+        # the layout of svy: regress (compat 1913)
+        rows = [(f"Number of strata   = {dd.n_strata:>9,}", "Number of obs", f"{m.N:,}"),
+                (f"Number of PSUs     = {dd.n_psu:>9,}", "Population size", format_size(float(m.w.sum()))),
+                ("", "Design df", f"{dd.df:,}")]
+        if F < SYS:
+            rows += [("", f"F({df1:>4},{df2:>7})", g9(F, "%10.2f")),
+                     ("", "Prob > F", g9(float(st_f_sf(F, df1, df2)), "%10.4f"))]
+        for left, lab, val in rows:
+            out.write(f"{left:<48}{lab:<18}= ", "text")
+            out.write(f"{val:>10}\n", "result")
+        out.write("\n", "text")
     elif not mo.get("noheader"):
         out.write("\n", "text")
         rows = [(est.title, "Number of obs", f"{m.N:,}")]
@@ -800,8 +1066,17 @@ def _display(s: "Session", m: Model, mo: dict) -> None:
             rows_.append(CoefRow("coef", nm, float(m.result.b[idx]), float(se[idx]), name=nm))
     if m.vcetype == "Robust" and m.clustvar:
         out.write(f"{'':>48}(Std. Err. adjusted for {getattr(m, 'nclust', 0)} clusters in {m.clustvar})\n", "text")
+    if getattr(m, "cns", None) is not None:
+        from .postest import _ctext
+        from types import SimpleNamespace
+        fake = SimpleNamespace(names=[c for _, c in m.names], eqnames=[q for q, _ in m.names])
+        for i, row in enumerate(m.cns, 1):
+            coef = {j: float(v) for j, v in enumerate(row[:-1]) if v != 0}
+            out.write(f" ({i:>2})  {_ctext(fake, coef, float(row[-1]))}\n", "text")
     dep = m.ysets[0] if m.ysets else ""
-    coef_table(s, "" if m.method == "mlexp" else dep, rows_, stat="z", df=None, level=level,
+    dd = getattr(m, "design", None)
+    coef_table(s, "" if m.method == "mlexp" else dep, rows_, stat="t" if dd is not None else "z",
+               df=dd.df if dd is not None else None, level=level,
                vcetype="Robust" if m.vcetype == "Robust" else "" if m.vcetype in ("OIM",) else m.vcetype)
 
 

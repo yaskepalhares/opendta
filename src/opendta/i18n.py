@@ -251,6 +251,13 @@ PT: dict[str, str] = {
     "The working directory OpenDTA starts in. Takes effect the next time OpenDTA opens.":
         "A pasta de trabalho em que o OpenDTA começa. Vale na próxima vez que o OpenDTA abrir.",
     "Save a log of each session": "Salvar um log de cada sessão",
+    "Show the commands of do-files in Review": "Mostrar os comandos dos do-files no Review",
+    "After do, run or the Do button of the Do-file Editor, Review lists the commands the do-files ran, under "
+    "the do line (click the arrow to open them; commands with errors in red). Off: one line per do, as in Stata.":
+        "Depois de do, run ou do botão Do do Editor de do-files, o Review lista os comandos que os do-files "
+        "executaram, sob a linha do do (clique na seta para abri-los; comandos com erro em vermelho). Desligado: "
+        "uma linha por do, como no Stata.",
+    "selection": "seleção", "line": "linha",
     "Starts a text log when OpenDTA opens, in a logs folder inside the initial folder (or your home folder). "
     "Takes effect the next time OpenDTA opens.":
         "Inicia um log em texto ao abrir o OpenDTA, numa pasta logs dentro da pasta inicial (ou da sua pasta "

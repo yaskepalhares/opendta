@@ -52,6 +52,11 @@ character for each horizontal boundary, {cmd:-} or {cmd:|} for a line and {cmd:&
 {p_end}
 
 {pstd}
-Matrices in OpenDTA carry no equation names yet, so {cmd:showcoleq()}, {cmd:roweqonly},
-{cmd:coleqonly}, {cmd:colorcoleq()} and {cmd:keepcoleq} are not available.
+With equation names, the column equations go in a line above the column names and each row
+equation in a line of its own above its rows. {cmd:showcoleq()} places the column equations:
+{cmd:combined} (default, centered over the columns of the equation), {cmd:lcombined},
+{cmd:rcombined}, {cmd:first} (over the first column) or {cmd:each} (over every column).
+{cmd:roweqonly} shows the row equations instead of the row names, {cmd:coleqonly} only the column
+equations, {cmd:keepcoleq} keeps the columns of an equation together when the table wraps, and
+{cmd:lines(eq)} draws lines between equations. {cmd:colorcoleq(txt}|{cmd:res)} is accepted.
 {p_end}

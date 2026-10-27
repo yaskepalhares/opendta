@@ -42,10 +42,16 @@ def align(text: str, width: int, how: str) -> str:
     return text.rjust(width)
 
 
-def _row_text(cells: list[str], fields: list[Field], seps: list[Sep]) -> str:
+def _row_text(cells: list[str], fields: list[Field], seps: list[Sep], flush: bool = False) -> str:
+    """flush: the first cell is a left-aligned label that starts right after the left border (the
+    equation lines of matlist; compat 1910)."""
     out = []
     for k, f in enumerate(fields):
         sp = seps[k]
+        if flush and k == 0:
+            out.append(" " * sp.before + ("|" if sp.line else ""))
+            out.append(cells[0][:f.width + sp.after].ljust(f.width + sp.after))
+            continue
         out.append(" " * sp.before + ("|" if sp.line else "") + " " * sp.after)
         out.append(align(cells[k], f.width, f.align))
     sp = seps[len(fields)]
@@ -61,20 +67,57 @@ def _rule_text(fields: list[Field], seps: list[Sep], outer: bool = False) -> str
     for k, f in enumerate(fields):
         sp = seps[k]
         cross = "+" if sp.line and (not outer or k == 0) else "-" if sp.line else ""
+        if k == 0 and sp.line and not outer:
+            cross = "|"           # a line inside a bordered table meets the border (compat 1910)
         out.append((" " if k == 0 else "-") * sp.before + cross + "-" * sp.after)
         out.append("-" * f.width)
     sp = seps[last]
-    cross = "+" if sp.line else ""
+    cross = ("+" if outer else "|") if sp.line else ""
     out.append("-" * sp.before + cross + "-" * sp.after)
     return "".join(out)
 
 
+def _span_text(row: list[str], cols: list[int], fields: list[Field], seps: list[Sep],
+               spans: list[tuple[int, int, str, str]]) -> str:
+    """A row whose texts run over groups of columns: `spans` has (first, last, text, alignment)
+    in the numbering of all the columns; inside a group the separators are blanks."""
+    groups = {}
+    for a, b, text, how in spans:
+        inside = [k for k in cols if a <= k <= b]
+        if inside:
+            groups[inside[0]] = (inside, text, how)
+    out, k = [], 0
+    while k < len(cols):
+        sp = seps[k]
+        out.append(" " * sp.before + ("|" if sp.line else "") + " " * sp.after)
+        if cols[k] in groups:
+            inside, text, how = groups[cols[k]]
+            n = len(inside)
+            width = sum(fields[k + j].width for j in range(n)) + sum(seps[k + j].width for j in range(1, n))
+            out.append(align(text, width, how))
+            k += n
+        else:
+            out.append(align(row[cols[k]], fields[k].width, fields[k].align))
+            k += 1
+    sp = seps[len(fields)]
+    out.append(" " * sp.before + ("|" if sp.line else "") + " " * sp.after)
+    return "".join(out).rstrip() if not sp.line else "".join(out)
+
+
 def render_table(rows: list[list[str]], fields: list[Field], seps: list[Sep],
                  rules: list[bool], *, left: int = 0, limit: int | None = None,
-                 repeat: int = 1) -> list[str]:
+                 repeat: int = 1, spans: dict[int, list[tuple[int, int, str, str]]] | None = None,
+                 groups: list[int] | None = None, flush: set[int] | None = None,
+                 body: int | None = None) -> list[str]:
     """The rows as lines. `rules[i]` draws a horizontal line before row i (the last one, after the
     last row). When the table is wider than `limit`, the columns after the first `repeat` ones are
-    split into panels that repeat those first columns."""
+    split into panels that repeat those first columns. `spans` gives, for some rows, texts that run
+    over several columns (see _span_text); with `groups` (a group number per column), a panel
+    breaks only between groups when it can. `flush`: rows whose first cell is a label flush with
+    the left border. `body`: index of the first row after the headings; when given, a panel leaves
+    out the rows whose cells (after the repeated ones) are all blank, and the label rows in `flush`
+    left without rows (the upper half of a symmetric matrix; compat 1910)."""
+    flush = flush or set()
     n = len(fields)
     chunks: list[list[int]] = []
     if limit is None:
@@ -84,6 +127,13 @@ def render_table(rows: list[list[str]], fields: list[Field], seps: list[Sep],
         width = left + seps[0].width + sum(fields[k].width + seps[k + 1].width for k in cur)
         for k in range(repeat, n):
             w = fields[k].width + seps[k + 1].width
+            if groups and len(cur) > repeat and groups[k] != groups[k - 1]:
+                # keep a group together: break before its first column if the group does not fit
+                gw = sum(fields[j].width + seps[j + 1].width for j in range(k, n) if groups[j] == groups[k])
+                if width + gw > limit:
+                    chunks.append(cur)
+                    cur = list(range(repeat))
+                    width = left + seps[0].width + sum(fields[j].width + seps[j + 1].width for j in cur)
             if len(cur) > repeat and width + w > limit:
                 chunks.append(cur)
                 cur = list(range(repeat))
@@ -98,10 +148,29 @@ def render_table(rows: list[list[str]], fields: list[Field], seps: list[Sep],
         # right border of the table
         sp = [seps[0]] + [seps[k + 1] if k != cols[-1] or cols[-1] == n - 1 else seps[n]
                           for k in cols]
+        shown = [True] * len(rows)
+        if body is not None:
+            data = [i for i in range(body, len(rows)) if i not in flush]
+            for i in data:
+                shown[i] = any(rows[i][k] for k in cols[repeat:])
+            for i in sorted(flush):
+                if i >= body:
+                    j = i + 1
+                    while j < len(rows) and j not in flush:
+                        j += 1
+                    shown[i] = any(shown[k] for k in range(i + 1, j))
+        pending = False
         for i, row in enumerate(rows):
-            if rules[i]:
+            pending = pending or rules[i]
+            if not shown[i]:
+                continue
+            if pending:
                 lines.append(" " * left + _rule_text(f, sp, outer=i == 0))
-            lines.append(" " * left + _row_text([row[k] for k in cols], f, sp))
+                pending = False
+            if spans and i in spans:
+                lines.append(" " * left + _span_text(row, cols, f, sp, spans[i]))
+            else:
+                lines.append(" " * left + _row_text([row[k] for k in cols], f, sp, flush=i in flush))
         if rules[len(rows)]:
             lines.append(" " * left + _rule_text(f, sp, outer=True))
     return lines
