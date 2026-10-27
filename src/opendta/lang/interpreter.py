@@ -306,6 +306,10 @@ class Interpreter:
                 pending_type = None
                 m = re.match(r"^%-?(\d+)", fmt)
                 width = (int(m.group(1)) if m else 9) + 2
+                if len(n) > width - 2:
+                    # a longer name is abbreviated to the format's width ("longvar~e"; compat 1911)
+                    from .functions import _abbrev
+                    n = _abbrev(n, float(width - 2))
                 cells.append(f"{n:>{width}}")
             out.write("\n   " + "".join(cells) + "\n", "text")
             for k, ln in enumerate(lines[i + 1:j + 1], start=1):

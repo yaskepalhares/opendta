@@ -30,7 +30,8 @@ O OpenDTA cobre o núcleo dos comandos: a linguagem dos do-files, a manipulaçã
 - texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;
 - planilhas: `import excel` e `export excel`;
 - texto em formato livre e em colunas fixas: `infile` (inclusive com dicionário `.dct` e `byvariable()`) e `infix`; `file` para arquivos de texto e binários;
-- arquivos SAS, SPSS e SAS XPORT: `import sas`, `import spss`, `import sasxport` e `export sasxport` (pelo pacote opcional `pyreadstat`);
+- arquivos SAS, SPSS e SAS XPORT: `import sas`, `import spss`, `import sasxport` e `export sasxport` (pelo pacote opcional `pyreadstat`), com os membros de um arquivo XPORT (`describe`, `member()`) e rótulos de valores no `formats.xpf`;
+- `table` com supercolunas e `by()`, e `list` com `string()` e o formato `display`;
 - File > Open/Save/Save as, arrastar um `.dta` para a janela, Data Editor (`browse` e `edit`, com cada edição registrada como comando) e Variables Manager (`varmanage`);
 - estatística descritiva: `summarize`, `tabstat`, `tabulate` (com `chi2`, `exact`, `gamma`, `taub`…, e `summarize()` em tabelas de uma e duas entradas), `tab1`, `tab2`, `table`, `ci` (médias, proporções e variâncias), `ttest`, `prtest` (uma e duas amostras), `correlate`, `pwcorr`, `centile`, `pctile`, `xtile`, com `fweight`, `aweight` e `iweight`;
 - manipulação: `egen` (funções de grupo e de linha), `collapse`, `contract`, `expand`, `fillin`, `merge` (também a sintaxe antiga), `append`, `joinby`, `cross`, `reshape` (também `reshape i/j/xij` e `reshape error`), `duplicates`, `isid`, `levelsof`, `recode`, `encode`/`decode`, `destring`/`tostring`, `split`, `mvencode`/`mvdecode`;

@@ -297,11 +297,18 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 
 ## Fase 24: programação, parte 2
 
-- [x] `makecns` com lista de números de restrições (restrições que não podem ser lidas, ou que são redundantes ou contraditórias com as anteriores, ficam de fora com uma nota), as opções `displaycns` e `nocnsnotes`, e `matrix dispCns`
+- [x] `makecns` com lista de números de restrições (restrições que não podem ser lidas ficam de fora com uma nota), as opções `displaycns` e `nocnsnotes`, e `matrix dispCns`
 - [x] `constraint #` sem a palavra `define`
 - [x] `matlist` com nomes de equações: `showcoleq()` (`first`, `each`, `combined`, `lcombined`, `rcombined`), `roweqonly`, `coleqonly`, `keepcoleq`, `colorcoleq()` e `lines(eq)`; `matrix rownames` e `colnames` definem a equação dos nomes escritos `eq:nome`
 - [x] `window` na interface gráfica: caixas de diálogo de arquivo `fopen` e `fsave`, caixas de mensagem `stopbox`, `push` para a janela Review, o menu User montado com `window menu`, e `manage` (`minimize`, `restore`, `maintitle`, `forward`, `close`)
-- O caso `1910` aguarda a rodada do Stata
+- Conferido com o log do Stata 14: caso `1910`. Achados e corrigidos no caminho: o `makecns` pula números sem restrição, mantém as restrições redundantes e não mostra nada com `r`; o `matrix dispCns` exige resultados gravados por um comando de estimação; o `matlist` mostra as equações das colunas como faixas, uma linha de rótulo para cada equação das linhas e, nos painéis seguintes, deixa de fora a metade superior vazia de uma matriz simétrica
+
+## Fase 25: manipulação de dados, parte 2
+
+- [x] `table` com variável de supercoluna (`table rowvar colvar supercolvar`), a opção `scol` e `by()` com até quatro variáveis
+- [x] `list` com `string()` e o formato `display` (escolhido também quando a tabela não cabe na linha)
+- [x] `import sasxport` com `describe` e `member()` (leitor próprio do OpenDTA de todos os membros de um arquivo XPORT, `io/xport.py`) e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
+- Conferido com o log do Stata 14: caso `1911`. Achados e corrigidos no caminho: o `table` mantém todas as linhas e todas as combinações das variáveis do `by()`, com as supercolunas separadas por 4 espaços; o `list, string()` termina com `..` os valores cortados; o `import sasxport, describe` tem o leiaute e os resultados guardados do Stata
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 
@@ -316,7 +323,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 
 Comandos e opções do Stata 14 que o OpenDTA ainda não tem, por área. Todos são necessários para a 1.0; a ordem é a dos blocos de [docs/next-steps.pt-BR.md](docs/next-steps.pt-BR.md), ajustada pelos pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
-- **Manipulação de dados**: `table` com três variáveis ou mais; `import sasxport` com `describe`, `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`; `list` com `string()` e `display`; `icd9p` com a lista de procedimentos da ICD-9-CM.
+- **Manipulação de dados**: `icd9p` com a lista de procedimentos da ICD-9-CM.
 - **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
 - **Estatística básica**: `margins` depois de mais comandos; `ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `constraints()` e `svy`; `boxcox` com `model(lhsrhs)`, `rhsonly` e `notrans()`; `icc` com `testvalue()` e dados não balanceados; `loneway` com `median` e `exact`; `esize` com `unequal` e `welch`; `pwmean` com `unequal`; `ameans` com pesos; `lv` com `generate()` e `tail()`; `stem` com `width()`; `cusum` com as estatísticas de teste.
 - **Modelos**: `ivprobit` e `ivtobit` com `twostep` e com mais de um regressor endógeno; `ivpoisson cfunction` com mais de um regressor endógeno; `ivregress gmm` com `wmatrix(hac)`, `center` e `igmm`; `glogit` com `or`; `tpoisson` e `tnbreg` com `ul()`; `tnbreg` com `dispersion(constant)`; `binreg` com `mu()`; `biprobit` com `partial`, `offset1()`, `offset2()` e `constraints()`; `heckman` e `heckprobit` com pesos no `twostep` e com `mills()`; `intreg` e `truncreg` com `offset()`; `sureg` e `reg3` com `constraints()`; `asmprobit` e `asroprobit` com `altwise`, alternativas não balanceadas e outras estruturas de covariância; `slogit` com `dim()` acima de 1; `exlogistic` e `expoisson` com `terms`, `group()`, `binomial()`, `condvars()`, `saving()`, `exposure()` e `offset()`; as formas com programa de `nl`, `nlsur` e `gmm`, e `gmm` com `derivatives()`, `parameters()` e `igmm`; `frontier` com `uhet()`, `vhet()`, `cm()` e `constraints()`; `teffects` com tratamentos de vários níveis, outros modelos de desfecho e `predict`; `stteffects wra`; `eteffects` com outros modelos de desfecho e de tratamento; `etregress` e `etpoisson` com `cfunc`.

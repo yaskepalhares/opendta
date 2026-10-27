@@ -85,7 +85,7 @@ Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, 
 
 ### 2. Data management: options ✅
 
-Done in phase 13 (compat case 1701). `import haver` (a proprietary format) is a known limitation, left out of 1.0. Still missing: `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), `import sasxport, describe` and `member()`, the value labels of `formats.xpf`, `export sasxport` with `rename` and `vallabfile()`, and `list` with `string()` and `display`, which stay in *Missing for 1.0*. The original plan:
+Done in phases 13 and 25 (compat cases 1701 and 1911). `import haver` (a proprietary format) is a known limitation, left out of 1.0. Still missing: `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), which stays in *Missing for 1.0*. The original plan:
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 
