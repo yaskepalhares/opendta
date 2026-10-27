@@ -191,6 +191,9 @@ def cmd_import(s: "Session", args: str) -> None:
         from . import statpkg
         {"sas": statpkg.import_sas, "spss": statpkg.import_spss}.get(sub, statpkg.import_sasxport)(s, rest)
         return
+    if sub == "haver":
+        # a known limitation: Haver databases are read only through Haver's own software
+        raise StataError(199, "import haver is not available in OpenDTA")
     raise StataError(199, f"import {sub} not yet available in OpenDTA")
 
 

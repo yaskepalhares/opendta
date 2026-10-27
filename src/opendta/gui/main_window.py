@@ -47,6 +47,8 @@ from .panes import CommandLine, ResultsView, monospace_font, titled
 from .preferences import PreferencesDialog
 from .settings import Preferences
 from .theme import apply_theme, results_scheme
+from .window_cmds import build_user_menu
+from .window_cmds import install as install_window_hooks
 
 
 def _dta_notes(ds) -> list[str]:
@@ -129,6 +131,7 @@ class MainWindow(QMainWindow):
         self.session.ui_hooks.update(browse=self.show_browser, varmanage=self.show_variables_manager,
                                      help=self.show_viewer, view=self.show_viewer, graph=self.show_graph,
                                      graph_close=self.close_graph, doedit=self.show_dofile_editor)
+        install_window_hooks(self)
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -289,7 +292,9 @@ class MainWindow(QMainWindow):
                 self._template_action(sub, item, cmd)
             sub.setToolTipsVisible(True)
 
-        mb.addMenu(tr("&User"))
+        self.user_menu = mb.addMenu(tr("&User"))
+        if getattr(self, "_user_items", None):
+            build_user_menu(self.user_menu, self._user_items, self.run_command)
 
         m = mb.addMenu(tr("&Window"))
         for dock in (self.dock_review, self.dock_variables, self.dock_properties):
@@ -963,7 +968,8 @@ class MainWindow(QMainWindow):
         self.cwd_label.setText(cwd)
         ds = self.session.data
         title = Path(ds.filename).name if ds.filename else (Path(cwd).name or cwd)
-        self.setWindowTitle(f"OpenDTA {__version__} — {title}")
+        # window manage maintitle replaces the title until "maintitle reset"
+        self.setWindowTitle(getattr(self, "main_title", "") or f"OpenDTA {__version__} — {title}")
 
         # Variables
         selected = self._selected_variable()
