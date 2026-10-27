@@ -48,6 +48,9 @@ same.
 macro {it:macroname}; if the dialog is cancelled the macro is empty and the return code is
 {cmd:601}. {cmd:window stopbox} shows a message box: {cmd:stop} ends with {cmd:r(1)}, {cmd:note} with 0,
 {cmd:rusure} with 0 for Yes and 1 for No. {cmd:window push}, {cmd:manage} and {cmd:menu} act on the
-windows and menus of the graphical interface. Without it (batch mode), {cmd:fopen}, {cmd:fsave} and
+windows and menus of the graphical interface: {cmd:push} adds a line to the Review window,
+{cmd:menu append} ({cmd:submenu}, {cmd:item}, {cmd:separator}) and {cmd:menu refresh} build the User
+menu, and {cmd:manage} handles {cmd:minimize}, {cmd:restore}, {cmd:maintitle}, {cmd:forward} and
+{cmd:close}. Without it (batch mode), {cmd:fopen}, {cmd:fsave} and
 {cmd:rusure} behave as a cancelled dialog and {cmd:push}, {cmd:manage} and {cmd:menu} do nothing.
 {p_end}

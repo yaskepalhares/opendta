@@ -85,13 +85,13 @@ Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, 
 
 ### 2. Data management: options ✅
 
-Done in phases 13 and 25 (compat cases 1701 and 1911), except `import haver` (a proprietary format) and `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), which stay in *Missing for 1.0*. The original plan:
+Done in phases 13 and 25 (compat cases 1701 and 1911). `import haver` (a proprietary format) is a known limitation, left out of 1.0. Still missing: `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), which stays in *Missing for 1.0*. The original plan:
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 
 ### 3. Programming ✅
 
-Done in phase 14 (compat case 1801), except `makecns` with a constraint list and `displaycns` (they need `constraint`, from block 10), `matlist` with the equation options, the `window` dialogs and menus of the graphical interface, and loading plugins, which stay in *Missing for 1.0*. The original plan:
+Done in phases 14 and 24 (compat cases 1801 and 1910). Loading compiled Stata plugins is a known limitation, left out of 1.0; Stata's class system stays in *Missing for 1.0* for a block of its own. The original plan:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 

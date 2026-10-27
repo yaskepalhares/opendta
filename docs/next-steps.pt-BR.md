@@ -85,13 +85,13 @@ Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `clust
 
 ### 2. Manipulação de dados: opções ✅
 
-Feito nas fases 13 e 25 (casos de comparação 1701 e 1911), exceto `import haver` (formato proprietário) e `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 13 e 25 (casos de comparação 1701 e 1911). `import haver` (formato proprietário) é uma limitação conhecida, fora da 1.0. Ainda falta: `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), que fica em *Faltam para a 1.0*. O plano original:
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
 ### 3. Programação ✅
 
-Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 14 e 24 (casos de comparação 1801 e 1910). O carregamento de plugins compilados do Stata é uma limitação conhecida, fora da 1.0; o sistema de classes do Stata fica em *Faltam para a 1.0* para um bloco próprio. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 
