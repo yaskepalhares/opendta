@@ -51,10 +51,12 @@ def cmd_rocreg(s: "Session", args: str) -> None:
     roccov = s.expand_varlist(str(o["roccov"])) if isinstance(o.get("roccov"), str) else []
     if roccov and not probit:
         raise StataError(198, "option roccov() requires probit")   # VERIFY
-    if probit and len(classes) > 1:
+    if probit and len(classes) > 1 and not o.get("ml"):
         raise StataError(103, "too many variables specified")   # VERIFY: one classifier per model
     if probit and any(o.get(k) for k in ("auc", "roc", "invroc", "pauc")):
         raise StataError(198, "summary options auc, roc(), invroc() and pauc() are not allowed with probit")   # VERIFY
+    if o.get("ml") and not probit:
+        raise StataError(198, "probit must be specified if ml is specified")
     model = str(o.get("ctrlmodel") or "strata").strip()
     if model not in ("strata", "linear"):
         raise StataError(198, "ctrlmodel() must be strata or linear")
@@ -74,8 +76,6 @@ def cmd_rocreg(s: "Session", args: str) -> None:
         raise StataError(2000, "no observations")   # VERIFY: needs cases and controls
     clust = cols[clustvar].data[mask] if clustvar else None
     if o.get("ml"):
-        if not probit:
-            raise StataError(198, "option ml requires probit")                  # VERIFY
         _rocreg_ml(s, o, args, refname, classes, ctrlcov, roccov, cols, mask, ref, clust, clustvar, level)
         return
     spec = _summary_spec(o) if not probit else []
@@ -186,6 +186,8 @@ def _bootstrap(s: "Session", o, statistic, ref, observed, level, clust=None) -> 
         raise StataError(198, "breps() must be an integer greater than 1")   # VERIFY
     if isinstance(o.get("bseed"), str):
         s.interp._execute_expanded(f"set seed {str(o['bseed']).strip()}")
+    from ..core import rng
+    rngstate = rng.RNG.state()          # e(rngstate): the state when the draws start
     out = s.output
     groups = [np.arange(len(ref))] if o.get("nobstrata") else [np.flatnonzero(~ref), np.flatnonzero(ref)]
     if clust is not None:
@@ -234,7 +236,7 @@ def _bootstrap(s: "Session", o, statistic, ref, observed, level, clust=None) -> 
     z0 = st.norm.ppf(prop)
     bc = [(np.percentile(good[:, j], st.norm.cdf(2 * z0[j] - z) * 100),
            np.percentile(good[:, j], st.norm.cdf(2 * z0[j] + z) * 100)) for j in range(len(observed))]
-    return {"reps": good, "n": len(good), "se": se, "bias": good.mean(axis=0) - observed, "z0": z0,
+    return {"rngstate": rngstate, "reps": good, "n": len(good), "se": se, "bias": good.mean(axis=0) - observed, "z0": z0,
             "b_bs": good.mean(axis=0),
             "normal": (observed - z * se, observed + z * se),
             "percentile": (np.percentile(good, a, axis=0), np.percentile(good, 100 - a, axis=0)),
@@ -297,23 +299,28 @@ def _display(s: "Session", o, refname, classes, spec, colnames, observed, boot, 
         finally:
             ds.drop_vars([tmp])
     per = len(colnames) // len(classes)
+    note = ""
+    if boot is not None and isinstance(o.get("cluster"), str):
+        cv = str(o["cluster"]).strip()
+        G = len(np.unique(s.data.get(cv).data[mask]))
+        note = f"{f'(Replications based on {G:,} clusters in {cv})':>78}\n"      # compat 1912
     if probit:
         for ci, c in enumerate(classes):
             base = ci * per
             out.write(f"\n   Status    : {refname}\n   Classifier: {c}\n   ROC Model : \n", "text")
-            _table_head(out, c, level)
+            _table_head(out, c, level, note)
             rows = [("_cons", base)] + [(v, base + 1 + j) for j, v in enumerate(roccov)]
             for lab, j in rows:
-                _row(out, lab, observed[j], boot, j, level, tags=False)
+                _row(out, lab, observed[j], boot, j, level)
             out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
             out.write(f"{'probit':>12} |\n", "text")
             out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
             j = base + 1 + len(roccov)
-            _row(out, "_cons", observed[j], boot, j, level, tags=False)
+            _row(out, "_cons", observed[j], boot, j, level)
             out.write("-" * 78 + "\n", "text")
             if not roccov:
                 out.write("\n", "text")
-                _table_head(out, "AUC", level)
+                _table_head(out, "AUC", level, note)
                 _row(out, "", observed[j + 1], boot, j + 1, level)
                 out.write("-" * 78 + "\n", "text")
         return
@@ -322,21 +329,22 @@ def _display(s: "Session", o, refname, classes, spec, colnames, observed, boot, 
         out.write(f"\n{_TITLES[kind]}\n", "text")
         for ci, c in enumerate(classes):
             out.write(f"\n   Status    : {refname}\n   Classifier: {c}\n", "text")
-            _table_head(out, _HEAD[kind], level)
+            _table_head(out, _HEAD[kind], level, note)
             for j, (k, x) in enumerate(spec):
                 if k == kind:
                     _row(out, "" if kind == "auc" else _g9(x), observed[ci * per + j], boot, ci * per + j, level)
             out.write("-" * 78 + "\n", "text")
 
 
-def _table_head(out, head: str, level: float) -> None:
+def _table_head(out, head: str, level: float, note: str = "") -> None:
+    out.write(note, "text")
     out.write("-" * 78 + "\n", "text")
     out.write(f"{'':>12} |    Observed               Bootstrap\n", "text")
     out.write(f"{head[:12]:>12} |       Coef.       Bias    Std. Err.     [{level:g}% Conf. Interval]\n", "text")
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
 
 
-def _row(out, label, obs, boot, j, level, tags: bool = True) -> None:
+def _row(out, label, obs, boot, j, level) -> None:
     """Observed value, bootstrap bias and standard error, and the normal (N), percentile (P)
     and bias-corrected (BC) intervals; missing without the bootstrap."""
     if boot is None:
@@ -347,10 +355,6 @@ def _row(out, label, obs, boot, j, level, tags: bool = True) -> None:
         cis = [(boot[k][0][j], boot[k][1][j]) for k in ("normal", "percentile", "bc")]
     out.write(f"{label:>12} |", "text")
     out.write(f"{_f(obs):>12}{_f(bias):>11}{_f(se):>12}{_f(cis[0][0]):>13}{_f(cis[0][1]):>11}", "result")
-    if not tags:
-        # VERIFY: the bootstrap rows of the probit model
-        out.write("\n", "text")
-        return
     out.write("  (N)\n", "text")
     for tag, (lo, hi) in zip(("  (P)", " (BC)"), cis[1:]):
         out.write(f"{'':>12} |{'':>35}", "text")
@@ -396,12 +400,15 @@ def _post(s: "Session", o, args, refname, classes, ctrlcov, roccov, colnames, eq
         s.e.pop("V", None)
         return
     scalars = [("N", float(n)), ("rank", float(np.linalg.matrix_rank(V))), ("level", level)]
+    clustvar = str(o["cluster"]).strip() if isinstance(o.get("cluster"), str) else ""
+    if clustvar:
+        scalars.insert(0, ("N_clust", float(len(np.unique(s.data.get(clustvar).data[mask])))))
     exps = " ".join(f"[{e}]_b[{c}]" for e, c in zip(eqs, colnames))
-    macros = [("properties", "b V"), ("exp1", exps), ("vce", "bootstrap")]
+    # e(rngstate) and e(clustvar) come before e(vce) (compat 1912)
+    macros = [("properties", "b V"), ("exp1", exps), ("rngstate", boot["rngstate"]), ("clustvar", clustvar),
+              ("vce", "bootstrap")]
     macros += [(k, stats[k]) for k in ("auc", "roc", "invroc", "pauc")] if not probit else \
         [("probit", "probit"), ("roccov", " ".join(roccov))]
-    if isinstance(o.get("cluster"), str):
-        macros.append(("clustvar", str(o["cluster"]).strip()))            # VERIFY: name and place
     macros += [("pvc", pvc), ("ctrlcov", " ".join(ctrlcov)), ("ctrlmodel", model if ctrlcov else ""),
                ("cmdline", f"rocreg {args.strip()}"), ("classvars", " ".join(classes)), ("refvar", refname),
                ("breps", str(boot["n"])), ("cmd", "rocreg"), ("title", est.title)]
@@ -413,110 +420,126 @@ def _post(s: "Session", o, args, refname, classes, ctrlcov, roccov, colnames, eq
 
 
 # ---------------------------------------------------------------------------
-# probit ml: the binormal model by maximum likelihood (VERIFY: layout and e() names, compat 1912)
+# probit ml (compat 1912): for each classifier, the covariate control adjustment model by maximum
+# likelihood (cases and controls normal; casecov, casesd, ctrlcov, ctrlsd), then the ROC model's
+# parameters as functions of it, with delta-method standard errors
 # ---------------------------------------------------------------------------
 
 def _rocreg_ml(s: "Session", o, args, refname, classes, ctrlcov, roccov, cols, mask, ref, clust, clustvar,
                level) -> None:
     from ..estimation import ml
     from ..estimation.results import CoefRow, Estimates, coef_table, post
-    model = str(o.get("ctrlmodel") or "linear").strip()
-    if model != "linear":
-        raise StataError(198, "ctrlmodel(strata) not allowed with ml")             # VERIFY
+    if str(o.get("ctrlmodel") or "linear").strip() != "linear":
+        raise StataError(198, "ctrlmodel(strata) not allowed with ml;\nspecify ctrlmodel(linear) instead")
     out = s.output
+    # the title and the number of observations of the header are those of the estimation results
+    # in memory before this command (compat 1912: its first rocreg shows the N of an earlier one;
+    # VERIFY)
+    prev_title = str(s.e.get("title", "")) if isinstance(s.e.get("title"), str) else ""
+    prev_n = s.e.get("N")
     n = int(mask.sum())
     X = np.column_stack([cols[v].data[mask] for v in roccov]) if roccov else np.zeros((n, 0))
-    Z = np.column_stack([cols[v].data[mask] for v in ctrlcov] + [np.ones(n)])
-    kx = X.shape[1]
+    Z = np.column_stack([cols[v].data[mask] for v in ctrlcov]) if ctrlcov else np.zeros((n, 0))
+    kx, kz = X.shape[1], Z.shape[1]
+    G = len(np.unique(clust)) if clust is not None else 0
+    note = f"{f'(Std. Err. adjusted for {G:,} clusters in {clustvar})':>78}\n" if clust is not None else ""
+    out.write("\n" + f"{prev_title:<48}Number of obs     = ", "text")
+    out.write((f"{int(prev_n):>10,}" if isinstance(prev_n, float) and prev_n < SYS else f"{'.':>10}") + "\n",
+              "result")
+    out.write("\n", "text")
+    if ctrlcov:
+        out.write(f"Covariate control      : linear regression\nControl variables      : {' '.join(ctrlcov)}\n",
+                  "text")
+    out.write("Control standardization: normal\n", "text")
+    out.write(f"ROC method             : {'parametric':<25}Link: probit\n\n", "text")
+    out.write(f"  Status     : {refname}\n  Classifiers: {' '.join(classes)}\n", "text")
+    label = "log pseudolikelihood" if clust is not None else "log likelihood"
     fits = []
     for c in classes:
         y = cols[c].data[mask].astype(float)
-        out.write("\n", "text")
-        res, llobs = RR.binormal_ml(y, ref, X, Z)
-        ml.print_log(out, res)
+        out.write(f"\n  Classifier : {c}\n  Covariate control adjustment model:\n\n", "text")
+        res = RR.adjust_ml(y, ref, X, Z)
+        ml.print_log(out, res, label)
         if not res.converged:
             raise StataError(430, "convergence not achieved")
-        fits.append((res, llobs))
-    # parameters of the ROC model of each classifier: intercept, ROC covariates and slope; the
-    # control model (mean and log standard deviation) stays out of e(b) (VERIFY)
-    keep = list(range(kx + 2))
-    blocks_V = []
-    scores = []
-    for res, llobs in fits:
-        Vf = np.linalg.inv(-res.H)
-        blocks_V.append((Vf + Vf.T) / 2)
-        if clust is not None:
-            scores.append(RR.obs_scores(llobs, res.b))
-    k_all = sum(len(r.b) for r, _ in fits)
-    if clust is None:
-        Vfull = np.zeros((k_all, k_all))
-        pos = 0
-        for B in blocks_V:
-            Vfull[pos:pos + len(B), pos:pos + len(B)] = B
-            pos += len(B)
-    else:
-        # cluster-robust sandwich over the stacked scores of every classifier
-        from scipy.linalg import block_diag
-        A = block_diag(*blocks_V)
-        S = np.hstack(scores)
-        ids = np.unique(clust)
-        G = len(ids)
-        U = np.vstack([S[clust == g].sum(axis=0) for g in ids])
-        Vfull = A @ (U.T @ U) @ A * G / (G - 1)
-    idx = []
-    pos = 0
-    for res, _ in fits:
-        idx += [pos + j for j in keep]
-        pos += len(res.b)
-    b = np.concatenate([r.b[keep] for r, _ in fits])
-    V = Vfull[np.ix_(idx, idx)]
-    names, eqs = [], []
-    for c in classes:
-        names += ["_cons"] + roccov + ["_cons"]
-        eqs += [c] * (1 + kx) + ["probit"]
-    ll = float(sum(r.ll for r, _ in fits))
-    out.write("\n", "text")
-    out.write(f"{'Parametric ROC estimation':<48}Number of obs     = ", "text")
-    out.write(f"{n:>10,}\n", "result")
-    out.write("\n", "text")
-    if ctrlcov:
-        out.write("Covariate control      : linear regression\n", "text")
-        out.write(f"Control variables      : {' '.join(ctrlcov)}\n", "text")
-    out.write("Control standardization: normal\n", "text")
-    out.write(f"{'ROC method             : ML':<47}Link: probit\n", "text")
-    if clust is not None:
-        out.write(f"{'':<47}(Std. Err. adjusted for {len(np.unique(clust)):,} clusters in {clustvar})\n",
-                  "text")
-    per = kx + 2
-    aucs = []
-    for ci, c in enumerate(classes):
-        base = ci * per
-        out.write(f"\n   Status    : {refname}\n   Classifier: {c}\n   ROC Model : \n", "text")
-        se = np.sqrt(np.maximum(np.diag(V), 0))
-        rows = [CoefRow("eq", c)]
-        rows += [CoefRow("coef", lab, b[base + j], se[base + j]) for j, lab in enumerate(["_cons"] + roccov)]
-        rows += [CoefRow("sep"), CoefRow("eq", "probit"),
-                 CoefRow("coef", "_cons", b[base + kx + 1], se[base + kx + 1])]
+        _, S, H = RR.adjust_derivatives(res.b, y, ref, X, Z)
+        A = np.linalg.inv(-H)
+        A = (A + A.T) / 2
+        V1 = A if clust is None else _sandwich(A, S, A, clust)
+        fits.append((res.b, S, A, V1))
+        se = np.sqrt(np.maximum(np.diag(V1), 0))
+        rows = []
+        k = 0
+        for eq, labels in (("casecov", roccov + ["_cons"]), ("casesd", ["_cons"]),
+                           ("ctrlcov", ctrlcov + ["_cons"]), ("ctrlsd", ["_cons"])):
+            if rows:
+                rows.append(CoefRow("sep"))
+            rows.append(CoefRow("eq", eq))
+            for lab in labels:
+                rows.append(CoefRow("coef", lab, res.b[k], se[k]))
+                k += 1
+        out.write(note, "text")
         coef_table(s, "", rows, stat="z", df=None, level=level,
                    vcetype="Robust" if clust is not None else "")
-        if not roccov:
-            a_, b_ = b[base], b[base + 1]
-            Vab = V[np.ix_([base, base + 1], [base, base + 1])]
-            val = float(st.norm.cdf(a_ / math.sqrt(1 + b_ * b_)))
-            gr = np.array([st.norm.pdf(a_ / math.sqrt(1 + b_ * b_)) / math.sqrt(1 + b_ * b_),
-                           -st.norm.pdf(a_ / math.sqrt(1 + b_ * b_)) * a_ * b_ / (1 + b_ * b_) ** 1.5])
-            aucs.append((val, float(math.sqrt(max(gr @ Vab @ gr, 0)))))
-            out.write("\n", "text")
-            coef_table(s, "AUC", [CoefRow("coef", "", val, aucs[-1][1])], stat="z", df=None, level=level)
+    # the ROC parameters of every classifier; with several classifiers (or clusters) their joint
+    # variance is the sandwich of the stacked scores (Robust in Stata's table)
+    from scipy.linalg import block_diag
+    A = block_diag(*[f[2] for f in fits])
+    if len(classes) > 1 or clust is not None:
+        Vt = _sandwich(A, np.hstack([f[1] for f in fits]), A, clust)
+    else:
+        Vt = A
+    J = block_diag(*[RR.roc_jacobian(f[0], kx, kz) for f in fits])
+    b = np.concatenate([RR.roc_params(f[0], kx, kz) for f in fits])
+    V = J @ Vt @ J.T
+    V = (V + V.T) / 2
+    names = (["i_cons"] + roccov + ["s_cons"] + ([] if roccov else ["auc"])) * len(classes)
+    per = len(names) // len(classes)
+    eqs = [c for c in classes for _ in range(per)]
+    out.write(f"\n   Status    : {refname}\n   ROC Model : \n", "text")
+    out.write(note, "text")
+    se = np.sqrt(np.maximum(np.diag(V), 0))
+    rows = []
+    for ci, c in enumerate(classes):
+        if rows:
+            rows.append(CoefRow("sep"))
+        rows.append(CoefRow("eq", c))
+        rows += [CoefRow("coef", names[ci * per + j], b[ci * per + j], se[ci * per + j]) for j in range(per)]
+    coef_table(s, "", rows, stat="z", df=None, level=level,
+               vcetype="Robust" if len(classes) > 1 or clust is not None else "")
+    if len(classes) > 1 and not roccov:
+        # Wald test that the AUCs are equal (VERIFY: the test statistic Stata uses)
+        pos = [ci * per + per - 1 for ci in range(len(classes))]
+        R = np.zeros((len(classes) - 1, len(b)))
+        for r in range(len(classes) - 1):
+            R[r, pos[r]], R[r, pos[r + 1]] = 1.0, -1.0
+        rb = R @ b
+        chi2 = float(rb @ np.linalg.solve(R @ V @ R.T, rb))
+        p = float(st.chi2.sf(chi2, len(classes) - 1))
+        out.write("\nHo: All classifiers have equal AUC values.\n"
+                  "Ha: At least one classifier has a different AUC value.\n\n", "text")
+        out.write(f"P-value: {_g9(p):>12}\n", "text")
     est = Estimates("rocreg", refname, names, b, V, n, stat="z", eqnames=eqs)
     est.title = "Parametric ROC estimation"
-    scalars = [("N", float(n)), ("ll", ll), ("rank", float(np.linalg.matrix_rank(V)))]
+    scalars = [("rank", float(np.linalg.matrix_rank(V))), ("N", float(n))]
     if clust is not None:
-        scalars.append(("N_clust", float(len(np.unique(clust)))))
-    macros = [("title", est.title), ("cmdline", f"rocreg {args.strip()}"), ("refvar", refname),
-              ("classvars", " ".join(classes)), ("cmd", "rocreg"), ("ml", "ml"), ("probit", "probit"),
-              ("roccov", " ".join(roccov)), ("ctrlcov", " ".join(ctrlcov)),
-              ("ctrlmodel", "linear" if ctrlcov else ""), ("pvc", "normal"),
-              ("vce", "cluster" if clust is not None else "oim"), ("clustvar", clustvar),
-              ("predict", "rocreg_p"), ("properties", "b V")]
+        scalars.append(("N_clust", float(G)))
+    macros = [("title", est.title), ("nobootstrap", "nobootstrap"), ("cmdline", f"rocreg {args.strip()}"),
+              ("ctrlcov", " ".join(ctrlcov)), ("ctrlmodel", "linear"), ("refvar", refname),
+              ("classvars", " ".join(classes)), ("cmd", "rocreg"), ("pvc", "normal")]
+    if clust is not None:
+        macros += [("vce", "cluster"), ("vcetype", "Robust"), ("clustvar", clustvar)]
+    macros += [("fprpts", str(_fprpts(o))), ("predict", "rocreg_p"), ("roccov", " ".join(roccov)),
+               ("probit", "probit"), ("ml", "ml"), ("properties", "b V")]
     post(s, est, scalars, macros, mask)
+
+
+def _sandwich(A: np.ndarray, S: np.ndarray, B: np.ndarray, clust) -> np.ndarray:
+    """A (U'U) B * G/(G-1), with U the scores summed within each cluster (each observation without
+    clusters)."""
+    if clust is None:
+        U = S
+    else:
+        U = np.vstack([S[clust == g].sum(axis=0) for g in np.unique(clust)])
+    G = len(U)
+    return A @ (U.T @ U) @ B * G / (G - 1)

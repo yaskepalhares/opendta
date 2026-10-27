@@ -546,7 +546,10 @@ def test_rocreg_probit_ml_matches_the_binormal_estimates(run):
     s0, s1 = y[~d].std(), y[d].std()
     a, b = (y[d].mean() - y[~d].mean()) / s1, s0 / s1
     assert abs(run.eval("el(e(b),1,1)") - a) < 1e-5 and abs(run.eval("el(e(b),1,2)") - b) < 1e-5
-    assert run.eval('e(ml) == "ml" & e(vce) == "oim"') == 1
+    # e(b) is y:i_cons y:s_cons y:auc, with no e(vce) without clusters (compat 1912)
+    assert run.eval('e(ml) == "ml" & e(nobootstrap) == "nobootstrap"') == 1 and "vce" not in run.session.e
+    from scipy.stats import norm
+    assert abs(run.eval("el(e(b),1,3)") - norm.cdf(a / np.sqrt(1 + b * b))) < 1e-6
 
 
 def test_rocreg_cluster(run):
