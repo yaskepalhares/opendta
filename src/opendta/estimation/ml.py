@@ -87,7 +87,9 @@ def maximize(fun: Callable[[np.ndarray, int], tuple], b0: np.ndarray, *, maxiter
                     break
                 t, bn, fn = t + inc, bt, ft
                 inc *= 2
-        if backed:
+        # one halving of the step is not flagged (compat 1912: Stata's iteration 1 is the half
+        # step, without "(backed up)"; VERIFY: Stata's exact rule)
+        if backed and t < 0.5:
             log[-1] = (log[-1][0], log[-1][1], log[-1][2] + "  (backed up)")
         dp = float(np.max(np.abs(bn - b) / (np.abs(b) + 1))) if k else 0.0
         dv = abs(fn - ll) / (abs(ll) + 1)

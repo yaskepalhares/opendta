@@ -79,7 +79,7 @@ Estimates from the work so far (±50%): session time and tokens generated; a ses
 
 ### 1. Epidemiology: finish ✅
 
-Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, which stay in *Missing for 1.0*. The original plan:
+Done in phases 12 and 26 (compat cases 1601 and 1912). The original plan:
 
 `rocreg` (nonparametric and parametric ROC regression; bootstrap standard errors); `cs`, `cc` and `ir` with `estandard`, `istandard`, `standard()`, `binomial` and `pool`; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`. Reuse `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; remove the matching "not available yet" errors.
 
