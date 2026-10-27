@@ -5,6 +5,8 @@
 * screen. Every command whose behavior the manual does not settle runs under capture noisily, so
 * that one Stata run shows the whole case.
 clear
+* constraints defined by earlier cases of the same Stata session are dropped
+constraint drop _all
 set obs 60
 gen x1 = mod(_n*7, 11)
 gen x2 = mod(_n*5, 13)

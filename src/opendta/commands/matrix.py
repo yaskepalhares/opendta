@@ -597,7 +597,7 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
     # all columns as wide as the largest value or name (observed in Stata 14,
     # compat/expected/0203_matrix.log)
     w_all = max([max(len(a), len(b)) for a, b in heads] if names else [0])
-    w_all = max([w_all] + [len(q) - 1 for q in ceqs])
+    w_all = max([w_all] + [len(q) for q in ceqs])          # "a:" counts with its colon (compat 1910)
     w_all = max([w_all] + [len(c) for c in shown])
     widths = [w_all] * mat.cols
     if header:

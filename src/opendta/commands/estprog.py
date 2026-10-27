@@ -80,9 +80,9 @@ def constraint_lines(b: Matrix, C: np.ndarray) -> list[str]:
 
 
 def _from_clist(s: "Session", b: Matrix, clist: str, notes: bool) -> tuple[np.ndarray, list[int]]:
-    """The rows of the defined constraints in clist that can be applied, in order. A constraint that
-    cannot be read, or that is redundant with or contradicts the earlier ones, is left out with a
-    note. VERIFY: the wording of the notes and r(412) for a redundant constraint."""
+    """The rows of the defined constraints in clist, in order. A number with no constraint is skipped
+    silently, a constraint that cannot be read is left out with a note; redundant constraints are
+    kept (compat 1910)."""
     from ..estimation.postest import _constraint
     from ..estimation.sysmodels import _constraints, _numlist
     try:
@@ -94,17 +94,14 @@ def _from_clist(s: "Session", b: Matrix, clist: str, notes: bool) -> tuple[np.nd
     rows: list[np.ndarray] = []
     used: list[int] = []
     for n in numbers:
+        if n not in defined:
+            continue
         try:
-            if n not in defined:
-                raise StataError(111, f"constraint {n} not found")
             coef, rhs = _constraint(s, est, defined[n])
             row = np.zeros(b.cols + 1)
             for j, v in coef.items():
                 row[j] += v
             row[-1] = rhs
-            if not row[:-1].any() or (rows and np.linalg.matrix_rank(np.array(rows + [row])[:, :-1])
-                                      == np.linalg.matrix_rank(np.array(rows)[:, :-1])):
-                raise StataError(412, "redundant or inconsistent constraints")
         except StataError as e:
             if notes:
                 s.output.write(f"(note: constraint number {n} caused error r({e.rc}))\n", "text")
@@ -138,12 +135,14 @@ def cmd_makecns(s: "Session", args: str) -> None:
         rows, used = _from_clist(s, b, name, not o.get("nocnsnotes"))
         clist, rownames = " ".join(map(str, used)), [f"r{k}" for k in range(1, len(used) + 1)]
     if len(rows):
+        ceq = list(b.coleq or ["_"] * b.cols)
+        # with equation names the last column is _Cns:_r (compat 1910)
         s.e["Cns"] = Matrix(rows, rownames, list(b.colnames) + ["_r"], ["_"] * len(rows),
-                            list(b.coleq or ["_"] * b.cols) + ["_"])
+                            ceq + (["_Cns"] if any(q != "_" for q in ceq) else ["_"]))
     else:
         s.e.pop("Cns", None)
     texts = constraint_lines(b, rows)
-    if o.get("displaycns"):
+    if o.get("displaycns") and not o.get("r"):        # with r, nothing is shown (compat 1910)
         _display_cns(s, texts)
     if o.get("r"):
         # return list shows the results in the reverse order of this dictionary
@@ -166,7 +165,10 @@ def dispcns(s: "Session", rest: str) -> None:
         raise StataError(198, "invalid syntax")
     o = match_options(opts, {"r": 1}) if comma else {}
     cns, b = s.e.get("Cns"), s.e.get("b")
-    if not isinstance(b, Matrix):
+    est = getattr(s, "_estimates", None)
+    if not isinstance(b, Matrix) or not getattr(est, "cns_posted", False):
+        # Stata answers this after makecns (compat 1910): the constraints shown are the ones an
+        # estimation command posted with its results (VERIFY: when it shows them)
         raise StataError(301, "last estimates not found")
     texts = constraint_lines(b, cns.data) if isinstance(cns, Matrix) else []
     if o.get("r"):

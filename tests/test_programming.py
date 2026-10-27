@@ -241,19 +241,20 @@ def test_makecns_returns(run):
 
 
 def test_makecns_with_a_constraint_list(run):
+    # the behavior seen in the Stata 14 log of case 1910
     run("clear\nset obs 30\nset seed 3\ngen x1 = rnormal()\ngen x2 = rnormal()\ngen y = x1 + x2 + rnormal()")
     run("quietly regress y x1 x2")
+    run("constraint drop _all")
     run("constraint 1 x1 = x2\nconstraint define 2 _cons = 1\nconstraint 3 2*x1 = 2*x2\nconstraint 4 zz = 0")
-    out = run("makecns 1-4, displaycns r")
-    assert "(note: constraint number 3 caused error r(412))" in out      # redundant with 1
-    assert "(note: constraint number 4 caused error r(111))" in out      # zz is not a coefficient
-    assert " ( 1)  x1 - x2 = 0\n ( 2)  _cons = 1\n" in out
-    assert run('display "`r(clist)\'" " " r(k)').strip() == "1 2 2"
-    assert run("display el(e(Cns), 2, 4)").strip() == "1"
+    out = run("makecns 1-4 99, displaycns r")
+    # with r nothing is shown; a redundant constraint is kept and a missing number is skipped
+    assert out == "(note: constraint number 4 caused error r(111))\n"
+    assert run('display "`r(clist)\'" " " r(k)').strip() == "1 2 3 3"
+    assert run("display el(e(Cns), 3, 1)").strip() == "2"
     assert run("makecns 1 4, nocnsnotes") == ""
-    assert run("matrix dispCns") == " ( 1)  x1 - x2 = 0\n"
-    run("matrix dispCns, r")
-    assert run("display r(k) \" \" r(cns1)").strip() == "1 x1 - x2 = 0"
+    assert run("makecns 2 1, displaycns") == " ( 1)  _cons = 1\n ( 2)  x1 - x2 = 0\n"
+    run("matrix dispCns")
+    assert run.rc == 301
 
 
 def test_makecns_names_equations(run):
@@ -264,17 +265,25 @@ def test_makecns_names_equations(run):
 
 
 def test_matlist_equation_options(run):
+    # the layouts of the Stata 14 log of case 1910
     run("matrix A = (1,2,3,4 \\ 2,5,6,7 \\ 3,6,8,9 \\ 4,7,9,10)")
     run("matrix rownames A = y:x1 y:_cons z:x1 z:_cons\nmatrix colnames A = y:x1 y:_cons z:x1 z:_cons")
-    out = run("matlist A, lines(eq)")
-    lines = out.splitlines()
-    assert lines[1] == "             |          y           |          z"
+    lines = run("matlist A").splitlines()
+    assert lines[1] == "             | y                    | z"
     assert lines[2] == "             |        x1      _cons |        x1      _cons"
-    assert lines[4].startswith("y            |")
-    assert lines[7].startswith("-------------+")
+    assert lines[4] == "y            |                      |"
+    assert lines[7] == "-------------+----------------------+----------------------"
     out = run("matlist A, showcoleq(each) roweqonly")
-    assert out.splitlines()[1].split("|")[1].split() == ["y", "y", "z", "z"]
-    assert out.splitlines()[4].startswith("           y |")
-    assert "_cons" not in run("matlist A, coleqonly").splitlines()[1]
+    assert out.splitlines()[1] == "             |         y          y |         z          z"
+    assert out.splitlines()[5] == "             |         1            |"
+    lines = run("matlist A, showcoleq(rcombined) border(all)").splitlines()
+    assert lines[2] == "|              |                    y |                    z |"
+    assert lines[4] == "|--------------+----------------------+----------------------|"
+    assert lines[5].startswith("|y             |")
+    assert "_cons" not in run("matlist A, coleqonly").splitlines()[2]
+    # in the second panel the empty upper half is left out
+    lines = run("matlist A, linesize(40)").splitlines()
+    second = lines[lines.index("             | z"):]
+    assert second[3].startswith("z ") and len(second) == 6
     run("matlist A, showcoleq(sideways)")
     assert run.rc == 198
