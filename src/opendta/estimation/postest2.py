@@ -629,10 +629,8 @@ def cmd_pwmean(s: "Session", args: str) -> None:
     N = int(n_i.sum())
     lev = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", 95))
     if o.get("unequal"):
-        s2 = np.array([y[mask & (ids == g)].var(ddof=1) for g in range(k)])
-        Vm = np.diag(s2 / n_i)
-        df = None       # Satterthwaite df per pair is not implemented
-        raise StataError(198, "option unequal is not available yet in OpenDTA")
+        # pwmean has no unequal option in the target version (compat 1913)
+        raise StataError(198, "option unequal not allowed")
     df = N - k
     Vm = np.diag(np.full(k, ss / df) / n_i)
     head = ["\nPairwise comparisons of means with equal variances\n\n",
