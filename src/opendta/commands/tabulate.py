@@ -6,6 +6,7 @@ VERIFY mark and cases in compat/do/0302_tabulate.do.
 
 from __future__ import annotations
 
+import itertools
 import math
 import re
 import textwrap
@@ -654,18 +655,19 @@ def cmd_table(s: "Session", args: str) -> None:
         bv, blabels, bc, bok = cats_of(n)
         ok = ok & bok
         byinfo.append((bv, blabels, bc))
-    # by() groups: the combinations present in the data, in sort order
-    if byinfo:
-        keys = sorted({tuple(int(bc[i]) for _, _, bc in byinfo) for i in np.flatnonzero(ok)})
-    else:
-        keys = [()]
+    # by() groups: every combination of the values of the by() variables, empty ones included
+    # (compat 1911)
+    keys = list(itertools.product(*[range(len(bl)) for _, bl, _ in byinfo]))
 
     def cell(sel: np.ndarray) -> list[str]:
+        if not sel.any():
+            return [""] * len(specs)          # a cell without observations is blank (compat 1911)
         res = []
         for st, var in specs:
             if st == "freq":
                 n = float((w[sel] if w is not None else np.ones(int(sel.sum()))).sum())
-                res.append(_fmt_freq(n) if n else "")
+                # format() applies to the frequencies too (compat 1911)
+                res.append(format_value(n, fmt, pad=False).strip() if "format" in o else _fmt_freq(n))
             else:
                 x = s.data.get(var).data
                 ss = sel & S.valid(x)
@@ -692,7 +694,7 @@ def cmd_table(s: "Session", args: str) -> None:
         gsel = ok.copy()
         for (_, _, bc), code in zip(byinfo, key):
             gsel &= bc == code
-        present = [r for r in rows if r == "T" or (gsel & (rc == r)).any()] if byinfo else rows
+        present = rows                   # every row, empty ones included (compat 1911)
         grid = {}
         for r in present:
             rsel = gsel & (rc == r) if r != "T" else gsel
@@ -708,18 +710,23 @@ def cmd_table(s: "Session", args: str) -> None:
     else:
         heads = [clabels[c] if c != "T" else "Total" for _, c in cols]
     every = heads + [x for _, pr, gr in grids for r in pr for line in gr[r] for x in line]
-    CW = max([4] + [len(x) for x in every])
+    # one-way tables have cells at least 10 wide (compat 0302, 1911; VERIFY)
+    CW = max([4 if cv is not None else 10] + [len(x) for x in every])
     parts = [b.label or b.name for b, _, _ in byinfo] + [rv.label or rv.name]
     stub_title = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
-    by_texts = [", ".join(lab[code] for (_, lab, _), code in zip(byinfo, key)) for key, _, _ in grids]
-    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)] + [len(t) for t in by_texts])   # VERIFY minimum width 9
+    W = max([9] + [len(x) for x in rlabels] + [len(rv.name)] + [len(x) for _, bl, _ in byinfo for x in bl])   # VERIFY minimum width 9
     title_lines = textwrap.wrap(stub_title, W) or [rv.name]
+    per = len(cols_in) if sv is not None else 0
+
+    def gap(k: int) -> str:
+        # supercolumns are 4 blanks apart (compat 1911)
+        return " " if k == 0 else "    " if per and k % per == 0 else "  "
 
     def row_text(values: list[str]) -> str:
         from ..core.layout import center_text
         if o.get("center"):
-            return "".join((" " if k == 0 else "  ") + center_text(v, CW) for k, v in enumerate(values))
-        return "".join((" " if k == 0 else "  ") + f"{v:>{CW}}" for k, v in enumerate(values))
+            return "".join(gap(k) + center_text(v, CW) for k, v in enumerate(values))
+        return "".join(gap(k) + f"{v:>{CW}}" for k, v in enumerate(values))
 
     block = len(row_text([""] * len(heads if cv is None else cols)))
     width = W + 2 + block
@@ -741,20 +748,25 @@ def cmd_table(s: "Session", args: str) -> None:
             for g in sgroups:
                 lab = f" {slabels[g] if g != 'T' else 'Total'} "
                 dl = max(0, gw - len(lab))
-                parts.append("-" * (dl // 2) + lab + "-" * (dl - dl // 2))
-            head_lines.append(" " + "  ".join(parts))
+                # the extra dash goes on the left (compat 1911)
+                parts.append("-" * (dl - dl // 2) + lab + "-" * (dl // 2))
+            head_lines.append(" " + "    ".join(parts))
         head_lines.append(row_text(heads))
-    # the stub title sits at the bottom of the header lines (left-aligned with by(), VERIFY)
+    # the stub title sits at the bottom of the header lines, right-aligned on one line and
+    # left-aligned when it wraps (compat 1911)
     n = max(len(title_lines), len(head_lines))
     for t, h in zip([""] * (n - len(title_lines)) + title_lines, [""] * (n - len(head_lines)) + head_lines):
-        out.write((f"{t:<{W}}" if byinfo else f"{t:>{W}}") + " |" + h + "\n", "text")
+        out.write((f"{t:<{W}}" if len(title_lines) > 1 else f"{t:>{W}}") + " |" + h + "\n", "text")
     out.write(rule, "text")
-    for gk, ((key, present, grid), btext) in enumerate(zip(grids, by_texts)):
+    for gk, (key, present, grid) in enumerate(grids):
         if gk:
             out.write(rule, "text")
-        if byinfo:
-            out.write(f"{btext:<{W}} |\n", "text")
-        for r in present:
+        for code, (_, lab, _) in zip(key, byinfo):
+            out.write(f"{lab[code]:<{W}} |\n", "text")         # one line per by() variable
+        for ri, r in enumerate(present):
+            # a blank line before the total and between rows of several lines (compat 1911)
+            if ri and (r == "T" or len(grid[r]) > 1):
+                out.write(" " * W + " |\n", "text")
             for line in range(len(grid[r])):
                 label = (rlabels[r] if r != "T" else "Total") if line == 0 else ""
                 out.write(f"{label:>{W}} |", "text")

@@ -322,13 +322,15 @@ def test_sasxport_value_labels_members_and_rename(run, tmp_path, monkeypatch):
     run("export sasxport odta_y, rename vallabfile(both)")
     assert run.rc == 0 and (tmp_path / "odta_y.sas").exists()
     out = run("import sasxport odta_y, describe")
-    assert "member ODTA_Y" in out and "averylon" in out and "SEXLAB" in out
+    assert "data from odta_y.xpt, member(odta_y)" in out and "averylon" in out and "sexlab" in out
+    assert run.session.r["n_members"] == 1 and run.session.r["N"] == 2
     run("import sasxport odta_y, clear")
     d = run.session.data
     assert d.names == ["id", "sex", "averylon"]
     assert d.get("sex").value_label == "sexlab" and d.value_labels["sexlab"] == {1: "Female", 2: "Male"}
+    # novallabels keeps the name of the value label but does not define it (compat 1911)
     run("import sasxport odta_y, clear novallabels member(odta_y)")
-    assert run.session.data.get("sex").value_label == ""
+    assert run.session.data.get("sex").value_label == "sexlab" and not run.session.data.value_labels
     run("import sasxport odta_y, clear member(nope)")
     assert run.rc == 198
 
@@ -386,6 +388,7 @@ def test_table_supercolumns_and_by(run):
     out = run("table a b c")
     lines = out.splitlines()
     assert lines[2].split("|")[1].strip() == "c and b"
-    assert lines[3].split("|")[1].split() == ["------", "1", "-------", "------", "2", "-------"]
+    # supercolumns 4 blanks apart, the extra dash on the left (compat 1911)
+    assert lines[3].split("|")[1] == " ------- 1 ------    ------- 2 ------"
     out = run("table a, by(c) row")
-    assert "c and a   |" in out and "1         |" in out and "Total |" in out
+    assert "  c and a |" in out and "1         |" in out and "Total |" in out

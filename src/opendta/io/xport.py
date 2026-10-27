@@ -35,6 +35,7 @@ class XVar:
 class Member:
     name: str
     label: str
+    created: str = ""      # the date and time the file records, as written there
     variables: list[XVar] = field(default_factory=list)
     rows: list[list] = field(default_factory=list)      # float (None = missing) or str
 
@@ -68,7 +69,7 @@ def read(path: Path) -> list[Member]:
         namestr_len = int(data[pos + 74:pos + 78] or b"140")
         d1 = data[pos + 2 * _REC:pos + 3 * _REC]          # after the DSCRPTR header
         d2 = data[pos + 3 * _REC:pos + 4 * _REC]
-        m = Member(_text(d1[8:16]), _text(d2[32:72]))
+        m = Member(_text(d1[8:16]), _text(d2[32:72]), _text(d1[64:80]))
         nh = data.find(_NAMESTR, pos)
         nvars = int(data[nh + 54:nh + 58])
         start = nh + _REC

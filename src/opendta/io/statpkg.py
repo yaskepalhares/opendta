@@ -185,11 +185,13 @@ def write_xport(ds: Dataset, path: Path, names: list[str], rows: np.ndarray, *,
 
 def write_formats_xpf(path: Path, sets: dict[str, dict[int, str]]) -> None:
     """Value labels as the SAS format catalog formats.xpf: an XPORT data set FORMATS with one row per
-    value (FMTNAME, START, END, LABEL, TYPE; VERIFY: the variables Stata writes)."""
+    value: FMTNAME, START and LABEL, 8, 12 and 40 characters wide, the variables Stata reads back
+    from its own file (compat 1911)."""
     rs = pyreadstat()
     import pandas as pd
-    rows = [(name.upper(), str(k), str(k), str(lab[k]), "N") for name, lab in sets.items() for k in sorted(lab)]
-    frame = pd.DataFrame(rows, columns=["FMTNAME", "START", "END", "LABEL", "TYPE"])
+    rows = [(name.upper().ljust(8), str(k).ljust(12), str(lab[k]).ljust(40))
+            for name, lab in sets.items() for k in sorted(lab)]
+    frame = pd.DataFrame(rows, columns=["FMTNAME", "START", "LABEL"])
     try:
         rs.write_xport(frame, str(path), table_name="FORMATS", file_format_version=5)
     except Exception as e:  # noqa: BLE001
