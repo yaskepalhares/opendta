@@ -69,7 +69,7 @@ def cmd_cumul(s: "Session", args: str) -> None:
 # stem
 # ---------------------------------------------------------------------------
 
-_SYMS = {1: [""], 2: ["*", "."], 5: ["*", "t", "f", "s", "."]}
+_SYMS = {1: ["*"], 2: ["*", "."], 5: ["*", "t", "f", "s", "."]}
 
 
 def _rows(q: np.ndarray, L: int):
@@ -251,8 +251,10 @@ def _stem_natural(s: "Session", v, x: np.ndarray, o: dict, target: float) -> Non
     if v.label:
         head += f" ({v.label})"
     out.write("\n" + head + "\n\n", "text")
-    if u > 0:
-        out.write(f"{v.name} rounded to nearest multiple of {10 ** u:g}\nplot in units of {10 ** u:g}\n\n", "text")
+    if u:
+        # also for decimal units: "rounded to nearest multiple of .01" (compat 1913)
+        unit = f"{10.0 ** u:g}".removeprefix("0")
+        out.write(f"{v.name} rounded to nearest multiple of {unit}\nplot in units of {unit}\n\n", "text")
     wd = max(len(a) for a, _b in labels)
     for lab, lv in labels:
         out.write(f"{lab:>{wd + 2}} | ", "text")
@@ -277,15 +279,15 @@ def cmd_lv(s: "Session", args: str) -> None:
             tail_max = int(o["tail"])
         except ValueError:
             tail_max = 0
-        if tail_max not in (4, 8, 16, 32, 64, 128, 256, 512, 1024):
-            raise StataError(198, "tail() must be 4, 8, 16, ..., 1024")
+        if tail_max < 1:
+            raise StataError(198, "option tail() incorrectly specified")         # VERIFY
     vars_ = numeric_vars(s, p.varlist, allow_string=False)
     if o.get("generate"):
         if len(vars_) > 1:
             raise StataError(103, "too many variables specified")             # VERIFY
         for nm in ("_mid", "_psigma"):
             if s.data.has(nm):
-                raise StataError(110, f"{nm} already defined")
+                s.data.drop_vars([nm])          # generate replaces them (compat 1913)
     mask = touse(s, p)
     for v in vars_:
         x = v.data[mask & S.valid(v.data)]
@@ -297,8 +299,9 @@ def cmd_lv(s: "Session", args: str) -> None:
         while depths[-1] > 1:
             depths.append((math.floor(depths[-1]) + 1) / 2)
         if tail_max is not None:
-            # letter values down to the tail 1/tail(), then the extremes (VERIFY)
-            keep = [i for i in range(len(depths) - 1) if 2 ** (i + 1) <= tail_max]
+            # the letter of 1/2^(i+1) is shown while 2^i < tail(), then the extremes (compat 1913:
+            # tail(3) and tail(4) show M and F, tail(8) down to E)
+            keep = [i for i in range(len(depths) - 1) if 2 ** i < tail_max]
             depths = [depths[i] for i in keep] + [1.0]
         rows = []
         for i, d in enumerate(depths):
@@ -335,12 +338,13 @@ def cmd_lv(s: "Session", args: str) -> None:
                 if let == "F":
                     hspread = spread
         if o.get("generate"):
-            # _mid and _psigma: one observation per row of the table (VERIFY)
-            k = len(rows)
+            # _mid and _psigma: one observation per letter value, the extremes left out (compat 1913)
+            rows_g = rows[:-1]
+            k = len(rows_g)
             if s.data.nobs < k:
                 raise StataError(198, "too few observations for generate")      # VERIFY
             mids, psig = np.full(s.data.nobs, SYS), np.full(s.data.nobs, SYS)
-            for i, (_let, d, lo, hi) in enumerate(rows):
+            for i, (_let, d, lo, hi) in enumerate(rows_g):
                 mids[i] = 0.5 * (lo + hi)
                 if i:
                     tl = (d - 1 / 3) / (n + 1 / 3)

@@ -75,12 +75,18 @@ def cmd_ameans(s: "Session", args: str) -> None:
             first = False
     out.write(sep if len(vars_) > 1 else "-" * 77 + "\n", "text")      # VERIFY: closing rule
     if last is not None:
+        # Stata stores the variance of x, of ln x and of 1/x (N times the squared standard error
+        # of their means) and the number of positive values, listed from ub_h back to N (compat
+        # 1913)
         pairs = []
         for key, sfx in (("a", ""), ("g", "_g"), ("h", "_h")):
             if key in last:
                 n, m, se, lo, hi = last[key]
-                pairs += [(f"N{sfx}", float(n)), (f"mean{sfx}", m), (f"lb{sfx}", lo),
-                          (f"ub{sfx}", hi), (f"se{sfx}", se)]
+                scale = 1.0 if key == "a" else m if key == "g" else m * m
+                var = (se / scale) ** 2 * n
+                head = [("N", float(n))] if key == "a" else [("N_pos", float(n))] if key == "g" else []
+                pairs = [(f"ub{sfx}", hi), (f"lb{sfx}", lo), (f"Var{sfx}", var), (f"mean{sfx}", m)] + \
+                    list(reversed(head)) + pairs
         _set_r(s, pairs)
 
 
@@ -133,14 +139,15 @@ def cmd_icc(s: "Session", args: str) -> None:
             idx = np.flatnonzero(ti == t)
             ri[idx] = np.arange(len(idx))
         rl = np.arange(k)
-    unbalanced = len(names) == 2 and len(set(np.bincount(ti).tolist())) > 1
     Y = np.full((n, k), np.nan)
     Y[ti, ri] = y
-    if unbalanced:
-        if n < 2:
-            raise StataError(2001, "insufficient observations")
-    elif np.isnan(Y).any():
+    if np.isnan(Y).any():
+        # targets with fewer ratings are left out, with a note (compat 1913)
         good = ~np.isnan(Y).any(1)
+        dropped = int((~good).sum())
+        why = "of unbalanced data" if len(names) == 2 else "not rated by all raters"
+        s.output.write(f"({dropped} target{'s' if dropped > 1 else ''} omitted from computation because "
+                       f"{why})\n", "text")
         Y = Y[good]
         if Y.shape[0] < 2:
             raise StataError(2001, "insufficient observations")
@@ -148,13 +155,8 @@ def cmd_icc(s: "Session", args: str) -> None:
     if n < 2 or k < 2:
         raise StataError(2001, "insufficient observations")
     level = _level(s, o)
-    if unbalanced:
-        r = B.icc_oneway_unbalanced(y, ti, level)
-        k = r["k"]
-        tests = B.icc_test({**r, "df2": r["df2"]}, "oneway", kind, r0, k)
-    else:
-        r = B.icc(Y, model, kind, level)
-        tests = B.icc_test(r, model, kind, r0)
+    r = B.icc(Y, model, kind, level)
+    tests = B.icc_test(r, model, kind, r0)
     out = s.output
     title = {"oneway": "One-way random-effects model",
              "random": "Two-way random-effects model",
@@ -170,7 +172,7 @@ def cmd_icc(s: "Session", args: str) -> None:
         out.write(f"{lab:<33}{'Number of raters':<18}= ", "text")
     else:
         out.write(f"{'':<33}{'Number of raters':<18}= ", "text")
-    out.write((f"{k:>9.2f}" if unbalanced else f"{k:>9}") + "\n", "result")   # VERIFY: k0 when unbalanced
+    out.write(f"{k:>9}\n", "result")
     out.write("\n" + "-" * 62 + "\n", "text")
     out.write(f"{names[0]:>22} |{'ICC':>11}{'[' + _lvl_text(level) + '% Conf. Interval]':>27}\n", "text")
     out.write("-" * 23 + "+" + "-" * 38 + "\n", "text")
@@ -180,19 +182,15 @@ def cmd_icc(s: "Session", args: str) -> None:
                   f"{g9(r[key + '_ub'], '%9.0g'):>12}\n", "result")
     out.write("-" * 62 + "\n", "text")
     out.write("F test that\n", "text")
-    if r0 == 0:
-        F, df1, df2, pv = tests["i"]
-        out.write(f"  ICC=0.00: F({df1:.1f}, {df2:.1f}) = " + f"{F:.2f}".ljust(19)
-                  + f"Prob > F = {pv:.3f}\n\n", "text")
-    else:
-        # VERIFY: one line per ICC when the two tests differ
-        for lab, key in (("Individual", "i"), ("Average", "avg")):
-            F, df1, df2, pv = tests[key]
-            out.write(f"  {lab} ICC={r0:.2f}: F({df1:.1f}, {df2:.1f}) = " + f"{F:.2f}".ljust(19)
-                      + f"Prob > F = {pv:.3f}\n", "text")
-        out.write("\n", "text")
-    out.write("Note: ICCs estimate correlations between individual measurements\n"
-              "      and between average measurements made on the same target.\n", "text")
+    # one line per ICC when the two tests differ: ICC(1) and ICC(k) (compat 1913)
+    for lab, key in ((("ICC", "i"),) if r0 == 0 else (("ICC(1)", "i"), ("ICC(k)", "avg"))):
+        F, df1, df2, pv = tests[key]
+        out.write(f"  {lab}={r0:.2f}: F({df1:.1f}, {df2:.1f}) = {F:.2f}".ljust(46)
+                  + f"Prob > F = {pv:.3f}\n", "text")
+    out.write("\n", "text")
+    if not (model == "mixed" and kind == "absolute"):      # no note there (compat 1913)
+        out.write("Note: ICCs estimate correlations between individual measurements\n"
+                  "      and between average measurements made on the same target.\n", "text")
     macros = [("model", {"oneway": "one-way random effects", "random": "two-way random effects",
                          "mixed": "two-way mixed effects"}[model]),
               ("depvar", names[0]), ("target", names[1])]
@@ -235,7 +233,7 @@ def cmd_loneway(s: "Session", args: str) -> None:
         raise StataError(2000, "no observations")
     level = _level(s, o)
     if o.get("exact") and len(set(np.bincount(codes).tolist())) > 1:
-        raise StataError(198, "exact requires balanced data")                       # VERIFY
+        raise StataError(198, "Balanced data (equal groups) required for exact confidence interval.")  # VERIFY: rc
     r = B.loneway(yv.data[mask], codes, level, center="mean" if o.get("mean") else "median" if o.get("median") else "",
                   exact=bool(o.get("exact")))
     if r["G"] < 2:
@@ -259,11 +257,20 @@ def cmd_loneway(s: "Session", args: str) -> None:
     out.write(f"{g9(r['sst'], '%10.0g'):>18}{r['N'] - 1:>7}"
               f"{g9(r['sst'] / (r['N'] - 1), '%10.0g'):>13}\n\n", "result")
     trunc = r["rho_raw"] < 0
-    out.write(f"{'':>9}{'Intraclass':>10}{'Asy.':>11}\n", "text")
+    if o.get("mean") or o.get("median"):
+        # with mean or median there is no standard error nor interval (compat 1913)
+        r["se"] = r["lb"] = r["ub"] = math.nan
+        # the reliability follows the correlation shown (compat 1913)
+        n0 = r["n0"]
+        r["rel"] = n0 * r["rho"] / (1 + (n0 - 1) * r["rho"])
+    exact = "        ------ Exact -----" if o.get("exact") else ""
+    out.write(f"{'':>9}{'Intraclass':>10}{'Asy.':>11}{exact}\n", "text")
     out.write(f"{'':>9}{'correlation':>11}{'S.E.':>10}{'':>7}[{_lvl_text(level)}% Conf. Interval]\n", "text")
     out.write(f"{'':>9}" + "-" * 48 + "\n", "text")
+    def f5(x: float, w: int) -> str:
+        return f"{'.':>{w}}" if math.isnan(x) else f"{x:>{w}.5f}"
     out.write(f"{'':>9}{r['rho']:>10.5f}" + ("*" if trunc else " ")
-              + f"{r['se']:>11.5f}{r['lb']:>14.5f}{r['ub']:>12.5f}\n\n", "result")
+              + f"{f5(r['se'], 11)}{f5(r['lb'], 14)}{f5(r['ub'], 12)}\n\n", "result")
     rel_trunc = r["rel_raw"] < 0
     for lab, val, star in (("Estimated SD of " + gv.name + " effect", r["sd_b"], False),
                            ("Estimated SD within " + gv.name, r["sd_w"], False),
@@ -274,10 +281,10 @@ def cmd_loneway(s: "Session", args: str) -> None:
     out.write(f"{'':>14}(evaluated at n={r['n0']:.2f})\n", "text")
     if trunc or rel_trunc:
         out.write("\n(*) Truncated at zero.\n", "text")
-    _set_r(s, [("N", float(r["N"])), ("rho", r["rho"]), ("lb", r["lb"]), ("ub", r["ub"]),
-               ("F", r["F"]), ("df_m", float(r["dfb"])), ("df_r", float(r["dfw"])),
-               ("sd_w", r["sd_w"]), ("sd_b", r["sd_b"]), ("rho_se", r["se"]), ("N_g", float(r["G"])),
-               ("Var_w", r["msw"]), ("Var_b", r["sd_b"] ** 2)])
+    # in the order of return list (compat 1913); missing for mean and median (VERIFY)
+    nan = lambda x: SYS if math.isnan(x) else x                    # noqa: E731
+    _set_r(s, [("lb", nan(r["lb"])), ("ub", nan(r["ub"])), ("se", nan(r["se"])), ("sd_w", r["sd_w"]),
+               ("sd_b", nan(r["sd_b"])), ("rho_t", r["rel"]), ("rho", r["rho"]), ("N", float(r["N"]))])
 
 
 # ---------------------------------------------------------------------------
@@ -302,14 +309,18 @@ def _es_options(o: dict) -> list[str]:
 
 
 def _es_print(s: "Session", n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
-              o: dict, lab1: str, lab2: str) -> None:
+              o: dict, lab1: str, lab2: str, empty: tuple = ()) -> None:
+    """empty: labels of other values of the by() variable, listed with 0 observations."""
     level = _level(s, o)
     r = B.effect_sizes(n1, m1, s1, n2, m2, s2, level, unequal=bool(o.get("unequal")), welch=bool(o.get("welch")))
     want = _es_options(o)
     out = s.output
-    out.write("\nEffect size based on mean comparison\n\n", "text")
+    uneq = bool(o.get("unequal") or o.get("welch"))
+    out.write("\nEffect size based on mean comparison" + (", unequal variances" if uneq else "") + "\n\n", "text")
     out.write(f"{'Obs per group:':>45}\n", "text")
     out.write(f"{lab1:>44} = {n1:>10}\n{lab2:>44} = {n2:>10}\n", "text")
+    for lab in empty:
+        out.write(f"{lab:>44} = {0:>10}\n", "text")
     out.write("-" * 57 + "\n", "text")
     out.write(f"{'Effect Size':>19} |{'Estimate':>11}{'[' + _lvl_text(level) + '% Conf. Interval]':>25}\n", "text")
     out.write("-" * 20 + "+" + "-" * 36 + "\n", "text")
@@ -319,12 +330,18 @@ def _es_print(s: "Session", n1: int, m1: float, s1: float, n2: int, m2: float, s
             out.write(f"{lab:>19} |", "text")
             out.write(f"{g9(est):>11}{g9(lo):>13}{g9(hi):>12}\n", "result")
     out.write("-" * 57 + "\n", "text")
+    if uneq:
+        lab = ("Welch's" if o.get("welch") else "Satterthwaite's") + " degrees of freedom"
+        out.write(f"{lab:>46} = ", "text")
+        out.write(f"{r['df']:8.4f}\n", "result")
     pairs = []
     names = {"cohen": "d", "hedges": "g", "glass1": "delta1", "glass2": "delta2", "pbcorr": "r_pb"}
     for key in want:
         est, lo, hi = r[key]
         pairs += [(names[key], est), (f"lb_{names[key]}", lo), (f"ub_{names[key]}", hi)]
-    pairs += [("N_1", float(n1)), ("N_2", float(n2)), ("level", level)]     # VERIFY: order and names
+    if uneq:
+        pairs.append(("df_t", r["df"]))
+    pairs += [("N_1", float(n1)), ("N_2", float(n2)), ("level", level)]
     _set_r(s, pairs)
 
 
@@ -350,9 +367,16 @@ def cmd_esize(s: "Session", args: str) -> None:
     if len(x1) < 2 or len(x2) < 2:
         raise StataError(2001, "insufficient observations")
     by = s.expand_varlist(o["by"])[0]
+    lab = lambda g: f"{by}=={g:g}" if not isinstance(g, str) else f"{by}=={g}"      # noqa: E731
+    # the other values of the by() variable in the data are listed with 0 observations (compat
+    # 1913: esize ... if j < 3, by(j) lists j==3 and j==4; VERIFY)
+    bv = s.data.get(by)
+    if bv.is_string:
+        others = sorted({x for x in bv.raw if x != ""} - {g1, g2})
+    else:
+        others = sorted({float(x) for x in bv.data[S.valid(bv.data)]} - {float(g1), float(g2)})
     _es_print(s, len(x1), float(x1.mean()), float(x1.std(ddof=1)), len(x2), float(x2.mean()),
-              float(x2.std(ddof=1)), o, f"{by}=={g1:g}" if not isinstance(g1, str) else f"{by}=={g1}",
-              f"{by}=={g2:g}" if not isinstance(g2, str) else f"{by}=={g2}")
+              float(x2.std(ddof=1)), o, lab(g1), lab(g2), tuple(lab(g) for g in others))
 
 
 @command("esizei", "esizei")
@@ -501,7 +525,9 @@ def cmd_boxcox(s: "Session", args: str) -> None:
         return
     vars_ = numeric_vars(s, p.varlist, allow_string=False)
     if o.get("notrans") not in (None, True):
-        vars_ += [v for v in numeric_vars(s, str(o["notrans"]), allow_string=False) if v not in vars_]
+        # the notrans() variables come first among the coefficients (compat 1913)
+        extra = [v for v in numeric_vars(s, str(o["notrans"]), allow_string=False) if v not in vars_]
+        vars_ = vars_[:1] + extra + vars_[1:]
     mask = touse(s, p)
     for v in vars_:
         mask &= S.valid(v.data)
@@ -583,7 +609,12 @@ def _boxcox_general(s: "Session", p, o: dict, mdl: str, args: str) -> None:
     from ..estimation.results import CoefRow, Estimates, coef_table, post
     vars_ = numeric_vars(s, p.varlist, allow_string=False)
     notrans = numeric_vars(s, str(o["notrans"]), allow_string=False) if o.get("notrans") not in (None, True) else []
-    trans = [v for v in vars_[1:] if v not in notrans]
+    # every regressor of the varlist is transformed; one also in notrans() is dropped from there
+    # as collinear (compat 1913)
+    trans = vars_[1:]
+    for v in [v for v in notrans if v in trans]:
+        s.output.write(f"note: {v.name} dropped because of collinearity\n", "text")
+        notrans.remove(v)
     if not trans:
         raise StataError(198, "no variables to transform")                         # VERIFY
     mask = touse(s, p)
@@ -593,22 +624,32 @@ def _boxcox_general(s: "Session", p, o: dict, mdl: str, args: str) -> None:
     n = len(y)
     if mdl != "rhsonly" and (y <= 0).any():
         raise StataError(411, "dependent variable must be positive")              # VERIFY
+    for v in trans:
+        if (v.data[mask] <= 0).any():
+            raise StataError(411, f"{v.name} contains observations that are not strictly positive")  # VERIFY: rc
     Xt = np.column_stack([v.data[mask] for v in trans])
-    if (Xt <= 0).any():
-        raise StataError(411, "nonpositive values encountered in transformed variables")   # VERIFY
     Xn = np.column_stack([v.data[mask] for v in notrans] + [np.ones(n)])
     fit = B.boxcox_general(y, Xt, Xn, mdl)
+    log0 = []
     if mdl == "rhsonly":
+        # no iterations for the comparison model (VERIFY)
         r0 = y - y.mean()
         ll0 = -n / 2 * (math.log(2 * math.pi) + 1) - n / 2 * math.log(float(r0 @ r0) / n)
     else:
-        ll0 = B.boxcox_fit(y, np.ones((n, 1)))["ll"]
+        # the constant-only model with y transformed, by Newton-Raphson from 1 (compat 1913)
+        nr0 = B.profile_newton(lambda t: B.boxcox_ll(float(t[0]), y, np.ones((n, 1))), [1.0])
+        ll0, log0 = (nr0.ll, nr0.log) if nr0.converged else (B.boxcox_fit(y, np.ones((n, 1)))["ll"], [])
     ll = fit["ll"]
     lr = 2 * (ll - ll0)
     ncov = len(trans) + len(notrans)
     level = _level(s, o)
     out = s.output
-    out.write("Fitting comparison model\n\nFitting full model\n\n", "text")
+    from ..estimation import ml as ML
+    for head, log in (("Fitting comparison model", log0), ("Fitting full model", fit["log"])):
+        out.write(head + "\n\n", "text")
+        if log and not o.get("nolog"):
+            ML.print_log(out, ML.MLResult(None, 0.0, None, None, 0, True, log))
+            out.write("\n", "text")
     out.write(f"{'':>50}{'Number of obs':<16}= ", "text")
     out.write(f"{n:>10}\n", "result")
     out.write(f"{'':>50}{'LR chi2(' + str(ncov) + ')':<16}= ", "text")
@@ -653,8 +694,10 @@ def _boxcox_general(s: "Session", p, o: dict, mdl: str, args: str) -> None:
         llr = fit["ll_at"](float(t0))
         chi = 2 * (ll - llr)
         pv = float(st.chi2.sf(chi, npar))
-        out.write(f"{lab + ' = ' + format(t0, '2d'):<{max(10, len(lab) + 6)}}", "text")
-        out.write(f"{g9(llr, '%10.0g'):>16}{chi:>13.2f}{pv:>16.3f}\n", "result")
+        # the restricted log likelihood ends in column 26 (compat 1913)
+        tl = f"{lab} = {t0:2d}"
+        out.write(tl, "text")
+        out.write(f"{g9(llr, '%10.0g'):>{26 - len(tl)}}{chi:>13.2f}{pv:>16.3f}\n", "result")
         tests[key] = (llr, chi, pv)
     out.write("-" * 57 + "\n", "text")
     # e(b): the transformation parameters, the coefficients and sigma
@@ -668,12 +711,14 @@ def _boxcox_general(s: "Session", p, o: dict, mdl: str, args: str) -> None:
     est.eqnames = eqs
     est.level = level
     est.title = "Box-Cox regression"
-    scal = [("N", float(n)), ("ll0", ll0), ("chi2", lr), ("ll", ll), ("df_m", float(ncov))]
+    # the order of model(lambda) in compat 1913: df_m is the number of parameters and df_r 3, as
+    # with the default model (VERIFY: rhsonly and theta)
+    scal = [("N", float(n)), ("df_m", float(len(bvec))), ("df_r", 3.0), ("chi2", lr), ("ll0", ll0), ("ll", ll)]
     for key in ("t1", "tm1", "t0"):
         llr, chi, pv = tests[key]
         scal += [(f"chi2_{key}", chi), (f"p_{key}", pv), (f"ll_{key}", llr)]
-    scal += [("ic", float(fit["nit"])), ("rank", float(npar))]                 # VERIFY
+    scal += [("ic", float(fit["nit"])), ("rc", 0.0), ("rank", float(npar))]
     post(s, est, scal,
-         [("cmd", "boxcox"), ("marginsnotok", "_ALL"), ("cmdline", f"boxcox {args.strip()}"),
-          ("ntrans", " ".join(v.name for v in notrans)), ("model", mdl), ("predict", "boxcox_p"),
+         [("cmd", "boxcox"), ("marginsnotok", "_ALL"), ("model", mdl), ("cmdline", f"boxcox {args.strip()}"),
+          ("ntrans", "yes"), ("predict", "boxcox_p"),
           ("chi2type", "LR"), ("depvar", vars_[0].name), ("properties", "b V")], mask)

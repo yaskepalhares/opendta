@@ -1,0 +1,1322 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1913_base_stats.log
+  log type:  text
+ opened on:  24 Oct 2026, 09:52:29
+
+. * Base statistics, second part: ml with the lf0, lf1, lf2, gf0 methods, constraints() and svy;
+. * boxcox with model(rhsonly), model(lambda), model(theta) and notrans(); icc with testvalue() and
+. * unbalanced one-way data; loneway with mean, median and exact; esize with unequal and welch;
+. * pwmean with unequal; ameans with weights; lv with generate and tail(); stem with width().
+. * Every command whose behavior the manual does not settle runs under capture noisily, so that one
+. * Stata run shows the whole case.
+. clear
+
+. set seed 1913
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen x1 = round(invnormal(runiform()), .01)
+
+. gen x2 = round(invnormal(runiform()), .01)
+
+. gen y = runiform() < invlogit(.3 + .8*x1 - .5*x2)
+
+. gen st = mod(_n, 4)
+
+. gen psu = ceil(_n/5)
+
+. gen wt = 1 + mod(_n, 3)
+
+. 
+. * --- ml evaluators of the lf0, lf1, lf2 and gf0 types ---
+. program lf0logit
+  1.     args todo b lnfj
+  2.     tempvar xb
+  3.     mleval `xb' = `b'
+  4.     quietly replace `lnfj' = ln(invlogit(`xb')) if $ML_y1 == 1
+  5.     quietly replace `lnfj' = ln(invlogit(-`xb')) if $ML_y1 == 0
+  6. end
+
+. program lf1logit
+  1.     args todo b lnfj g1
+  2.     tempvar xb
+  3.     mleval `xb' = `b'
+  4.     quietly replace `lnfj' = ln(invlogit(`xb')) if $ML_y1 == 1
+  5.     quietly replace `lnfj' = ln(invlogit(-`xb')) if $ML_y1 == 0
+  6.     if `todo' == 0 exit
+  7.     quietly replace `g1' = $ML_y1 - invlogit(`xb')
+  8. end
+
+. program lf2logit
+  1.     args todo b lnfj g1 H
+  2.     tempvar xb
+  3.     mleval `xb' = `b'
+  4.     quietly replace `lnfj' = ln(invlogit(`xb')) if $ML_y1 == 1
+  5.     quietly replace `lnfj' = ln(invlogit(-`xb')) if $ML_y1 == 0
+  6.     if `todo' == 0 exit
+  7.     quietly replace `g1' = $ML_y1 - invlogit(`xb')
+  8.     if `todo' == 1 exit
+  9.     tempvar w
+ 10.     quietly gen double `w' = invlogit(`xb')*invlogit(-`xb')
+ 11.     mlmatsum `lnfj' `H' = -`w'
+ 12. end
+
+. capture noisily ml model lf0 lf0logit (y = x1 x2)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -138.62944
+alternative:   log likelihood =  -138.3154
+rescale:       log likelihood = -136.93788
+Iteration 0:   log likelihood = -136.93788  
+Iteration 1:   log likelihood = -122.58642  
+Iteration 2:   log likelihood = -122.51248  
+Iteration 3:   log likelihood = -122.51244  
+Iteration 4:   log likelihood = -122.51244  
+
+                                                Number of obs     =        200
+                                                Wald chi2(2)      =      23.08
+Log likelihood = -122.51244                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5955098   .1781282     3.34   0.001      .246385    .9446346
+          x2 |  -.7158249   .1775453    -4.03   0.000    -1.063807   -.3678426
+       _cons |    .301841   .1551472     1.95   0.052    -.0022419     .605924
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  200
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -122.5124398897863
+         e(k_eq_model) =  1
+               e(df_m) =  2
+               e(chi2) =  23.08036612344829
+                  e(p) =  9.73110539120e-06
+
+macros:
+                e(cmd) : "ml"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+            e(predict) : "ml_p"
+                e(vce) : "oim"
+               e(user) : "lf0logit"
+          e(ml_method) : "lf0"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily ml model lf1 lf1logit (y = x1 x2)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -138.62944
+alternative:   log likelihood =  -138.3154
+rescale:       log likelihood = -136.93788
+Iteration 0:   log likelihood = -136.93788  
+Iteration 1:   log likelihood = -122.58642  
+Iteration 2:   log likelihood = -122.51248  
+Iteration 3:   log likelihood = -122.51244  
+Iteration 4:   log likelihood = -122.51244  
+
+                                                Number of obs     =        200
+                                                Wald chi2(2)      =      23.08
+Log likelihood = -122.51244                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5955098   .1781282     3.34   0.001      .246385    .9446346
+          x2 |  -.7158249   .1775453    -4.03   0.000    -1.063807   -.3678426
+       _cons |    .301841   .1551472     1.95   0.052    -.0022419     .605924
+------------------------------------------------------------------------------
+
+. capture noisily ml model lf1 lf1logit (y = x1 x2), vce(robust)
+
+. capture noisily ml maximize
+
+initial:       log pseudolikelihood = -138.62944
+alternative:   log pseudolikelihood =  -138.3154
+rescale:       log pseudolikelihood = -136.93788
+Iteration 0:   log pseudolikelihood = -136.93788  
+Iteration 1:   log pseudolikelihood = -122.58642  
+Iteration 2:   log pseudolikelihood = -122.51248  
+Iteration 3:   log pseudolikelihood = -122.51244  
+Iteration 4:   log pseudolikelihood = -122.51244  
+
+                                                Number of obs     =        200
+                                                Wald chi2(2)      =      25.24
+Log pseudolikelihood = -122.51244               Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5955098   .1685478     3.53   0.000     .2651622    .9258574
+          x2 |  -.7158249   .1716779    -4.17   0.000    -1.052307   -.3793424
+       _cons |    .301841   .1560075     1.93   0.053     -.003928    .6076101
+------------------------------------------------------------------------------
+
+. capture noisily ml model lf2 lf2logit (y = x1 x2)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -138.62944
+alternative:   log likelihood =  -138.3154
+rescale:       log likelihood = -136.93788
+Iteration 0:   log likelihood = -136.93788  
+Iteration 1:   log likelihood = -122.58642  
+Iteration 2:   log likelihood = -122.51248  
+Iteration 3:   log likelihood = -122.51244  
+Iteration 4:   log likelihood = -122.51244  
+
+                                                Number of obs     =        200
+                                                Wald chi2(2)      =      23.08
+Log likelihood = -122.51244                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5955098   .1781282     3.34   0.001      .246385    .9446346
+          x2 |  -.7158249   .1775453    -4.03   0.000    -1.063807   -.3678426
+       _cons |    .301841   .1551472     1.95   0.052    -.0022419     .605924
+------------------------------------------------------------------------------
+
+. capture noisily ml model gf0 lf0logit (y = x1 x2)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -138.62944
+alternative:   log likelihood =  -138.3154
+rescale:       log likelihood = -136.93788
+Iteration 0:   log likelihood = -136.93788  
+Iteration 1:   log likelihood = -122.58638  
+Iteration 2:   log likelihood = -122.51248  
+Iteration 3:   log likelihood = -122.51244  
+Iteration 4:   log likelihood = -122.51244  
+
+                                                Number of obs     =        200
+                                                Wald chi2(2)      =      23.08
+Log likelihood = -122.51244                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5955098   .1781282     3.34   0.001      .246385    .9446346
+          x2 |   -.715825   .1775453    -4.03   0.000    -1.063807   -.3678426
+       _cons |    .301841   .1551472     1.95   0.052    -.0022419     .605924
+------------------------------------------------------------------------------
+
+. * constraints()
+. constraint define 1 x1 = -x2
+
+. capture noisily ml model lf2 lf2logit (y = x1 x2), constraints(1)
+
+. capture noisily ml maximize
+
+initial:       log likelihood = -138.62944
+alternative:   log likelihood =  -138.3154
+rescale:       log likelihood = -136.93788
+Iteration 0:   log likelihood = -136.93788  
+Iteration 1:   log likelihood = -122.72469  
+Iteration 2:   log likelihood = -122.65457  
+Iteration 3:   log likelihood = -122.65454  
+Iteration 4:   log likelihood = -122.65454  
+
+                                                Number of obs     =        200
+                                                Wald chi2(1)      =      22.90
+Log likelihood = -122.65454                     Prob > chi2       =     0.0000
+
+ ( 1)  [eq1]x1 + [eq1]x2 = 0
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .6569356   .1372848     4.79   0.000     .3878624    .9260088
+          x2 |  -.6569356   .1372848    -4.79   0.000    -.9260088   -.3878624
+       _cons |   .2937879   .1541792     1.91   0.057    -.0083978    .5959737
+------------------------------------------------------------------------------
+
+. capture noisily matrix list e(Cns)
+
+e(Cns)[1,4]
+      eq1:   eq1:   eq1:  _Cns:
+       x1     x2  _cons     _r
+r1      1      1      0      0
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  2
+                  e(N) =  200
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -122.654539413944
+         e(k_eq_model) =  1
+               e(df_m) =  1
+               e(chi2) =  22.89817974046146
+                  e(p) =  1.70813535215e-06
+
+macros:
+                e(cmd) : "ml"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+            e(predict) : "ml_p"
+                e(vce) : "oim"
+               e(user) : "lf2logit"
+          e(ml_method) : "lf2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+                e(Cns) :  1 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily ml model d0 lf0logit (y = x1 x2), constraints(1)
+
+. * svy
+. svyset psu [pw=wt], strata(st)
+
+      pweight: wt
+          VCE: linearized
+  Single unit: missing
+     Strata 1: st
+         SU 1: psu
+        FPC 1: <zero>
+
+. capture noisily ml model lf1 lf1logit (y = x1 x2), svy
+
+. capture noisily ml maximize
+
+initial:       log pseudolikelihood = -277.95202
+alternative:   log pseudolikelihood = -279.10487
+rescale:       log pseudolikelihood = -275.45171
+Iteration 0:   log pseudolikelihood = -275.45171  
+Iteration 1:   log pseudolikelihood = -244.20978  
+Iteration 2:   log pseudolikelihood = -244.01905  
+Iteration 3:   log pseudolikelihood = -244.01889  
+Iteration 4:   log pseudolikelihood = -244.01889  
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =       160                  Population size   =        401
+                                                Design df         =        156
+                                                F(   2,    155)   =      14.24
+                                                Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+             |             Linearized
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .4790969   .1831189     2.62   0.010     .1173845    .8408094
+          x2 |   -.840628   .1682474    -5.00   0.000    -1.172965    -.508291
+       _cons |   .2931765   .1672106     1.75   0.082    -.0371125    .6234654
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_eq) =  1
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+              e(N_psu) =  160
+           e(N_strata) =  4
+               e(df_r) =  156
+                  e(N) =  200
+              e(N_pop) =  401
+             e(census) =  0
+          e(singleton) =  0
+      e(N_strata_omit) =  0
+             e(stages) =  1
+         e(k_eq_model) =  1
+               e(df_m) =  2
+                  e(F) =  14.24313289229541
+                  e(p) =  2.09618947269e-06
+
+macros:
+                e(cmd) : "ml"
+              e(svyml) : "svyml"
+                e(opt) : "moptimize"
+            e(predict) : "ml_p"
+         e(singleunit) : "missing"
+            e(strata1) : "st"
+                e(su1) : "psu"
+               e(wvar) : "__000004"
+               e(wexp) : "= __000004"
+              e(wtype) : "pweight"
+            e(vcetype) : "Linearized"
+                e(vce) : "linearized"
+             e(prefix) : "svy"
+               e(user) : "lf1logit"
+          e(ml_method) : "lf1"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+       e(V_modelbased) :  3 x 3
+         e(V_srssubwr) :  3 x 3
+           e(V_srssub) :  3 x 3
+            e(V_srswr) :  3 x 3
+              e(V_srs) :  3 x 3
+  e(_N_strata_certain) :  1 x 1
+   e(_N_strata_single) :  1 x 1
+          e(_N_strata) :  1 x 1
+
+functions:
+             e(sample)   
+
+. capture noisily svy: logit y x1 x2
+(running logit on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         4                  Number of obs     =        200
+Number of PSUs     =       160                  Population size   =        401
+                                                Design df         =        156
+                                                F(   2,    155)   =      14.24
+                                                Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+             |             Linearized
+           y |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .4790969   .1831189     2.62   0.010     .1173845    .8408094
+          x2 |   -.840628   .1682474    -5.00   0.000    -1.172965    -.508291
+       _cons |   .2931765   .1672106     1.75   0.082    -.0371125    .6234654
+------------------------------------------------------------------------------
+
+. 
+. * --- boxcox ---
+. clear
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen x = 1 + mod(_n*7, 13)
+
+. gen z = mod(_n, 3)
+
+. gen y = round(exp(.5 + .1*x + .2*z + mod(_n*11,7)/20), .01)
+
+. capture noisily boxcox y x z, model(rhsonly) notrans(z)
+note: z dropped because of collinearity
+z contains observations that are not strictly positive
+
+. capture noisily ereturn list
+
+scalars:
+                 e(ic) =  4
+                  e(k) =  3
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+         e(k_eq_model) =  1
+              e(N_cdf) =  0
+              e(N_cds) =  0
+             e(stages) =  1
+                  e(N) =  200
+              e(N_pop) =  401
+           e(N_strata) =  4
+              e(N_psu) =  160
+               e(df_r) =  156
+      e(N_strata_omit) =  0
+          e(singleton) =  0
+               e(k_eq) =  1
+               e(rank) =  3
+                  e(p) =  2.09618947289e-06
+                  e(F) =  14.24313289218478
+               e(df_m) =  2
+             e(census) =  0
+
+macros:
+                e(cmd) : "logit"
+            e(cmdline) : "svy : logit y x1 x2"
+             e(prefix) : "svy"
+            e(cmdname) : "logit"
+            e(command) : "logit y x1 x2"
+               e(wexp) : "= wt"
+              e(wtype) : "pweight"
+          e(estat_cmd) : "svy_estat"
+                e(vce) : "linearized"
+            e(vcetype) : "Linearized"
+              e(title) : "Survey: Logistic regression"
+               e(wvar) : "wt"
+         e(singleunit) : "missing"
+                e(su1) : "psu"
+            e(strata1) : "st"
+         e(properties) : "b V"
+            e(predict) : "logit_p"
+       e(marginsnotok) : "stdp DBeta DEviance DX2 DDeviance Hat Number Residuals RStandard SCore"
+                e(opt) : "moptimize"
+               e(user) : "mopt__logit_d2()"
+          e(ml_method) : "d2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+       e(V_modelbased) :  3 x 3
+              e(V_srs) :  3 x 3
+  e(_N_strata_certain) :  1 x 1
+   e(_N_strata_single) :  1 x 1
+          e(_N_strata) :  1 x 1
+                e(mns) :  1 x 3
+              e(rules) :  1 x 4
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+. capture noisily boxcox y x, model(lambda)
+Fitting comparison model
+
+Iteration 0:   log likelihood = -129.98963  
+Iteration 1:   log likelihood = -124.39358  
+Iteration 2:   log likelihood = -124.38647  
+Iteration 3:   log likelihood = -124.38647  
+
+Fitting full model
+
+Iteration 0:   log likelihood = -88.669984  
+Iteration 1:   log likelihood = -85.905039  
+Iteration 2:   log likelihood = -85.854371  
+Iteration 3:   log likelihood = -85.854371  
+
+                                                  Number of obs   =         60
+                                                  LR chi2(1)      =      77.06
+Log likelihood = -85.854371                       Prob > chi2     =      0.000
+ 
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+     /lambda |   .5226329   .1974209     2.65   0.008     .1356951    .9095707
+------------------------------------------------------------------------------
+ 
+Estimates of scale-variant parameters
+----------------------------
+             |      Coef.
+-------------+--------------
+Notrans      |
+       _cons |   .8800714
+-------------+--------------
+Trans        |
+           x |   .5101487
+-------------+--------------
+      /sigma |    .484428
+----------------------------
+ 
+---------------------------------------------------------
+   Test         Restricted     LR statistic      P-value
+    H0:       log likelihood       chi2       Prob > chi2
+---------------------------------------------------------
+lambda = -1     -107.36878        43.03           0.000
+lambda =  0     -89.226968         6.75           0.009
+lambda =  1     -88.669984         5.63           0.018
+---------------------------------------------------------
+
+. capture noisily boxcox y x z, model(lambda) notrans(z) nolog
+note: z dropped because of collinearity
+z contains observations that are not strictly positive
+
+. capture noisily boxcox y x z, model(theta) notrans(z)
+note: z dropped because of collinearity
+z contains observations that are not strictly positive
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  60
+               e(df_m) =  4
+               e(df_r) =  3
+               e(chi2) =  77.06419927958461
+                e(ll0) =  -124.3864701981546
+                 e(ll) =  -85.85437055836229
+            e(chi2_t1) =  5.631226494505228
+               e(p_t1) =  .0176432826356121
+              e(ll_t1) =  -88.6699838056149
+           e(chi2_tm1) =  43.02881605768124
+              e(p_tm1) =  5.39395195176e-11
+             e(ll_tm1) =  -107.3687785872029
+            e(chi2_t0) =  6.745194087528461
+               e(p_t0) =  .009400054999792
+              e(ll_t0) =  -89.22696760212652
+                 e(ic) =  3
+                 e(rc) =  0
+               e(rank) =  1
+
+macros:
+                e(cmd) : "boxcox"
+       e(marginsnotok) : "_ALL"
+              e(model) : "lambda"
+            e(cmdline) : "boxcox y x, model(lambda)"
+             e(ntrans) : "yes"
+            e(predict) : "boxcox_p"
+           e(chi2type) : "LR"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+
+functions:
+             e(sample)   
+
+. capture noisily boxcox y x, notrans(z) nolog
+Fitting comparison model
+
+Fitting full model
+
+                                                  Number of obs   =         60
+                                                  LR chi2(2)      =     171.33
+Log likelihood = -38.720869                       Prob > chi2     =      0.000
+ 
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+      /theta |   .0275801   .1322025     0.21   0.835    -.2315319    .2866922
+------------------------------------------------------------------------------
+ 
+Estimates of scale-variant parameters
+----------------------------
+             |      Coef.
+-------------+--------------
+Notrans      |
+           z |   .2050468
+           x |   .1029675
+       _cons |   .6601669
+-------------+--------------
+      /sigma |   .1028592
+----------------------------
+
+---------------------------------------------------------
+   Test         Restricted     LR statistic      P-value
+    H0:       log likelihood       chi2       Prob > chi2
+---------------------------------------------------------
+theta = -1      -60.835683        44.23           0.000
+theta =  0      -38.742602         0.04           0.835
+theta =  1      -60.065561        42.69           0.000
+---------------------------------------------------------
+
+. capture noisily boxcox y z, model(rhsonly) nolog
+z contains observations that are not strictly positive
+
+. 
+. * --- icc and loneway ---
+. clear
+
+. set obs 40
+number of observations (_N) was 0, now 40
+
+. gen t = ceil(_n/4)
+
+. gen j = mod(_n-1,4)+1
+
+. gen y = t + mod(_n*7,5)*.5 + j*.3
+
+. capture noisily icc y t j, testvalue(.5)
+
+Intraclass correlations
+Two-way random-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =        10
+Random effects: j                Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9186352       .8066138    .9761877
+               Average |   .9783368       .9434517    .9939387
+--------------------------------------------------------------
+F test that
+  ICC(1)=0.50: F(9.0, 28.9) = 9.41            Prob > F = 0.000
+  ICC(k)=0.50: F(9.0, 30.0) = 24.29           Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily return list
+
+scalars:
+           r(N_target) =  10
+            r(N_rater) =  4
+              r(icc_i) =  .9186351821360471
+            r(icc_i_F) =  9.407029027676364
+          r(icc_i_df1) =  9
+          r(icc_i_df2) =  28.91454450211646
+            r(icc_i_p) =  1.61883312799e-06
+           r(icc_i_lb) =  .8066137765255893
+           r(icc_i_ub) =  .9761877010066938
+            r(icc_avg) =  .978336830663443
+          r(icc_avg_F) =  24.29111745631536
+        r(icc_avg_df1) =  9
+        r(icc_avg_df2) =  29.99855886587788
+          r(icc_avg_p) =  2.00662819694e-11
+         r(icc_avg_lb) =  .9434516970708862
+         r(icc_avg_ub) =  .9939386746836266
+          r(testvalue) =  .5
+              r(level) =  95
+
+macros:
+              r(model) : "two-way random effects"
+             r(depvar) : "y"
+             r(target) : "t"
+              r(rater) : "j"
+               r(type) : "absolute"
+
+. capture noisily icc y t j, mixed consistency testvalue(.3)
+
+Intraclass correlations
+Two-way mixed-effects model
+Consistency of agreement
+
+Random effects: t                Number of targets =        10
+ Fixed effects: j                Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9264706        .822517    .9786371
+               Average |   .9805447        .948816    .9945723
+--------------------------------------------------------------
+F test that
+  ICC(1)=0.30: F(9.0, 27.0) = 18.94           Prob > F = 0.000
+  ICC(k)=0.30: F(9.0, 27.0) = 35.98           Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily icc y t j, mixed absolute testvalue(.3)
+
+Intraclass correlations
+Two-way mixed-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =        10
+ Fixed effects: j                Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9186352       .8066138    .9761877
+               Average |   .9783368       .9434517    .9939387
+--------------------------------------------------------------
+F test that
+  ICC(1)=0.30: F(9.0, 29.8) = 17.64           Prob > F = 0.000
+  ICC(k)=0.30: F(9.0, 29.5) = 34.77           Prob > F = 0.000
+
+. capture noisily icc y t, testvalue(.2)
+
+Intraclass correlations
+One-way random-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =        10
+                                 Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9184628       .8085122    .9760455
+               Average |   .9782879       .9440999    .9939018
+--------------------------------------------------------------
+F test that
+  ICC(1)=0.20: F(9.0, 30.0) = 23.03           Prob > F = 0.000
+  ICC(k)=0.20: F(9.0, 30.0) = 36.85           Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily return list
+
+scalars:
+           r(N_target) =  10
+            r(N_rater) =  4
+              r(icc_i) =  .9184627866842728
+            r(icc_i_F) =  23.02867738140172
+          r(icc_i_df1) =  9
+          r(icc_i_df2) =  30
+            r(icc_i_p) =  3.95878885229e-11
+           r(icc_i_lb) =  .8085122054594923
+           r(icc_i_ub) =  .976045476452335
+            r(icc_avg) =  .9782879410867161
+          r(icc_avg_F) =  36.84588381024276
+        r(icc_avg_df1) =  9
+        r(icc_avg_df2) =  30
+          r(icc_avg_p) =  8.32667268469e-14
+         r(icc_avg_lb) =  .9440999130983013
+         r(icc_avg_ub) =  .9939018096803766
+          r(testvalue) =  .2
+              r(level) =  95
+
+macros:
+              r(model) : "one-way random effects"
+             r(depvar) : "y"
+             r(target) : "t"
+               r(type) : "absolute"
+
+. capture noisily loneway y t, exact
+
+                      One-way Analysis of Variance for y: 
+
+                                             Number of obs =           40
+                                                 R-squared =       0.9325
+
+    Source                SS         df      MS            F     Prob > F
+-------------------------------------------------------------------------
+Between t                 321.25      9    35.694445     46.06     0.0000
+Within t               23.249996     30    .77499988
+-------------------------------------------------------------------------
+Total                      344.5     39    8.8333333
+
+         Intraclass       Asy.        ------ Exact -----
+         correlation      S.E.       [95% Conf. Interval]
+         ------------------------------------------------
+            0.91846     0.04114       0.80851     0.97605
+
+         Estimated SD of t effect                2.954634
+         Estimated SD within t                   .8803408
+         Est. reliability of a t mean             0.97829
+              (evaluated at n=4.00)
+
+. capture noisily return list
+
+scalars:
+                 r(lb) =  .8085122054594924
+                 r(ub) =  .9760454764523349
+                 r(se) =  .0411449129970385
+               r(sd_w) =  .880340776279409
+               r(sd_b) =  2.954633845400183
+              r(rho_t) =  .9782879410867162
+                r(rho) =  .9184627866842731
+                  r(N) =  40
+
+. capture noisily loneway y t, mean
+
+                      One-way Analysis of Variance for y: 
+
+                                             Number of obs =           40
+                                                 R-squared =       0.9325
+
+    Source                SS         df      MS            F     Prob > F
+-------------------------------------------------------------------------
+Between t                 321.25      9    35.694445     46.06     0.0000
+Within t               23.249996     30    .77499988
+-------------------------------------------------------------------------
+Total                      344.5     39    8.8333333
+
+         Intraclass       Asy.        
+         correlation      S.E.       [95% Conf. Interval]
+         ------------------------------------------------
+            0.91302           .             .           .
+
+         Estimated SD of t effect                2.954634
+         Estimated SD within t                   .8803408
+         Est. reliability of a t mean             0.97674
+              (evaluated at n=4.00)
+
+. capture noisily loneway y t, median
+
+                      One-way Analysis of Variance for y: 
+
+                                             Number of obs =           40
+                                                 R-squared =       0.9325
+
+    Source                SS         df      MS            F     Prob > F
+-------------------------------------------------------------------------
+Between t                 321.25      9    35.694445     46.06     0.0000
+Within t               23.249996     30    .77499988
+-------------------------------------------------------------------------
+Total                      344.5     39    8.8333333
+
+         Intraclass       Asy.        
+         correlation      S.E.       [95% Conf. Interval]
+         ------------------------------------------------
+            0.92245           .             .           .
+
+         Estimated SD of t effect                2.954634
+         Estimated SD within t                   .8803408
+         Est. reliability of a t mean             0.97942
+              (evaluated at n=4.00)
+
+. drop if _n == 3 | _n == 17
+(2 observations deleted)
+
+. capture noisily icc y t
+(2 targets omitted from computation because of unbalanced data)
+
+Intraclass correlations
+One-way random-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =         8
+                                 Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9077884       .7654029    .9779336
+               Average |   .9752343       .9288282    .9943906
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(7.0, 24.0) = 40.38              Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily return list
+
+scalars:
+           r(N_target) =  8
+            r(N_rater) =  4
+              r(icc_i) =  .9077883633105007
+            r(icc_i_F) =  40.3784730821886
+          r(icc_i_df1) =  7
+          r(icc_i_df2) =  24
+            r(icc_i_p) =  9.21218656913e-12
+           r(icc_i_lb) =  .765402923183064
+           r(icc_i_ub) =  .9779335815144757
+            r(icc_avg) =  .975234328500621
+          r(icc_avg_F) =  40.3784730821886
+        r(icc_avg_df1) =  7
+        r(icc_avg_df2) =  24
+          r(icc_avg_p) =  9.21218656913e-12
+         r(icc_avg_lb) =  .9288282104628279
+         r(icc_avg_ub) =  .9943905601939467
+          r(testvalue) =  0
+              r(level) =  95
+
+macros:
+              r(model) : "one-way random effects"
+             r(depvar) : "y"
+             r(target) : "t"
+               r(type) : "absolute"
+
+. capture noisily icc y t, testvalue(.4)
+(2 targets omitted from computation because of unbalanced data)
+
+Intraclass correlations
+One-way random-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =         8
+                                 Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9077884       .7654029    .9779336
+               Average |   .9752343       .9288282    .9943906
+--------------------------------------------------------------
+F test that
+  ICC(1)=0.40: F(7.0, 24.0) = 11.01           Prob > F = 0.000
+  ICC(k)=0.40: F(7.0, 24.0) = 24.23           Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily icc y t j
+(2 targets omitted from computation because not rated by all raters)
+
+Intraclass correlations
+Two-way random-effects model
+Absolute agreement
+
+Random effects: t                Number of targets =         8
+Random effects: j                Number of raters  =         4
+
+--------------------------------------------------------------
+                     y |        ICC       [95% Conf. Interval]
+-----------------------+--------------------------------------
+            Individual |   .9081188       .7606813    .9781504
+               Average |   .9753296       .9270824    .9944466
+--------------------------------------------------------------
+F test that
+  ICC=0.00: F(7.0, 21.0) = 47.84              Prob > F = 0.000
+
+Note: ICCs estimate correlations between individual measurements
+      and between average measurements made on the same target.
+
+. capture noisily loneway y t, exact
+Balanced data (equal groups) required for exact confidence interval.
+
+. 
+. * --- esize, pwmean, ameans ---
+. capture noisily esizei 20 5 2 25 4 3, unequal
+
+Effect size based on mean comparison, unequal variances
+
+                               Obs per group:
+                                     Group 1 =         20
+                                     Group 2 =         25
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |   .3837451    -.2121849    .9751812
+         Hedges's g |   .3770061    -.2084587     .958056
+---------------------------------------------------------
+            Satterthwaite's degrees of freedom =  41.7840
+
+. capture noisily return list
+
+scalars:
+                  r(d) =  .3837450637762038
+               r(lb_d) =  -.2121849242808096
+               r(ub_d) =  .9751812064061136
+                  r(g) =  .3770061001361663
+               r(lb_g) =  -.2084587356606312
+               r(ub_g) =  .9580560071195078
+               r(df_t) =  41.78401122019635
+                r(N_1) =  20
+                r(N_2) =  25
+              r(level) =  95
+
+. capture noisily esizei 20 5 2 25 4 3, welch all
+
+Effect size based on mean comparison, unequal variances
+
+                               Obs per group:
+                                     Group 1 =         20
+                                     Group 2 =         25
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |   .3837451    -.2118725    .9750443
+         Hedges's g |   .3770061    -.2081518    .9579215
+    Glass's Delta 1 |         .5    -.1149236    1.102718
+    Glass's Delta 2 |   .3333333      -.26546    .9253869
+   Point-Biserial r |   .1985329    -.0982132     .448318
+---------------------------------------------------------
+                    Welch's degrees of freedom =  43.5194
+
+. capture noisily esize twosample y if j < 3, by(j) unequal all
+
+Effect size based on mean comparison, unequal variances
+
+                               Obs per group:
+                                        j==1 =          9
+                                        j==2 =         10
+                                        j==3 =          0
+                                        j==4 =          0
+---------------------------------------------------------
+        Effect Size |   Estimate     [95% Conf. Interval]
+--------------------+------------------------------------
+          Cohen's d |  -.1109067    -1.010525    .7921941
+         Hedges's g |  -.1059283    -.9651642    .7566337
+    Glass's Delta 1 |  -.1019928    -1.000753     .803009
+    Glass's Delta 2 |  -.1211652    -1.020094    .7843636
+   Point-Biserial r |  -.0601188    -.4842233    .3987926
+---------------------------------------------------------
+            Satterthwaite's degrees of freedom =  15.7598
+
+. capture noisily pwmean y, over(j) unequal
+option unequal not allowed
+
+. capture noisily pwmean y, over(j) unequal effects mcompare(bonferroni)
+option unequal not allowed
+
+. capture noisily pwmean y, over(j) unequal cieffects mcompare(scheffe)
+option unequal not allowed
+
+. gen w = 1 + mod(_n, 3)
+
+. capture noisily ameans y [fw=w]
+
+    Variable |    Type             Obs        Mean       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+           y | Arithmetic           77    7.438961        6.770136   8.107786 
+             |  Geometric           77    6.777799        6.106921   7.522377 
+             |   Harmonic           77    6.050744        5.396149   6.886079 
+-----------------------------------------------------------------------------
+
+. capture noisily return list
+
+scalars:
+               r(ub_h) =  6.886078770159767
+               r(lb_h) =  5.396149272514555
+              r(Var_h) =  .0078021516338319
+             r(mean_h) =  6.050744020868176
+               r(ub_g) =  7.522376707679572
+               r(lb_g) =  6.106921147993688
+              r(Var_g) =  .2108811626308706
+             r(mean_g) =  6.777799156016908
+              r(N_pos) =  77
+                 r(ub) =  8.107785988782419
+                 r(lb) =  6.770136100286503
+                r(Var) =  8.683198867895356
+               r(mean) =  7.43896104453446
+                  r(N) =  77
+
+. capture noisily ameans y [aw=w]
+
+    Variable |    Type             Obs        Mean       [95% Conf. Interval]
+-------------+---------------------------------------------------------------
+           y | Arithmetic           38    7.438961        6.463789   8.414133 
+             |  Geometric           38    6.777799         5.82222   7.890214 
+             |   Harmonic           38    6.050744        5.141381   7.350908 
+-----------------------------------------------------------------------------
+
+. 
+. * --- lv and stem ---
+. clear
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen y = round(exp(.5 + .1*mod(_n*7, 13) + mod(_n*11,7)/20), .01)
+
+. gen x = 1 + mod(_n*7, 13)
+
+. capture noisily lv y, tail(8)
+
+ #     60                    y
+             ---------------------------------
+ M     30.5 |                3.405            |    spread  pseudosigma
+ F     15.5 |      2.46      3.645       4.83 |      2.37    1.768262
+ E      8   |      2.12      3.935       5.75 |      3.63    1.591627
+        1   |      1.82      4.425       7.03 |      5.21    1.145986
+            |                                 |
+            |                                 |   # below     # above
+inner fence |    -1.095                 8.385 |         0           0
+outer fence |     -4.65                 11.94 |         0           0
+
+. capture noisily lv y, tail(4) generate
+
+ #     60                    y
+             ---------------------------------
+ M     30.5 |                3.405            |    spread  pseudosigma
+ F     15.5 |      2.46      3.645       4.83 |      2.37    1.768262
+        1   |      1.82      4.425       7.03 |      5.21    1.145986
+            |                                 |
+            |                                 |   # below     # above
+inner fence |    -1.095                 8.385 |         0           0
+outer fence |     -4.65                 11.94 |         0           0
+
+. capture noisily list _mid _psigma in 1/5
+
+     +------------------+
+     |  _mid    _psigma |
+     |------------------|
+  1. | 3.405          . |
+  2. | 3.645   1.768262 |
+  3. |     .          . |
+  4. |     .          . |
+  5. |     .          . |
+     +------------------+
+
+. capture noisily lv y, generate
+
+ #     60                    y
+             ---------------------------------
+ M     30.5 |                3.405            |    spread  pseudosigma
+ F     15.5 |      2.46      3.645       4.83 |      2.37    1.768262
+ E      8   |      2.12      3.935       5.75 |      3.63    1.591627
+ D      4.5 |     1.965     4.0075       6.05 |     4.085    1.377441
+ C      2.5 |      1.87       4.12       6.37 |       4.5    1.249835
+ B      1.5 |      1.82       4.34       6.86 |      5.04    1.218782
+        1   |      1.82      4.425       7.03 |      5.21    1.145986
+            |                                 |
+            |                                 |   # below     # above
+inner fence |    -1.095                 8.385 |         0           0
+outer fence |     -4.65                 11.94 |         0           0
+
+. capture noisily lv x, tail(3)
+
+ #     60                    x
+             ---------------------------------
+ M     30.5 |                    7            |    spread  pseudosigma
+ F     15.5 |         4          7         10 |         6    4.476612
+        1   |         1          7         13 |        12    2.639507
+            |                                 |
+            |                                 |   # below     # above
+inner fence |        -5                    19 |         0           0
+outer fence |       -14                    28 |         0           0
+
+. capture noisily stem x, width(5)
+
+Stem-and-leaf plot for x
+
+  0* | 1111222223333344444
+  0. | 55555666677778888899999
+  1* | 000001111122223333
+
+. capture noisily stem x, width(2)
+
+Stem-and-leaf plot for x
+
+  0* | 1111
+  0t | 2222233333
+  0f | 4444455555
+  0s | 66667777
+  0. | 8888899999
+  1* | 0000011111
+  1t | 22223333
+
+. capture noisily stem x, width(10)
+
+Stem-and-leaf plot for x
+
+  0* | 111122222333334444455555666677778888899999
+  1* | 000001111122223333
+
+. capture noisily stem y, lines(2)
+
+Stem-and-leaf plot for y
+
+y rounded to nearest multiple of .01
+plot in units of .01
+
+  18* | 22
+  18. | 
+  19* | 22
+  19. | 
+  20* | 1
+  20. | 
+  21* | 222
+  21. | 
+  22* | 333
+  22. | 
+  23* | 4
+  23. | 
+  24* | 
+  24. | 6666
+  25* | 
+  25. | 99
+  26* | 
+  26. | 
+  27* | 22
+  27. | 
+  28* | 
+  28. | 666
+  29* | 
+  29. | 
+  30* | 00
+  30. | 
+  31* | 
+  31. | 6
+  32* | 
+  32. | 
+  33* | 2222
+  33. | 
+  34* | 
+  34. | 9
+  35* | 
+  35. | 
+  36* | 
+  36. | 77
+  37* | 
+  37. | 
+  38* | 
+  38. | 666
+  39* | 
+  39. | 
+  40* | 
+  40. | 66
+  41* | 
+  41. | 
+  42* | 
+  42. | 66
+  43* | 
+  43. | 
+  44* | 
+  44. | 8888
+  45* | 
+  45. | 
+  46* | 
+  46. | 
+  47* | 1
+  47. | 
+  48* | 
+  48. | 
+  49* | 
+  49. | 555
+  50* | 
+  50. | 
+  51* | 
+  51. | 
+  52* | 111
+  52. | 
+  53* | 
+  53. | 
+  54* | 
+  54. | 7
+  55* | 
+  55. | 
+  56* | 
+  56. | 
+  57* | 
+  57. | 555
+  58* | 
+  58. | 
+  59* | 
+  59. | 
+  60* | 
+  60. | 555
+  61* | 
+  61. | 
+  62* | 
+  62. | 
+  63* | 
+  63. | 
+  64* | 
+  64. | 
+  65* | 
+  65. | 
+  66* | 
+  66. | 9
+  67* | 
+  67. | 
+  68* | 
+  68. | 
+  69* | 
+  69. | 
+  70* | 3
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1913_base_stats.log
+  log type:  text
+ closed on:  24 Oct 2026, 09:52:30
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

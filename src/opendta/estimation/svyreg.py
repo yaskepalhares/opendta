@@ -119,9 +119,10 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
         res = maximize(fun, b0)
         A = np.linalg.inv(-res.H)
         Z_ = (X * (wv * scores(res.b) * inside)[:, None]) @ A
-        return res.b, Z_, {}
+        return res.b, Z_, {"_res": res, "_A": A}
 
     b, Z, extra = fit(w)
+    res_ml, A_ml = extra.pop("_res", None), extra.pop("_A", None)
     n_rep = None
     if dd.replicated:
         V, n_rep = dd.rep_variance(lambda ww: fit(ww * inside)[0], b)
@@ -179,8 +180,71 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     macros = [("prefix", "svy"), ("cmdname", cmd), ("cmd", cmd if cmd != "logistic" else "logistic"),
               ("cmdline", f"svy: {cmd} {args.strip()}"), ("vce", dd.vce), ("vcetype", dd.vcetype),
               ("depvar", smp.depname), ("properties", "b V"), ("title", f"Survey: {_TITLES[cmd]}")]
-    post(s, est, scalars, macros, est_mask)
+    if cmd in ("logit", "probit", "cloglog") and res_ml is not None and subpop is None and not dd.replicated:
+        _post_ml(s, est, cmd, args, d, dd, res_ml, A_ml, (Swor, Swr), pos, X, w, y, inside, N, pop, df, F, df1,
+                 names, est_mask)
+    else:
+        post(s, est, scalars, macros, est_mask)
     _display(s, est)
+
+
+def _post_ml(s, est, cmd, args, d, dd, res, A, srs, pos, X, w, y, inside, N, pop, df, F, df1, names,
+             est_mask) -> None:
+    """e() of svy: logit, probit and cloglog: the results of the command itself (iterations, ilog,
+    gradient, ...) and those of the design, in the order of Stata's ereturn list (compat 1909 for
+    cloglog, 1913 for logit; VERIFY probit, which is taken to be like logit)."""
+    from ..commands.matrix import Matrix
+    from .ml import ilog
+    kk = len(names)
+    Vm = np.zeros((kk, kk))
+    Vm[np.ix_(pos, pos)] = A
+    nm = list(names)
+    head = [("ic", float(res.iterations)), ("k", float(kk)), ("k_dv", 1.0),
+            ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0), ("k_eq_model", 1.0)]
+    if cmd == "cloglog":
+        yb = (y != 0) & inside
+        head += [("N_f", float((inside & ~yb).sum())), ("N_s", float(yb.sum()))]
+    else:
+        head += [("N_cdf", 0.0), ("N_cds", 0.0)]
+    pval = float(st.f.sf(F, df1, df - df1 + 1)) if F < SYS else SYS
+    scalars = head + [("stages", 1.0), ("N", float(N)), ("N_pop", pop), ("N_strata", float(dd.n_strata)),
+                      ("N_psu", float(dd.n_psu)), ("df_r", float(df)), ("N_strata_omit", 0.0),
+                      ("singleton", 0.0), ("k_eq", 1.0), ("rank", float(np.linalg.matrix_rank(est.V))),
+                      ("p", pval), ("F", F), ("df_m", float(df1)), ("census", 0.0)]
+    command = f"{cmd} {args.strip()}".strip()
+    macros = [("cmd", cmd), ("cmdline", f"svy : {command}"), ("prefix", "svy"), ("cmdname", cmd),
+              ("command", command)]
+    if d.weight:
+        macros += [("wexp", f"= {d.weight}"), ("wtype", d.wtype or "pweight")]
+    macros += [("estat_cmd", "svy_estat"), ("vce", dd.vce), ("vcetype", dd.vcetype),
+               ("title", f"Survey: {_TITLES[cmd]}")]
+    if d.weight:
+        macros.append(("wvar", d.weight))
+    macros.append(("singleunit", d.singleunit))
+    if d.psu and d.psu != "_n":
+        macros.append(("su1", d.psu))
+    if d.strata:
+        macros.append(("strata1", d.strata))
+    macros.append(("properties", "b V"))
+    tail = [("opt", "moptimize"), ("user", f"mopt__{cmd}_d2()"), ("ml_method", "d2"), ("technique", "nr"),
+            ("which", "max"), ("depvar", est.depvar)]
+    if cmd == "cloglog":
+        macros += [("depvar", est.depvar), ("which", "max"), ("technique", "nr"), ("ml_method", "e2"),
+                   ("user", "clog_lf"), ("opt", "moptimize"), ("predict", "clog_p")]
+    else:
+        macros += [("predict", f"{cmd}_p"),
+                   ("marginsnotok", "stdp DBeta DEviance DX2 DDeviance Hat Number Residuals RStandard SCore")] + tail
+    grad = Matrix(np.asarray(res.g).reshape(1, -1), ["r1"], [nm[i] for i in pos])
+    mats = [("V_modelbased", Matrix(Vm, nm, nm)), ("V_srs", Matrix(srs[0], nm, nm)),
+            ("_N_strata_certain", Matrix(np.zeros((1, 1)))), ("_N_strata_single", Matrix(np.zeros((1, 1)))),
+            ("_N_strata", Matrix(np.array([[float(dd.n_strata)]])))]
+    if cmd == "cloglog":
+        mats += [("gradient", grad), ("ilog", Matrix(ilog(res)))]
+    else:
+        mns = (np.average(X[inside], axis=0, weights=w[inside]) if inside.any() else np.zeros(X.shape[1]))
+        mats += [("mns", Matrix(mns.reshape(1, -1), ["r1"], [nm[i] for i in pos])),
+                 ("rules", Matrix(np.zeros((1, 4)))), ("ilog", Matrix(ilog(res))), ("gradient", grad)]
+    post(s, est, scalars, macros, est_mask, extra_mats=mats)
 
 
 def _predict_xb(s, est, stat, mask):

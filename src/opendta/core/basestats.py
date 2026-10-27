@@ -358,33 +358,10 @@ def icc_test(a: dict, model: str, kind: str, r0: float, k: float | None = None) 
             df1 = n - 1
             df2 = (n - 1) * (k - 1) if aa == 0 else \
                 (aa * JMS + bb * EMS) ** 2 / ((aa * JMS) ** 2 / (k - 1) + (bb * EMS) ** 2 / ((n - 1) * (k - 1)))
-        out[which] = (float(F), float(df1), float(df2), float(st.f.sf(F, df1, df2)))
+        # 1 - F(x), as Stata computes it: a tiny p comes out as a multiple of the machine epsilon
+        # (compat 1913: 8.32667268469e-14)
+        out[which] = (float(F), float(df1), float(df2), float(1 - st.f.cdf(F, df1, df2)))
     return out
-
-
-def icc_oneway_unbalanced(y: np.ndarray, g: np.ndarray, level: float = 95.0) -> dict:
-    """One-way random-effects ICC with unequal numbers of ratings per target: the ANOVA mean
-    squares and k0 = (N - sum n_i^2 / N) / (n - 1) in place of the number of raters
-    (VERIFY: Stata's rule for unbalanced data)."""
-    labels, inv, ng = np.unique(g, return_inverse=True, return_counts=True)
-    n, N = len(labels), len(y)
-    gm = y.mean()
-    means = np.bincount(inv, y) / ng
-    ssb = float((ng * (means - gm) ** 2).sum())
-    ssw = float(((y - means[inv]) ** 2).sum())
-    BMS, WMS = ssb / (n - 1), ssw / (N - n)
-    k0 = (N - float((ng ** 2).sum()) / N) / (n - 1)
-    alpha = 1 - level / 100
-    F = BMS / WMS
-    df1, df2 = n - 1, N - n
-    ind = (BMS - WMS) / (BMS + (k0 - 1) * WMS)
-    FL = F / st.f.ppf(1 - alpha / 2, df1, df2)
-    FU = F * st.f.ppf(1 - alpha / 2, df2, df1)
-    lo, hi = (FL - 1) / (FL + k0 - 1), (FU - 1) / (FU + k0 - 1)
-    sb = lambda r: k0 * r / (1 + (k0 - 1) * r)   # noqa: E731
-    return {"ind": ind, "ind_lb": lo, "ind_ub": hi, "avg": sb(ind), "avg_lb": sb(lo), "avg_ub": sb(hi),
-            "F": F, "df1": df1, "df2": df2, "p": float(st.f.sf(F, df1, df2)), "n": n, "k": k0,
-            "BMS": BMS, "WMS": WMS, "JMS": math.nan, "EMS": math.nan}
 
 
 def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0, center: str = "", exact: bool = False) -> dict:
@@ -466,26 +443,28 @@ def effect_sizes(n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
                  level: float = 95.0, unequal: bool = False, welch: bool = False) -> dict:
     """Cohen's d, Hedges's g, Glass's Delta (both controls) and the point-biserial correlation
     of a two-group mean comparison, with noncentral-t confidence intervals. unequal (or welch):
-    d is standardized by sqrt((s1^2 + s2^2)/2) and the interval uses the t statistic of unequal
-    variances with Satterthwaite's (or Welch's) degrees of freedom (VERIFY: Stata's formulas)."""
-    df = n1 + n2 - 2
-    sp = math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / df)
+    d and g stay those of the pooled standard deviation, and their intervals use Satterthwaite's
+    (or Welch's) degrees of freedom; the point-biserial r comes from the t statistic of unequal
+    variances (compat 1913)."""
+    df0 = n1 + n2 - 2
+    sp = math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / df0)
     diff = m1 - m2
     d = diff / sp
     cn = math.sqrt(n1 * n2 / (n1 + n2))
+    df = df0
+    t = d * cn
     if unequal or welch:
         a1, a2 = s1 * s1 / n1, s2 * s2 / n2
         if welch:
             df = (a1 + a2) ** 2 / (a1 * a1 / (n1 + 1) + a2 * a2 / (n2 + 1)) - 2
         else:
             df = (a1 + a2) ** 2 / (a1 * a1 / (n1 - 1) + a2 * a2 / (n2 - 1))
-        sp = math.sqrt((s1 * s1 + s2 * s2) / 2)
-        d = diff / sp
-        cn = sp / math.sqrt(a1 + a2)          # t = d * cn, as in the equal-variance case
-    J = math.exp(math.lgamma(df / 2) - math.lgamma((df - 1) / 2)) / math.sqrt(df / 2)
-    t = d * cn
+    J = math.exp(math.lgamma(df0 / 2) - math.lgamma((df0 - 1) / 2)) / math.sqrt(df0 / 2)
     lo, hi = _nct_ci(t, df, level)
     out = {"cohen": (d, lo / cn, hi / cn), "hedges": (J * d, J * lo / cn, J * hi / cn)}
+    if unequal or welch:
+        t = diff / math.sqrt(a1 + a2)
+        lo, hi = _nct_ci(t, df, level)
     for key, sd, nc in (("glass1", s1, n1), ("glass2", s2, n2)):
         D = diff / sd
         glo, ghi = _nct_ci(D * cn, nc - 1, level)       # noncentral t with the control's df
@@ -652,6 +631,34 @@ def boxcox_fit(y: np.ndarray, X: np.ndarray) -> dict:
             "nit": int(getattr(res, "nit", 0)), "ll_at": lambda t: boxcox_ll(t, y, X), "z": z}
 
 
+def profile_newton(f, start):
+    """Newton-Raphson on a concentrated log likelihood f(params) with numerical derivatives, from
+    `start`: the iterations of boxcox (compat 1913: from lambda = 1, the same values as Stata's
+    log). Returns the ml.MLResult."""
+    from ..estimation import ml
+
+    def fun(pv, todo):
+        f0 = f(pv)
+        if todo == 0:
+            return f0, None, None
+        k = len(pv)
+        h = 1e-4 * np.maximum(np.abs(pv), 1.0)
+        g = np.zeros(k)
+        H = np.zeros((k, k))
+        for i in range(k):
+            e = np.zeros(k)
+            e[i] = h[i]
+            fp, fm = f(pv + e), f(pv - e)
+            g[i] = (fp - fm) / (2 * h[i])
+            H[i, i] = (fp - 2 * f0 + fm) / h[i] ** 2
+            for j in range(i):
+                d = np.zeros(k)
+                d[j] = h[j]
+                H[i, j] = H[j, i] = (f(pv + e + d) - f(pv + e - d) - f(pv - e + d) + f(pv - e - d)) / (4 * h[i] * h[j])
+        return f0, g, H
+    return ml.maximize(fun, np.asarray(start, dtype=float))
+
+
 def boxcox_general(y: np.ndarray, Xt: np.ndarray, Xn: np.ndarray, model: str) -> dict:
     """Box-Cox models with transformed regressors: y^(theta) = Xt^(lambda) b + Xn c + e, where Xn
     holds the untransformed regressors and the constant. model: rhsonly (theta = 1, y not
@@ -683,13 +690,18 @@ def boxcox_general(y: np.ndarray, Xt: np.ndarray, Xn: np.ndarray, model: str) ->
         return -n / 2 * (math.log(2 * math.pi) + 1) - n / 2 * math.log(rss / n) + jac, b, rss
 
     npar = 2 if model == "theta" else 1
-    best = None
-    for start in ([1.0] * npar, [0.0] * npar, [0.5] * npar, [-0.5] * npar):
-        r = so.minimize(lambda pv: -prof(pv)[0], np.array(start), method="Nelder-Mead",
-                        options={"xatol": 1e-10, "fatol": 1e-12, "maxiter": 20000})
-        if best is None or r.fun < best.fun:
-            best = r
-    pv = best.x
+    # Newton-Raphson from 1 as Stata; a search from several points if it does not converge
+    nr = profile_newton(lambda pv: prof(pv)[0], [1.0] * npar)
+    if nr.converged:
+        pv, log, nit = nr.b, nr.log, nr.iterations
+    else:
+        best = None
+        for start in ([1.0] * npar, [0.0] * npar, [0.5] * npar, [-0.5] * npar):
+            r = so.minimize(lambda pv: -prof(pv)[0], np.array(start), method="Nelder-Mead",
+                            options={"xatol": 1e-10, "fatol": 1e-12, "maxiter": 20000})
+            if best is None or r.fun < best.fun:
+                best = r
+        pv, log, nit = best.x, [], int(best.nit)
     ll, b, rss = prof(pv)
     sigma = math.sqrt(rss / n)
     th, lam = unpack(pv)
@@ -720,7 +732,7 @@ def boxcox_general(y: np.ndarray, Xt: np.ndarray, Xn: np.ndarray, model: str) ->
         """Log likelihood with every transformation parameter set to c."""
         return prof(np.full(npar, c))[0]
     return {"theta": th, "lambda": lam, "params": pv, "ll": ll, "b": b, "sigma": sigma, "V": (V + V.T) / 2,
-            "nit": int(best.nit), "ll_at": ll_at}
+            "nit": nit, "log": log, "ll_at": ll_at}
 
 
 # ---------------------------------------------------------------------------

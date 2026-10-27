@@ -346,6 +346,7 @@ def _setup(s: "Session", m: Model) -> None:
         full[m.touse] = m.w
         ds.get(m.wvar).data = full
         g["ML_w"] = m.wvar
+        m.wvar_posted = m.wvar          # e(wvar) of ml, svy (the variable is dropped at the end)
     else:
         g.pop("ML_w", None)
     s._ml_active = m
@@ -682,18 +683,26 @@ def _constraint_rows(s: "Session", m: Model, numlist) -> np.ndarray:
 # search, rescale and maximize
 # ---------------------------------------------------------------------------
 
-def _line(out, lead: str, ll: float, note: str = "") -> None:
+def _line(out, lead: str, ll: float, note: str = "", label: str = "log likelihood") -> None:
     shown = "-<inf>" if ll == -np.inf or not np.isfinite(ll) else _g10(ll)
-    out.write(f"{lead:<14} log likelihood = {shown:>10}{note}\n", "text")
+    out.write(f"{lead:<14} {label} = {shown:>10}{note}\n", "text")
 
 
-def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
+def _pseudo(m: Model, mo: dict) -> bool:
+    """The log is of a pseudolikelihood with robust or cluster variances, pweights and svy
+    (compat 1913)."""
+    vce = str(mo["vce"]).split()[0].lower() if isinstance(mo.get("vce"), str) else ""
+    return (bool(mo.get("robust")) or vce.startswith(("rob", "cl")) or bool(m.clustvar)
+            or m.wtype == "pweight" or getattr(m, "design", None) is not None)
+
+
+def _start(s: "Session", m: Model, fun, out, quiet: bool, label: str = "log likelihood") -> np.ndarray:
     """Initial point: the given one, else zeros; if the evaluator fails there, a search for a
     feasible point (VERIFY: Stata's random search is undocumented), then rescaling."""
     b = np.zeros(m.nb) if m.b0 is None else m.b0.copy()
     ll = fun(b, 0)[0]
     if not quiet:
-        _line(out, "initial:", ll, "  (could not be evaluated)" if not np.isfinite(ll) else "")
+        _line(out, "initial:", ll, "  (could not be evaluated)" if not np.isfinite(ll) else "", label)
     if not np.isfinite(ll):
         rng = np.random.default_rng(1)
         best = None
@@ -713,10 +722,11 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
             raise StataError(491, "could not find feasible values")
         b, ll = best
         if not quiet:
-            _line(out, "feasible:", ll)
+            _line(out, "feasible:", ll, label=label)
     elif m.b0 is None and any(e.cons for e in m.eqs):
-        # alternative: constants set to -.5 or .5, kept if the likelihood improves (VERIFY: the
-        # reference log shows constant -.5 for a logit with 43% of ones; Stata's rule is not documented)
+        # alternative: constants set to -.5 or .5, the better of the two, kept even when it is
+        # worse than the initial point (compat 1913: with pweights the alternative -279.10 follows
+        # the initial -277.95, and rescale starts from it; VERIFY: Stata's rule is not documented)
         best = None
         for c in (-0.5, 0.5):
             cand = b.copy()
@@ -724,12 +734,12 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
                 if e.cons:
                     cand[e.start + e.k - 1] = c
             v = fun(cand, 0)[0]
-            if np.isfinite(v) and v > ll and (best is None or v > best[1]):
+            if np.isfinite(v) and (best is None or v > best[1]):
                 best = (cand, v)
         if best is not None:
             b, ll = best
             if not quiet:
-                _line(out, "alternative:", ll)
+                _line(out, "alternative:", ll, label=label)
     # rescale: best multiple of the whole vector, then of each equation
     def rescale(idx_sets):
         nonlocal b, ll
@@ -747,11 +757,11 @@ def _start(s: "Session", m: Model, fun, out, quiet: bool) -> np.ndarray:
                 ll = bestv
     rescale([np.arange(m.nb)])
     if not quiet:
-        _line(out, "rescale:", ll)
+        _line(out, "rescale:", ll, label=label)
     if m.K > 1:
         rescale([np.arange(e.start, e.start + e.k) for e in m.eqs])
         if not quiet:
-            _line(out, "rescale eq:", ll)
+            _line(out, "rescale eq:", ll, label=label)
     return b
 
 
@@ -783,9 +793,10 @@ def _maximize(s: "Session", args: str) -> None:
     mo = dict(m.opts)
     mo.update(o)
     nolog = bool(mo.get("nolog"))
+    label = "log pseudolikelihood" if _pseudo(m, mo) else "log likelihood"
     try:
         fun = _fun(s, m)
-        b = _start(s, m, fun, out, nolog)
+        b = _start(s, m, fun, out, nolog, label)
         if getattr(m, "cns", None) is not None:
             # constraints(): b = T bc + a, maximized over bc
             T, a = m.cns_T, m.cns_a
@@ -802,7 +813,7 @@ def _maximize(s: "Session", args: str) -> None:
         if not nolog:
             for it, ll, note in r.log:
                 lead = f"Iteration {it}:"
-                out.write(f"{lead:<14} log likelihood = {_g10(ll):>10}{note}  \n", "text")
+                out.write(f"{lead:<14} {label} = {_g10(ll):>10}{note}  \n", "text")
             if not r.converged:
                 out.write("convergence not achieved\n", "error")
         m.result = r
@@ -841,6 +852,11 @@ def _variance(s: "Session", m: Model, fun, mo: dict) -> None:
         pos[np.flatnonzero(dd.mask)] = np.arange(dd.n)
         Z[pos[m.touse]] = S
         m.V = Vh @ dd.variance(Z) @ Vh
+        # for e(V_srs): the linearized scores and the weights of the sample on the design rows
+        wd = np.zeros(dd.n)
+        wd[pos[m.touse]] = dd.w[pos[m.touse]]
+        from .svy import srs_variances
+        m._srs = srs_variances(Z @ Vh, wd, dd, int(m.touse.sum()))
         m.vcetype, m.vce = "Linearized", "linearized"
         return
     if robust or vce.startswith("opg"):
@@ -943,18 +959,46 @@ def _post(s: "Session", m: Model, mo: dict) -> None:
         extra.append(("V_modelbased", Matrix(m.Vh, names, names)))
     if getattr(m, "cns", None) is not None:
         cm = Matrix(m.cns.copy(), [f"r{i}" for i in range(1, len(m.cns) + 1)], names + ["_r"])
-        cm.coleq = eqs + ["_"]
-        extra.append(("Cns", cm))
+        # the last column is _Cns:_r, and e(Cns) comes right after e(V) (compat 1913)
+        cm.coleq = eqs + ["_Cns" if any(q not in ("", "_") for q in eqs) else "_"]
+        extra.insert(0, ("Cns", cm))
     dd = getattr(m, "design", None)
     if dd is not None:
+        # ml, svy: the results in the order of Stata's ereturn list, with the design-based F test
+        # of the first equation and no e(ll) nor e(rank) (compat 1913)
+        from .svyreg import _adjusted_F
         d = dd.d
-        scalars += [("df_r", float(dd.df)), ("N_strata", float(dd.n_strata)), ("N_psu", float(dd.n_psu)),
-                    ("N_pop", float(m.w.sum()))]
-        macros += [("prefix", "svy")]
-        if d.psu:
-            macros.append(("su1", d.psu))
+        F, df1, df2 = _adjusted_F(r.b, V, keep, dd.df) if keep else (SYS, 0, 0)
+        m.svyF = (F, df1, df2)
+        scalars = [("ic", float(r.iterations)), ("k", float(m.nb)), ("k_eq", float(k_eq)),
+                   ("k_dv", float(len(m.ysets))), ("converged", 1.0 if r.converged else 0.0),
+                   ("rc", 0.0 if r.converged else 430.0), ("N_psu", float(dd.n_psu)),
+                   ("N_strata", float(dd.n_strata)), ("df_r", float(dd.df)), ("N", float(m.N)),
+                   ("N_pop", float(m.w.sum())), ("census", 0.0), ("singleton", 0.0), ("N_strata_omit", 0.0),
+                   ("stages", 1.0), ("k_eq_model", float(k_eq))]
+        if F < SYS:
+            scalars += [("df_m", float(df1)), ("F", F), ("p", float(st_f_sf(F, df1, df2)))]
+        macros = [("cmd", "ml"), ("svyml", "svyml"), ("opt", "moptimize"), ("predict", "ml_p"),
+                  ("singleunit", d.singleunit)]
         if d.strata:
             macros.append(("strata1", d.strata))
+        if d.psu:
+            macros.append(("su1", d.psu))
+        wv = getattr(m, "wvar_posted", "")
+        if wv:
+            # Stata's is a temporary variable (__000004 in compat 1913)
+            macros += [("wvar", wv), ("wexp", f"= {wv}")]
+        macros += [("wtype", "pweight"), ("vcetype", m.vcetype), ("vce", m.vce), ("prefix", "svy"),
+                   ("user", m.prog), ("ml_method", m.method), ("technique", "nr"), ("which", "max"),
+                   ("depvar", " ".join(m.ysets)), ("properties", "b V")]
+        Swor, Swr = m._srs
+        extra += [("V_srssubwr", Matrix(Swr, names, names)), ("V_srssub", Matrix(Swor, names, names)),
+                  ("V_srswr", Matrix(Swr, names, names)), ("V_srs", Matrix(Swor, names, names)),
+                  ("_N_strata_certain", Matrix(np.zeros((1, 1)))), ("_N_strata_single", Matrix(np.zeros((1, 1)))),
+                  ("_N_strata", Matrix(np.array([[float(dd.n_strata)]])))]
+        post(s, est, scalars, macros, m.touse.copy(), extra_mats=extra)
+        s._estimates = est
+        return
     sample = m.touse.copy()
     post(s, est, list(reversed(scalars)), list(reversed(macros)), sample, extra_mats=extra)
     s._estimates = est
@@ -977,17 +1021,16 @@ def _display(s: "Session", m: Model, mo: dict) -> None:
     elif not mo.get("noheader") and getattr(m, "design", None) is not None:
         # svy: the design header and the design-based F test of the first equation (VERIFY)
         from .svy import format_size
-        from .svyreg import _adjusted_F
         dd = m.design
-        keep = [i for i, (q, c) in enumerate(m.names) if q == m.eqs[0].name and c != "_cons"]
-        F, df1, df2 = _adjusted_F(m.result.b, m.V, keep, dd.df) if keep else (SYS, 0, 0)
+        F, df1, df2 = m.svyF
         out.write(f"\n{est.title}\n\n" if est.title else "\n", "text")
-        rows = [(f"Number of strata = {dd.n_strata:>7,}", "Number of obs", f"{m.N:,}"),
-                (f"Number of PSUs   = {dd.n_psu:>7,}", "Population size", format_size(float(m.w.sum()))),
+        # the layout of svy: regress (compat 1913)
+        rows = [(f"Number of strata   = {dd.n_strata:>9,}", "Number of obs", f"{m.N:,}"),
+                (f"Number of PSUs     = {dd.n_psu:>9,}", "Population size", format_size(float(m.w.sum()))),
                 ("", "Design df", f"{dd.df:,}")]
         if F < SYS:
-            rows += [("", f"F({df1:>3},{df2:>9})" if isinstance(df2, int) else f"F({df1:>3},{df2:>9.1f})",
-                      g9(F, "%10.2f")), ("", "Prob > F", g9(float(st_f_sf(F, df1, df2)), "%10.4f"))]
+            rows += [("", f"F({df1:>4},{df2:>7})", g9(F, "%10.2f")),
+                     ("", "Prob > F", g9(float(st_f_sf(F, df1, df2)), "%10.4f"))]
         for left, lab, val in rows:
             out.write(f"{left:<48}{lab:<18}= ", "text")
             out.write(f"{val:>10}\n", "result")

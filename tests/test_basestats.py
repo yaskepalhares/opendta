@@ -168,7 +168,7 @@ def test_loneway_matches_oneway(run):
     out = run(DATA + "loneway y g\noneway y g")
     F = st.f_oneway(*[_arr(run, "y")[_arr(run, "g") == k] for k in (1, 2, 3, 4)]).statistic
     out2 = run("loneway y g")
-    assert abs(run.session.r["F"] - F) < 1e-10
+    assert f"{F:.2f}" in out2
     assert run.session.r["lb"] < run.session.r["rho"] < run.session.r["ub"]
     assert "Intraclass" in out2
 
@@ -434,13 +434,15 @@ def test_ml_constraints_and_svy(run):
 
 
 def test_esize_unequal_and_pwmean_unequal(run):
+    # d keeps the pooled standard deviation; the interval uses Satterthwaite's df (compat 1913)
     out = run("esizei 20 5 2 25 4 3, unequal")
-    assert "Cohen's d |   .3922323" in out          # (5 - 4) / sqrt((4 + 9) / 2)
+    assert "Cohen's d |   .3837451    -.2121849    .9751812" in out
+    assert "Satterthwaite's degrees of freedom =  41.7840" in out
     run("clear\nset obs 30\ngen g = 1 + mod(_n, 3)\ngen y = g * 2 + mod(_n * 7, 5) * g")
-    out = run("pwmean y, over(g) unequal effects")
-    assert "unequal variances" in out
-    run("esizei 20 5 2 25 4 3, welch")
-    assert run.rc == 0
+    run("pwmean y, over(g) unequal effects")
+    assert run.rc == 198                                  # not an option of pwmean
+    out = run("esizei 20 5 2 25 4 3, welch")
+    assert "Welch's degrees of freedom =  43.5194" in out
 
 
 def test_icc_testvalue_and_unbalanced(run):
@@ -451,8 +453,10 @@ def test_icc_testvalue_and_unbalanced(run):
     f0 = run.eval("r(icc_i_F)")
     run("quietly icc y t, testvalue(0)")
     assert run.eval("r(icc_i_F)") == f0
-    run("drop in 3\nquietly icc y t")
-    assert run.rc == 0 and abs(run.eval("r(N_rater)") - 3.9) < .01
+    # a target with fewer ratings is left out (compat 1913)
+    out = run("drop in 3\nicc y t")
+    assert "(1 target omitted from computation because of unbalanced data)" in out
+    assert run.eval("r(N_target)") == 9 and run.eval("r(N_rater)") == 4
 
 
 def test_loneway_options_ameans_weights_lv_stem(run):
@@ -476,7 +480,10 @@ def test_boxcox_other_models(run):
     run("clear\nset obs 60\ngen x = 1 + mod(_n*7, 13)\ngen z = mod(_n, 3)\n"
         "gen y = round(exp(.5 + .1*x + .2*z + mod(_n*11,7)/20), .01)")
     for model in ("rhsonly", "lambda", "theta"):
-        run(f"quietly boxcox y x z, model({model}) notrans(z) nolog")
+        # z is transformed too, and it has zeros (compat 1913)
+        out = run(f"boxcox y x z, model({model}) notrans(z) nolog")
+        assert run.rc == 411 and "z contains observations that are not strictly positive" in out
+        run(f"quietly boxcox y x, model({model}) notrans(z) nolog")
         assert run.rc == 0 and run.eval(f'e(model) == "{model}"') == 1
     # the lambda model at lambda = 1 is the linear regression
     run("quietly boxcox y x, model(lambda) nolog")
