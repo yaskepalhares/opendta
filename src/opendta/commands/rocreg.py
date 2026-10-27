@@ -311,12 +311,12 @@ def _display(s: "Session", o, refname, classes, spec, colnames, observed, boot, 
             _table_head(out, c, level, note)
             rows = [("_cons", base)] + [(v, base + 1 + j) for j, v in enumerate(roccov)]
             for lab, j in rows:
-                _row(out, lab, observed[j], boot, j, level)
+                _row(out, lab, observed[j], boot, j, level, tags=boot is not None)
             out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
             out.write(f"{'probit':>12} |\n", "text")
             out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
             j = base + 1 + len(roccov)
-            _row(out, "_cons", observed[j], boot, j, level)
+            _row(out, "_cons", observed[j], boot, j, level, tags=boot is not None)
             out.write("-" * 78 + "\n", "text")
             if not roccov:
                 out.write("\n", "text")
@@ -344,7 +344,7 @@ def _table_head(out, head: str, level: float, note: str = "") -> None:
     out.write("-" * 13 + "+" + "-" * 64 + "\n", "text")
 
 
-def _row(out, label, obs, boot, j, level) -> None:
+def _row(out, label, obs, boot, j, level, tags: bool = True) -> None:
     """Observed value, bootstrap bias and standard error, and the normal (N), percentile (P)
     and bias-corrected (BC) intervals; missing without the bootstrap."""
     if boot is None:
@@ -355,6 +355,11 @@ def _row(out, label, obs, boot, j, level) -> None:
         cis = [(boot[k][0][j], boot[k][1][j]) for k in ("normal", "percentile", "bc")]
     out.write(f"{label:>12} |", "text")
     out.write(f"{_f(obs):>12}{_f(bias):>11}{_f(se):>12}{_f(cis[0][0]):>13}{_f(cis[0][1]):>11}", "result")
+    if not tags:
+        # the probit rows without the bootstrap: one line (compat 1601); with it, the three
+        # intervals (compat 1912)
+        out.write("\n", "text")
+        return
     out.write("  (N)\n", "text")
     for tag, (lo, hi) in zip(("  (P)", " (BC)"), cis[1:]):
         out.write(f"{'':>12} |{'':>35}", "text")
