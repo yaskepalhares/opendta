@@ -17,7 +17,7 @@
 {title:Description}
 
 {pstd}
-{cmd:xtgls} fits panel-data linear models by feasible generalized least squares with heteroskedastic or cross-sectionally correlated errors and AR(1) autocorrelation; {cmd:xtpcse} keeps the pooled OLS (or Prais-Winsten) coefficients and computes panel-corrected standard errors. {cmd:xtregar} fits fixed- and random-effects models with AR(1) disturbances, {cmd:xtrc} the Swamy random-coefficients model, {cmd:xthtaylor} the Hausman-Taylor estimator and {cmd:xtivreg} panel instrumental-variables estimators (G2SLS and EC2SLS random effects, between, within and first differences).
+{cmd:xtgls} fits panel-data linear models by feasible generalized least squares with heteroskedastic or cross-sectionally correlated errors and AR(1) autocorrelation; {cmd:xtpcse} keeps the pooled OLS (or Prais-Winsten) coefficients and computes panel-corrected standard errors. {cmd:xtregar} fits fixed- and random-effects models with AR(1) disturbances, {cmd:xtrc} the Swamy random-coefficients model ({cmd:betas} shows the predicted coefficients of each panel), {cmd:xthtaylor} the Hausman-Taylor estimator and {cmd:xtivreg} panel instrumental-variables estimators (G2SLS and EC2SLS random effects, between, within and first differences; {cmd:first} shows the first-stage regressions and {cmd:regress} treats every regressor as exogenous).
 {p_end}
 
 {title:Options}

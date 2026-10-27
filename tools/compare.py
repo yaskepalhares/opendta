@@ -38,13 +38,14 @@ _SKIP = re.compile(r"^\.\s+((capture\s+)?(noisily\s+)?(do|run)|log close|log usi
 
 
 # .dta date stamp (describe): changes on every run
-_STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b")
+# dates: "24 Oct 2026 09:52" and, in SAS XPORT files, "24oct26:09:52:24"
+_STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b|\b\d{2}[a-z]{3}\d{2}:\d{2}:\d{2}:\d{2}\b")
 # absolute path of the case's temporary files (graph export to PDF shows the full path, which
 # changes from machine to machine): absolute path of odta_* files (macOS/Linux "/..."; Windows
 # "C:\\...")
 # e(datasignature): Stata's checksum algorithm is undocumented; N and k are compared, the two
 # checksums are not
-_DATASIG = re.compile(r'(e\(datasignature\) : "\d+:\d+):\d+:\d+"')
+_DATASIG = re.compile(r'(e\(datasignature\) : "\d+:\d+)(?:\(\d+\))?:\d+:\d+"')
 _ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 
 
