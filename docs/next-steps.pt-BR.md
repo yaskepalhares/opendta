@@ -105,7 +105,7 @@ Feito na fase 16 (caso 1902), exceto mais de um nível de efeitos aleatórios no
 
 ### 6. Dados em painel ✅
 
-Feito na fase 19 (caso 1905), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar`, `xtrc`, `xtivreg` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
+Feito nas fases 19 e 28 (casos 1905 e 1914), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
 
 ### 7. Estatística básica (3–4 h, ~135 mil tokens)
 

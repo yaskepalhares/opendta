@@ -379,6 +379,24 @@ def display_xtreg(s: "Session", est: Estimates, *, header: bool = True, table: b
         out.write("\n", "text")
         title = {"fe": "Fixed-effects (within) regression", "re": "Random-effects GLS regression",
                  "be": "Between regression (regression on group means)"}[est.model]
+        if est.model == "fe" and getattr(s, "_xtreg_old", False):
+            # the first stage of xtivreg, fe shows the older layout of the header (compat 1914)
+            rows = [(title, "Number of obs", comma(x["N"])), (f"Group variable: {x['pvar']}", "Number of groups",
+                                                               comma(x["G"])), None,
+                    (f"R-sq:  within  = {x['r2_w']:.4f}", "Obs per group: min", f"{x['tmin']}"),
+                    (f"       between = {x['r2_b']:.4f}", "avg", f"{x['tbar']:.1f}"),
+                    (f"       overall = {x['r2_o']:.4f}", "max", f"{x['tmax']}"), None,
+                    ("", f"F({int(x['df_m'])},{int(x['df_r'])})", g(x['F'], '%10.2f')),
+                    ('corr(u_i, Xb)  = ' + format(x['corr'], '.4f'), "Prob > F", g(x['pF'], '%10.4f')), None]
+            for row in rows:
+                if row is None:
+                    out.write("\n", "text")
+                    continue
+                lft, rl, rv = row
+                out.write(f"{lft:<48}" + (f"{rl:>18} " if rl in ("avg", "max") else f"{rl:<19}") + "=", "text")
+                out.write(f"{rv:>10}\n", "result")
+            header = False
+    if header:
         right_top = [("Number of obs", comma(x["N"])), ("Number of groups", comma(x["G"]))]
         left = [title, f"Group variable: {x['pvar']}"]
         for lft, (rl, rv) in zip(left, right_top):

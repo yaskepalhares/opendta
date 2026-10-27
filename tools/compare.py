@@ -45,7 +45,7 @@ _STAMP = re.compile(r"\b\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}\b|\b\d{2}[a-z]{3
 # "C:\\...")
 # e(datasignature): Stata's checksum algorithm is undocumented; N and k are compared, the two
 # checksums are not
-_DATASIG = re.compile(r'(e\(datasignature\) : "\d+:\d+):\d+:\d+"')
+_DATASIG = re.compile(r'(e\(datasignature\) : "\d+:\d+)(?:\(\d+\))?:\d+:\d+"')
 _ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 
 

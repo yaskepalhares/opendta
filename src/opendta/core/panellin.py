@@ -285,6 +285,25 @@ def swamy_rc(y: np.ndarray, X: np.ndarray, pi: PanelIndex) -> dict:
     return {"b": b, "V": (V + V.T) / 2, "delta": delta, "bi": bi, "Vi": Vi, "chi2": chi2, "df": k * (G - 1)}
 
 
+def swamy_blup(r: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Best linear predictors of the panel-specific coefficients after swamy_rc and their
+    covariances: beta_i = A_i b + (I - A_i) b_i with A_i = (Delta^-1 + V_i^-1)^-1 Delta^-1, and
+    Var(beta_i) = V + (I - A_i)(V_i - V)(I - A_i)' (Judge et al. 1985; VERIFY against Stata)."""
+    b, V, D, bi, Vi = r["b"], r["V"], r["delta"], r["bi"], r["Vi"]
+    k = len(b)
+    Di = np.linalg.pinv(D)
+    out_b = np.zeros_like(bi)
+    out_V = np.zeros_like(Vi)
+    for g in range(len(bi)):
+        Vgi = np.linalg.inv(Vi[g])
+        A = np.linalg.inv(Di + Vgi) @ Di
+        IA = np.eye(k) - A
+        out_b[g] = A @ b + IA @ bi[g]
+        Vg = V + IA @ (Vi[g] - V) @ IA.T
+        out_V[g] = (Vg + Vg.T) / 2
+    return out_b, out_V
+
+
 # ---------------------------------------------------------------------------
 # two-stage least squares on transformed data
 # ---------------------------------------------------------------------------
