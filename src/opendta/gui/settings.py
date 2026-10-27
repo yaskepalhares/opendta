@@ -214,6 +214,15 @@ class Preferences:
     def auto_log(self, on: bool) -> None:
         self._s.setValue("session/auto_log", "on" if on else "off")
 
+    # Review: the commands run by do-files, grouped under the do line (off: as Stata, one line)
+    @property
+    def review_do_commands(self) -> bool:
+        return str(self._s.value("session/review_do_commands", "off")) == "on"
+
+    @review_do_commands.setter
+    def review_do_commands(self, on: bool) -> None:
+        self._s.setValue("session/review_do_commands", "on" if on else "off")
+
     # confirmation before risky commands (guard.py): one switch per command, all on by default;
     # and whether the first-time notice was shown
     def confirm_enabled(self, command: str) -> bool:

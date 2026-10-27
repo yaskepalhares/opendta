@@ -302,6 +302,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `set numerics precise`: QR no `regress`, `D.`/`S.` em double, passo final de Newton no `ml`/`optimize()`, Richardson nas derivadas numéricas e variáveis novas em double (o padrão `stata` reproduz os arredondamentos do Stata)
 - [ ] Opções estatísticas além do Stata: `vce(cr2)` com graus de liberdade de Satterthwaite, *wild cluster bootstrap*, `logit, firth`
 - [x] Expoente sobrescrito na notação científica exibida (`1.0000×10¹⁰`, `2.5×10⁻⁵`), mantendo a largura do formato; `set superscript off` (ou Help → Superscript Exponents) volta ao `e+10` do Stata. `string()`, macros, `file write`, exportação e `sprintf()`/`strofreal()` do Mata ficam sempre na forma do Stata
+- [x] O Review pode listar os comandos executados pelos do-files (`do`, `run`, `include` e os botões Do e Run do Editor de do-files) sob a linha do do, com os do-files aninhados e os comandos com erro em vermelho, e as seleções do editor identificadas pelo arquivo (Settings > General > Session; desligado por padrão, como no Stata, em que o Review mostra só `do "<arquivo temporário>"`)
 
 ## Faltam para a 1.0
 
