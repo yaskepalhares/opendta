@@ -69,8 +69,11 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
     s.current_dofile = str(path)
     if echo:
         out.end_command()
+    record = None
+    if s.review_root is not None:
+        record = (s._review_stack[-1] if s._review_stack else s.review_root)["children"]
     try:
-        s.interp.run_lines(lines, echo=echo)
+        s.interp.run_lines(lines, echo=echo, record=record)
     except ExitRequest as e:
         if e.clear_all:
             raise

@@ -155,8 +155,10 @@ def read_xport(path: Path) -> tuple[dict, object]:
         raise StataError(610, f"file not SAS XPORT format ({e})")
 
 
-def write_xport(ds: Dataset, path: Path, names: list[str], rows: np.ndarray) -> None:
-    """XPORT version 5 (names of up to 8 characters, no value labels)."""
+def write_xport(ds: Dataset, path: Path, names: list[str], rows: np.ndarray, *,
+                rename: dict[str, str] | None = None, formats: dict[str, str] | None = None) -> None:
+    """XPORT version 5 (names of up to 8 characters). rename: the name of each variable in the file;
+    formats: the SAS format of a variable, the name of its value labels in formats.xpf."""
     rs = pyreadstat()
     try:
         import pandas as pd
@@ -168,13 +170,29 @@ def write_xport(ds: Dataset, path: Path, names: list[str], rows: np.ndarray) -> 
         if v.is_string:
             # the file keeps the width of the variable (str6 comes back as str6)
             w = int(v.vtype[3:]) if v.vtype[3:].isdigit() else 0
-            frame[n] = [str(v.value(int(i))).ljust(w) for i in rows]
+            frame[(rename or {}).get(n, n)] = [str(v.value(int(i))).ljust(w) for i in rows]
         else:
             x = v.data[rows].astype(float)
-            frame[n] = np.where(x >= M.SYSMISS, np.nan, x)
+            frame[(rename or {}).get(n, n)] = np.where(x >= M.SYSMISS, np.nan, x)
     labels = [ds.get(n).label or None for n in names]
     try:
         rs.write_xport(pd.DataFrame(frame), str(path), file_label=ds.label or "", column_labels=labels,
-                       file_format_version=5)
+                       file_format_version=5, variable_format=formats or None,
+                       table_name=path.stem.upper()[:8])     # VERIFY: the member is named after the file
+    except Exception as e:  # noqa: BLE001
+        raise StataError(603, f"file {path} could not be written ({e})")
+
+
+def write_formats_xpf(path: Path, sets: dict[str, dict[int, str]]) -> None:
+    """Value labels as the SAS format catalog formats.xpf: an XPORT data set FORMATS with one row per
+    value: FMTNAME, START and LABEL, 8, 12 and 40 characters wide, the variables Stata reads back
+    from its own file (compat 1911)."""
+    rs = pyreadstat()
+    import pandas as pd
+    rows = [(name.upper().ljust(8), str(k).ljust(12), str(lab[k]).ljust(40))
+            for name, lab in sets.items() for k in sorted(lab)]
+    frame = pd.DataFrame(rows, columns=["FMTNAME", "START", "LABEL"])
+    try:
+        rs.write_xport(frame, str(path), table_name="FORMATS", file_format_version=5)
     except Exception as e:  # noqa: BLE001
         raise StataError(603, f"file {path} could not be written ({e})")
