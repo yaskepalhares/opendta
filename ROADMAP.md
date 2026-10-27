@@ -304,6 +304,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `set numerics precise`: QR in `regress`, `D.`/`S.` in double, a final Newton step in `ml`/`optimize()`, Richardson extrapolation for numerical derivatives and new variables in double (the default `stata` reproduces Stata's rounding)
 - [ ] Statistical options beyond Stata: `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap*, `logit, firth`
 - [x] Superscript exponents in displayed scientific notation (`1.0000×10¹⁰`, `2.5×10⁻⁵`), keeping the format width; `set superscript off` (or Help → Superscript Exponents) restores Stata's `e+10`. `string()`, macros, `file write`, exports and Mata's `sprintf()`/`strofreal()` always use Stata's form
+- [x] Review can list the commands run by do-files (`do`, `run`, `include` and the Do and Run buttons of the Do-file Editor) under the do line, nested do-files included and failed commands in red, with the editor's selections named after their file (Settings > General > Session; off by default, as in Stata, where Review shows only `do "<temporary file>"`)
 
 ## Missing for 1.0
 
