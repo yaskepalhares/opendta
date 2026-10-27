@@ -179,7 +179,7 @@ def cmd_ucm(s: "Session", args: str) -> None:
               re.findall(r"\bcycle\(((?:[^()]|\([^()]*\))*)\)", opts))]
     for f_ in freq0:
         if f_ is not None and not 0 < f_ < math.pi:
-            raise StataError(198, "frequency() must be between 0 and pi")       # VERIFY
+            raise StataError(198, "cycle frequency must be in (2*_pi/_N, _pi) and must not be too close to _pi")
     spec = UCSpec()
     spec.model = str(o["model"]).strip().lower() if isinstance(o.get("model"), str) else "rwalk"
     if spec.model not in MODELS:
@@ -278,7 +278,9 @@ def cmd_ucm(s: "Session", args: str) -> None:
     se = np.sqrt(np.maximum(np.diag(V), 0))
     D, A, S, H, cc, dm = build_state_space(spec, natural(u))
     stationary = not dm.any()
-    idx = list(range(nreg))
+    # the Wald test covers the regressors and the frequency and damping of the cycles (compat 1904
+    # and 1915)
+    idx = list(range(nreg)) + [i for i, nm in enumerate(names) if nm.startswith(("frequency", "damping"))]
     chi2 = SYS
     if idx:
         try:
@@ -342,10 +344,10 @@ def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("\nUnobserved-components model\n", "text")
         out.write(f"Components: {x['components']}".rstrip() + "\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        if x["nreg"]:
+        if x["df_m"]:
             _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
         ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
-        if x["nreg"]:
+        if x["df_m"]:
             _right(out, ll, "Prob > chi2", _g(x["p"], "%10.4f"))
         else:
             out.write(ll + "\n", "text")
@@ -369,15 +371,21 @@ def _predict_ucm(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     dd = (U["X"] @ beta).reshape(-1, 1) if spec.nreg else None
     yhat, fv = kalman_onestep(U["y"].reshape(-1, 1), D, A, S, H, cc, dd, dm)
     rows = np.nonzero(U["mask"])[0][U["order"]]
+    # the first observations, one per diffuse state, have no prediction (compat 1915: 299 of 300
+    # with a random walk; VERIFY with other models)
+    nd = int(np.asarray(dm).sum())
+    yhat = yhat.copy()
+    yhat[:nd] = np.nan
     out = np.full(s.data.nobs, SYS)
     if stat in ("", "xb"):
-        out[rows] = yhat[:, 0]
-        return out, "" if stat else "(option xb assumed; predicted values)"
+        out[rows] = np.where(np.isnan(yhat[:, 0]), SYS, yhat[:, 0])
+        return out, "" if stat else "(option xb assumed; fitted values)"
     e = U["y"] - yhat[:, 0]
     if stat == "residuals":
-        out[rows] = e
+        out[rows] = np.where(np.isnan(e), SYS, e)
     elif stat == "rstandard":
-        out[rows] = e / np.sqrt(fv[:, 0])
+        z = e / np.sqrt(fv[:, 0])
+        out[rows] = np.where(np.isnan(z), SYS, z)
     else:
         raise StataError(198, f"option {stat} not allowed")                      # VERIFY
     return out, ""

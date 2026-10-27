@@ -521,7 +521,7 @@ def _predict_ssm(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     th["__T"] = M_["y"].shape[0]
     D, A, S, H, c, d = spec.build(th, M_["X"])
     dm = np.ones(A.shape[0], dtype=bool) if spec.diffuse else None
-    yhat, fv = kalman_onestep(M_["y"], D, A, S, H, c, d, dm)
+    yhat, fv, Fs = kalman_onestep(M_["y"], D, A, S, H, c, d, dm, full=True)
     eq = str((getattr(est, "_pred_opts", {}) or {}).get("equation") or "").strip().lstrip("#")
     j = 0
     if eq:
@@ -532,12 +532,23 @@ def _predict_ssm(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     out = np.full(s.data.nobs, SYS)
     if stat in ("", "xb"):
         out[rows] = yhat[:, j]
-        return out, "" if stat else "(option xb assumed; fitted values)"
+        # dfactor names the default y (compat 1915)
+        return out, "" if stat else f"(option {'y' if est.cmd == 'dfactor' else 'xb'} assumed; fitted values)"
     e = M_["y"][:, j] - yhat[:, j]
     if stat == "residuals":
         out[rows] = np.where(np.isfinite(e), e, SYS)
     elif stat == "rstandard":
-        out[rows] = np.where(np.isfinite(e), e / np.sqrt(fv[:, j]), SYS)
+        # the innovations standardized jointly, by the Cholesky factor of their covariance
+        # (VERIFY, compat 1915: the second equation of a dfactor model has Stata's minimum and
+        # maximum but not its mean; also with missing values)
+        E = M_["y"] - yhat
+        z = np.full(len(e), np.nan)
+        for t in range(len(e)):
+            if np.all(np.isfinite(E[t])):
+                z[t] = np.linalg.solve(np.linalg.cholesky(Fs[t]), E[t])[j]
+            elif np.isfinite(e[t]):
+                z[t] = e[t] / np.sqrt(fv[t, j])
+        out[rows] = np.where(np.isfinite(z), z, SYS)
     else:
         raise StataError(198, f"option {stat} not allowed")                      # VERIFY
     return out, ""

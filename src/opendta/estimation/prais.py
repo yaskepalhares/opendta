@@ -170,8 +170,11 @@ def cmd_prais(s: "Session", args: str) -> None:
     r2_a = 1 - (1 - r2) * (nn - (1 if smp.constant else 0)) / df_r if tss > 0 else SYS
     F = (mss / df_m) / s2 if df_m > 0 else 0.0
     rmse = float(np.sqrt(s2))
-    ll = -0.5 * nn * (np.log(2 * np.pi) + np.log(rss / nn) + 1) + (0.5 * np.log(1 - rho * rho) if pw else 0.0)
+    # the log likelihood of the transformed regression, without the Jacobian of the first
+    # observation (compat 1915)
+    ll = -0.5 * nn * (np.log(2 * np.pi) + np.log(rss / nn) + 1)
     Vb = s2 * XtXi
+    V_model = Vb
     vcetype, n_clust = "", None
     if smp.vce != "ols":
         # sandwich on the transformed regression, rho taken as known ("semirobust"; VERIFY: the
@@ -220,17 +223,25 @@ def cmd_prais(s: "Session", args: str) -> None:
                  "r2_a": r2_a, "rmse": rmse, "mss": mss, "rss": rss, "tss": tss, "rho": rho,
                  "dw": dw, "dw0": dw0, "title": title, "nodw": bool(o.get("nodw"))}
     est.display = display_prais
-    scalars = [("N", nn), ("N_gaps", gaps), ("mss", mss), ("df_m", df_m), ("rss", rss), ("df_r", df_r),
-               ("r2", r2), ("r2_a", r2_a), ("F", F), ("rmse", rmse), ("ll", ll), ("rho", rho),
-               ("dw", dw), ("dw_0", dw0), ("rank", k), ("tol", tol), ("max_ic", maxiter), ("ic", it)]
+    # e() in the order of Stata's ereturn list (compat 1915, with vce(robust); VERIFY: N_clust and
+    # clustvar)
+    scalars = [("N", nn), ("df_m", df_m), ("df_r", df_r), ("F", F), ("r2", r2), ("rmse", rmse), ("mss", mss),
+               ("rss", rss), ("r2_a", r2_a), ("ll", ll), ("N_gaps", gaps)]
     if n_clust is not None:
         scalars.append(("N_clust", n_clust))
-    macros = [("cmd", "prais"), ("cmdline", cmdline("prais", args)), ("depvar", smp.depname),
-              ("title", title), ("method", method), ("rhotype", rhotype),
-              ("tranmeth", "prais" if pw else "corc"), ("properties", "b V"), ("estat_cmd", "regress_estat")]
+    scalars += [("tol", tol), ("max_ic", maxiter), ("ic", it), ("dw", dw), ("dw_0", dw0), ("rho", rho), ("rank", k)]
+    macros = [("cmd", "prais"), ("title", "Prais-Winsten AR(1) regression" if pw else "Cochrane-Orcutt AR(1) regression"),
+              ("cmdline", cmdline("prais", args)), ("tranmeth", "prais" if pw else "corc"), ("method", method),
+              ("depvar", smp.depname), ("predict", "prais_p"), ("rhotype", rhotype)]
+    extra = []
     if vcetype:
-        macros += [("vcetype", vcetype), ("vce", smp.vce)] + ([("clustvar", smp.clustvar)] if smp.clustvar else [])
-    post(s, est, scalars, macros, smp.mask)
+        macros += ([("clustvar", smp.clustvar)] if smp.clustvar else []) + [("vce", smp.vce), ("vcetype", vcetype)]
+        Vm = np.zeros((kk, kk))
+        Vm[np.ix_(pos, pos)] = V_model
+        from ..commands.matrix import Matrix
+        extra = [("V_modelbased", Matrix(Vm, names, names))]
+    macros.append(("properties", "b V"))
+    post(s, est, scalars, macros, smp.mask, extra_mats=extra)
     display_prais(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 
@@ -252,13 +263,13 @@ def display_prais(s: "Session", est: Estimates, *, header: bool = True, table: b
         out.write(x["title"] + "\n", "text")
         out.write("\n", "text")
         if est.vcetype:
-            # VERIFY: the header of the robust fit, as regress's without the ANOVA table
+            # the header of regress, vce(robust) (compat 1915)
             from .regress import comma, g, sig5
-            for lab, val in (("Number of obs", comma(x["N"])),
+            for i, (lab, val) in enumerate((("Number of obs", comma(x["N"])),
                              (f"F({int(x['df_m'])}, {int(x['df_r'])})", g(x["F"], "%10.2f")),
                              ("Prob > F", g(float(st.f.sf(x["F"], x["df_m"], x["df_r"])), "%10.4f")),
-                             ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"]))):
-                out.write(f"{'':<48}{lab:<18}= ", "text")
+                             ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"])))):
+                out.write(f"{'Linear regression' if i == 0 else '':<48}{lab:<18}= ", "text")
                 out.write(f"{val:>10}\n", "result")
         else:
             _anova(s, est)

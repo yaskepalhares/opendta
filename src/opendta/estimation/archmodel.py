@@ -648,8 +648,10 @@ def cmd_arch(s: "Session", args: str) -> None:
     extra_m = []
     if T is not None:
         from ..commands.matrix import Matrix
-        cm = Matrix(Cmat.copy(), [f"r{i}" for i in range(1, len(Cmat) + 1)], list(names) + ["_r"])
-        cm.coleq = list(eqs) + ["_"]
+        # matrix list shows the lag as L. and the last column as _Cns:_r (compat 1915)
+        cm = Matrix(Cmat.copy(), [f"r{i}" for i in range(1, len(Cmat) + 1)],
+                    [re.sub(r"^L1\.", "L.", nm) for nm in names] + ["_r"])
+        cm.coleq = list(eqs) + ["_Cns"]
         extra_m.append(("Cns", cm))
     post(s, est, scalars, macros, smp.mask, extra_mats=extra_m)
     display_arch(s, est)
