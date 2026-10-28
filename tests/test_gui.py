@@ -1,6 +1,7 @@
 """Smoke test of the interface (runs without a screen, with QT_QPA_PLATFORM=offscreen)."""
 
 import os
+import sys
 
 import pytest
 
@@ -753,3 +754,41 @@ def test_window_commands_in_the_interface(app, monkeypatch):
     assert w.results.toPlainText().rstrip().endswith("1")
     w.run_command('window manage maintitle "My title"')
     assert w.windowTitle() == "My title"
+
+
+def test_toolbar_buttons_show_their_name_under_the_icon(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolBar, QToolButton
+
+    from opendta import i18n
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        w.show()
+        tb = w.findChild(QToolBar, "Toolbar")
+        assert tb.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+        names = ["open", "save", "print", "log", "viewer", "graph", "dofile", "dataeditor", "databrowser",
+                 "variables", "more", "break", "settings"]
+        en = ["Open", "Save", "Print", "Log", "Viewer", "Graph", "Do-file Editor", "Data Editor",
+              "Data Browser", "Variables", "More", "Break", "Settings"]
+        assert [w.toolbar_actions[n].text() for n in names] == en
+        # the long text stays in the tooltip
+        assert w.toolbar_actions["log"].toolTip().startswith("Log (begin or close)")
+        # a disabled button keeps its label (the style greys it out)
+        btn = tb.widgetForAction(w.toolbar_actions["more"])
+        assert isinstance(btn, QToolButton) and not btn.isEnabled() and btn.text() == "More"
+        # everything fits in the window, in both languages: no overflow chevron
+        for lang in ("en", "pt"):
+            i18n.set_language(lang)
+            w.retranslate()
+            app.processEvents()
+            widths = {n: tb.widgetForAction(a).sizeHint().width() for n, a in w.toolbar_actions.items()}
+            if sys.platform != "win32":   # the Windows runner scales the fonts up (unlike the other two)
+                assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width(), widths)
+                assert all(tb.widgetForAction(a).isVisible() for a in w.toolbar_actions.values())
+        assert w.toolbar_actions["dofile"].text() == "Editor de do-files"
+        assert w.toolbar_actions["databrowser"].text() == "Navegador de dados"
+    finally:
+        i18n.set_language("en")
+        w.close()

@@ -24,9 +24,9 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
-                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar,
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar, QToolButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import __version__
@@ -66,6 +66,13 @@ def _human_size(nbytes: int) -> str:
         nbytes /= 1024
     return str(nbytes)
 
+
+# short name shown under each toolbar icon, as in Stata (the tooltip keeps the long text)
+_TOOLBAR_LABELS = {
+    "open": "Open", "save": "Save", "print": "Print", "log": "Log", "viewer": "Viewer", "graph": "Graph",
+    "dofile": "Do-file Editor", "dataeditor": "Data Editor", "databrowser": "Data Browser",
+    "variables": "Variables", "more": "More", "break": "Break",
+}
 
 # toolbar buttons that exist in Stata but do nothing here, with the reason in their tooltip
 _PENDING = {
@@ -361,8 +368,9 @@ class MainWindow(QMainWindow):
         self.refresh_state()
         for act in self.toolbar_actions.values():
             key = act.property("key")
-            act.setText(tr(key))
+            act.setText(tr(act.property("label")))
             act.setToolTip(tr(key) + (act.property("suffix") or ""))
+        self._fit_toolbar_buttons()
         for d in (self.dock_review, self.dock_variables, self.dock_properties):
             d.setWindowTitle(tr(d.objectName()))
         for lab in self.findChildren(QLabel, "PaneTitle"):
@@ -387,7 +395,7 @@ class MainWindow(QMainWindow):
         tb.setObjectName("Toolbar")
         tb.setMovable(False)
         tb.setIconSize(TOOLBAR_SIZE)
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         # same arrangement as Stata 14's toolbar; OpenDTA's own drawing (gui/icons/)
         # buttons without a slot are the _PENDING ones: shown disabled, with the reason
         groups = [
@@ -407,8 +415,10 @@ class MainWindow(QMainWindow):
                 tb.addSeparator()
             for name, text, slot in group:
                 accent = ACCENT_RED if name == "break" else None
-                act = QAction(icon(name, accent), tr(text), self)
+                label = _TOOLBAR_LABELS[name]
+                act = QAction(icon(name, accent), tr(label), self)
                 act.setData((name, accent))
+                act.setProperty("label", label)
                 suffix = f" — {tr(_PENDING[name])}" if slot is None else ""
                 act.setProperty("key", text)
                 act.setProperty("suffix", suffix)
@@ -424,6 +434,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(spacer)
         act = QAction(icon("settings"), tr("Settings"), self)
         act.setData(("settings", None))
+        act.setProperty("label", "Settings")
         act.setProperty("key", "Settings")
         suffix = f"  [{QKeySequence('Ctrl+,').toString(QKeySequence.SequenceFormat.NativeText)}]"
         act.setProperty("suffix", suffix)
@@ -432,6 +443,18 @@ class MainWindow(QMainWindow):
         tb.addAction(act)
         self.toolbar_actions["settings"] = act
         self.addToolBar(tb)
+        self._fit_toolbar_buttons()
+
+    def _fit_toolbar_buttons(self) -> None:
+        """Small font and a width that follows the label, the same on every platform style."""
+        tb = self.findChild(QToolBar, "Toolbar")
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        for act in tb.actions():
+            btn = tb.widgetForAction(act)
+            if isinstance(btn, QToolButton):
+                btn.setFont(font)
+                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
@@ -450,7 +473,7 @@ class MainWindow(QMainWindow):
             QSplitter#CentralSplitter::handle { background: palette(window); }
             QSplitter#CentralSplitter::handle:hover { background: palette(mid); }
             QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
-            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 4px; }
+            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 3px 4px; }
             QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
