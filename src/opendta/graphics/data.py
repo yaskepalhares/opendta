@@ -213,13 +213,19 @@ def kernel_name(text: str | None) -> str:
     raise StataError(198, f"kernel({text}) invalid")   # VERIFY
 
 
-def default_bandwidth(x: np.ndarray, w: np.ndarray | None) -> float:
-    """[R] kdensity: h = 0.9 m / n^(1/5), m = min(sd, IQR/1.349)."""
+def is_fweight(p) -> bool:
+    """True when the command's weight is a frequency weight (a bare [weight=] is one too)."""
+    return p.weight is not None and p.weight[0] in ("fweight", "weight")
+
+
+def default_bandwidth(x: np.ndarray, w: np.ndarray | None, fw: bool = True) -> float:
+    """[R] kdensity: h = 0.9 m / n^(1/5), m = min(sd, IQR/1.349). n is the sum of the
+    weights with fweights and the number of observations with aweights (r(N) of summarize)."""
     order = np.argsort(x, kind="stable")
     xs = x[order]
     ws = None if w is None else w[order]
-    mom = S.moments(xs, ws, "aweight" if w is not None else "")
-    n = float(mom.N if w is None else ws.sum())
+    mom = S.moments(xs, ws, ("fweight" if fw else "aweight") if w is not None else "")
+    n = float(mom.N)   # VERIFY: aweight n (compat 1921)
     q1 = S.percentile(xs, 25, ws)
     q3 = S.percentile(xs, 75, ws)
     m = min(mom.sd, (q3 - q1) / 1.349)
@@ -229,11 +235,12 @@ def default_bandwidth(x: np.ndarray, w: np.ndarray | None) -> float:
 
 
 def kdensity(x: np.ndarray, w: np.ndarray | None, *, kernel: str = "epanechnikov",
-             bw: float | None = None, n: int | None = None, at: np.ndarray | None = None) -> dict:
+             bw: float | None = None, n: int | None = None, at: np.ndarray | None = None,
+             fw: bool = True) -> dict:
     N = len(x)
     if N == 0:
         raise StataError(2000, "no observations")
-    h = bw if bw is not None else default_bandwidth(x, w)
+    h = bw if bw is not None else default_bandwidth(x, w, fw)
     if at is None:
         npts = n if n is not None else min(N, 50)
         # grid from minimum - h to maximum + h (compat 0701)

@@ -171,3 +171,72 @@ def test_graphics_off_and_scheme(run):
 def test_scalar_abbreviation_not_taken_by_scatter(run):
     run("sca z = 3")
     assert run.eval("z") == 3
+
+
+def test_kdensity_bandwidth_counts_observations_with_aweight(run):
+    # aweight: n is the number of observations (not the sum of the weights), so a constant
+    # weight changes nothing; with fweight n is the sum of the weights
+    run("clear\nset seed 7\nset obs 200\ngen x = rnormal()\ngen w = 1000")
+    run("kdensity x, nograph")
+    h0 = run.session.r["bwidth"]
+    run("kdensity x [aweight=w], nograph")
+    assert run.session.r["bwidth"] == pytest.approx(h0, rel=1e-9)
+    run("kdensity x [fweight=w], nograph")
+    assert run.session.r["bwidth"] == pytest.approx(h0 * 1000 ** -0.2, rel=1e-9)
+
+
+def test_graph_bar_nested_over_and_sort(run):
+    run("clear\nset obs 40\ngen a = mod(_n, 4)\ngen b = mod(_n, 2)\ngen y = a*10 + b")
+    run("graph bar (mean) y, over(a) over(b)")
+    ex = store(run.session).get().panels[0].layers[0].extra
+    # first over() is the innermost: its categories repeat inside each group of the second
+    assert ex["cats"] == ["0", "2", "1", "3"] and ex["levels"] == [["0", "0", "1", "1"]]
+    run("graph dot (mean) y, over(a, sort(1) descending)")
+    ex = store(run.session).get().panels[0].layers[0].extra
+    assert ex["cats"] == ["3", "2", "1", "0"]
+
+
+def test_graph_bar_blabel_format(run):
+    run(SEQ)
+    run("graph bar (mean) y, over(g) blabel(bar, format(%4.1f))")
+    assert store(run.session).get().panels[0].layers[0].extra["blabel_fmt"] == "%4.1f"
+
+
+def test_histogram_x_axis_starts_at_zero(run):
+    # Stata starts the x axis of a histogram of positive data at zero (also with normal)
+    from opendta.graphics.render import figure
+    run("clear\nset seed 7\nset obs 300\ngen x = 20 + 5*runiform()")
+    run("histogram x, normal name(h)")
+    ax = figure(store(run.session).get()).axes[0]
+    assert ax.get_xlim()[0] == 0
+    assert ax.get_xlim()[1] > 24
+    # data that already include negatives are left alone
+    run("histogram x, name(h2)")
+    run("replace x = x - 22")
+    run("histogram x, name(h3)")
+    ax = figure(store(run.session).get()).axes[0]
+    assert ax.get_xlim()[0] < 0
+
+
+def test_kdensity_bandwidth_fweight_equals_replicated_data():
+    # an fweight means the observation is repeated w times (variance divisor sum(w) - 1)
+    rng = np.random.default_rng(1921)
+    x = np.sort(rng.uniform(size=60))   # sd < IQR/1.349
+    w = rng.integers(1, 6, size=60).astype(float)
+    h_fw = D.default_bandwidth(x, w, True)
+    h_rep = D.default_bandwidth(np.repeat(x, w.astype(int)), None)
+    assert h_fw == pytest.approx(h_rep, rel=1e-12)
+
+
+def test_box_value_axis_follows_the_data_but_bars_start_at_zero(run):
+    # Stata: the y axis of graph box fits the data (here about 24-32); bars start at zero
+    from opendta.graphics.render import figure
+    run("clear\nset seed 7\nset obs 200\ngen g = mod(_n, 2)\ngen y = 25 + 3*runiform()")
+    run("graph box y, over(g)")
+    lo, hi = figure(store(run.session).get()).axes[0].get_ylim()
+    assert 24 < lo < 25.1 and 28 < hi < 29
+    run("graph bar (mean) y, over(g)")
+    assert figure(store(run.session).get()).axes[0].get_ylim()[0] == 0
+    run("graph hbox y, over(g)")
+    lo, hi = figure(store(run.session).get()).axes[0].get_xlim()
+    assert lo > 24
