@@ -188,6 +188,69 @@ def procrustes_orthogonal(Y: np.ndarray, X: np.ndarray, scale: bool = True) -> d
             "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
 
 
+def procrustes_unrestricted(Y: np.ndarray, X: np.ndarray) -> dict:
+    """Unrestricted Procrustes: the least-squares linear transformation T (any matrix) and the
+    translation from the source X to the target Y; the dilation is 1."""
+    my, mx = Y.mean(0), X.mean(0)
+    Yc, Xc = Y - my, X - mx
+    T = np.linalg.lstsq(Xc, Yc, rcond=None)[0]
+    fitted = Xc @ T + my
+    k = Y.shape[1]
+    ss_i, rss_i = (Yc ** 2).sum(0), ((Y - fitted) ** 2).sum(0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr_i = np.array([np.corrcoef(Y[:, j], fitted[:, j])[0, 1] for j in range(k)])
+    return {"T": T, "c": 1.0, "trans": my - mx @ T, "fitted": fitted, "rss": float(rss_i.sum()),
+            "ss": float(ss_i.sum()), "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
+
+
+def _unit_ls(M: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """min ||y - M a|| over unit vectors a: a = (M'M + l I)^-1 M'y with l > -smallest
+    eigenvalue of M'M chosen so that ||a|| = 1 (the global minimum on the sphere)."""
+    d, V = np.linalg.eigh(M.T @ M)
+    b = V.T @ (M.T @ y)
+
+    def norm2(lam):
+        return float(np.sum((b / (d + lam)) ** 2))
+    lo = -d[0] + 1e-15 * max(1.0, abs(d[-1]))
+    hi = max(1.0, float(np.sqrt((b ** 2).sum())) - d[0])
+    while norm2(hi) > 1.0:
+        hi *= 2.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if norm2(mid) > 1.0:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo <= 1e-16 * max(1.0, abs(hi)):
+            break
+    return V @ (b / (d + 0.5 * (lo + hi)))
+
+
+def procrustes_oblique(Y: np.ndarray, X: np.ndarray, maxiter: int = 10000) -> dict:
+    """Oblique Procrustes: the transformation A with columns of unit length, the dilation c and
+    the translation that bring the source X closest to the target Y, by alternating between
+    the columns of A (each a least-squares problem on the unit sphere) and c."""
+    my, mx = Y.mean(0), X.mean(0)
+    Yc, Xc = Y - my, X - mx
+    T = np.linalg.lstsq(Xc, Yc, rcond=None)[0]
+    T = T / np.sqrt((T ** 2).sum(0))
+    c = float(np.trace(Yc.T @ Xc @ T) / np.trace(T.T @ Xc.T @ Xc @ T))
+    for _ in range(maxiter):
+        T_new = np.column_stack([_unit_ls(c * Xc, Yc[:, j]) for j in range(Y.shape[1])])
+        c_new = float(np.trace(Yc.T @ Xc @ T_new) / np.trace(T_new.T @ Xc.T @ Xc @ T_new))
+        done = abs(c_new - c) <= 1e-14 * abs(c) and np.abs(T_new - T).max() <= 1e-14
+        T, c = T_new, c_new
+        if done:
+            break
+    fitted = c * Xc @ T + my
+    k = Y.shape[1]
+    ss_i, rss_i = (Yc ** 2).sum(0), ((Y - fitted) ** 2).sum(0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr_i = np.array([np.corrcoef(Y[:, j], fitted[:, j])[0, 1] for j in range(k)])
+    return {"T": T, "c": c, "trans": my - c * mx @ T, "fitted": fitted, "rss": float(rss_i.sum()),
+            "ss": float(ss_i.sum()), "ss_i": ss_i, "rss_i": rss_i, "corr_i": corr_i}
+
+
 # ---------------------------------------------------------------------------
 # biplot
 # ---------------------------------------------------------------------------

@@ -51,6 +51,8 @@ def cmd_constraint(s: "Session", args: str) -> None:
     if not m:
         raise StataError(198, "invalid syntax")
     sub, rest = m.group(1).lower(), m.group(2).strip()
+    if sub.isdigit():
+        sub, rest = "define", args.strip()             # constraint # exp: define is optional
     if "define".startswith(sub) and len(sub) >= 1 and sub not in ("dir", "di", "d") or sub == "def":
         mm = re.match(r"^(\d+)\s+(.+)$", rest, re.S)
         if not mm:
@@ -81,8 +83,8 @@ def cmd_constraint(s: "Session", args: str) -> None:
 def _numlist(text: str) -> list[int]:
     out: list[int] = []
     for tok in text.replace(",", " ").split():
-        if "-" in tok:
-            a, b = tok.split("-", 1)
+        if "-" in tok or "/" in tok:
+            a, b = re.split(r"[-/]", tok, maxsplit=1)
             out += list(range(int(a), int(b) + 1))
         else:
             out.append(int(tok))

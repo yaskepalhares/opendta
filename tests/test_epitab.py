@@ -532,3 +532,33 @@ gen y = rnormal(cond(d, 1.5, 0), cond(d, 1.25, 1))
     # binormal ROC: intercept mu/sigma1 = 1.2, slope sigma0/sigma1 = 0.8
     assert b[0] == pytest.approx(1.2, abs=0.1)
     assert b[1] == pytest.approx(0.8, abs=0.1)
+
+
+def test_rocreg_probit_ml_matches_the_binormal_estimates(run):
+    # without covariates the ML estimates are those of two normal samples: a = (m1 - m0) / s1 and
+    # b = s0 / s1, with the standard deviations of maximum likelihood (divisor n)
+    run("clear\nset seed 3\nset obs 200\ngen d = _n > 120\n"
+        "gen y = round(cond(d, 2 + 1.5*invnormal(runiform()), invnormal(runiform())), .01)")
+    run("quietly rocreg d y, probit ml")
+    import numpy as np
+    y = np.array(run.session.data.get("y").data)
+    d = np.array(run.session.data.get("d").data) == 1
+    s0, s1 = y[~d].std(), y[d].std()
+    a, b = (y[d].mean() - y[~d].mean()) / s1, s0 / s1
+    assert abs(run.eval("el(e(b),1,1)") - a) < 1e-5 and abs(run.eval("el(e(b),1,2)") - b) < 1e-5
+    # e(b) is y:i_cons y:s_cons y:auc, with no e(vce) without clusters (compat 1912)
+    assert run.eval('e(ml) == "ml" & e(nobootstrap) == "nobootstrap"') == 1 and "vce" not in run.session.e
+    from scipy.stats import norm
+    assert abs(run.eval("el(e(b),1,3)") - norm.cdf(a / np.sqrt(1 + b * b))) < 1e-6
+
+
+def test_rocreg_cluster(run):
+    run("clear\nset seed 4\nset obs 120\ngen d = runiform() < .5\ngen id = ceil(_n/4)\n"
+        "gen x = runiform() < .5\ngen y = round(invnormal(runiform()) + d*(1 + x), .01)")
+    out = run("rocreg d y, probit ml roccov(x) cluster(id)")
+    assert "(Std. Err. adjusted for 30 clusters in id)" in out and "Robust" in out
+    assert run.eval("e(N_clust)") == 30
+    run("quietly rocreg d y, cluster(id) breps(20) bseed(1) nodots")
+    assert run.rc == 0 and run.eval('e(clustvar) == "id"') == 1
+    run("rocreg d y, ml")
+    assert run.rc == 198

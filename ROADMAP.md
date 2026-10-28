@@ -288,6 +288,69 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `svy:` with `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` and `ivregress`
 - Checked against the Stata 14 log: case `1909` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the variance of `sem, method(adf)` is the numerical Hessian of the discrepancy, not its Gauss-Newton approximation; `ivregress` ignored weights; the `svy:` confidence intervals of `sigma`, `rho`, `alpha` and `lambda` use the design degrees of freedom; `irt 3pl` has one common pseudoguessing parameter unless `sepguessing` is given. The draws of `bayesmh` and `mi impute` come from OpenDTA's own generator and do not reproduce Stata's
 
+## Phase 24: programming, part 2
+
+- [x] `makecns` with a list of constraint numbers (constraints that cannot be read are left out with a note), the `displaycns` and `nocnsnotes` options, and `matrix dispCns`
+- [x] `constraint #` without the word `define`
+- [x] `matlist` with equation names: `showcoleq()` (`first`, `each`, `combined`, `lcombined`, `rcombined`), `roweqonly`, `coleqonly`, `keepcoleq`, `colorcoleq()` and `lines(eq)`; `matrix rownames` and `colnames` set the equation of names written `eq:name`
+- [x] `window` in the graphical interface: `fopen` and `fsave` file dialogs, `stopbox` message boxes, `push` to the Review window, the User menu built with `window menu`, and `manage` (`minimize`, `restore`, `maintitle`, `forward`, `close`)
+- Checked against the Stata 14 log: case `1910`. Found and fixed on the way: `makecns` skips numbers with no constraint, keeps redundant constraints and shows nothing with `r`; `matrix dispCns` needs results posted by an estimation command; `matlist` shows the column equations as spans, a label row for each row equation and, in later panels, leaves out the empty upper half of a symmetric matrix
+
+## Phase 25: data management, part 2
+
+- [x] `table` with a supercolumn variable (`table rowvar colvar supercolvar`), the `scol` option and `by()` with up to four variables
+- [x] `list` with `string()` and the `display` format (also chosen when the table does not fit the line)
+- [x] `import sasxport` with `describe` and `member()` (OpenDTA's own reader of every member of an XPORT file, `io/xport.py`) and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
+- Checked against the Stata 14 log: case `1911`. Found and fixed on the way: `table` keeps every row and every combination of the `by()` variables, with the supercolumns 4 blanks apart; `list, string()` ends cut values with `..`; `import sasxport, describe` has Stata's layout and stored results
+
+## Phase 26: epidemiology, part 2
+
+- [x] `rocreg` with `probit ml`: the binormal ROC model by maximum likelihood, with ROC covariates (`roccov()`), control covariates (`ctrlcov()`, linear) and the AUC by the delta method
+- [x] `rocreg` with `cluster()`: cluster-robust standard errors after `ml` and resampling of whole clusters in the bootstrap
+- Checked against the Stata 14 log: case `1912` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: `probit ml` fits, for each classifier, the covariate control adjustment model (case and control means and standard deviations) and takes the ROC parameters and the AUC from it by the delta method; several classifiers go in one model, with the test of equal AUCs
+
+## Phase 27: base statistics, part 2
+
+- [x] `ml` with the `lf0`, `lf1`, `lf2`, `gf0`, `gf1` and `gf2` methods, `constraints()` (maximization over the constrained subspace, `e(Cns)`) and `svy` (design weights and linearized variance)
+- [x] `boxcox` with `model(rhsonly)`, `model(lambda)` and `model(theta)` and `notrans()`
+- [x] `icc` with `testvalue()` and unbalanced one-way data; `loneway` with `mean`, `median` and `exact`
+- [x] `esize` and `esizei` with `unequal` and `welch`; `pwmean` with `unequal` (Satterthwaite degrees of freedom per comparison); `ameans` with `fweight` and `aweight`
+- [x] `lv` with `generate` and `tail()`; `stem` with `width()` (and a fix for decimal data stored as `float`)
+- Checked against the Stata 14 log: case `1913` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: `ml` with constraints posts e(Cns) and the survey results of Stata; `boxcox` iterates by Newton–Raphson from 1 and transforms every variable of the varlist; `icc` leaves out the targets with missing ratings; `loneway` stores Stata's r(); `esize, unequal/welch` report their degrees of freedom
+
+## Phase 28: panel data, part 2
+
+- [x] `xtivreg` with `first` (first-stage regressions with the same estimator) and `regress` (every regressor exogenous)
+- [x] `xtdata` with `re` and `ratio()` (the random-effects GLS transform, with a `constant` variable)
+- [x] `xtrc` with `betas` (best linear predictors of the panel-specific coefficients, `e(beta_ps)` and `e(V_ps)`)
+- [x] `xtunitroot fisher` with `drift`, `demean` and `pperron`; `xtunitroot hadri` with `kernel()` (Bartlett, Parzen and quadratic-spectral long-run variances with a given number of lags)
+- [x] `xtabond`, `xtdpdsys` and `xtdpd` with `artests()`; `xtdpd` with `hascons`
+- Checked against the Stata 14 log: case `1914` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the first-stage regressions of `xtivreg, first` follow the estimator (G2SLS has its own header); `xtdata, re` keeps the panel variable and adds the constant; `xtunitroot fisher` and `hadri` take Stata's layout and r(); `xtabond` drops duplicated instruments and the constant of `hascons` with a note
+
+## Phase 29: time series, part 2
+
+- [x] `prais` with `vce(robust)`, `vce(hc2)`, `vce(hc3)` and `vce(cluster)` (semirobust variance of the transformed regression)
+- [x] `arch` with `constraints()` and `from()`; `arfima` with `vce(robust)`
+- [x] `svar` with `aconstraints()` and `bconstraints()`; `sspace` and `dfactor` with `constraints()` on the coefficients
+- [x] `predict` after `ucm`, `sspace` and `dfactor` (one-step predictions, residuals and standardized residuals); the `frequency()` suboption of `ucm`'s `cycle()`; `psdensity` after `ucm`
+- Checked against the Stata 14 log: case `1915` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the log likelihood of `prais` leaves out the Jacobian term; `arfima` refines its estimates in a second maximization; `svar` posts every entry of A and B in e(b), with zero variance for the fixed ones, and e(Cns); `ucm` checks the cycle frequency and its Wald test covers the frequency and the damping; `sspace` and `dfactor` standardize the residuals jointly
+
+## Phase 30: multilevel models, part 2
+
+- [x] `meglm` and the other `me` commands with nested levels of random effects (`|| school: || class:`), by product adaptive quadrature over the levels
+- [x] Weights in the `me` commands and `mestreg`: `fweight`, `pweight` and `iweight` at the observation level and the `fweight()` and `pweight()` options of each random-effects equation
+- [x] `vce(robust)` and `vce(cluster clustvar)` (the default with sampling weights): sandwich variance with the scores of the highest-level groups
+- [x] `predict` after `mestreg` with `median`, `mean` and `hazard` for every distribution
+- Checked against the Stata 14 log: case `1916` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: with nested levels the quadrature points of a lower level move with the effects of the level above and the derivatives follow the points, which gives Stata's estimates and standard errors; a variance going to zero no longer inflates the likelihood; `meqrlogit` and `meqrpoisson` take nested levels; frequency weights count in the group table; the `mestreg` median uses the fixed effects only
+
+## Phase 31: multivariate statistics, part 2
+
+- [x] `clustermat` (hierarchical clustering of a dissimilarity matrix, with `shape()`, `add`, `clear` and `labelvar()`); the binary similarity measures of `cluster` and `matrix dissimilarity` (`matching`, `Jaccard`, `Russell`, `Hamann`, `Dice`, `antiDice`, `Sneath`, `Rogers`, `Ochiai`, `Yule`, `Anderberg`, `Kulczynski`, `Pearson`, `Gower2`); `cluster kmeans` and `kmedians` with `keepcenters`
+- [x] `manovatest` (tests of terms after `manova`, with error terms after `/` and `ytransform()`)
+- [x] `camat`, `cabiplot`, `caprojection`, `mcaplot` and `mcaprojection`
+- [x] `mdslong`, `mdsconfig` and `mdsshepard`; `procoverlay`; `procrustes` with `transform(unrestricted)` and `transform(oblique)`
+- Checked against the Stata 14 log: case `1917` matches except for the iteration log of `mdslong, method(modern)` (Stata's optimizer is undocumented; see `compat/known_differences.txt`). Found and fixed on the way: the `_ord` and `_hgt` variables of a hierarchical cluster analysis are by dendrogram position (the id of the k-th leaf and the height of the merge that joins it to the next one), the cluster holding the smallest observation goes first, binary similarity measures keep their heights as similarities and `cluster generate` refuses a number of groups that ties make ambiguous; `clustermat` reports the new observations and the cluster name and puts the label variable last; `manovatest` with several terms tests them together in the base-level coding, with an error term of fewer degrees of freedom than dependent variables it stops, and it has `showorder`; `list` abbreviates a name so that it matches only that variable (`_clus~id`)
+
 ## Phase 32: models, part 3
 
 - [x] `tpoisson` and `tnbreg` with `ul()` and limits given by variables; `tnbreg` and `nbreg` with `dispersion(constant)` (`nbreg` took the option and fitted the mean-dispersion model)
@@ -314,21 +377,22 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `set numerics precise`: QR in `regress`, `D.`/`S.` in double, a final Newton step in `ml`/`optimize()`, Richardson extrapolation for numerical derivatives and new variables in double (the default `stata` reproduces Stata's rounding)
 - [ ] Statistical options beyond Stata: `vce(cr2)` with Satterthwaite degrees of freedom, *wild cluster bootstrap*, `logit, firth`
 - [x] Superscript exponents in displayed scientific notation (`1.0000×10¹⁰`, `2.5×10⁻⁵`), keeping the format width; `set superscript off` (or Help → Superscript Exponents) restores Stata's `e+10`. `string()`, macros, `file write`, exports and Mata's `sprintf()`/`strofreal()` always use Stata's form
+- [x] Review can list the commands run by do-files (`do`, `run`, `include` and the Do and Run buttons of the Do-file Editor) under the do line, nested do-files included and failed commands in red, with the editor's selections named after their file (Settings > General > Session; off by default, as in Stata, where Review shows only `do "<temporary file>"`)
 
 ## Missing for 1.0
 
 Commands and options of Stata 14 that OpenDTA does not have yet, by area. All of them are needed for 1.0; the order is the one of the blocks in [docs/next-steps.md](docs/next-steps.md), adjusted by the requests opened with the [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md) template.
 
-- **Data management**: `table` with three or more variables; `import haver`; `import sasxport` with `describe`, `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`; `list` with `string()` and `display`; `icd9p` with the ICD-9-CM procedure code list.
-- **Epidemiology**: `rocreg` with the `ml` and `cluster()` options.
-- **Base statistics**: `margins` after more commands; `ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `constraints()` and `svy`; `boxcox` with `model(lhsrhs)`, `rhsonly` and `notrans()`; `icc` with `testvalue()` and unbalanced data; `loneway` with `median` and `exact`; `esize` with `unequal` and `welch`; `pwmean` with `unequal`; `ameans` with weights; `lv` with `generate()` and `tail()`; `stem` with `width()`; `cusum` with the test statistics.
+- **Data management**: `icd9p` with the ICD-9-CM procedure code list.
 - **Models**: `ivprobit` and `ivtobit` with `twostep` and with more than one endogenous regressor; `ivpoisson cfunction` with more than one endogenous regressor; `ivregress gmm` with `wmatrix(hac kernel opt)`; `biprobit` with `partial` and `constraints()`; `asmprobit` and `asroprobit` with `altwise`, unbalanced alternatives and other covariance structures; `slogit` with `dim()` above 1; `exlogistic` and `expoisson` with `terms`, `group()`, `binomial()`, `condvars()`, `saving()`, `exposure()` and `offset()`; the program-based forms of `nl`, `nlsur` and `gmm`, and `gmm` with `derivatives()`, `parameters()` and `igmm`; `frontier` with `constraints()`; `teffects` with multivalued treatments, other outcome models and `predict`; `stteffects wra`; `eteffects` with other outcome and treatment models; `etregress` and `etpoisson` with `cfunc`.
-- **Panel data**: `xtunitroot` with `llc` and `ips` (they need the tabulated moments of the original papers), `trend` for `ht`, `lags()` for `breitung`, `demean`, `drift` and `pperron` for `fisher` and the kernel options of `hadri`; `xtregar` with `lbi`; `xtrc` with `betas`; `xtivreg` with `first` and `regress`; `xtdata` with `re` and `fa`; `xtabond`, `xtdpdsys` and `xtdpd` with `teffects`, `small`, `diffvars()`, `collapse`, `hascons`, `h()`, `artests()` and `vce(cluster)`.
-- **Time series**: `vec` with `bconstraints()`, `aconstraints()` and `sindicators()`, and the Osterwald-Lenum critical values for the trends other than `constant` and `rconstant`; `svar` with `aconstraints()`, `bconstraints()` and `lrconstraints()`; `fcast` with `bs`, `bsp`, `exog` and non-consecutive lags; `arch` with `constraints()` and `from()`; `arfima` with `mpl`, `smemory` and `vce(robust)`; `ucm` with `constraints()` and the `frequency()` suboption of `cycle()`; `sspace` with `covstate()` and `covobserved()` other than `diagonal`, `constraints()` and states with lags above one; `dfactor` with more than one factor, `ma()` and error autoregressions; `mgarch vcc`, `distribution(t)`, `het()`, `constraints()` and `vce(robust)`; `prais` with `vce(robust)`; `predict` and `estat` after `ucm`, `sspace`, `dfactor` and `mgarch`; `psdensity` after `ucm`.
-- **Multivariate statistics**: `clustermat`, `manovatest`, `camat`, `cabiplot`, `cagraph`, `caprojection`, `mcaplot`, `mcaprojection`, `mdsconfig`, `mdsshepard`, `mdslong`, `procoverlay`; `pca` with `vce(normal)`, `means` and supplementary variables; `factor` with `estat factors` and `estat rotatecompare`; `rotate` with `target()`, `matrix()` and the other criteria (`oblimax`, `bentler`, `cf()`…); `manova` with error terms; `canon` with `estat`; `mvtest` with `compound`, `block` and `pairwise` hypotheses and `normality` with `univariate`, `bivariate`, `by()` and Doornik-Hansen; `cluster` with the binary similarity measures and `keepcenters`; `discrim` with `ties()`, `priors(matname)`, weights and `lootable` after `logistic`, `estat correlations`, `estat grsummarize` and `estat manova`; `ca` and `mca` with supplementary points, `method(indicator)` and `method(johnson)` and the other `estat` subcommands; `mds` with `method(nonmetric)`, `loss()`, `transform()` and `addconstant`; `procrustes` with `transform(oblique)` and `transform(unrestricted)`.
-- **Multilevel models**: `meglm` and the other `me` commands with more than one level of random effects, weights or `vce(robust)`; `mestreg` with weights, `vce(robust)` and the `median` and `mean` options of `predict` (and `hazard` after the lognormal, loglogistic and gamma distributions); `predict, reffects` after `mixed` with `R.` equations.
+- **Panel data**: `xtunitroot` with `llc` and `ips` (they need the tabulated moments of the original papers), `trend` for `ht`, `lags()` for `breitung` and the automatic lag choices of `kernel()`; `xtregar` with `lbi`; `xtdata` with `fa`; `xtabond`, `xtdpdsys` and `xtdpd` with `teffects`, `small`, `diffvars()`, `collapse`, `h()` and `vce(cluster)` (some of these may be options of the user-written `xtabond2` rather than of Stata 14: to check in the manual).
+- **Time series**: `vec` with `bconstraints()`, `aconstraints()` and `sindicators()`, and the Osterwald-Lenum critical values for the trends other than `constant` and `rconstant`; `svar` with `lrconstraints()`; `fcast` with `bs`, `bsp`, `exog` and non-consecutive lags; `arfima` with `mpl` and `smemory`; `ucm` with `constraints()`; `sspace` with `covstate()` and `covobserved()` other than `diagonal`, constraints on the variances and states with lags above one; `dfactor` with more than one factor, `ma()` and error autoregressions; `mgarch vcc`, `distribution(t)`, `het()`, `constraints()` and `vce(robust)`; `predict` with the states, components and `smethod()` and `estat` after `ucm`, `sspace` and `dfactor`; `predict` and `estat` after `mgarch`.
+- **Multivariate statistics**: `manovatest` with `test()`; `pca` with `vce(normal)`, `means` and supplementary variables; `factor` with `estat factors` and `estat rotatecompare`; `rotate` with `target()`, `matrix()` and the other criteria (`oblimax`, `bentler`, `cf()`…); `manova` with error terms; `canon` with `estat`; `mvtest` with `compound`, `block` and `pairwise` hypotheses and `normality` with `univariate`, `bivariate`, `by()` and Doornik-Hansen; `discrim` with `ties()`, `priors(matname)`, weights and `lootable` after `logistic`, `estat correlations`, `estat grsummarize` and `estat manova`; `ca` and `mca` with supplementary points, `method(indicator)` and `method(johnson)` and the other `estat` subcommands; `mds` with `method(nonmetric)`, `loss()`, `transform()` and `addconstant`; `mdslong` with `s2d()`.
+- **Multilevel models**: `intmethod(laplace)` with more than one level; crossed random effects (`_all:`) in the `me` commands.
 - **Other suites**: `power` with the `twoway`, `repeated`, `cmh`, `mcc`, `trend`, `cox`, `exponential` and `logrank` methods; `bayes` with the estimation commands other than `regress`, `logit`, `probit` and `poisson`; `irt` with `group()`; `gsem` with observation-level and cluster-level latent variables in the same model; `svy:` with `ivprobit`, `ivtobit` and the other estimators that do not take weights yet; `e(b)` of `sem`, `gsem` and `irt` with the constrained parameters (and `e(Cns)`); `svy:` storing the `e()` results of the estimator.
-- **Programming**: `makecns` with a constraint list and `displaycns` (they need `constraint`, from the Models area); `matlist` with the equation options; `window` dialogs and menus in the graphical interface; `plugin` loading (compiled Stata plugins cannot run in OpenDTA); Stata's class system (Mata classes already work).
+- **Programming**: Stata's class system (Mata classes already work).
+
+Left out of 1.0 on purpose, as known limitations: `import haver`, which reads Haver Analytics databases only through Haver's own software (Windows and a paid license), and loading compiled Stata plugins (`program name, plugin` and `plugin call`), which are machine code written against Stata's internal interface; the same computation can be written in a do-file, an ado-file or Mata.
 
 ## After 1.0
 

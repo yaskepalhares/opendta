@@ -64,14 +64,17 @@ def arfima_acov(d: float, ar: np.ndarray, ma: np.ndarray, sigma2: float, n: int)
     return sigma2 * full[center:center + n]
 
 
-def toeplitz_loglik(y: np.ndarray, g: np.ndarray) -> float:
+def toeplitz_loglik(y: np.ndarray, g: np.ndarray, contributions: bool = False):
     """Gaussian log likelihood of y with autocovariances g (Durbin-Levinson); -inf if not positive
-    definite."""
+    definite. contributions: the terms of the prediction-error decomposition, one per observation."""
     n = len(y)
     v = g[0]
     if v <= 0:
-        return -np.inf
+        return np.full(n, -np.inf) if contributions else -np.inf
+    terms = np.empty(n) if contributions else None
     ll = -0.5 * (math.log(2 * math.pi * v) + y[0] ** 2 / v)
+    if contributions:
+        terms[0] = ll
     phi = np.zeros(0)
     for t in range(1, n):
         if t == 1:
@@ -82,10 +85,13 @@ def toeplitz_loglik(y: np.ndarray, g: np.ndarray) -> float:
             phi = np.concatenate([phi - k * phi[::-1], [k]])
         v = v * (1 - k * k)
         if v <= 0 or not np.isfinite(v):
-            return -np.inf
+            return np.full(n, -np.inf) if contributions else -np.inf
         e = y[t] - float(phi @ y[t - 1::-1][:t])
-        ll += -0.5 * (math.log(2 * math.pi * v) + e * e / v)
-    return ll
+        term = -0.5 * (math.log(2 * math.pi * v) + e * e / v)
+        ll += term
+        if contributions:
+            terms[t] = term
+    return terms if contributions else ll
 
 
 _OPTS = {"ar": 2, "ma": 2, "noconstant": 4, "mle": 3, "mpl": 3, "smemory": 2, "vce": 3, "robust": 1,
@@ -148,6 +154,10 @@ def cmd_arfima(s: "Session", args: str) -> None:
         except (FloatingPointError, np.linalg.LinAlgError, ValueError):
             return -np.inf
 
+    def contrib(b):
+        phi, th, d, s2 = parts(b)
+        return toeplitz_loglik(y - X @ b[:k], arfima_acov(d, phi, th, s2, n), contributions=True)
+
     def fun(b, todo):
         if todo == 0:
             return ll(b), None, None
@@ -158,17 +168,31 @@ def cmd_arfima(s: "Session", args: str) -> None:
     b0 = np.concatenate([beta0, np.zeros(na + nm), [0.1], [var0]])
     r = maximize(fun, b0, **ml_options(o))
     out = s.output
+    vce_ = str(o.get("vce") or ("robust" if o.get("robust") else "oim")).strip().lower()
+    label = "log pseudolikelihood" if vce_.startswith("r") else "log likelihood"
+    # Stata ends with "Refining estimates:" and Newton-Raphson steps from the maximum (compat 1915)
+    r2 = maximize(fun, r.b, **ml_options(o))
     if not o.get("nolog"):
-        out.write("\n", "text")
-        print_log(out, r, "log likelihood")
+        print_log(out, r, label)
+        out.write("Refining estimates:\n", "text")
+        print_log(out, r2, label)
+    r = r2 if np.isfinite(r2.ll) and r2.ll >= r.ll else r
     b = r.b
     _l, _g_, H = _numderiv(ll, b)
     try:
         V = np.linalg.inv(-H)
     except np.linalg.LinAlgError:
         V = np.linalg.pinv(-H)
-    if o.get("vce") not in (None, "oim") or o.get("robust"):
-        raise StataError(198, "only vce(oim) is implemented in OpenDTA")   # OpenDTA
+    V_model = (V + V.T) / 2
+    vce = str(o.get("vce") or ("robust" if o.get("robust") else "oim")).strip().lower()
+    if vce.startswith("r"):
+        # sandwich with the scores of the prediction-error decomposition (VERIFY: Stata's scores)
+        from .tsmodels import _scores
+        S = _scores(contrib, b)
+        V = V @ (S.T @ S) @ V
+        vce = "robust"
+    elif vce != "oim":
+        raise StataError(198, f"vcetype {vce} not allowed")                        # VERIFY
     V = (V + V.T) / 2
     se = np.sqrt(np.maximum(np.diag(V), 0))
     idx = list(range(len(est_cols))) + list(range(k, k + na + nm + 1))     # the constant is not tested
@@ -216,22 +240,41 @@ def cmd_arfima(s: "Session", args: str) -> None:
     est.rows = rows
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = float(o["level"]) if o.get("level") else smp.level
-    est.vcetype = "OIM"
-    est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1)}
+    est.vcetype = "Robust" if vce == "robust" else "OIM"
+    est.extra = {"N": float(n), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "sample": _sample_text(s, t0, t1),
+                 "lll": "Log pseudolikelihood" if vce == "robust" else "Log likelihood"}
     phi, th, d, s2 = parts(b)
     g = arfima_acov(d, phi, th, s2, 2)
     est.arfima = {"ar": {lg: float(phi[lg - 1]) for lg in ar}, "ma": {lg: float(th[lg - 1]) for lg in ma},
                   "sigma2": float(s2), "d": float(d), "gamma0": float(g[0])}
     est.display = display_arfima
-    scalars = [("N", float(n)), ("k", float(kk)), ("k_eq", float(len(dict.fromkeys(eqs)))), ("k_dv", 1.0),
-               ("df_m", float(len(idx))), ("ll", r.ll), ("chi2", chi2), ("p", pv), ("tmin", t0), ("tmax", t1),
-               ("rank", float(kk)), ("ic", float(r.iterations)), ("rc", 0.0), ("converged", 1.0 if r.converged else 0.0)]
-    macros = [("cmd", "arfima"), ("cmdline", cmdline("arfima", args)), ("depvar", smp.depname),
-              ("eqnames", " ".join(dict.fromkeys(eqs))), ("title", "ARFIMA regression"),
-              ("ar", " ".join(map(str, ar))), ("ma", " ".join(map(str, ma))), ("vce", "oim"),
-              ("vcetype", "OIM"), ("chi2type", "Wald"), ("tvar", info.tvar), ("properties", "b V")]
-    post(s, est, scalars, macros, smp.mask)
+    # e() in the order of Stata's ereturn list (compat 1915); OpenDTA maximizes by Newton-Raphson
+    # (Stata by BFGS), so e(technique), e(ic) and e(ilog) describe OpenDTA's steps
+    from ..commands.matrix import Matrix
+    scalars = [("N", float(n)), ("p", pv), ("df_m", float(len(idx))), ("chi2", chi2),
+               ("constant", 1.0 if smp.constant else 0.0), ("rank", float(kk)),
+               ("converged", 1.0 if r.converged else 0.0), ("ic", float(r.iterations)), ("ll", r.ll), ("rc", 0.0),
+               ("ar_max", float(max(ar + [0]))), ("ma_max", float(max(ma + [0]))), ("tmax", t1), ("tmin", t0),
+               ("k_eq", float(len(dict.fromkeys(eqs)))), ("k_aux", 1.0), ("k", float(kk))]
+    covs = " ".join(c_.name for c_ in est_cols) or "_NONE"
+    macros = [("cmd", "arfima"), ("cmdline", cmdline("arfima", args)), ("title", "ARFIMA regression"),
+              ("estat_cmd", "arfima_estat"), ("predict", "arfima_p"), ("depvar", smp.depname), ("tvar", info.tvar),
+              ("covariates", covs), ("eqnames", "ARFIMA"), ("tmaxs", _g9(t1)), ("tmins", _g9(t0)),
+              ("marginsnotok", "residuals rstandard fdifference"), ("marginsok", "default xb"),
+              ("ar", " ".join(map(str, ar))), ("ma", " ".join(map(str, ma))),
+              ("tech_steps", f"{r.iterations}"), ("technique", "nr"), ("method", "mle"), ("vce", vce),
+              ("vcetype", est.vcetype if vce == "robust" else ""), ("chi2type", "Wald"), ("properties", "b V")]
+    mats = [("gradient", Matrix(np.asarray(_g_).reshape(1, -1), ["r1"], names)),
+            ("ilog", Matrix(np.array([[ll_] for _, ll_, _n in r.log if _ >= 0][:20] or [[r.ll]])))]
+    if vce == "robust":
+        mats.append(("V_modelbased", Matrix(V_model, names, names)))
+    post(s, est, scalars, macros, smp.mask, extra_mats=mats)
     display_arfima(s, est)
+
+
+def _g9(x: float) -> str:
+    from ..core.formats import format_value
+    return format_value(float(x), "%9.0g", pad=False).strip()
 
 
 def display_arfima(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
@@ -243,7 +286,8 @@ def display_arfima(s: "Session", est: Estimates, *, header: bool = True, table: 
         out.write("\nARFIMA regression\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right(out, f"{x.get('lll', 'Log likelihood')} = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2",
+               _g(x["p"], "%10.4f"))
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: The test of the variance against zero is one sided, and the two-sided\n"

@@ -69,7 +69,7 @@ def cmd_cumul(s: "Session", args: str) -> None:
 # stem
 # ---------------------------------------------------------------------------
 
-_SYMS = {1: [""], 2: ["*", "."], 5: ["*", "t", "f", "s", "."]}
+_SYMS = {1: ["*"], 2: ["*", "."], 5: ["*", "t", "f", "s", "."]}
 
 
 def _rows(q: np.ndarray, L: int):
@@ -98,7 +98,10 @@ def _span(keys, L: int) -> int:
 def _natural_unit(x: np.ndarray) -> int:
     """Largest 10**u that divides every value (u <= 0 for values with decimals)."""
     u = 0
-    while u > -8 and not np.allclose(x / 10.0 ** u, np.round(x / 10.0 ** u), rtol=0, atol=1e-9):
+    # float variables hold 2.01 as 2.0099999: compare with a tolerance relative to the values,
+    # or the unit falls to 1e-8 and the plot has hundreds of millions of rows
+    while u > -8 and not np.all(np.abs(x - np.round(x / 10.0 ** u) * 10.0 ** u)
+                                <= 1e-6 * np.maximum(np.abs(x), 10.0 ** u)):
         u -= 1
     return u
 
@@ -116,8 +119,20 @@ def _stem_rows(q: np.ndarray, d: int, L: int):
 @command("stem", "stem", byable=True)
 def cmd_stem(s: "Session", args: str) -> None:
     p = parse_standard(args)
-    o = match_options(p.options, {"digits": 1, "lines": 1, "round": 1, "prune": 1}) \
+    o = match_options(p.options, {"digits": 1, "lines": 1, "round": 1, "prune": 1, "width": 1}) \
         if p.options.strip() else {}
+    if isinstance(o.get("width"), str):
+        # width(#): the width of a stem, another way of giving lines() = 10 / width
+        # (VERIFY: widths that do not divide 10)
+        if isinstance(o.get("lines"), str):
+            raise StataError(198, "options lines() and width() may not be combined")
+        try:
+            wv = int(o["width"])
+        except ValueError:
+            raise StataError(198, "option width() incorrectly specified")
+        if wv not in (2, 5, 10):
+            raise StataError(198, "width() must be 2, 5 or 10")
+        o["lines"] = str(10 // wv)
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
     mask = touse(s, p) & S.valid(v.data)
     x = v.data[mask]
@@ -236,8 +251,10 @@ def _stem_natural(s: "Session", v, x: np.ndarray, o: dict, target: float) -> Non
     if v.label:
         head += f" ({v.label})"
     out.write("\n" + head + "\n\n", "text")
-    if u > 0:
-        out.write(f"{v.name} rounded to nearest multiple of {10 ** u:g}\nplot in units of {10 ** u:g}\n\n", "text")
+    if u:
+        # also for decimal units: "rounded to nearest multiple of .01" (compat 1913)
+        unit = f"{10.0 ** u:g}".removeprefix("0")
+        out.write(f"{v.name} rounded to nearest multiple of {unit}\nplot in units of {unit}\n\n", "text")
     wd = max(len(a) for a, _b in labels)
     for lab, lv in labels:
         out.write(f"{lab:>{wd + 2}} | ", "text")
@@ -256,9 +273,21 @@ _LETTERS = "MFEDCBAZYXWVU"
 def cmd_lv(s: "Session", args: str) -> None:
     p = parse_standard(args)
     o = match_options(p.options, {"generate": 1, "tail": 1}) if p.options.strip() else {}
-    if o:
-        raise StataError(198, f"option {next(iter(o))} is not available yet in OpenDTA")
+    tail_max = None
+    if isinstance(o.get("tail"), str):
+        try:
+            tail_max = int(o["tail"])
+        except ValueError:
+            tail_max = 0
+        if tail_max < 1:
+            raise StataError(198, "option tail() incorrectly specified")         # VERIFY
     vars_ = numeric_vars(s, p.varlist, allow_string=False)
+    if o.get("generate"):
+        if len(vars_) > 1:
+            raise StataError(103, "too many variables specified")             # VERIFY
+        for nm in ("_mid", "_psigma"):
+            if s.data.has(nm):
+                s.data.drop_vars([nm])          # generate replaces them (compat 1913)
     mask = touse(s, p)
     for v in vars_:
         x = v.data[mask & S.valid(v.data)]
@@ -269,6 +298,11 @@ def cmd_lv(s: "Session", args: str) -> None:
         depths = [(n + 1) / 2]
         while depths[-1] > 1:
             depths.append((math.floor(depths[-1]) + 1) / 2)
+        if tail_max is not None:
+            # the letter of 1/2^(i+1) is shown while 2^i < tail(), then the extremes (compat 1913:
+            # tail(3) and tail(4) show M and F, tail(8) down to E)
+            keep = [i for i in range(len(depths) - 1) if 2 ** i < tail_max]
+            depths = [depths[i] for i in keep] + [1.0]
         rows = []
         for i, d in enumerate(depths):
             lo = 0.5 * (xs[int(math.floor(d)) - 1] + xs[int(math.ceil(d)) - 1])
@@ -303,6 +337,21 @@ def cmd_lv(s: "Session", args: str) -> None:
                 out.write(f"{g9(spread):>10}{g9(pseudo):>12}\n", "result")
                 if let == "F":
                     hspread = spread
+        if o.get("generate"):
+            # _mid and _psigma: one observation per letter value, the extremes left out (compat 1913)
+            rows_g = rows[:-1]
+            k = len(rows_g)
+            if s.data.nobs < k:
+                raise StataError(198, "too few observations for generate")      # VERIFY
+            mids, psig = np.full(s.data.nobs, SYS), np.full(s.data.nobs, SYS)
+            for i, (_let, d, lo, hi) in enumerate(rows_g):
+                mids[i] = 0.5 * (lo + hi)
+                if i:
+                    tl = (d - 1 / 3) / (n + 1 / 3)
+                    if tl < 0.5:
+                        psig[i] = (hi - lo) / (2 * float(st.norm.ppf(1 - tl)))
+            s.data.add(Variable("_mid", "float", mids))
+            s.data.add(Variable("_psigma", "float", psig))
         out.write(" " * 12 + "|" + " " * 33 + "|\n", "text")
         out.write(" " * 12 + "|" + " " * 33 + "|" + f"{'# below':>10}{'# above':>12}\n", "text")
         if hspread is not None:

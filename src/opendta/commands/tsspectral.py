@@ -349,6 +349,10 @@ def cmd_psdensity(s: "Session", args: str) -> None:
     elif est.cmd == "arfima":
         A = est.arfima
         ar, ma, sigma2, d = A["ar"], A["ma"], A["sigma2"], (0.0 if o.get("smemory") else A["d"])
+    elif est.cmd == "ucm":
+        from ..estimation.ucm import cycle_density
+        which = int(o["cycle"]) if isinstance(o.get("cycle"), str) else 1
+        ar = ma = None
     else:
         raise StataError(321, "psdensity only works after arima, arfima and ucm")      # VERIFY
     lo, hi = 0.0, math.pi
@@ -359,9 +363,12 @@ def cmd_psdensity(s: "Session", args: str) -> None:
         lo, hi = v
     omega = math.pi * np.arange(N) / (N - 1) if N > 1 else np.array([0.0])
     omega = omega[(omega >= lo) & (omega < hi)] if isinstance(o.get("range"), str) else omega
-    f = arma_density(ar, ma, sigma2, omega, d)
-    if not o.get("pspectrum"):
-        f = f / arma_variance(ar, ma, sigma2, d) if d == 0 else f / A["gamma0"]
+    if est.cmd == "ucm":
+        f = cycle_density(est, which, omega, normalized=not o.get("pspectrum"))
+    else:
+        f = arma_density(ar, ma, sigma2, omega, d)
+        if not o.get("pspectrum"):
+            f = f / arma_variance(ar, ma, sigma2, d) if d == 0 else f / A["gamma0"]
     for nm in names:
         if s.data.has(nm):
             raise StataError(110, f"{nm} already defined")

@@ -16,5 +16,5 @@
 {title:Description}
 
 {pstd}
-{cmd:pergram} plots the log sample spectral density, {cmd:cumsp} the cumulative sample spectral distribution, {cmd:xcorr} the cross-correlogram of two series, {cmd:wntestb} the Bartlett cumulative-periodogram white-noise test and {cmd:wntestq} the portmanteau (Q) test. After {cmd:arima} or {cmd:arfima}, {cmd:psdensity} computes the parametric spectral density and the implied autocorrelation. {cmd:psdensity} after {cmd:ucm} is not available.
+{cmd:pergram} plots the log sample spectral density, {cmd:cumsp} the cumulative sample spectral distribution, {cmd:xcorr} the cross-correlogram of two series, {cmd:wntestb} the Bartlett cumulative-periodogram white-noise test and {cmd:wntestq} the portmanteau (Q) test. After {cmd:arima} or {cmd:arfima}, {cmd:psdensity} computes the parametric spectral density and the implied autocorrelation. After {cmd:ucm}, {cmd:psdensity} gives the spectral density of a cycle ({cmd:cycle(}{it:#}{cmd:)}, the first by default).
 {p_end}

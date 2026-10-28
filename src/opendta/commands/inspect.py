@@ -35,6 +35,18 @@ def cell_text(ds: "Dataset", var: "Variable", i: int, *, use_labels: bool = True
     return format_value(x, var.fmt, pad=False).strip()
 
 
+def _unique_abbrev(name: str, n: int, names: list[str]) -> str:
+    """Abbreviation start~end of `name` in n characters that, read as a varlist pattern, names
+    only this variable: the end grows until no other variable matches ("_clus_1_id" next to
+    "_clus_1_ord" is "_clus~id", not "_clus_~d"; compat 1917)."""
+    n = max(n, 5)
+    for k in range(1, n - 1):
+        head, tail = name[: n - 1 - k], name[-k:]
+        if sum(1 for m in names if m.startswith(head) and m.endswith(tail) and len(m) >= len(head) + len(tail)) <= 1:
+            return head + "~" + tail
+    return name[: n - 2] + "~" + name[-1]
+
+
 def _left_aligned(var: "Variable", use_labels: bool) -> bool:
     """Strings follow the justification of the format (%-18s left, %18s
     right); numbers, with or without a value label, are right-aligned."""
@@ -52,7 +64,7 @@ def cmd_list(s: "Session", args: str) -> None:
         "noobs": 5, "clean": 5, "separator": 3, "nolabel": 5, "noheader": 6,
         "abbreviate": 2, "table": 3, "divider": 3, "string": 3, "compress": 3,
         "fast": 4, "constant": 4, "sepby": 5, "header": 6, "nodotz": 6, "nocompress": 3,
-        "mean": 4, "sum": 3, "N": 1, "labvar": 6,
+        "mean": 4, "sum": 3, "N": 1, "labvar": 6, "display": 4,
     })
     if opts.get("noheader") and opts.get("header") is True:
         raise StataError(198, "option noheader not allowed")
@@ -73,6 +85,23 @@ def cmd_list(s: "Session", args: str) -> None:
         keys = [ds.get(n).raw for n in sepby]
 
     cells = [[cell_text(ds, v, int(i), use_labels=use_labels) for v in vars_] for i in rows]
+    cut_left: set[int] = set()
+    if isinstance(opts.get("string"), str):
+        # string(#): a string column is max(#+2, length of the name) wide and a longer value is cut
+        # to two less, followed by ".."; a cut column is left-aligned (compat 1911; VERIFY)
+        try:
+            cut = int(opts["string"])
+        except ValueError:
+            raise StataError(198, "option string() incorrectly specified")
+        if cut < 1:
+            raise StataError(198, "option string() incorrectly specified")
+        for j, v in enumerate(vars_):
+            w = max(cut + 2, len(v.name))
+            if v.is_string and any(len(r[j]) > w for r in cells):
+                cut_left.add(j)
+                for r in cells:
+                    if len(r[j]) > w:
+                        r[j] = r[j][:w - 2] + ".."
     if opts.get("nodotz"):
         # .z is shown as a blank field (the manual's words; VERIFY with .z in the data)
         cells = [[("" if (c == ".z" and not v.is_string) else c) for c, v in zip(r, vars_)] for r in cells]
@@ -105,17 +134,17 @@ def cmd_list(s: "Session", args: str) -> None:
     # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
     # default is ab(8) ("Rendamensal" → "Rendam~l")
     ab = int(opts["abbreviate"]) if isinstance(opts.get("abbreviate"), str) else 8
-    from ..lang.functions import _abbrev
+    all_names = s.data.names
     titles = []
     widths = []
     for j, v in enumerate(vars_):
         data_w = max([len(r[j]) for r in cells + [sm[1] for sm in summaries]], default=0)
         if opts.get("nocompress") or opts.get("fast"):
             data_w = max(data_w, parse_format(v.fmt).width)     # widths from the display formats (compat 1701)
-        title = v.name if len(v.name) <= max(ab, data_w) else _abbrev(v.name, float(max(ab, data_w)))
+        title = v.name if len(v.name) <= max(ab, data_w) else _unique_abbrev(v.name, max(ab, data_w), all_names)
         titles.append(title)
         widths.append(max([len(title), data_w]))
-    left = [_left_aligned(v, use_labels) for v in vars_]
+    left = [_left_aligned(v, use_labels) or j in cut_left for j, v in enumerate(vars_)]
 
     def fmt_row(texts: list[str]) -> str:
         parts = []
@@ -131,6 +160,13 @@ def cmd_list(s: "Session", args: str) -> None:
         obs_w = max(obs_w, max(len(lb) for lb, _ in summaries))
     header = fmt_row(titles)
     inner = len(header) + 2
+    linesize = int(float(s.settings.get("linesize", 80)))
+    pad = " " * (obs_w + 2) if show_obs else "  "
+    if not clean and not summaries and (opts.get("display") or (
+            not opts.get("table") and len(pad) + inner + 2 > linesize)):
+        _list_display(s, rows, cells, titles, widths, left, pad, obs_w, show_obs, linesize,
+                      noheader=bool(opts.get("noheader")))
+        return
 
     out.ensure_line_start()
     out.write("\n", "text")
@@ -148,7 +184,10 @@ def cmd_list(s: "Session", args: str) -> None:
             out.write((lead if labvar else label.rjust(obs_w + 1) + "   ") + fmt_row(r) + "  \n", "result")
         return
 
-    pad = " " * (obs_w + 2) if show_obs else "  "
+    if len(pad) + inner + 2 > linesize:
+        # a table wider than the line: each line goes on after linesize characters in a line that
+        # starts with "> " (compat 1911; VERIFY with more than one continuation)
+        out = _Wrapped(out, linesize)
     out.write(pad + "+" + "-" * inner + "+\n", "text")
     if not opts.get("noheader"):
         out.write(pad + "| " + header + " |\n", "text")
@@ -176,6 +215,68 @@ def cmd_list(s: "Session", args: str) -> None:
         out.write(fmt_row(r), "result")
         out.write(" |\n", "text")
     out.write(pad + "+" + "-" * inner + "+\n", "text")
+
+
+class _Wrapped:
+    """The writes of a table cut at `width` columns, the rest of each line after "> "."""
+
+    def __init__(self, out, width: int) -> None:
+        self.out, self.width, self.col = out, width, 0
+
+    def write(self, text: str, style: str) -> None:
+        for k, part in enumerate(text.split("\n")):
+            if k:
+                self.out.write("\n", style)
+                self.col = 0
+            while self.col + len(part) > self.width:
+                n = self.width - self.col
+                self.out.write(part[:n] + "\n> ", style)
+                part, self.col = part[n:], 2
+            self.out.write(part, style)
+            self.col += len(part)
+
+
+def _list_display(s: "Session", rows, cells, titles, widths, left, pad: str, obs_w: int,
+                  show_obs: bool, linesize: int, *, noheader: bool) -> None:
+    """list in display format: one box per observation, with the variables in groups that fit the
+    line, each group a line of names and a line of values. Also used when the table does not fit.
+    VERIFY: the whole layout (blank line between boxes, lines not padded to the box width)."""
+    out = s.output
+    groups: list[list[int]] = [[]]
+    room = linesize - len(pad) - 4
+    used = -3
+    for j, w in enumerate(widths):
+        if groups[-1] and used + 3 + w > room:
+            groups.append([])
+            used = -3
+        groups[-1].append(j)
+        used += 3 + w
+
+    def line(texts: list[str], idx: list[int], box: int = 0) -> str:
+        cells = [t.ljust(widths[j]) if left[j] else t.rjust(widths[j]) for t, j in zip(texts, idx)]
+        # a group narrower than the box shares the difference among its cells, half on each side
+        # (compat 1911; VERIFY: where an odd remainder goes)
+        extra = max(0, box - (sum(widths[j] + 3 for j in idx) + 1))
+        if extra:
+            share = [extra // len(idx)] * len(idx)
+            share[-1] += extra - sum(share)
+            cells = [" " * (e // 2) + c + " " * (e - e // 2) for c, e in zip(cells, share)]
+        return "| " + " | ".join(cells) + " |"
+
+    box = max(len(line([""] * len(g), g)) for g in groups)
+    out.ensure_line_start()
+    for k, (i, r) in enumerate(zip(rows, cells)):
+        out.write("\n" + pad + "+" + "-" * (box - 2) + "+\n", "text")
+        for gk, g in enumerate(groups):
+            if gk:
+                out.write(pad + "|" + "-" * (box - 2) + "|\n", "text")
+            label = f"{int(i) + 1:>{obs_w}}. " if show_obs and gk == 0 else pad
+            if not noheader:
+                out.write(label + line([titles[j] for j in g], g, box) + "\n", "text")
+                label = pad
+            out.write(label, "text")
+            out.write(line([r[j] for j in g], g, box) + "\n", "result")
+        out.write(pad + "+" + "-" * (box - 2) + "+\n", "text")
 
 
 # ---------------------------------------------------------------------------

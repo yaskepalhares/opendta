@@ -295,6 +295,69 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `svy:` com `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` e `ivregress`
 - Conferido com o log do Stata 14: caso `1909` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: a variância do `sem, method(adf)` é a Hessiana numérica da discrepância, não a aproximação de Gauss-Newton; o `ivregress` ignorava os pesos; os intervalos de confiança de `sigma`, `rho`, `alpha` e `lambda` no `svy:` usam os graus de liberdade do desenho; o `irt 3pl` tem um pseudoacerto comum, a menos que se dê `sepguessing`. Os sorteios do `bayesmh` e do `mi impute` vêm do gerador do próprio OpenDTA e não reproduzem os do Stata
 
+## Fase 24: programação, parte 2
+
+- [x] `makecns` com lista de números de restrições (restrições que não podem ser lidas ficam de fora com uma nota), as opções `displaycns` e `nocnsnotes`, e `matrix dispCns`
+- [x] `constraint #` sem a palavra `define`
+- [x] `matlist` com nomes de equações: `showcoleq()` (`first`, `each`, `combined`, `lcombined`, `rcombined`), `roweqonly`, `coleqonly`, `keepcoleq`, `colorcoleq()` e `lines(eq)`; `matrix rownames` e `colnames` definem a equação dos nomes escritos `eq:nome`
+- [x] `window` na interface gráfica: caixas de diálogo de arquivo `fopen` e `fsave`, caixas de mensagem `stopbox`, `push` para a janela Review, o menu User montado com `window menu`, e `manage` (`minimize`, `restore`, `maintitle`, `forward`, `close`)
+- Conferido com o log do Stata 14: caso `1910`. Achados e corrigidos no caminho: o `makecns` pula números sem restrição, mantém as restrições redundantes e não mostra nada com `r`; o `matrix dispCns` exige resultados gravados por um comando de estimação; o `matlist` mostra as equações das colunas como faixas, uma linha de rótulo para cada equação das linhas e, nos painéis seguintes, deixa de fora a metade superior vazia de uma matriz simétrica
+
+## Fase 25: manipulação de dados, parte 2
+
+- [x] `table` com variável de supercoluna (`table rowvar colvar supercolvar`), a opção `scol` e `by()` com até quatro variáveis
+- [x] `list` com `string()` e o formato `display` (escolhido também quando a tabela não cabe na linha)
+- [x] `import sasxport` com `describe` e `member()` (leitor próprio do OpenDTA de todos os membros de um arquivo XPORT, `io/xport.py`) e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
+- Conferido com o log do Stata 14: caso `1911`. Achados e corrigidos no caminho: o `table` mantém todas as linhas e todas as combinações das variáveis do `by()`, com as supercolunas separadas por 4 espaços; o `list, string()` termina com `..` os valores cortados; o `import sasxport, describe` tem o leiaute e os resultados guardados do Stata
+
+## Fase 26: epidemiologia, parte 2
+
+- [x] `rocreg` com `probit ml`: o modelo ROC binormal por máxima verossimilhança, com covariáveis da ROC (`roccov()`), covariáveis de controle (`ctrlcov()`, linear) e a AUC pelo método delta
+- [x] `rocreg` com `cluster()`: erros-padrão robustos a clusters depois de `ml` e reamostragem de clusters inteiros no bootstrap
+- Conferido com o log do Stata 14: caso `1912` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: o `probit ml` ajusta, para cada classificador, o modelo de ajuste por covariáveis dos controles (médias e desvios-padrão de casos e controles) e tira dele os parâmetros da ROC e a AUC pelo método delta; vários classificadores entram num só modelo, com o teste de AUCs iguais
+
+## Fase 27: estatística básica, parte 2
+
+- [x] `ml` com os métodos `lf0`, `lf1`, `lf2`, `gf0`, `gf1` e `gf2`, `constraints()` (maximização no subespaço restrito, `e(Cns)`) e `svy` (pesos do desenho e variância linearizada)
+- [x] `boxcox` com `model(rhsonly)`, `model(lambda)` e `model(theta)` e `notrans()`
+- [x] `icc` com `testvalue()` e dados não balanceados no modelo de um fator; `loneway` com `mean`, `median` e `exact`
+- [x] `esize` e `esizei` com `unequal` e `welch`; `pwmean` com `unequal` (graus de liberdade de Satterthwaite por comparação); `ameans` com `fweight` e `aweight`
+- [x] `lv` com `generate` e `tail()`; `stem` com `width()` (e uma correção para dados decimais guardados como `float`)
+- Conferido com o log do Stata 14: caso `1913` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: o `ml` com restrições grava e(Cns) e os resultados de survey do Stata; o `boxcox` itera por Newton–Raphson a partir de 1 e transforma todas as variáveis da varlist; o `icc` deixa de fora os alvos com avaliações faltantes; o `loneway` guarda o r() do Stata; o `esize, unequal/welch` informa os graus de liberdade
+
+## Fase 28: dados em painel, parte 2
+
+- [x] `xtivreg` com `first` (regressões de primeiro estágio com o mesmo estimador) e `regress` (todos os regressores exógenos)
+- [x] `xtdata` com `re` e `ratio()` (a transformação de MQG de efeitos aleatórios, com uma variável `constant`)
+- [x] `xtrc` com `betas` (melhores preditores lineares dos coeficientes de cada painel, `e(beta_ps)` e `e(V_ps)`)
+- [x] `xtunitroot fisher` com `drift`, `demean` e `pperron`; `xtunitroot hadri` com `kernel()` (variâncias de longo prazo de Bartlett, Parzen e espectral quadrática com um número dado de defasagens)
+- [x] `xtabond`, `xtdpdsys` e `xtdpd` com `artests()`; `xtdpd` com `hascons`
+- Conferido com o log do Stata 14: caso `1914` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: as regressões de primeiro estágio do `xtivreg, first` seguem o estimador (o G2SLS tem cabeçalho próprio); o `xtdata, re` mantém a variável de painel e acrescenta a constante; o `xtunitroot fisher` e o `hadri` seguem o layout e o r() do Stata; o `xtabond` descarta instrumentos duplicados e a constante do `hascons` com uma nota
+
+## Fase 29: séries temporais, parte 2
+
+- [x] `prais` com `vce(robust)`, `vce(hc2)`, `vce(hc3)` e `vce(cluster)` (variância semirrobusta da regressão transformada)
+- [x] `arch` com `constraints()` e `from()`; `arfima` com `vce(robust)`
+- [x] `svar` com `aconstraints()` e `bconstraints()`; `sspace` e `dfactor` com `constraints()` nos coeficientes
+- [x] `predict` depois de `ucm`, `sspace` e `dfactor` (previsões um passo à frente, resíduos e resíduos padronizados); a subopção `frequency()` do `cycle()` do `ucm`; `psdensity` depois de `ucm`
+- Conferido com o log do Stata 14: caso `1915` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: a log-verossimilhança do `prais` deixa de fora o termo do jacobiano; o `arfima` refina as estimativas numa segunda maximização; o `svar` grava todas as entradas de A e B em e(b), com variância zero para as fixas, e o e(Cns); o `ucm` confere a frequência do ciclo e o teste de Wald cobre a frequência e o amortecimento; o `sspace` e o `dfactor` padronizam os resíduos em conjunto
+
+## Fase 30: modelos multinível, parte 2
+
+- [x] `meglm` e os outros comandos `me` com níveis aninhados de efeitos aleatórios (`|| school: || class:`), por quadratura adaptativa em produto sobre os níveis
+- [x] Pesos nos comandos `me` e no `mestreg`: `fweight`, `pweight` e `iweight` no nível da observação e as opções `fweight()` e `pweight()` de cada equação de efeitos aleatórios
+- [x] `vce(robust)` e `vce(cluster clustvar)` (o padrão com pesos amostrais): variância sanduíche com os escores dos grupos do nível mais alto
+- [x] `predict` depois do `mestreg` com `median`, `mean` e `hazard` em todas as distribuições
+- Conferido com o log do Stata 14: caso `1916` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: com níveis aninhados os pontos de quadratura de um nível inferior acompanham os efeitos do nível acima e as derivadas seguem os pontos, o que dá as estimativas e os erros-padrão do Stata; uma variância que vai a zero não infla mais a verossimilhança; o `meqrlogit` e o `meqrpoisson` aceitam níveis aninhados; os pesos de frequência entram na tabela de grupos; a mediana do `mestreg` usa só os efeitos fixos
+
+## Fase 31: estatística multivariada, parte 2
+
+- [x] `clustermat` (agrupamento hierárquico de uma matriz de dissimilaridades, com `shape()`, `add`, `clear` e `labelvar()`); as medidas binárias de similaridade do `cluster` e do `matrix dissimilarity` (`matching`, `Jaccard`, `Russell`, `Hamann`, `Dice`, `antiDice`, `Sneath`, `Rogers`, `Ochiai`, `Yule`, `Anderberg`, `Kulczynski`, `Pearson`, `Gower2`); `cluster kmeans` e `kmedians` com `keepcenters`
+- [x] `manovatest` (testes de termos depois do `manova`, com termos de erro depois de `/` e `ytransform()`)
+- [x] `camat`, `cabiplot`, `caprojection`, `mcaplot` e `mcaprojection`
+- [x] `mdslong`, `mdsconfig` e `mdsshepard`; `procoverlay`; `procrustes` com `transform(unrestricted)` e `transform(oblique)`
+- Conferido com o log do Stata 14: o caso `1917` bate, exceto o histórico de iterações de `mdslong, method(modern)` (o otimizador do Stata não é documentado; ver `compat/known_differences.txt`). Encontrado e corrigido no caminho: as variáveis `_ord` e `_hgt` de uma análise hierárquica são por posição no dendrograma (o id da k-ésima folha e a altura da junção com a seguinte), o grupo com a menor observação vem primeiro, as medidas binárias de similaridade guardam as alturas como similaridades e `cluster generate` recusa um número de grupos que os empates tornam ambíguo; `clustermat` informa as observações novas e o nome da análise e põe a variável de rótulos por último; `manovatest` com vários termos testa-os juntos na codificação por nível de base, para quando o termo de erro tem menos graus de liberdade que as variáveis dependentes e tem `showorder`; `list` abrevia um nome de modo que ele corresponda só àquela variável (`_clus~id`)
+
 ## Fase 32: modelos, parte 3
 
 - [x] `tpoisson` e `tnbreg` com `ul()` e limites dados por variáveis; `tnbreg` e `nbreg` com `dispersion(constant)` (o `nbreg` aceitava a opção e ajustava o modelo de dispersão média)
@@ -312,21 +375,22 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `set numerics precise`: QR no `regress`, `D.`/`S.` em double, passo final de Newton no `ml`/`optimize()`, Richardson nas derivadas numéricas e variáveis novas em double (o padrão `stata` reproduz os arredondamentos do Stata)
 - [ ] Opções estatísticas além do Stata: `vce(cr2)` com graus de liberdade de Satterthwaite, *wild cluster bootstrap*, `logit, firth`
 - [x] Expoente sobrescrito na notação científica exibida (`1.0000×10¹⁰`, `2.5×10⁻⁵`), mantendo a largura do formato; `set superscript off` (ou Help → Superscript Exponents) volta ao `e+10` do Stata. `string()`, macros, `file write`, exportação e `sprintf()`/`strofreal()` do Mata ficam sempre na forma do Stata
+- [x] O Review pode listar os comandos executados pelos do-files (`do`, `run`, `include` e os botões Do e Run do Editor de do-files) sob a linha do do, com os do-files aninhados e os comandos com erro em vermelho, e as seleções do editor identificadas pelo arquivo (Settings > General > Session; desligado por padrão, como no Stata, em que o Review mostra só `do "<arquivo temporário>"`)
 
 ## Faltam para a 1.0
 
 Comandos e opções do Stata 14 que o OpenDTA ainda não tem, por área. Todos são necessários para a 1.0; a ordem é a dos blocos de [docs/next-steps.pt-BR.md](docs/next-steps.pt-BR.md), ajustada pelos pedidos abertos com o modelo [Command request](https://github.com/yaskepalhares/opendta/issues/new?template=command-request.md).
 
-- **Manipulação de dados**: `table` com três variáveis ou mais; `import haver`; `import sasxport` com `describe`, `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`; `list` com `string()` e `display`; `icd9p` com a lista de procedimentos da ICD-9-CM.
-- **Epidemiologia**: `rocreg` com as opções `ml` e `cluster()`.
-- **Estatística básica**: `margins` depois de mais comandos; `ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `constraints()` e `svy`; `boxcox` com `model(lhsrhs)`, `rhsonly` e `notrans()`; `icc` com `testvalue()` e dados não balanceados; `loneway` com `median` e `exact`; `esize` com `unequal` e `welch`; `pwmean` com `unequal`; `ameans` com pesos; `lv` com `generate()` e `tail()`; `stem` com `width()`; `cusum` com as estatísticas de teste.
+- **Manipulação de dados**: `icd9p` com a lista de procedimentos da ICD-9-CM.
 - **Modelos**: `ivprobit` e `ivtobit` com `twostep` e com mais de um regressor endógeno; `ivpoisson cfunction` com mais de um regressor endógeno; `ivregress gmm` com `wmatrix(hac kernel opt)`; `biprobit` com `partial` e `constraints()`; `asmprobit` e `asroprobit` com `altwise`, alternativas não balanceadas e outras estruturas de covariância; `slogit` com `dim()` acima de 1; `exlogistic` e `expoisson` com `terms`, `group()`, `binomial()`, `condvars()`, `saving()`, `exposure()` e `offset()`; as formas com programa de `nl`, `nlsur` e `gmm`, e `gmm` com `derivatives()`, `parameters()` e `igmm`; `frontier` com `constraints()`; `teffects` com tratamentos de vários níveis, outros modelos de desfecho e `predict`; `stteffects wra`; `eteffects` com outros modelos de desfecho e de tratamento; `etregress` e `etpoisson` com `cfunc`.
-- **Dados em painel**: `xtunitroot` com `llc` e `ips` (precisam dos momentos tabelados dos artigos originais), `trend` no `ht`, `lags()` no `breitung`, `demean`, `drift` e `pperron` no `fisher` e as opções de núcleo do `hadri`; `xtregar` com `lbi`; `xtrc` com `betas`; `xtivreg` com `first` e `regress`; `xtdata` com `re` e `fa`; `xtabond`, `xtdpdsys` e `xtdpd` com `teffects`, `small`, `diffvars()`, `collapse`, `hascons`, `h()`, `artests()` e `vce(cluster)`.
-- **Séries temporais**: `vec` com `bconstraints()`, `aconstraints()` e `sindicators()`, e os valores críticos de Osterwald-Lenum para as tendências diferentes de `constant` e `rconstant`; `svar` com `aconstraints()`, `bconstraints()` e `lrconstraints()`; `fcast` com `bs`, `bsp`, `exog` e defasagens não consecutivas; `arch` com `constraints()` e `from()`; `arfima` com `mpl`, `smemory` e `vce(robust)`; `ucm` com `constraints()` e a subopção `frequency()` de `cycle()`; `sspace` com `covstate()` e `covobserved()` diferentes de `diagonal`, `constraints()` e estados com defasagens acima de um; `dfactor` com mais de um fator, `ma()` e autorregressões nos erros; `mgarch vcc`, `distribution(t)`, `het()`, `constraints()` e `vce(robust)`; `prais` com `vce(robust)`; `predict` e `estat` depois de `ucm`, `sspace`, `dfactor` e `mgarch`; `psdensity` depois de `ucm`.
-- **Estatística multivariada**: `clustermat`, `manovatest`, `camat`, `cabiplot`, `cagraph`, `caprojection`, `mcaplot`, `mcaprojection`, `mdsconfig`, `mdsshepard`, `mdslong`, `procoverlay`; `pca` com `vce(normal)`, `means` e variáveis suplementares; `factor` com `estat factors` e `estat rotatecompare`; `rotate` com `target()`, `matrix()` e os outros critérios (`oblimax`, `bentler`, `cf()`…); `manova` com termos de erro; `canon` com `estat`; `mvtest` com as hipóteses `compound`, `block` e `pairwise` e `normality` com `univariate`, `bivariate`, `by()` e Doornik-Hansen; `cluster` com as medidas binárias de similaridade e `keepcenters`; `discrim` com `ties()`, `priors(matname)`, pesos e `lootable` depois de `logistic`, `estat correlations`, `estat grsummarize` e `estat manova`; `ca` e `mca` com pontos suplementares, `method(indicator)` e `method(johnson)` e os outros subcomandos de `estat`; `mds` com `method(nonmetric)`, `loss()`, `transform()` e `addconstant`; `procrustes` com `transform(oblique)` e `transform(unrestricted)`.
-- **Modelos multinível**: `meglm` e os outros comandos `me` com mais de um nível de efeitos aleatórios, pesos ou `vce(robust)`; `mestreg` com pesos, `vce(robust)` e as opções `median` e `mean` do `predict` (e `hazard` depois das distribuições lognormal, loglogística e gama); `predict, reffects` depois do `mixed` com equações `R.`.
+- **Dados em painel**: `xtunitroot` com `llc` e `ips` (precisam dos momentos tabelados dos artigos originais), `trend` no `ht`, `lags()` no `breitung` e as escolhas automáticas de defasagens do `kernel()`; `xtregar` com `lbi`; `xtdata` com `fa`; `xtabond`, `xtdpdsys` e `xtdpd` com `teffects`, `small`, `diffvars()`, `collapse`, `h()` e `vce(cluster)` (algumas podem ser opções do `xtabond2`, de usuário, e não do Stata 14: conferir no manual).
+- **Séries temporais**: `vec` com `bconstraints()`, `aconstraints()` e `sindicators()`, e os valores críticos de Osterwald-Lenum para as tendências diferentes de `constant` e `rconstant`; `svar` com `lrconstraints()`; `fcast` com `bs`, `bsp`, `exog` e defasagens não consecutivas; `arfima` com `mpl` e `smemory`; `ucm` com `constraints()`; `sspace` com `covstate()` e `covobserved()` diferentes de `diagonal`, restrições nas variâncias e estados com defasagens acima de um; `dfactor` com mais de um fator, `ma()` e autorregressões nos erros; `mgarch vcc`, `distribution(t)`, `het()`, `constraints()` e `vce(robust)`; `predict` com os estados, os componentes e `smethod()` e `estat` depois de `ucm`, `sspace` e `dfactor`; `predict` e `estat` depois de `mgarch`.
+- **Estatística multivariada**: `manovatest` com `test()`; `pca` com `vce(normal)`, `means` e variáveis suplementares; `factor` com `estat factors` e `estat rotatecompare`; `rotate` com `target()`, `matrix()` e os outros critérios (`oblimax`, `bentler`, `cf()`…); `manova` com termos de erro; `canon` com `estat`; `mvtest` com as hipóteses `compound`, `block` e `pairwise` e `normality` com `univariate`, `bivariate`, `by()` e Doornik-Hansen; `discrim` com `ties()`, `priors(matname)`, pesos e `lootable` depois de `logistic`, `estat correlations`, `estat grsummarize` e `estat manova`; `ca` e `mca` com pontos suplementares, `method(indicator)` e `method(johnson)` e os outros subcomandos de `estat`; `mds` com `method(nonmetric)`, `loss()`, `transform()` e `addconstant`; `mdslong` com `s2d()`.
+- **Modelos multinível**: `intmethod(laplace)` com mais de um nível; efeitos aleatórios cruzados (`_all:`) nos comandos `me`.
 - **Outras suítes**: `power` com os métodos `twoway`, `repeated`, `cmh`, `mcc`, `trend`, `cox`, `exponential` e `logrank`; `bayes` com os comandos de estimação além de `regress`, `logit`, `probit` e `poisson`; `irt` com `group()`; `gsem` com variáveis latentes por observação e por conglomerado no mesmo modelo; `svy:` com `ivprobit`, `ivtobit` e os demais estimadores que ainda não aceitam pesos; `e(b)` de `sem`, `gsem` e `irt` com os parâmetros restritos (e `e(Cns)`); `svy:` guardando os resultados `e()` do estimador.
-- **Programação**: `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, da área Modelos); `matlist` com as opções de equações; as caixas de diálogo e os menus de `window` na interface gráfica; o carregamento de `plugin` (plugins compilados do Stata não rodam no OpenDTA); o sistema de classes do Stata (as classes do Mata já funcionam).
+- **Programação**: o sistema de classes do Stata (as classes do Mata já funcionam).
+
+Ficam de fora da 1.0 de propósito, como limitações conhecidas: `import haver`, que lê os bancos da Haver Analytics só pelo software da própria Haver (Windows e licença paga), e o carregamento de plugins compilados do Stata (`program nome, plugin` e `plugin call`), que são código de máquina escrito para a interface interna do Stata; o mesmo cálculo pode ser escrito num do-file, num ado-file ou em Mata.
 
 ## Depois da 1.0
 
