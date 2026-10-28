@@ -892,6 +892,8 @@ class MainWindow(QMainWindow):
             self.session.run("capture quietly log close _all")
         self.prefs.save_layout(self.saveGeometry(), self.saveState(), self.splitter.saveState())
         super().closeEvent(event)
+        if event.isAccepted():
+            self.updates.shutdown()
         start = self._pending_update
         if start is not None and event.isAccepted():
             # the installer (or the replacement script) waits for this process to end

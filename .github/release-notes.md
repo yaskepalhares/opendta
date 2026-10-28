@@ -1,11 +1,10 @@
 **English** · [Português](#português)
 
-## What's new in 0.7.2
+## What's new in 0.7.3
 
-Interface polish:
+Bug fix:
 
-- **Data Editor**: opens with a grid of empty cells, ready to type into, instead of a blank window. New toolbar with Edit, Browse, Filter, Variables, Properties and Snapshots; a cell bar with `var[obs]` and the value of the current cell (editable in Edit mode); Variables and Properties panes (the properties can be edited in Edit mode); a status bar with Vars, Order, Obs, Length and Filter.
-- **Do-file Editor**: the new-tab button sits right after the last tab, every tab shows its close icon, closing an empty tab no longer asks for confirmation, and the save dialog has rounded buttons.
+- **Updates**: clicking Cancel while the update was downloading (or closing the window) crashed OpenDTA. The download now stops cleanly and the application keeps running.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -51,12 +50,11 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.7.2
+### Novidades da 0.7.3
 
-Ajustes de interface:
+Correção:
 
-- **Editor de dados**: abre com uma grade de células vazias, pronta para digitar, em vez de uma janela em branco. Nova barra com Editar, Ver, Filtro, Variáveis, Propriedades e Instantâneos; uma barra de célula com `var[obs]` e o valor da célula atual (editável no modo Edição); painéis de Variáveis e Propriedades (as propriedades podem ser editadas no modo Edição); barra de status com Vars, Ordem, Obs, Tamanho e Filtro.
-- **Editor de do-files**: o botão de nova aba fica logo após a última aba, cada aba mostra o ícone de fechar, fechar uma aba vazia não pede mais confirmação e a janela de salvar tem botões arredondados.
+- **Atualizações**: clicar em Cancelar durante o download da atualização (ou fechar a janela) fazia o OpenDTA fechar com erro. Agora o download é interrompido normalmente e o aplicativo continua aberto.
 
 ### Download
 

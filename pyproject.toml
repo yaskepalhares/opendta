@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opendta"
-version = "0.7.2"
+version = "0.7.3"
 description = "Do-file interpreter with a Stata 14-style interface (personal study project)"
 readme = "README.md"
 requires-python = ">=3.11"

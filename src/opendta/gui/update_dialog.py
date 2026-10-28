@@ -70,6 +70,40 @@ class UpdateController(QObject):
         self._thread = None
         self._worker = None
         self._manual = False
+        self._orphans: list[tuple[QThread, _Worker]] = []   # download threads still finishing
+
+    # -- threads that outlive the dialog -------------------------------------------
+    def adopt(self, thread: QThread, worker: _Worker) -> None:
+        """The dialog can close (Cancel, Esc, success) while its QThread is still running. A
+        QThread destroyed while running aborts the whole application, so the controller, which
+        lives as long as the main window, takes the thread over until it finishes."""
+        thread.setParent(self)
+        self._orphans.append((thread, worker))
+        thread.finished.connect(self._reap)
+        if thread.isFinished():
+            self._reap()
+
+    @Slot()
+    def _reap(self) -> None:
+        alive = []
+        for th, w in self._orphans:
+            if th.isRunning():
+                alive.append((th, w))
+            else:
+                th.wait()
+                th.deleteLater()
+        self._orphans = alive
+
+    def shutdown(self) -> None:
+        """Called when the main window closes: cancels downloads and waits for the threads."""
+        for th, w in self._orphans + ([(self._thread, self._worker)] if self._thread is not None else []):
+            try:
+                w.cancel = True
+                th.quit()
+                th.wait(5000)
+            except RuntimeError:        # already deleted
+                pass
+        self._orphans = []
 
     # -- checking --------------------------------------------------------------
     def check_at_startup(self) -> None:
@@ -242,6 +276,26 @@ class UpdateDialog(QDialog):
         self.later.clicked.connect(self.reject)
         self.install.clicked.connect(self._install)
         self._worker = None
+        self._thread = None
+
+    def done(self, r: int) -> None:
+        """Every way of closing the dialog (buttons, Esc, window close) ends here."""
+        self._release_download()
+        super().done(r)
+
+    def _release_download(self) -> None:
+        th, w = self._thread, self._worker
+        self._thread = None
+        if th is None or w is None:
+            return
+        w.cancel = True
+        for sig, slot in ((w.progress, self._progress), (w.done, self._downloaded),
+                          (w.failed, self._failed)):
+            try:
+                sig.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
+        self.ctl.adopt(th, w)
 
     def _skip(self) -> None:
         self.ctl.prefs.skipped_version = self.rel.version
@@ -277,9 +331,7 @@ class UpdateDialog(QDialog):
                                   f"Baixando... {done / 1e6:.1f} de {total / 1e6:.1f} MB"))
 
     def _cancel(self) -> None:
-        if self._worker is not None:
-            self._worker.cancel = True
-        self.reject()
+        self.reject()       # done() cancels the download and hands the thread to the controller
 
     @Slot(str)
     def _failed(self, msg: str) -> None:
