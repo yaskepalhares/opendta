@@ -665,7 +665,10 @@ def _vc_rows(lv: Level, th: np.ndarray, V: np.ndarray, sd: bool, z: float):
         se = float(np.sqrt(max(J @ V @ J, 0)))
         if kind == "pos":           # variances and sds: interval on the log scale
             lse = se / f0 if f0 > 0 else np.nan
-            lo, hi = f0 * math.exp(-z * lse), f0 * math.exp(z * lse)
+            try:
+                lo, hi = f0 * math.exp(-z * lse), f0 * math.exp(z * lse)
+            except OverflowError:   # a variance at the boundary (compat 1916)
+                lo = hi = np.nan
         elif kind == "corr":
             a = math.atanh(f0) if abs(f0) < 1 else np.nan
             ase = se / (1 - f0 * f0) if abs(f0) < 1 else np.nan
