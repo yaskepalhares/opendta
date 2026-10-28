@@ -67,6 +67,13 @@ def _human_size(nbytes: int) -> str:
     return str(nbytes)
 
 
+# short name shown under each toolbar icon, as in Stata (the tooltip keeps the long text)
+_TOOLBAR_LABELS = {
+    "open": "Open", "save": "Save", "print": "Print", "log": "Log", "viewer": "Viewer", "graph": "Graph",
+    "dofile": "Do-file Editor", "dataeditor": "Data Editor", "databrowser": "Data Browser",
+    "variables": "Variables", "more": "More", "break": "Break",
+}
+
 # toolbar buttons that exist in Stata but do nothing here, with the reason in their tooltip
 _PENDING = {
     "more": "No effect: OpenDTA always runs with set more off",
@@ -361,7 +368,7 @@ class MainWindow(QMainWindow):
         self.refresh_state()
         for act in self.toolbar_actions.values():
             key = act.property("key")
-            act.setText(tr(key))
+            act.setText(tr(act.property("label")))
             act.setToolTip(tr(key) + (act.property("suffix") or ""))
         for d in (self.dock_review, self.dock_variables, self.dock_properties):
             d.setWindowTitle(tr(d.objectName()))
@@ -387,7 +394,7 @@ class MainWindow(QMainWindow):
         tb.setObjectName("Toolbar")
         tb.setMovable(False)
         tb.setIconSize(TOOLBAR_SIZE)
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         # same arrangement as Stata 14's toolbar; OpenDTA's own drawing (gui/icons/)
         # buttons without a slot are the _PENDING ones: shown disabled, with the reason
         groups = [
@@ -407,8 +414,10 @@ class MainWindow(QMainWindow):
                 tb.addSeparator()
             for name, text, slot in group:
                 accent = ACCENT_RED if name == "break" else None
-                act = QAction(icon(name, accent), tr(text), self)
+                label = _TOOLBAR_LABELS[name]
+                act = QAction(icon(name, accent), tr(label), self)
                 act.setData((name, accent))
+                act.setProperty("label", label)
                 suffix = f" — {tr(_PENDING[name])}" if slot is None else ""
                 act.setProperty("key", text)
                 act.setProperty("suffix", suffix)
@@ -424,6 +433,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(spacer)
         act = QAction(icon("settings"), tr("Settings"), self)
         act.setData(("settings", None))
+        act.setProperty("label", "Settings")
         act.setProperty("key", "Settings")
         suffix = f"  [{QKeySequence('Ctrl+,').toString(QKeySequence.SequenceFormat.NativeText)}]"
         act.setProperty("suffix", suffix)
@@ -450,7 +460,7 @@ class MainWindow(QMainWindow):
             QSplitter#CentralSplitter::handle { background: palette(window); }
             QSplitter#CentralSplitter::handle:hover { background: palette(mid); }
             QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
-            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 4px; }
+            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 3px 4px; font-size: 11px; }
             QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
