@@ -916,3 +916,26 @@ def test_do_editor_closes_empty_tab_without_asking(app):
     ed.current().document().setModified(True)
     assert ed.close_tab(ed.tabs.currentIndex()) is True            # blank: no confirmation
     assert ed.tab_bar.plus.x() > ed.tab_bar.tabRect(ed.tabs.count() - 1).right() - 1
+
+
+def test_do_editor_close_button_and_shortcut(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QTabBar
+
+    from opendta.gui.dofile_editor import DoFileEditor
+    from opendta.session import Session
+
+    ed = DoFileEditor(Session(), run=lambda c: None)
+    ed.show()
+    ed.new_file()
+    ed.new_file()
+    app.processEvents()
+    assert ed.tabs.count() == 3
+    btn = ed.tab_bar.tabButton(1, QTabBar.ButtonPosition.RightSide)
+    QTest.mouseClick(btn, Qt.MouseButton.LeftButton)            # the x of a tab closes it
+    assert ed.tabs.count() == 2
+    ed.tabs.setCurrentIndex(0)
+    QTest.keyClick(ed, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)   # Ctrl+W (Cmd+W on a Mac)
+    assert ed.tabs.count() == 1
+    ed.close()

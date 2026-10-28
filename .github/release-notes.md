@@ -1,10 +1,10 @@
 **English** · [Português](#português)
 
-## What's new in 0.8.0
+## What's new in 0.8.1
 
-Interface:
+Fix:
 
-- **Toolbar**: when you close the Review, Variables or Properties window, a button for it appears in the toolbar and brings the window back to its place; with the window open, the button is not there. The Variables Manager has its own **Manager** button, with a new icon.
+- **Do-file Editor**: the **x** on a tab closes it again, and **Ctrl+W** (Cmd+W on a Mac) closes the current tab. A tab with unsaved text still asks before closing.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -50,11 +50,11 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.8.0
+### Novidades da 0.8.1
 
-Interface:
+Correção:
 
-- **Barra de ferramentas**: ao fechar a janela Histórico, Variáveis ou Propriedades, um botão dela aparece na barra e traz a janela de volta ao seu lugar; com a janela aberta, o botão não aparece. O Gerenciador de variáveis tem o seu próprio botão, **Gerenciador**, com ícone novo.
+- **Editor de do-files**: o **x** da aba volta a fechá-la, e **Ctrl+W** (Cmd+W no Mac) fecha a aba atual. Uma aba com texto não salvo continua perguntando antes de fechar.
 
 ### Download
 
