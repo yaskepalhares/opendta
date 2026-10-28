@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..i18n import tr
 from .icons import icon
+from .style import apply_rounded
 
 import os
 import re
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING, Callable
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QKeySequence, QPainter, QShortcut, QSyntaxHighlighter,
                            QTextCharFormat, QTextCursor, QTextDocument)
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QTabBar,
                                QPlainTextEdit, QPushButton, QSizePolicy, QTabWidget, QTextEdit, QToolBar,
                                QToolButton, QWidget)
 
@@ -339,6 +340,63 @@ class _FindBar(QWidget):
             lay.addWidget(b)
 
 
+class _TabBar(QTabBar):
+    """Tab bar with the "new tab" button right after the last tab and a close icon on every tab."""
+
+    def __init__(self):
+        super().__init__()
+        self.plus = QToolButton(self)
+        self.plus.setAutoRaise(True)
+        self.plus.setIconSize(QSize(16, 16))
+        self.plus.setObjectName("NewTab")
+        self.setExpanding(False)
+        self.setDrawBase(False)
+
+    def refresh_icons(self) -> None:
+        self.plus.setIcon(icon("plus"))
+        for i in range(self.count()):
+            self._close_button(i)
+
+    def _close_button(self, i: int) -> None:
+        btn = QToolButton(self)
+        btn.setAutoRaise(True)
+        btn.setObjectName("TabClose")
+        btn.setIcon(icon("close"))
+        btn.setIconSize(QSize(12, 12))
+        btn.setFixedSize(18, 18)
+        btn.clicked.connect(lambda _=False, b=btn: self._close_clicked(b))
+        self.setTabButton(i, QTabBar.ButtonPosition.RightSide, btn)
+
+    def _close_clicked(self, btn: QToolButton) -> None:
+        for i in range(self.count()):
+            if self.tabButton(i, QTabBar.ButtonPosition.RightSide) is btn:
+                self.tabCloseRequested.emit(i)
+                return
+
+    def tabInserted(self, index: int) -> None:  # noqa: N802
+        super().tabInserted(index)
+        self._close_button(index)
+        self._place_plus()
+
+    def tabRemoved(self, index: int) -> None:  # noqa: N802
+        super().tabRemoved(index)
+        self._place_plus()
+
+    def tabLayoutChange(self) -> None:  # noqa: N802
+        super().tabLayoutChange()
+        self._place_plus()
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self._place_plus()
+
+    def _place_plus(self) -> None:
+        n = self.count()
+        x = self.tabRect(n - 1).right() + 6 if n else 6
+        self.plus.move(x, max(0, (self.height() - self.plus.height()) // 2))
+        self.plus.raise_()
+
+
 class DoFileEditor(QMainWindow):
     """Do-file Editor window."""
 
@@ -360,8 +418,10 @@ class DoFileEditor(QMainWindow):
         self.tmp_sources: dict[str, str] = {}     # temporary file -> what it holds, for Review
 
         self.tabs = QTabWidget()
+        self.tab_bar = _TabBar()
+        self.tabs.setTabBar(self.tab_bar)
         self.tabs.setDocumentMode(True)
-        self.tabs.setTabsClosable(True)
+        self.tabs.setTabsClosable(False)      # _TabBar draws its own close icons
         self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(lambda _: (self._update_title(), self._update_undo()))
@@ -428,12 +488,9 @@ class DoFileEditor(QMainWindow):
         self.addToolBar(tb)
         self.toolbar = tb
         self._fit_toolbar_buttons()
-        self.new_tab_button = QToolButton()          # the + at the end of the tab bar
-        self.new_tab_button.setAutoRaise(True)
-        self.new_tab_button.setIcon(icon("plus"))
-        self.new_tab_button.setIconSize(QSize(16, 16))
+        self.new_tab_button = self.tab_bar.plus      # the + right after the last tab
         self.new_tab_button.clicked.connect(self.new_file)
-        self.tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
+        self.tab_bar.refresh_icons()
         self._retitle_tab_button()
         self.setStyleSheet("""
             QToolBar#DoToolbar { border: none; spacing: 2px; padding: 4px 10px; }
@@ -447,8 +504,8 @@ class DoFileEditor(QMainWindow):
                            margin: 4px 2px 4px 2px; }
             QTabBar::tab:selected { background: rgba(127, 127, 127, 0.22); font-weight: 600; }
             QTabBar::tab:hover:!selected { background: rgba(127, 127, 127, 0.12); }
-            QTabBar::close-button { border-radius: 6px; subcontrol-position: right; }
-            QTabBar::close-button:hover { background: rgba(127, 127, 127, 0.3); }
+            QTabBar QToolButton { border: none; border-radius: 6px; }
+            QTabBar QToolButton:hover { background: rgba(127, 127, 127, 0.3); }
             QPlainTextEdit { border: none; }
             QWidget#FindBar { border-top: 1px solid rgba(127, 127, 127, 0.3); }
             QWidget#FindBar QLineEdit { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
@@ -595,12 +652,17 @@ class DoFileEditor(QMainWindow):
 
     def close_tab(self, idx: int) -> bool:
         ed = self.tabs.widget(idx)
-        if isinstance(ed, CodeEditor) and ed.document().isModified():
+        if isinstance(ed, CodeEditor) and ed.document().isModified() and ed.toPlainText().strip():
             self.tabs.setCurrentIndex(idx)
-            ans = QMessageBox.question(self, tr("Do-file Editor"),
-                                       tr("Save changes to {name}?").format(name=self._tab_title(ed).rstrip('*')),
-                                       QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
-                                       | QMessageBox.StandardButton.Cancel)
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(tr("Do-file Editor"))
+            box.setText(tr("Save changes to {name}?").format(name=self._tab_title(ed).rstrip('*')))
+            box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
+                                   | QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(QMessageBox.StandardButton.Save)
+            apply_rounded(box)
+            ans = box.exec()
             if ans == QMessageBox.StandardButton.Cancel:
                 return False
             if ans == QMessageBox.StandardButton.Save and not self.save():
@@ -617,7 +679,7 @@ class DoFileEditor(QMainWindow):
         try:
             for i in reversed(range(self.tabs.count())):
                 ed = self.tabs.widget(i)
-                if isinstance(ed, CodeEditor) and ed.document().isModified():
+                if isinstance(ed, CodeEditor) and ed.document().isModified() and ed.toPlainText().strip():
                     if not self.close_tab(i):
                         e.ignore()
                         return
@@ -708,7 +770,7 @@ class DoFileEditor(QMainWindow):
         for act in self.tool_actions.values():
             name, accent = act.data()
             act.setIcon(icon(name, accent))
-        self.new_tab_button.setIcon(icon("plus"))
+        self.tab_bar.refresh_icons()
 
     def cleanup(self) -> None:
         for p in self.tmpfiles:
@@ -722,5 +784,6 @@ class DoFileEditor(QMainWindow):
         for act in self.tool_actions.values():
             self._retitle(act)
         self._retitle_tab_button()
+        self.tab_bar.refresh_icons()
         self._fit_toolbar_buttons()
         self._update_title()

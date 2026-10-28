@@ -792,3 +792,36 @@ def test_toolbar_buttons_show_their_name_under_the_icon(app):
     finally:
         i18n.set_language("en")
         w.close()
+
+
+def test_data_editor_empty_grid_and_panes(app, tmp_path, monkeypatch):
+    from opendta.gui.main_window import MainWindow
+
+    monkeypatch.chdir(tmp_path)
+    w = MainWindow()
+    w.run_command("edit")
+    app.processEvents()
+    b = w.browser
+    m = b.model
+    assert m.rowCount() > 10 and m.columnCount() > 3             # empty cells fill the view
+    assert b.cell_name.text() == "var1[1]"
+    b.table.setCurrentIndex(m.index(0, 0))
+    b.cell_value.setText("4")
+    b._commit_cell()
+    app.processEvents()
+    assert w.session.data.names == ["var1"] and w.session.data.nobs == 1
+    assert m.rowCount() == 2 and m.columnCount() == 2              # no padding once there is data
+    assert b.vars_list.topLevelItemCount() == 1
+    w.close()
+
+
+def test_do_editor_closes_empty_tab_without_asking(app):
+    from opendta.gui.dofile_editor import DoFileEditor
+    from opendta.session import Session
+
+    ed = DoFileEditor(Session(), run=lambda c: None)
+    ed.new_file()
+    ed.current().setPlainText("   ")
+    ed.current().document().setModified(True)
+    assert ed.close_tab(ed.tabs.currentIndex()) is True            # blank: no confirmation
+    assert ed.tab_bar.plus.x() > ed.tab_bar.tabRect(ed.tabs.count() - 1).right() - 1
