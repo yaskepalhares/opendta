@@ -334,8 +334,9 @@ def cmd_heckman(s: "Session", args: str) -> None:
     dep, sel_name, sel_vars, pr, selected, o = _selection_setup(s, args, spec)
     if o.get("twostep"):
         return _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name)
-    if o.get("mills"):
-        raise StataError(198, "option mills() not allowed")   # VERIFY: only with twostep
+    mills = o["mills"].strip() if isinstance(o.get("mills"), str) else None
+    if mills and s.data.has(mills):
+        raise StataError(110, f"{mills} already defined")
     pr.write_notes(s.output)
     y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     sel = selected.astype(float)
@@ -405,6 +406,16 @@ def cmd_heckman(s: "Session", args: str) -> None:
                        predict_opts={"xbsel": 4, "ycond": 2, "yexpected": 2, "psel": 4})
     est.predict = make_predict(_predict_heckman, "xb")
     est.pred_label = "fitted values"
+    if mills:
+        # the inverse Mills ratio from the selection equation of the ML fit (compat 1918; values
+        # VERIFY)
+        from ..core.dataset import Variable
+        zg = sel_blk.X @ res.b[main.k:main.k + sel_blk.k] + (sel_blk.offset if sel_blk.offset is not None else 0.0)
+        vals = np.full(s.data.nobs, SYS)
+        vals[np.flatnonzero(pr.smp.mask)] = np.exp(st.norm.logpdf(zg) - st.norm.logcdf(zg))
+        var = Variable(mills, "double", np.full(s.data.nobs, SYS))
+        var.data = vals
+        s.data.add(var)
     display_eq(s, est)
 
 

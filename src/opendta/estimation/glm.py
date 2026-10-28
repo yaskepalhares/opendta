@@ -419,7 +419,8 @@ def display_glm(s: "Session", est: Estimates, *, header: bool = True, table: boo
             out.write(f"{'':<{L}}{'AIC':<16}= ", "text")
             out.write(f"{g(x['aic'], '%9.0g'):>10}\n", "result")
             lab = "Log pseudolikelihood" if est.robust else "Log likelihood"
-            out.write(f"{(lab + '   = ' + g(x['ll'], '%12.0g')) if not est.robust else (lab + ' = ' + g(x['ll'], '%12.0g')):<{L}}"
+            # the value right-aligned in 12 columns ("  -259.733629"; compat 1918)
+            out.write(f"{(lab + '   = ' + format(g(x['ll'], '%12.0g'), '>12')) if not est.robust else (lab + ' = ' + format(g(x['ll'], '%12.0g'), '>12')):<{L}}"
                       f"{'BIC':<16}= ", "text")
             out.write(f"{g(x['bic'], '%9.0g'):>10}\n", "result")
         out.write("\n", "text")

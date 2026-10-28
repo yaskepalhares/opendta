@@ -20,7 +20,7 @@ from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_onl
                    finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right,
                    sub_options, transformed_row)
 from .models import _logit, _poisson, _probit
-from .models2 import _header, _Prep, _log, g
+from .models2 import _header, _Prep, _log, chibar_text, g
 from .regress import comma
 from .results import CoefRow
 
@@ -440,7 +440,7 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
             nm, zv, pz = vuong
             out.write(f"{'Vuong test of ' + nm + ':':<51}z = {g(zv, '%8.2f'):>8}  Pr>z = {g(pz, '%6.4f')}\n", "text")
         if nb and not pr.robust and lna > -10:     # VERIFY: Stata omits the test at the boundary
-            out.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n",
+            out.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar_text(chibar)} Prob>=chibar2 = {p_chibar:5.3f}\n",
                       "text")   # VERIFY
 
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main, infl], eng=eng, res=res, V=V,
@@ -560,20 +560,27 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     pres, _ = _poisson_start(y, main.X, w, main.offset)
     mu0 = np.exp(np.clip(main.X @ pres.b + (main.offset if main.offset is not None else 0.0), -700, 700))
     b0 = np.concatenate([pres.b] + ([[np.log(_alpha_start(y, mu0, w))]] if nb else []))
-    res = pr.maximize(eng.fun, b0)
-    V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     # constant-only model: start from the log of the mean
     null = None
     if main.constant:
         eng0 = Engine(lik, [constant_only(main)], w, n_theta)
         c0 = float(np.log(max(np.sum(w * y) / np.sum(w) - float(np.mean(lower_a)), 0.5)))
-        null = maximize(eng0.fun, np.array([c0] + ([float(res.b[-1])] if nb else [])), maxiter=300)
+        # ln alpha starts from the moment estimate of the constant-only model, not from the full
+        # model's (which may sit at the boundary; compat 1918)
+        a0 = [float(np.log(_alpha_start(y, np.full(len(y), np.exp(c0)), w)))] if nb else []
+        null = maximize(eng0.fun, np.array([c0] + a0), maxiter=300)
         if not nb:
             # Stata takes the constant-only log likelihood of tpoisson at the untruncated mean,
             # not at the maximum (compat 1907)
             import dataclasses
             c_mean = float(np.log(np.sum(w * y) / np.sum(w)))
             null = dataclasses.replace(null, ll=float(eng0.fun(np.array([c_mean]), 0)[0]))
+    if nb1 and null is not None:
+        # dispersion(constant): the full model starts from the constant-only fit, as Stata's log
+        # shows (compat 1918; with the mean dispersion it does not, compat 1907)
+        b0 = np.concatenate([np.zeros(main.k - 1), null.b])
+    res = pr.maximize(eng.fun, b0)
+    V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     ll0 = null.ll if null else SYS
     ptr = None
     if nb:
@@ -595,16 +602,27 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     def aux_rows(level):
         if not nb:
             return []
-        an = "delta" if nb1 else "alpha"      # VERIFY the rows of dispersion(constant)
-        return [CoefRow("sep"), aux_row(f"/ln{an}", lna, se_lna, level), CoefRow("sep"),
+        # /lnalpha (/lndelta) without z and P>|z|, as nbreg (compat 1907, 1918)
+        an = "delta" if nb1 else "alpha"
+        return [CoefRow("sep"), CoefRow("aux", f"/ln{an}", lna, se_lna, name="_cons"), CoefRow("sep"),
                 transformed_row(an, np.exp, np.exp, lna, se_lna, level)]
 
     title = "Truncated negative binomial regression" if nb else "Truncated Poisson regression"
+    nb_scalars, nb_macros = [], []
+    if nb:
+        # tnbreg's e() as Stata lists it: the Poisson comparison, the limits as macros (compat 1918)
+        chibar0 = max(2 * (res.ll - ptr.ll), 0.0)
+        nb_scalars = [("rank0", 2.0)] + ([] if pr.robust else [("ll_c", ptr.ll), ("chi2_c", chibar0)]) \
+            + [("delta" if nb1 else "alpha", float(np.exp(lna)))]
+        nb_macros = [("llopt", ltext), ("ulopt", utext), ("dispers", "constant" if nb1 else "mean"),
+                     ("chi2_ct", "LR"), ("user", "tnbreg_cons" if nb1 else "tnbreg_mean"), ("ml_method", "e2")]
 
     def hdr(est):
         x = est.extra
-        if utext:       # VERIFY the header with an upper limit or a variable
+        if utext:       # VERIFY the header with an upper limit
             trunc = f"Truncation points: {ltext} - {utext}"
+        elif lower >= SYS:
+            trunc = f"Truncation points: {ltext}"      # a variable lower limit (compat 1918)
         else:
             trunc = f"Truncation point: {ltext}"
         left = [title, trunc, (f"Dispersion     = {'constant' if nb1 else 'mean'}") if nb else "",
@@ -614,14 +632,15 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main], eng=eng, res=res, V=V, n_clust=n_clust,
                        ll0=ll0, aux_names=[("lndelta" if nb1 else "lnalpha", "_cons")] if nb else [], aux_rows_fn=aux_rows,
                        hdr_fn=hdr, k_eq=2 if nb else 1, wald=pr.robust,
-                       extra_scalars=([("llopt", lower)] if lower < SYS else [])
-                       + ([("ulopt", float(upper_a[0]))] if utext and np.ptp(upper_a) == 0 else [])
-                       + ([("delta" if nb1 else "alpha", float(np.exp(lna)))] if nb else []))   # VERIFY
+                       extra_scalars=nb_scalars if nb else
+                       (([("llopt", lower)] if lower < SYS else [])
+                        + ([("ulopt", float(upper_a[0]))] if utext and np.ptp(upper_a) == 0 else [])),   # VERIFY
+                       extra_macros=nb_macros if nb else [])
     if nb and not pr.robust:
         chibar = max(2 * (res.ll - ptr.ll), 0.0)
         p_chibar = 0.5 * _chi2p(chibar, 1) if chibar > 0 else 0.5
         est.footer = lambda s_, e: s_.output.write(
-            f"Likelihood-ratio test of {'delta' if nb1 else 'alpha'}=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n", "text")
+            f"Likelihood-ratio test of {'delta' if nb1 else 'alpha'}=0:  chibar2(01) = {chibar_text(chibar)} Prob>=chibar2 = {p_chibar:5.3f}\n", "text")
     mean_fn = _trunc_mean(nb, lower) if not general else _trunc_mean_general(kind, lower_a, upper_a)
     est.predict = make_predict(lambda what, etas, th, e: mean_fn(np.exp(etas[0]), th) if what == "n" else None, "n")
     est.pred_label = "number of events"

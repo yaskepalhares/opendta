@@ -655,7 +655,10 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     n_clust = None
     wm_label = ""
     if estimator == "gmm":
-        b, e, V, wm_label, n_clust_w = _gmm_two_step(smp, y, X, Z, A @ (QX.T @ y), small)
+        b, e, V, wm_label, n_clust_w, ginfo = _gmm_two_step(smp, y, X, Z, A @ (QX.T @ y), small)
+        if smp.o.get("igmm") and not smp.o.get("nolog"):
+            for i_, (db, dw) in enumerate(ginfo["trace"], 1):
+                s.output.write(f"Iteration {i_}: change in beta = {db:10.3e}   change in W = {dw:10.3e}\n", "text")
         rss = float(e @ e)
         s2 = rss / (N - k) if small else rss / N
         if smp.vce in ("robust", "cluster") or wm_label != "Unadjusted":
@@ -721,16 +724,30 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
     est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
     # e(): order observed in Stata 14 with small (compat 0510); without small, VERIFY
-    scalars = [("kappa", kappa), ("rss", rss), ("N", float(N)), ("df_m", float(len(slopes)))]
+    gmm = estimator == "gmm"
+    # gmm: J in place of kappa, the iterations, the HAC lags and S and W (compat 1918; the other
+    # weight matrices follow the HAC case, VERIFY)
+    scalars = [("J", ginfo["J"]) if gmm else ("kappa", kappa), ("rss", rss), ("N", float(N)),
+               ("df_m", float(len(slopes)))]
     scalars += [("df_r", float(N - k))] if small else []
     scalars += [("rmse", rmse), ("mss", tss - rss), ("r2", r2), ("r2_a", r2_a)]
     scalars += [("F", W / len(slopes))] if small else [("chi2", W)]
     if n_clust is not None:
         scalars.append(("N_clust", float(n_clust)))
-    scalars += [("iterations", 0.0), ("rank", float(k))]
+    scalars += [("iterations", float(ginfo["iterations"]) if gmm else 0.0)]
+    if gmm and ginfo["hac"] is not None:
+        scalars.append(("hac_lag", float(ginfo["hac"][1])))
+    scalars.append(("rank", float(k)))
     exogr = " ".join(c.name for c in ex_cols)
-    macros = [("cmdline", cmdline("ivregress", args)), ("cmd", "ivregress"), ("estat_cmd", "ivregress_estat"),
-              ("vce", smp.vce if vcetype else "unadjusted")]
+    macros = [("cmdline", cmdline("ivregress", args)), ("cmd", "ivregress"), ("estat_cmd", "ivregress_estat")]
+    if gmm:
+        wtext = " ".join(str(smp.o.get("wmatrix") or "robust").split())
+        if ginfo["hac"] is not None:
+            macros.append(("hac_kernel", {"quadraticspectral": "Quadratic spectral"}.get(ginfo["hac"][0], ginfo["hac"][0].capitalize())))
+            wtext = f"hac {ginfo['hac'][0]} {ginfo['hac'][1]}"
+        macros += [("wmatrix", wtext), ("vce", wtext if ginfo["hac"] is not None else (smp.vce if vcetype else "unadjusted"))]
+    else:
+        macros.append(("vce", smp.vce if vcetype else "unadjusted"))
     if vcetype:
         macros.append(("vcetype", vcetype))
     if smp.clustvar:
@@ -745,7 +762,13 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     title = f"Instrumental variables ({estimator.upper()}) regression"
     est.extra["title"] = title
     macros += [("title", title), ("properties", "b V")]
-    post(s, est, scalars, macros, mask)
+    mats = []
+    if gmm:
+        from ..commands.matrix import Matrix
+        zn = [c.name for c in Zc] + [c.name for c in ex_cols] + ["_cons"]
+        mats = [("S", Matrix(ginfo["S"], zn, zn)), ("W", Matrix(ginfo["W"], zn, zn))]
+        est.extra["hac"] = ginfo["hac"]
+    post(s, est, scalars, macros, mask, extra_mats=mats)
     display_iv(s, est)
 
 
@@ -799,6 +822,10 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
                vcetype=est.vcetype)
     out.write(f"Instrumented:  {x['instd']}\n", "text")
     out.write(f"Instruments:   {x['insts']}\n", "text")
+    if x.get("hac") is not None:
+        kern, lags = x["hac"][0], x["hac"][1]
+        kname = {"quadraticspectral": "Quadratic spectral"}.get(kern, kern.capitalize())
+        out.write(f"HAC VCE:       {kname} kernel with {lags} lags\n", "text")
 
 
 def _liml_kappa(y, Xn, ex_cols, X, Z) -> float:
@@ -821,7 +848,7 @@ def _hac_weights(kernel: str, lags: int, N: int) -> list[float]:
     out = []
     for j in range(1, N):
         if kernel == "quadraticspectral":
-            x = j / lags if lags > 0 else np.inf          # VERIFY: bandwidth = #
+            x = j / (lags + 1)                                # bandwidth # + 1, as the other kernels (compat 1918)
             if not np.isfinite(x):
                 out.append(0.0)
                 continue
@@ -892,13 +919,22 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
     ZX = Z.T @ X
     W = np.linalg.inv(meat(e1, kind))
     b = None
+    trace = []
+
+    def mreldif(a_, b_):
+        return float(np.max(np.abs(a_ - b_) / (np.abs(b_) + 1)))
     for _it in range(16000 if o.get("igmm") else 1):          # VERIFY igmm's limits
         Ainv = np.linalg.inv(ZX.T @ W @ ZX)
         b_new = Ainv @ (ZX.T @ W @ (Z.T @ y))
-        done = b is not None and np.max(np.abs(b_new - b)) <= 1e-6 * (1 + np.max(np.abs(b)))
-        b = b_new
-        if not o.get("igmm") or done:
+        if b is not None:
+            W_new = W
+            trace.append((mreldif(b_new, b), mreldif(W_new * N, W_old * N)))
+        b_prev, b = b, b_new
+        if not o.get("igmm"):
             break
+        if trace and trace[-1][0] < 1e-6 and trace[-1][1] < 1e-6:      # VERIFY Stata's rule
+            break
+        W_old = W
         W = np.linalg.inv(meat(y - X @ b, kind))
     e = y - X @ b
     V = Ainv
@@ -908,7 +944,11 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
         S2 = meat(e, k2)
         V = Ainv @ (ZX.T @ W @ S2 @ W @ ZX) @ Ainv
     if hac is not None:
-        label = f"HAC {hac[0].capitalize() if hac[0] != 'quadraticspectral' else 'Quadratic spectral'} {hac[1]}"   # VERIFY
+        label = f"HAC {hac[0].capitalize() if hac[0] != 'quadraticspectral' else 'quadratic spectral'} {hac[1]}"   # compat 1918
     else:
         label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
-    return b, e, (V + V.T) / 2, label, n_cl
+    Ze = Z.T @ e
+    J = float(Ze @ W @ Ze)              # with the weight matrix of the estimates (compat 1918)
+    info = {"J": J, "S": meat(e, kind) / N, "W": W * N, "trace": trace, "iterations": max(len(trace), 1),
+            "hac": hac}
+    return b, e, (V + V.T) / 2, label, n_cl, info

@@ -100,7 +100,12 @@ def sure(Xs: list, ys: list, *, iterate: bool = False, dfk: str = "", maxit: int
     """Feasible GLS for seemingly unrelated regressions. The first sigma comes from the equation-by-
     equation OLS residuals; with `iterate` it is updated until the coefficients stop changing."""
     ks = [X.shape[1] for X in Xs]
-    bs = [np.linalg.lstsq(X, y, rcond=None)[0] for X, y in zip(Xs, ys)]
+    if cons is None:
+        bs = [np.linalg.lstsq(X, y, rcond=None)[0] for X, y in zip(Xs, ys)]
+    else:
+        # with constraints the first sigma comes from the constrained equation-by-equation fit
+        # (compat 1918)
+        bs, _V = _gls(Xs, Xs, ys, np.eye(len(Xs)), cons)
     E = _resid(Xs, ys, bs)
     sigma = _sigma(E, ks, dfk)
     it, conv, trace = 0, True, []
@@ -139,7 +144,7 @@ def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bo
         E = _resid(Xs, ys, bs)
         sigma = _sigma(E, ks, dfk)
         bs, V = _gls(Xs, src, ys, np.diag(np.diag(sigma)), cons)
-        return _finish_system(bs, V, E, sigma, 1, True, ks, dfk)
+        return _finish_system(bs, V, _resid(Xs, ys, bs), sigma, 1, True, ks, dfk)
     if method in ("ols", "2sls"):
         src = Xs if method == "ols" else Zs
         bs = [np.linalg.solve(Z.T @ X, Z.T @ y) for Z, X, y in zip(src, Xs, ys)]
@@ -154,7 +159,7 @@ def three_sls(Xs: list, Zs: list, ys: list, *, method: str = "3sls", iterate: bo
             o += ks[i]
         return _finish_system(bs, V, E, sigma, 1, True, ks, dfk)
     first = "ols" if method == "sure" else "2sls"
-    start = three_sls(Xs, Zs, ys, method=first, dfk=dfk)
+    start = three_sls(Xs, Zs, ys, method=first, dfk=dfk, cons=cons)   # constrained first step (compat 1918)
     sigma, bs = start.sigma, start.b
     src = Xs if method == "sure" else Zs
     it, conv = 0, True

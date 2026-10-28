@@ -1,0 +1,1220 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1918_models3.log
+  log type:  text
+ opened on:  24 Oct 2026, 09:52:26
+
+. * Models, part 3 (block 20a): tpoisson and tnbreg with ul() and variable limits, tnbreg and
+. * nbreg with dispersion(constant), glogit with or, offset() in intreg, truncreg, heckman and
+. * biprobit, heckman twostep with mills(), sureg and reg3 with constraints(), ivregress gmm with
+. * wmatrix(hac), center and igmm, frontier with uhet(), vhet() and cm(), glm and binreg with mu().
+. * Counts are built by inversion (the rpoisson() draws differ from Stata's). Every command whose
+. * behavior the manual does not settle runs under capture noisily, so that one Stata run shows the
+. * whole case.
+. clear
+
+. set seed 1918
+
+. set obs 400
+number of observations (_N) was 0, now 400
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 400
+                delta:  1 unit
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen z = round(invnormal(runiform()), .01)
+
+. gen o = round(.3*runiform(), .01)
+
+. gen w = round(runiform(), .01)
+
+. gen double lam = exp(.8 + .4*x)
+
+. gen double pu = runiform()
+
+. gen double pk = exp(-lam)
+
+. gen double cp = pk
+
+. gen y = 0
+
+. forvalues k = 1/40 {
+  2.     quietly replace y = y + 1 if pu > cp
+  3.     quietly replace pk = pk*lam/`k'
+  4.     quietly replace cp = cp + pk
+  5. }
+
+. drop lam pu pk cp
+
+. gen y1 = 1 + .5*x + .5*z + invnormal(runiform())
+
+. gen y2 = 2 + .5*x - z + invnormal(runiform())
+
+. 
+. * truncated counts
+. tpoisson y x if y > 0
+
+Iteration 0:   log likelihood = -556.94308  
+Iteration 1:   log likelihood = -548.65298  
+Iteration 2:   log likelihood = -548.64966  
+Iteration 3:   log likelihood = -548.64966  
+
+Truncated Poisson regression                    Number of obs     =        356
+Truncation point: 0                             LR chi2(1)        =     111.15
+                                                Prob > chi2       =     0.0000
+Log likelihood = -548.64966                     Pseudo R2         =     0.0920
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4107515   .0405827    10.12   0.000      .331211    .4902921
+       _cons |   .6972942   .0447999    15.56   0.000     .6094879    .7851004
+------------------------------------------------------------------------------
+
+. capture noisily tpoisson y x if y > 0 & y < 6, ul(6)
+option ul() not allowed
+
+. capture noisily predict n1
+(option n assumed; predicted number of events)
+
+. capture noisily summarize n1
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+          n1 |        400    2.187282    .9164518   .5372895   6.830062
+
+. gen l = cond(x > 0, 1, 0)
+
+. capture noisily tpoisson y x if y > l, ll(l)
+
+Iteration 0:   log likelihood = -481.85668  
+Iteration 1:   log likelihood = -468.11734  
+Iteration 2:   log likelihood =  -468.0807  
+Iteration 3:   log likelihood =  -468.0807  
+
+Truncated Poisson regression                    Number of obs     =        324
+Truncation points: l                            LR chi2(1)        =     113.90
+                                                Prob > chi2       =     0.0000
+Log likelihood =  -468.0807                     Pseudo R2         =     0.1085
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4036851   .0425421     9.49   0.000     .3203041    .4870661
+       _cons |   .6885479   .0487032    14.14   0.000     .5930913    .7840045
+------------------------------------------------------------------------------
+
+. capture noisily tnbreg y x if y > 0, dispersion(constant)
+
+Fitting truncated Poisson model:
+
+Iteration 0:   log likelihood = -556.94308  
+Iteration 1:   log likelihood = -548.65298  
+Iteration 2:   log likelihood = -548.64966  
+Iteration 3:   log likelihood = -548.64966  
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -610.84402  
+Iteration 1:   log likelihood = -596.52832  
+Iteration 2:   log likelihood = -595.71648  
+Iteration 3:   log likelihood = -595.65467  
+Iteration 4:   log likelihood = -595.65443  
+Iteration 5:   log likelihood = -595.65443  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -595.65443  (not concave)
+Iteration 1:   log likelihood = -557.54636  
+Iteration 2:   log likelihood = -549.04158  
+Iteration 3:   log likelihood = -548.75813  
+Iteration 4:   log likelihood = -548.68288  
+Iteration 5:   log likelihood = -548.65776  
+Iteration 6:   log likelihood = -548.65169  
+Iteration 7:   log likelihood = -548.65014  
+Iteration 8:   log likelihood = -548.64976  
+Iteration 9:   log likelihood = -548.64968  
+Iteration 10:  log likelihood = -548.64967  
+
+Truncated negative binomial regression          Number of obs     =        356
+Truncation point: 0                             LR chi2(1)        =      94.01
+Dispersion     = constant                       Prob > chi2       =     0.0000
+Log likelihood = -548.64967                     Pseudo R2         =     0.0789
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4107515   .0405828    10.12   0.000     .3312108    .4902923
+       _cons |   .6972942   .0448001    15.56   0.000     .6094875    .7851008
+-------------+----------------------------------------------------------------
+    /lndelta |  -14.15688   696.6718                     -1379.609    1351.295
+-------------+----------------------------------------------------------------
+       delta |   7.11e-07   .0004952                             0           .
+------------------------------------------------------------------------------
+Likelihood-ratio test of delta=0:  chibar2(01) = 0.0e+00 Prob>=chibar2 = 0.500
+
+. capture noisily tnbreg y x if y > 0 & y < 8, ul(8)
+option ul() not allowed
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  356
+                 e(ic) =  10
+                  e(k) =  3
+               e(k_eq) =  2
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -548.6496662128702
+         e(k_eq_model) =  1
+               e(ll_0) =  -595.6544265649235
+              e(rank0) =  2
+               e(df_m) =  1
+               e(chi2) =  94.00952070410654
+                  e(p) =  3.14009844756e-22
+               e(ll_c) =  -548.6496642208444
+             e(chi2_c) =  0
+               e(r2_p) =  .0789128028866078
+              e(k_aux) =  1
+              e(delta) =  7.10799371100e-07
+
+macros:
+            e(cmdline) : "tnbreg y x if y > 0, dispersion(constant)"
+              e(title) : "Truncated negative binomial regression"
+              e(llopt) : "0"
+                e(cmd) : "tnbreg"
+            e(predict) : "tnbreg_p"
+            e(dispers) : "constant"
+            e(chi2_ct) : "LR"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "tnbreg_cons"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. nbreg y x, dispersion(constant)
+
+Fitting Poisson model:
+
+Iteration 0:   log likelihood = -676.18811  
+Iteration 1:   log likelihood = -676.18811  
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -755.84381  
+Iteration 1:   log likelihood = -735.59338  
+Iteration 2:   log likelihood = -735.51619  
+Iteration 3:   log likelihood = -735.51606  
+Iteration 4:   log likelihood = -735.51606  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -735.51606  
+Iteration 1:   log likelihood = -678.59464  
+Iteration 2:   log likelihood = -676.25112  
+Iteration 3:   log likelihood = -676.19564  
+Iteration 4:   log likelihood = -676.18937  
+Iteration 5:   log likelihood = -676.18834  
+Iteration 6:   log likelihood = -676.18817  
+Iteration 7:   log likelihood = -676.18812  
+Iteration 8:   log likelihood = -676.18812  
+
+Negative binomial regression                    Number of obs     =        400
+                                                LR chi2(1)        =     118.66
+Dispersion     = constant                       Prob > chi2       =     0.0000
+Log likelihood = -676.18812                     Pseudo R2         =     0.0807
+
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .3803986   .0338842    11.23   0.000     .3139868    .4468103
+       _cons |   .7495421   .0354816    21.12   0.000     .6799994    .8190847
+-------------+----------------------------------------------------------------
+    /lndelta |  -15.89182   632.3622                     -1255.299    1223.515
+-------------+----------------------------------------------------------------
+       delta |   1.25e-07   .0000793                             0           .
+------------------------------------------------------------------------------
+Likelihood-ratio test of delta=0:  chibar2(01) = 0.0e+00 Prob>=chibar2 = 0.500
+
+. ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  400
+                 e(ic) =  8
+                  e(k) =  3
+               e(k_eq) =  2
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -676.1881162134863
+         e(k_eq_model) =  1
+               e(ll_0) =  -735.5160611815579
+              e(rank0) =  2
+               e(df_m) =  1
+               e(chi2) =  118.6558899361432
+                  e(p) =  1.24569081121e-27
+               e(ll_c) =  -676.1881121742518
+             e(chi2_c) =  0
+               e(r2_p) =  .0806616579830565
+              e(k_aux) =  1
+              e(delta) =  1.25392644989e-07
+
+macros:
+            e(cmdline) : "nbreg y x, dispersion(constant)"
+                e(cmd) : "nbreg"
+            e(predict) : "nbreg_p"
+            e(dispers) : "constant"
+            e(chi2_ct) : "LR"
+           e(chi2type) : "LR"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Negative binomial regression"
+               e(user) : "nbreg_al"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily nbreg y x, dispersion(constant) irr
+
+Fitting Poisson model:
+
+Iteration 0:   log likelihood = -676.18811  
+Iteration 1:   log likelihood = -676.18811  
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -755.84381  
+Iteration 1:   log likelihood = -735.59338  
+Iteration 2:   log likelihood = -735.51619  
+Iteration 3:   log likelihood = -735.51606  
+Iteration 4:   log likelihood = -735.51606  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -735.51606  
+Iteration 1:   log likelihood = -678.59464  
+Iteration 2:   log likelihood = -676.25112  
+Iteration 3:   log likelihood = -676.19564  
+Iteration 4:   log likelihood = -676.18937  
+Iteration 5:   log likelihood = -676.18834  
+Iteration 6:   log likelihood = -676.18817  
+Iteration 7:   log likelihood = -676.18812  
+Iteration 8:   log likelihood = -676.18812  
+
+Negative binomial regression                    Number of obs     =        400
+                                                LR chi2(1)        =     118.66
+Dispersion     = constant                       Prob > chi2       =     0.0000
+Log likelihood = -676.18812                     Pseudo R2         =     0.0807
+
+------------------------------------------------------------------------------
+           y |        IRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   1.462868    .049568    11.23   0.000     1.368872    1.563318
+       _cons |   2.116031   .0750802    21.12   0.000     1.973877    2.268423
+-------------+----------------------------------------------------------------
+    /lndelta |  -15.89182   632.3622                     -1255.299    1223.515
+-------------+----------------------------------------------------------------
+       delta |   1.25e-07   .0000793                             0           .
+------------------------------------------------------------------------------
+Likelihood-ratio test of delta=0:  chibar2(01) = 0.0e+00 Prob>=chibar2 = 0.500
+
+. 
+. * glogit, or
+. gen pop = y + 3
+
+. glogit y pop x in 1/80
+
+Weighted LS logistic regression for grouped data
+
+      Source |       SS           df       MS      Number of obs   =        72
+-------------+----------------------------------   F(1, 70)        =     19.95
+       Model |   5.5453648         1   5.5453648   Prob > F        =    0.0000
+    Residual |  19.4602766        70  .278003952   R-squared       =    0.2218
+-------------+----------------------------------   Adj R-squared   =    0.2106
+       Total |  25.0056414        71  .352192133   Root MSE        =    .52726
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .2712158   .0607261     4.47   0.000     .1501014    .3923302
+       _cons |  -.1873414   .0631821    -2.97   0.004    -.3133542   -.0613286
+------------------------------------------------------------------------------
+
+. glogit y pop x in 1/80, or
+
+Weighted LS logistic regression for grouped data
+
+      Source |       SS           df       MS      Number of obs   =        72
+-------------+----------------------------------   F(1, 70)        =     19.95
+       Model |   5.5453648         1   5.5453648   Prob > F        =    0.0000
+    Residual |  19.4602766        70  .278003952   R-squared       =    0.2218
+-------------+----------------------------------   Adj R-squared   =    0.2106
+       Total |  25.0056414        71  .352192133   Root MSE        =    .52726
+
+------------------------------------------------------------------------------
+             | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   1.311558   .0796458     4.47   0.000     1.161952    1.480427
+       _cons |   .8291606   .0523881    -2.97   0.004      .730991    .9405142
+------------------------------------------------------------------------------
+
+. 
+. * offsets
+. gen lo = floor(y1)
+
+. gen hi = lo + 1
+
+. intreg lo hi x z, offset(o)
+
+Fitting constant-only model:
+
+Iteration 0:   log likelihood = -643.69576  
+Iteration 1:   log likelihood = -643.36484  
+Iteration 2:   log likelihood = -643.36469  
+Iteration 3:   log likelihood = -643.36469  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -576.37688  
+Iteration 1:   log likelihood =  -575.6813  
+Iteration 2:   log likelihood = -575.68043  
+Iteration 3:   log likelihood = -575.68043  
+
+Interval regression                             Number of obs     =        400
+                                                LR chi2(2)        =     135.37
+Log likelihood = -575.68043                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4468761   .0522705     8.55   0.000     .3444277    .5493244
+           z |   .4680149   .0494518     9.46   0.000     .3710912    .5649387
+       _cons |   .8308872   .0510581    16.27   0.000     .7308152    .9309593
+           o |          1  (offset)
+-------------+----------------------------------------------------------------
+    /lnsigma |  -.0216908   .0383909    -0.56   0.572    -.0969357    .0535541
+-------------+----------------------------------------------------------------
+       sigma |   .9785428   .0375672                      .9076144    1.055014
+------------------------------------------------------------------------------
+             0  left-censored observations
+             0     uncensored observations
+             0 right-censored observations
+           400       interval observations
+
+. capture noisily truncreg y1 x z, ll(0) offset(o)
+(note: 84 obs. truncated)
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -362.31128  
+Iteration 1:   log likelihood = -341.54488  
+Iteration 2:   log likelihood =  -338.7497  
+Iteration 3:   log likelihood = -338.73153  
+Iteration 4:   log likelihood = -338.73152  
+
+Truncated regression
+Limit:   lower =          0                     Number of obs     =        316
+         upper =       +inf                     Wald chi2(2)      =      72.69
+Log likelihood = -338.73152                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          y1 |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .4226714   .0708073     5.97   0.000     .2838916    .5614511
+           z |   .5013089   .0703064     7.13   0.000     .3635109    .6391068
+       _cons |   .8809846   .0910066     9.68   0.000     .7026149    1.059354
+           o |          1  (offset)
+-------------+----------------------------------------------------------------
+      /sigma |   .9379646   .0569761    16.46   0.000     .8262934    1.049636
+------------------------------------------------------------------------------
+
+. gen s = (x + invnormal(runiform())) > 0
+
+. gen yh = y1 if s
+(198 missing values generated)
+
+. heckman yh x, select(s = x z) twostep mills(imr)
+
+Heckman selection model -- two-step estimates   Number of obs     =        400
+(regression model with sample selection)        Censored obs      =        198
+                                                Uncensored obs    =        202
+
+                                                Wald chi2(1)      =       0.11
+                                                Prob > chi2       =     0.7416
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yh           |
+           x |  -.1168185   .3542784    -0.33   0.742    -.8111914    .5775544
+       _cons |   2.040123   .5963689     3.42   0.001      .871261    3.208984
+-------------+----------------------------------------------------------------
+s            |
+           x |   .9781083   .0980197     9.98   0.000     .7859931    1.170223
+           z |   .0742078   .0684002     1.08   0.278    -.0598541    .2082696
+       _cons |   .0174372   .0714155     0.24   0.807    -.1225346    .1574091
+-------------+----------------------------------------------------------------
+mills        |
+      lambda |  -1.277555   .6999348    -1.83   0.068    -2.649402    .0942917
+-------------+----------------------------------------------------------------
+         rho |   -0.91799
+       sigma |  1.3916807
+------------------------------------------------------------------------------
+
+. summarize imr
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         imr |        400    .8791714    .5828166   .0063282   3.353397
+
+. capture noisily heckman yh x, select(s = x z) mills(imr2)
+
+Iteration 0:   log likelihood = -510.47927  
+Iteration 1:   log likelihood = -504.02161  
+Iteration 2:   log likelihood = -502.86531  
+Iteration 3:   log likelihood = -502.85205  
+Iteration 4:   log likelihood = -502.85203  
+
+Heckman selection model                         Number of obs     =        400
+(regression model with sample selection)        Censored obs      =        198
+                                                Uncensored obs    =        202
+
+                                                Wald chi2(1)      =       1.14
+Log likelihood =  -502.852                      Prob > chi2       =     0.2852
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yh           |
+           x |  -.1624003   .1519559    -1.07   0.285    -.4602284    .1354278
+       _cons |   2.035199   .1925791    10.57   0.000     1.657751    2.412647
+-------------+----------------------------------------------------------------
+s            |
+           x |   .8467354   .0937848     9.03   0.000     .6629206     1.03055
+           z |   .2852222   .0602126     4.74   0.000     .1672076    .4032367
+       _cons |  -.0093324   .0704338    -0.13   0.895      -.14738    .1287153
+-------------+----------------------------------------------------------------
+     /athrho |  -1.426555   .3246445    -4.39   0.000    -2.062847   -.7902638
+    /lnsigma |   .3206535   .0827904     3.87   0.000     .1583873    .4829196
+-------------+----------------------------------------------------------------
+         rho |  -.8909585   .0669394                     -.9682089   -.6585584
+       sigma |   1.378028   .1140874                       1.17162      1.6208
+      lambda |  -1.227766   .1831605                     -1.586754   -.8687779
+------------------------------------------------------------------------------
+LR test of indep. eqns. (rho = 0):   chi2(1) =    10.68   Prob > chi2 = 0.0011
+
+. capture noisily heckman yh x, select(s = x z) offset(o)
+
+Iteration 0:   log likelihood = -511.57658  
+Iteration 1:   log likelihood = -508.57203  
+Iteration 2:   log likelihood = -504.07846  
+Iteration 3:   log likelihood = -503.92177  
+Iteration 4:   log likelihood = -503.92147  
+Iteration 5:   log likelihood = -503.92147  
+
+Heckman selection model                         Number of obs     =        400
+(regression model with sample selection)        Censored obs      =        198
+                                                Uncensored obs    =        202
+
+                                                Wald chi2(1)      =       1.06
+Log likelihood = -503.9215                      Prob > chi2       =     0.3032
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yh           |
+           x |  -.1530571    .148645    -1.03   0.303     -.444396    .1382817
+       _cons |   1.869103   .1872644     9.98   0.000     1.502072    2.236135
+           o |          1  (offset)
+-------------+----------------------------------------------------------------
+s            |
+           x |   .8463522   .0931602     9.08   0.000     .6637616    1.028943
+           z |    .283184   .0599951     4.72   0.000     .1655958    .4007721
+       _cons |  -.0103655   .0704656    -0.15   0.883    -.1484755    .1277446
+-------------+----------------------------------------------------------------
+     /athrho |  -1.393586   .3016692    -4.62   0.000    -1.984846    -.802325
+    /lnsigma |   .3192384   .0806802     3.96   0.000     .1611081    .4773687
+-------------+----------------------------------------------------------------
+         rho |  -.8839573   .0659508                     -.9629412   -.6653346
+       sigma |   1.376079   .1110224                      1.174812    1.611828
+      lambda |  -1.216395   .1778328                     -1.564941   -.8678495
+------------------------------------------------------------------------------
+LR test of indep. eqns. (rho = 0):   chi2(1) =    10.41   Prob > chi2 = 0.0013
+
+. gen b1 = y1 > 1
+
+. gen b2 = y2 > 2
+
+. capture noisily biprobit b1 b2 x z, offset1(o)
+
+Fitting comparison equation 1:
+
+Iteration 0:   log likelihood = -278.52527  
+Iteration 1:   log likelihood = -232.87521  
+Iteration 2:   log likelihood = -232.70618  
+Iteration 3:   log likelihood = -232.70612  
+Iteration 4:   log likelihood = -232.70612  
+
+Fitting comparison equation 2:
+
+Iteration 0:   log likelihood = -277.07885  
+Iteration 1:   log likelihood = -182.16362  
+Iteration 2:   log likelihood = -181.22447  
+Iteration 3:   log likelihood =  -181.2233  
+Iteration 4:   log likelihood =  -181.2233  
+
+Comparison:    log likelihood = -413.92942
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -413.92942  
+Iteration 1:   log likelihood = -413.50642  
+Iteration 2:   log likelihood = -413.50633  
+Iteration 3:   log likelihood = -413.50633  
+
+Bivariate probit regression                     Number of obs     =        400
+                                                Wald chi2(4)      =     196.44
+Log likelihood = -413.50633                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+b1           |
+           x |   .4549488   .0742096     6.13   0.000     .3095007    .6003969
+           z |   .5079145   .0713003     7.12   0.000     .3681685    .6476605
+       _cons |   -.133402   .0677001    -1.97   0.049    -.2660917   -.0007123
+           o |          1  (offset)
+-------------+----------------------------------------------------------------
+b2           |
+           x |   .4780444   .0848066     5.64   0.000     .3118265    .6442623
+           z |  -1.076013   .1028196   -10.47   0.000    -1.277535   -.8744898
+       _cons |   .0188019   .0755906     0.25   0.804     -.129353    .1669569
+-------------+----------------------------------------------------------------
+     /athrho |   .0919264   .1000206     0.92   0.358    -.1041103    .2879631
+-------------+----------------------------------------------------------------
+         rho |   .0916683   .0991801                     -.1037358    .2802589
+------------------------------------------------------------------------------
+Likelihood-ratio test of rho=0:     chi2(1) =   .84618    Prob > chi2 = 0.3576
+
+. capture noisily biprobit b1 b2 x z, offset2(o)
+
+Fitting comparison equation 1:
+
+Iteration 0:   log likelihood = -277.25387  
+Iteration 1:   log likelihood = -230.75467  
+Iteration 2:   log likelihood = -230.57642  
+Iteration 3:   log likelihood = -230.57635  
+Iteration 4:   log likelihood = -230.57635  
+
+Fitting comparison equation 2:
+
+Iteration 0:   log likelihood = -278.37839  
+Iteration 1:   log likelihood = -181.63262  
+Iteration 2:   log likelihood = -180.65457  
+Iteration 3:   log likelihood = -180.65344  
+Iteration 4:   log likelihood = -180.65344  
+
+Comparison:    log likelihood = -411.22979
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -411.22979  
+Iteration 1:   log likelihood = -410.56722  
+Iteration 2:   log likelihood = -410.56697  
+Iteration 3:   log likelihood = -410.56697  
+
+Bivariate probit regression                     Number of obs     =        400
+                                                Wald chi2(4)      =     200.80
+Log likelihood = -410.56697                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+b1           |
+           x |   .4560423    .074352     6.13   0.000     .3103151    .6017695
+           z |   .5153301   .0713143     7.23   0.000     .3755566    .6551035
+       _cons |   .0225604   .0677262     0.33   0.739    -.1101804    .1553013
+-------------+----------------------------------------------------------------
+b2           |
+           x |   .4781929   .0845724     5.65   0.000     .3124341    .6439518
+           z |  -1.089672    .103064   -10.57   0.000    -1.291674   -.8876705
+       _cons |  -.1354853    .075691    -1.79   0.073    -.2838369    .0128664
+           o |          1  (offset)
+-------------+----------------------------------------------------------------
+     /athrho |   .1173947   .1022416     1.15   0.251     -.082995    .3177845
+-------------+----------------------------------------------------------------
+         rho |   .1168584   .1008454                      -.082805    .3075023
+------------------------------------------------------------------------------
+Likelihood-ratio test of rho=0:     chi2(1) =  1.32564    Prob > chi2 = 0.2496
+
+. 
+. * constraints in sureg and reg3
+. constraint define 1 [y1]x = [y2]x
+
+. sureg (y1 x z) (y2 x z), constraints(1)
+
+Seemingly unrelated regression
+--------------------------------------------------------------------------
+Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
+--------------------------------------------------------------------------
+y1                   400       2    .9763735    0.3127     269.82   0.0000
+y2                   400       2    1.038034    0.5524     573.60   0.0000
+--------------------------------------------------------------------------
+
+ ( 1)  [y1]x - [y2]x = 0
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+           x |   .4730836   .0364792    12.97   0.000     .4015858    .5445815
+           z |   .4813106   .0473229    10.17   0.000     .3885594    .5740617
+       _cons |   .9856264    .048865    20.17   0.000     .8898528      1.0814
+-------------+----------------------------------------------------------------
+y2           |
+           x |   .4730836   .0364792    12.97   0.000     .4015858    .5445815
+           z |  -1.008674   .0503075   -20.05   0.000    -1.107275   -.9100733
+       _cons |   2.017903   .0519467    38.85   0.000     1.916089    2.119716
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+             e(cons_1) =  1
+             e(chi2_1) =  269.8163676931864
+                e(p_1) =  2.57110724320e-59
+              e(df_m1) =  2
+              e(rss_1) =  381.3220987285778
+             e(rmse_1) =  .9763735180869278
+              e(mss_1) =  173.4846579210698
+               e(r2_1) =  .3126938449140461
+             e(cons_2) =  1
+             e(chi2_2) =  573.6035318613528
+                e(p_2) =  2.7769985706e-125
+              e(df_m2) =  2
+              e(rss_2) =  431.0062366707083
+             e(rmse_2) =  1.038034484820601
+              e(mss_2) =  531.949955661882
+               e(r2_2) =  .5524134533818488
+                  e(k) =  6
+                  e(N) =  400
+               e(rank) =  5
+                 e(ll) =  -1140.516977711011
+           e(dfk2_adj) =  400
+               e(k_eq) =  2
+                 e(ic) =  0
+
+macros:
+                e(cmd) : "sureg"
+            e(cmdline) : "sureg (y1 x z) (y2 x z), constraints(1)"
+             e(method) : "sure"
+     e(marginsdefault) : "predict(xb equation(y1)) predict(xb equation(y2))"
+          e(marginsok) : "XB default"
+       e(marginsnotok) : "stdp Residuals stddp"
+            e(predict) : "reg3_p"
+               e(corr) : "unstructured"
+               e(exog) : "y1 x z y2"
+             e(depvar) : "y1 y2"
+            e(eqnames) : "y1 y2"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 6
+                  e(V) :  6 x 6
+                e(Cns) :  1 x 7
+              e(Sigma) :  2 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily reg3 (y1 x z) (y2 x z), constraints(1)
+
+Three-stage least-squares regression
+--------------------------------------------------------------------------
+Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
+--------------------------------------------------------------------------
+y1                   400       2    .9763735    0.3127     269.82   0.0000
+y2                   400       2    1.038034    0.5524     573.60   0.0000
+--------------------------------------------------------------------------
+
+ ( 1)  [y1]x - [y2]x = 0
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+           x |   .4730836   .0364792    12.97   0.000     .4015858    .5445815
+           z |   .4813106   .0473229    10.17   0.000     .3885594    .5740617
+       _cons |   .9856264    .048865    20.17   0.000     .8898528      1.0814
+-------------+----------------------------------------------------------------
+y2           |
+           x |   .4730836   .0364792    12.97   0.000     .4015858    .5445815
+           z |  -1.008674   .0503075   -20.05   0.000    -1.107275   -.9100733
+       _cons |   2.017903   .0519467    38.85   0.000     1.916089    2.119716
+------------------------------------------------------------------------------
+Endogenous variables:  y1 y2 
+Exogenous variables:   x z 
+------------------------------------------------------------------------------
+
+. capture noisily reg3 (y1 x z) (y2 x z), constraints(1) 2sls
+
+Two-stage least-squares regression
+--------------------------------------------------------------------------
+Equation             Obs   Parms        RMSE    "R-sq"       chi2        P
+--------------------------------------------------------------------------
+y1                   400       2    .9763736    0.3127     270.27   0.0000
+y2                   400       2    1.038034    0.5524     574.05   0.0000
+--------------------------------------------------------------------------
+
+ ( 1)  [y1]x - [y2]x = 0
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+           x |   .4730878   .0364307    12.99   0.000      .401685    .5444907
+           z |   .4813106   .0473229    10.17   0.000     .3885594    .5740618
+       _cons |   .9856263    .048865    20.17   0.000     .8898528      1.0814
+-------------+----------------------------------------------------------------
+y2           |
+           x |   .4730878   .0364307    12.99   0.000      .401685    .5444907
+           z |  -1.008674   .0503075   -20.05   0.000    -1.107275   -.9100733
+       _cons |   2.017903   .0519467    38.85   0.000     1.916089    2.119716
+------------------------------------------------------------------------------
+Endogenous variables:  y1 y2 
+Exogenous variables:   x z 
+------------------------------------------------------------------------------
+
+. 
+. * ivregress gmm
+. gen e = invnormal(runiform())
+
+. gen yy = 1 + x + e + .2*w
+
+. gen xe = x + .5*e + z + .3*w
+
+. ivregress gmm yy (xe = z w), wmatrix(hac bartlett 2)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.87
+                                                  Prob > chi2     =     0.3497
+                                                  R-squared       =     0.0870
+GMM weight matrix: HAC Bartlett 2                 Root MSE        =     1.3599
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   .0590387   .0631357     0.94   0.350    -.0647051    .1827825
+       _cons |    1.08392   .0660472    16.41   0.000     .9544699     1.21337
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Bartlett kernel with 2 lags
+
+. ereturn list
+
+scalars:
+                  e(J) =  .0239061247415717
+                e(rss) =  739.6935145981457
+                  e(N) =  400
+               e(df_m) =  1
+               e(rmse) =  1.359865356017045
+                e(mss) =  70.4886631349375
+                 e(r2) =  .0870034728882424
+               e(r2_a) =  .0847095117648461
+               e(chi2) =  .8744253585324377
+         e(iterations) =  1
+            e(hac_lag) =  2
+               e(rank) =  2
+
+macros:
+            e(cmdline) : "ivregress gmm yy (xe = z w), wmatrix(hac bartlett 2)"
+                e(cmd) : "ivregress"
+          e(estat_cmd) : "ivregress_estat"
+         e(hac_kernel) : "Bartlett"
+            e(wmatrix) : "hac bartlett 2"
+                e(vce) : "hac bartlett 2"
+            e(vcetype) : "HAC"
+          e(estimator) : "gmm"
+           e(footnote) : "ivreg_footnote"
+       e(marginsnotok) : "Residuals SCores"
+          e(marginsok) : "XB default"
+            e(predict) : "ivregress_p"
+             e(depvar) : "yy"
+              e(insts) : "z w"
+              e(instd) : "xe"
+              e(title) : "Instrumental variables (GMM) regression"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+                  e(S) :  3 x 3
+                  e(W) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(hac parzen 3)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.86
+                                                  Prob > chi2     =     0.3525
+                                                  R-squared       =     0.0870
+GMM weight matrix: HAC Parzen 3                   Root MSE        =     1.3599
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |    .059008   .0634626     0.93   0.352    -.0653765    .1833925
+       _cons |   1.083909   .0657796    16.48   0.000      .954983    1.212834
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Parzen kernel with 3 lags
+
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(hac quadraticspectral 2)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.86
+                                                  Prob > chi2     =     0.3534
+                                                  R-squared       =     0.0870
+GMM weight matrix: HAC quadratic spectral 2       Root MSE        =     1.3599
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   .0590497    .063627     0.93   0.353    -.0656569    .1837564
+       _cons |   1.083942   .0646359    16.77   0.000     .9572577    1.210626
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Quadratic spectral kernel with 2 lags
+
+. capture noisily ivregress gmm yy (xe = z w), center
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.82
+                                                  Prob > chi2     =     0.3644
+                                                  R-squared       =     0.0866
+GMM weight matrix: Robust                         Root MSE        =     1.3602
+
+------------------------------------------------------------------------------
+             |               Robust
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   .0587256   .0647522     0.91   0.364    -.0681863    .1856375
+       _cons |   1.083745   .0679395    15.95   0.000     .9505857    1.216904
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+
+. capture noisily ivregress gmm yy (xe = z w), igmm
+Iteration 1: change in beta =  1.061e-06   change in W =  1.749e-04
+Iteration 2: change in beta =  1.431e-09   change in W =  1.547e-06
+Iteration 3: change in beta =  3.014e-12   change in W =  2.138e-09
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.82
+                                                  Prob > chi2     =     0.3645
+                                                  R-squared       =     0.0866
+GMM weight matrix: Robust                         Root MSE        =     1.3602
+
+------------------------------------------------------------------------------
+             |               Robust
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   .0587245   .0647522     0.91   0.364    -.0681875    .1856365
+       _cons |   1.083745   .0679396    15.95   0.000     .9505856    1.216904
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(unadjusted) center
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.84
+                                                  Prob > chi2     =     0.3586
+                                                  R-squared       =     0.0866
+GMM weight matrix: Unadjusted                     Root MSE        =     1.3602
+
+------------------------------------------------------------------------------
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   .0587494   .0639884     0.92   0.359    -.0666655    .1841643
+       _cons |   1.084813   .0683867    15.86   0.000     .9507776    1.218848
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+
+. 
+. * frontier with heteroskedasticity
+. gen u = abs(invnormal(runiform()))*exp(.5*w)
+
+. gen yf = 1 + .5*x + .3*invnormal(runiform()) - .5*u
+
+. frontier yf x, uhet(w)
+
+Iteration 0:   log likelihood = -316.59578  
+Iteration 1:   log likelihood = -310.20249  
+Iteration 2:   log likelihood =  -309.7528  
+Iteration 3:   log likelihood = -309.74249  
+Iteration 4:   log likelihood = -309.74249  
+
+Stoc. frontier normal/half-normal model         Number of obs     =        400
+                                                Wald chi2(1)      =     353.40
+Log likelihood = -309.74249                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yf           |
+           x |   .5042072   .0268209    18.80   0.000     .4516392    .5567752
+       _cons |   .9799974    .060413    16.22   0.000     .8615901    1.098405
+-------------+----------------------------------------------------------------
+lnsig2v      |
+       _cons |  -2.101737   .2250223    -9.34   0.000    -2.542773   -1.660702
+-------------+----------------------------------------------------------------
+lnsig2u      |
+           w |   1.268967   .3696311     3.43   0.001     .5445029     1.99343
+       _cons |  -1.489881   .3417293    -4.36   0.000    -2.159658   -.8201035
+-------------+----------------------------------------------------------------
+     sigma_v |   .3496339   .0393377                      .2804425    .4358963
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(rank) =  5
+                  e(N) =  400
+                 e(ic) =  4
+                  e(k) =  5
+               e(k_eq) =  3
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -309.7424881396867
+         e(k_eq_model) =  1
+               e(df_m) =  1
+               e(chi2) =  353.4037224831
+                  e(p) =  7.69025792913e-79
+            e(sigma_v) =  .3496338934321737
+
+macros:
+            e(cmdline) : "frontier yf x, uhet(w)"
+                e(cmd) : "frontier"
+                e(het) : "u"
+           e(function) : "production"
+               e(dist) : "hnormal"
+            e(predict) : "fron_p"
+           e(u_hetvar) : "w"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Stoc. frontier normal/half-normal model"
+               e(user) : "fron_hn"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "yf"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 5
+                  e(V) :  5 x 5
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 5
+
+functions:
+             e(sample)   
+
+. capture noisily frontier yf x, vhet(w)
+
+Iteration 0:   log likelihood = -316.59578  
+Iteration 1:   log likelihood = -315.33626  
+Iteration 2:   log likelihood = -314.77116  
+Iteration 3:   log likelihood = -314.75838  
+Iteration 4:   log likelihood = -314.75824  
+Iteration 5:   log likelihood = -314.75824  
+
+Stoc. frontier normal/half-normal model         Number of obs     =        400
+                                                Wald chi2(1)      =     344.72
+Log likelihood = -314.75824                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yf           |
+           x |   .5042858    .027161    18.57   0.000     .4510512    .5575204
+       _cons |   .9676372   .0670317    14.44   0.000     .8362574    1.099017
+-------------+----------------------------------------------------------------
+lnsig2v      |
+           w |   .9273125   .4572394     2.03   0.043     .0311398    1.823485
+       _cons |   -2.45336   .3122737    -7.86   0.000    -3.065406   -1.841315
+-------------+----------------------------------------------------------------
+lnsig2u      |
+       _cons |  -.8821452   .2635879    -3.35   0.001    -1.398768   -.3655224
+-------------+----------------------------------------------------------------
+     sigma_u |    .643346   .0847891                      .4968913     .832967
+------------------------------------------------------------------------------
+
+. capture noisily frontier yf x, uhet(w) vhet(w)
+
+Iteration 0:   log likelihood = -316.59578  
+Iteration 1:   log likelihood = -309.16359  
+Iteration 2:   log likelihood =  -308.9648  
+Iteration 3:   log likelihood = -308.96224  
+Iteration 4:   log likelihood = -308.96224  
+
+Stoc. frontier normal/half-normal model         Number of obs     =        400
+                                                Wald chi2(1)      =     355.33
+Log likelihood = -308.96224                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yf           |
+           x |   .5024627   .0266554    18.85   0.000     .4502191    .5547064
+       _cons |   .9624458   .0637082    15.11   0.000       .83758    1.087312
+-------------+----------------------------------------------------------------
+lnsig2v      |
+           w |   .5866735   .4590612     1.28   0.201    -.3130699    1.486417
+       _cons |  -2.323958   .2994662    -7.76   0.000    -2.910901   -1.737015
+-------------+----------------------------------------------------------------
+lnsig2u      |
+           w |   1.223099   .3747023     3.26   0.001     .4886955    1.957502
+       _cons |  -1.530483    .352303    -4.34   0.000    -2.220984   -.8399819
+------------------------------------------------------------------------------
+
+. capture noisily frontier yf x, distribution(tnormal) cm(w)
+
+Iteration 0:   log likelihood = -316.59578  (not concave)
+Iteration 1:   log likelihood = -310.68374  
+Iteration 2:   log likelihood =  -310.4893  
+Iteration 3:   log likelihood = -310.48872  
+Iteration 4:   log likelihood = -310.48872  
+
+Stoc. frontier normal/truncated-normal model    Number of obs     =        400
+                                                Wald chi2(1)      =     349.90
+Log likelihood = -310.48872                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yf           |
+           x |   .5042539   .0269573    18.71   0.000     .4514187    .5570892
+       _cons |   .9848562   .1569428     6.28   0.000     .6772539    1.292458
+-------------+----------------------------------------------------------------
+mu           |
+           w |   .8908352   .6280842     1.42   0.156    -.3401871    2.121858
+       _cons |  -.4892399   1.091127    -0.45   0.654    -2.627809    1.649329
+-------------+----------------------------------------------------------------
+   /lnsigma2 |  -.5460243   .4471732    -1.22   0.222    -1.422468    .3304192
+  /ilgtgamma |   1.327737   .4424946     3.00   0.003     .4604638    2.195011
+-------------+----------------------------------------------------------------
+      sigma2 |   .5792482   .2590243                      .2411183    1.391551
+       gamma |   .7904661   .0732901                      .6131242    .8998006
+    sigma_u2 |    .457876   .2337201                      -.000207    .9159591
+    sigma_v2 |   .1213721   .0431111                      .0368759    .2058683
+------------------------------------------------------------------------------
+
+. capture noisily frontier yf x, cm(w)
+cm() allowed only with truncated-normal models
+
+. 
+. * glm and binreg mu()
+. gen yb = y1 > 1
+
+. gen m0 = .5
+
+. capture noisily glm yb x, family(binomial) mu(m0)
+
+Iteration 0:   log likelihood = -259.85833  
+Iteration 1:   log likelihood = -259.73368  
+Iteration 2:   log likelihood = -259.73363  
+Iteration 3:   log likelihood = -259.73363  
+
+Generalized linear models                         No. of obs      =        400
+Optimization     : ML                             Residual df     =        398
+                                                  Scale parameter =          1
+Deviance         =  519.4672581                   (1/df) Deviance =   1.305194
+Pearson          =  399.8500204                   (1/df) Pearson  =   1.004648
+
+Variance function: V(u) = u*(1-u)                 [Bernoulli]
+Link function    : g(u) = ln(u/(1-u))             [Logit]
+
+                                                  AIC             =   1.308668
+Log likelihood   =  -259.733629                   BIC             =  -1865.136
+
+------------------------------------------------------------------------------
+             |                 OIM
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .6507985   .1175618     5.54   0.000     .4203817    .8812154
+       _cons |   .0028819   .1044925     0.03   0.978    -.2019196    .2076835
+------------------------------------------------------------------------------
+
+. capture noisily binreg yb x, mu(m0)
+
+Iteration 1:   deviance =  519.7167
+Iteration 2:   deviance =  519.4674
+Iteration 3:   deviance =  519.4673
+Iteration 4:   deviance =  519.4673
+
+Generalized linear models                         No. of obs      =        400
+Optimization     : MQL Fisher scoring             Residual df     =        398
+                   (IRLS EIM)                     Scale parameter =          1
+Deviance         =  519.4672581                   (1/df) Deviance =   1.305194
+Pearson          =  399.8499621                   (1/df) Pearson  =   1.004648
+
+Variance function: V(u) = u*(1-u)                 [Bernoulli]
+Link function    : g(u) = ln(u/(1-u))             [Logit]
+
+                                                  BIC             =  -1865.136
+
+------------------------------------------------------------------------------
+             |                 EIM
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           x |   .6507985   .1175618     5.54   0.000     .4203817    .8812154
+       _cons |   .0028819   .1044925     0.03   0.978    -.2019196    .2076835
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1918_models3.log
+  log type:  text
+ closed on:  24 Oct 2026, 09:52:27
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

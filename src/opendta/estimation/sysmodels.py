@@ -552,11 +552,20 @@ def _system(s: "Session", args: str, cmd: str) -> None:
                 cols.append(np.ones(n))
             Zs.append(np.column_stack(cols))
         # Stata scales the 2sls/ols covariance by the equation degrees of freedom (observed in the 1908 log)
+        # with constraints the 2sls/ols covariance is not rescaled and the tests are z (compat 1918)
         fit = syseq.three_sls(Xs, Zs, ys, method=method, iterate=iterate,
-                              dfk="small" if method in ("2sls", "ols") and not dfk else dfk, cons=cons)
+                              dfk="small" if method in ("2sls", "ols") and not dfk and cons is None else dfk, cons=cons)
     foot = (endog_list, exog_list) if cmd == "reg3" else None
+    if cmd == "sureg":
+        exog = []
+        for dep_, blk in zip(depnames, blocks):
+            for nm in [dep_] + [c.name for c in blk.cols if c.values is not None]:
+                if nm not in exog:
+                    exog.append(nm)
+    else:
+        exog = exog_list
     _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method if cmd == "reg3" else "sure", dfk, foot,
-                 cns_text=cns_text)
+                 cns_text=cns_text, cons=cons, exog=exog)
 
 
 def _system_constraints(s, o, blocks):
@@ -588,13 +597,14 @@ def _system_constraints(s, o, blocks):
     return (np.array(R).reshape(-1, len(names)), np.array(r, dtype=float)), texts
 
 
-def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, foot=None, cns_text=()) -> None:
+def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, foot=None, cns_text=(), cons=None,
+                 exog=()) -> None:
     ds = s.data
     n = smp.n
     m = len(blocks)
     b_all = np.concatenate(fit.b)
     names, eqnames, b_full, V_full, rows = assemble(SimpleNamespace(s=s), blocks, b_all, fit.V, [])
-    use_t = bool(o.get("small")) or (cmd == "reg3" and method in ("2sls", "ols"))
+    use_t = bool(o.get("small")) or (cmd == "reg3" and method in ("2sls", "ols") and not cns_text)
     if cmd == "sureg" and o.get("isure") and not o.get("nolog"):
         s.output.write("\n", "text")
         for it, d in enumerate(fit.trace, 1):
@@ -616,7 +626,8 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, fo
             chi2 = float(bb @ np.linalg.solve(VV, bb))
         else:
             chi2 = SYS
-        eq_info.append({"obs": n, "parms": blk.nslopes, "rmse": rmse, "r2": r2, "chi2": chi2, "df": len(sl), "rss": rss})
+        eq_info.append({"obs": n, "parms": blk.nslopes, "rmse": rmse, "r2": r2, "chi2": chi2, "df": len(sl), "rss": rss,
+                        "mss": tss - rss})
     level = smp.level
     est = Estimates(cmd, blocks[0].name, names, b_full, V_full, n, "t" if use_t else "z",
                     float(m * n - sum(b.k for b in blocks)) if use_t else None)
@@ -644,15 +655,30 @@ def _post_system(s, args, cmd, eqs, blocks, ys, Xs, fit, smp, o, method, dfk, fo
                       "sure": "Seemingly unrelated regression"}.get(method, "Three-stage least-squares regression")
              }[cmd]
     est.title = title + (", iterated " if cmd == "sureg" and o.get("isure") else "")
-    scalars = [("N", n), ("k_eq", m), ("k_dv", m), ("df_m", sum(e["df"] for e in eq_info)),
-               ("df_r", n), ("ic", fit.iterations), ("rank", np.linalg.matrix_rank(fit.V)),
-               ("chi2_bp", fit.chi2_bp), ("df_bp", fit.df_bp)]
-    for i, e in enumerate(eq_info, 1):
-        scalars += [(f"rmse_{i}", e["rmse"]), (f"r2_{i}", e["r2"]), (f"chi2_{i}", e["chi2"]),
-                    (f"mss_{i}", 0.0), (f"rss_{i}", e["rss"])]
-    macros = [("cmdline", cmdline(cmd, args)), ("title", title), ("depvar", est.depvar), ("cmd", cmd),
-              ("method", method if cmd == "reg3" else "sureg"), ("properties", "b V"), ("predict", "reg3_p")]
-    post(s, est, scalars, macros, smp.mask)
+    # e() as Stata lists it after sureg (compat 1918; reg3 follows it, VERIFY)
+    scalars = []
+    for i, (blk, e) in enumerate(zip(blocks, eq_info), 1):
+        p_i = chi2_tail(e["chi2"], e["df"]) if e["chi2"] < SYS else SYS
+        scalars += [(f"cons_{i}", 1.0 if blk.constant else 0.0), (f"chi2_{i}", e["chi2"]), (f"p_{i}", p_i),
+                    (f"df_m{i}", e["df"]), (f"rss_{i}", e["rss"]), (f"rmse_{i}", e["rmse"]), (f"mss_{i}", e["mss"]),
+                    (f"r2_{i}", e["r2"])]
+    S = fit.resid.T @ fit.resid / n
+    ll = -0.5 * n * (m * (1 + np.log(2 * np.pi)) + float(np.linalg.slogdet(S)[1]))
+    scalars += [("k", float(len(b_all))), ("N", n), ("rank", np.linalg.matrix_rank(fit.V)), ("ll", ll),
+                ("dfk2_adj", float(n)), ("k_eq", m), ("ic", fit.iterations if est.iterated else 0)]
+    macros = [("cmd", cmd), ("cmdline", cmdline(cmd, args)), ("method", method),
+              ("marginsdefault", " ".join(f"predict(xb equation({b.name}))" for b in blocks)),
+              ("marginsok", "XB default"), ("marginsnotok", "stdp Residuals stddp"), ("predict", "reg3_p"),
+              ("corr", "unstructured"), ("exog", " ".join(exog)), ("depvar", est.depvar),
+              ("eqnames", " ".join(b.name for b in blocks)), ("properties", "b V")]
+    from ..commands.matrix import Matrix
+    mats = []
+    if cons is not None:
+        mats.append(("Cns", Matrix(np.column_stack([cons[0], cons[1]]), [str(i + 1) for i in range(len(cons[1]))],
+                                   list(names) + ["_r"])))
+    sig_names = [b.name for b in blocks]
+    mats.append(("Sigma", Matrix(fit.sigma, sig_names, sig_names)))
+    post(s, est, scalars, macros, smp.mask, extra_mats=mats)
     _display_system(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 

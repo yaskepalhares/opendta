@@ -299,11 +299,11 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 
 - [x] `tpoisson` e `tnbreg` com `ul()` e limites dados por variáveis; `tnbreg` e `nbreg` com `dispersion(constant)` (o `nbreg` aceitava a opção e ajustava o modelo de dispersão média)
 - [x] `glogit` com `or`; `glm` e `binreg` com `mu()`
-- [x] `offset()` no `intreg`, `truncreg`, `heckman`, `heckprobit` e `heckoprobit` (antes aceito e ignorado), `offset1()` e `offset2()` no `biprobit`; a linha do offset na tabela de coeficientes desses modelos e dos modelos de contagem; `heckman, twostep mills()`
+- [x] `offset()` no `intreg`, `truncreg`, `heckman`, `heckprobit` e `heckoprobit` (antes aceito e ignorado), `offset1()` e `offset2()` no `biprobit`; a linha do offset na tabela de coeficientes desses modelos e dos modelos de contagem; `heckman` com `mills()` (duas etapas e máxima verossimilhança)
 - [x] `sureg` e `reg3` com `constraints()`
 - [x] `ivregress gmm` com `wmatrix(hac kernel #)`, `center` e `igmm`
 - [x] `frontier` com `uhet()`, `vhet()` e `cm()`
-- O caso `1918` aguarda a rodada do Stata (ele também mostra se o Stata 14 tem `ul()` no `tpoisson` e no `tnbreg`)
+- Conferido com o log do Stata 14: caso `1918` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). O Stata 14 não tem `ul()` no `tpoisson` e no `tnbreg` (veio depois): o OpenDTA mantém a opção como extensão. Encontrado e corrigido no caminho: as verossimilhanças binomiais negativas somam ln Gama(y + r) - ln Gama(r) termo a termo quando a dispersão vai a zero (a diferença das duas perdia dígitos e punha a verossimilhança NB1 acima da Poisson); a probabilidade da janela de uma contagem com limite superior é somada termo a termo; `tnbreg` e `nbreg` com `dispersion(constant)` começam o modelo completo do ajuste só com constante e o `tnbreg` guarda o e() do Stata; `sureg` e `reg3` com restrições tiram a primeira covariância dos resíduos do ajuste restrito equação por equação e guardam o e() do Stata (`Sigma`, `Cns`, as estatísticas de cada equação), e o `2sls` restrito usa estatísticas z; `ivregress gmm` com matriz de pesos HAC: a largura de banda do núcleo espectral quadrático é # + 1, a nota do VCE HAC, e(J), e(hac_lag), e(S) e e(W), e o histórico do `igmm`; `frontier` com `uhet()` ou `vhet()` mostra as duas variâncias como equações, e com `cm()` os parâmetros `/lnsigma2` e `/ilgtgamma`
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 

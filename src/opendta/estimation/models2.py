@@ -200,11 +200,19 @@ _E_ORDER = {
                ["out", "ilog", "gradient"]),
     # compat 0512: ereturn list order of Stata 14 (without p_c and diparm1)
     "nbreg": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
-               "ll_0", "rank0", "df_m", "chi2", "p", "ll_c", "chi2_c", "r2_p", "k_aux", "alpha"],
+               "ll_0", "rank0", "df_m", "chi2", "p", "ll_c", "chi2_c", "r2_p", "k_aux", "alpha", "delta"],
               ["cmdline", "cmd", "predict", "dispers", "chi2_ct", "chi2type", "opt", "vce", "vcetype",
                "clustvar", "title", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar",
                "properties"],
               ["ilog", "gradient"]),
+    # compat 1918 (tnbreg, dispersion(constant)); ulopt and the user program of the mean
+    # dispersion are VERIFY
+    "tnbreg": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
+                "ll_0", "rank0", "df_m", "chi2", "p", "ll_c", "chi2_c", "r2_p", "k_aux", "alpha", "delta"],
+               ["cmdline", "title", "llopt", "ulopt", "cmd", "predict", "dispers", "chi2_ct", "chi2type", "opt",
+                "vce", "vcetype", "clustvar", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar",
+                "properties"],
+               ["ilog", "gradient"]),
     "tobit": (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model",
                "ll_0", "df_m", "chi2", "p", "df_r", "N_unc", "N_lc", "N_rc", "llopt", "ulopt", "k_aux", "r2_p"],
               ["cmdline", "cmd", "predict", "title", "chi2type", "opt", "vce", "vcetype", "clustvar", "user",
@@ -683,6 +691,10 @@ def cmd_nbreg(s: "Session", args: str) -> None:
     _log(s, pr, res0)
     fun, scores = make(X)
     b0 = np.concatenate([resp.b, [res0.b[1]]])
+    if nb1:
+        # dispersion(constant) starts from the constant-only fit (Stata's iteration 0 is ll_0;
+        # compat 1918)
+        b0 = np.concatenate([np.zeros(kx - 1), res0.b]) if pr.constant else b0
     res = pr.maximize(fun, b0)
     if not pr.o.get("nolog"):
         out.write("\nFitting full model:\n", "text")
@@ -739,7 +751,7 @@ def cmd_nbreg(s: "Session", args: str) -> None:
                   k_aux=1, extra_scalars=[(an, alpha), ("rank0", 2.0)]
                   + ([] if pr.robust else [("chi2_c", chibar), ("ll_c", ll_pois)]),
                   extra_macros=[("dispers", "constant" if nb1 else "mean"), ("chi2_ct", "LR"),
-                                ("user", "nbreg_lf"),
+                                ("user", "nbreg_al" if nb1 else "nbreg_lf"),      # compat 1918
                                 ("ml_method", "e2")], constant=pr.constant,
                   order=_E_ORDER["nbreg"])
     est.dispersion = "constant" if nb1 else "mean"
@@ -751,6 +763,12 @@ def cmd_nbreg(s: "Session", args: str) -> None:
         est.coef_title, est.eform_on = "IRR", True
     _display_std(s, est)
     est.coef_title, est.eform_on = "Coef.", False
+
+
+def chibar_text(chibar: float) -> str:
+    """The chibar2 of the LR test of alpha (delta) = 0: %7.2f, and 0.0e+00 when the test is zero
+    (the model at the boundary; compat 1907, 1918; VERIFY for small positive values)."""
+    return f"{chibar:7.1e}" if chibar < 0.005 else f"{chibar:7.2f}"
 
 
 def _bmap(pr, b, kx):
@@ -784,7 +802,7 @@ def _semap(pr, V, kx):
 def _nbreg_footer(s: "Session", est: Estimates) -> None:
     chibar, p = est.chibar
     an = "delta" if getattr(est, "dispersion", "mean") == "constant" else "alpha"
-    s.output.write(f"Likelihood-ratio test of {an}=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p:5.3f}\n",
+    s.output.write(f"Likelihood-ratio test of {an}=0:  chibar2(01) = {chibar_text(chibar)} Prob>=chibar2 = {p:5.3f}\n",
                    "text")
 
 

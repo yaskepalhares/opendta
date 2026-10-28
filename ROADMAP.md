@@ -292,11 +292,11 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 
 - [x] `tpoisson` and `tnbreg` with `ul()` and limits given by variables; `tnbreg` and `nbreg` with `dispersion(constant)` (`nbreg` took the option and fitted the mean-dispersion model)
 - [x] `glogit` with `or`; `glm` and `binreg` with `mu()`
-- [x] `offset()` in `intreg`, `truncreg`, `heckman`, `heckprobit` and `heckoprobit` (accepted and ignored before), `offset1()` and `offset2()` in `biprobit`; the offset row in the coefficient tables of these models and of the count models; `heckman, twostep mills()`
+- [x] `offset()` in `intreg`, `truncreg`, `heckman`, `heckprobit` and `heckoprobit` (accepted and ignored before), `offset1()` and `offset2()` in `biprobit`; the offset row in the coefficient tables of these models and of the count models; `heckman` with `mills()` (two-step and maximum likelihood)
 - [x] `sureg` and `reg3` with `constraints()`
 - [x] `ivregress gmm` with `wmatrix(hac kernel #)`, `center` and `igmm`
 - [x] `frontier` with `uhet()`, `vhet()` and `cm()`
-- Case `1918` awaits the Stata run (it also settles whether Stata 14 has `ul()` in `tpoisson` and `tnbreg`)
+- Checked against the Stata 14 log: case `1918` (the differences and the reason for each are in `compat/known_differences.txt`). Stata 14 has no `ul()` in `tpoisson` and `tnbreg` (it came later): OpenDTA keeps it as an extension. Found and fixed on the way: the negative binomial likelihoods sum ln Gamma(y + r) - ln Gamma(r) term by term when the dispersion goes to zero (the difference of the two lost digits and put the NB1 likelihood above the Poisson one); the window probability of a count with an upper limit is summed term by term; `tnbreg` and `nbreg` with `dispersion(constant)` start the full model from the constant-only fit and `tnbreg` stores Stata's e(); `sureg` and `reg3` with constraints take the first residual covariance from the constrained equation-by-equation fit and store Stata's e() (`Sigma`, `Cns`, the statistics of each equation), and constrained `2sls` reports z statistics; `ivregress gmm` with a HAC weight matrix: the quadratic-spectral bandwidth is # + 1, the footnote of the HAC VCE, e(J), e(hac_lag), e(S) and e(W), and the log of `igmm`; `frontier` with `uhet()` or `vhet()` reports both variances as equations, and with `cm()` the parameters `/lnsigma2` and `/ilgtgamma`
 
 ## Distribution and documentation
 
