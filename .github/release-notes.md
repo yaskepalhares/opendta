@@ -1,20 +1,11 @@
 **English** · [Português](#português)
 
-## What's new in 0.6.0
+## What's new in 0.7.0
 
-New options across nine areas, each checked against Stata 14 output (the remaining differences, and why, are in `compat/known_differences.txt`):
+Graphs now look like Stata 14's, each change checked against Stata's own PNG output (case 1921 in `compat/`), and the interface got a few touches:
 
-- **Programming**: `makecns` with constraint lists, `displaycns` and `nocnsnotes`, and `matrix dispCns`; `constraint #` without `define`; `matlist` with equation names (`showcoleq()`, `roweqonly`, `coleqonly`, `lines(eq)`…); `window` dialogs, message boxes and the User menu in the interface.
-- **Data management**: `table` with a supercolumn variable and `by()`; `list` with `string()` and `display`; `import sasxport` with `describe` and `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`.
-- **Epidemiology**: `rocreg` with `probit ml` (binormal ROC model by maximum likelihood) and with `cluster()`.
-- **Base statistics**: `ml` with the `lf0`–`lf2` and `gf0`–`gf2` methods, `constraints()` and `svy`; more options of `boxcox`, `icc`, `loneway`, `esize`, `pwmean`, `ameans`, `lv` and `stem`.
-- **Panel data**: `xtivreg` with `first` and `regress`; `xtdata, re`; `xtrc, betas`; more options of `xtunitroot fisher` and `hadri`; `artests()` in the dynamic-panel commands.
-- **Time series**: robust variances in `prais` and `arfima`; constraints in `arch`, `svar`, `sspace` and `dfactor`; `predict` after `ucm`, `sspace` and `dfactor`.
-- **Multilevel models**: nested levels of random effects in `meglm` and the other `me` commands, weights at every level and robust and cluster variances; `predict` after `mestreg`.
-- **Multivariate statistics**: `clustermat`, the binary similarity measures, `manovatest`, `camat`, `cabiplot`, `caprojection`, `mcaplot`, `mcaprojection`, `mdslong`, `mdsconfig`, `mdsshepard`, `procoverlay`, and `procrustes` with the unrestricted and oblique transformations.
-- **Models**: `tnbreg` and `nbreg` with `dispersion(constant)`; `glogit, or`; `glm` and `binreg` with `mu()`; `offset()` in `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit` and `biprobit`; `heckman` with `mills()`; `sureg` and `reg3` with `constraints()`; `ivregress gmm` with HAC weight matrices, `center` and `igmm`; `frontier` with `uhet()`, `vhet()` and `cm()`. `tpoisson` and `tnbreg` also take `ul()`, an option that Stata 14 does not have.
-- **Interface**: the Review window can list the commands that a do-file ran, under its `do` line.
-- **Fixes** found while checking against Stata: hierarchical cluster variables follow the dendrogram; negative binomial likelihoods no longer lose digits when the dispersion goes to zero; nested multilevel quadrature gives Stata's estimates and standard errors; and many `e()` and `r()` lists now have Stata's contents and order.
+- **Graphs**: the `kdensity` bandwidth with `aweight` and `fweight` (the number of observations with `aweight`, the sum of the weights with `fweight`); `graph bar`, `hbar` and `box` with two `over()` (grouped axis); `sort()` and `descending` in `graph dot`; narrower bars; the y axis of bars starting at zero with about four ticks; `blabel(, format())`; light boxes with filled outliers, and a `graph box` axis that follows the data; `lfit` drawn over the scatter; the `histogram` x axis starting at zero and no border between many narrow bins.
+- **Interface**: each toolbar button shows its name under the icon, in English and Portuguese; the update dialog follows the Settings style; the Results tables have solid lines; do-files dropped on the window open in the Do-file Editor instead of running.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -60,21 +51,12 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.6.0
+### Novidades da 0.7.0
 
-Novas opções em nove áreas, cada uma conferida com a saída do Stata 14 (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`):
+Os gráficos agora ficam como os do Stata 14, cada mudança conferida com os PNGs do próprio Stata (caso 1921 em `compat/`), e a interface ganhou alguns ajustes:
 
-- **Programação**: `makecns` com listas de restrições, `displaycns` e `nocnsnotes`, e `matrix dispCns`; `constraint #` sem `define`; `matlist` com nomes de equação (`showcoleq()`, `roweqonly`, `coleqonly`, `lines(eq)`…); diálogos, caixas de mensagem e o menu User do `window` na interface.
-- **Manipulação de dados**: `table` com variável de supercoluna e `by()`; `list` com `string()` e `display`; `import sasxport` com `describe` e `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`.
-- **Epidemiologia**: `rocreg` com `probit ml` (modelo ROC binormal por máxima verossimilhança) e com `cluster()`.
-- **Estatística básica**: `ml` com os métodos `lf0`–`lf2` e `gf0`–`gf2`, `constraints()` e `svy`; mais opções do `boxcox`, `icc`, `loneway`, `esize`, `pwmean`, `ameans`, `lv` e `stem`.
-- **Dados em painel**: `xtivreg` com `first` e `regress`; `xtdata, re`; `xtrc, betas`; mais opções do `xtunitroot fisher` e `hadri`; `artests()` nos comandos de painel dinâmico.
-- **Séries temporais**: variâncias robustas no `prais` e no `arfima`; restrições no `arch`, `svar`, `sspace` e `dfactor`; `predict` depois do `ucm`, `sspace` e `dfactor`.
-- **Modelos multinível**: níveis aninhados de efeitos aleatórios no `meglm` e nos outros comandos `me`, pesos em todos os níveis e variâncias robusta e por cluster; `predict` depois do `mestreg`.
-- **Estatística multivariada**: `clustermat`, as medidas binárias de similaridade, `manovatest`, `camat`, `cabiplot`, `caprojection`, `mcaplot`, `mcaprojection`, `mdslong`, `mdsconfig`, `mdsshepard`, `procoverlay`, e `procrustes` com as transformações irrestrita e oblíqua.
-- **Modelos**: `tnbreg` e `nbreg` com `dispersion(constant)`; `glogit, or`; `glm` e `binreg` com `mu()`; `offset()` no `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit` e `biprobit`; `heckman` com `mills()`; `sureg` e `reg3` com `constraints()`; `ivregress gmm` com matrizes de pesos HAC, `center` e `igmm`; `frontier` com `uhet()`, `vhet()` e `cm()`. O `tpoisson` e o `tnbreg` também aceitam `ul()`, opção que o Stata 14 não tem.
-- **Interface**: a janela Review pode listar os comandos que um do-file executou, abaixo da linha do `do`.
-- **Correções** encontradas na conferência com o Stata: as variáveis da análise de cluster hierárquica seguem o dendrograma; as verossimilhanças binomiais negativas não perdem mais dígitos quando a dispersão vai a zero; a quadratura multinível aninhada dá as estimativas e os erros-padrão do Stata; e muitas listas de `e()` e `r()` agora têm o conteúdo e a ordem do Stata.
+- **Gráficos**: a largura de banda do `kdensity` com `aweight` e `fweight` (nº de observações com `aweight`, soma dos pesos com `fweight`); `graph bar`, `hbar` e `box` com dois `over()` (eixo agrupado); `sort()` e `descending` no `graph dot`; barras mais estreitas; eixo y das barras a partir de zero com cerca de quatro marcas; `blabel(, format())`; caixas claras com outliers preenchidos, e eixo do `graph box` que acompanha os dados; `lfit` desenhado por cima do scatter; eixo x do `histogram` começando em zero e sem borda entre muitos bins estreitos.
+- **Interface**: cada botão da barra de ferramentas mostra o nome sob o ícone, em inglês e português; a janela de atualização segue o estilo de Settings; as tabelas de Results têm linhas sólidas; do-files soltos na janela abrem no Editor de do-files em vez de rodar.
 
 O que ainda falta para a versão 1.0 está no [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10).
 
