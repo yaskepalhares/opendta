@@ -423,7 +423,7 @@ class DoFileEditor(QMainWindow):
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(False)      # _TabBar draws its own close icons
         self.tabs.setMovable(True)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tab_bar.tabCloseRequested.connect(self.close_tab)      # a custom bar is not relayed by QTabWidget
         self.tabs.currentChanged.connect(lambda _: (self._update_title(), self._update_undo()))
         self.findbar = _FindBar(self)
         self.findbar.hide()
@@ -516,6 +516,7 @@ class DoFileEditor(QMainWindow):
             QWidget#FindBar QPushButton:hover { background: rgba(127, 127, 127, 0.16); }
         """)
         QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.do_selection)
+        QShortcut(QKeySequence.StandardKey.Close, self, lambda: self.close_tab(self.tabs.currentIndex()))
         QShortcut(QKeySequence("Escape"), self, self.findbar.hide)
         self.new_file()
 
