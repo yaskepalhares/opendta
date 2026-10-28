@@ -1,14 +1,20 @@
 **English** · [Português](#português)
 
-## What's new in 0.5.0
+## What's new in 0.6.0
 
-Four new groups of commands, each checked against Stata 14 output (the remaining differences, and why, are in `compat/known_differences.txt`):
+New options across nine areas, each checked against Stata 14 output (the remaining differences, and why, are in `compat/known_differences.txt`):
 
-- **Panel data**: random-effects models by quadrature, `quadchk`, dynamic panels by GMM (`xtabond`, `xtdpdsys`, `xtdpd`, with `estat abond` and `estat sargan`), the linear panel estimators, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` and `xtdata`.
-- **Multivariate statistics**: `pca`, `factor` and `rotate`, `alpha`, `cluster` (k-means, k-medians and the hierarchical linkages, with the dendrogram), `discrim` and `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` and `biplot`, with their `estat` subcommands.
-- **Models**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` and `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` and `etpoisson`.
-- **Other suites**: `sem` with `mlmv`, `adf`, groups and the `estat` subcommands; `gsem`; `irt` (`1pl` to `hybrid`) with `irtgraph`; `bayesmh`, the `bayes` prefix for `regress`, `logit`, `probit` and `poisson`, `bayesstats`, `bayestest` and `bayesgraph`; new `power` methods and the `graph` option; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with sixteen more estimators.
-- **Fixes**: `ivregress` now uses weights; `matrix list` shows equation names (`y:x`, `cut1:_cons`) and lists a 1×1 matrix as symmetric, and `` `:colfullnames' ``, `` `:coleq' `` and `matrix coleq`/`roweq` work with equations.
+- **Programming**: `makecns` with constraint lists, `displaycns` and `nocnsnotes`, and `matrix dispCns`; `constraint #` without `define`; `matlist` with equation names (`showcoleq()`, `roweqonly`, `coleqonly`, `lines(eq)`…); `window` dialogs, message boxes and the User menu in the interface.
+- **Data management**: `table` with a supercolumn variable and `by()`; `list` with `string()` and `display`; `import sasxport` with `describe` and `member()` and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()`.
+- **Epidemiology**: `rocreg` with `probit ml` (binormal ROC model by maximum likelihood) and with `cluster()`.
+- **Base statistics**: `ml` with the `lf0`–`lf2` and `gf0`–`gf2` methods, `constraints()` and `svy`; more options of `boxcox`, `icc`, `loneway`, `esize`, `pwmean`, `ameans`, `lv` and `stem`.
+- **Panel data**: `xtivreg` with `first` and `regress`; `xtdata, re`; `xtrc, betas`; more options of `xtunitroot fisher` and `hadri`; `artests()` in the dynamic-panel commands.
+- **Time series**: robust variances in `prais` and `arfima`; constraints in `arch`, `svar`, `sspace` and `dfactor`; `predict` after `ucm`, `sspace` and `dfactor`.
+- **Multilevel models**: nested levels of random effects in `meglm` and the other `me` commands, weights at every level and robust and cluster variances; `predict` after `mestreg`.
+- **Multivariate statistics**: `clustermat`, the binary similarity measures, `manovatest`, `camat`, `cabiplot`, `caprojection`, `mcaplot`, `mcaprojection`, `mdslong`, `mdsconfig`, `mdsshepard`, `procoverlay`, and `procrustes` with the unrestricted and oblique transformations.
+- **Models**: `tnbreg` and `nbreg` with `dispersion(constant)`; `glogit, or`; `glm` and `binreg` with `mu()`; `offset()` in `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit` and `biprobit`; `heckman` with `mills()`; `sureg` and `reg3` with `constraints()`; `ivregress gmm` with HAC weight matrices, `center` and `igmm`; `frontier` with `uhet()`, `vhet()` and `cm()`. `tpoisson` and `tnbreg` also take `ul()`, an option that Stata 14 does not have.
+- **Interface**: the Review window can list the commands that a do-file ran, under its `do` line.
+- **Fixes** found while checking against Stata: hierarchical cluster variables follow the dendrogram; negative binomial likelihoods no longer lose digits when the dispersion goes to zero; nested multilevel quadrature gives Stata's estimates and standard errors; and many `e()` and `r()` lists now have Stata's contents and order.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -54,15 +60,21 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.5.0
+### Novidades da 0.6.0
 
-Quatro novos grupos de comandos, cada um conferido com a saída do Stata 14 (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`):
+Novas opções em nove áreas, cada uma conferida com a saída do Stata 14 (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`):
 
-- **Dados em painel**: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM (`xtabond`, `xtdpdsys`, `xtdpd`, com `estat abond` e `estat sargan`), os estimadores lineares de painel, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` e `xtdata`.
-- **Estatística multivariada**: `pca`, `factor` e `rotate`, `alpha`, `cluster` (k-médias, k-medianas e as ligações hierárquicas, com o dendrograma), `discrim` e `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` e `biplot`, com seus subcomandos de `estat`.
-- **Modelos**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` e `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` e `etpoisson`.
-- **Outras suítes**: `sem` com `mlmv`, `adf`, grupos e os subcomandos de `estat`; `gsem`; `irt` (do `1pl` ao `hybrid`) com `irtgraph`; `bayesmh`, o prefixo `bayes` para `regress`, `logit`, `probit` e `poisson`, `bayesstats`, `bayestest` e `bayesgraph`; novos métodos do `power` e a opção `graph`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg`; `svy:` com mais dezesseis estimadores.
-- **Correções**: o `ivregress` agora usa os pesos; o `matrix list` mostra os nomes de equação (`y:x`, `cut1:_cons`) e lista uma matriz 1×1 como simétrica, e `` `:colfullnames' ``, `` `:coleq' `` e `matrix coleq`/`roweq` funcionam com equações.
+- **Programação**: `makecns` com listas de restrições, `displaycns` e `nocnsnotes`, e `matrix dispCns`; `constraint #` sem `define`; `matlist` com nomes de equação (`showcoleq()`, `roweqonly`, `coleqonly`, `lines(eq)`…); diálogos, caixas de mensagem e o menu User do `window` na interface.
+- **Manipulação de dados**: `table` com variável de supercoluna e `by()`; `list` com `string()` e `display`; `import sasxport` com `describe` e `member()` e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()`.
+- **Epidemiologia**: `rocreg` com `probit ml` (modelo ROC binormal por máxima verossimilhança) e com `cluster()`.
+- **Estatística básica**: `ml` com os métodos `lf0`–`lf2` e `gf0`–`gf2`, `constraints()` e `svy`; mais opções do `boxcox`, `icc`, `loneway`, `esize`, `pwmean`, `ameans`, `lv` e `stem`.
+- **Dados em painel**: `xtivreg` com `first` e `regress`; `xtdata, re`; `xtrc, betas`; mais opções do `xtunitroot fisher` e `hadri`; `artests()` nos comandos de painel dinâmico.
+- **Séries temporais**: variâncias robustas no `prais` e no `arfima`; restrições no `arch`, `svar`, `sspace` e `dfactor`; `predict` depois do `ucm`, `sspace` e `dfactor`.
+- **Modelos multinível**: níveis aninhados de efeitos aleatórios no `meglm` e nos outros comandos `me`, pesos em todos os níveis e variâncias robusta e por cluster; `predict` depois do `mestreg`.
+- **Estatística multivariada**: `clustermat`, as medidas binárias de similaridade, `manovatest`, `camat`, `cabiplot`, `caprojection`, `mcaplot`, `mcaprojection`, `mdslong`, `mdsconfig`, `mdsshepard`, `procoverlay`, e `procrustes` com as transformações irrestrita e oblíqua.
+- **Modelos**: `tnbreg` e `nbreg` com `dispersion(constant)`; `glogit, or`; `glm` e `binreg` com `mu()`; `offset()` no `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit` e `biprobit`; `heckman` com `mills()`; `sureg` e `reg3` com `constraints()`; `ivregress gmm` com matrizes de pesos HAC, `center` e `igmm`; `frontier` com `uhet()`, `vhet()` e `cm()`. O `tpoisson` e o `tnbreg` também aceitam `ul()`, opção que o Stata 14 não tem.
+- **Interface**: a janela Review pode listar os comandos que um do-file executou, abaixo da linha do `do`.
+- **Correções** encontradas na conferência com o Stata: as variáveis da análise de cluster hierárquica seguem o dendrograma; as verossimilhanças binomiais negativas não perdem mais dígitos quando a dispersão vai a zero; a quadratura multinível aninhada dá as estimativas e os erros-padrão do Stata; e muitas listas de `e()` e `r()` agora têm o conteúdo e a ordem do Stata.
 
 O que ainda falta para a versão 1.0 está no [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10).
 

@@ -129,6 +129,6 @@ Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras s
 
 ## Antes da 1.0
 
-Os blocos 1 a 11 saíram na versão 0.5.0. A versão 1.0 espera o que ainda consta em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10): planeje como novos blocos (a partir do bloco 12), uma área por vez, executados como os blocos acima.
+Os blocos 1 a 11 saíram na versão 0.5.0, e os blocos 12 a 20a (fases 24 a 32) na versão 0.6.0. A versão 1.0 espera o que ainda consta em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10): planeje como novos blocos (a partir do bloco 12), uma área por vez, executados como os blocos acima.
 
 Quando essa lista estiver vazia: a rodada no Stata de todos os casos de comparação sem referência, as diferenças corrigidas, a versão 1.0.0 em `src/opendta/__init__.py` e `pyproject.toml`, as notas de lançamento escritas e a tag `v1.0.0` enviada (veja [development.pt-BR.md](development.pt-BR.md#publicar-uma-versão)).
