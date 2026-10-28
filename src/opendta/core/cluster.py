@@ -41,7 +41,53 @@ def pairwise(X: np.ndarray, Y: np.ndarray | None, measure: str, power: float | N
     if m == "angular":
         s = (X @ Y.T) / np.outer(np.sqrt((X ** 2).sum(1)), np.sqrt((Y ** 2).sum(1)))
         return 1.0 - s
+    if m in BINARY:
+        return 1.0 - binary_similarity(X, Y, m)
     raise ValueError(measure)
+
+
+BINARY = ("matching", "Jaccard", "Russell", "Hamann", "Dice", "antiDice", "Sneath", "Rogers", "Ochiai",
+          "Yule", "Anderberg", "Kulczynski", "Pearson", "Gower2")
+
+
+def binary_similarity(X: np.ndarray, Y: np.ndarray, measure: str) -> np.ndarray:
+    """The similarity measures for binary data ([MV] measure_option) from the counts of each
+    pair of rows: a (both 1), b (1 in X only), c (1 in Y only) and d (both 0). A row is 1 where
+    the value is nonzero."""
+    Xb, Yb = (X != 0).astype(float), (Y != 0).astype(float)
+    a = Xb @ Yb.T
+    b = Xb @ (1 - Yb).T
+    c = (1 - Xb) @ Yb.T
+    d = (1 - Xb) @ (1 - Yb).T
+    p = a + b + c + d
+    with np.errstate(invalid="ignore", divide="ignore"):
+        if measure == "matching":
+            return (a + d) / p
+        if measure == "Jaccard":
+            return a / (a + b + c)
+        if measure == "Russell":
+            return a / p
+        if measure == "Hamann":
+            return (a + d - b - c) / p
+        if measure == "Dice":
+            return 2 * a / (2 * a + b + c)
+        if measure == "antiDice":
+            return a / (a + 2 * (b + c))
+        if measure == "Sneath":
+            return 2 * (a + d) / (2 * (a + d) + b + c)
+        if measure == "Rogers":
+            return (a + d) / (a + d + 2 * (b + c))
+        if measure == "Ochiai":
+            return a / np.sqrt((a + b) * (a + c))
+        if measure == "Yule":
+            return (a * d - b * c) / (a * d + b * c)
+        if measure == "Anderberg":
+            return (a / (a + b) + a / (a + c) + d / (c + d) + d / (b + d)) / 4
+        if measure == "Kulczynski":
+            return (a / (a + b) + a / (a + c)) / 2
+        if measure == "Pearson":
+            return (a * d - b * c) / np.sqrt((a + b) * (a + c) * (d + b) * (d + c))
+        return a * d / np.sqrt((a + b) * (a + c) * (d + b) * (d + c))   # Gower2
 
 
 def linkage(D: np.ndarray, method: str) -> list[tuple[int, int, float]]:
@@ -121,16 +167,44 @@ def cut_height(merges: list[tuple[int, int, float]], n: int, height: float) -> n
 
 
 def leaf_order(merges: list[tuple[int, int, float]], n: int) -> list[int]:
-    """Left-to-right order of the leaves of the dendrogram."""
+    """Left-to-right order of the leaves of the dendrogram: at each merge, the cluster holding
+    the smallest leaf goes first (compat 1917)."""
     kids = {n + r: (a, b) for r, (a, b, _) in enumerate(merges)}
+    low = {i: i for i in range(n)}
+    for r, (a, b, _) in enumerate(merges):
+        low[n + r] = min(low[a], low[b])
 
     def walk(c):
         if c < n:
             return [c]
-        a, b = kids[c]
+        a, b = sorted(kids[c], key=low.__getitem__)
         return walk(a) + walk(b)
 
     return walk(n + len(merges) - 1) if merges else [0]
+
+
+def gap_heights(merges: list[tuple[int, int, float]], n: int, heights: list[float] | None = None) -> np.ndarray:
+    """Height of the merge that joins each pair of neighboring leaves of leaf_order (n - 1
+    values); `heights` replaces the merge heights (pseudo-heights)."""
+    order = leaf_order(merges, n)
+    pos = {lf: i for i, lf in enumerate(order)}
+    span = {i: (pos[i], pos[i]) for i in range(n)}
+    out = np.full(max(n - 1, 0), np.nan)
+    for r, (a, b, h) in enumerate(merges):
+        lo, hi = sorted([span[a], span[b]])
+        out[lo[1]] = h if heights is None else heights[r]
+        span[n + r] = (lo[0], hi[1])
+    return out
+
+
+def has_ties(merges: list[tuple[int, int, float]], n: int, groups: int) -> bool:
+    """True when the merge that would bring the tree below `groups` clusters has the same height
+    as the last merge kept, so that the `groups`-cluster solution is not unique."""
+    r = n - groups
+    if r <= 0 or r >= len(merges):
+        return False
+    h0, h1 = merges[r - 1][2], merges[r][2]
+    return abs(h1 - h0) <= 1e-12 * max(1.0, abs(h0), abs(h1))
 
 
 def kmeans(X: np.ndarray, centers: np.ndarray, measure: str = "L2", median: bool = False,

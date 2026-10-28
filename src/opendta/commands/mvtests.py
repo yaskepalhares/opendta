@@ -384,7 +384,158 @@ def cmd_manova(s: "Session", args: str) -> None:
     macros = [("cmdline", "manova " + args.strip()), ("cmd", "manova"), ("depvar", " ".join(deps)),
               ("title", "Multivariate model"), ("model", "ols"), ("properties", "nob noV"), ("wtype", wtype)]
     macros += [(f"term_{j}", t_.name) for j, t_ in enumerate(terms, start=1)]
-    post_e(s, "manova", scalars, macros, mats, mask, int(N))
+    post_e(s, "manova", scalars, macros, mats, mask, int(N),
+           extra={"manova": {"Y": Y, "w": ww, "blocks": blocks, "terms": [t_.name for t_ in terms],
+                             "order": _design_order(terms, data),
+                             "ref_blocks": [_reference_block(t_, data) for t_ in terms],
+                             "E": E, "rank": rank, "df_r": df_r, "deps": deps}})
+
+
+def _design_order(terms, data: dict) -> list[str]:
+    """Labels of the columns of the overparameterized design matrix, as manovatest, showorder
+    lists them: (a==0), ..., (a==0)*(b==0), ..., _cons (compat 1917; nested terms VERIFY)."""
+    out = []
+    for t_ in terms:
+        labs = [""]
+        for name, cont in list(t_.comps) + [(v, False) for v in t_.nest]:
+            parts = [name] if cont else [f"({name}=={lev:g})" for lev in data[name][1]]
+            labs = [f"{a}*{b}" if a else b for a in labs for b in parts]
+        out += labs
+    return out + ["_cons"]
+
+
+def _reference_block(t_, data: dict) -> np.ndarray:
+    """The columns of a term in the base-level coding (indicators of every level but the
+    first; continuous variables as they are), crossed for interactions."""
+    mats = []
+    for name, cont in list(t_.comps) + [(v, False) for v in t_.nest]:
+        x, levels = data[name]
+        mats.append(x[:, None] if cont else np.column_stack([(x == lev).astype(float) for lev in levels[1:]]))
+    out = mats[0]
+    for m_ in mats[1:]:
+        out = np.einsum("ij,ik->ijk", out, m_).reshape(len(out), -1)
+    return out
+
+
+def _manova_terms(text: str, names: list[str]) -> list[int]:
+    """Indices of the terms of the last manova named in text (as written in e(term_#))."""
+    out = []
+    norm = {n_.replace(" ", ""): i for i, n_ in enumerate(names)}
+    for w_ in text.split():
+        key = w_.replace(" ", "")
+        if key not in norm:
+            raise StataError(111, f"manova variable {w_} not found")
+        out.append(norm[key])
+    return out
+
+
+def _joint_hypothesis(Y, ww, m, idx):
+    """SSCP matrix and degrees of freedom of the test of the terms idx: one term is the partial
+    test (the model without the term, sum-to-zero coding); several terms drop their columns
+    together from the model in the base-level coding, which is what Stata's joint test
+    reproduces (compat 1917; VERIFY beyond two main effects next to their interaction)."""
+    blocks = m["blocks"] if len(idx) == 1 else m["ref_blocks"]
+    one = np.ones((Y.shape[0], 1))
+    E, rank = _resid_sscp(np.column_stack([one] + blocks), Y, ww)
+    Er, rk = _resid_sscp(np.column_stack([one] + [b for k, b in enumerate(blocks) if k not in idx]), Y, ww)
+    return Er - E, rank - rk
+
+
+def _ytransform_lines(Mt, deps) -> list[str]:
+    """The rows of ytransform() written as combinations of the dependent variables (VERIFY for
+    coefficients other than 1 and -1)."""
+    lines = []
+    for row in Mt:
+        text = ""
+        for c, d in zip(row, deps):
+            if c == 0:
+                continue
+            mag = "" if abs(c) == 1 else f"{abs(c):g}*"
+            if not text:
+                text = ("-" if c < 0 else "") + mag + d
+            else:
+                text += (" - " if c < 0 else " + ") + mag + d
+        lines.append(text)
+    return lines
+
+
+@command("manovatest", "manovatest")
+def cmd_manovatest(s: "Session", args: str) -> None:
+    """manovatest term [term ...] [/ term [term ...]] [, ytransform(matname) showorder] after
+    manova ([MV] manova postestimation): the multivariate tests of the terms, with the residual
+    or the terms after the slash as the error. test() is not available yet."""
+    from .matrix import get_matrix
+    est = getattr(s, "_estimates", None)
+    if est is None or est.cmd != "manova":
+        raise StataError(301, "last estimates not found")
+    c = _find_comma(args)
+    body, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
+    o = match_options(opt, {"ytransform": 2, "test": 4, "showorder": 5}) if opt.strip() else {}
+    if o.get("test"):
+        raise StataError(198, "manovatest, test() is not available yet in OpenDTA")      # OpenDTA
+    m = est.extra["manova"]
+    out = s.output
+    if o.get("showorder"):
+        out.write("\n Order of columns in the design matrix\n", "text")
+        for i, lab in enumerate(m["order"], start=1):
+            out.write(f"{i:>7}: {lab}\n", "text")
+        if not body.strip():
+            return
+    num, _, den = body.partition("/")
+    if not num.strip():
+        raise StataError(198, "invalid syntax")
+    Y, ww = m["Y"], m["w"]
+    q = len(m["deps"])
+    H, dfh = _joint_hypothesis(Y, ww, m, _manova_terms(num, m["terms"]))
+    if den.strip():
+        Eh, dfe = _joint_hypothesis(Y, ww, m, _manova_terms(den, m["terms"]))
+        elab = " ".join(den.split())
+    else:
+        Eh, dfe = m["E"], m["df_r"]
+        elab = "Residual"
+    Mt = None
+    if isinstance(o.get("ytransform"), str):
+        Mt = get_matrix(s, o["ytransform"].strip()).data
+        if Mt.shape[1] != q:
+            raise StataError(503, "conformability error")
+        H, Eh = Mt @ H @ Mt.T, Mt @ Eh @ Mt.T
+        q = Mt.shape[0]
+    if dfe < q:
+        # an error term with fewer degrees of freedom than dependent variables (compat 1917)
+        out.write("matrix not positive definite\n", "text")
+        raise StataError(459, "insufficient denominator degrees of freedom")               # VERIFY rc
+    if np.linalg.matrix_rank(Eh) < Eh.shape[0]:
+        raise StataError(506, "error matrix is singular")                                   # VERIFY
+    lam = T.eig_ratio(Eh, H) if dfh > 0 else np.zeros(0)
+    stats = T.mv_statistics(lam, q, dfh, dfe) if dfh > 0 else []
+    if Mt is not None:
+        out.write("\n Transformations of the dependent variables\n", "text")
+        for i, line in enumerate(_ytransform_lines(Mt, m["deps"]), start=1):
+            out.write(f" ({i})    {line}\n", "text")
+    out.write(f"\n{'':>23}W = Wilks' lambda      L = Lawley-Hotelling trace\n", "text")
+    out.write(f"{'':>23}P = Pillai's trace     R = Roy's largest root\n\n", "text")
+    out.write(f"{'Source':>20} | Statistic        df    F(df1,     df2) =   F   Prob>F\n", "text")
+    rule = f"{'':>10}{'-' * 11}+{'-' * 55}"
+    out.write(rule + "\n", "text")
+    _stat_rows(out, " ".join(num.split()), stats, dfh)
+    out.write(f"{'':>21}|{'-' * 55}\n", "text")
+    out.write(f"{elab:>20} |{int(dfe):>20}\n{'':>10}{'-' * 67}\n", "text")
+    out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
+    # r() as Stata lists it: df, df_r; eigvals (the s = min(q, df) nonzero eigenvalues), aux
+    # (s, m, n), stat (4 x 6), E, H (compat 1917); the contents of aux and stat are VERIFY
+    sdim = int(min(q, dfh))
+    mpar, npar = (abs(q - dfh) - 1.0) / 2.0, (dfe - q - 1.0) / 2.0
+    code = {"e": 1.0, "a": 2.0, "u": 3.0}
+    stat = None
+    if stats:
+        stat = matrix(np.array([[r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"], code[r_["flag"]]]
+                                for r_ in stats]), ["W", "P", "L", "R"], ["statistic", "df1", "df2", "F", "p", "type"])
+    # return list shows the last stored first
+    s.r = {"H": matrix(H), "E": matrix(Eh), "stat": stat,
+           "aux": matrix(np.array([[sdim], [mpar], [npar]], dtype=float), ["s", "m", "n"], ["aux"]),
+           "eigvals": matrix(np.asarray(lam[:sdim], dtype=float).reshape(1, -1)),
+           "df_r": float(dfe), "df": float(dfh)}
+    s.r = {k_: v_ for k_, v_ in s.r.items() if v_ is not None}
 
 
 # ---------------------------------------------------------------------------

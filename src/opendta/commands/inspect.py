@@ -35,6 +35,18 @@ def cell_text(ds: "Dataset", var: "Variable", i: int, *, use_labels: bool = True
     return format_value(x, var.fmt, pad=False).strip()
 
 
+def _unique_abbrev(name: str, n: int, names: list[str]) -> str:
+    """Abbreviation start~end of `name` in n characters that, read as a varlist pattern, names
+    only this variable: the end grows until no other variable matches ("_clus_1_id" next to
+    "_clus_1_ord" is "_clus~id", not "_clus_~d"; compat 1917)."""
+    n = max(n, 5)
+    for k in range(1, n - 1):
+        head, tail = name[: n - 1 - k], name[-k:]
+        if sum(1 for m in names if m.startswith(head) and m.endswith(tail) and len(m) >= len(head) + len(tail)) <= 1:
+            return head + "~" + tail
+    return name[: n - 2] + "~" + name[-1]
+
+
 def _left_aligned(var: "Variable", use_labels: bool) -> bool:
     """Strings follow the justification of the format (%-18s left, %18s
     right); numbers, with or without a value label, are right-aligned."""
@@ -122,14 +134,14 @@ def cmd_list(s: "Session", args: str) -> None:
     # names longer than the column are abbreviated to max(abbreviate(#), width of the values); the
     # default is ab(8) ("Rendamensal" → "Rendam~l")
     ab = int(opts["abbreviate"]) if isinstance(opts.get("abbreviate"), str) else 8
-    from ..lang.functions import _abbrev
+    all_names = s.data.names
     titles = []
     widths = []
     for j, v in enumerate(vars_):
         data_w = max([len(r[j]) for r in cells + [sm[1] for sm in summaries]], default=0)
         if opts.get("nocompress") or opts.get("fast"):
             data_w = max(data_w, parse_format(v.fmt).width)     # widths from the display formats (compat 1701)
-        title = v.name if len(v.name) <= max(ab, data_w) else _abbrev(v.name, float(max(ab, data_w)))
+        title = v.name if len(v.name) <= max(ab, data_w) else _unique_abbrev(v.name, max(ab, data_w), all_names)
         titles.append(title)
         widths.append(max([len(title), data_w]))
     left = [_left_aligned(v, use_labels) or j in cut_left for j, v in enumerate(vars_)]

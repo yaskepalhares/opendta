@@ -1,0 +1,844 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1917_multivariate.log
+  log type:  text
+ opened on:  24 Oct 2026, 21:19:25
+
+. * Multivariate statistics, second part: clustermat, manovatest, camat, the plots after ca, mca,
+. * mds and procrustes (cabiplot, caprojection, mcaplot, mcaprojection, mdsconfig, mdsshepard,
+. * procoverlay), mdslong, the binary similarity measures of cluster, cluster kmeans keepcenters
+. * and procrustes transform(unrestricted). The plots are drawn with nodraw (only their messages
+. * and errors are compared). Every command whose behavior the manual does not settle runs under
+. * capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. matrix D = (0,1,5,6,8 \ 1,0,4,5,7 \ 5,4,0,1.5,3 \ 6,5,1.5,0,2.5 \ 8,7,3,2.5,0)
+
+. matrix rownames D = a b c d e
+
+. matrix colnames D = a b c d e
+
+. 
+. * clustermat
+. clustermat averagelinkage D, labelvar(nm)
+number of observations (_N) was 0, now 5
+cluster name: _clus_1
+
+. list
+
+     +--------------------------------------+
+     | _clus~id   _clus~rd   _clus_1~t   nm |
+     |--------------------------------------|
+  1. |        1          1           1    a |
+  2. |        2          2   5.8333333    b |
+  3. |        3          3         1.5    c |
+  4. |        4          4        2.75    d |
+  5. |        5          5           .    e |
+     +--------------------------------------+
+
+. cluster list
+_clus_1  (type: hierarchical,  method: average,  dissimilarity: user matrix D)
+      vars: _clus_1_id (id variable)
+            _clus_1_ord (order variable)
+            _clus_1_hgt (height variable)
+     other: cmd: clustermat averagelinkage D, labelvar(nm)
+
+
+. cluster generate g2 = groups(2)
+
+. list nm g2
+
+     +---------+
+     | nm   g2 |
+     |---------|
+  1. |  a    1 |
+  2. |  b    1 |
+  3. |  c    2 |
+  4. |  d    2 |
+  5. |  e    2 |
+     +---------+
+
+. capture noisily clustermat singlelinkage D
+add or clear are required when a dataset is present
+
+. clustermat completelinkage D, add name(cmp)
+
+. cluster list cmp
+cmp  (type: hierarchical,  method: complete,  dissimilarity: user matrix D)
+      vars: cmp_id (id variable)
+            cmp_ord (order variable)
+            cmp_hgt (height variable)
+     other: cmd: clustermat completelinkage D, add name(cmp)
+
+
+. capture noisily cluster dendrogram cmp, labels(nm) nodraw
+
+. matrix L = (0 \ 1 \ 0 \ 5 \ 4 \ 0 \ 6 \ 5 \ 1.5 \ 0)
+
+. capture noisily clustermat singlelinkage L, shape(lower) clear
+number of observations (_N) was 0, now 4
+cluster name: _clus_1
+
+. capture noisily list
+
+     +--------------------------------+
+     | _clus~id   _clus~rd   _clus_~t |
+     |--------------------------------|
+  1. |        1          1          1 |
+  2. |        2          2          4 |
+  3. |        3          3        1.5 |
+  4. |        4          4          . |
+     +--------------------------------+
+
+. 
+. * manovatest
+. clear
+
+. set seed 1917
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen a = mod(_n, 3)
+
+. gen b = mod(_n, 2)
+
+. gen y1 = a + invnormal(runiform())
+
+. gen y2 = b + .5*a + invnormal(runiform())
+
+. gen y3 = invnormal(runiform())
+
+. manova y1 y2 y3 = a b a#b
+
+                       Number of obs =         60
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+               Model |W   0.2727         5     15.0    144.0     5.77 0.0000 a
+                     |P   0.8495               15.0    162.0     4.27 0.0000 a
+                     |L   2.2250               15.0    152.0     7.52 0.0000 a
+                     |R   2.0097                5.0     54.0    21.70 0.0000 u
+                     |-------------------------------------------------------
+            Residual |                  54
+          -----------+-------------------------------------------------------
+                   a |W   0.3433         2      6.0    104.0    12.25 0.0000 e
+                     |P   0.6725                6.0    106.0     8.95 0.0000 a
+                     |L   1.8664                6.0    102.0    15.86 0.0000 a
+                     |R   1.8413                3.0     53.0    32.53 0.0000 u
+                     |-------------------------------------------------------
+                   b |W   0.8300         1      3.0     52.0     3.55 0.0206 e
+                     |P   0.1700                3.0     52.0     3.55 0.0206 e
+                     |L   0.2047                3.0     52.0     3.55 0.0206 e
+                     |R   0.2047                3.0     52.0     3.55 0.0206 e
+                     |-------------------------------------------------------
+                 a#b |W   0.8665         2      6.0    104.0     1.29 0.2697 e
+                     |P   0.1335                6.0    106.0     1.26 0.2803 a
+                     |L   0.1539                6.0    102.0     1.31 0.2602 a
+                     |R   0.1533                3.0     53.0     2.71 0.0543 u
+                     |-------------------------------------------------------
+            Residual |                  54
+          -----------+-------------------------------------------------------
+               Total |                  59
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. manovatest a
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+                   a |W   0.3433         2      6.0    104.0    12.25 0.0000 e
+                     |P   0.6725                6.0    106.0     8.95 0.0000 a
+                     |L   1.8664                6.0    102.0    15.86 0.0000 a
+                     |R   1.8413                3.0     53.0    32.53 0.0000 u
+                     |-------------------------------------------------------
+            Residual |                  54
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. return list
+
+scalars:
+                 r(df) =  2
+               r(df_r) =  54
+
+matrices:
+            r(eigvals) :  1 x 2
+                r(aux) :  3 x 1
+               r(stat) :  4 x 6
+                  r(E) :  3 x 3
+                  r(H) :  3 x 3
+
+. capture noisily manovatest a b
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+                 a b |W   0.3504         3      9.0    126.7     7.58 0.0000 a
+                     |P   0.7002                9.0    162.0     5.48 0.0000 a
+                     |L   1.7104                9.0    152.0     9.63 0.0000 a
+                     |R   1.6234                3.0     54.0    29.22 0.0000 u
+                     |-------------------------------------------------------
+            Residual |                  54
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily manovatest b / a
+matrix not positive definite
+insufficient denominator degrees of freedom
+
+. matrix M = (1, -1, 0 \ 0, 1, -1)
+
+. capture noisily manovatest b, ytransform(M)
+
+ Transformations of the dependent variables
+ (1)    y1 - y2
+ (2)    y2 - y3
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+                   b |W   0.8863         1      2.0     53.0     3.40 0.0409 e
+                     |P   0.1137                2.0     53.0     3.40 0.0409 e
+                     |L   0.1282                2.0     53.0     3.40 0.0409 e
+                     |R   0.1282                2.0     53.0     3.40 0.0409 e
+                     |-------------------------------------------------------
+            Residual |                  54
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily return list
+
+scalars:
+                 r(df) =  1
+               r(df_r) =  54
+
+matrices:
+            r(eigvals) :  1 x 1
+                r(aux) :  3 x 1
+               r(stat) :  4 x 6
+                  r(E) :  2 x 2
+                  r(H) :  2 x 2
+
+. capture noisily manovatest c
+manova variable c not found
+
+. capture noisily manovatest, showorder
+
+ Order of columns in the design matrix
+      1: (a==0)
+      2: (a==1)
+      3: (a==2)
+      4: (b==0)
+      5: (b==1)
+      6: (a==0)*(b==0)
+      7: (a==0)*(b==1)
+      8: (a==1)*(b==0)
+      9: (a==1)*(b==1)
+     10: (a==2)*(b==0)
+     11: (a==2)*(b==1)
+     12: _cons
+
+. 
+. * camat and the ca plots
+. matrix F = (20, 10, 5 \ 8, 15, 12 \ 3, 9, 25 \ 10, 10, 10)
+
+. matrix rownames F = r1 r2 r3 r4
+
+. matrix colnames F = c1 c2 c3
+
+. camat F
+
+Correspondence analysis                       Number of obs      =        137
+                                              Pearson chi2(6)    =      31.36
+                                              Prob > chi2        =     0.0000
+                                              Total inertia      =     0.2289
+    4 active rows                             Number of dim.     =          2
+    3 active columns                          Expl. inertia (%)  =     100.00
+
+                |   singular    principal                             cumul  
+      Dimension |    value       inertia           chi2    percent   percent 
+    ------------+------------------------------------------------------------
+          dim 1 |   .4551573    .2071681          28.38      90.49     90.49
+          dim 2 |   .1475297     .021765           2.98       9.51    100.00
+    ------------+------------------------------------------------------------
+          total |               .2289331          31.36     100
+
+Statistics for row and column categories in symmetric normalization
+
+                 |          overall          |        dimension_1        |        dimension_2        
+      Categories |    mass  quality   %inert |   coord   sqcorr  contrib |   coord   sqcorr  contrib 
+    -------------+---------------------------+---------------------------+---------------------------
+    rows         |                           |                           |                           
+              r1 |   0.255    1.000    0.445 |   0.919    0.964    0.475 |   0.311    0.036    0.167 
+              r2 |   0.255    1.000    0.063 |  -0.061    0.030    0.002 |  -0.608    0.970    0.640 
+              r3 |   0.270    1.000    0.482 |  -0.930    0.963    0.513 |   0.322    0.037    0.189 
+              r4 |   0.219    1.000    0.010 |   0.145    0.963    0.010 |  -0.050    0.037    0.004 
+    -------------+---------------------------+---------------------------+---------------------------
+    columns      |                           |                           |                           
+              c1 |   0.299    1.000    0.486 |   0.888    0.964    0.518 |   0.300    0.036    0.183 
+              c2 |   0.321    1.000    0.067 |   0.068    0.044    0.003 |  -0.557    0.956    0.676 
+              c3 |   0.380    1.000    0.447 |  -0.758    0.970    0.479 |   0.235    0.030    0.142 
+    -------------------------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+                  e(N) =  137
+            e(inertia) =  .228933141128263
+                  e(f) =  2
+           e(pinertia) =  1
+                 e(X2) =  31.36384033457204
+              e(X2_df) =  6
+               e(X2_p) =  .0000215997384373
+
+macros:
+            e(cmdline) : "camat F"
+                e(cmd) : "ca"
+       e(marginsnotok) : "_ALL"
+            e(ca_data) : "matrix"
+          e(estat_cmd) : "ca_estat"
+            e(predict) : "ca_p"
+              e(title) : "correspondence analysis"
+              e(Cname) : "columns"
+              e(Rname) : "rows"
+               e(norm) : "symmetric"
+          e(sv_unique) : "1"
+         e(properties) : "nob noV eigen"
+
+matrices:
+                e(GSC) :  3 x 9
+                e(GSR) :  4 x 9
+                 e(TC) :  3 x 2
+                 e(TR) :  4 x 2
+                  e(C) :  3 x 2
+                  e(R) :  4 x 2
+                 e(Sv) :  1 x 2
+                  e(c) :  3 x 1
+                  e(r) :  4 x 1
+                  e(P) :  4 x 3
+
+. camat F, rowname(age) colname(answer) normalize(principal)
+
+Correspondence analysis                       Number of obs      =        137
+                                              Pearson chi2(6)    =      31.36
+                                              Prob > chi2        =     0.0000
+                                              Total inertia      =     0.2289
+    4 active rows                             Number of dim.     =          2
+    3 active columns                          Expl. inertia (%)  =     100.00
+
+                |   singular    principal                             cumul  
+      Dimension |    value       inertia           chi2    percent   percent 
+    ------------+------------------------------------------------------------
+          dim 1 |   .4551573    .2071681          28.38      90.49     90.49
+          dim 2 |   .1475297     .021765           2.98       9.51    100.00
+    ------------+------------------------------------------------------------
+          total |               .2289331          31.36     100
+
+Statistics for row and column categories in principal normalization
+
+                 |          overall          |        dimension_1        |        dimension_2        
+      Categories |    mass  quality   %inert |   coord   sqcorr  contrib |   coord   sqcorr  contrib 
+    -------------+---------------------------+---------------------------+---------------------------
+    age          |                           |                           |                           
+              r1 |   0.255    1.000    0.445 |   0.620    0.964    0.475 |   0.119    0.036    0.167 
+              r2 |   0.255    1.000    0.063 |  -0.041    0.030    0.002 |  -0.233    0.970    0.640 
+              r3 |   0.270    1.000    0.482 |  -0.627    0.963    0.513 |   0.124    0.037    0.189 
+              r4 |   0.219    1.000    0.010 |   0.098    0.963    0.010 |  -0.019    0.037    0.004 
+    -------------+---------------------------+---------------------------+---------------------------
+    answer       |                           |                           |                           
+              c1 |   0.299    1.000    0.486 |   0.599    0.964    0.518 |   0.115    0.036    0.183 
+              c2 |   0.321    1.000    0.067 |   0.046    0.044    0.003 |  -0.214    0.956    0.676 
+              c3 |   0.380    1.000    0.447 |  -0.511    0.970    0.479 |   0.090    0.030    0.142 
+    -------------------------------------------------------------------------------------------------
+
+. capture noisily cabiplot, nodraw
+
+. capture noisily cabiplot, origin norow nodraw
+
+. capture noisily caprojection, nodraw
+
+. capture noisily estat coordinates
+
+Coordinates in row space in principal normalization
+
+             age |      dim1       dim2 
+    -------------+----------------------
+              r1 |    0.6203     0.1193 
+              r2 |   -0.0410    -0.2334 
+              r3 |   -0.6275     0.1236 
+              r4 |    0.0980    -0.0193 
+    ------------------------------------
+
+Coordinates in column space in principal normalization
+
+          answer |      dim1       dim2 
+    -------------+----------------------
+              c1 |    0.5989     0.1152 
+              c2 |    0.0460    -0.2140 
+              c3 |   -0.5111     0.0902 
+    ------------------------------------
+
+. 
+. * mca plots
+. clear
+
+. set seed 2917
+
+. set obs 90
+number of observations (_N) was 0, now 90
+
+. gen a = 1 + mod(_n, 3)
+
+. gen b = 1 + mod(floor(_n/2), 4)
+
+. gen c = 1 + (runiform() > .5)
+
+. quietly mca a b c
+
+. capture noisily mcaplot, nodraw
+
+. capture noisily mcaplot a b, origin nodraw
+
+. capture noisily mcaprojection, nodraw
+
+. 
+. * mds plots and mdslong
+. quietly mdsmat D
+
+. capture noisily mdsconfig, nodraw
+
+. capture noisily mdsshepard, nodraw
+
+. clear
+
+. input i j d
+
+             i          j          d
+  1. 1 2 1
+  2. 1 3 5
+  3. 1 4 6
+  4. 1 5 8
+  5. 2 3 4
+  6. 2 4 5
+  7. 2 5 7
+  8. 3 4 1.5
+  9. 3 5 3
+ 10. 4 5 2.5
+ 11. end
+
+. mdslong d, id(i j)
+
+Classical metric multidimensional scaling
+    dissimilarity variable: d in long format
+
+                                             Number of obs        =          5
+    Eigenvalues > 0      =         2         Mardia fit measure 1 =     0.9998
+    Retained dimensions  =         2         Mardia fit measure 2 =     1.0000
+
+    --------------------------------------------------------------------------
+                 |                   abs(eigenvalue)          (eigenvalue)^2
+      Dimension  |  Eigenvalue      Percent    Cumul.       Percent    Cumul.
+    -------------+------------------------------------------------------------
+              1  |   45.558691        97.52     97.52         99.94     99.94
+              2  |   1.1491881         2.46     99.98          0.06    100.00
+    --------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+            e(mardia2) =  .9999999701114736
+            e(mardia1) =  .9998313453899217
+                 e(np) =  2
+                  e(p) =  2
+            e(addcons) =  0
+                 e(rc) =  0
+                  e(N) =  5
+
+macros:
+            e(cmdline) : "mdslong d, id(i j)"
+                e(cmd) : "mdslong"
+       e(marginsnotok) : "_ALL"
+          e(estat_cmd) : "mds_estat"
+            e(predict) : "mds_p"
+         e(duplicates) : "0"
+             e(idtype) : "int"
+              e(mxlen) : "1"
+             e(labels) : "`"1"' `"2"' `"3"' `"4"' `"5"'"
+              e(dtype) : "dissimilarity"
+                 e(id) : "i j"
+             e(depvar) : "d"
+             e(method) : "classical"
+             e(unique) : "1"
+               e(norm) : "principal"
+         e(properties) : "nob noV eigen"
+
+matrices:
+           e(idcoding) :  5 x 1
+                  e(D) :  5 x 5
+                  e(Y) :  5 x 2
+            e(linearf) :  1 x 2
+                 e(Ev) :  1 x 5
+
+functions:
+             e(sample)   
+
+. capture noisily mdsconfig, nodraw
+
+. capture noisily mdslong d, id(i j) method(modern)
+(loss(stress) assumed)
+(transform(identity) assumed)
+
+Iteration 1:   stress =   .0003385
+Iteration 2:   stress =  .00033796
+Iteration 3:   stress =  .00033771
+Iteration 4:   stress =  .00033752
+Iteration 5:   stress =  .00033735
+Iteration 6:   stress =  .00033719
+Iteration 7:   stress =  .00033705
+Iteration 8:   stress =   .0003369
+Iteration 9:   stress =  .00033676
+Iteration 10:   stress =  .00033659
+Iteration 11:   stress =  .00033644
+Iteration 12:   stress =  .00033632
+Iteration 13:   stress =  .00033621
+Iteration 14:   stress =  .00033607
+Iteration 15:   stress =  .00033595
+Iteration 16:   stress =  .00033586
+Iteration 17:   stress =  .00033577
+Iteration 18:   stress =  .00033569
+Iteration 19:   stress =  .00033562
+Iteration 20:   stress =  .00033555
+Iteration 21:   stress =  .00033548
+Iteration 22:   stress =  .00033542
+Iteration 23:   stress =  .00033536
+Iteration 24:   stress =   .0003353
+Iteration 25:   stress =  .00033524
+Iteration 26:   stress =  .00033518
+Iteration 27:   stress =  .00033513
+Iteration 28:   stress =  .00033508
+Iteration 29:   stress =  .00033503
+Iteration 30:   stress =  .00033498
+Iteration 31:   stress =  .00033493
+Iteration 32:   stress =  .00033489
+Iteration 33:   stress =  .00033485
+Iteration 34:   stress =   .0003348
+Iteration 35:   stress =  .00033476
+Iteration 36:   stress =  .00033473
+Iteration 37:   stress =  .00033469
+Iteration 38:   stress =  .00033465
+Iteration 39:   stress =  .00033462
+Iteration 40:   stress =  .00033458
+Iteration 41:   stress =  .00033455
+Iteration 42:   stress =  .00033452
+Iteration 43:   stress =  .00033449
+Iteration 44:   stress =  .00033446
+Iteration 45:   stress =  .00033443
+Iteration 46:   stress =  .00033441
+Iteration 47:   stress =  .00033438
+Iteration 48:   stress =  .00033436
+Iteration 49:   stress =  .00033433
+Iteration 50:   stress =  .00033431
+Iteration 51:   stress =  .00033429
+Iteration 52:   stress =  .00033426
+Iteration 53:   stress =  .00033424
+Iteration 54:   stress =  .00033422
+Iteration 55:   stress =  .00033419
+Iteration 56:   stress =  .00033418
+Iteration 57:   stress =  .00033416
+Iteration 58:   stress =  .00033414
+Iteration 59:   stress =  .00033412
+Iteration 60:   stress =   .0003341
+Iteration 61:   stress =  .00033407
+Iteration 62:   stress =  .00033406
+Iteration 63:   stress =  .00033405
+Iteration 64:   stress =  .00033403
+Iteration 65:   stress =  .00033402
+Iteration 66:   stress =  .00033401
+Iteration 67:   stress =  .00033399
+Iteration 68:   stress =  .00033397
+Iteration 69:   stress =  .00033396
+Iteration 70:   stress =  .00033395
+Iteration 71:   stress =  .00033394
+
+Modern multidimensional scaling
+    dissimilarity variable: d in long format
+
+    Loss criterion: stress = raw_stress/norm(distances)
+    Transformation: identity (no transformation)
+
+                                                 Number of obs    =          5
+                                                 Dimensions       =          2
+    Normalization: principal                     Loss criterion   =     0.0003
+
+. 
+. * binary similarity measures and keepcenters
+. clear
+
+. set seed 3917
+
+. set obs 14
+number of observations (_N) was 0, now 14
+
+. forvalues j = 1/5 {
+  2.     gen b`j' = runiform() > .5
+  3. }
+
+. gen x = invnormal(runiform())
+
+. gen y = invnormal(runiform())
+
+. gen z = .8*x + .4*y + .3*invnormal(runiform())
+
+. gen w = y - .5*x + .3*invnormal(runiform())
+
+. cluster averagelinkage b1-b5, measure(Jaccard) name(jac)
+
+. cluster list jac
+jac  (type: hierarchical,  method: average,  similarity: Jaccard)
+      vars: jac_id (id variable)
+            jac_ord (order variable)
+            jac_hgt (height variable)
+     other: cmd: cluster averagelinkage b1-b5, measure(Jaccard) name(jac)
+            varlist: b1 b2 b3 b4 b5
+            range: 1 0
+
+
+. cluster generate gj = groups(3), name(jac)
+
+. list b1-b5 gj jac_id jac_ord jac_hgt
+
+     +------------------------------------------------------------+
+     | b1   b2   b3   b4   b5   gj   jac_id   jac_ord     jac_hgt |
+     |------------------------------------------------------------|
+  1. |  0    1    1    1    0    1        1         1           1 |
+  2. |  0    1    1    1    0    1        2         2           1 |
+  3. |  1    1    0    1    1    2        3         4   .66666667 |
+  4. |  0    1    1    1    0    1        4         8   .51041667 |
+  5. |  1    0    0    1    1    2        5         9   .66666667 |
+     |------------------------------------------------------------|
+  6. |  1    1    0    1    1    2        6        14    .3297619 |
+  7. |  1    0    1    0    1    2        7         3           1 |
+  8. |  0    1    0    1    0    1        8         6           1 |
+  9. |  0    0    1    1    0    1        9        12         .75 |
+ 10. |  0    1    0    0    0    3       10         5   .49583333 |
+     |------------------------------------------------------------|
+ 11. |  1    0    1    1    1    2       11         7           1 |
+ 12. |  1    1    0    1    1    2       12        13         .75 |
+ 13. |  1    0    1    0    1    2       13        11   .17307692 |
+ 14. |  1    0    1    1    0    1       14        10           . |
+     +------------------------------------------------------------+
+
+. foreach m in matching Russell Hamann Dice antiDice Sneath Rogers Ochiai Yule Anderberg Kulczynski Pearson Gower2 {
+  2.     capture noisily cluster singlelinkage b1-b5, measure(`m') name(s_`m')
+  3.     capture noisily cluster generate g_`m' = groups(3), name(s_`m')
+  4. }
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+cannot create 3 groups because of ties
+
+. capture noisily list g_*
+variable g_* not found
+
+. capture noisily matrix dissimilarity S = b1-b5, Jaccard
+
+. capture noisily matrix list S
+
+symmetric S[14,14]
+            obs1       obs2       obs3       obs4       obs5       obs6       obs7       obs8       obs9      obs10      obs11      obs12      obs13      obs14
+ obs1          1
+ obs2          1          1
+ obs3         .4         .4          1
+ obs4          1          1         .4          1
+ obs5         .2         .2        .75         .2          1
+ obs6         .4         .4          1         .4        .75          1
+ obs7         .2         .2         .4         .2         .5         .4          1
+ obs8  .66666667  .66666667         .5  .66666667        .25         .5          0          1
+ obs9  .66666667  .66666667         .2  .66666667        .25         .2        .25  .33333333          1
+obs10  .33333333  .33333333        .25  .33333333          0        .25          0         .5          0          1
+obs11         .4         .4         .6         .4        .75         .6        .75         .2         .5          0          1
+obs12         .4         .4          1         .4        .75          1         .4         .5         .2        .25         .6          1
+obs13         .2         .2         .4         .2         .5         .4          1          0        .25          0        .75         .4          1
+obs14         .5         .5         .4         .5         .5         .4         .5        .25  .66666667          0        .75         .4         .5          1
+
+. cluster kmeans x y, k(3) start(firstk) keepcenters name(km)
+
+. list x y km
+
+     +----------------------------+
+     |         x           y   km |
+     |----------------------------|
+  1. |  .4527496   -.5249739    3 |
+  2. |  .5879695    .1130344    3 |
+  3. |  .2266888   -.4546485    3 |
+  4. |  -.071645   -.3593504    3 |
+  5. | -.8196861     1.23105    2 |
+     |----------------------------|
+  6. |  .3606527    1.365245    2 |
+  7. |  1.052754    .1248699    3 |
+  8. |  1.025377    .1913611    3 |
+  9. |  .5798373   -1.873049    1 |
+ 10. |   1.11407   -.2985974    3 |
+     |----------------------------|
+ 11. |  1.014516   -1.997862    1 |
+ 12. | -.3683576   -.2783934    3 |
+ 13. |  .0348035   -.6815991    3 |
+ 14. |  .0788352    1.667316    2 |
+ 15. |  .7971768   -1.935456    . |
+     |----------------------------|
+ 16. | -.1267327    1.421204    . |
+ 17. |    .45049   -.2409219    . |
+     +----------------------------+
+
+. drop in 15/17
+(3 observations deleted)
+
+. 
+. * procrustes transform(unrestricted) and procoverlay
+. procrustes (z w) (x y), transform(unrestricted)
+
+Procrustes analysis (unrestricted)         Number of observations =         14
+                                           Model df (df_m)        =          6
+                                           Residual df (df_r)     =         22
+                                           SS(target)             =   24.56407
+                                           RSS(target)            =   1.109967
+                                           RMSE = root(RSS/df_r)  =   .2246176
+                                           Procrustes = RSS/SS    =     0.0452
+Translation c
+
+    ------------------------------------
+                 |         z          w 
+    -------------+----------------------
+           _cons | -.0875941   -.110272 
+    ------------------------------------
+
+Rotation & reflection matrix A (unrestricted)
+
+    ------------------------------------
+                 |         z          w 
+    -------------+----------------------
+               x |   .678831  -.4453739 
+               y |  .3856289   1.076863 
+    ------------------------------------
+
+Fit statistics by target variable
+
+    ------------------------------------
+      Statistics |         z          w 
+    -------------+----------------------
+              SS |  3.166986   21.39708 
+             RSS |  .5498595   .5601075 
+            RMSE |  .2235782   .2256521 
+      Procrustes |  .1736223   .0261768 
+     Corr_y_yhat |  .9090532   .9868248 
+    ------------------------------------
+
+. ereturn list
+
+scalars:
+                e(rho) =  1
+                  e(N) =  14
+                 e(ss) =  24.5640698939468
+                e(rss) =  1.109966972284219
+                  e(P) =  .0451866069863994
+               e(rmse) =  .224617550949914
+              e(urmse) =  .1991021787464397
+               e(df_m) =  6
+               e(df_r) =  22
+                 e(ny) =  2
+
+macros:
+            e(cmdline) : "procrustes (z w) (x y), transform(unrestricted)"
+                e(cmd) : "procrustes"
+       e(marginsnotok) : "_ALL"
+          e(estat_cmd) : "procrustes_estat"
+            e(predict) : "procrustes_p"
+            e(uniqueA) : "1"
+          e(transform) : "unrestricted"
+              e(xlist) : "x y"
+              e(ylist) : "z w"
+         e(properties) : "nob noV"
+
+matrices:
+             e(ystats) :  5 x 2
+                  e(c) :  1 x 2
+                  e(A) :  2 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily procoverlay, nodraw
+
+. quietly procrustes (z w) (x y)
+
+. capture noisily procoverlay, nodraw
+
+. capture noisily procrustes (z w) (x y), transform(oblique)
+
+Procrustes analysis (oblique)              Number of observations =         14
+                                           Model df (df_m)        =          5
+                                           Residual df (df_r)     =         23
+                                           SS(target)             =   24.56407
+                                           RSS(target)            =    1.54513
+                                           RMSE = root(RSS/df_r)  =   .2591902
+                                           Procrustes = RSS/SS    =     0.0629
+Translation c
+
+    ------------------------------------
+                 |         z          w 
+    -------------+----------------------
+           _cons | -.1881729  -.1374926 
+    ------------------------------------
+
+Rotation & reflection matrix A (oblique)
+
+    ------------------------------------
+                 |         z          w 
+    -------------+----------------------
+               x |   .897584  -.3611666 
+               y |  .4408435   .9325013 
+    ------------------------------------
+
+Dilation factor 
+
+             rho =    1.0896
+
+Fit statistics by target variable
+
+    ------------------------------------
+      Statistics |         z          w 
+    -------------+----------------------
+              SS |  3.166986   21.39708 
+             RSS |  .8999366    .645193 
+            RMSE |  .2797416   .2368623 
+      Procrustes |  .2841618   .0301533 
+     Corr_y_yhat |  .9037751   .9867661 
+    ------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1917_multivariate.log
+  log type:  text
+ closed on:  24 Oct 2026, 21:19:31
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
