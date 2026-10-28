@@ -106,7 +106,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `areg`
 - [x] Robust, cluster and bootstrap standard errors (`vce(bootstrap)` and the `bootstrap` prefix); `ml` engine (maximum likelihood)
 - [x] `xtlogit` and `xtpoisson` (fe and re), `qreg`, `lrtest`, `hausman`, `xtsum`, `xtdescribe`
-- [x] Mata's `moptimize()` (lf, d0–d2, lf0–lf2 and gf0–gf2 evaluators; oim, opg and robust variance; case `0408` awaits the Stata run)
+- [x] Mata's `moptimize()` (lf, d0–d2, lf0–lf2 and gf0–gf2 evaluators; oim, opg and robust variance; case `0408` checked against the Stata 14 log)
 - Checked against the Stata logs: cases `0501`–`0513`
 
 ## Phase 6: complex surveys ✅
@@ -115,7 +115,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `svy:` prefix with `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` and `over()`
 - [x] Taylor linearization; Rao–Scott correction in two-way `svy: tabulate`
 - [x] Several stages, BRR, jackknife, bootstrap and SDR; `estat effects`; `svy:` also with `ologit`, `oprobit`, `mlogit`, `nbreg`, `glm` and `tobit`
-- Checked against the Stata logs: cases `0601` and `0602`; `0603` awaits the next run
+- Checked against the Stata logs: cases `0601`, `0602` and `0603`
 
 ## Phase 7: graphics ✅
 
@@ -133,13 +133,13 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Nonparametric and normality tests (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) and immediate commands (`cii`, `ttesti`, `prtesti`, `tabi`)
 - [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
 - [x] `codebook`, `misstable`, `putexcel`
-- [x] Mata classes (`class`, `extends`, virtual methods, `super`, `this`, static members, constructors; case `0409` awaits the Stata run)
-- [x] Survival analysis: `stset` (with `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (Breslow and Efron ties, strata, robust), `estat phtest`, `streg` (exponential, Weibull, Gompertz, lognormal, loglogistic) and their `predict` options; cases `0901`–`0902` await the Stata run
-- [x] Multilevel models: `mixed` (ML and REML, nested levels, random slopes, identity/independent/exchangeable/unstructured covariances; `estat icc`, `group`, `recovariance`; `predict`) and `melogit`, `meprobit`, `mepoisson` (adaptive Gauss-Hermite quadrature); cases `1001`–`1002` await the Stata run
-- [x] Time series: `arima` (exact ML with the Kalman filter, OPG variance), `var`, `varsoc`, `vargranger`, `dfuller` (Fuller critical values, MacKinnon p-values), `corrgram`, `newey`; case `1101` awaits the Stata run
+- [x] Mata classes (`class`, `extends`, virtual methods, `super`, `this`, static members, constructors; case `0409` checked against the Stata 14 log)
+- [x] Survival analysis: `stset` (with `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (Breslow and Efron ties, strata, robust), `estat phtest`, `streg` (exponential, Weibull, Gompertz, lognormal, loglogistic) and their `predict` options; cases `0901`–`0902` checked against the Stata 14 log
+- [x] Multilevel models: `mixed` (ML and REML, nested levels, random slopes, identity/independent/exchangeable/unstructured covariances; `estat icc`, `group`, `recovariance`; `predict`) and `melogit`, `meprobit`, `mepoisson` (adaptive Gauss-Hermite quadrature); cases `1001`–`1002` checked against the Stata 14 log
+- [x] Time series: `arima` (exact ML with the Kalman filter, OPG variance), `var`, `varsoc`, `vargranger`, `dfuller` (Fuller critical values, MacKinnon p-values), `corrgram`, `newey`; case `1101` checked against the Stata 14 log
 - [x] Multiple imputation: `mi set` (mlong, flong), `register`, `describe`, `impute` (`regress`, `pmm`, `logit`, `ologit`, `mlogit`, `poisson`, `chained`), `estimate` (Rubin's rules, Barnard-Rubin df), `passive`, `xeq`, `extract`, `misstable`; case `1201` (imputed values differ from Stata's: known difference)
-- [x] `sem` (path models, CFA and latent variables by ML, standardized solution, `estat gof`, `predict`), `power` (`onemean`, `twomeans`, `pairedmeans`, `oneproportion`, `twoproportions`, `onecorrelation`, `twocorrelations`) and `irf` (`create`, `table`, `graph`, `describe`, `rename`, `drop` after `var`); cases `1301`–`1303` await the Stata run
-- [x] Completed commands: `anova` (sequential sums of squares, nested terms, error terms, repeated measures), `xtgee` and the `pa` estimator of `xtreg`/`xtlogit`/`xtpoisson`, `xtreg, be` and `mle`, two-way `tabulate, summarize()`, `misstable tree`/`nested`, `ci`/`cii variances`, two-sample `prtest`/`prtesti`, `reshape i/j/xij/error`, the old `merge` syntax, `sort ... in`, `list, sepby()`, `display _request()`, `export excel` to `.xls`, `set rng kiss32`; sequential `replace` with time-series operators (`replace y = 2*L.y`); case `0805` awaits the Stata run
+- [x] `sem` (path models, CFA and latent variables by ML, standardized solution, `estat gof`, `predict`), `power` (`onemean`, `twomeans`, `pairedmeans`, `oneproportion`, `twoproportions`, `onecorrelation`, `twocorrelations`) and `irf` (`create`, `table`, `graph`, `describe`, `rename`, `drop` after `var`); cases `1301`–`1303` checked against the Stata 14 log
+- [x] Completed commands: `anova` (sequential sums of squares, nested terms, error terms, repeated measures), `xtgee` and the `pa` estimator of `xtreg`/`xtlogit`/`xtpoisson`, `xtreg, be` and `mle`, two-way `tabulate, summarize()`, `misstable tree`/`nested`, `ci`/`cii variances`, two-sample `prtest`/`prtesti`, `reshape i/j/xij/error`, the old `merge` syntax, `sort ... in`, `list, sepby()`, `display _request()`, `export excel` to `.xls`, `set rng kiss32`; sequential `replace` with time-series operators (`replace y = 2*L.y`); case `0805` checked against the Stata 14 log
 - [x] Menu dialogs (38 Statistics and Graphics commands), with a preview of the command and OK, Submit and Copy
 - [x] Help pages for all commands
 - [x] macOS package (`tools/build_macos.sh`: `OpenDTA.app` and `.dmg`; "Open With" for `.do` and `.dta`)
@@ -158,7 +158,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `symmetry` (Bowker, Stuart-Maxwell, Bickenboller, exact significance), `dstdize` (direct standardization) and `istdize` (indirect standardization, SMR with exact limits)
 - [x] Interrater agreement: `kap` (Cohen's kappa, weighted kappa; Fleiss's kappa for several raters) and `kappa` (frequency form)
 - [x] ROC analysis: `roctab` (area with DeLong or Hanley-McNeil errors, detailed report, curve), `roccomp` (equality of areas, correlated or independent), `rocfit` (binormal model), `lroc` and `lsens` after `logit`, `logistic` and `probit`
-- Cases `1401` and `1402` await the Stata run
+- Checked against the Stata 14 log: cases `1401` and `1402` (the differences that remain, and why, are in `compat/known_differences.txt`)
 
 ## Phase 11: data management ✅
 
@@ -168,7 +168,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `statsby`, `putmata`; `sysuse` (OpenDTA's own example datasets) and `webuse` (downloads on demand)
 - [x] `icd9` and `icd10` with the public-domain ICD-9-CM and ICD-10-CM code lists of the U.S. CMS (check, clean, generate, lookup, search); `icd9p` by format
 - [x] `odbc` through the optional `pyodbc` package; business calendars (`bcal`, the `%tb` format, `bofd()` and `dofb()`)
-- Case `1501` awaits the Stata run
+- Checked against the Stata 14 log: case `1501` (matches)
 
 ## Phase 12: epidemiology, finished ✅
 
@@ -176,7 +176,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `mhodds` with `by()`: the odds ratio within each group, the estimate controlling for the groups and a test of homogeneity
 - [x] `roctab` with Bamber's standard error (`bamber`), exact binomial limits (`binomial`) and the Lorenz curve with the Gini and Pietra indices (`lorenz`); `roccomp` with binormal areas (`binormal`)
 - [x] `rocreg`: nonparametric ROC estimation with covariate-adjusted controls (stratified or linear, empirical or normal percentile values) and its summaries (AUC, ROC(t), inverse ROC, partial AUC), and the parametric probit GLM model with ROC covariates; bootstrap standard errors with normal, percentile and bias-corrected intervals
-- Case `1601` awaits the Stata run
+- Checked against the Stata 14 log: case `1601` (the differences that remain, and why, are in `compat/known_differences.txt`)
 
 ## Phase 13: data management, options ✅
 
@@ -184,7 +184,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `infile` with `byvariable()`; `putexcel` to `.xls`
 - [x] `import sas` (with `bcat()`), `import spss` and `import sasxport`, and a basic `export sasxport`, through the optional `pyreadstat` package
 - [x] `describe` with `numbers`, `varlist`, `replace` and `using`; `list` with `header()`, `nodotz`, `mean`, `sum`, `N`, `labvar()` and `nocompress`
-- Case `1701` awaits the Stata run
+- Checked against the Stata 14 log: case `1701` (matches)
 
 ## Phase 14: programming ✅
 
@@ -195,7 +195,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `program, sortpreserve`; `program name, plugin` (explains that Stata plugins cannot be loaded)
 - [x] `pause`, `sleep`, `window` (in batch mode the dialogs act as cancelled) and `viewsource` (shows OpenDTA's own source)
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` with a constraint matrix and `matcproc`
-- Case `1801` awaits the Stata run
+- Checked against the Stata 14 log: case `1801` (the differences that remain, and why, are in `compat/known_differences.txt`)
 
 ## Phase 15: survival analysis ✅
 
@@ -211,7 +211,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `meglm` (families gaussian, bernoulli, binomial, gamma, nbinomial, ordinal and poisson with their links), `mecloglog`, `menbreg` (mean and constant dispersion), `meologit`, `meoprobit`, `meqrlogit` and `meqrpoisson`; `predict` and `estat icc`/`recovariance`/`group` after them
 - [x] `mestreg` (exponential, Weibull, lognormal, loglogistic and gamma with a random effect per group)
 - [x] Crossed random effects in `mixed` (`|| _all: R.factor`)
-- Checked against the Stata log: case `1902` awaits the Stata run
+- Checked against the Stata 14 log: case `1902` (the differences that remain, and why, are in `compat/known_differences.txt`)
 
 ## Phase 17: base statistics ✅
 
@@ -248,7 +248,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Description: `xtline` (with `overlay`), `xttab` and `xtdata` (`fe`, `be`)
 - Checked against the Stata 14 log: case `1905` matches except for the differences in `compat/known_differences.txt` (the iteration paths of the numerical maximizers and of `igls`, `xtgls` with correlated panels and `igls` with `psar1`, the variance components of `xtregar, re`, the F test of `u_i` in `xtivreg, fe`, the between R-sq of `xtivreg, fd`, the flat likelihood of `xtfrontier, tvd` and the Breitung statistic); `xtunitroot llc` and `ips`, which Stata 14 runs, are not implemented yet
 
-## Phase 20: multivariate statistics
+## Phase 20: multivariate statistics ✅
 
 - [x] Principal components and factor analysis: `pca`, `factor` (`pf`, `pcf`, `ipf`, `ml`), `rotate` (`varimax`, `quartimax`, `equamax`, `parsimax`, `promax`, `oblimin`, `quartimin`), `alpha`, `screeplot`, `loadingplot` and `scoreplot`, with `estat` (`kmo`, `smc`, `anti`, `loadings`, `correlation`, `residuals`, `summarize`, `structure`, `common`) and `predict`
 - [x] Multivariate tests and models: `hotelling`, `mvreg`, `manova` (Wilks, Pillai, Lawley-Hotelling and Roy), `canon` and `mvtest` (`means`, `covariances`, `correlations`, `normality`)
@@ -257,7 +257,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] Correspondence analysis and scaling: `ca`, `mca`, `mds` and `mdsmat` (classical and modern), orthogonal `procrustes` and `biplot`, with `estat` and `predict` where they apply
 - Checked against the Stata 14 log: case `1906` matches except for the differences in `compat/known_differences.txt` (the iteration paths of `factor, ml`, `discrim logistic` and `mds, method(modern)`, and the maximum-likelihood factor numbers that follow from where Stata's `ml` stops)
 
-## Phase 21: models, part 1 (binary and count, censored and selection, instrumental variables)
+## Phase 21: models, part 1 (binary and count, censored and selection, instrumental variables) ✅
 
 - [x] Binary and fractional response: `cloglog`, `scobit`, `hetprobit` (`het()`), `fracreg` (`logit`, `probit`, `cloglog`), `binreg` (`or`, `rr`, `hr`, `rd`) and `glogit`
 - [x] Count data: `zip` and `zinb` (`inflate()`, `probit`, `vuong`, `irr`), `tpoisson`, `tnbreg` and `gnbreg` (`lnalpha()`)
@@ -267,7 +267,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - Checked against the Stata 14 log: case `1907` matches, except for the differences in `compat/known_differences.txt` (the iteration paths and the stopping point of each optimizer; blocks whose data put a parameter at the boundary, so that Stata's estimates depend on its path: `scobit`, `zinb`, `tnbreg`, `gnbreg`; `binreg, hr`, where Stata's IRLS does not converge on the case data; `glogit`, run on other grouped counts than Stata's; the robust variance of `ivregress liml` and of `ivpoisson cfunction`). Found and fixed on the way: `binreg` is IRLS with the expected-information variance, `ivpoisson cfunction` uses the multiplicative residual, `ivregress gmm` with a robust weight matrix reports the sandwich variance, and the constant-only models of `tpoisson` and `gnbreg` follow Stata's reference points
 - Not verified against Stata yet: `glogit` (data of the case), `fracreg cloglog`, `heckoprobit` and the options not exercised by case `1907`
 
-## Phase 22: models, part 2 (choice, exact, systems and treatment effects)
+## Phase 22: models, part 2 (choice, exact, systems and treatment effects) ✅
 
 - [x] Systems and constraints: `constraint`, `cnsreg`, `sureg` (including `isure`), `reg3` (`2sls`, `3sls`, `ols`, `sure`), `eivreg`, `vwls` and `rreg` (Huber then biweight), with the algebra in `core/syseq.py`
 - [x] Choice models: `clogit` (any number of chosen alternatives per group), `rologit` (`exactp`, `breslow`, `efron` and `none` for ties), `asclogit`, `slogit`, `mprobit`, `asmprobit` and `asroprobit` (GHK simulator with Hammersley draws), with the likelihoods in `core/choice.py`
@@ -277,7 +277,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - Checked against the Stata 14 log: case `1908` (see `compat/known_differences.txt` for what does not match and why)
 - Not verified against Stata yet: the table layouts of every command of this part (marked `VERIFY` in the code), the variance of `eivreg`, the weights of `stteffects` and the options the case does not exercise
 
-## Phase 23: other suites (sem, gsem, irt, Bayesian estimation, power, mi impute and svy)
+## Phase 23: other suites (sem, gsem, irt, Bayesian estimation, power, mi impute and svy) ✅
 
 - [x] `sem` with `method(mlmv)` (normal likelihood by missing-data pattern, EM starting values in `core/mvnmiss.py`) and `method(adf)`, `group()` and `ginvariant()`, path labels (`@name`) and the `estat` subcommands `eqgof`, `eqtest`, `framework`, `ggof`, `ginvariant`, `mindices`, `residuals`, `scoretests`, `stable`, `stdize:`, `summarize` and `teffects`
 - [x] `gsem` with the `gaussian`, `bernoulli`, `binomial`, `poisson`, `nbinomial`, `gamma` and `ordinal` families, observation-level and cluster-level (`M[id]`) latent variables, adaptive Gauss-Hermite quadrature and `predict`
@@ -288,7 +288,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `svy:` with `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` and `ivregress`
 - Checked against the Stata 14 log: case `1909` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the variance of `sem, method(adf)` is the numerical Hessian of the discrepancy, not its Gauss-Newton approximation; `ivregress` ignored weights; the `svy:` confidence intervals of `sigma`, `rho`, `alpha` and `lambda` use the design degrees of freedom; `irt 3pl` has one common pseudoguessing parameter unless `sepguessing` is given. The draws of `bayesmh` and `mi impute` come from OpenDTA's own generator and do not reproduce Stata's
 
-## Phase 24: programming, part 2
+## Phase 24: programming, part 2 ✅
 
 - [x] `makecns` with a list of constraint numbers (constraints that cannot be read are left out with a note), the `displaycns` and `nocnsnotes` options, and `matrix dispCns`
 - [x] `constraint #` without the word `define`
@@ -296,20 +296,20 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `window` in the graphical interface: `fopen` and `fsave` file dialogs, `stopbox` message boxes, `push` to the Review window, the User menu built with `window menu`, and `manage` (`minimize`, `restore`, `maintitle`, `forward`, `close`)
 - Checked against the Stata 14 log: case `1910`. Found and fixed on the way: `makecns` skips numbers with no constraint, keeps redundant constraints and shows nothing with `r`; `matrix dispCns` needs results posted by an estimation command; `matlist` shows the column equations as spans, a label row for each row equation and, in later panels, leaves out the empty upper half of a symmetric matrix
 
-## Phase 25: data management, part 2
+## Phase 25: data management, part 2 ✅
 
 - [x] `table` with a supercolumn variable (`table rowvar colvar supercolvar`), the `scol` option and `by()` with up to four variables
 - [x] `list` with `string()` and the `display` format (also chosen when the table does not fit the line)
 - [x] `import sasxport` with `describe` and `member()` (OpenDTA's own reader of every member of an XPORT file, `io/xport.py`) and the value labels of `formats.xpf`; `export sasxport` with `rename` and `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
 - Checked against the Stata 14 log: case `1911`. Found and fixed on the way: `table` keeps every row and every combination of the `by()` variables, with the supercolumns 4 blanks apart; `list, string()` ends cut values with `..`; `import sasxport, describe` has Stata's layout and stored results
 
-## Phase 26: epidemiology, part 2
+## Phase 26: epidemiology, part 2 ✅
 
 - [x] `rocreg` with `probit ml`: the binormal ROC model by maximum likelihood, with ROC covariates (`roccov()`), control covariates (`ctrlcov()`, linear) and the AUC by the delta method
 - [x] `rocreg` with `cluster()`: cluster-robust standard errors after `ml` and resampling of whole clusters in the bootstrap
 - Checked against the Stata 14 log: case `1912` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: `probit ml` fits, for each classifier, the covariate control adjustment model (case and control means and standard deviations) and takes the ROC parameters and the AUC from it by the delta method; several classifiers go in one model, with the test of equal AUCs
 
-## Phase 27: base statistics, part 2
+## Phase 27: base statistics, part 2 ✅
 
 - [x] `ml` with the `lf0`, `lf1`, `lf2`, `gf0`, `gf1` and `gf2` methods, `constraints()` (maximization over the constrained subspace, `e(Cns)`) and `svy` (design weights and linearized variance)
 - [x] `boxcox` with `model(rhsonly)`, `model(lambda)` and `model(theta)` and `notrans()`
@@ -318,7 +318,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `lv` with `generate` and `tail()`; `stem` with `width()` (and a fix for decimal data stored as `float`)
 - Checked against the Stata 14 log: case `1913` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: `ml` with constraints posts e(Cns) and the survey results of Stata; `boxcox` iterates by Newton–Raphson from 1 and transforms every variable of the varlist; `icc` leaves out the targets with missing ratings; `loneway` stores Stata's r(); `esize, unequal/welch` report their degrees of freedom
 
-## Phase 28: panel data, part 2
+## Phase 28: panel data, part 2 ✅
 
 - [x] `xtivreg` with `first` (first-stage regressions with the same estimator) and `regress` (every regressor exogenous)
 - [x] `xtdata` with `re` and `ratio()` (the random-effects GLS transform, with a `constant` variable)
@@ -327,7 +327,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `xtabond`, `xtdpdsys` and `xtdpd` with `artests()`; `xtdpd` with `hascons`
 - Checked against the Stata 14 log: case `1914` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the first-stage regressions of `xtivreg, first` follow the estimator (G2SLS has its own header); `xtdata, re` keeps the panel variable and adds the constant; `xtunitroot fisher` and `hadri` take Stata's layout and r(); `xtabond` drops duplicated instruments and the constant of `hascons` with a note
 
-## Phase 29: time series, part 2
+## Phase 29: time series, part 2 ✅
 
 - [x] `prais` with `vce(robust)`, `vce(hc2)`, `vce(hc3)` and `vce(cluster)` (semirobust variance of the transformed regression)
 - [x] `arch` with `constraints()` and `from()`; `arfima` with `vce(robust)`
@@ -335,7 +335,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `predict` after `ucm`, `sspace` and `dfactor` (one-step predictions, residuals and standardized residuals); the `frequency()` suboption of `ucm`'s `cycle()`; `psdensity` after `ucm`
 - Checked against the Stata 14 log: case `1915` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: the log likelihood of `prais` leaves out the Jacobian term; `arfima` refines its estimates in a second maximization; `svar` posts every entry of A and B in e(b), with zero variance for the fixed ones, and e(Cns); `ucm` checks the cycle frequency and its Wald test covers the frequency and the damping; `sspace` and `dfactor` standardize the residuals jointly
 
-## Phase 30: multilevel models, part 2
+## Phase 30: multilevel models, part 2 ✅
 
 - [x] `meglm` and the other `me` commands with nested levels of random effects (`|| school: || class:`), by product adaptive quadrature over the levels
 - [x] Weights in the `me` commands and `mestreg`: `fweight`, `pweight` and `iweight` at the observation level and the `fweight()` and `pweight()` options of each random-effects equation
@@ -343,7 +343,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `predict` after `mestreg` with `median`, `mean` and `hazard` for every distribution
 - Checked against the Stata 14 log: case `1916` (the differences and the reason for each are in `compat/known_differences.txt`). Found and fixed on the way: with nested levels the quadrature points of a lower level move with the effects of the level above and the derivatives follow the points, which gives Stata's estimates and standard errors; a variance going to zero no longer inflates the likelihood; `meqrlogit` and `meqrpoisson` take nested levels; frequency weights count in the group table; the `mestreg` median uses the fixed effects only
 
-## Phase 31: multivariate statistics, part 2
+## Phase 31: multivariate statistics, part 2 ✅
 
 - [x] `clustermat` (hierarchical clustering of a dissimilarity matrix, with `shape()`, `add`, `clear` and `labelvar()`); the binary similarity measures of `cluster` and `matrix dissimilarity` (`matching`, `Jaccard`, `Russell`, `Hamann`, `Dice`, `antiDice`, `Sneath`, `Rogers`, `Ochiai`, `Yule`, `Anderberg`, `Kulczynski`, `Pearson`, `Gower2`); `cluster kmeans` and `kmedians` with `keepcenters`
 - [x] `manovatest` (tests of terms after `manova`, with error terms after `/` and `ytransform()`)
@@ -351,7 +351,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 - [x] `mdslong`, `mdsconfig` and `mdsshepard`; `procoverlay`; `procrustes` with `transform(unrestricted)` and `transform(oblique)`
 - Checked against the Stata 14 log: case `1917` matches except for the iteration log of `mdslong, method(modern)` (Stata's optimizer is undocumented; see `compat/known_differences.txt`). Found and fixed on the way: the `_ord` and `_hgt` variables of a hierarchical cluster analysis are by dendrogram position (the id of the k-th leaf and the height of the merge that joins it to the next one), the cluster holding the smallest observation goes first, binary similarity measures keep their heights as similarities and `cluster generate` refuses a number of groups that ties make ambiguous; `clustermat` reports the new observations and the cluster name and puts the label variable last; `manovatest` with several terms tests them together in the base-level coding, with an error term of fewer degrees of freedom than dependent variables it stops, and it has `showorder`; `list` abbreviates a name so that it matches only that variable (`_clus~id`)
 
-## Phase 32: models, part 3
+## Phase 32: models, part 3 ✅
 
 - [x] `tpoisson` and `tnbreg` with `ul()` and limits given by variables; `tnbreg` and `nbreg` with `dispersion(constant)` (`nbreg` took the option and fitted the mean-dispersion model)
 - [x] `glogit` with `or`; `glm` and `binreg` with `mu()`
