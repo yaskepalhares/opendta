@@ -13,11 +13,11 @@ QTabBar { background: transparent; }
 QTabBar::tab { background: transparent; border: none; border-radius: 8px; padding: 5px 12px; margin: 4px 2px; }
 QTabBar::tab:selected { background: rgba(127, 127, 127, 0.22); font-weight: 600; }
 QTabBar::tab:hover:!selected { background: rgba(127, 127, 127, 0.12); }
-QTabBar::close-button { border-radius: 6px; subcontrol-position: right; }
-QTabBar::close-button:hover { background: rgba(127, 127, 127, 0.3); }
 QPushButton { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px; padding: 5px 14px; }
 QPushButton:hover { background: rgba(127, 127, 127, 0.16); }
 QPushButton:pressed { background: rgba(127, 127, 127, 0.28); }
+QPushButton:default { background: #0a84ff; border: 1px solid #0a84ff; color: #ffffff; }
+QPushButton:default:hover { background: #3b9bff; }
 QPushButton:disabled { color: rgba(127, 127, 127, 0.7); }
 QLineEdit, QSpinBox, QDoubleSpinBox { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
                                       padding: 4px 8px; }
