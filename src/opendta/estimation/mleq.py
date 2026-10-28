@@ -197,6 +197,9 @@ def assemble(pr, blocks: list[Block], b: np.ndarray, V: np.ndarray, aux_names: l
                 rows.append(CoefRow("sep"))
             rows.append(CoefRow("eq", blk.name))
         rows.extend(rows_from_columns(blk.cols, bmap, semap, ds, constant=blk.constant))
+        if getattr(blk, "off_name", ""):
+            kind = "exposure" if blk.off_name.startswith("ln(") else "offset"
+            rows.append(CoefRow("fixed", blk.off_name, eq=f"({kind})"))
         start += blk.k
     for eq, nm in aux_names:
         names.append(nm)

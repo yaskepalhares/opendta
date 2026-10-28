@@ -33,4 +33,4 @@
 {cmd:constraint} stores linear constraints; {cmd:cnsreg} fits least squares under them. {cmd:sureg} is Zellner's seemingly unrelated regression and {cmd:reg3} the two- and three-stage least squares of a system. {cmd:eivreg} corrects for measurement error with known reliabilities, {cmd:vwls} is weighted least squares with known variances and {cmd:rreg} is iteratively reweighted robust regression (Huber then biweight, after dropping the observations with Cook's D above 1).
 
 {pstd}
-Not available: {cmd:constraints()} in {cmd:sureg} and {cmd:reg3}. The table layouts are marked for checking against the Stata 14 log (case 1908).
+{cmd:sureg} and {cmd:reg3} take {cmd:constraints(}numlist{cmd:)} (constrained GLS; the constraints are listed above the table). The table layouts are marked for checking against the Stata 14 log (case 1908).

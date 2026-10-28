@@ -121,7 +121,7 @@ Feito nas fases 18 e 29 (casos 1904 e 1915), exceto as peças listadas em Série
 
 ### 10. Modelos (pronto)
 
-Feito nas fases 21 e 22 (casos de compatibilidade 1907 e 1908), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
+Feito nas fases 21, 22 e 32 (casos de compatibilidade 1907, 1908 e 1918), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
 
 ### 11. Outras suítes (pronto)
 

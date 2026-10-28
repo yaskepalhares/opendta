@@ -121,7 +121,7 @@ Done in phases 18 and 29 (compat cases 1904 and 1915), except the pieces listed 
 
 ### 10. Models (done)
 
-Done in phases 21 and 22 (compat cases 1907 and 1908), except the pieces listed under Models in [Missing for 1.0](../ROADMAP.md#missing-for-10). Part 10a (binary and count, censored and selection, instrumental variables) lives in `estimation/binmodels.py`, `censmodels.py` and `ivmodels.py`, on the engine `estimation/mleq.py` and the log likelihoods of `estimation/likelihoods.py`. Part 10b: systems in `estimation/sysmodels.py` (algebra in `core/syseq.py`), choice models in `estimation/choice.py` and `choiceprobit.py` (`core/choice.py`), exact methods in `estimation/exact.py` (`core/exact.py`), nonlinear models in `estimation/nonlin.py` and `frontier.py`, and treatment effects in `estimation/teffects.py` and `treatment.py` (`core/treatfx.py`).
+Done in phases 21, 22 and 32 (compat cases 1907, 1908 and 1918), except the pieces listed under Models in [Missing for 1.0](../ROADMAP.md#missing-for-10). Part 10a (binary and count, censored and selection, instrumental variables) lives in `estimation/binmodels.py`, `censmodels.py` and `ivmodels.py`, on the engine `estimation/mleq.py` and the log likelihoods of `estimation/likelihoods.py`. Part 10b: systems in `estimation/sysmodels.py` (algebra in `core/syseq.py`), choice models in `estimation/choice.py` and `choiceprobit.py` (`core/choice.py`), exact methods in `estimation/exact.py` (`core/exact.py`), nonlinear models in `estimation/nonlin.py` and `frontier.py`, and treatment effects in `estimation/teffects.py` and `treatment.py` (`core/treatfx.py`).
 
 ### 11. Other suites (done)
 

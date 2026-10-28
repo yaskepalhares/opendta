@@ -20,7 +20,7 @@ from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_onl
                    finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right,
                    sub_options, transformed_row)
 from .models import _logit, _poisson, _probit
-from .models2 import _header, _Prep, _log, g
+from .models2 import _header, _Prep, _log, chibar_text, g
 from .regress import comma
 from .results import CoefRow
 
@@ -440,7 +440,7 @@ def _zero_inflated(s: "Session", args: str, cmd: str) -> None:
             nm, zv, pz = vuong
             out.write(f"{'Vuong test of ' + nm + ':':<51}z = {g(zv, '%8.2f'):>8}  Pr>z = {g(pz, '%6.4f')}\n", "text")
         if nb and not pr.robust and lna > -10:     # VERIFY: Stata omits the test at the boundary
-            out.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n",
+            out.write(f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar_text(chibar)} Prob>=chibar2 = {p_chibar:5.3f}\n",
                       "text")   # VERIFY
 
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main, infl], eng=eng, res=res, V=V,
@@ -491,12 +491,25 @@ def cmd_zinb(s: "Session", args: str) -> None:
 # tpoisson and tnbreg
 # ---------------------------------------------------------------------------
 
-def _truncation(o, pr) -> float:
-    if o.get("ul") not in (None, False):
-        raise StataError(198, "option ul() is not available yet in OpenDTA")
-    if o.get("ll") in (None, False, True):
-        return 0.0
-    return float(np.floor(float(pr.s.eval(str(o["ll"])))))
+def _limit(o, pr, key: str, default: float):
+    """ll() or ul(): a number or a variable, as an array over the sample, and its text."""
+    v = o.get(key)
+    if v in (None, False, True):
+        return np.full(pr.smp.n, default), (f"{default:g}" if np.isfinite(default) else "")
+    t = str(v).strip()
+    ds = pr.s.data
+    try:
+        from ..core.varlist import resolve_name
+        nm = resolve_name(ds, t)
+    except StataError:
+        nm = None
+    if nm is not None and not ds.get(nm).is_string:
+        x = ds.get(nm).data[pr.smp.mask].astype(float)
+        if np.any(x >= SYS):
+            raise StataError(416, f"missing values encountered in {nm}")   # VERIFY
+        return np.floor(x), nm
+    val = float(np.floor(float(pr.s.eval(t))))
+    return np.full(pr.smp.n, val), f"{val:g}"
 
 
 def _truncated(s: "Session", args: str, cmd: str) -> None:
@@ -505,21 +518,38 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
         return
     spec = {"ll": 2, "ul": 2, "irr": 3, "offset": 3, "exposure": 3, "dispersion": 4}
     o = peek(args, spec)
-    pr = _Prep(s, args, spec, extra_vars=names_in(o.get("offset"), o.get("exposure")))
+    lim_vars = [str(o[k]).strip() for k in ("ll", "ul") if isinstance(o.get(k), str)
+                and str(o[k]).strip().replace("_", "a").isalnum() and not str(o[k]).strip()[0].isdigit()]
+    pr = _Prep(s, args, spec, extra_vars=names_in(o.get("offset"), o.get("exposure"), *lim_vars))
     pr.write_notes(s.output)
-    lower = _truncation(o, pr)
+    lower_a, ltext = _limit(o, pr, "ll", 0.0)
+    upper_a, utext = _limit(o, pr, "ul", np.inf)
+    lower = float(lower_a[0]) if np.ptp(lower_a) == 0 else SYS
     disp = str(o.get("dispersion", "mean")).strip().lower() or "mean"
-    if nb and not ("mean".startswith(disp) and disp):
-        raise StataError(198, "option dispersion(constant) is not available yet in OpenDTA")
+    if nb and not disp:
+        disp = "mean"
+    if nb and not ("mean".startswith(disp) or "constant".startswith(disp)):
+        raise StataError(198, f"dispersion({disp}) invalid")   # VERIFY
+    nb1 = nb and "constant".startswith(disp)
+    general = nb1 or np.isfinite(upper_a).any() or lower >= SYS
     y = _count_y(pr)
-    if np.any(y <= lower):
-        raise StataError(459, f"{pr.smp.depname} <= {lower:g} in sample")   # VERIFY
+    if np.any(y <= lower_a):
+        raise StataError(459, f"{pr.smp.depname} <= {ltext} in sample")   # VERIFY
+    if np.any(y >= upper_a):
+        raise StataError(459, f"{pr.smp.depname} >= {utext} in sample")   # VERIFY
+    if np.any(upper_a - lower_a < 2):
+        raise StataError(198, "ll() must be less than ul() - 1")   # VERIFY
     main = block_from_pr(pr, pr.smp.depname)
     _set_offset(main, pr, o.get("offset"), o.get("exposure"))
     w = pr.w
     n_theta = 1 if nb else 0
 
+    kind = "nb1" if nb1 else ("nb2" if nb else "poisson")
+
     def lik(etas, th):
+        if general:
+            ll, d1, d2 = L.trunc_count(y, etas[0], th[0] if nb else 0.0, lower_a, upper_a, kind)
+            return ll, [d1], (d2.reshape(-1, 1) if nb else None)
         if nb:
             ll, d1, d2 = L.tnbreg(y, etas[0], th[0], lower)
             return ll, [d1], d2.reshape(-1, 1)
@@ -530,24 +560,35 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     pres, _ = _poisson_start(y, main.X, w, main.offset)
     mu0 = np.exp(np.clip(main.X @ pres.b + (main.offset if main.offset is not None else 0.0), -700, 700))
     b0 = np.concatenate([pres.b] + ([[np.log(_alpha_start(y, mu0, w))]] if nb else []))
-    res = pr.maximize(eng.fun, b0)
-    V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     # constant-only model: start from the log of the mean
     null = None
     if main.constant:
         eng0 = Engine(lik, [constant_only(main)], w, n_theta)
-        c0 = float(np.log(max(np.sum(w * y) / np.sum(w) - lower, 0.5)))
-        null = maximize(eng0.fun, np.array([c0] + ([float(res.b[-1])] if nb else [])), maxiter=300)
+        c0 = float(np.log(max(np.sum(w * y) / np.sum(w) - float(np.mean(lower_a)), 0.5)))
+        # ln alpha starts from the moment estimate of the constant-only model, not from the full
+        # model's (which may sit at the boundary; compat 1918)
+        a0 = [float(np.log(_alpha_start(y, np.full(len(y), np.exp(c0)), w)))] if nb else []
+        null = maximize(eng0.fun, np.array([c0] + a0), maxiter=300)
         if not nb:
             # Stata takes the constant-only log likelihood of tpoisson at the untruncated mean,
             # not at the maximum (compat 1907)
             import dataclasses
             c_mean = float(np.log(np.sum(w * y) / np.sum(w)))
             null = dataclasses.replace(null, ll=float(eng0.fun(np.array([c_mean]), 0)[0]))
+    if nb1 and null is not None:
+        # dispersion(constant): the full model starts from the constant-only fit, as Stata's log
+        # shows (compat 1918; with the mean dispersion it does not, compat 1907)
+        b0 = np.concatenate([np.zeros(main.k - 1), null.b])
+    res = pr.maximize(eng.fun, b0)
+    V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     ll0 = null.ll if null else SYS
     ptr = None
     if nb:
-        ep = Engine(lambda e, th: (lambda ll, d: (ll, [d], None))(*L.tpoisson(y, e[0], lower)), [main], w, 0)
+        if general:
+            ep = Engine(lambda e, th: (lambda ll, d, _p: (ll, [d], None))(
+                *L.trunc_count(y, e[0], 0.0, lower_a, upper_a, "poisson")), [main], w, 0)
+        else:
+            ep = Engine(lambda e, th: (lambda ll, d: (ll, [d], None))(*L.tpoisson(y, e[0], lower)), [main], w, 0)
         ptr = maximize(ep.fun, pres.b, maxiter=300)
         fit_log(s, pr, "Fitting truncated Poisson model:", ptr)
         if null is not None:
@@ -561,33 +602,79 @@ def _truncated(s: "Session", args: str, cmd: str) -> None:
     def aux_rows(level):
         if not nb:
             return []
-        return [CoefRow("sep"), aux_row("/lnalpha", lna, se_lna, level), CoefRow("sep"),
-                transformed_row("alpha", np.exp, np.exp, lna, se_lna, level)]
+        # /lnalpha (/lndelta) without z and P>|z|, as nbreg (compat 1907, 1918)
+        an = "delta" if nb1 else "alpha"
+        return [CoefRow("sep"), CoefRow("aux", f"/ln{an}", lna, se_lna, name="_cons"), CoefRow("sep"),
+                transformed_row(an, np.exp, np.exp, lna, se_lna, level)]
 
     title = "Truncated negative binomial regression" if nb else "Truncated Poisson regression"
+    nb_scalars, nb_macros = [], []
+    if nb:
+        # tnbreg's e() as Stata lists it: the Poisson comparison, the limits as macros (compat 1918)
+        chibar0 = max(2 * (res.ll - ptr.ll), 0.0)
+        nb_scalars = [("rank0", 2.0)] + ([] if pr.robust else [("ll_c", ptr.ll), ("chi2_c", chibar0)]) \
+            + [("delta" if nb1 else "alpha", float(np.exp(lna)))]
+        nb_macros = [("llopt", ltext), ("ulopt", utext), ("dispers", "constant" if nb1 else "mean"),
+                     ("chi2_ct", "LR"), ("user", "tnbreg_cons" if nb1 else "tnbreg_mean"), ("ml_method", "e2")]
 
     def hdr(est):
         x = est.extra
-        left = [title, f"Truncation point: {lower:g}", "Dispersion     = mean" if nb else "",
+        if utext:       # VERIFY the header with an upper limit
+            trunc = f"Truncation points: {ltext} - {utext}"
+        elif lower >= SYS:
+            trunc = f"Truncation points: {ltext}"      # a variable lower limit (compat 1918)
+        else:
+            trunc = f"Truncation point: {ltext}"
+        left = [title, trunc, (f"Dispersion     = {'constant' if nb1 else 'mean'}") if nb else "",
                 f"{lab(est)} = {g(x['ll'], '%10.0g'):>10}"]
         return left, std_right(x)
 
     est = finish_model(s, pr, cmd, args, title=title, blocks=[main], eng=eng, res=res, V=V, n_clust=n_clust,
-                       ll0=ll0, aux_names=[("lnalpha", "_cons")] if nb else [], aux_rows_fn=aux_rows,
+                       ll0=ll0, aux_names=[("lndelta" if nb1 else "lnalpha", "_cons")] if nb else [], aux_rows_fn=aux_rows,
                        hdr_fn=hdr, k_eq=2 if nb else 1, wald=pr.robust,
-                       extra_scalars=[("llopt", lower)] + ([("alpha", float(np.exp(lna)))] if nb else []))
+                       extra_scalars=nb_scalars if nb else
+                       (([("llopt", lower)] if lower < SYS else [])
+                        + ([("ulopt", float(upper_a[0]))] if utext and np.ptp(upper_a) == 0 else [])),   # VERIFY
+                       extra_macros=nb_macros if nb else [])
     if nb and not pr.robust:
         chibar = max(2 * (res.ll - ptr.ll), 0.0)
         p_chibar = 0.5 * _chi2p(chibar, 1) if chibar > 0 else 0.5
         est.footer = lambda s_, e: s_.output.write(
-            f"Likelihood-ratio test of alpha=0:  chibar2(01) = {chibar:7.2f} Prob>=chibar2 = {p_chibar:5.3f}\n", "text")
-    mean_fn = _trunc_mean(nb, lower)
+            f"Likelihood-ratio test of {'delta' if nb1 else 'alpha'}=0:  chibar2(01) = {chibar_text(chibar)} Prob>=chibar2 = {p_chibar:5.3f}\n", "text")
+    mean_fn = _trunc_mean(nb, lower) if not general else _trunc_mean_general(kind, lower_a, upper_a)
     est.predict = make_predict(lambda what, etas, th, e: mean_fn(np.exp(etas[0]), th) if what == "n" else None, "n")
     est.pred_label = "number of events"
     if o.get("irr"):
         est.coef_title, est.eform_on = "IRR", True
     display_eq(s, est)
     est.coef_title, est.eform_on = "Coef.", False
+
+
+def _trunc_mean_general(kind: str, lower_a, upper_a):
+    """E[y | lower < y < upper] for limits given per observation of the estimation sample (the
+    prediction applies them to the sample observations; VERIFY outside it)."""
+    def mean(mu, th):
+        lo = np.resize(lower_a, mu.shape)
+        hi = np.resize(upper_a, mu.shape)
+        eta = np.log(mu)
+        par = th[0] if kind != "poisson" else 0.0
+        fin = np.isfinite(hi)
+        neg, inf = np.full_like(mu, -1.0), np.full_like(mu, np.inf)
+
+        def pmf(j):
+            return np.exp(L.trunc_count(np.full_like(mu, j), eta, par, neg, inf, kind)[0])
+        # infinite upper limit: the complement of the mass at and below the lower limit
+        num = np.where(fin, 0.0, mu)
+        den = np.where(fin, 0.0, 1.0)
+        top = int(max(np.max(lo), np.max(np.where(fin, hi - 1, 0))))
+        for j in range(top + 1):
+            pj = pmf(j)
+            below = ~fin & (j <= lo)
+            inside = fin & (j > lo) & (j < hi)
+            num += np.where(inside, j * pj, 0) - np.where(below, j * pj, 0)
+            den += np.where(inside, pj, 0) - np.where(below, pj, 0)
+        return num / den
+    return mean
 
 
 def _trunc_mean(nb: bool, lower: float):
@@ -702,9 +789,7 @@ def cmd_binreg(s: "Session", args: str) -> None:
             title = (_BINREG_LINKS[hit[0]][1], _BINREG_LINKS[hit[0]][2])
         elif low == "n" and arg is not None:
             nbin = arg.strip()
-        elif low in ("ml", "irls") or (low.startswith("mu") and arg is not None):
-            if low.startswith("mu"):
-                raise StataError(198, "option mu() is not available yet in OpenDTA")
+        elif low in ("ml", "irls"):
             keep.append(low)
         else:
             keep.append(f"{name}({arg})" if arg is not None else name)
@@ -729,8 +814,6 @@ def cmd_glogit(s: "Session", args: str) -> None:
     from ..lang.syntax import find_top, match_options, parse_standard
     p = parse_standard(args)
     o = match_options(p.options, {"or": 2, "level": 1}) if p.options.strip() else {}
-    if o.get("or"):
-        raise StataError(198, "option or is not available yet in OpenDTA")
     toks = p.varlist.split()
     if len(toks) < 2:
         raise StataError(102, "too few variables specified")
@@ -767,8 +850,11 @@ def cmd_glogit(s: "Session", args: str) -> None:
         s.output.write("\nWeighted LS logistic regression for grouped data\n", "text")
         est = s._estimates
         est.depvar_cell = ""
+        if o.get("or"):
+            est.coef_title, est.eform_on = "Odds Ratio", True
         s.run("regress")
         del est.depvar_cell
+        est.coef_title, est.eform_on = "Coef.", False
     finally:
         ds.drop_vars([pos, t_w])
         ds.rename(t_pos, pos)
