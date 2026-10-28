@@ -15,7 +15,7 @@
 {title:Description}
 
 {pstd}
-Fits two-level generalized linear mixed models with random intercepts and slopes. The likelihood of each group is integrated by mean-variance adaptive Gauss-Hermite quadrature (7 points per random effect by default). The fixed-effects model is fitted first and an LR test against it is reported.
+Fits multilevel generalized linear mixed models with random intercepts and slopes. The likelihood of each group is integrated by mean-variance adaptive Gauss-Hermite quadrature (7 points per random effect by default). The fixed-effects model is fitted first and an LR test against it is reported. Nested levels are written one after the other, the highest first ({cmd:|| school: || class:}); the likelihood is integrated level by level with the points of each level adapted to its groups. Weights: {cmd:fweight}s, {cmd:pweight}s and {cmd:iweight}s at the observation level and the options {cmd:fweight(}varname{cmd:)} and {cmd:pweight(}varname{cmd:)} of a random-effects equation (constant within its groups). {cmd:vce(robust)} and {cmd:vce(cluster} clustvar{cmd:)} give the sandwich variance from the scores of the highest-level groups (the clusters must contain them); sampling weights imply {cmd:vce(robust)}, and no LR test is reported then.
 
 {title:Postestimation}
 

@@ -55,8 +55,45 @@ class Interpreter:
     # ------------------------------------------------------------------
     # Running a sequence of lines
     # ------------------------------------------------------------------
-    def run_lines(self, lines: list[LogicalLine], *, echo: bool = False) -> None:
-        self._run_range(lines, 0, len(lines), echo="top" if echo else None)
+    def run_lines(self, lines: list[LogicalLine], *, echo: bool = False, record: list | None = None) -> None:
+        """record: a list that receives one entry per command of the file (comments left out), with
+        its text, its return code and, under it, the commands of the do-files it runs (Review in
+        the interface)."""
+        if record is None:
+            self._run_range(lines, 0, len(lines), echo="top" if echo else None)
+            return
+        i, end = 0, len(lines)
+        stack = self.s._review_stack
+        mode = "top" if echo else None
+        while i < end:
+            ln = lines[i]
+            if ln.kind == "comment" or not ln.text.strip():
+                i = self._run_one(lines, i, end, echo=mode)
+                continue
+            entry = {"text": self._lines_text(lines, i, i + 1), "rc": 0, "children": []}
+            record.append(entry)
+            stack.append(entry)
+            try:
+                j = self._run_one(lines, i, end, echo=mode)
+            except StataError as e:
+                entry["rc"] = e.rc
+                if ln.text.strip().endswith("{"):
+                    try:
+                        entry["text"] = self._lines_text(lines, i, self._block_end(lines, i, end) + 1)
+                    except StataError:
+                        pass
+                raise
+            finally:
+                stack.pop()
+            entry["text"] = self._lines_text(lines, i, j)
+            i = j
+
+    @staticmethod
+    def _lines_text(lines: list[LogicalLine], i: int, j: int) -> str:
+        """The command as written in the file (continuation lines and the body of a block kept)."""
+        import textwrap
+        rows = [r.rstrip() for ln in lines[i:j] for r in ln.echo_lines]
+        return textwrap.dedent("\n".join(rows)).strip()
 
     def _run_range(self, lines: list[LogicalLine], start: int, end: int, *, echo: str | None) -> None:
         i = start
@@ -269,6 +306,10 @@ class Interpreter:
                 pending_type = None
                 m = re.match(r"^%-?(\d+)", fmt)
                 width = (int(m.group(1)) if m else 9) + 2
+                if len(n) > width - 2:
+                    # a longer name is abbreviated to the format's width ("longvar~e"; compat 1911)
+                    from .functions import _abbrev
+                    n = _abbrev(n, float(width - 2))
                 cells.append(f"{n:>{width}}")
             out.write("\n   " + "".join(cells) + "\n", "text")
             for k, ln in enumerate(lines[i + 1:j + 1], start=1):

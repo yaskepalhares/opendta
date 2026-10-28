@@ -14,7 +14,7 @@
 {title:Description}
 
 {pstd}
-{cmd:xtline} plots each panel's time series, one graph per panel or all on one graph with {cmd:overlay}. {cmd:xttab} tabulates a variable showing overall, between (panels) and within (percent of time) frequencies. {cmd:xtdata} replaces the data in memory by their fixed-effects ({cmd:fe}: deviations from the panel means plus the overall mean) or between ({cmd:be}: panel means) transformation; {cmd:re} and {cmd:fa} are not available yet.
+{cmd:xtline} plots each panel's time series, one graph per panel or all on one graph with {cmd:overlay}. {cmd:xttab} tabulates a variable showing overall, between (panels) and within (percent of time) frequencies. {cmd:xtdata} replaces the data in memory by their fixed-effects ({cmd:fe}: deviations from the panel means plus the overall mean) or between ({cmd:be}: panel means) transformation; {cmd:re} with {cmd:ratio(}{it:sigma_u/sigma_e}{cmd:)} applies the random-effects GLS transform and adds the variable {cmd:constant} (1 - theta), to be used with {cmd:regress ..., noconstant}; {cmd:fa} is not available yet.
 {p_end}
 
 {title:Options}

@@ -79,19 +79,19 @@ Estimates from the work so far (±50%): session time and tokens generated; a ses
 
 ### 1. Epidemiology: finish ✅
 
-Done in phase 12 (compat case 1601), except `rocreg` with `ml` and `cluster()`, which stay in *Missing for 1.0*. The original plan:
+Done in phases 12 and 26 (compat cases 1601 and 1912). The original plan:
 
 `rocreg` (nonparametric and parametric ROC regression; bootstrap standard errors); `cs`, `cc` and `ir` with `estandard`, `istandard`, `standard()`, `binomial` and `pool`; `mhodds` with `by()`; `roctab` with `binomial`, `bamber` and `lorenz`; `roccomp` with `binormal`. Reuse `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; remove the matching "not available yet" errors.
 
 ### 2. Data management: options ✅
 
-Done in phase 13 (compat case 1701), except `import haver` (a proprietary format), `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), `import sasxport, describe` and `member()`, the value labels of `formats.xpf`, `export sasxport` with `rename` and `vallabfile()`, and `list` with `string()` and `display`, which stay in *Missing for 1.0*. The original plan:
+Done in phases 13 and 25 (compat cases 1701 and 1911). `import haver` (a proprietary format) is a known limitation, left out of 1.0. Still missing: `icd9p` (no copy of the CMS ICD-9-CM procedure list could be obtained), which stays in *Missing for 1.0*. The original plan:
 
 `import sas`, `import spss` and `import sasxport` (through `pyreadstat`, optional like for old `.dta`; `io/`), `file` with binary read/write (`commands/filecmd.py`), `infile` with `byvariable()` (`commands/infile.py`), `putexcel` to `.xls`, the missing options of `list` and `describe`. `import haver` needs a proprietary format: leave it out and say so. `icd9p` needs the public-domain ICD-9-CM procedure list (CMS); add it to `src/opendta/data/icd/` with `tools/make_icd_tables.py` if a copy can be obtained.
 
 ### 3. Programming ✅
 
-Done in phase 14 (compat case 1801), except `makecns` with a constraint list and `displaycns` (they need `constraint`, from block 10), `matlist` with the equation options, the `window` dialogs and menus of the graphical interface, and loading plugins, which stay in *Missing for 1.0*. The original plan:
+Done in phases 14 and 24 (compat cases 1801 and 1910). Loading compiled Stata plugins is a known limitation, left out of 1.0; Stata's class system stays in *Missing for 1.0* for a block of its own. The original plan:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 
@@ -101,15 +101,15 @@ Done in phase 15 (compat case 1901), except the options that stop with error 198
 
 ### 5. Multilevel models (1–1.5 h, ~55k tokens)
 
-Done in phase 16 (compat case 1902), except more than one level of random effects in the `me` commands, weights, `vce(robust)` and the `predict` options `median` and `mean` of `mestreg` (and `hazard` after its lognormal, loglogistic and gamma distributions). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
+Done in phases 16 and 30 (compat cases 1902 and 1916), except the pieces listed under Multilevel models in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`meqrlogit` and `meqrpoisson` with more than one level, `intmethod(laplace)` with more than one level, crossed effects in the `me` commands). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
 
 ### 6. Panel data ✅
 
-Done in phase 19 (compat case 1905), except the pieces listed under Panel data in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`xtunitroot llc` and `ips`, which need the tabulated moments of the original papers, and some options of the dynamic-panel, `xtregar`, `xtrc`, `xtivreg` and `xtdata` commands). The original plan: random-effects models by quadrature, `quadchk`, dynamic panels by GMM, the linear panel estimators, `xtfrontier`, `xtunitroot` and the description commands.
+Done in phases 19 and 28 (compat cases 1905 and 1914), except the pieces listed under Panel data in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`xtunitroot llc` and `ips`, which need the tabulated moments of the original papers, and some options of the dynamic-panel commands, `xtregar` and `xtdata`). The original plan: random-effects models by quadrature, `quadchk`, dynamic panels by GMM, the linear panel estimators, `xtfrontier`, `xtunitroot` and the description commands.
 
 ### 7. Base statistics (3–4 h, ~135k tokens)
 
-Done in phase 17 (compat case 1903), except the pieces listed under Base statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`ml` with the `lf0`, `lf1`, `lf2` and `gf` methods, `boxcox` with other models, `cusum` test statistics…). The original plan: prefixes and resampling: `jackknife`, `permute`, `simulate` (reuse `estimation/bootstrap.py`); `ml` (the command around `estimation/ml.py`), `mlexp`; model building: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; after estimation: `contrast`, `pwcompare`, `pwmean`, `margins` after more commands (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformations: `boxcox`, `ladder`, `gladder`, `lnskew0`; tests: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; agreement and effect sizes: `icc`, `loneway`, `esize`, `ameans`; displays: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+Done in phases 17 and 27 (compat cases 1903 and 1913), except the pieces listed under Base statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`margins` after more commands; the `cusum` test statistics, whose formulas need the manual's Methods and formulas). The original plan: prefixes and resampling: `jackknife`, `permute`, `simulate` (reuse `estimation/bootstrap.py`); `ml` (the command around `estimation/ml.py`), `mlexp`; model building: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; after estimation: `contrast`, `pwcompare`, `pwmean`, `margins` after more commands (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformations: `boxcox`, `ladder`, `gladder`, `lnskew0`; tests: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; agreement and effect sizes: `icc`, `loneway`, `esize`, `ameans`; displays: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
 ### 8. Multivariate statistics ✅
 
@@ -117,7 +117,7 @@ Done in phases 20 and 31 (compat cases 1906 and 1917), except the pieces listed 
 
 ### 9. Time series (3–4 h, ~150k tokens)
 
-Done in phase 18 (compat case 1904), except the pieces listed under Time series in [Missing for 1.0](../ROADMAP.md#missing-for-10) (constraints in `vec`, `svar`, `arch`, `ucm` and `sspace`, `mgarch vcc`, `predict` after the state-space commands…). The original plan: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (state space: share one Kalman filter with `arima` in `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+Done in phases 18 and 29 (compat cases 1904 and 1915), except the pieces listed under Time series in [Missing for 1.0](../ROADMAP.md#missing-for-10) (constraints in `vec`, the long-run constraints of `svar`, `ucm` constraints, `mgarch vcc`, the state statistics of `predict` after the state-space commands…). The original plan: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (state space: share one Kalman filter with `arima` in `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` with `sarima()`, `condition` and `diffuse`; `irf` after `svar` and `vec`, with bootstrap standard errors, and `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
 
 ### 10. Models (done)
 

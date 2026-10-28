@@ -12,7 +12,7 @@
 {title:Description}
 
 {pstd}
-{cmd:xtunitroot} performs panel unit-root tests. Available tests: {cmd:ht} (Harris-Tzavalis), {cmd:breitung}, {cmd:hadri} (stationarity null) and {cmd:fisher} (augmented Dickey-Fuller tests of every panel, combined by Maddala-Wu and Choi). {cmd:llc} and {cmd:ips} are not available yet.
+{cmd:xtunitroot} performs panel unit-root tests. Available tests: {cmd:ht} (Harris-Tzavalis), {cmd:breitung}, {cmd:hadri} (stationarity null) and {cmd:fisher} (augmented Dickey-Fuller tests, with {cmd:drift} or {cmd:demean}, or Phillips-Perron tests with {cmd:pperron}, of every panel, combined by Maddala-Wu and Choi). {cmd:hadri} accepts {cmd:kernel(}{it:kernel #}{cmd:)} with the Bartlett, Parzen or quadratic-spectral kernel and a number of lags. {cmd:llc} and {cmd:ips} are not available yet.
 {p_end}
 
 {title:Options}

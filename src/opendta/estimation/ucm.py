@@ -169,12 +169,17 @@ def cmd_ucm(s: "Session", args: str) -> None:
     # cycle() may be repeated: collect all of them before the option matcher keeps only the last
     import re
     cyc = [int(float(m_)) for m_ in re.findall(r"\bcycle\(\s*(\d+)", opts)]
-    o = match_options(re.sub(r"\bcycle\([^)]*\)", "", opts), _OPTS) if opts.strip() else {}
+    o = match_options(re.sub(r"\bcycle\((?:[^()]|\([^()]*\))*\)", "", opts), _OPTS) if opts.strip() else {}
     for bad in ("constraints", "from", "vce"):
         if o.get(bad):
             raise StataError(198, f"option {bad}() not implemented in OpenDTA")   # OpenDTA
-    if re.search(r"frequency\(", opts):
-        raise StataError(198, "cycle() suboption frequency() not implemented in OpenDTA")   # OpenDTA
+    # cycle(#, frequency(#f)): the starting value of that cycle's frequency, in radians
+    freq0 = [float(m_.group(1)) if m_ else None for m_ in
+             (re.search(r"frequency\(\s*([-+.\deE]+)\s*\)", c_) for c_ in
+              re.findall(r"\bcycle\(((?:[^()]|\([^()]*\))*)\)", opts))]
+    for f_ in freq0:
+        if f_ is not None and not 0 < f_ < math.pi:
+            raise StataError(198, "cycle frequency must be in (2*_pi/_N, _pi) and must not be too close to _pi")
     spec = UCSpec()
     spec.model = str(o["model"]).strip().lower() if isinstance(o.get("model"), str) else "rwalk"
     if spec.model not in MODELS:
@@ -234,11 +239,14 @@ def cmd_ucm(s: "Session", args: str) -> None:
              f"var({smp.depname})": 0.5 * vy}
     u0 = []
     beta0 = np.linalg.lstsq(X, y, rcond=None)[0] if nreg else np.zeros(0)
+    ncyc = 0
     for nm, kd in layout:
         if nm.startswith("reg"):
             u0.append(float(beta0[int(nm[3:])]))
         elif nm.startswith("frequency"):
-            u0.append(to_unc(2 * math.pi / max(8.0, n / 6), kd))
+            f_ = freq0[ncyc] if ncyc < len(freq0) else None
+            ncyc += 1
+            u0.append(to_unc(f_ if f_ is not None else 2 * math.pi / max(8.0, n / 6), kd))
         elif nm.startswith("damping"):
             u0.append(to_unc(0.7, kd))
         elif nm.startswith("var(cycle"):
@@ -270,7 +278,9 @@ def cmd_ucm(s: "Session", args: str) -> None:
     se = np.sqrt(np.maximum(np.diag(V), 0))
     D, A, S, H, cc, dm = build_state_space(spec, natural(u))
     stationary = not dm.any()
-    idx = list(range(nreg))
+    # the Wald test covers the regressors and the frequency and damping of the cycles (compat 1904
+    # and 1915)
+    idx = list(range(nreg)) + [i for i, nm in enumerate(names) if nm.startswith(("frequency", "damping"))]
     chi2 = SYS
     if idx:
         try:
@@ -313,6 +323,7 @@ def cmd_ucm(s: "Session", args: str) -> None:
                  "components": ", ".join(comps), "stationary": stationary, "nreg": nreg}
     est.ucm = {"spec": spec, "layout": layout, "u": u, "y": y, "X": X, "order": order, "mask": smp.mask.copy()}
     est.display = display_ucm
+    est.predict = _predict_ucm
     scalars = [("N", float(n)), ("k", float(len(u))), ("k_aux", float(len(u) - nreg)), ("k_eq", float(1 + (nreg > 0))),
                ("k_dv", 1.0), ("k_cycles", float(len(spec.cycles))), ("df_m", float(len(idx))), ("ll", r.ll),
                ("chi2", chi2), ("p", pv), ("tmin", t0), ("tmax", t1), ("stationary", 1.0 if stationary else 0.0),
@@ -333,10 +344,10 @@ def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("\nUnobserved-components model\n", "text")
         out.write(f"Components: {x['components']}".rstrip() + "\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        if x["nreg"]:
+        if x["df_m"]:
             _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
         ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
-        if x["nreg"]:
+        if x["df_m"]:
             _right(out, ll, "Prob > chi2", _g(x["p"], "%10.4f"))
         else:
             out.write(ll + "\n", "text")
@@ -346,3 +357,64 @@ def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: boo
             out.write("Note: Model is not stationary.\n", "text")
         out.write("Note: Tests of variances against zero are one sided, and the two-sided\n"
                   "      confidence intervals are truncated at zero.\n", "text")
+
+
+def _predict_ucm(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
+    """One-step predictions (xb, the default), residuals and standardized residuals over the
+    estimation sample (VERIFY: trend, seasonal, cycle and the other smethod() options)."""
+    from .ssm import kalman_onestep
+    U = est.ucm
+    spec, layout, u = U["spec"], U["layout"], U["u"]
+    nat = {nm: to_nat(v, kd) for (nm, kd), v in zip(layout, u)}
+    D, A, S, H, cc, dm = build_state_space(spec, nat)
+    beta = np.array([nat[f"reg{i}"] for i in range(spec.nreg)])
+    dd = (U["X"] @ beta).reshape(-1, 1) if spec.nreg else None
+    yhat, fv = kalman_onestep(U["y"].reshape(-1, 1), D, A, S, H, cc, dd, dm)
+    rows = np.nonzero(U["mask"])[0][U["order"]]
+    # the first observations, one per diffuse state, have no prediction (compat 1915: 299 of 300
+    # with a random walk; VERIFY with other models)
+    nd = int(np.asarray(dm).sum())
+    yhat = yhat.copy()
+    yhat[:nd] = np.nan
+    out = np.full(s.data.nobs, SYS)
+    if stat in ("", "xb"):
+        out[rows] = np.where(np.isnan(yhat[:, 0]), SYS, yhat[:, 0])
+        return out, "" if stat else "(option xb assumed; fitted values)"
+    e = U["y"] - yhat[:, 0]
+    if stat == "residuals":
+        out[rows] = np.where(np.isnan(e), SYS, e)
+    elif stat == "rstandard":
+        z = e / np.sqrt(fv[:, 0])
+        out[rows] = np.where(np.isnan(z), SYS, z)
+    else:
+        raise StataError(198, f"option {stat} not allowed")                      # VERIFY
+    return out, ""
+
+
+def cycle_density(est: Estimates, which: int, omega: np.ndarray, normalized: bool = True) -> np.ndarray:
+    """Spectral density of the cycle number `which` (1, 2, 3) of a ucm fit, from the state-space
+    form of that cycle alone: (1/2pi) D (I - A z)^-1 S (I - A z)^-H D', z = exp(-i w); divided by
+    the cycle's variance unless pspectrum (VERIFY: psdensity's normalization after ucm)."""
+    from .ssm import stationary_cov
+    U = est.ucm
+    spec = U["spec"]
+    if not spec.cycles:
+        raise StataError(321, "no cycle in the model")                               # VERIFY
+    if not 1 <= which <= len(spec.cycles):
+        raise StataError(198, f"cycle({which}) not found")                          # VERIFY
+    nat = {nm: to_nat(v, kd) for (nm, kd), v in zip(U["layout"], U["u"])}
+    nc = len(spec.cycles)
+    sfx = "" if nc == 1 else str(which)
+    one = UCSpec(model="none", depname=spec.depname, cycles=[spec.cycles[which - 1]])
+    sub = {"frequency": nat[f"frequency{sfx}"], "damping": nat[f"damping{sfx}"],
+           "var(cycle1)": nat["var(cycle1)" if nc == 1 else f"var(cycle{which})"]}
+    D, A, S, _H, _c, _d = build_state_space(one, sub)
+    r = A.shape[0]
+    f = np.empty(len(omega))
+    for i, w in enumerate(omega):
+        G = np.linalg.inv(np.eye(r) - A * np.exp(-1j * w))
+        f[i] = float(np.real(D @ G @ S @ G.conj().T @ D.T)[0, 0]) / (2 * math.pi)
+    if normalized:
+        P = stationary_cov(A, S)
+        f = f / float((D @ P @ D.T)[0, 0])
+    return f

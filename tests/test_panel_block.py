@@ -250,3 +250,65 @@ def test_xtdata_fe_and_be(run):
     x = run.session.data.get("x1").data.astype(float)
     assert len(x) == 30                                 # one observation per panel
     assert np.allclose(x, means)
+
+
+# -- block 16 (phase 28) -------------------------------------------------------------------------
+
+def _iv_panel(run):
+    run("clear\nset seed 160\nset obs 300\ngen id = ceil(_n/10)\ngen t = mod(_n-1,10)+1\nxtset id t\n"
+        "gen z = round(invnormal(runiform()),.01)\ngen x2 = round(invnormal(runiform()),.01)\n"
+        "gen u = round(invnormal(runiform()),.01)\ngen x1 = z + .5*u + round(invnormal(runiform()),.01)\n"
+        "gen y = 1 + x1 + x2 + u + id/10")
+
+
+def test_xtivreg_regress_and_first(run):
+    _iv_panel(run)
+    run("quietly xtreg y x1 x2, re\nmatrix b0 = e(b)")
+    run("quietly xtivreg y x2 (x1 = z), re regress")
+    assert run.eval("mreldif(e(b), b0)") < 1e-8
+    out = run("xtivreg y x2 (x1 = z), fe first")
+    assert "First-stage within regression" in out and "Instrumented:   x1" in out
+    assert run.eval('e(model) == "fe"') == 1
+
+
+def test_xtdata_re_reproduces_xtreg_re(run):
+    run("clear\nset seed 160\nset obs 300\ngen id = ceil(_n/10)\ngen t = mod(_n-1,10)+1\nxtset id t\n"
+        "gen x1 = round(invnormal(runiform()),.01)\ngen y = 1 + x1 + round(invnormal(runiform()),.01) + mod(id,7)/3")
+    run("quietly xtreg y x1, re")
+    b1, b0 = run.eval("_b[x1]"), run.eval("_b[_cons]")
+    r = run.eval("e(sigma_u)/e(sigma_e)")
+    run(f"xtdata y x1, re ratio({r!r}) clear\nquietly regress y x1 constant, noconstant")
+    assert abs(run.eval("_b[x1]") - b1) < 1e-6 and abs(run.eval("_b[constant]") - b0) < 1e-6
+
+
+def test_xtrc_betas(run):
+    run("clear\nset seed 17\nset obs 60\ngen id = ceil(_n/12)\ngen t = mod(_n-1,12)+1\nxtset id t\n"
+        "gen x = round(invnormal(runiform()),.01)\ngen y = 1 + (1 + id/5)*x + round(invnormal(runiform()),.01)")
+    out = run("xtrc y x, betas")
+    assert "Group-specific coefficients" in out and "Group 5" in out
+    assert run.eval("rowsof(e(beta_ps))") == 5
+
+
+def test_xtunitroot_fisher_and_hadri_options(run):
+    run("clear\nset seed 16\nset obs 400\ngen id = ceil(_n/20)\ngen t = mod(_n-1,20)+1\nxtset id t\n"
+        "gen e = round(invnormal(runiform()), .01)\ngen y = e\nbysort id (t): replace y = .5*y[_n-1] + e if _n > 1")
+    for opts in ("dfuller lags(1) drift", "dfuller lags(1) demean", "pperron lags(2)"):
+        run(f"quietly xtunitroot fisher y, {opts}")
+        assert run.rc == 0 and run.eval("r(p_P)") < .05
+    run("quietly xtunitroot hadri y")
+    z0 = run.eval("r(z)")
+    run("quietly xtunitroot hadri y, kernel(bartlett 3)")
+    assert run.rc == 0 and run.eval("r(z)") != z0
+
+
+def test_xtdpd_artests_and_hascons(run):
+    run("clear\nset seed 5\nset obs 300\ngen id = ceil(_n/10)\ngen t = mod(_n-1,10)+1\nxtset id t\n"
+        "gen x = round(invnormal(runiform()),.01)\ngen y = round(invnormal(runiform()),.01)\n"
+        "bysort id (t): replace y = .4*y[_n-1] + x + y if _n > 1\ngen one = 1")
+    run("quietly xtabond y x, artests(3) vce(robust)")
+    assert run.rc == 0 and run.eval("e(artests)") == 3
+    out = run("estat abond")
+    assert "|   3  |" in out
+    run("quietly xtdpd y L.y x one, dgmmiv(y) lgmmiv(y) div(x) liv(one) hascons")
+    # the constant regressor is dropped as collinear and the model has _cons (compat 1914)
+    assert run.rc == 0 and run.session.e["b"].colnames == ["L.y", "x", "_cons"]

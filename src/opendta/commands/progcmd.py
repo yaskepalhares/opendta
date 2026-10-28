@@ -189,7 +189,10 @@ def _results_list(s: "Session", store: dict, prefix: str) -> None:
         out.write("\nmacros:\n", "text")
         for k, v in macros.items():
             out.write(f"{prefix + '(' + k + ')':>22} : ", "text")
-            out.write(f'"{v}"\n', "result")
+            # a value longer than the line is cut and ends in ".." (compat 1912: 254 columns with
+            # linesize 255; VERIFY with other line sizes)
+            room = int(float(s.settings.get("linesize", 80))) - 1 - 27
+            out.write(f'"{v[:room - 2]}.."\n' if len(v) > room else f'"{v}"\n', "result")
     if mats:
         out.write("\nmatrices:\n", "text")
         for k, v in mats.items():

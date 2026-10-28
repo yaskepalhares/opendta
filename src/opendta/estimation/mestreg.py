@@ -22,7 +22,7 @@ from ..core.errors import StataError
 from ..lang.syntax import find_top
 from ..lazy import lazy
 from . import fvars
-from .meglm import Fit, _fit_me, _posterior_eta
+from .meglm import Fit, _fit_me, _posterior_eta, level_weights
 from .mixed import build_levels, split_levels
 from .results import CoefRow, Estimates
 from .stfit import STSample
@@ -106,21 +106,18 @@ def cmd_mestreg(s: "Session", args: str) -> None:
         replay(s, "mestreg", args)
         return
     fixed, levels_spec, glob = split_levels(args) if "||" in args else (args, [], "")
-    if len(levels_spec) > 1:
-        raise StataError(198, "OpenDTA's me commands support one level of random effects")   # OpenDTA
     c = find_top(fixed, ",")
     body, fe_opts = (fixed, "") if c == -1 else (fixed[:c], fixed[c + 1:])
     opts_text = " ".join(x for x in (fe_opts.strip(), glob.strip()) if x)
     if not levels_spec:         # without || the model has no random effects (compat 1902)
         opts_text, fe_opts = fe_opts.strip(), fe_opts
-    extra = " ".join([lv for lv, _r, _o in levels_spec] + [r for _l, r, _o in levels_spec if r])
+    extra = " ".join([lv for lv, _r, _o in levels_spec] + [r for _l, r, _o in levels_spec if r]
+                     + [o_[k] for _l, _r, o_ in levels_spec for k in ("fweight", "pweight") if isinstance(o_.get(k), str)])
     stx = STSample(s, body.strip() + (f", {opts_text}" if opts_text else ""), _OPTS, extra_vars=extra)
     o = stx.o
     if not isinstance(o.get("distribution"), str):
         raise StataError(198, "option distribution() required")   # VERIFY
     name = _dist(o["distribution"])
-    if stx.wtype:
-        raise StataError(198, "weights are not available yet with mestreg in OpenDTA")   # OpenDTA
     ph = name in ("exponential", "weibull")
     if o.get("time") and not ph:
         raise StataError(198, "option time not allowed")   # VERIFY
@@ -128,6 +125,8 @@ def cmd_mestreg(s: "Session", args: str) -> None:
     late = "option nohr not allowed" if (o.get("nohr") and time_metric) else ""   # after the fit (compat 1902)
     if o.get("tratio") and not time_metric:
         raise StataError(198, "option tratio not allowed")   # VERIFY
+    if stx.wtype and levels_spec:
+        raise StataError(101, "stset weights not allowed")   # compat 1916; VERIFY the return code
     stx.notes_and_header(s)
     t, t0, d = stx.t, stx.t0, stx.d
     if np.any((t <= 0) & (d > 0)):
@@ -136,13 +135,19 @@ def cmd_mestreg(s: "Session", args: str) -> None:
     n = stx.n
     X = np.column_stack([stx.X, np.ones(n)])
     lv = None
+    levels, wobs, wgrp = [], None, None
     if levels_spec:
-        lvspec = levels_spec[0]
+        lvspec = levels_spec[-1]
         if lvspec[2].get("covariance") is None and o.get("covariance"):
             lvspec[2]["covariance"] = o["covariance"]
-        lv = build_levels(s, smp.mask, [lvspec], n)[0]
-        if lv.cov == "identity" and lv.q > 1 and not lvspec[2].get("covariance"):
-            lv.cov = "independent"
+        levels = build_levels(s, smp.mask, levels_spec, n)
+        for lv_, (_l, _r, ro_) in zip(levels, levels_spec):
+            if lv_.cov == "identity" and lv_.q > 1 and not ro_.get("covariance"):
+                lv_.cov = "independent"
+        lv = levels[0]
+        wobs, wgrp = level_weights(s, smp, levels, levels_spec)
+    elif stx.wtype:
+        raise StataError(198, "weights are not available yet with mestreg without random effects in OpenDTA")   # OpenDTA
     npts = int(o["intpoints"]) if o.get("intpoints") else 7
     method = {"mv": "mvaghermite", "mc": "mcaghermite", "gh": "ghermite"}.get(
         str(o.get("intmethod") or "mvaghermite").strip().lower(),
@@ -224,7 +229,7 @@ def cmd_mestreg(s: "Session", args: str) -> None:
                   "model": _NAMES[name], "distribution": name, "depvar": "_t",
                   "cmdline": "mestreg _t " + args.strip(), "estat_cmd": "mestreg_estat",
                   "predict": "mestreg_p", "datasignaturevars": " ".join(
-                      ["_d", "_t", "_t0"] + [lv.var] + [c for c in d.get("covariates", "").split()])})
+                      ["_d", "_t", "_t0"] + [lv_.var for lv_ in levels] + [c for c in d.get("covariates", "").split()])})
         from .results import datasignature
         sv = d["datasignaturevars"].split()
         d["datasignature"] = datasignature(s, sv, smp.mask)
@@ -235,7 +240,8 @@ def cmd_mestreg(s: "Session", args: str) -> None:
           "model": "", "vs": f"{shown} model", "disp": "", "nbin": ""}
     eform = "Time Ratio" if (time_metric and o.get("tratio")) else \
         ("Haz. Ratio" if (not time_metric and not o.get("nohr")) else "")
-    F = Fit(smp=smp, o=o, sp=sp, X=X, off=np.zeros(n), lv=lv, fam_f=fam_f, naux=naux, b0=b0,
+    F = Fit(smp=smp, o=o, sp=sp, X=X, off=np.zeros(n), lv=lv, lvs=levels, wobs=wobs, wgrp=wgrp,
+            level_opts=[ro_ for _l, _r, ro_ in levels_spec], fam_f=fam_f, naux=naux, b0=b0,
             npts=npts, method=method, family=name, link="", aux_eq=[aux_lab] if naux else [],
             aux_in_table=bool(naux), aux_rows=aux_rows if naux else None, eform=eform,
             predict=_predict_mestreg, macro_edit=edit, late_error=late,
@@ -247,17 +253,61 @@ def _predict_mestreg(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     if stat in ("xb", "eta"):
         eta, ok = _posterior_eta(s, est, fixedonly=stat != "eta")
         return np.where(ok, eta, SYS), ""
-    sp = est.extra["spec"]
-    if stat == "hazard" and sp["fam"] in ("exponential", "weibull"):
-        # hazard at the observed _t given the fixed effects and the posterior means of the effects
-        eta, ok = _posterior_eta(s, est, fixedonly=False)
-        tt = s.data.get("_t").data.astype(float)
-        aft = est.extra["spec"]["title"].endswith("-- AFT")
-        p_ = math.exp(float(est.glmm["aux"][0])) if sp["fam"] == "weibull" else 1.0
-        e_ = np.exp(-p_ * eta) if aft else np.exp(eta)
-        h = p_ * np.power(np.maximum(tt, 1e-300), p_ - 1) * e_
-        return np.where(ok & (tt < SYS), h, SYS), "(predictions based on fixed effects and posterior means of random effects)"
-    raise StataError(198, f"option {stat or 'xb'} is not available yet in OpenDTA after mestreg")   # OpenDTA
+    if stat not in ("hazard", "median", "mean"):
+        raise StataError(198, f"option {stat or 'xb'} is not available yet in OpenDTA after mestreg")   # OpenDTA
+    # given the fixed effects and the posterior means of the random effects; the median of the
+    # distributions other than gamma takes the fixed effects only, without a note (compat 1916;
+    # VERIFY)
+    fixed_med = stat == "median" and est.extra["spec"]["fam"] != "gamma"
+    eta, ok = _posterior_eta(s, est, fixedonly=fixed_med)
+    fam = est.extra["spec"]["fam"]
+    aft = est.extra["spec"]["title"].endswith("-- AFT")
+    a = float(est.glmm["aux"][0]) if len(est.glmm["aux"]) else 0.0
+    tt = s.data.get("_t").data.astype(float)
+    v = surv_stat(stat, fam, eta, a, aft, tt)
+    okv = ok & np.isfinite(v) & ((tt < SYS) if stat == "hazard" else True)
+    note = "" if stat == "median" else "(predictions based on fixed effects and posterior means of random effects)"
+    if stat == "mean":
+        note += f"\n(using {int(est.extra['npts'])} quadrature points)"
+    return np.where(okv, v, SYS), note
+
+
+def surv_stat(stat: str, fam: str, eta, a: float, aft: bool, t):
+    """Hazard at t, median or mean survival time of the mestreg distributions given the linear
+    predictor eta and the auxiliary parameter a (ln p of the Weibull, /logs of the others)."""
+    with np.errstate(all="ignore"):
+        tp = np.maximum(np.where(t < SYS, t, 1.0), 1e-300)
+        if fam in ("exponential", "weibull"):
+            p_ = math.exp(a) if fam == "weibull" else 1.0
+            lam = np.exp(-p_ * eta) if aft else np.exp(eta)          # S = exp(-lam t^p)
+            if stat == "hazard":
+                return p_ * np.power(tp, p_ - 1) * lam
+            if stat == "median":
+                return np.power(math.log(2) / lam, 1 / p_)
+            return math.gamma(1 + 1 / p_) * np.power(lam, -1 / p_)
+        if fam in ("lognormal", "loglogistic"):
+            sig = math.exp(a)
+            z = (np.log(tp) - eta) / sig
+            if stat == "median":
+                return np.exp(eta)
+            if fam == "lognormal":
+                if stat == "mean":
+                    return np.exp(eta + sig * sig / 2)
+                return np.exp(st.norm.logpdf(z) - special.log_ndtr(-z)) / (sig * tp)
+            if stat == "mean":
+                return np.exp(eta) * math.pi * sig / math.sin(math.pi * sig) if sig < 1 else np.full(eta.shape, np.nan)
+            return special.expit(z) / (sig * tp)
+        # gamma: shape k = 1/sc and scale exp(eta) sc, so the mean is exp(eta)
+        sc = math.exp(2 * a)
+        k = 1 / sc
+        theta = np.exp(eta) * sc
+        if stat == "mean":
+            return np.exp(eta)
+        if stat == "median":
+            return theta * special.gammaincinv(k, 0.5)
+        x = tp / theta
+        lf = (k - 1) * np.log(x) - x - special.gammaln(k) - np.log(theta)
+        return np.exp(lf) / np.maximum(special.gammaincc(k, x), 1e-300)
 
 
 def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, eform_, aux_lab, late):
