@@ -24,9 +24,9 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
-                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar,
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar, QToolButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from .. import __version__
@@ -370,6 +370,7 @@ class MainWindow(QMainWindow):
             key = act.property("key")
             act.setText(tr(act.property("label")))
             act.setToolTip(tr(key) + (act.property("suffix") or ""))
+        self._fit_toolbar_buttons()
         for d in (self.dock_review, self.dock_variables, self.dock_properties):
             d.setWindowTitle(tr(d.objectName()))
         for lab in self.findChildren(QLabel, "PaneTitle"):
@@ -442,6 +443,18 @@ class MainWindow(QMainWindow):
         tb.addAction(act)
         self.toolbar_actions["settings"] = act
         self.addToolBar(tb)
+        self._fit_toolbar_buttons()
+
+    def _fit_toolbar_buttons(self) -> None:
+        """Small font and a width that follows the label, the same on every platform style."""
+        tb = self.findChild(QToolBar, "Toolbar")
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        for act in tb.actions():
+            btn = tb.widgetForAction(act)
+            if isinstance(btn, QToolButton):
+                btn.setFont(font)
+                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
@@ -460,7 +473,7 @@ class MainWindow(QMainWindow):
             QSplitter#CentralSplitter::handle { background: palette(window); }
             QSplitter#CentralSplitter::handle:hover { background: palette(mid); }
             QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
-            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 3px 4px; font-size: 11px; }
+            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 3px 4px; }
             QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
