@@ -55,6 +55,8 @@ def _lagrange(txt, default: tuple[int, int | None]) -> tuple[int, int | None]:
 
 def _lab(a: int, b: int | None, name: str, diff: bool = False) -> str:
     d = "D." if diff else ""
+    if b == a and diff:
+        return f"L{a if a > 1 else ''}D.{name}"          # LD.y (compat 1914)
     return f"L({a}/{'.' if b is None else b}).{d}{name}" if (b is None or b != a) else (f"L{a}.{d}{name}" if a > 1 else f"L.{d}{name}")
 
 
@@ -99,7 +101,7 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     m = re.match(r"^(.*?)(,.*)?$", args, re.S)
     body, optxt = m.group(1), (m.group(2) or "")
     o0 = match_options(optxt[1:], dict(spec_o, robust=1, level=1)) if optxt.strip(" ,") else {}
-    for bad in ("diffvars", "teffects", "small", "hascons", "coldiag", "artests", "h"):
+    for bad in ("diffvars", "teffects", "small", "coldiag", "h"):
         if o0.get(bad):
             raise StataError(198, f"option {bad} is not available yet in OpenDTA")
     pre = _varlist(s, o0.get("pre"))
@@ -162,7 +164,11 @@ def _run(s: "Session", cmd: str, args: str) -> None:
         out[:, j:] = a[:, :Tg - j] if j else a
         return out
     sp = _Spec()
-    sp.cons = not o.get("noconstant")
+    # hascons: the constant is among the user's regressors, so none is added (VERIFY)
+    sp.cons = not o.get("noconstant") and not o.get("hascons")
+    artests = int(o["artests"]) if o.get("artests") not in (None, False, True) else 2
+    if artests < 1:
+        raise StataError(198, "artests() must be positive")                      # VERIFY
     lab_dgmm: list[str] = []
     lab_div: list[str] = []
     lab_lgmm: list[str] = []
@@ -172,6 +178,11 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     p = 1
     if cmd == "xtdpd":
         for c in xcols:
+            if o.get("hascons") and np.ptp(c.values) == 0:
+                # a constant regressor with hascons is dropped and the model gets _cons (compat 1914)
+                s.output.write(f"note: {c.name} dropped because of collinearity\n", "text")
+                sp.cons = not o.get("noconstant")
+                continue
             reg_names.append(c.name)
             reg_series.append(grid(c.values))
         dg, lg = o0.get("dgmmiv"), o0.get("lgmmiv")
@@ -337,6 +348,12 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     # drop instruments that are zero in every panel
     keep = np.flatnonzero(np.any([np.any(z != 0, axis=0) for z in Zs], axis=0))
     Zs = [z[:, keep] for z in Zs]
+    # and those equal to an earlier one in every panel (liv(one) with hascons, next to _cons:
+    # compat 1914)
+    stacked = np.vstack(Zs)
+    uniq_cols = [j for j in range(stacked.shape[1])
+                 if not any(np.array_equal(stacked[:, j], stacked[:, i]) for i in range(j))]
+    Zs = [z[:, uniq_cols] for z in Zs]
     X, yv = rows_X, rows_y
     if len(keep) < k:
         raise StataError(481, "equation not identified; fewer instruments than parameters")   # VERIFY
@@ -375,14 +392,33 @@ def _run(s: "Session", cmd: str, args: str) -> None:
     L = Zs[0].shape[1]
     x = dict(N=nobs, G=Gu, tmin=int(counts.min()), tavg=float(counts.mean()), tmax=int(counts.max()), L=L,
              chi2=chi2, p=pchi, df=len(slopes), twostep=twostep, robust=robust, title=title, pvar=pvar, cmd=cmd,
-             tvar=info.tvar, dgmm=lab_dgmm, div=lab_div, lgmm=lab_lgmm, liv=lab_liv, cons=sp.cons, level=sp.level)
+             tvar=info.tvar, dgmm=lab_dgmm, div=lab_div, lgmm=lab_lgmm, liv=lab_liv, cons=sp.cons, level=sp.level,
+             artests=artests)
     est.extra = x
     est.display = _display
     est.estat = {"abond": (2, lambda ss, ee, rest: _estat_abond(ss, ee, rest, fit, X, Zs, rows_t)),
                  "sargan": (3, lambda ss, ee, rest: _estat_sargan(ss, ee, fit, Zs, twostep, robust))}
+    if cmd == "xtabond":
+        # e() in the order of Stata's ereturn list (compat 1914); rss is 2 (N - k) sigma2, the
+        # differenced errors having twice the variance (VERIFY)
+        from ..commands.datacmds import _signature
+        from .results import post as _post
+        arm = [pg.ar_test(j, fit, X, Zs, rows_t)[0] for j in range(1, artests + 1)]
+        sc = [("rank", float(k)), ("sig2", fit["sigma2"]), ("rss", 2 * (nobs - k) * fit["sigma2"]), ("N", float(nobs)),
+              ("N_g", float(Gu)), ("g_min", float(counts.min())), ("g_max", float(counts.max())),
+              ("g_avg", float(counts.mean())), ("t_min", t0), ("t_max", t0 + (Tg - 1) * (info.delta or 1.0)),
+              ("chi2", chi2), ("df_m", float(len(slopes))), ("zrank", float(L)), ("artests", float(artests))]
+        sc += [(f"arm{j}", z) for j, z in enumerate(arm, 1)]
+        mc = [("cmdline", cmdline(cmd, args)), ("cmd", cmd), ("estat_cmd", "xtdpd_estat"), ("marginsok", "XB default"),
+              ("predict", "xtdpd_p"), ("depvar", dname), ("transform", "difference"), ("hascons", "hascons"),
+              ("tvar", info.tvar), ("ivar", pvar), ("datasignature", _signature(ds)), ("system", "system"),
+              ("vce", "robust" if robust else "gmm"), ("vcetype", "Robust" if robust else ""), ("properties", "b V")]
+        _post(s, est, sc, mc, smp.mask)
+        _display(s, est)
+        return
     sc = [("N", float(nobs)), ("N_g", float(Gu)), ("df_m", float(len(slopes))), ("g_min", float(counts.min())),
           ("g_avg", float(counts.mean())), ("g_max", float(counts.max())), ("t_min", float(Tg)), ("chi2", chi2),
-          ("sig2", fit["sigma2"]), ("zrank", float(L)), ("rank", float(k))]
+          ("sig2", fit["sigma2"]), ("zrank", float(L)), ("rank", float(k)), ("artests", float(artests))]   # VERIFY
     mc = [("cmdline", cmdline(cmd, args)), ("cmd", cmd), ("depvar", dname), ("ivar", pvar), ("tvar", info.tvar),
           ("vce", "robust" if robust else "gmm"), ("twostep", "twostep" if twostep else "onestep"),
           ("title", title), ("properties", "b V"), ("estat_cmd", "xtdpd_estat"), ("predict", "xtdpd_p")]
@@ -410,7 +446,8 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
         out.write(f"{'':<48}{'Prob > chi2':<18}= ", "text")
         out.write(f"{_g(x['p'], '%10.4f'):>10}\n", "result")
         out.write(("Two-step results" if x["twostep"] else "One-step results") + "\n", "text")
-        if x["robust"] and x["cmd"] == "xtabond":
+        if x["robust"] and (x["cmd"] == "xtabond" or not x["twostep"]):
+            # xtabond, and xtdpd in one step (compat 1914; not after twostep: compat 1905)
             out.write(f"{'(Std. Err. adjusted for clustering on ' + x['pvar'] + ')':>78}\n", "text")   # VERIFY
     if not table:
         return
@@ -437,7 +474,7 @@ def _display(s, est, *, header=True, table=True, level=None, **_kw):
 
 def _estat_abond(s, est, rest, fit, X, Z, times) -> None:
     m = re.search(r"artests\(\s*(\d+)\s*\)", rest)
-    top = int(m.group(1)) if m else 2
+    top = int(m.group(1)) if m else est.extra.get("artests", 2)
     x_ = est.extra
     if (x_["level"] or x_["cons"]) and not x_["twostep"] and not x_["robust"]:
         raise StataError(321, "artests not computed for one-step system estimator with vce(gmm)")   # VERIFY

@@ -1,0 +1,823 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1911_datamgmt.log
+  log type:  text
+ opened on:  24 Oct 2026, 09:52:24
+
+. * Data management, second part: table with a supercolumn variable and by(), list with string()
+. * and display, import sasxport with describe, member() and the value labels of formats.xpf, and
+. * export sasxport with rename and vallabfile(). Every command whose behavior the manual does not
+. * settle runs under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set obs 48
+number of observations (_N) was 0, now 48
+
+. gen a = 1 + mod(_n, 2)
+
+. gen b = 1 + mod(_n*5, 3)
+
+. gen c = 1 + mod(_n*7, 4)
+
+. gen d = 1 + mod(_n*11, 3)
+
+. gen y = mod(_n*13, 17) + .25
+
+. label define al 1 "Male" 2 "Female"
+
+. label values a al
+
+. label variable b "Group"
+
+. 
+. * table with three variables and with by()
+. capture noisily table a b c
+
+----------------------------------------------------------------------------------------
+          |                                 c and Group                                 
+          | ------- 1 ------    ------- 2 ------    ------- 3 ------    ------- 4 ------
+        a |    1     2     3       1     2     3       1     2     3       1     2     3
+----------+-----------------------------------------------------------------------------
+     Male |    4     4     4                           4     4     4                    
+   Female |                        4     4     4                           4     4     4
+----------------------------------------------------------------------------------------
+
+. capture noisily table a b c, c(mean y) format(%9.2f)
+
+----------------------------------------------------------------------------------------------------
+          |                                       c and Group                                       
+          | -------- 1 --------    -------- 2 --------    -------- 3 --------    -------- 4 --------
+        a |     1      2      3        1      2      3        1      2      3        1      2      3
+----------+-----------------------------------------------------------------------------------------
+     Male |  7.75   6.75   5.75                           10.50   9.50   7.25                       
+   Female |                         9.75  11.75  10.75                            7.00   6.00   9.25
+----------------------------------------------------------------------------------------------------
+
+. capture noisily table a b c, col scol row
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+          |                                                                    c and Group                                                                    
+          | ------------ 1 -----------    ------------ 2 -----------    ------------ 3 -----------    ------------ 4 -----------    ---------- Total ---------
+        a |     1      2      3  Total        1      2      3  Total        1      2      3  Total        1      2      3  Total        1      2      3  Total
+----------+---------------------------------------------------------------------------------------------------------------------------------------------------
+     Male |     4      4      4     12                                      4      4      4     12                                      8      8      8     24
+   Female |                                   4      4      4     12                                      4      4      4     12        8      8      8     24
+          | 
+    Total |     4      4      4     12        4      4      4     12        4      4      4     12        4      4      4     12       16     16     16     48
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+. capture noisily table a b c, c(freq mean y sd y) format(%9.3f)
+
+----------------------------------------------------------------------------------------------------------------
+          |                                             c and Group                                             
+          | ---------- 1 ---------    ---------- 2 ---------    ---------- 3 ---------    ---------- 4 ---------
+        a |      1       2       3         1       2       3         1       2       3         1       2       3
+----------+-----------------------------------------------------------------------------------------------------
+     Male |  4.000   4.000   4.000                               4.000   4.000   4.000                          
+          |  7.750   6.750   5.750                              10.500   9.500   7.250                          
+          |  3.873   3.873   3.873                               6.021   6.021   6.583                          
+          | 
+   Female |                            4.000   4.000   4.000                               4.000   4.000   4.000
+          |                            9.750  11.750  10.750                               7.000   6.000   9.250
+          |                            3.873   3.873   3.873                               6.021   6.021   6.583
+----------------------------------------------------------------------------------------------------------------
+
+. capture noisily table a b, by(c)
+
+----------------------------
+          |      Group      
+  c and a |    1     2     3
+----------+-----------------
+1         |
+     Male |    4     4     4
+   Female |                 
+----------+-----------------
+2         |
+     Male |                 
+   Female |    4     4     4
+----------+-----------------
+3         |
+     Male |    4     4     4
+   Female |                 
+----------+-----------------
+4         |
+     Male |                 
+   Female |    4     4     4
+----------------------------
+
+. capture noisily table a b, by(c d) row col
+
+--------------------------------------
+c, d and  |           Group           
+a         |     1      2      3  Total
+----------+---------------------------
+1         |
+1         |
+     Male |     4                    4
+   Female |                           
+          | 
+    Total |     4                    4
+----------+---------------------------
+1         |
+2         |
+     Male |            4             4
+   Female |                           
+          | 
+    Total |            4             4
+----------+---------------------------
+1         |
+3         |
+     Male |                   4      4
+   Female |                           
+          | 
+    Total |                   4      4
+----------+---------------------------
+2         |
+1         |
+     Male |                           
+   Female |     4                    4
+          | 
+    Total |     4                    4
+----------+---------------------------
+2         |
+2         |
+     Male |                           
+   Female |            4             4
+          | 
+    Total |            4             4
+----------+---------------------------
+2         |
+3         |
+     Male |                           
+   Female |                   4      4
+          | 
+    Total |                   4      4
+----------+---------------------------
+3         |
+1         |
+     Male |     4                    4
+   Female |                           
+          | 
+    Total |     4                    4
+----------+---------------------------
+3         |
+2         |
+     Male |            4             4
+   Female |                           
+          | 
+    Total |            4             4
+----------+---------------------------
+3         |
+3         |
+     Male |                   4      4
+   Female |                           
+          | 
+    Total |                   4      4
+----------+---------------------------
+4         |
+1         |
+     Male |                           
+   Female |     4                    4
+          | 
+    Total |     4                    4
+----------+---------------------------
+4         |
+2         |
+     Male |                           
+   Female |            4             4
+          | 
+    Total |            4             4
+----------+---------------------------
+4         |
+3         |
+     Male |                           
+   Female |                   4      4
+          | 
+    Total |                   4      4
+--------------------------------------
+
+. capture noisily table a, by(c) c(freq mean y)
+
+----------------------------------
+  c and a |      Freq.     mean(y)
+----------+-----------------------
+1         |
+     Male |         12        6.75
+   Female |                       
+----------+-----------------------
+2         |
+     Male |                       
+   Female |         12       10.75
+----------+-----------------------
+3         |
+     Male |         12    9.083333
+   Female |                       
+----------+-----------------------
+4         |
+     Male |                       
+   Female |         12    7.416667
+----------------------------------
+
+. capture noisily table a b c, by(d) c(n y)
+
+----------------------------------------------------------------------------------------
+          |                                 c and Group                                 
+          | ------- 1 ------    ------- 2 ------    ------- 3 ------    ------- 4 ------
+  d and a |    1     2     3       1     2     3       1     2     3       1     2     3
+----------+-----------------------------------------------------------------------------
+1         |
+     Male |    4                                       4                                
+   Female |                        4                                       4            
+----------+-----------------------------------------------------------------------------
+2         |
+     Male |          4                                       4                          
+   Female |                              4                                       4      
+----------+-----------------------------------------------------------------------------
+3         |
+     Male |                4                                       4                    
+   Female |                                    4                                       4
+----------------------------------------------------------------------------------------
+
+. capture noisily table a b c d
+too many variables specified
+
+. capture noisily table a, by(b c d)
+
+----------------------
+Group, c, |
+d and a   |      Freq.
+----------+-----------
+1         |
+1         |
+1         |
+     Male |          4
+   Female |           
+----------+-----------
+1         |
+1         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+1         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+2         |
+1         |
+     Male |           
+   Female |          4
+----------+-----------
+1         |
+2         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+2         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+3         |
+1         |
+     Male |          4
+   Female |           
+----------+-----------
+1         |
+3         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+3         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+4         |
+1         |
+     Male |           
+   Female |          4
+----------+-----------
+1         |
+4         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+1         |
+4         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+1         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+1         |
+2         |
+     Male |          4
+   Female |           
+----------+-----------
+2         |
+1         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+2         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+2         |
+2         |
+     Male |           
+   Female |          4
+----------+-----------
+2         |
+2         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+3         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+3         |
+2         |
+     Male |          4
+   Female |           
+----------+-----------
+2         |
+3         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+4         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+2         |
+4         |
+2         |
+     Male |           
+   Female |          4
+----------+-----------
+2         |
+4         |
+3         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+1         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+1         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+1         |
+3         |
+     Male |          4
+   Female |           
+----------+-----------
+3         |
+2         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+2         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+2         |
+3         |
+     Male |           
+   Female |          4
+----------+-----------
+3         |
+3         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+3         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+3         |
+3         |
+     Male |          4
+   Female |           
+----------+-----------
+3         |
+4         |
+1         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+4         |
+2         |
+     Male |           
+   Female |           
+----------+-----------
+3         |
+4         |
+3         |
+     Male |           
+   Female |          4
+----------------------
+
+. 
+. * list with string() and display
+. clear
+
+. input str24 make price mpg str10 origin
+
+                         make      price        mpg      origin
+  1. "AMC Concord" 4099 22 "Domestic"
+  2. "Buick LeSabre Custom" 5788 18 "Domestic"
+  3. "Honda Accord" 5799 25 "Foreign"
+  4. end
+
+. capture noisily list, string(5)
+
+     +---------------------------------+
+     | make      price   mpg   origin  |
+     |---------------------------------|
+  1. | AMC C..    4099    22   Domes.. |
+  2. | Buick..    5788    18   Domes.. |
+  3. | Honda..    5799    25   Foreign |
+     +---------------------------------+
+
+. capture noisily list make origin, string(3) clean
+
+       make    origin  
+  1.   AMC..   Dome..  
+  2.   Bui..   Dome..  
+  3.   Hon..   Fore..  
+
+. capture noisily list, display
+
+     +-----------------------------------------------+
+  1. |                 make | price | mpg |   origin |
+     |          AMC Concord |  4099 |  22 | Domestic |
+     +-----------------------------------------------+
+
+     +-----------------------------------------------+
+  2. |                 make | price | mpg |   origin |
+     | Buick LeSabre Custom |  5788 |  18 | Domestic |
+     +-----------------------------------------------+
+
+     +-----------------------------------------------+
+  3. |                 make | price | mpg |   origin |
+     |         Honda Accord |  5799 |  25 |  Foreign |
+     +-----------------------------------------------+
+
+. capture noisily list in 1, display noobs
+
+  +--------------------------------------+
+  |        make | price | mpg |   origin |
+  | AMC Concord |  4099 |  22 | Domestic |
+  +--------------------------------------+
+
+. capture noisily list in 2, display divider
+
+     +-----------------------------------------------+
+  2. |                 make | price | mpg |   origin |
+     | Buick LeSabre Custom |  5788 |  18 | Domestic |
+     +-----------------------------------------------+
+
+. set linesize 40
+
+. capture noisily list
+
+     +------------------------------+
+  1. |                 make | price |
+     |          AMC Concord |  4099 |
+     |------------------------------|
+     |    mpg     |      origin     |
+     |     22     |    Domestic     |
+     +------------------------------+
+
+     +------------------------------+
+  2. |                 make | price |
+     | Buick LeSabre Custom |  5788 |
+     |------------------------------|
+     |    mpg     |      origin     |
+     |     18     |    Domestic     |
+     +------------------------------+
+
+     +------------------------------+
+  3. |                 make | price |
+     |         Honda Accord |  5799 |
+     |------------------------------|
+     |    mpg     |      origin     |
+     |     25     |     Foreign     |
+     +------------------------------+
+
+. capture noisily list, table
+
+     +----------------------------------
+> -------------+
+     |                 make   price   mp
+> g     origin |
+     |----------------------------------
+> -------------|
+  1. |          AMC Concord    4099    2
+> 2   Domestic |
+  2. | Buick LeSabre Custom    5788    1
+> 8   Domestic |
+  3. |         Honda Accord    5799    2
+> 5    Foreign |
+     +----------------------------------
+> -------------+
+
+. set linesize 255
+
+. 
+. * export sasxport with value labels, rename and vallabfile(); import sasxport with describe,
+. * member() and formats.xpf
+. clear
+
+. input id sex agegroup longvariablename
+
+            id        sex   agegroup  longvar~e
+  1. 1 1 1 5.5
+  2. 2 2 3 .
+  3. 3 1 2 7
+  4. 4 2 1 8.25
+  5. end
+
+. label define sexlab 1 "Female" 2 "Male"
+
+. label define agelab 1 "Young" 2 "Middle" 3 "Old"
+
+. label values sex sexlab
+
+. label values agegroup agelab
+
+. label variable longvariablename "A long name"
+
+. capture erase odta_s.xpt
+
+. capture erase formats.xpf
+
+. capture erase odta_s.sas
+
+. capture noisily export sasxport odta_s
+the following variable(s) have names that must be changed to fit into .xpt format:  (suggested renamings shown):
+
+                longvariablename -> LONGVARI
+
+specify option rename to save .xpt file with suggested names
+
+. capture noisily export sasxport odta_s, rename
+the following variable(s) were renamed in the output file:
+
+                longvariablename -> LONGVARI
+
+file odta_s.xpt saved
+file formats.xpf saved
+
+. capture noisily export sasxport odta_s, rename vallabfile(both) replace
+the following variable(s) were renamed in the output file:
+
+                longvariablename -> LONGVARI
+
+file odta_s.xpt saved
+file odta_s.sas saved
+file formats.xpf saved
+
+. capture noisily export sasxport odta_s, rename vallabfile(sascode) replace
+the following variable(s) were renamed in the output file:
+
+                longvariablename -> LONGVARI
+
+file odta_s.xpt saved
+file odta_s.sas saved
+
+. capture noisily export sasxport odta_s, rename vallabfile(none) replace
+the following variable(s) were renamed in the output file:
+
+                longvariablename -> LONGVARI
+
+file odta_s.xpt saved
+
+. capture noisily export sasxport odta_s, rename vallabfile(xpf) replace
+the following variable(s) were renamed in the output file:
+
+                longvariablename -> LONGVARI
+
+file odta_s.xpt saved
+file formats.xpf saved
+
+. capture noisily type odta_s.sas
+file odta_s.sas not found
+
+. capture noisily import sasxport odta_s, describe
+
+data from odta_s.xpt, member(odta_s)
+  obs:                4             24oct26:09:52:24
+ vars:                4             (date shown exactly as recorded in file)
+ size:              144
+----------------------------------------------------------------------------
+variable    variable     value
+  name        type       label      variable label
+----------------------------------------------------------------------------
+id          numeric
+sex         numeric     sexlab
+agegroup    numeric     agelab
+longvari    numeric                 A long name
+----------------------------------------------------------------------------
+
+. capture noisily return list
+
+scalars:
+                  r(N) =  4
+                  r(k) =  4
+               r(size) =  144
+          r(n_members) =  1
+
+macros:
+            r(members) : "odta_s"
+
+. capture noisily import sasxport odta_s, describe member(odta_s)
+
+data from odta_s.xpt, member(odta_s)
+  obs:                4             24oct26:09:52:24
+ vars:                4             (date shown exactly as recorded in file)
+ size:              144
+----------------------------------------------------------------------------
+variable    variable     value
+  name        type       label      variable label
+----------------------------------------------------------------------------
+id          numeric
+sex         numeric     sexlab
+agegroup    numeric     agelab
+longvari    numeric                 A long name
+----------------------------------------------------------------------------
+
+. capture noisily import sasxport odta_s, clear
+
+. capture noisily describe
+
+Contains data
+  obs:             4                          
+ vars:             4                          
+ size:           128                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              double  %10.0g                
+sex             double  %10.0g     sexlab     
+agegroup        double  %10.0g     agelab     
+longvari        double  %10.0g                A long name
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily list
+
+     +-----------------------------------+
+     | id      sex   agegroup   longvari |
+     |-----------------------------------|
+  1. |  1   Female      Young        5.5 |
+  2. |  2     Male        Old          . |
+  3. |  3   Female     Middle          7 |
+  4. |  4     Male      Young       8.25 |
+     +-----------------------------------+
+
+. capture noisily label list
+agelab:
+           1 Young
+           2 Middle
+           3 Old
+sexlab:
+           1 Female
+           2 Male
+
+. capture noisily import sasxport odta_s, clear novallabels
+
+. capture noisily describe
+
+Contains data
+  obs:             4                          
+ vars:             4                          
+ size:           128                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              double  %10.0g                
+sex             double  %10.0g     sexlab     
+agegroup        double  %10.0g     agelab     
+longvari        double  %10.0g                A long name
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily import sasxport odta_s, clear member(odta_s)
+
+. capture noisily describe
+
+Contains data
+  obs:             4                          
+ vars:             4                          
+ size:           128                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              double  %10.0g                
+sex             double  %10.0g     sexlab     
+agegroup        double  %10.0g     agelab     
+longvari        double  %10.0g                A long name
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily import sasxport odta_s, clear member(nothere)
+member nothere not found
+
+. capture noisily import sasxport formats.xpf, clear
+
+. capture noisily describe
+
+Contains data
+  obs:             5                          
+ vars:             3                          
+ size:           300                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+fmtname         str8    %9s                   
+start           str12   %12s                  
+label           str40   %40s                  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. capture noisily list
+
+     +--------------------------+
+     | fmtname   start    label |
+     |--------------------------|
+  1. |  SEXLAB       1   Female |
+  2. |  SEXLAB       2     Male |
+  3. |  AGELAB       1    Young |
+  4. |  AGELAB       2   Middle |
+  5. |  AGELAB       3      Old |
+     +--------------------------+
+
+. capture erase odta_s.xpt
+
+. capture erase formats.xpf
+
+. capture erase odta_s.sas
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1911_datamgmt.log
+  log type:  text
+ closed on:  24 Oct 2026, 09:52:24
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

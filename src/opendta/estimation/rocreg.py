@@ -12,6 +12,8 @@ Plain functions of arrays: the command is commands/rocreg.py.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from ..lazy import lazy
@@ -100,3 +102,88 @@ def probit_glm(pv: np.ndarray, Z: np.ndarray, t: np.ndarray) -> np.ndarray:
     X = np.column_stack([np.repeat(Z, len(t), axis=0), np.ones(n * len(t)), np.tile(q, n)])
     fun, _ = _probit(y, X, np.ones(len(y)))
     return ml.maximize(fun, np.zeros(k + 2)).b
+
+
+# ---------------------------------------------------------------------------
+# parametric (binormal) ROC model by maximum likelihood: rocreg, probit ml
+# ---------------------------------------------------------------------------
+
+def adjust_split(theta: np.ndarray, kx: int, kz: int):
+    """theta = (casecov: X then _cons, casesd, ctrlcov: Z then _cons, ctrlsd)."""
+    return (theta[:kx + 1], theta[kx + 1], theta[kx + 2:kx + 3 + kz], theta[kx + 3 + kz])
+
+
+def adjust_derivatives(theta: np.ndarray, y: np.ndarray, d: np.ndarray, X: np.ndarray, Z: np.ndarray):
+    """The covariate control adjustment model of rocreg, probit ml: the controls are
+    N(Z1 gamma, ctrlsd^2) and the cases N(Z1 gamma + X1 delta, casesd^2), with X1 and Z1 the ROC
+    and control covariates followed by a constant. Returns the log likelihood of each observation,
+    the scores (one row per observation) and the Hessian of the total."""
+    kx, kz = X.shape[1], Z.shape[1]
+    delta, sd_d, gamma, sd_c = adjust_split(theta, kx, kz)
+    n, k = len(y), len(theta)
+    X1 = np.column_stack([X, np.ones(n)])
+    Z1 = np.column_stack([Z, np.ones(n)])
+    mu = Z1 @ gamma + np.where(d, X1 @ delta, 0.0)
+    sd = np.where(d, sd_d, sd_c)
+    if sd_d <= 0 or sd_c <= 0:
+        return np.full(n, -np.inf), np.zeros((n, k)), np.zeros((k, k))
+    r = y - mu
+    ll = -0.5 * math.log(2 * math.pi) - np.log(sd) - r * r / (2 * sd * sd)
+    # derivative of the mean (W) and of the standard deviation (Sg) with respect to theta
+    W = np.zeros((n, k))
+    W[:, :kx + 1] = X1 * d[:, None]
+    W[:, kx + 2:kx + 3 + kz] = Z1
+    Sg = np.zeros((n, k))
+    Sg[d, kx + 1] = 1.0
+    Sg[~d, kx + 3 + kz] = 1.0
+    dmu = r / sd ** 2
+    dsd = -1 / sd + r * r / sd ** 3
+    S = W * dmu[:, None] + Sg * dsd[:, None]
+    H = -(W * (1 / sd ** 2)[:, None]).T @ W
+    cross = (W * (-2 * r / sd ** 3)[:, None]).T @ Sg
+    H += cross + cross.T
+    H += (Sg * (1 / sd ** 2 - 3 * r * r / sd ** 4)[:, None]).T @ Sg
+    return ll, S, H
+
+
+def adjust_start(y: np.ndarray, d: np.ndarray, kx: int, kz: int) -> np.ndarray:
+    """Starting values: no covariate effects, the controls' mean, the difference of the means
+    and the standard deviations of the two groups (n - 1 divisor; Stata's iteration 0, compat
+    1912)."""
+    yc, yd = y[~d], y[d]
+    return np.concatenate([np.zeros(kx), [yd.mean() - yc.mean(), yd.std(ddof=1)],
+                           np.zeros(kz), [yc.mean(), yc.std(ddof=1)]])
+
+
+def adjust_ml(y: np.ndarray, d: np.ndarray, X: np.ndarray, Z: np.ndarray):
+    """Newton-Raphson fit of the adjustment model. Returns the ml.MLResult."""
+    from . import ml
+
+    def fun(t, todo):
+        ll, S, H = adjust_derivatives(t, y, d, X, Z)
+        v = float(ll.sum())
+        return (v if np.isfinite(v) else -np.inf), S.sum(axis=0), H
+    return ml.maximize(fun, adjust_start(y, d, X.shape[1], Z.shape[1]))
+
+
+def roc_params(theta: np.ndarray, kx: int, kz: int) -> np.ndarray:
+    """The ROC model Phi^-1 ROC(t) = i_cons + x'b + s_cons Phi^-1(t) of the adjustment model:
+    (i_cons, b, s_cons), and the AUC when there are no ROC covariates."""
+    delta, sd_d, _, sd_c = adjust_split(theta, kx, kz)
+    i, b, sl = delta[-1] / sd_d, delta[:-1] / sd_d, sd_c / sd_d
+    out = np.concatenate([[i], b, [sl]])
+    if not kx:
+        out = np.append(out, st.norm.cdf(i / math.sqrt(1 + sl * sl)))
+    return out
+
+
+def roc_jacobian(theta: np.ndarray, kx: int, kz: int) -> np.ndarray:
+    """Derivatives of roc_params by central differences."""
+    base = roc_params(theta, kx, kz)
+    J = np.zeros((len(base), len(theta)))
+    for j in range(len(theta)):
+        h = 1e-6 * max(1.0, abs(theta[j]))
+        e = np.zeros(len(theta))
+        e[j] = h
+        J[:, j] = (roc_params(theta + e, kx, kz) - roc_params(theta - e, kx, kz)) / (2 * h)
+    return J

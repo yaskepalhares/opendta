@@ -106,8 +106,8 @@ def test_tabulate(run):
     run("tabulate grupo, generate(gg) matcell(F)")
     assert run.session.data.has("gg1") and run.session.matrices["F"].data.ravel().tolist() == [10, 10]
     out = run("table grupo, contents(freq mean x)")
-    # single-width columns (the longest label or value; Stata 14)
-    assert " Controle |       10      17.6" in out
+    # one-way tables have cells at least 10 wide (compat 0302)
+    assert " Controle |         10        17.6" in out
 
 
 def test_fisher_rxc_matches_2x2():

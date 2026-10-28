@@ -79,19 +79,19 @@ Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tok
 
 ### 1. Epidemiologia: completar ✅
 
-Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 12 e 26 (casos de comparação 1601 e 1912). O plano original:
 
 `rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
 
 ### 2. Manipulação de dados: opções ✅
 
-Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato proprietário), `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), `import sasxport, describe` e `member()`, os rótulos de valores do `formats.xpf`, `export sasxport` com `rename` e `vallabfile()`, e `list` com `string()` e `display`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 13 e 25 (casos de comparação 1701 e 1911). `import haver` (formato proprietário) é uma limitação conhecida, fora da 1.0. Ainda falta: `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), que fica em *Faltam para a 1.0*. O plano original:
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
 ### 3. Programação ✅
 
-Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 14 e 24 (casos de comparação 1801 e 1910). O carregamento de plugins compilados do Stata é uma limitação conhecida, fora da 1.0; o sistema de classes do Stata fica em *Faltam para a 1.0* para um bloco próprio. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 
@@ -105,11 +105,11 @@ Feito nas fases 16 e 30 (casos 1902 e 1916), exceto as peças listadas em Modelo
 
 ### 6. Dados em painel ✅
 
-Feito na fase 19 (caso 1905), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar`, `xtrc`, `xtivreg` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
+Feito nas fases 19 e 28 (casos 1905 e 1914), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
 
 ### 7. Estatística básica (3–4 h, ~135 mil tokens)
 
-Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `boxcox` com outros modelos, estatísticas de teste do `cusum`…). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+Feito nas fases 17 e 27 (casos 1903 e 1913), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`margins` depois de mais comandos; as estatísticas de teste do `cusum`, cujas fórmulas pedem os Methods and formulas do manual). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
 ### 8. Estatística multivariada ✅
 
@@ -117,7 +117,7 @@ Feito na fase 20 (caso 1906), exceto as peças listadas em Estatística multivar
 
 ### 9. Séries temporais (3–4 h, ~150 mil tokens)
 
-Feito na fase 18 (caso 1904), exceto as peças listadas em Séries temporais em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (restrições em `vec`, `svar`, `arch`, `ucm` e `sspace`, `mgarch vcc`, `predict` depois dos comandos de espaço de estados…). O plano original: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+Feito nas fases 18 e 29 (casos 1904 e 1915), exceto as peças listadas em Séries temporais em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (restrições no `vec`, as restrições de longo prazo do `svar`, restrições no `ucm`, `mgarch vcc`, as estatísticas de estado do `predict` depois dos comandos de espaço de estados…). O plano original: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
 
 ### 10. Modelos (pronto)
 

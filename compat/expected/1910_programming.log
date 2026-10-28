@@ -1,0 +1,426 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1910_programming.log
+  log type:  text
+ opened on:  24 Oct 2026, 21:19:31
+
+. * Programming, second part: makecns with a list of constraints and its displaycns option,
+. * matrix dispCns, matlist with equation names (showcoleq(), roweqonly, coleqonly, keepcoleq,
+. * lines(eq)), matrix rownames/colnames with equation names, and matrix list and matlist of a 1x1
+. * matrix defined by the user. The window dialogs and menus are left out: they need someone at the
+. * screen. Every command whose behavior the manual does not settle runs under capture noisily, so
+. * that one Stata run shows the whole case.
+. clear
+
+. * constraints defined by earlier cases of the same Stata session are dropped
+. constraint drop _all
+
+. set obs 60
+number of observations (_N) was 0, now 60
+
+. gen x1 = mod(_n*7, 11)
+
+. gen x2 = mod(_n*5, 13)
+
+. gen x3 = mod(_n*3, 7)
+
+. gen y = 2 + x1 + x2 - x3 + mod(_n*11, 9)
+
+. 
+. * constraint without the word define, and constraint dir
+. constraint 1 x1 = x2
+
+. constraint define 2 _cons = 1
+
+. constraint 3 2*x1 = 2*x2
+
+. constraint 4 zz = 0
+
+. constraint 5 x3 + x1 = 0.5
+
+. capture noisily constraint dir
+     1:  x1 = x2
+     2:  _cons = 1
+     3:  2*x1 = 2*x2
+     4:  zz = 0
+     5:  x3 + x1 = 0.5
+
+. 
+. * makecns with a list of constraints
+. quietly regress y x1 x2 x3
+
+. capture noisily makecns 1-5, displaycns r
+(note: constraint number 4 caused error r(111))
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  4
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "1 2 3 5"
+               r(cns4) : "x1 + x3 = .5"
+               r(cns3) : "2*x1 - 2*x2 = 0"
+               r(cns2) : "_cons = 1"
+               r(cns1) : "x1 - x2 = 0"
+
+. capture noisily matrix list e(Cns)
+
+e(Cns)[4,5]
+       x1     x2     x3  _cons     _r
+r1      1     -1      0      0      0
+r2      0      0      0      1      1
+r3      2     -2      0      0      0
+r4      1      0      1      0     .5
+
+. capture noisily matrix dispCns
+last estimates not found
+
+. capture noisily matrix dispCns, r
+last estimates not found
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  4
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "1 2 3 5"
+               r(cns4) : "x1 + x3 = .5"
+               r(cns3) : "2*x1 - 2*x2 = 0"
+               r(cns2) : "_cons = 1"
+               r(cns1) : "x1 - x2 = 0"
+
+. capture noisily makecns 1 4, nocnsnotes r
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  1
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "1"
+               r(cns1) : "x1 - x2 = 0"
+
+. capture noisily makecns 3 1
+
+. capture noisily matrix dispCns
+last estimates not found
+
+. capture noisily makecns 99
+
+. capture noisily display _rc
+0
+
+. capture noisily matrix dispCns
+last estimates not found
+
+. capture noisily makecns 2 5, displaycns
+ ( 1)  _cons = 1
+ ( 2)  x1 + x3 = .5
+
+. matrix C = (1, -1, 0, 0, 0)
+
+. capture noisily makecns C, displaycns r
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  1
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "C"
+               r(cns1) : "x1 - x2 = 0"
+
+. 
+. * equations: makecns after ereturn post of a two-equation vector
+. matrix b = (1, 2, 3, 4)
+
+. matrix colnames b = eq1:x1 eq1:_cons eq2:x1 eq2:_cons
+
+. capture noisily matrix list b
+
+b[1,4]
+      eq1:   eq1:   eq2:   eq2:
+       x1  _cons     x1  _cons
+r1      1      2      3      4
+
+. ereturn post b
+
+. constraint 6 [eq1]x1 = [eq2]x1
+
+. constraint 7 [eq2]_cons = 2
+
+. capture noisily makecns 6 7, displaycns r
+
+. capture noisily return list
+
+scalars:
+                  r(k) =  2
+          r(k_autoCns) =  0
+
+macros:
+              r(clist) : "6 7"
+               r(cns2) : "[eq2]_cons = 2"
+               r(cns1) : "[eq1]x1 - [eq2]x1 = 0"
+
+. capture noisily matrix list e(Cns)
+
+e(Cns)[2,5]
+      eq1:   eq1:   eq2:   eq2:  _Cns:
+       x1  _cons     x1  _cons     _r
+r1      1      0     -1      0      0
+r2      0      0      0      1      2
+
+. 
+. * matlist with equation names
+. matrix A = (1,2,3,4 \ 2,5,6,7 \ 3,6,8,9 \ 4,7,9,10)
+
+. matrix rownames A = y:x1 y:_cons z:x1 z:_cons
+
+. matrix colnames A = y:x1 y:_cons z:x1 z:_cons
+
+. capture noisily matrix list A
+
+symmetric A[4,4]
+             y:     y:     z:     z:
+            x1  _cons     x1  _cons
+   y:x1      1
+y:_cons      2      5
+   z:x1      3      6      8
+z:_cons      4      7      9     10
+
+. capture noisily matlist A
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, lines(eq)
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, showcoleq(first) nohalf
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1          2 |         3          4 
+       _cons |         2          5 |         6          7 
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8          9 
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, showcoleq(each)
+
+             |         y          y |         z          z 
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, showcoleq(lcombined) lines(eq)
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, showcoleq(rcombined) border(all)
+
++------------------------------------------------------------+
+|              |                    y |                    z |
+|              |        x1      _cons |        x1      _cons |
+|--------------+----------------------+----------------------|
+|y             |                      |                      |
+|           x1 |         1            |                      |
+|        _cons |         2          5 |                      |
+|--------------+----------------------+----------------------|
+|z             |                      |                      |
+|           x1 |         3          6 |         8            |
+|        _cons |         4          7 |         9         10 |
++------------------------------------------------------------+
+
+. capture noisily matlist A, roweqonly
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+             |         1            |                      
+             |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+             |         3          6 |         8            
+             |         4          7 |         9         10 
+
+. capture noisily matlist A, coleqonly
+
+             | y                    | z                    
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, keepcoleq linesize(40)
+
+             | y                    
+             |        x1      _cons 
+-------------+----------------------
+y            |                      
+          x1 |         1            
+       _cons |         2          5 
+-------------+----------------------
+z            |                      
+          x1 |         3          6 
+       _cons |         4          7 
+
+             | z                    
+             |        x1      _cons 
+-------------+----------------------
+z            |                      
+          x1 |         8            
+       _cons |         9         10 
+
+. capture noisily matlist A, linesize(40)
+
+             | y                    
+             |        x1      _cons 
+-------------+----------------------
+y            |                      
+          x1 |         1            
+       _cons |         2          5 
+-------------+----------------------
+z            |                      
+          x1 |         3          6 
+       _cons |         4          7 
+
+             | z                    
+             |        x1      _cons 
+-------------+----------------------
+z            |                      
+          x1 |         8            
+       _cons |         9         10 
+
+. capture noisily matlist A, colorcoleq(res) lines(eq)
+
+             | y                    | z                    
+             |        x1      _cons |        x1      _cons 
+-------------+----------------------+----------------------
+y            |                      |                      
+          x1 |         1            |                      
+       _cons |         2          5 |                      
+-------------+----------------------+----------------------
+z            |                      |                      
+          x1 |         3          6 |         8            
+       _cons |         4          7 |         9         10 
+
+. capture noisily matlist A, showcoleq(sideways)
+option sideways not allowed
+
+. matrix B = (1, 2, 3 \ 4, 5, 6)
+
+. matrix colnames B = a:u a:v b:w
+
+. capture noisily matlist B
+
+             | a                    | b         
+             |         u          v |         w 
+-------------+----------------------+-----------
+          r1 |         1          2 |         3 
+          r2 |         4          5 |         6 
+
+. capture noisily matlist B, lines(eq) showcoleq(each)
+
+             |         a          a |         b 
+             |         u          v |         w 
+-------------+----------------------+-----------
+          r1 |         1          2 |         3 
+          r2 |         4          5 |         6 
+
+. matrix colnames B = u v w
+
+. capture noisily matrix list B
+
+B[2,3]
+     a:  a:  b:
+     u   v   w
+r1   1   2   3
+r2   4   5   6
+
+. 
+. * a 1x1 matrix defined by the user
+. matrix S = (7)
+
+. capture noisily matrix list S
+
+symmetric S[1,1]
+    c1
+r1   7
+
+. capture noisily matlist S
+
+             |        c1 
+-------------+-----------
+          r1 |         7 
+
+. matrix S2 = (7, 1 \ 1, 3)
+
+. capture noisily matrix list S2
+
+symmetric S2[2,2]
+    c1  c2
+r1   7
+r2   1   3
+
+. capture noisily matlist S2
+
+             |        c1         c2 
+-------------+----------------------
+          r1 |         7            
+          r2 |         1          3 
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1910_programming.log
+  log type:  text
+ closed on:  24 Oct 2026, 21:19:31
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

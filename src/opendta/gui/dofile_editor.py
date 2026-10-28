@@ -354,6 +354,7 @@ class DoFileEditor(QMainWindow):
         self.resize(860, 640)
         self.untitled = 0
         self.tmpfiles: list[str] = []
+        self.tmp_sources: dict[str, str] = {}     # temporary file -> what it holds, for Review
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -659,6 +660,13 @@ class DoFileEditor(QMainWindow):
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(code if code.endswith("\n") else code + "\n")
         self.tmpfiles.append(path)
+        name = ed.path.name if ed.path else ed.property("untitled")
+        if line:
+            self.tmp_sources[path] = f"{tr('line')}: {name}"
+        elif ed.textCursor().hasSelection():
+            self.tmp_sources[path] = f"{tr('selection')}: {name}"
+        else:
+            self.tmp_sources[path] = name
         self.run(f'{verb} "{path}"')
         self.ran.emit()
 

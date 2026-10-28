@@ -597,7 +597,7 @@ def list_matrix(s: "Session", title: str, mat: Matrix, fmt: str = "%10.0g",
     # all columns as wide as the largest value or name (observed in Stata 14,
     # compat/expected/0203_matrix.log)
     w_all = max([max(len(a), len(b)) for a, b in heads] if names else [0])
-    w_all = max([w_all] + [len(q) - 1 for q in ceqs])
+    w_all = max([w_all] + [len(q) for q in ceqs])          # "a:" counts with its colon (compat 1910)
     w_all = max([w_all] + [len(c) for c in shown])
     widths = [w_all] * mat.cols
     if header:
@@ -685,10 +685,17 @@ def _names_cmd(s: "Session", which: str, text: str) -> None:
         mat.roweq = names
     elif which == "coleq":
         mat.coleq = names
-    elif which.startswith("row"):
-        mat.rownames = names
     else:
-        mat.colnames = names
+        # "eq:name" sets the equation as well (VERIFY: a name without a colon keeps the equation)
+        eqs = list(mat.roweq if which.startswith("row") else mat.coleq) or ["_"] * n
+        for k, nm in enumerate(names):
+            if ":" in nm:
+                eqs[k], names[k] = nm.split(":", 1)
+                names[k] = names[k] or "_cons"                                  # VERIFY
+        if which.startswith("row"):
+            mat.rownames, mat.roweq = names, eqs
+        else:
+            mat.colnames, mat.coleq = names, eqs
 
 
 @command("matrix", "mat")
@@ -742,6 +749,10 @@ def cmd_matrix(s: "Session", args: str) -> None:
         return
     if sub in ("rownames", "colnames", "roweq", "coleq", "rown", "coln"):
         _names_cmd(s, {"rown": "rownames", "coln": "colnames"}.get(sub, sub), rest)
+        return
+    if re.match(r"dispCns\b", t):
+        from .estprog import dispcns
+        dispcns(s, t[len("dispCns"):])
         return
     # matrix A = ...
     _define(s, t)
