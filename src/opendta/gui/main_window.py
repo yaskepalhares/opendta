@@ -820,6 +820,7 @@ class MainWindow(QMainWindow):
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
+        self.results.set_solid_rules(self.prefs.solid_table_lines)
         if self.browser is not None:
             self.browser.table.setFont(font)
         if self.dofile_editor is not None:

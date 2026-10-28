@@ -230,6 +230,11 @@ PT: dict[str, str] = {
     "Open a dialog to build the command": "Abre uma caixa de diálogo para montar o comando",
     # Preferences
     "Interface appearance": "Aparência da interface", "Light (default)": "Claro (padrão)", "Dark": "Escuro",
+    "Tables": "Tabelas", "Solid table lines": "Linhas contínuas nas tabelas",
+    "Draws the lines of the tables in the Results window as continuous lines. Off: dashes, as in Stata "
+    "and in the logs.":
+        "Desenha as linhas das tabelas na janela Results de forma contínua. Desligado: tracejadas, como "
+        "no Stata e nos logs.",
     "Application icon": "Ícone do aplicativo", "Font of the Results, Command and Review windows":
         "Fonte das janelas Results, Command e Review", "Family": "Família",
     "Default on this system": "Padrão neste sistema", "Language": "Idioma",

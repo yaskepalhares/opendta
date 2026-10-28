@@ -61,6 +61,15 @@ class Preferences:
         from .theme import system_theme
         return system_theme() if self.theme == "system" else self.theme
 
+    # table lines in the Results window: continuous (default) or the text's dashes, as in Stata
+    @property
+    def solid_table_lines(self) -> bool:
+        return str(self._s.value("appearance/solid_table_lines", "on")) != "off"
+
+    @solid_table_lines.setter
+    def solid_table_lines(self, on: bool) -> None:
+        self._s.setValue("appearance/solid_table_lines", "on" if on else "off")
+
     # font of the Results, Command and Review windows
     @property
     def hints(self) -> bool:
