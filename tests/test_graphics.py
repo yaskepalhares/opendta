@@ -226,3 +226,17 @@ def test_kdensity_bandwidth_fweight_equals_replicated_data():
     h_fw = D.default_bandwidth(x, w, True)
     h_rep = D.default_bandwidth(np.repeat(x, w.astype(int)), None)
     assert h_fw == pytest.approx(h_rep, rel=1e-12)
+
+
+def test_box_value_axis_follows_the_data_but_bars_start_at_zero(run):
+    # Stata: the y axis of graph box fits the data (here about 24-32); bars start at zero
+    from opendta.graphics.render import figure
+    run("clear\nset seed 7\nset obs 200\ngen g = mod(_n, 2)\ngen y = 25 + 3*runiform()")
+    run("graph box y, over(g)")
+    lo, hi = figure(store(run.session).get()).axes[0].get_ylim()
+    assert 24 < lo < 25.1 and 28 < hi < 29
+    run("graph bar (mean) y, over(g)")
+    assert figure(store(run.session).get()).axes[0].get_ylim()[0] == 0
+    run("graph hbox y, over(g)")
+    lo, hi = figure(store(run.session).get()).axes[0].get_xlim()
+    assert lo > 24

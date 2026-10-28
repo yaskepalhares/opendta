@@ -352,16 +352,18 @@ def _set_cats(ax, ly: Layer, pos: np.ndarray, horizontal: bool, invert: bool = T
     _outer_labels(ax, ly, pos, horizontal)
 
 
-def _value_axis(ax, lo: float, hi: float, horizontal: bool) -> None:
-    """Value axis of bars and boxes: starts at zero, about four ticks, reaches the next tick
-    when the data end close to it, and leaves room for the labels above the last bar."""
+def _value_axis(ax, lo: float, hi: float, horizontal: bool, zero: bool = True) -> None:
+    """Value axis of bars and boxes: about four ticks, reaches the next tick when the data end
+    close to it, and leaves room for the labels above the last bar. Bars start at zero; boxes
+    (zero=False) follow the data, as in Stata."""
     if not (np.isfinite(lo) and np.isfinite(hi)):
         return
-    lo, hi = min(lo, 0.0), max(hi, 0.0)
+    if zero:
+        lo, hi = min(lo, 0.0), max(hi, 0.0)
     if hi == lo:
         return
     axis = ax.xaxis if horizontal else ax.yaxis
-    loc = _mticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10])
+    loc = _mticker.MaxNLocator(nbins=4 if zero else 5, steps=[1, 2, 5, 10])
     axis.set_major_locator(loc)
     ticks = loc.tick_values(lo, hi)
     step = ticks[1] - ticks[0]
@@ -375,8 +377,8 @@ def _value_axis(ax, lo: float, hi: float, horizontal: bool) -> None:
 
     top, bottom = reach(hi, True), reach(lo, False)
     span = top - bottom
-    top = top + 0.045 * span if top > 0 else top
-    bottom = bottom - 0.045 * span if bottom < 0 else bottom
+    top = top + 0.045 * span if (top > 0 or not zero) else top
+    bottom = bottom - 0.045 * span if (bottom < 0 or not zero) else bottom
     (ax.set_xlim if horizontal else ax.set_ylim)(bottom, top)
 
 
@@ -487,7 +489,7 @@ def _draw_boxes(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
     cats = ly.extra.get("cats", [])
     if len(cats) == 1 and cats[0] == "":
         (ax.set_yticks if horizontal else ax.set_xticks)([])
-    _value_axis(ax, low, top, horizontal)
+    _value_axis(ax, low, top, horizontal, zero=False)
     return handles if len(series) > 1 else []
 
 
