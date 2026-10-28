@@ -782,7 +782,8 @@ def test_toolbar_buttons_show_their_name_under_the_icon(app):
             i18n.set_language(lang)
             w.retranslate()
             app.processEvents()
-            assert tb.sizeHint().width() <= w.width()
+            widths = {n: tb.widgetForAction(a).sizeHint().width() for n, a in w.toolbar_actions.items()}
+            assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width(), widths)
             assert all(tb.widgetForAction(a).isVisible() for a in w.toolbar_actions.values())
         assert w.toolbar_actions["dofile"].text() == "Editor de do-files"
         assert w.toolbar_actions["databrowser"].text() == "Navegador de dados"
