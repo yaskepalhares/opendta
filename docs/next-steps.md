@@ -113,7 +113,7 @@ Done in phase 17 (compat case 1903), except the pieces listed under Base statist
 
 ### 8. Multivariate statistics ✅
 
-Done in phases 20 and 31 (compat cases 1906 and 1917), except the pieces listed under Multivariate statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (supplementary points in `ca` and `mca`, `mds` with `method(nonmetric)`, `procrustes` with the oblique transformation, `manova` with error terms, and some `estat` subcommands). The original plan: `pca`, `factor`, `rotate`, `alpha`, `cluster` (linkages, dendrogram, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, each with its `estat` subcommands. New `core/multivariate.py`.
+Done in phases 20 and 31 (compat cases 1906 and 1917), except the pieces listed under Multivariate statistics in [Missing for 1.0](../ROADMAP.md#missing-for-10) (supplementary points in `ca` and `mca`, `mds` with `method(nonmetric)`, `manova` with error terms, and some `estat` subcommands). The original plan: `pca`, `factor`, `rotate`, `alpha`, `cluster` (linkages, dendrogram, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, each with its `estat` subcommands. New `core/multivariate.py`.
 
 ### 9. Time series (3–4 h, ~150k tokens)
 

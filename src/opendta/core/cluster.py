@@ -167,16 +167,44 @@ def cut_height(merges: list[tuple[int, int, float]], n: int, height: float) -> n
 
 
 def leaf_order(merges: list[tuple[int, int, float]], n: int) -> list[int]:
-    """Left-to-right order of the leaves of the dendrogram."""
+    """Left-to-right order of the leaves of the dendrogram: at each merge, the cluster holding
+    the smallest leaf goes first (compat 1917)."""
     kids = {n + r: (a, b) for r, (a, b, _) in enumerate(merges)}
+    low = {i: i for i in range(n)}
+    for r, (a, b, _) in enumerate(merges):
+        low[n + r] = min(low[a], low[b])
 
     def walk(c):
         if c < n:
             return [c]
-        a, b = kids[c]
+        a, b = sorted(kids[c], key=low.__getitem__)
         return walk(a) + walk(b)
 
     return walk(n + len(merges) - 1) if merges else [0]
+
+
+def gap_heights(merges: list[tuple[int, int, float]], n: int, heights: list[float] | None = None) -> np.ndarray:
+    """Height of the merge that joins each pair of neighboring leaves of leaf_order (n - 1
+    values); `heights` replaces the merge heights (pseudo-heights)."""
+    order = leaf_order(merges, n)
+    pos = {lf: i for i, lf in enumerate(order)}
+    span = {i: (pos[i], pos[i]) for i in range(n)}
+    out = np.full(max(n - 1, 0), np.nan)
+    for r, (a, b, h) in enumerate(merges):
+        lo, hi = sorted([span[a], span[b]])
+        out[lo[1]] = h if heights is None else heights[r]
+        span[n + r] = (lo[0], hi[1])
+    return out
+
+
+def has_ties(merges: list[tuple[int, int, float]], n: int, groups: int) -> bool:
+    """True when the merge that would bring the tree below `groups` clusters has the same height
+    as the last merge kept, so that the `groups`-cluster solution is not unique."""
+    r = n - groups
+    if r <= 0 or r >= len(merges):
+        return False
+    h0, h1 = merges[r - 1][2], merges[r][2]
+    return abs(h1 - h0) <= 1e-12 * max(1.0, abs(h0), abs(h1))
 
 
 def kmeans(X: np.ndarray, centers: np.ndarray, measure: str = "L2", median: bool = False,

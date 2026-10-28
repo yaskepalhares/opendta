@@ -30,7 +30,7 @@
 {cmd:ca} analyzes a two-way table by singular value decomposition of the standardized residuals. {cmd:mca} analyzes the indicator matrix of several variables, with Benzecri-adjusted inertias by default (VERIFY). {cmd:mds} and {cmd:mdsmat} scale a dissimilarity matrix: classical scaling by the eigenvalues of the double-centered squared dissimilarities, modern scaling by stress majorization from the classical solution. {cmd:camat} analyzes a matrix of counts. {cmd:mdslong} scales dissimilarities stored one pair of objects per observation. {cmd:procrustes} finds the orthogonal rotation, dilation and translation (or, with {cmd:transform(unrestricted)}, the least-squares linear transformation) that bring the source variables closest to the target. {cmd:biplot} draws the observations and the variables on the first two singular dimensions of the centered data.
 
 {pstd}
-Not implemented yet: supplementary rows, columns and variables, {cmd:mca} with {cmd:method(indicator)} and {cmd:method(johnson)}, {cmd:mds} with {cmd:method(nonmetric)} and {cmd:loss()}, {cmd:mdslong} with {cmd:s2d()}, {cmd:procrustes} with {cmd:transform(oblique)}.
+Not implemented yet: supplementary rows, columns and variables, {cmd:mca} with {cmd:method(indicator)} and {cmd:method(johnson)}, {cmd:mds} with {cmd:method(nonmetric)} and {cmd:loss()}, {cmd:mdslong} with {cmd:s2d()}.
 
 {title:Postestimation}
 

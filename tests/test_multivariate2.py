@@ -30,14 +30,16 @@ def test_clustermat_matches_cluster_on_the_same_distances():
     s, _ = _run("clear\n" + D5 + "clustermat averagelinkage D, labelvar(nm)\ncluster generate g = groups(2)\n")
     assert list(s.data.get("nm").raw) == ["a", "b", "c", "d", "e"]
     assert list(_col(s, "g")) == [1, 1, 2, 2, 2]
+    # by dendrogram position, as in the Stata log of compat 1917: a b c d e, heights 1, 35/6, 1.5, 2.75
+    assert list(_col(s, "_clus_1_ord")) == [1, 2, 3, 4, 5]
     h = _col(s, "_clus_1_hgt")
-    assert np.isclose(sorted(h[:4])[0], 1.0)
+    assert np.allclose(h[:4], [1.0, 35 / 6, 1.5, 2.75])
     # points on a line with these distances give the same tree with cluster
     s2, _ = _run("clear\ninput x\n0\n1\n5\n6.5\n8\nend\ncluster averagelinkage x, measure(L1)\n"
                  "cluster generate g = groups(2)\n")
     assert list(_col(s2, "g")) == [1, 1, 2, 2, 2]
     s3 = Session()
-    assert s3.run_text("clear\nset obs 3\ngen k = 1\n" + D5 + "clustermat singlelinkage D\n") == 4
+    assert s3.run_text("clear\nset obs 3\ngen k = 1\n" + D5 + "clustermat singlelinkage D\n") == 198
     s4, _ = _run("clear\nset obs 5\ngen k = _n\n" + D5 + "clustermat completelinkage D, add\n")
     assert s4.data.nobs == 5 and s4.data.has("_clus_1_id")
 
@@ -140,9 +142,9 @@ input b1 b2 b3 b4
 end
 cluster singlelinkage b1-b4, measure(Jaccard)
 """)
-    # rows 3 and 4: a = 2, b = 1, c = 0 -> Jaccard 2/3, dissimilarity 1/3 (the first merge)
+    # rows 3 and 4: a = 2, b = 1, c = 0 -> Jaccard 2/3, the first merge; heights are similarities
     h = _col(s, "_clus_1_hgt")
-    assert np.isclose(np.nanmin(np.where(h < 1e300, h, np.nan)), 1 / 3)
+    assert np.isclose(np.nanmax(np.where(h < 1e300, h, np.nan)), 2 / 3)
     from opendta.core.cluster import binary_similarity
     X = np.array([[1, 1, 0, 0], [0, 1, 1, 1]], dtype=float)
     a, b, c, d = 1, 1, 2, 0

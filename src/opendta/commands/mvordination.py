@@ -219,8 +219,13 @@ def _ca_run(s: "Session", N: np.ndarray, labels, names: list[str], o: dict, cmdl
     ctx = {"cmd": "ca", "fit": fit, "f": f, "norm": norm, "vars": names, "labels": [[str(x) for x in labels[0]], [str(x) for x in labels[1]]],
            "coords": [Rc[:, :f], Cc[:, :f]], "coords_all": [Rc, Cc], "share": fit["inertia"] / total}
     scalars = [("N", n), ("inertia", total), ("f", f), ("pinertia", expl / 100.0), ("X2", chi2), ("X2_df", df), ("X2_p", chi2_p(chi2, df))]
-    macros = [("cmdline", cmdline), ("ca_data", data), ("varlist", " ".join(names)), ("cmd", "ca"),
-              ("marginsnotok", "_ALL"), ("estat_cmd", "ca_estat"), ("predict", "ca_p"), ("title", "correspondence analysis"),
+    if data == "matrix":
+        # camat: no varlist, no coding matrices and no e(sample) (compat 1917)
+        macros = [("cmdline", cmdline), ("cmd", "ca"), ("marginsnotok", "_ALL"), ("ca_data", data)]
+    else:
+        macros = [("cmdline", cmdline), ("ca_data", data), ("varlist", " ".join(names)), ("cmd", "ca"),
+                  ("marginsnotok", "_ALL")]
+    macros += [("estat_cmd", "ca_estat"), ("predict", "ca_p"), ("title", "correspondence analysis"),
               ("Cname", names[1]), ("Rname", names[0]), ("norm", norm), ("sv_unique", "1"), ("properties", "nob noV eigen")]
     dn = [f"dim{j + 1}" for j in range(nd)]
     gs = lambda stt, Cx: np.column_stack([stt["mass"], stt["quality"], stt["inertia"]]
@@ -237,8 +242,12 @@ def _ca_run(s: "Session", N: np.ndarray, labels, names: list[str], o: dict, cmdl
             ("c", matrix(fit["c"].reshape(-1, 1), [str(x) for x in labels[1]], ["c"])),
             ("r", matrix(fit["r"].reshape(-1, 1), [str(x) for x in labels[0]], ["r"])),
             ("P", matrix(P, [str(x) for x in labels[0]], [str(x) for x in labels[1]]))]       # VERIFY: contents
+    if data == "matrix":
+        mats = mats[2:]
     post_e(s, "ca", scalars, macros, mats, mask, int(round(n)),
            estat={"table": (3, _estat_table), "coordinates": (5, _estat_coordinates)}, extra={"ord": ctx})
+    if data == "matrix":
+        s.data.esample = None
 
 
 # ---------------------------------------------------------------------------
@@ -372,8 +381,18 @@ def _mds_run(s: "Session", D: np.ndarray, ids: list[str], o: dict, desc: str, cm
               ("duplicates", "0")]
     if cmd == "mds":
         macros += [("idtype", meta.get("idtype", "int")), ("id", meta.get("idname", "")), ("varlist", meta.get("varlist", ""))]
+    elif cmd == "mdslong":
+        # mdslong: the object labels and the id variables, no dname (compat 1917; idtype of
+        # string ids VERIFY)
+        macros = [("cmdline", f"{cmd} " + cmdline.strip()), ("cmd", cmd), ("marginsnotok", "_ALL"),
+                  ("estat_cmd", "mds_estat"), ("predict", "mds_p"), ("duplicates", "0"),
+                  ("idtype", meta.get("idtype", "int")), ("mxlen", str(max(len(x) for x in ids))),
+                  ("labels", " ".join(f'`"{x}"\'' for x in ids)), ("dtype", meta.get("dtype", "dissimilarity")),
+                  ("id", meta.get("idname", "")), ("depvar", meta.get("dname", ""))]
     macros += [("method", method), ("unique", "1"), ("norm", "principal"),
                ("properties", "nob noV eigen" if method == "classical" else "nob noV")]
+    if cmd == "mdslong":
+        mats += [("idcoding", matrix(np.arange(1.0, n + 1).reshape(-1, 1), ids, ["idcoding"]))]          # VERIFY: contents
     if cmd == "mds":
         mats += [("idcoding", matrix(np.arange(1.0, n + 1).reshape(-1, 1), ids, ["idcoding"])),
                  ("coding", matrix(np.tile([0.0, 1.0], (len(meta.get("names", [])), 1)), meta.get("names", []), ["shift", "scale"]))]
@@ -452,11 +471,10 @@ def _mds_predict(s, est):
 # ---------------------------------------------------------------------------
 
 def _g7(x: float) -> str:
-    """Seven significant digits, no leading zero: how Stata's matrix tables show a number."""
+    """A number of the matrix tables of procrustes, in %9.0g."""
     if not np.isfinite(x):
         return "."
-    r = f"{x:.7g}"
-    return r.replace("0.", ".", 1) if r.startswith("0.") else r.replace("-0.", "-.", 1)
+    return gnum(x, "%9.0g")
 
 
 def _proc_matrix(out, title: str, corner: str, rows: list[str], cols: list[str], M_) -> None:
@@ -478,9 +496,7 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     o = match_options(p.options, {"transform": 5, "norho": 3, "noscale": 3}) if p.options.strip() else {}
     tr = str(o.get("transform", "orthogonal")).strip().lower()
     tr = next((f_ for f_, m_ in (("orthogonal", 1), ("oblique", 2), ("unrestricted", 1)) if len(tr) >= m_ and f_.startswith(tr)), tr)
-    if tr == "oblique":
-        raise StataError(198, "transform(oblique) is not available yet in OpenDTA")      # OpenDTA
-    if tr != "orthogonal" and tr != "unrestricted":
+    if tr not in ("orthogonal", "unrestricted", "oblique") and tr != "unrestricted":
         raise StataError(198, f"transform({tr}) invalid")                                 # VERIFY
     if tr == "orthogonal" and len(tgt) != len(src):
         raise StataError(198, "the two variable lists must have the same number of variables")   # VERIFY
@@ -493,7 +509,10 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     kx = Xs.shape[1]
     if tr == "unrestricted":
         r = O.procrustes_unrestricted(Yt, Xs)
-        df_m = kx * k + k                                                   # VERIFY
+        df_m = kx * k + k
+    elif tr == "oblique":
+        r = O.procrustes_oblique(Yt, Xs)
+        df_m = kx * k + (0 if o.get("norho") else 1)                        # VERIFY norho
     else:
         r = O.procrustes_orthogonal(Yt, Xs, scale=not o.get("norho"))      # VERIFY: noscale is accepted and ignored
         df_m = k * k - k * (k + 1) // 2 + k + (0 if o.get("norho") else 1)
@@ -510,15 +529,13 @@ def cmd_procrustes(s: "Session", args: str) -> None:
     out.write(f"{f'Procrustes analysis ({tr})':<43}{'Number of observations':<23}={n:>11}\n", "text")
     row("Model df (df_m)", df_m)
     row("Residual df (df_r)", df_r)
-    row("SS(target)", f"{r['ss']:.4f}")
-    row("RSS(target)", f"{r['rss']:.4f}")
-    row("RMSE = root(RSS/df_r)", f"{rmse:.7g}")
+    row("SS(target)", gnum(r["ss"], "%9.0g"))
+    row("RSS(target)", gnum(r["rss"], "%9.0g"))
+    row("RMSE = root(RSS/df_r)", gnum(rmse, "%9.0g"))
     row("Procrustes = RSS/SS", f"{P:.4f}")
     _proc_matrix(out, "Translation c", "", ["_cons"], tgt, r["trans"].reshape(1, -1))
-    if tr == "unrestricted":
-        _proc_matrix(out, "Transformation matrix A (unrestricted)", "", src, tgt, r["T"])          # VERIFY
-    else:
-        _proc_matrix(out, "Rotation & reflection matrix A (orthogonal)", "", src, tgt, r["T"])
+    _proc_matrix(out, f"Rotation & reflection matrix A ({tr})", "", src, tgt, r["T"])
+    if tr != "unrestricted":
         out.write(f"Dilation factor\n\n{'rho =':>18}{r['c']:>10.4f}\n\n", "text")
     ddf = df_r / k if k else float("nan")
     ys = np.vstack([r["ss_i"], r["rss_i"], np.sqrt(r["rss_i"] / ddf), r["rss_i"] / r["ss_i"], r["corr_i"]])
@@ -838,7 +855,8 @@ def cmd_mdslong(s: "Session", args: str) -> None:
     if str(o.get("s2d", "")).strip():
         raise StataError(198, "option s2d() is not available yet in OpenDTA")             # OpenDTA
     desc = f"dissimilarity variable: {names[0]} in long format"                            # VERIFY
-    _mds_run(s, D, keys, o, desc, args, "mdslong", mask, {"dname": names[0]})
+    _mds_run(s, D, keys, o, desc, args, "mdslong", mask,
+             {"dname": names[0], "idname": " ".join(idv), "idtype": "int" if numeric else "str"})
 
 
 @command("procoverlay", "procoverlay")

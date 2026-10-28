@@ -113,7 +113,7 @@ Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica 
 
 ### 8. Estatística multivariada ✅
 
-Feito nas fases 20 e 31 (casos 1906 e 1917), exceto as peças listadas em Estatística multivariada em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (pontos suplementares em `ca` e `mca`, `mds` com `method(nonmetric)`, `procrustes` com a transformação oblíqua, `manova` com termos de erro, e alguns subcomandos de `estat`). O plano original: `pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
+Feito nas fases 20 e 31 (casos 1906 e 1917), exceto as peças listadas em Estatística multivariada em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (pontos suplementares em `ca` e `mca`, `mds` com `method(nonmetric)`, `manova` com termos de erro, e alguns subcomandos de `estat`). O plano original: `pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
 
 ### 9. Séries temporais (3–4 h, ~150 mil tokens)
 
