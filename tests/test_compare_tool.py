@@ -44,9 +44,10 @@ def test_parse_limits(tmp_path, monkeypatch):
     assert not known["y"].limited()
 
 
-def test_brief_diff_leaves_out_iterations_and_is_cut(tmp_path, capsys):
+def test_brief_diff_leaves_out_iterations_and_is_cut(tmp_path, capsys, monkeypatch):
     """--brief --show-diff: only the cases that differ, without iteration lines, at most
-    --max-diff lines of diff."""
+    --max-diff lines of diff (the CI annotation, printed only under GitHub Actions, is left out)."""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     exp = tmp_path / "expected"
     exp.mkdir()
     out = C.run_opendta(C.COMPAT / "do" / "1910_programming.do", C.COMPAT / "out", "")
