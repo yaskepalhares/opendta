@@ -106,7 +106,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `logit`, `logistic`, `probit`, `ologit`, `oprobit`, `mlogit`, `poisson`, `nbreg`, `glm`, `tobit`, `ivregress`, `xtreg`, `areg`
 - [x] Erros-padrão robustos, por cluster e bootstrap (`vce(bootstrap)` e prefixo `bootstrap`); motor `ml` (máxima verossimilhança)
 - [x] `xtlogit` e `xtpoisson` (fe e re), `qreg`, `lrtest`, `hausman`, `xtsum`, `xtdescribe`
-- [x] `moptimize()` do Mata (avaliadores lf, d0–d2, lf0–lf2 e gf0–gf2; variância oim, opg e robusta; o caso `0408` aguarda a rodada no Stata)
+- [x] `moptimize()` do Mata (avaliadores lf, d0–d2, lf0–lf2 e gf0–gf2; variância oim, opg e robusta; o caso `0408` conferido com o log do Stata 14)
 - Conferência com os logs do Stata: casos `0501`–`0513` conferidos
 
 ## Fase 6: amostras complexas ✅
@@ -115,7 +115,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Prefixo `svy:` com `mean`, `proportion`, `ratio`, `total`, `tabulate`, `regress`, `logit`, `logistic`, `poisson`; `subpop()` e `over()`
 - [x] Linearização de Taylor; correção de Rao–Scott no `svy: tabulate` de duas vias
 - [x] Vários estágios, BRR, jackknife, bootstrap e SDR; `estat effects`; `svy:` também com `ologit`, `oprobit`, `mlogit`, `nbreg`, `glm` e `tobit`
-- Conferência com os logs do Stata: casos `0601` e `0602` conferidos; `0603` aguarda a próxima rodada
+- Conferência com os logs do Stata: casos `0601`, `0602` e `0603` conferidos
 
 ## Fase 7: gráficos ✅
 
@@ -133,13 +133,13 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Testes não paramétricos e de normalidade (`ranksum`, `signrank`, `kwallis`, `spearman`, `swilk`, `sktest`, `sdtest`) e comandos imediatos (`cii`, `ttesti`, `prtesti`, `tabi`)
 - [x] `oneway`, `anova`, `tabulate, summarize()`, `estat` (`ic`, `vce`, `summarize`, `hettest`, `ovtest`, `classification`, `gof`, `bootstrap`)
 - [x] `codebook`, `misstable`, `putexcel`
-- [x] Classes do Mata (`class`, `extends`, métodos virtuais, `super`, `this`, membros estáticos, construtores; o caso `0409` aguarda a rodada no Stata)
-- [x] Análise de sobrevivência: `stset` (com `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (empates de Breslow e Efron, estratos, robusto), `estat phtest`, `streg` (exponencial, Weibull, Gompertz, lognormal, loglogística) e as opções de `predict`; os casos `0901`–`0902` aguardam a rodada no Stata
-- [x] Modelos multinível: `mixed` (ML e REML, níveis aninhados, inclinações aleatórias, covariâncias identity/independent/exchangeable/unstructured; `estat icc`, `group`, `recovariance`; `predict`) e `melogit`, `meprobit`, `mepoisson` (quadratura de Gauss-Hermite adaptativa); os casos `1001`–`1002` aguardam a rodada no Stata
-- [x] Séries temporais: `arima` (ML exata com filtro de Kalman, variância OPG), `var`, `varsoc`, `vargranger`, `dfuller` (valores críticos de Fuller, p-valores de MacKinnon), `corrgram`, `newey`; o caso `1101` aguarda a rodada no Stata
+- [x] Classes do Mata (`class`, `extends`, métodos virtuais, `super`, `this`, membros estáticos, construtores; o caso `0409` conferido com o log do Stata 14)
+- [x] Análise de sobrevivência: `stset` (com `id()`, `time0()`, `origin()`, `enter()`, `exit()`, `scale()`), `st`, `streset`, `stdescribe`, `stsum`, `sts list`/`generate`/`test`/`graph` (Kaplan-Meier, Nelson-Aalen, log-rank, Wilcoxon, Tarone-Ware, Peto-Peto), `stcox` (empates de Breslow e Efron, estratos, robusto), `estat phtest`, `streg` (exponencial, Weibull, Gompertz, lognormal, loglogística) e as opções de `predict`; os casos `0901`–`0902` conferidos com o log do Stata 14
+- [x] Modelos multinível: `mixed` (ML e REML, níveis aninhados, inclinações aleatórias, covariâncias identity/independent/exchangeable/unstructured; `estat icc`, `group`, `recovariance`; `predict`) e `melogit`, `meprobit`, `mepoisson` (quadratura de Gauss-Hermite adaptativa); os casos `1001`–`1002` conferidos com o log do Stata 14
+- [x] Séries temporais: `arima` (ML exata com filtro de Kalman, variância OPG), `var`, `varsoc`, `vargranger`, `dfuller` (valores críticos de Fuller, p-valores de MacKinnon), `corrgram`, `newey`; o caso `1101` conferido com o log do Stata 14
 - [x] Imputação múltipla: `mi set` (mlong, flong), `register`, `describe`, `impute` (`regress`, `pmm`, `logit`, `ologit`, `mlogit`, `poisson`, `chained`), `estimate` (regras de Rubin, gl de Barnard-Rubin), `passive`, `xeq`, `extract`, `misstable`; caso `1201` (os valores imputados diferem dos do Stata: diferença conhecida)
-- [x] `sem` (modelos de caminhos, AFC e variáveis latentes por ML, solução padronizada, `estat gof`, `predict`), `power` (`onemean`, `twomeans`, `pairedmeans`, `oneproportion`, `twoproportions`, `onecorrelation`, `twocorrelations`) e `irf` (`create`, `table`, `graph`, `describe`, `rename`, `drop` depois do `var`); os casos `1301`–`1303` aguardam a rodada no Stata
-- [x] Comandos completados: `anova` (somas de quadrados sequenciais, termos aninhados, termos de erro, medidas repetidas), `xtgee` e o estimador `pa` de `xtreg`/`xtlogit`/`xtpoisson`, `xtreg, be` e `mle`, `tabulate, summarize()` de duas entradas, `misstable tree`/`nested`, `ci`/`cii variances`, `prtest`/`prtesti` de duas amostras, `reshape i/j/xij/error`, a sintaxe antiga do `merge`, `sort ... in`, `list, sepby()`, `display _request()`, `export excel` para `.xls`, `set rng kiss32`; `replace` sequencial com operadores de séries temporais (`replace y = 2*L.y`); o caso `0805` aguarda a rodada no Stata
+- [x] `sem` (modelos de caminhos, AFC e variáveis latentes por ML, solução padronizada, `estat gof`, `predict`), `power` (`onemean`, `twomeans`, `pairedmeans`, `oneproportion`, `twoproportions`, `onecorrelation`, `twocorrelations`) e `irf` (`create`, `table`, `graph`, `describe`, `rename`, `drop` depois do `var`); os casos `1301`–`1303` conferidos com o log do Stata 14
+- [x] Comandos completados: `anova` (somas de quadrados sequenciais, termos aninhados, termos de erro, medidas repetidas), `xtgee` e o estimador `pa` de `xtreg`/`xtlogit`/`xtpoisson`, `xtreg, be` e `mle`, `tabulate, summarize()` de duas entradas, `misstable tree`/`nested`, `ci`/`cii variances`, `prtest`/`prtesti` de duas amostras, `reshape i/j/xij/error`, a sintaxe antiga do `merge`, `sort ... in`, `list, sepby()`, `display _request()`, `export excel` para `.xls`, `set rng kiss32`; `replace` sequencial com operadores de séries temporais (`replace y = 2*L.y`); o caso `0805` conferido com o log do Stata 14
 - [x] Diálogos dos menus (38 comandos de Statistics e Graphics), com prévia do comando e OK, Submit e Copy
 - [x] Páginas de ajuda para todos os comandos
 - [x] Pacote para macOS (`tools/build_macos.sh`: `OpenDTA.app` e `.dmg`; "Abrir com" para `.do` e `.dta`)
@@ -158,7 +158,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `symmetry` (Bowker, Stuart-Maxwell, Bickenboller, significância exata), `dstdize` (padronização direta) e `istdize` (padronização indireta, SMR com limites exatos)
 - [x] Concordância entre avaliadores: `kap` (kappa de Cohen, kappa ponderado; kappa de Fleiss para vários avaliadores) e `kappa` (formato de frequências)
 - [x] Análise ROC: `roctab` (área com erros de DeLong ou de Hanley-McNeil, relatório detalhado, curva), `roccomp` (igualdade de áreas, correlacionadas ou independentes), `rocfit` (modelo binormal), `lroc` e `lsens` depois de `logit`, `logistic` e `probit`
-- Os casos `1401` e `1402` aguardam a rodada no Stata
+- Conferido com o log do Stata 14: casos `1401` e `1402` (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`)
 
 ## Fase 11: manipulação de dados ✅
 
@@ -168,7 +168,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `statsby`, `putmata`; `sysuse` (dados de exemplo próprios do OpenDTA) e `webuse` (baixa sob demanda)
 - [x] `icd9` e `icd10` com as listas de códigos de domínio público ICD-9-CM e ICD-10-CM do CMS americano (check, clean, generate, lookup, search); `icd9p` pelo formato
 - [x] `odbc` pelo pacote opcional `pyodbc`; calendários de dias úteis (`bcal`, o formato `%tb`, `bofd()` e `dofb()`)
-- O caso `1501` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: caso `1501` (bate)
 
 ## Fase 12: epidemiologia, conclusão ✅
 
@@ -176,7 +176,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `mhodds` com `by()`: a razão de chances dentro de cada grupo, a estimativa controlada pelos grupos e um teste de homogeneidade
 - [x] `roctab` com o erro padrão de Bamber (`bamber`), limites binomiais exatos (`binomial`) e a curva de Lorenz com os índices de Gini e de Pietra (`lorenz`); `roccomp` com áreas binormais (`binormal`)
 - [x] `rocreg`: estimação ROC não paramétrica com controles ajustados por covariáveis (estratificados ou por regressão linear, valores percentis empíricos ou normais) e os seus resumos (AUC, ROC(t), ROC inversa, AUC parcial), e o modelo paramétrico GLM probit com covariáveis da ROC; erros padrão por bootstrap com intervalos normal, percentil e com correção de viés
-- O caso `1601` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: caso `1601` (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`)
 
 ## Fase 13: manipulação de dados, opções ✅
 
@@ -184,7 +184,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `infile` com `byvariable()`; `putexcel` para `.xls`
 - [x] `import sas` (com `bcat()`), `import spss` e `import sasxport`, e um `export sasxport` básico, pelo pacote opcional `pyreadstat`
 - [x] `describe` com `numbers`, `varlist`, `replace` e `using`; `list` com `header()`, `nodotz`, `mean`, `sum`, `N`, `labvar()` e `nocompress`
-- O caso `1701` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: caso `1701` (bate)
 
 ## Fase 14: programação ✅
 
@@ -195,7 +195,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `program, sortpreserve`; `program nome, plugin` (explica que os plugins do Stata não podem ser carregados)
 - [x] `pause`, `sleep`, `window` (no modo lote as caixas de diálogo agem como canceladas) e `viewsource` (mostra o código-fonte do próprio OpenDTA)
 - [x] `signestimationsample`, `checkestimationsample`, `makecns` com matriz de restrições e `matcproc`
-- Caso `1801` aguarda a rodada no Stata
+- Conferido com o log do Stata 14: caso `1801` (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`)
 
 ## Fase 15: análise de sobrevivência ✅
 
@@ -211,14 +211,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `meglm` (famílias gaussian, bernoulli, binomial, gamma, nbinomial, ordinal e poisson com suas ligações), `mecloglog`, `menbreg` (dispersão mean e constant), `meologit`, `meoprobit`, `meqrlogit` e `meqrpoisson`; `predict` e `estat icc`/`recovariance`/`group` depois deles
 - [x] `mestreg` (exponencial, Weibull, lognormal, loglogística e gama com um efeito aleatório por grupo)
 - [x] Efeitos aleatórios cruzados no `mixed` (`|| _all: R.fator`)
-- Conferido com o log do Stata: o caso `1902` aguarda a rodada no Stata
-
-- [x] Licença MIT e avisos de licença dos componentes de terceiros
-- [x] Download para macOS (Apple Silicon e Intel) com a Release gerada pelo GitHub Actions a cada tag `v*`
-- [x] Toda a documentação publicada no GitHub em inglês, com cópia em português (`*.pt-BR.md`) e o seletor **English | Português** no topo de cada página; comentários do código e mensagens de commit em inglês
-- [x] Busca e instalação de atualizações dentro do app (Releases do GitHub, download verificado, verificação diária que pode ser desligada)
-- [x] Download para Windows (64 bits, Intel/AMD): instalador por usuário e `.zip` portátil, gerados pelo mesmo workflow
-- [x] Versão 1.0: README curto com captura de tela, documentação em `docs/` (primeiros passos, recursos, testes, desenvolvimento), `CONTRIBUTING.md`, modelos de issue (diferença com o Stata, bug, pedido de comando) e de pull request; o workflow de release confere se a tag coincide com a versão
+- Conferido com o log do Stata 14: caso `1902` (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`)
 
 ## Fase 17: estatística básica ✅
 
@@ -255,7 +248,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Descrição: `xtline` (com `overlay`), `xttab` e `xtdata` (`fe`, `be`)
 - Conferido com o log do Stata 14: o caso `1905` bate, exceto pelas diferenças de `compat/known_differences.txt` (os caminhos de iteração dos maximizadores numéricos e do `igls`, o `xtgls` com painéis correlacionados e o `igls` com `psar1`, os componentes de variância do `xtregar, re`, o teste F de `u_i` do `xtivreg, fe`, o R² entre do `xtivreg, fd`, a verossimilhança plana do `xtfrontier, tvd` e a estatística de Breitung); `xtunitroot llc` e `ips`, que o Stata 14 executa, ainda não foram implementados
 
-## Fase 20: estatística multivariada
+## Fase 20: estatística multivariada ✅
 
 - [x] Componentes principais e análise fatorial: `pca`, `factor` (`pf`, `pcf`, `ipf`, `ml`), `rotate` (`varimax`, `quartimax`, `equamax`, `parsimax`, `promax`, `oblimin`, `quartimin`), `alpha`, `screeplot`, `loadingplot` e `scoreplot`, com `estat` (`kmo`, `smc`, `anti`, `loadings`, `correlation`, `residuals`, `summarize`, `structure`, `common`) e `predict`
 - [x] Testes e modelos multivariados: `hotelling`, `mvreg`, `manova` (Wilks, Pillai, Lawley-Hotelling e Roy), `canon` e `mvtest` (`means`, `covariances`, `correlations`, `normality`)
@@ -264,7 +257,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] Análise de correspondência e escalonamento: `ca`, `mca`, `mds` e `mdsmat` (clássico e moderno), `procrustes` ortogonal e `biplot`, com `estat` e `predict` onde se aplicam
 - Conferido com o log do Stata 14: o caso `1906` confere, exceto pelas diferenças em `compat/known_differences.txt` (os caminhos de iteração de `factor, ml`, `discrim logistic` e `mds, method(modern)`, e os números do `factor, ml` que decorrem de onde o `ml` do Stata para)
 
-## Fase 21: modelos, parte 1 (binários e contagem, censurados e seleção, variáveis instrumentais)
+## Fase 21: modelos, parte 1 (binários e contagem, censurados e seleção, variáveis instrumentais) ✅
 
 - [x] Resposta binária e fracionária: `cloglog`, `scobit`, `hetprobit` (`het()`), `fracreg` (`logit`, `probit`, `cloglog`), `binreg` (`or`, `rr`, `hr`, `rd`) e `glogit`
 - [x] Dados de contagem: `zip` e `zinb` (`inflate()`, `probit`, `vuong`, `irr`), `tpoisson`, `tnbreg` e `gnbreg` (`lnalpha()`)
@@ -274,7 +267,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - Conferido com o log do Stata 14: o caso `1907` confere, exceto pelas diferenças em `compat/known_differences.txt` (os caminhos de iteração e o ponto de parada de cada otimizador; blocos cujos dados levam um parâmetro à fronteira, de modo que as estimativas do Stata dependem do caminho dele: `scobit`, `zinb`, `tnbreg`, `gnbreg`; `binreg, hr`, em que o IRLS do Stata não converge com os dados do caso; `glogit`, rodado com contagens agrupadas diferentes das do Stata; a variância robusta de `ivregress liml` e de `ivpoisson cfunction`). Achados e corrigidos no caminho: `binreg` é IRLS com a variância da informação esperada, `ivpoisson cfunction` usa o resíduo multiplicativo, `ivregress gmm` com matriz de pesos robusta mostra a variância sanduíche, e os modelos só com constante de `tpoisson` e `gnbreg` seguem os pontos de referência do Stata
 - Ainda não conferidos com o Stata: `glogit` (dados do caso), `fracreg cloglog`, `heckoprobit` e as opções que o caso `1907` não exercita
 
-## Fase 22: modelos, parte 2 (escolha, exatos, sistemas e efeitos de tratamento)
+## Fase 22: modelos, parte 2 (escolha, exatos, sistemas e efeitos de tratamento) ✅
 
 - [x] Sistemas e restrições: `constraint`, `cnsreg`, `sureg` (com `isure`), `reg3` (`2sls`, `3sls`, `ols`, `sure`), `eivreg`, `vwls` e `rreg` (Huber e depois biquadrado), com a álgebra em `core/syseq.py`
 - [x] Modelos de escolha: `clogit` (qualquer número de alternativas escolhidas por grupo), `rologit` (`exactp`, `breslow`, `efron` e `none` para empates), `asclogit`, `slogit`, `mprobit`, `asmprobit` e `asroprobit` (simulador GHK com sorteios de Hammersley), com as verossimilhanças em `core/choice.py`
@@ -284,7 +277,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - Conferido com o log do Stata 14: caso `1908` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`)
 - Ainda não conferidos com o Stata: o layout das tabelas de todos os comandos desta parte (marcados com `VERIFY` no código), a variância de `eivreg`, os pesos de `stteffects` e as opções que o caso não exercita
 
-## Fase 23: outras suítes (sem, gsem, irt, estimação bayesiana, power, mi impute e svy)
+## Fase 23: outras suítes (sem, gsem, irt, estimação bayesiana, power, mi impute e svy) ✅
 
 - [x] `sem` com `method(mlmv)` (verossimilhança normal por padrão de ausência, valores iniciais por EM em `core/mvnmiss.py`) e `method(adf)`, `group()` e `ginvariant()`, rótulos de caminho (`@nome`) e os subcomandos de `estat` `eqgof`, `eqtest`, `framework`, `ggof`, `ginvariant`, `mindices`, `residuals`, `scoretests`, `stable`, `stdize:`, `summarize` e `teffects`
 - [x] `gsem` com as famílias `gaussian`, `bernoulli`, `binomial`, `poisson`, `nbinomial`, `gamma` e `ordinal`, variáveis latentes por observação e por conglomerado (`M[id]`), quadratura de Gauss-Hermite adaptativa e `predict`
@@ -295,7 +288,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `svy:` com `cloglog`, `intreg`, `truncreg`, `heckman`, `heckprobit`, `zip`, `zinb`, `gnbreg`, `hetprobit`, `scobit`, `biprobit`, `fracreg`, `slogit`, `mprobit`, `clogit` e `ivregress`
 - Conferido com o log do Stata 14: caso `1909` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: a variância do `sem, method(adf)` é a Hessiana numérica da discrepância, não a aproximação de Gauss-Newton; o `ivregress` ignorava os pesos; os intervalos de confiança de `sigma`, `rho`, `alpha` e `lambda` no `svy:` usam os graus de liberdade do desenho; o `irt 3pl` tem um pseudoacerto comum, a menos que se dê `sepguessing`. Os sorteios do `bayesmh` e do `mi impute` vêm do gerador do próprio OpenDTA e não reproduzem os do Stata
 
-## Fase 24: programação, parte 2
+## Fase 24: programação, parte 2 ✅
 
 - [x] `makecns` com lista de números de restrições (restrições que não podem ser lidas ficam de fora com uma nota), as opções `displaycns` e `nocnsnotes`, e `matrix dispCns`
 - [x] `constraint #` sem a palavra `define`
@@ -303,20 +296,20 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `window` na interface gráfica: caixas de diálogo de arquivo `fopen` e `fsave`, caixas de mensagem `stopbox`, `push` para a janela Review, o menu User montado com `window menu`, e `manage` (`minimize`, `restore`, `maintitle`, `forward`, `close`)
 - Conferido com o log do Stata 14: caso `1910`. Achados e corrigidos no caminho: o `makecns` pula números sem restrição, mantém as restrições redundantes e não mostra nada com `r`; o `matrix dispCns` exige resultados gravados por um comando de estimação; o `matlist` mostra as equações das colunas como faixas, uma linha de rótulo para cada equação das linhas e, nos painéis seguintes, deixa de fora a metade superior vazia de uma matriz simétrica
 
-## Fase 25: manipulação de dados, parte 2
+## Fase 25: manipulação de dados, parte 2 ✅
 
 - [x] `table` com variável de supercoluna (`table rowvar colvar supercolvar`), a opção `scol` e `by()` com até quatro variáveis
 - [x] `list` com `string()` e o formato `display` (escolhido também quando a tabela não cabe na linha)
 - [x] `import sasxport` com `describe` e `member()` (leitor próprio do OpenDTA de todos os membros de um arquivo XPORT, `io/xport.py`) e os rótulos de valores do `formats.xpf`; `export sasxport` com `rename` e `vallabfile()` (`xpf`, `sascode`, `both`, `none`)
 - Conferido com o log do Stata 14: caso `1911`. Achados e corrigidos no caminho: o `table` mantém todas as linhas e todas as combinações das variáveis do `by()`, com as supercolunas separadas por 4 espaços; o `list, string()` termina com `..` os valores cortados; o `import sasxport, describe` tem o leiaute e os resultados guardados do Stata
 
-## Fase 26: epidemiologia, parte 2
+## Fase 26: epidemiologia, parte 2 ✅
 
 - [x] `rocreg` com `probit ml`: o modelo ROC binormal por máxima verossimilhança, com covariáveis da ROC (`roccov()`), covariáveis de controle (`ctrlcov()`, linear) e a AUC pelo método delta
 - [x] `rocreg` com `cluster()`: erros-padrão robustos a clusters depois de `ml` e reamostragem de clusters inteiros no bootstrap
 - Conferido com o log do Stata 14: caso `1912` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: o `probit ml` ajusta, para cada classificador, o modelo de ajuste por covariáveis dos controles (médias e desvios-padrão de casos e controles) e tira dele os parâmetros da ROC e a AUC pelo método delta; vários classificadores entram num só modelo, com o teste de AUCs iguais
 
-## Fase 27: estatística básica, parte 2
+## Fase 27: estatística básica, parte 2 ✅
 
 - [x] `ml` com os métodos `lf0`, `lf1`, `lf2`, `gf0`, `gf1` e `gf2`, `constraints()` (maximização no subespaço restrito, `e(Cns)`) e `svy` (pesos do desenho e variância linearizada)
 - [x] `boxcox` com `model(rhsonly)`, `model(lambda)` e `model(theta)` e `notrans()`
@@ -325,7 +318,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `lv` com `generate` e `tail()`; `stem` com `width()` (e uma correção para dados decimais guardados como `float`)
 - Conferido com o log do Stata 14: caso `1913` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: o `ml` com restrições grava e(Cns) e os resultados de survey do Stata; o `boxcox` itera por Newton–Raphson a partir de 1 e transforma todas as variáveis da varlist; o `icc` deixa de fora os alvos com avaliações faltantes; o `loneway` guarda o r() do Stata; o `esize, unequal/welch` informa os graus de liberdade
 
-## Fase 28: dados em painel, parte 2
+## Fase 28: dados em painel, parte 2 ✅
 
 - [x] `xtivreg` com `first` (regressões de primeiro estágio com o mesmo estimador) e `regress` (todos os regressores exógenos)
 - [x] `xtdata` com `re` e `ratio()` (a transformação de MQG de efeitos aleatórios, com uma variável `constant`)
@@ -334,7 +327,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `xtabond`, `xtdpdsys` e `xtdpd` com `artests()`; `xtdpd` com `hascons`
 - Conferido com o log do Stata 14: caso `1914` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: as regressões de primeiro estágio do `xtivreg, first` seguem o estimador (o G2SLS tem cabeçalho próprio); o `xtdata, re` mantém a variável de painel e acrescenta a constante; o `xtunitroot fisher` e o `hadri` seguem o layout e o r() do Stata; o `xtabond` descarta instrumentos duplicados e a constante do `hascons` com uma nota
 
-## Fase 29: séries temporais, parte 2
+## Fase 29: séries temporais, parte 2 ✅
 
 - [x] `prais` com `vce(robust)`, `vce(hc2)`, `vce(hc3)` e `vce(cluster)` (variância semirrobusta da regressão transformada)
 - [x] `arch` com `constraints()` e `from()`; `arfima` com `vce(robust)`
@@ -342,7 +335,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `predict` depois de `ucm`, `sspace` e `dfactor` (previsões um passo à frente, resíduos e resíduos padronizados); a subopção `frequency()` do `cycle()` do `ucm`; `psdensity` depois de `ucm`
 - Conferido com o log do Stata 14: caso `1915` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: a log-verossimilhança do `prais` deixa de fora o termo do jacobiano; o `arfima` refina as estimativas numa segunda maximização; o `svar` grava todas as entradas de A e B em e(b), com variância zero para as fixas, e o e(Cns); o `ucm` confere a frequência do ciclo e o teste de Wald cobre a frequência e o amortecimento; o `sspace` e o `dfactor` padronizam os resíduos em conjunto
 
-## Fase 30: modelos multinível, parte 2
+## Fase 30: modelos multinível, parte 2 ✅
 
 - [x] `meglm` e os outros comandos `me` com níveis aninhados de efeitos aleatórios (`|| school: || class:`), por quadratura adaptativa em produto sobre os níveis
 - [x] Pesos nos comandos `me` e no `mestreg`: `fweight`, `pweight` e `iweight` no nível da observação e as opções `fweight()` e `pweight()` de cada equação de efeitos aleatórios
@@ -350,7 +343,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `predict` depois do `mestreg` com `median`, `mean` e `hazard` em todas as distribuições
 - Conferido com o log do Stata 14: caso `1916` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: com níveis aninhados os pontos de quadratura de um nível inferior acompanham os efeitos do nível acima e as derivadas seguem os pontos, o que dá as estimativas e os erros-padrão do Stata; uma variância que vai a zero não infla mais a verossimilhança; o `meqrlogit` e o `meqrpoisson` aceitam níveis aninhados; os pesos de frequência entram na tabela de grupos; a mediana do `mestreg` usa só os efeitos fixos
 
-## Fase 31: estatística multivariada, parte 2
+## Fase 31: estatística multivariada, parte 2 ✅
 
 - [x] `clustermat` (agrupamento hierárquico de uma matriz de dissimilaridades, com `shape()`, `add`, `clear` e `labelvar()`); as medidas binárias de similaridade do `cluster` e do `matrix dissimilarity` (`matching`, `Jaccard`, `Russell`, `Hamann`, `Dice`, `antiDice`, `Sneath`, `Rogers`, `Ochiai`, `Yule`, `Anderberg`, `Kulczynski`, `Pearson`, `Gower2`); `cluster kmeans` e `kmedians` com `keepcenters`
 - [x] `manovatest` (testes de termos depois do `manova`, com termos de erro depois de `/` e `ytransform()`)
@@ -358,7 +351,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `mdslong`, `mdsconfig` e `mdsshepard`; `procoverlay`; `procrustes` com `transform(unrestricted)` e `transform(oblique)`
 - Conferido com o log do Stata 14: o caso `1917` bate, exceto o histórico de iterações de `mdslong, method(modern)` (o otimizador do Stata não é documentado; ver `compat/known_differences.txt`). Encontrado e corrigido no caminho: as variáveis `_ord` e `_hgt` de uma análise hierárquica são por posição no dendrograma (o id da k-ésima folha e a altura da junção com a seguinte), o grupo com a menor observação vem primeiro, as medidas binárias de similaridade guardam as alturas como similaridades e `cluster generate` recusa um número de grupos que os empates tornam ambíguo; `clustermat` informa as observações novas e o nome da análise e põe a variável de rótulos por último; `manovatest` com vários termos testa-os juntos na codificação por nível de base, para quando o termo de erro tem menos graus de liberdade que as variáveis dependentes e tem `showorder`; `list` abrevia um nome de modo que ele corresponda só àquela variável (`_clus~id`)
 
-## Fase 32: modelos, parte 3
+## Fase 32: modelos, parte 3 ✅
 
 - [x] `tpoisson` e `tnbreg` com `ul()` e limites dados por variáveis; `tnbreg` e `nbreg` com `dispersion(constant)` (o `nbreg` aceitava a opção e ajustava o modelo de dispersão média)
 - [x] `glogit` com `or`; `glm` e `binreg` com `mu()`
@@ -367,6 +360,15 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - [x] `ivregress gmm` com `wmatrix(hac kernel #)`, `center` e `igmm`
 - [x] `frontier` com `uhet()`, `vhet()` e `cm()`
 - Conferido com o log do Stata 14: caso `1918` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). O Stata 14 não tem `ul()` no `tpoisson` e no `tnbreg` (veio depois): o OpenDTA mantém a opção como extensão. Encontrado e corrigido no caminho: as verossimilhanças binomiais negativas somam ln Gama(y + r) - ln Gama(r) termo a termo quando a dispersão vai a zero (a diferença das duas perdia dígitos e punha a verossimilhança NB1 acima da Poisson); a probabilidade da janela de uma contagem com limite superior é somada termo a termo; `tnbreg` e `nbreg` com `dispersion(constant)` começam o modelo completo do ajuste só com constante e o `tnbreg` guarda o e() do Stata; `sureg` e `reg3` com restrições tiram a primeira covariância dos resíduos do ajuste restrito equação por equação e guardam o e() do Stata (`Sigma`, `Cns`, as estatísticas de cada equação), e o `2sls` restrito usa estatísticas z; `ivregress gmm` com matriz de pesos HAC: a largura de banda do núcleo espectral quadrático é # + 1, a nota do VCE HAC, e(J), e(hac_lag), e(S) e e(W), e o histórico do `igmm`; `frontier` com `uhet()` ou `vhet()` mostra as duas variâncias como equações, e com `cm()` os parâmetros `/lnsigma2` e `/ilgtgamma`
+
+## Distribuição e documentação
+
+- [x] Licença MIT e avisos de licença dos componentes de terceiros
+- [x] Download para macOS (Apple Silicon e Intel) com a Release gerada pelo GitHub Actions a cada tag `v*`
+- [x] Toda a documentação publicada no GitHub em inglês, com cópia em português (`*.pt-BR.md`) e o seletor **English | Português** no topo de cada página; comentários do código e mensagens de commit em inglês
+- [x] Busca e instalação de atualizações dentro do app (Releases do GitHub, download verificado, verificação diária que pode ser desligada)
+- [x] Download para Windows (64 bits, Intel/AMD): instalador por usuário e `.zip` portátil, gerados pelo mesmo workflow
+- [x] Versão 1.0: README curto com captura de tela, documentação em `docs/` (primeiros passos, recursos, testes, desenvolvimento), `CONTRIBUTING.md`, modelos de issue (diferença com o Stata, bug, pedido de comando) e de pull request; o workflow de release confere se a tag coincide com a versão
 
 ## Melhorias em relação ao Stata (ao longo das fases)
 
