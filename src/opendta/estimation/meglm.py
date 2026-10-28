@@ -34,6 +34,7 @@ from . import fvars
 from .mixed import (
     Level,
     _p_chibar,
+    _right,
     build_levels,
     estat_group,
     estat_icc,
@@ -208,6 +209,21 @@ def _gh_nodes(n: int, q: int):
     return nodes, lw
 
 
+def _chol_rows(cov, old):
+    """Cholesky factors of a stack of covariance matrices; a matrix that is not numerically
+    positive definite keeps its old factor."""
+    try:
+        return np.linalg.cholesky(cov)
+    except np.linalg.LinAlgError:
+        out = old.copy()
+        for i in range(cov.shape[0]):
+            try:
+                out[i] = np.linalg.cholesky(cov[i])
+            except np.linalg.LinAlgError:
+                pass
+        return out
+
+
 class GLMM:
     def __init__(self, kind, y, X, offset, level: Level, npoints: int, method: str, fam=None,
                  naux: int = 0, ordered: bool = False, wobs=None, wgrp=None):
@@ -341,9 +357,14 @@ class GLMM:
             cov = np.einsum("gk,gki,gkj->gij", pw, dev, dev)
             if self.nodes.shape[0] == 1:
                 return self._mode_curvature(b)
-            ok = np.all(np.linalg.eigvalsh(cov) > 1e-12, axis=1)
+            fin = np.all(np.isfinite(cov), axis=(1, 2))
+            ok = fin & np.all(np.linalg.eigvalsh(np.where(fin[:, None, None], cov, 0)) > 1e-12, axis=1)
             newC = self.C.copy()
-            newC[ok] = np.linalg.cholesky(cov[ok])
+            newC[ok] = _chol_rows(cov[ok], newC[ok])
+            if not ok.all():
+                # points too wide for the prior all but one fall in its tails and the
+                # posterior variance comes out zero: restart those groups from the prior
+                newC[~ok] = np.linalg.cholesky(r[6] + 1e-300 * np.eye(self.q))
             change = np.max(np.abs(mu - self.mu)) + np.max(np.abs(newC - self.C))
             self.mu = mu
             self.C = newC
@@ -445,21 +466,48 @@ class GLMM:
     def fun(self, b, todo):
         if self.nodes.shape[0] == 1:
             return self._laplace_fun(b, todo)
-        if todo == 0:
-            return self.loglik(b), None, None
+        # the quadrature points follow b also in the line search: points adapted to a larger
+        # variance overstate the likelihood of a smaller one (compat 1916)
         self.adapt(b)
         ll = self.loglik(b)
-        if not np.isfinite(ll):
-            return -np.inf, None, None
-        g = self.gradient(b)
+        if todo == 0 or not np.isfinite(ll):
+            return (ll if np.isfinite(ll) else -np.inf), None, None
+        if not self.adaptive:
+            g = self.gradient(b)
+            k = b.size
+            H = np.zeros((k, k))
+            for i in range(k):
+                hi = 1e-5 * (abs(b[i]) + 1)
+                e = np.zeros(k)
+                e[i] = hi
+                H[:, i] = (self.gradient(b + e) - self.gradient(b - e)) / (2 * hi)
+            return ll, g, (H + H.T) / 2
+        # derivatives of the likelihood whose points follow the parameters: the estimates and
+        # standard errors of Stata (compat 1916)
+        state = (self.mu.copy(), self.C.copy())
+
+        def f(x):
+            self.mu, self.C = state[0].copy(), state[1].copy()
+            self.adapt(x)
+            return self.loglik(x)
         k = b.size
+        hs = 1e-5 * (np.abs(b) + 1)
+        g = np.zeros(k)
+        for i in range(k):
+            e = np.zeros(k)
+            e[i] = hs[i]
+            g[i] = (f(b + e) - f(b - e)) / (2 * hs[i])
+        hh = 1e-4 * (np.abs(b) + 1)
         H = np.zeros((k, k))
         for i in range(k):
-            hi = 1e-5 * (abs(b[i]) + 1)
-            e = np.zeros(k)
-            e[i] = hi
-            H[:, i] = (self.gradient(b + e) - self.gradient(b - e)) / (2 * hi)
-        H = (H + H.T) / 2
+            for j in range(i, k):
+                ei = np.zeros(k)
+                ej = np.zeros(k)
+                ei[i] += hh[i]
+                ej[j] += hh[j]
+                H[i, j] = H[j, i] = (f(b + ei + ej) - f(b + ei - ej) - f(b - ei + ej) + f(b - ei - ej)) \
+                    / (4 * hh[i] * hh[j])
+        f(b)
         return ll, g, H
 
 
@@ -503,6 +551,7 @@ class MGLMM:
     def reset(self):
         self.mus = [np.zeros((g, lv.q)) for g, lv in zip(self.G, self.lvs)]
         self.Cs = None
+        self.Bs = [None] + [np.zeros((self.G[li], self.lvs[li].q, self.lvs[li - 1].q)) for li in range(1, self.m)]
 
     # the attributes the single-level model exposes to _fit_me
     @property
@@ -536,6 +585,19 @@ class MGLMM:
             k += n
         return out
 
+    def _points(self, li, U_par):
+        """Quadrature points of level li: G_li x K_0 x ... x K_li x q. The points of a group
+        move with the effects of its parent group, by the regression of the posterior (the
+        conditional posterior of a Gaussian model)."""
+        base = self.mus[li][:, None, :] + np.einsum("gij,kj->gki", self.Cs[li], self.nodes[li])
+        if li == 0:
+            return base
+        par = self.parent[li]
+        dev = U_par[par] - self.mus[li - 1][par].reshape((-1,) + (1,) * li + (U_par.shape[-1],))
+        shift = np.einsum("gij,g...j->g...i", self.Bs[li], dev)
+        G, K, q = base.shape
+        return shift[..., None, :] + base.reshape((G,) + (1,) * li + (K, q))
+
     def _eval(self, b, keep: bool = False):
         beta, th = self.split(b)
         Ss = [lv.sigma(t) for lv, t in zip(self.lvs, self._pieces(th))]
@@ -546,21 +608,17 @@ class MGLMM:
         except np.linalg.LinAlgError:
             return None
         if self.Cs is None or not self.adaptive:
-            self.Cs = [np.broadcast_to(L, (g, L.shape[0], L.shape[0])).copy() for L, g in zip(chols, self.G)]
             if not self.adaptive:
                 self.reset()
-                self.Cs = [np.broadcast_to(L, (g, L.shape[0], L.shape[0])).copy() for L, g in zip(chols, self.G)]
+            self.Cs = [np.broadcast_to(L, (g, L.shape[0], L.shape[0])).copy() for L, g in zip(chols, self.G)]
         m, N = self.m, self.N
-        Ks = [nd.shape[0] for nd in self.nodes]
         eta = (self.X @ beta + self.off).reshape((N,) + (1,) * m)
         Us = []
         for li, lv in enumerate(self.lvs):
-            U = self.mus[li][:, None, :] + np.einsum("gij,kj->gki", self.Cs[li], self.nodes[li])
+            U = self._points(li, Us[-1] if li else None)
             Us.append(U)
-            E = np.einsum("nq,nkq->nk", lv.Z, U[lv.gid])
-            shape = [N] + [1] * m
-            shape[li + 1] = Ks[li]
-            eta = eta + E.reshape(shape)
+            E = np.einsum("nq,n...q->n...", lv.Z, U[lv.gid])
+            eta = eta + E.reshape(E.shape + (1,) * (m - 1 - li))
         full = eta.shape
         lf = self.fam(eta.reshape(N, -1), self.aux(b))[0].reshape(full)
         if self.wobs is not None:
@@ -571,12 +629,12 @@ class MGLMM:
             S = np.zeros((self.G[li],) + cur.shape[1:])
             np.add.at(S, idx, cur)
             U = Us[li]
-            quad = np.einsum("gki,ij,gkj->gk", U, Sinvs[li], U)
+            quad = np.einsum("g...i,ij,g...j->g...", U, Sinvs[li], U)
             q = self.lvs[li].q
             lprior = -0.5 * (q * math.log(2 * math.pi) + ldSs[li] + quad)
             ldC = np.linalg.slogdet(self.Cs[li])[1]
-            T = lprior - self.lphi[li][None, :] + ldC[:, None] + self.lw[li][None, :]
-            S = S + T.reshape((self.G[li],) + (1,) * li + (Ks[li],))
+            T = lprior + (self.lw[li] - self.lphi[li]) + ldC.reshape((-1,) + (1,) * (li + 1))
+            S = S + T
             R = special.logsumexp(S, axis=-1)
             if keep:
                 store[li] = (S, R, U)
@@ -614,30 +672,44 @@ class MGLMM:
             for li in range(self.m):
                 S, R, U = store[li]
                 cond = np.exp(S - R[..., None])
-                J = cond if li == 0 else J[self.parent[li]][..., None] * cond
-                w = J.sum(axis=tuple(range(1, li + 1))) if li > 0 else J
-                mu = np.einsum("gk,gkq->gq", w, U)
-                dev = U - mu[:, None, :]
-                cov = np.einsum("gk,gki,gkj->gij", w, dev, dev)
-                ok = np.all(np.linalg.eigvalsh(cov) > 1e-12, axis=1)
+                J = cond if li == 0 else J[self.parent[li]][..., None] * cond      # joint weights
+                G_ = J.shape[0]
+                Jf, Uf = J.reshape(G_, -1), U.reshape(G_, -1, U.shape[-1])
+                mu = np.einsum("gk,gkq->gq", Jf, Uf)
+                dev = U - mu.reshape((-1,) + (1,) * (li + 1) + (mu.shape[1],))
+                devf = dev.reshape(Uf.shape)
+                cov = np.einsum("gk,gki,gkj->gij", Jf, devf, devf)
                 C = self.Cs[li].copy()
-                C[ok] = np.linalg.cholesky(cov[ok])
+                if li > 0:
+                    Up = store[li - 1][2][self.parent[li]]
+                    Jp = J.sum(axis=-1).reshape(G_, -1)
+                    Upf = Up.reshape(G_, -1, Up.shape[-1])
+                    mup = np.einsum("gk,gkq->gq", Jp, Upf)
+                    dp = Up - mup.reshape((-1,) + (1,) * li + (mup.shape[1],))
+                    dpf = dp.reshape(Upf.shape)
+                    Vp = np.einsum("gk,gki,gkj->gij", Jp, dpf, dpf)
+                    dpx = np.broadcast_to(dp[..., None, :], dev.shape[:-1] + (dp.shape[-1],)).reshape(G_, -1, dp.shape[-1])
+                    X_ = np.einsum("gk,gki,gkj->gij", Jf, devf, dpx)
+                    try:
+                        Bn = np.einsum("gij,gjk->gik", X_, np.linalg.pinv(Vp, hermitian=True))
+                    except np.linalg.LinAlgError:
+                        Bn = self.Bs[li]
+                    if np.all(np.isfinite(Bn)):
+                        cov = cov - np.einsum("gij,gkj->gik", Bn, X_)
+                        change = max(change, float(np.max(np.abs(Bn - self.Bs[li]))))
+                        self.Bs[li] = Bn
+                fin = np.all(np.isfinite(cov), axis=(1, 2))
+                ok = fin & np.all(np.linalg.eigvalsh(np.where(fin[:, None, None], cov, 0)) > 1e-12, axis=1)
+                C[ok] = _chol_rows(cov[ok], C[ok])
+                if not ok.all():        # see GLMM.adapt
+                    S_ = self.lvs[li].sigma(self._pieces(self.split(b)[1])[li])
+                    C[~ok] = np.linalg.cholesky(S_ + 1e-300 * np.eye(S_.shape[0]))
                 change = max(change, float(np.max(np.abs(mu - self.mus[li]))), float(np.max(np.abs(C - self.Cs[li]))))
                 newmus.append(mu)
                 newCs.append(C)
             self.mus, self.Cs = newmus, newCs
             if change < 1e-8:
                 break
-
-    def _grad(self, b) -> np.ndarray:
-        k = b.size
-        g = np.zeros(k)
-        for i in range(k):
-            h = 1e-5 * (abs(b[i]) + 1)
-            e = np.zeros(k)
-            e[i] = h
-            g[i] = (self.loglik(b + e) - self.loglik(b - e)) / (2 * h)
-        return g
 
     def scores(self, b) -> np.ndarray:
         k = b.size
@@ -649,22 +721,49 @@ class MGLMM:
             Sc[:, i] = (self.contrib(b + e) - self.contrib(b - e)) / (2 * h)
         return Sc
 
+    def _ll_moving(self, x, state) -> float:
+        """The log likelihood with the quadrature points adapted to x, from the state given."""
+        self.mus = [a.copy() for a in state[0]]
+        self.Cs = [a.copy() for a in state[1]]
+        self.Bs = [None if a is None else a.copy() for a in state[2]]
+        self.adapt(x)
+        return self.loglik(x)
+
     def fun(self, b, todo):
-        if todo == 0:
-            return self.loglik(b), None, None
+        # the quadrature points follow b also in the line search: points adapted to a larger
+        # variance overstate the likelihood of a smaller one (compat 1916)
         self.adapt(b)
         ll = self.loglik(b)
-        if not np.isfinite(ll):
-            return -np.inf, None, None
-        g = self._grad(b)
+        if todo == 0 or not np.isfinite(ll):
+            return (ll if np.isfinite(ll) else -np.inf), None, None
+        if not self.adaptive:
+            f = self.loglik
+        else:
+            # derivatives of the likelihood whose points follow the parameters: the standard
+            # errors of Stata (compat 1916)
+            state = ([a.copy() for a in self.mus], [a.copy() for a in self.Cs],
+                     [None if a is None else a.copy() for a in self.Bs])
+            f = lambda x: self._ll_moving(x, state)        # noqa: E731
         k = b.size
+        hs = 1e-5 * (np.abs(b) + 1)
+        g = np.zeros(k)
+        for i in range(k):
+            e = np.zeros(k)
+            e[i] = hs[i]
+            g[i] = (f(b + e) - f(b - e)) / (2 * hs[i])
+        hh = 1e-4 * (np.abs(b) + 1)
         H = np.zeros((k, k))
         for i in range(k):
-            hi = 1e-4 * (abs(b[i]) + 1)
-            e = np.zeros(k)
-            e[i] = hi
-            H[:, i] = (self._grad(b + e) - self._grad(b - e)) / (2 * hi)
-        return ll, g, (H + H.T) / 2
+            for j in range(i, k):
+                ei = np.zeros(k)
+                ej = np.zeros(k)
+                ei[i] += hh[i]
+                ej[j] += hh[j]
+                H[i, j] = H[j, i] = (f(b + ei + ej) - f(b + ei - ej) - f(b - ei + ej) + f(b - ei - ej)) \
+                    / (4 * hh[i] * hh[j])
+        if self.adaptive:
+            self._ll_moving(b, state)
+        return ll, g, H
 
 
 # ---------------------------------------------------------------------------
@@ -864,9 +963,7 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
         raise StataError(198, f"option {re.sub(chr(32), '', m_.group(0))} allowed only in the fixed-effects equation")
     if not levels_spec:
         raise StataError(198, "random-effects equation required")   # VERIFY
-    if qr_ := cmdname.startswith("meqr"):
-        if len(levels_spec) != 1:
-            raise StataError(198, "OpenDTA's meqrlogit and meqrpoisson support one level of random effects")   # OpenDTA
+    qr_ = cmdname.startswith("meqr")
     c = find_top(fixed, ",")
     fixed_body, fe_opts = (fixed, "") if c == -1 else (fixed[:c], fixed[c + 1:])
     opts_text = " ".join(x for x in (fe_opts.strip(), glob.strip()) if x)
@@ -875,8 +972,13 @@ def cmd_me(s: "Session", args: str, cmdname: str) -> None:
         for _wk in ("fweight", "pweight"):
             if isinstance(_o.get(_wk), str):
                 extra += " " + _o[_wk].strip()
-    smp = Sample(s, fixed_body + (f", {opts_text}" if opts_text else ""), opts_spec=_GLOBAL,
-                 weights=() if qr_ else ("fweight", "iweight", "pweight"), extra_vars=extra)
+    try:
+        smp = Sample(s, fixed_body + (f", {opts_text}" if opts_text else ""), opts_spec=_GLOBAL,
+                     weights=() if qr_ else ("fweight", "iweight", "pweight"), extra_vars=extra)
+    except StataError as e_:
+        if e_.message == "aweights not allowed":
+            raise StataError(e_.rc, "aweight not allowed") from None     # compat 1916
+        raise
     o = smp.o
     sp = _resolve(cmdname, o)
     fam, link = sp["fam"], sp["link"]
@@ -1029,7 +1131,7 @@ def level_weights(s: "Session", smp, levels, levels_spec):
         first = np.full(G, np.nan)
         first[lv.gid[::-1]] = v[::-1]
         if np.any(v != first[lv.gid]):
-            raise StataError(198, f"{nm[1].strip()} is not constant within {lv.var}")   # VERIFY
+            raise StataError(198, f"weights in variable {nm[1].strip()} not constant within groups defined by: {lv.var}")   # compat 1916
         if np.any(first < 0):
             raise StataError(402, "negative weights encountered")   # VERIFY
         wgrp.append(first)
@@ -1204,10 +1306,12 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
                 out.write(f"{'Iteration 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
             out.write("\nPerforming gradient-based optimization:\n\n", "text")
         else:
+            # the fixed-effects fit and the grid show "log likelihood" even with vce(robust) or
+            # sampling weights (compat 1916)
             out.write("\nFitting fixed-effects model:\n\n", "text")
-            print_log(out, rfe, lab)
+            print_log(out, rfe)
             out.write("\nRefining starting values:\n\n", "text")
-            out.write(f"{'Grid node 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
+            out.write(f"{'Grid node 0:':<14} log likelihood = {_g(best[0], '%10.0g'):>10}\n", "text")
             out.write("\nFitting full model:\n\n", "text")
     r = maximize(model.fun, best[1], **kw)
     if not o.get("nolog"):
@@ -1219,8 +1323,12 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     except np.linalg.LinAlgError:
         V = np.full((b.size, b.size), np.nan)
     n_clust = 0
+    V_model = V
     if robust:
         V, n_clust = _robust_v(model, b, V, F, clustvar)
+        # the note and e(N_clust) count the highest-level groups also with vce(cluster) (compat
+        # 1916: "30 clusters in cl" for 6 clusters of 5 groups; VERIFY)
+        n_clust = int(lvs[0].gid.max()) + 1
     beta, th = model.split(b)
     aux = model.aux(b)
     Vb = V[:p, :p]
@@ -1258,6 +1366,9 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     Vall[kk:kk + naux, kk + naux:] = V[p:p + naux, p + naux:]
     Vall[kk + naux:, kk:kk + naux] = V[p + naux:, p:p + naux]
     Vall[kk + naux:, kk + naux:] = Vth
+    bidx = pos + list(range(kk, ball.size))
+    V_model_all = np.zeros_like(Vall)
+    V_model_all[np.ix_(bidx, bidx)] = V_model
     est = Estimates(cmdname, smp.depname, names + ["_cons"] * (naux + th.size), ball, Vall, n, "z", None)
     est.eqnames = [smp.depname] * kk + aux_eq + [f"/{t.split(':')[0]}" for t in th_names]
     est.rows = rows_from_columns(smp.cols, bmap, semap, ds, constant=smp.constant)
@@ -1283,12 +1394,23 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     est.glmm = {"model": model, "theta": th, "Vth": Vth, "beta": beta, "levels": lvs, "aux": aux,
                 "Va": Va, "aux_eq": aux_eq, "resid_var": resid, "mask": smp.mask.copy(), "nbin": F.nbin,
                 "nlev": F.nlev}
+    # frequency weights: the observations of a group are counted with their [fweight] and the
+    # groups (and the observations) with the fweight() of their level and of the levels above
+    # (compat 1916)
+    fwo = np.asarray(F.wobs, dtype=float) if (F.wobs is not None and getattr(smp, "wtype", "") == "fweight") \
+        else np.ones(n)
+    fwg = np.ones(n)
     groups = []
-    for lv_ in lvs:
-        cnt = np.bincount(lv_.gid)
-        groups.append((lv_.var, len(cnt), int(cnt.min()), float(cnt.mean()), int(cnt.max())))
+    for li_, lv_ in enumerate(lvs):
+        wg_ = F.wgrp[li_] if (F.wgrp and isinstance(F.level_opts[li_].get("fweight"), str)) else None
+        if wg_ is not None:
+            fwg = fwg * wg_[lv_.gid]
+        cnt = np.bincount(lv_.gid, weights=fwo)
+        ng = np.bincount(lv_.gid, weights=fwg) / np.bincount(lv_.gid)    # the group's weight
+        groups.append((lv_.var, int(round(ng.sum())), int(round(cnt.min())), float(np.sum(cnt * ng) / ng.sum()),
+                       int(round(cnt.max()))))
     nvc = sum(lv_.npar() for lv_ in lvs)
-    N_ = float(np.sum(F.wobs)) if (F.wobs is not None and getattr(smp, "wtype", "") == "fweight") else float(n)
+    N_ = float(np.sum(fwo * fwg))
     est.extra = {"N": N_, "ll": r.ll, "chi2": wchi2, "p": wp, "df_m": len(slopes), "ll_c": rfe.ll,
                  "chi2_c": chi2_c, "nvc": nvc, "spec": sp, "method": method, "qr": qr,
                  "sd": bool(o.get("stddeviations")), "robust": robust, "n_clust": n_clust,
@@ -1322,23 +1444,23 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
     gmats = [(nm, Matrix(np.array([[g_[j] for g_ in groups]], dtype=float), ["r1"], [lv_.var for lv_ in lvs]))
              for nm, j in (("g_max", 4), ("g_avg", 3), ("g_min", 2), ("N_g", 1))]
     cmdline_ = F.cmdline or cmdline(cmdname, args)
-    vt = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
-          "unstructured": "Unstructured"}[lv.cov]
     if qr:
         # meqrlogit and meqrpoisson: the e() of the xtmelogit family. The plain fit lists it in the
         # order below and a fit with refineopts() in the reverse order (compat 1902; VERIFY)
         sigvars = [smp.depname] + [v for v in base_vars(smp.terms) if v != smp.depname] + [lv.var] \
             + [nm for nm in lv.names if nm != "_cons"]
         scalars = [("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("p", wp), ("chi2", wchi2),
-                   ("df_m", float(len(slopes))), ("N", float(n)), ("p_c", _p_chibar(chi2_c, lv.npar())),
-                   ("chi2_c", chi2_c), ("df_c", float(lv.npar())), ("ll_c", rfe.ll), ("ll", r.ll),
+                   ("df_m", float(len(slopes))), ("N", float(n)), ("p_c", _p_chibar(chi2_c, nvc)),
+                   ("chi2_c", chi2_c), ("df_c", float(nvc)), ("ll_c", rfe.ll), ("ll", r.ll),
                    ("k_rc", float(ncov_p)), ("k_rs", float(nvar_p)), ("k_r", float(th.size)),
                    ("k_f", float(len(slopes) + int(smp.constant))), ("k", float(ball.size)),
                    ("reparm_rc", 0.0), ("rank", float(ball.size))]
         macros = [("cmdline", cmdline_), ("datasignaturevars", " ".join(sigvars)),
                   ("datasignature", datasignature(s, sigvars, smp.mask)), ("chi2type", "Wald"),
-                  ("n_quad", str(int(est.extra["npts"]))), ("redim", str(lv.q)), ("ivars", lv.var),
-                  ("vartypes", vt), ("revars", " ".join(lv.names)), ("title", sp["title"]),
+                  ("n_quad", str(int(est.extra["npts"]))), ("redim", " ".join(str(l_.q) for l_ in lvs)),
+                  ("ivars", " ".join(l_.var for l_ in lvs)),   # nested levels: VERIFY
+                  ("vartypes", " ".join(_VT[l_.cov] for l_ in lvs)),
+                  ("revars", " ".join(" ".join(l_.names) for l_ in lvs)), ("title", sp["title"]),
                   ("technique", "nr"), ("ml_method", "d0"), ("opt", "moptimize"), ("model", sp["model"]),
                   ("estat_cmd", f"{cmdname}_estat"), ("predict", f"{cmdname}_p"), ("cmd", cmdname),
                   ("marginsdefault", "predict(xb)"),
@@ -1352,31 +1474,31 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
         if method == "laplace":
             macros.append(("laplace", "laplace"))
     else:
-        sigvars = [lv_.var for lv_ in lvs] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
+        # the level variables from the lowest level up (compat 1916)
+        sigvars = [lv_.var for lv_ in reversed(lvs)] + [v for v in base_vars(smp.terms) if v != smp.depname] + [smp.depname]
         ordinal = fam == "ordinal"
         scalars = [("rank", float(ball.size)), ("N", N_), ("ic", float(r.iterations)),
                    ("converged", 1.0 if r.converged else 0.0), ("rc", 0.0), ("ll", r.ll),
                    ("k", float(ball.size)), ("k_eq", float(1 + naux + nvc))]
         if ordinal:
             scalars.append(("k_cat", float(F.nlev)))
-        scalars += [("k_eq_model", 1.0)]
-        if not robust:
-            scalars += [("ll_c", rfe.ll)]
-        else:       # VERIFY the place of N_clust
-            scalars += [("N_clust", float(n_clust))]
-        scalars += [("k_rs", float(nvar_p)), ("k_rc", float(ncov_p)),
-                    ("k_dv", 1.0), ("k_r", float(sum(lv_.q for lv_ in lvs))),
+        scalars += [("k_eq_model", 1.0), ("ll_c", rfe.ll), ("k_rs", float(nvar_p)), ("k_rc", float(ncov_p)),
+                    ("k_dv", 1.0)]
+        if len(lvs) > 1:        # compat 1916: with nested levels this part comes in reverse order
+            scalars.reverse()
+        scalars += [("k_r", float(sum(lv_.q for lv_ in lvs))),
                     ("k_f", float(len(slopes)))]   # VERIFY: k_f without _cons
-        if not robust:      # no LR test of the random effects with vce(robust) (VERIFY)
-            scalars += [("p_c", _p_chibar(chi2_c, nvc)), ("df_c", float(nvc)), ("chi2_c", chi2_c)]
+        scalars += [("p_c", _p_chibar(chi2_c, nvc)), ("df_c", float(nvc)), ("chi2_c", chi2_c)]
         scalars += [("p", wp), ("chi2", wchi2), ("df_m", float(len(slopes)))]
+        if robust:
+            scalars += [("N_clust", float(n_clust))]
         common = [("n_quad", str(int(est.extra["npts"]))), ("ivars", ivars), ("chi2type", "Wald"),
                   ("datasignaturevars", " ".join(sigvars)),
                   ("datasignature", datasignature(s, sigvars, smp.mask)), ("intmethod", method),
-                  ("depvar", smp.depname), ("marginsnotok", "LATent1(passthru) LATent se(passthru)"),
-                  ("covariates", " ".join(covs))]
-        tail = [("opt", "moptimize"), ("vce", vce)] + \
-            ([("vcetype", "Robust"), ("clustvar", clustvar or lvs[0].var)] if robust else []) + \
+                  ("depvar", smp.depname)] + \
+            ([("clustvar", clustvar or lvs[0].var)] if robust else []) + \
+            [("marginsnotok", "LATent1(passthru) LATent se(passthru)"), ("covariates", " ".join(covs))]
+        tail = [("opt", "moptimize")] + ([("vcetype", "Robust")] if robust else []) + [("vce", vce)] + \
             [("user", "_gsem_eval_chol()"), ("ml_method", "gf2"),
              ("technique", "nr"), ("which", "max"), ("properties", "b V")]   # VERIFY vcetype/clustvar
         if getattr(smp, "wtype", ""):
@@ -1402,6 +1524,8 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
         if ordinal:
             extra_mats.append(("cat", Matrix(np.array([F.cats], dtype=float), ["r1"],
                                              [f"c{i + 1}" for i in range(len(F.cats))])))
+        if robust:
+            extra_mats.append(("V_modelbased", Matrix(V_model_all, names_all, names_all)))
         extra_mats += [("gradient", Matrix(grad, ["r1"], names_all)),
                        ("ilog", Matrix(ilog(r), ["r1"], [f"c{i + 1}" for i in range(20)]))]
     if F.macro_edit is not None:
@@ -1495,6 +1619,10 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
         lr_line(out, sp["vs"], x["chi2_c"], x["nvc"])
 
 
+_VT = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
+       "unstructured": "Unstructured"}
+
+
 def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, group: bool = True, lrtest: bool = True, eform=None,
                 retable: bool = True, **_kw) -> None:
@@ -1507,28 +1635,50 @@ def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: boo
     lev = level or est.level
     if header:
         ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
-        group_header(out, sp["title"], x["groups"] if group else [], x["N"],
-                     [("", "", ""),
-                      (f"Integration points = {int(x['npts']):>3}", f"Wald chi2({int(x['df_m'])})",
-                       _g(x["chi2"], "%10.2f")),
-                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
+        if len(x["groups"]) > 1 and group:
+            # nested levels: the group table has a column of integration points (compat 1916)
+            out.write("\n", "text")
+            _right(out, sp["title"], "Number of obs", f"{int(x['N']):,}")
+            out.write("\n" + "-" * 76 + "\n", "text")
+            out.write("                |     No. of       Observations per Group       Integration\n", "text")
+            out.write(" Group Variable |     Groups    Minimum    Average    Maximum      Points\n", "text")
+            out.write("----------------+" + "-" * 59 + "\n", "text")
+            for var, ng, mn, av, mx in x["groups"]:
+                out.write(f"{var[:14]:>15} |", "text")
+                out.write(f" {ng:>10,} {mn:>10,} {av:>10.1f} {mx:>10,} {int(x['npts']):>11}\n", "result")
+            out.write("-" * 76 + "\n", "text")
+            for left, lab_, val in [("", "", ""), ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
+                                    (ll, "Prob > chi2", _g(x["p"], "%10.4f"))]:
+                if lab_:
+                    _right(out, left, lab_, val)
+                else:
+                    out.write(left + "\n", "text")
+        else:
+            group_header(out, sp["title"], x["groups"] if group else [], x["N"],
+                         [("", "", ""),
+                          (f"Integration points = {int(x['npts']):>3}", f"Wald chi2({int(x['df_m'])})",
+                           _g(x["chi2"], "%10.2f")),
+                          (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
     if table:
         ef = est.eform_default if eform is None else eform
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=lev,
                    coef_title=ef or "Coef.", eform=bool(ef))
     z = st.norm.ppf(1 - (1 - lev / 100) / 2)
     G = est.glmm
-    lv = G["levels"][0]
     if retable:
         from .mixed import _vc_rows
         out.write("\n" + "-" * 78 + "\n", "text")
         out.write(f"  Random-effects Parameters  |   Estimate   Std. Err.     [{lev:g}% Conf. Interval]\n", "text")
-        out.write("-" * 29 + "+" + "-" * 48 + "\n", "text")
-        kind = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
-                "unstructured": "Unstructured"}[lv.cov]
-        out.write(f"{lv.var + ': ' + kind:<29}|\n", "text")
-        for row in _vc_rows(lv, G["theta"], G["Vth"], x["sd"], z):
-            _re_row(out, *row)
+        k0 = 0
+        for lv in G["levels"]:
+            k1 = k0 + lv.npar()
+            out.write("-" * 29 + "+" + "-" * 48 + "\n", "text")
+            kind = {"identity": "Identity", "independent": "Independent", "exchangeable": "Exchangeable",
+                    "unstructured": "Unstructured"}[lv.cov]
+            out.write(f"{lv.var + ': ' + kind:<29}|\n", "text")
+            for row in _vc_rows(lv, G["theta"][k0:k1], G["Vth"][k0:k1, k0:k1], x["sd"], z):
+                _re_row(out, *row)
+            k0 = k1
         out.write("-" * 78 + "\n", "text")
     if lrtest:
         lr_line(out, sp["vs"], x["chi2_c"], x["nvc"])

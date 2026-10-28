@@ -82,7 +82,8 @@ def test_robust_sandwich():
     assert s.e["vce"] == "robust" and s.e["N_clust"] == 25
     V = s.e["V"].data
     s3, _ = _run(DATA + "gen cl = ceil(s/5)\nquietly melogit yb x || s:, vce(cluster cl)\n")
-    assert s3.e["N_clust"] == 5 and s3.e["clustvar"] == "cl"
+    # Stata counts the highest-level groups also with vce(cluster) (compat 1916)
+    assert s3.e["N_clust"] == 25 and s3.e["clustvar"] == "cl"
     assert not np.allclose(s3.e["V"].data, V)
     # clusters must contain the highest-level groups
     assert Session().run_text(DATA + "gen cl = mod(_n, 3)\nmelogit yb x || s:, vce(cluster cl)\n") == 198
@@ -103,20 +104,22 @@ replace tw = min(tw, 2)
 stset tw, failure(dw)
 """
     s, out = _run(st + "mestreg x || s: || c:, distribution(weibull)\npredict md, median\npredict mn, mean\n"
-                  "predict h, hazard\npredict eta, eta\n")
+                  "predict h, hazard\npredict eta, eta\npredict xb, xb\n")
     assert "s>c" in out
     p = math.exp(float(s.e["b"].data.ravel()[2]))
     eta = s.data.get("eta").data
     lam = np.exp(eta)
-    assert np.allclose(s.data.get("md").data, (math.log(2) / lam) ** (1 / p))
+    # the median takes the fixed effects only (compat 1916)
+    assert np.allclose(s.data.get("md").data, (math.log(2) / np.exp(s.data.get("xb").data)) ** (1 / p))
     assert np.allclose(s.data.get("mn").data, math.gamma(1 + 1 / p) * lam ** (-1 / p))
     t = s.data.get("_t").data
     assert np.allclose(s.data.get("h").data, p * t ** (p - 1) * lam)
     s, _ = _run(st + "quietly mestreg x || s:, distribution(lognormal)\npredict md, median\npredict mn, mean\n"
-                "predict eta, eta\n")
+                "predict eta, eta\npredict xb, xb\n")
     sig = math.exp(float(s.e["b"].data.ravel()[2]))
     eta = s.data.get("eta").data
-    assert np.allclose(s.data.get("md").data, np.exp(eta))
+    assert np.allclose(s.data.get("md").data, np.exp(s.data.get("xb").data))
     assert np.allclose(s.data.get("mn").data, np.exp(eta + sig * sig / 2))
-    s, out = _run(st.replace("stset tw,", "stset tw [pw=fw],") + "mestreg x || s:, distribution(exponential)\n")
-    assert "Robust" in out and s.e["vce"] == "robust"
+    # stset weights are not allowed with random effects (compat 1916)
+    assert Session().run_text(st.replace("stset tw,", "stset tw [pw=fw],")
+                              + "mestreg x || s:, distribution(exponential)\n") == 101

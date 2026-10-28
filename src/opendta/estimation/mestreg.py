@@ -125,6 +125,8 @@ def cmd_mestreg(s: "Session", args: str) -> None:
     late = "option nohr not allowed" if (o.get("nohr") and time_metric) else ""   # after the fit (compat 1902)
     if o.get("tratio") and not time_metric:
         raise StataError(198, "option tratio not allowed")   # VERIFY
+    if stx.wtype and levels_spec:
+        raise StataError(101, "stset weights not allowed")   # compat 1916; VERIFY the return code
     stx.notes_and_header(s)
     t, t0, d = stx.t, stx.t0, stx.d
     if np.any((t <= 0) & (d > 0)):
@@ -253,15 +255,21 @@ def _predict_mestreg(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
         return np.where(ok, eta, SYS), ""
     if stat not in ("hazard", "median", "mean"):
         raise StataError(198, f"option {stat or 'xb'} is not available yet in OpenDTA after mestreg")   # OpenDTA
-    # given the fixed effects and the posterior means of the random effects (VERIFY the notes)
-    eta, ok = _posterior_eta(s, est, fixedonly=False)
+    # given the fixed effects and the posterior means of the random effects; the median of the
+    # distributions other than gamma takes the fixed effects only, without a note (compat 1916;
+    # VERIFY)
+    fixed_med = stat == "median" and est.extra["spec"]["fam"] != "gamma"
+    eta, ok = _posterior_eta(s, est, fixedonly=fixed_med)
     fam = est.extra["spec"]["fam"]
     aft = est.extra["spec"]["title"].endswith("-- AFT")
     a = float(est.glmm["aux"][0]) if len(est.glmm["aux"]) else 0.0
     tt = s.data.get("_t").data.astype(float)
     v = surv_stat(stat, fam, eta, a, aft, tt)
     okv = ok & np.isfinite(v) & ((tt < SYS) if stat == "hazard" else True)
-    return np.where(okv, v, SYS), "(predictions based on fixed effects and posterior means of random effects)"
+    note = "" if stat == "median" else "(predictions based on fixed effects and posterior means of random effects)"
+    if stat == "mean":
+        note += f"\n(using {int(est.extra['npts'])} quadrature points)"
+    return np.where(okv, v, SYS), note
 
 
 def surv_stat(stat: str, fam: str, eta, a: float, aft: bool, t):
