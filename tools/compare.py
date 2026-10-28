@@ -4,6 +4,8 @@ Usage:
     python tools/compare.py              # runs all compat/do/*.do
     python tools/compare.py 0001         # only those starting with 0001
     python tools/compare.py --show-diff  # shows the differences line by line
+    python tools/compare.py --brief      # short output: only the cases that differ, diffs
+                                         # without iteration lines and cut at --max-diff lines
 
 For each compat/do/NAME.do:
   1. runs it in OpenDTA in batch mode, writing compat/out/NAME.log;
@@ -72,6 +74,9 @@ def normalize(text: str) -> list[str]:
         out.pop()
     return out
 
+
+# iteration logs of the optimizers, left out of the --brief diffs
+_ITER = re.compile(r"^(Iteration \d+:|Grid node \d+:|Refining estimates|Fitting )")
 
 _NUM = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:e[-+]\d+)?")
 
@@ -220,7 +225,15 @@ def main(argv: list[str] | None = None) -> int:
                    help="folder with the reference logs (default: compat/expected)")
     p.add_argument("--setup", default="",
                    help="command run before each do-file, e.g. 'set dp comma'")
+    p.add_argument("--brief", action="store_true",
+                   help="print only the cases that differ (known differences without their reason); "
+                        "with --show-diff, leave out the iteration lines and cut each diff")
+    p.add_argument("--max-diff", type=int, default=60,
+                   help="with --brief, the most diff lines shown per case (default 60)")
     ns = p.parse_args(argv)
+    if ns.brief:
+        import warnings
+        warnings.simplefilter("ignore")      # numpy overflow notes of boundary fits
 
     files = sorted(f for f in (COMPAT / "do").glob("*.do") if f.name.startswith(ns.prefix))
     known = _known_differences()
@@ -245,12 +258,13 @@ def main(argv: list[str] | None = None) -> int:
         a = normalize(exp.read_text(encoding="utf-8", errors="replace"))
         b = normalize(got.read_text(encoding="utf-8", errors="replace"))
         if same_logs(a, b):
-            print(f"  ok {f.stem}")
+            if not ns.brief:
+                print(f"  ok {f.stem}")
             passed += 1
         else:
             k = known.get(f.stem)
             if k is not None and k.accepts(a, b):
-                print(f"  ~~ {f.stem:<32} known difference: {k.why}")
+                print(f"  ~~ {f.stem}" if ns.brief else f"  ~~ {f.stem:<32} known difference: {k.why}")
                 tolerated += 1
             else:
                 print(f"  XX {f.stem}")
@@ -272,9 +286,20 @@ def main(argv: list[str] | None = None) -> int:
                     diff = diff[:12]
                     body = "%0A".join(ln.replace("%", "%25") for ln in diff)
                     print(f"::error title=compat {f.stem}::{body}")
-            if ns.show_diff:
-                for line in difflib.unified_diff(a, b, "Stata 14", "OpenDTA", lineterm="", n=1):
+            if ns.show_diff and not (ns.brief and k is not None and k.accepts(a, b)):
+                da, db = a, b
+                if ns.brief:
+                    # only what the known difference (if any) does not cover, without iteration lines
+                    if k is not None:
+                        da, db = k.filtered(a), k.filtered(b)
+                    da = [x for x in da if not _ITER.match(x)]
+                    db = [x for x in db if not _ITER.match(x)]
+                lines = list(difflib.unified_diff(da, db, "Stata 14", "OpenDTA", lineterm="", n=1))
+                cut = ns.max_diff if ns.brief else len(lines)
+                for line in lines[:cut]:
                     print("     " + line)
+                if len(lines) > cut:
+                    print(f"     ... {len(lines) - cut} more diff lines (run without --brief to see them)")
     extra = f", {tolerated} with a known difference" if tolerated else ""
     print(f"\n{passed} equal, {failed} different{extra}, {missing} without a reference")
     return 1 if failed else 0

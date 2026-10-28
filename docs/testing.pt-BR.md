@@ -112,6 +112,12 @@ Para mostrar as linhas diferentes:
 python tools/compare.py --show-diff
 ```
 
+Para um relatório curto (só os casos que diferem; diffs sem os históricos de iteração e cortados em `--max-diff` linhas, 60 por padrão):
+
+```bash
+python tools/compare.py --brief --show-diff
+```
+
 Para comparar só um arquivo, pelo começo do nome:
 
 ```bash

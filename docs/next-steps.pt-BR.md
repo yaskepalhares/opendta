@@ -6,7 +6,7 @@ Um plano de trabalho para os comandos que ainda faltam em [Faltam para a 1.0](..
 
 ## Como executar um bloco
 
-Comece uma sessão nova (uma conversa longa custa mais a cada passo) com uma instrução como:
+Comece uma sessão nova para cada bloco, ou duas para um bloco grande (uma para implementar, outra para conferir com o log do Stata): cada passo relê a conversa inteira, então um passo no fim de uma sessão longa custa três a quatro vezes um passo do começo. Comece com uma instrução como:
 
 > Implemente o bloco **Programação** conforme docs/next-steps.md. Abra um pull request e faça o merge quando o CI passar.
 
@@ -20,6 +20,14 @@ Todo bloco segue os mesmos passos:
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
 7. A rodada no Stata, uma só, para tudo o que o bloco precisa (inclusive casos sem referência): peça ao usuário que rode `compat/gerar_esperados.do`, nunca um bloco improvisado de comandos. Esse arquivo já faz `set dp period` e `linesize 255`, apaga as sobras `odta_*` e roda `mata clear`. Antes de pedir, confira com o git que o branch está no GitHub e diga ao usuário que dê `git pull` nele. Se uma rodada falhar por motivo de ambiente (vírgula decimal, nome de arquivo, sobras de outra rodada), diga isso antes de pedir outra. Antes de pedir, confira também que os dados do caso estão definitivos (os modelos convergem, os testes não são degenerados): mudar os dados depois custa uma segunda rodada. O clone do usuário precisa estar no branch do bloco (uma rodada em outro branch não gera o log); se tiver alterações locais, `git stash -u` antes.
 8. `python tools/compare.py` sem diferenças novas; abrir o PR; merge quando os testes passarem no Linux, no macOS e no Windows. A página de cobertura se atualiza sozinha depois do merge.
+
+Para manter a sessão pequena (cada passo relê tudo o que foi dito até ali):
+
+- Leia a saída dos comandos em forma curta: `python tools/compare.py --brief --show-diff` (só os casos que diferem, sem as linhas de iteração, cada diff cortado em 60 linhas); `pytest -q` com `tail`; nunca imprima um log inteiro. Rode o `pytest` completo e o `compare.py` completo uma vez, no fim do bloco; durante as correções, rode só o arquivo de teste ou o caso em que está trabalhando.
+- Espere o CI numa chamada só, que repete até os três jobs terminarem, e não em consultas seguidas.
+- Um pull request que muda só documentação (`*.md`, texto de ajuda) entra sem esperar o CI.
+- Os passos mecânicos (merge, espera do CI, publicação de versão, texto do roadmap) podem rodar com um modelo mais leve; implementar um bloco e conferi-lo com o log do Stata ficam com o principal.
+- O `progresso.md` (local) guarda só o estado atual e o próximo passo; o histórico das etapas concluídas vai para o `progresso-arquivo.md`, que a sessão lê só quando precisa.
 
 Notas para sessões que rodam na nuvem:
 
