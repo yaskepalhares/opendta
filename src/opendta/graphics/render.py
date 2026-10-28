@@ -119,7 +119,7 @@ def draw_layer(ax, ly: Layer, i: int, sch: dict) -> list:
         sizes = ly.extra.get("sizes")
         s = _ms(st) if sizes is None else _arr(sizes)
         h = ax.scatter(x, y, s=s, marker=mk, label=label, linewidths=0.8,
-                       facecolors="none" if hollow else col, edgecolors=col, zorder=3)
+                       facecolors="none" if hollow else col, edgecolors=col, zorder=2 + i * 0.01)
         labs = ly.extra.get("mlabel")
         if labs:
             for xi, yi, t in zip(x, y, labs):
@@ -132,7 +132,7 @@ def draw_layer(ax, ly: Layer, i: int, sch: dict) -> list:
         if kind == "connected":
             mk, _ = _msymbol(st, i, sch)
         (h,) = ax.plot(y if horiz else x, x if horiz else y, color=lcol, linestyle=_ls(st), linewidth=_lw(st),
-                       marker=mk or None, markersize=math.sqrt(_ms(st)), label=label, zorder=2)
+                       marker=mk or None, markersize=math.sqrt(_ms(st)), label=label, zorder=2 + i * 0.01)
         return [h]
     if kind == "area":
         base = float(st.get("base", 0) or 0)
@@ -142,11 +142,13 @@ def draw_layer(ax, ly: Layer, i: int, sch: dict) -> list:
         w = float(ly.extra.get("width", st.get("barwidth", 1) or 1))
         base = float(st.get("base", 0) or 0)
         edge = sch["background"] if kind == "histogram" else fcol
+        # many narrow bins: an edge in the background color would eat the fill
+        lw = 0.0 if kind == "histogram" and len(x) > 40 else 0.6
         if horiz:
-            h = ax.barh(x, y - base, height=w, left=base, color=fcol, edgecolor=edge, linewidth=0.6,
+            h = ax.barh(x, y - base, height=w, left=base, color=fcol, edgecolor=edge, linewidth=lw,
                         label=label, zorder=1)
         else:
-            h = ax.bar(x, y - base, width=w, bottom=base, color=fcol, edgecolor=edge, linewidth=0.6,
+            h = ax.bar(x, y - base, width=w, bottom=base, color=fcol, edgecolor=edge, linewidth=lw,
                        label=label, zorder=1)
         return [h]
     if kind in ("spike", "dropline"):
@@ -285,38 +287,136 @@ def _draw_twoway_panel(ax, panel: Panel, g: Graph, sch: dict) -> list:
     return handles
 
 
-def _draw_bars(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
+# graph bar/box/dot: positions, value axis and nested over() labels
+
+_GAP = 0.5          # extra space between groups of an outer over(), in category widths
+
+
+def _positions(ly: Layer) -> np.ndarray:
+    """Category positions: consecutive, with a gap where an outer over() changes."""
+    n = len(ly.extra.get("cats", []))
+    levels = ly.extra.get("levels", [])
+    pos = np.arange(n, dtype=float)
+    for i in range(1, n):
+        for L in range(len(levels), 0, -1):
+            if any(levels[j][i] != levels[j][i - 1] for j in range(L - 1, len(levels))):
+                pos[i:] += _GAP * L
+                break
+    return pos
+
+
+def _outer_labels(ax, ly: Layer, pos: np.ndarray, horizontal: bool) -> None:
+    """Labels of the outer over() groups, below (or left of) the category labels."""
+    levels = ly.extra.get("levels", [])
+    if not levels:
+        return
     cats = ly.extra.get("cats", [])
+    inner = max((len(str(c)) for c in cats), default=0)
+    for L, labs in enumerate(levels, start=1):
+        keys = [tuple(levels[j][i] for j in range(L - 1, len(levels))) for i in range(len(cats))]
+        i = 0
+        while i < len(keys):
+            j = i
+            while j + 1 < len(keys) and keys[j + 1] == keys[i]:
+                j += 1
+            mid = float(pos[i:j + 1].mean())
+            if horizontal:
+                ax.text(-(0.04 + 0.012 * inner + 0.05 * L) , mid, labs[i], transform=ax.get_yaxis_transform(),
+                        rotation=90, ha="center", va="center", fontsize=8, color=ax.yaxis.label.get_color())
+            else:
+                ax.text(mid, -(0.05 + 0.07 * L), labs[i], transform=ax.get_xaxis_transform(),
+                        ha="center", va="top", fontsize=8, color=ax.xaxis.label.get_color())
+            i = j + 1
+    if not horizontal:
+        ax.xaxis.labelpad = 6 + 18 * len(levels)
+
+
+def _set_cats(ax, ly: Layer, pos: np.ndarray, horizontal: bool, invert: bool = True) -> None:
+    cats = ly.extra.get("cats", [])
+    if horizontal:
+        ax.set_yticks(pos)
+        ax.set_yticklabels(cats)
+        if invert:
+            ax.invert_yaxis()
+    else:
+        ax.set_xticks(pos)
+        ax.set_xticklabels(cats)
+    _outer_labels(ax, ly, pos, horizontal)
+
+
+def _value_axis(ax, lo: float, hi: float, horizontal: bool) -> None:
+    """Value axis of bars and boxes: starts at zero, about four ticks, reaches the next tick
+    when the data end close to it, and leaves room for the labels above the last bar."""
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return
+    lo, hi = min(lo, 0.0), max(hi, 0.0)
+    if hi == lo:
+        return
+    axis = ax.xaxis if horizontal else ax.yaxis
+    loc = _mticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10])
+    axis.set_major_locator(loc)
+    ticks = loc.tick_values(lo, hi)
+    step = ticks[1] - ticks[0]
+
+    def reach(v: float, up: bool) -> float:
+        cand = [t for t in ticks if (t >= v if up else t <= v)]
+        if not cand:
+            return v
+        t = min(cand) if up else max(cand)
+        return t if abs(t - v) <= 0.4 * step else v
+
+    top, bottom = reach(hi, True), reach(lo, False)
+    span = top - bottom
+    top = top + 0.045 * span if top > 0 else top
+    bottom = bottom - 0.045 * span if bottom < 0 else bottom
+    (ax.set_xlim if horizontal else ax.set_ylim)(bottom, top)
+
+
+def _tint(color: str, background: str, amount: float) -> tuple:
+    """`color` mixed with the background: a light fill for the boxes."""
+    from matplotlib.colors import to_rgb
+    c, b = np.array(to_rgb(color)), np.array(to_rgb(background))
+    return tuple(c * (1 - amount) + b * amount)
+
+
+def _draw_bars(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
     series = ly.extra.get("series", [])
     stack = ly.extra.get("stack", False)
     nser = max(1, len(series))
-    pos = np.arange(len(cats), dtype=float)
-    width = 0.8 / (1 if stack else nser)
-    bottom = np.zeros(len(cats))
+    pos = _positions(ly)
+    width = (0.6 if nser == 1 else 0.8) / (1 if stack else nser)
+    group = width * (1 if stack else nser)
+    bottom = np.zeros(len(pos))
     handles = []
+    top = -np.inf
+    low = np.inf
     for j, ser in enumerate(series):
         vals = _arr(ser["values"])
         c = sch["colors"][j % len(sch["colors"])]
-        offs = pos if stack else pos - 0.4 + width * (j + 0.5)
+        offs = pos if stack else pos - group / 2 + width * (j + 0.5)
         if horizontal:
             h = ax.barh(offs, np.nan_to_num(vals), height=width, left=bottom if stack else 0, color=c, zorder=2)
         else:
             h = ax.bar(offs, np.nan_to_num(vals), width=width, bottom=bottom if stack else 0, color=c, zorder=2)
         if ly.extra.get("blabel"):
-            ax.bar_label(h, labels=[_num(round(v, 4)) if np.isfinite(v) else "" for v in vals], fontsize=7,
-                         color=sch["text"])
+            fmt = ly.extra.get("blabel_fmt")
+            if fmt:
+                from ..core.formats import format_value
+                texts = [format_value(v, fmt, pad=False) if np.isfinite(v) else "" for v in vals]
+            else:
+                texts = [_num(round(v, 4)) if np.isfinite(v) else "" for v in vals]
+            ax.bar_label(h, labels=texts, fontsize=7, color=sch["text"])
         if stack:
             bottom = bottom + np.nan_to_num(vals)
+            top, low = max(top, float(bottom.max())), min(low, float(bottom.min()))
+        else:
+            fin = vals[np.isfinite(vals)]
+            if len(fin):
+                top, low = max(top, float(fin.max())), min(low, float(fin.min()))
         handles.append((h, ser.get("label", "")))
-    if horizontal:
-        ax.set_yticks(pos)
-        ax.set_yticklabels(cats)
-        ax.invert_yaxis()
-        ax.grid(True, axis="x", color=sch["grid"], linewidth=0.7, zorder=0)
-    else:
-        ax.set_xticks(pos)
-        ax.set_xticklabels(cats)
-        ax.grid(True, axis="y", color=sch["grid"], linewidth=0.7, zorder=0)
+    _set_cats(ax, ly, pos, horizontal)
+    ax.grid(True, axis="x" if horizontal else "y", color=sch["grid"], linewidth=0.7, zorder=0)
+    _value_axis(ax, low, top, horizontal)
     return handles if len(series) > 1 else []
 
 
@@ -331,9 +431,8 @@ def _orientation_kw(horizontal: bool) -> dict:
 
 def _draw_dots(ax, ly: Layer, sch: dict) -> list:
     """graph dot: one dotted line per category and one marker per series."""
-    cats = ly.extra.get("cats", [])
     series = ly.extra.get("series", [])
-    pos = np.arange(len(cats), dtype=float)
+    pos = _positions(ly)
     for p_ in pos:
         ax.axhline(p_, color=sch["grid"], linestyle=":", linewidth=0.9, zorder=0)
     handles = []
@@ -342,18 +441,17 @@ def _draw_dots(ax, ly: Layer, sch: dict) -> list:
         c = sch["colors"][j % len(sch["colors"])]
         h = ax.scatter(vals, pos, s=30, color=c, marker=sch["markers"][j % len(sch["markers"])], zorder=3)
         handles.append((h, ser.get("label", "")))
-    ax.set_yticks(pos)
-    ax.set_yticklabels(cats)
-    ax.invert_yaxis()
+    _set_cats(ax, ly, pos, True)
     return handles if len(series) > 1 else []
 
 
 def _draw_boxes(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
-    cats = ly.extra.get("cats", [])
     series = ly.extra.get("series", [])
     nser = max(1, len(series))
     width = 0.7 / nser
+    pos_cat = _positions(ly)
     handles = []
+    top, low = -np.inf, np.inf
     for j, ser in enumerate(series):
         c = sch["colors"][j % len(sch["colors"])]
         stats = []
@@ -363,28 +461,25 @@ def _draw_boxes(ax, ly: Layer, sch: dict, horizontal: bool) -> list:
                 continue
             stats.append({"med": b["med"], "q1": b["q1"], "q3": b["q3"], "whislo": b["lo"], "whishi": b["hi"],
                           "fliers": b["out"]})
-            positions.append(k - 0.35 + width * (j + 0.5))
+            positions.append(pos_cat[k] - 0.35 + width * (j + 0.5))
+            top = max(top, b["hi"], *(b["out"] or [b["hi"]]))
+            low = min(low, b["lo"], *(b["out"] or [b["lo"]]))
         if not stats:
             continue
         orient = _orientation_kw(horizontal)
         r = ax.bxp(stats, positions=positions, widths=width * 0.85, patch_artist=True, **orient,
                    showfliers=True, manage_ticks=False,
-                   boxprops={"facecolor": c, "edgecolor": c},
-                   medianprops={"color": sch["background"], "linewidth": 1.5},
+                   boxprops={"facecolor": _tint(c, sch["background"], 0.6), "edgecolor": c},
+                   medianprops={"color": c, "linewidth": 1.5},
                    whiskerprops={"color": c}, capprops={"color": c},
-                   flierprops={"marker": "o", "markerfacecolor": "none", "markeredgecolor": c, "markersize": 4})
+                   flierprops={"marker": "o", "markerfacecolor": c, "markeredgecolor": c, "markersize": 3.5})
         handles.append((r["boxes"][0], ser.get("label", "")))
-    pos = np.arange(len(cats))
-    if horizontal:
-        ax.set_yticks(pos)
-        ax.set_yticklabels(cats)
-        ax.grid(True, axis="x", color=sch["grid"], linewidth=0.7, zorder=0)
-    else:
-        ax.set_xticks(pos)
-        ax.set_xticklabels(cats)
-        ax.grid(True, axis="y", color=sch["grid"], linewidth=0.7, zorder=0)
+    _set_cats(ax, ly, pos_cat, horizontal, invert=False)
+    ax.grid(True, axis="x" if horizontal else "y", color=sch["grid"], linewidth=0.7, zorder=0)
+    cats = ly.extra.get("cats", [])
     if len(cats) == 1 and cats[0] == "":
         (ax.set_yticks if horizontal else ax.set_xticks)([])
+    _value_axis(ax, low, top, horizontal)
     return handles if len(series) > 1 else []
 
 

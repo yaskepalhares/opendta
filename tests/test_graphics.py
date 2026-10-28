@@ -171,3 +171,32 @@ def test_graphics_off_and_scheme(run):
 def test_scalar_abbreviation_not_taken_by_scatter(run):
     run("sca z = 3")
     assert run.eval("z") == 3
+
+
+def test_kdensity_bandwidth_counts_observations_with_aweight(run):
+    # aweight: n is the number of observations (not the sum of the weights), so a constant
+    # weight changes nothing; with fweight n is the sum of the weights
+    run("clear\nset seed 7\nset obs 200\ngen x = rnormal()\ngen w = 1000")
+    run("kdensity x, nograph")
+    h0 = run.session.r["bwidth"]
+    run("kdensity x [aweight=w], nograph")
+    assert run.session.r["bwidth"] == pytest.approx(h0, rel=1e-9)
+    run("kdensity x [fweight=w], nograph")
+    assert run.session.r["bwidth"] == pytest.approx(h0 * 1000 ** -0.2, rel=1e-9)
+
+
+def test_graph_bar_nested_over_and_sort(run):
+    run("clear\nset obs 40\ngen a = mod(_n, 4)\ngen b = mod(_n, 2)\ngen y = a*10 + b")
+    run("graph bar (mean) y, over(a) over(b)")
+    ex = store(run.session).get().panels[0].layers[0].extra
+    # first over() is the innermost: its categories repeat inside each group of the second
+    assert ex["cats"] == ["0", "2", "1", "3"] and ex["levels"] == [["0", "0", "1", "1"]]
+    run("graph dot (mean) y, over(a, sort(1) descending)")
+    ex = store(run.session).get().panels[0].layers[0].extra
+    assert ex["cats"] == ["3", "2", "1", "0"]
+
+
+def test_graph_bar_blabel_format(run):
+    run(SEQ)
+    run("graph bar (mean) y, over(g) blabel(bar, format(%4.1f))")
+    assert store(run.session).get().panels[0].layers[0].extra["blabel_fmt"] == "%4.1f"

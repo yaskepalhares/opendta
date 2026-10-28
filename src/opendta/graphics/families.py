@@ -98,7 +98,7 @@ def histogram(s: "Session", text: str) -> tuple[Graph, dict, str]:
             dens = np.exp(-0.5 * ((grid - mu) / sd) ** 2) / (sd * math.sqrt(2 * math.pi)) if sd > 0 else grid * 0
             out.append(Layer("line", grid.tolist(), (dens * factor).tolist(), {}, {"lcolor": "maroon"}, ""))
         if lopts.get("kdensity"):
-            kd = D.kdensity(xx, ww)
+            kd = D.kdensity(xx, ww, fw=D.is_fweight(p))
             out.append(Layer("line", kd["x"].tolist(), (kd["d"] * factor).tolist(), {}, {"lcolor": "navy"}, ""))
         if lopts.get("addlabels"):
             out[0].extra["blabel"] = True
@@ -182,7 +182,7 @@ def kdensity(s: "Session", text: str) -> tuple[Graph | None, dict]:
         at = av[at_rows]
     xx = x[mask]
     ww = None if w is None else w[mask]
-    kd = D.kdensity(xx, ww, kernel=kname, bw=bw, n=npts, at=at)
+    kd = D.kdensity(xx, ww, kernel=kname, bw=bw, n=npts, at=at, fw=D.is_fweight(p))
     gen = lopts.get("generate")
     if isinstance(gen, str):
         _generate(s, gen, kd, at_rows)
@@ -301,6 +301,38 @@ def _over_list(graw: dict, key: str = "over") -> list[dict]:
     return out
 
 
+def _over_groups(s: "Session", m: np.ndarray, overvars: list[str], missing: bool):
+    """over() groups with the first over() varying fastest (innermost) and the last one
+    outermost, as in graph bar/box. Returns (cats, levels, keys): the labels of the first
+    over(), one list of labels per outer over(), and the (key, mask) pairs."""
+    if not overvars:
+        return [""], [], [([], m)]
+    keys = [(k[::-1], gm) for k, gm in D.groups(s, m, overvars[::-1], missing=missing)]
+    cats = [D.group_title(s, overvars[:1], k[:1]) for k, _ in keys]
+    levels = [[D.value_text(s, overvars[j], k[j]) for k, _ in keys] for j in range(1, len(overvars))]
+    return cats, levels, keys
+
+
+def _sort_cats(cats: list[str], levels: list[list[str]], series: list[dict], subs: dict) -> None:
+    """over(var, sort(#) descending): orders the categories by the value of the #-th series,
+    inside each outer group (in place)."""
+    k = str(subs.get("sort", ""))
+    if not k.isdigit() or not 1 <= int(k) <= len(series):
+        return
+    vals = series[int(k) - 1]["values"]
+    sign = -1.0 if subs.get("descending") else 1.0
+    key = lambda i: (tuple(lv[i] for lv in reversed(levels)), sign * (vals[i] if vals[i] is not None else math.inf))
+    order = sorted(range(len(cats)), key=key)
+    cats[:] = [cats[i] for i in order]
+    for lv in levels:
+        lv[:] = [lv[i] for i in order]
+    for ser in series:
+        if "stats" in ser:
+            ser["stats"] = [ser["stats"][i] for i in order]
+        else:
+            ser["values"] = [ser["values"][i] for i in order]
+
+
 def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
     p = parse_standard(text)
     lopts, graw = split_layer_graph(p.options, BAR_OPTS)
@@ -319,9 +351,8 @@ def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
         raise StataError(102, "too few variables specified")   # VERIFY
     opts = graph_options({k: v for k, v in graw.items() if k != "_raw"})
 
-    def series_for(m: np.ndarray) -> tuple[list[str], list[dict]]:
-        keys = list(D.groups(s, m, overvars, missing=bool(lopts.get("missing")))) if overvars else [([], m)]
-        cats = [D.group_title(s, overvars, k) if overvars else "" for k, _ in keys]
+    def series_for(m: np.ndarray) -> tuple[list[str], list[list[str]], list[dict]]:
+        cats, levels, keys = _over_groups(s, m, overvars, bool(lopts.get("missing")))
         series = []
         if not ys:
             tot = float(m.sum() if w is None else w[m].sum())
@@ -344,29 +375,34 @@ def bar(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
             # the first over() becomes the series (colors and legend)
             vals = series[0]["values"]
             series = [{"label": c, "values": [v]} for c, v in zip(cats, vals)]
-            cats = [""]
+            cats, levels = [""], []
         if lopts.get("percentages") and len(series) > 1:
             for k in range(len(cats)):
                 tot = sum((ser["values"][k] or 0) for ser in series)
                 for ser in series:
                     if ser["values"][k] is not None and tot:
                         ser["values"][k] = 100 * ser["values"][k] / tot
-        return cats, series
+        if overs:
+            _sort_cats(cats, levels, series, overs[0]["subs"])
+        return cats, levels, series
 
     g = Graph(family=family, opts=opts)
     blabel = isinstance(lopts.get("blabel"), str) and lopts["blabel"].split(",")[0].strip() in ("bar", "total")
+    bfmt = split_sub(lopts["blabel"])[1].get("format") if blabel else None
     byo = opts.get("by")
     if byo:
         byvars = s.expand_varlist(" ".join(byo["vars"]))
         for key, gm in D.groups(s, mask, byvars):
-            cats, series = series_for(gm)
+            cats, levels, series = series_for(gm)
             g.panels.append(Panel(D.group_title(s, byvars, key), [Layer("bars", extra={
-                "cats": cats, "series": series, "stack": bool(lopts.get("stack")), "blabel": blabel})]))
+                "cats": cats, "levels": levels, "series": series, "stack": bool(lopts.get("stack")),
+                "blabel": blabel, "blabel_fmt": bfmt})]))
         opts.setdefault("note", {"lines": ["Graphs by " + ", ".join(D.var_title(s, b) for b in byvars)]})
     else:
-        cats, series = series_for(mask)
-        g.panels.append(Panel("", [Layer("bars", extra={"cats": cats, "series": series,
-                                                       "stack": bool(lopts.get("stack")), "blabel": blabel})]))
+        cats, levels, series = series_for(mask)
+        g.panels.append(Panel("", [Layer("bars", extra={"cats": cats, "levels": levels, "series": series,
+                                                       "stack": bool(lopts.get("stack")), "blabel": blabel,
+                                                       "blabel_fmt": bfmt})]))
     first = g.panels[0].layers[0].extra["series"]
     opts["_ytitle"] = first[0]["label"] if len(first) == 1 else ""
     opts["_xtitle"] = ""
@@ -395,8 +431,7 @@ def box(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
     opts = graph_options({k: v for k, v in graw.items() if k != "_raw"})
 
     def series_for(m: np.ndarray):
-        keys = list(D.groups(s, m, overvars, missing=bool(lopts.get("missing")))) if overvars else [([], m)]
-        cats = [D.group_title(s, overvars, k) if overvars else "" for k, _ in keys]
+        cats, levels, keys = _over_groups(s, m, overvars, bool(lopts.get("missing")))
         series = []
         for nm in names:
             xv = D.numeric(s, nm)
@@ -411,20 +446,20 @@ def box(s: "Session", text: str, family: str) -> tuple[Graph, dict]:
                     b["out"] = []
                 st.append(b)
             series.append({"label": D.var_title(s, nm), "stats": st})
-        return cats, series
+        return cats, levels, series
 
     g = Graph(family=family, opts=opts)
     byo = opts.get("by")
     if byo:
         byvars = s.expand_varlist(" ".join(byo["vars"]))
         for key, gm in D.groups(s, mask, byvars):
-            cats, series = series_for(gm)
+            cats, levels, series = series_for(gm)
             g.panels.append(Panel(D.group_title(s, byvars, key),
-                                  [Layer("boxes", extra={"cats": cats, "series": series})]))
+                                  [Layer("boxes", extra={"cats": cats, "levels": levels, "series": series})]))
         opts.setdefault("note", {"lines": ["Graphs by " + ", ".join(D.var_title(s, b) for b in byvars)]})
     else:
-        cats, series = series_for(mask)
-        g.panels.append(Panel("", [Layer("boxes", extra={"cats": cats, "series": series})]))
+        cats, levels, series = series_for(mask)
+        g.panels.append(Panel("", [Layer("boxes", extra={"cats": cats, "levels": levels, "series": series})]))
     opts["_ytitle"] = D.var_title(s, names[0]) if len(names) == 1 else ""
     opts["_xtitle"] = ""
     return g, graw
