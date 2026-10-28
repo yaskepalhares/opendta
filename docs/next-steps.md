@@ -129,6 +129,6 @@ Done in phase 23 (compat case 1909), except the pieces listed under Other suites
 
 ## Before 1.0
 
-Blocks 1 to 11 were released as version 0.5.0. Version 1.0 waits for what is still listed in [Missing for 1.0](../ROADMAP.md#missing-for-10): plan it as new blocks (from block 12), one area at a time, run the same way as the blocks above.
+Blocks 1 to 11 were released as version 0.5.0, and blocks 12 to 20a (phases 24 to 32) as version 0.6.0. Version 1.0 waits for what is still listed in [Missing for 1.0](../ROADMAP.md#missing-for-10): plan it as new blocks (from block 12), one area at a time, run the same way as the blocks above.
 
 When that list is empty: the Stata run of all compat cases without reference, the differences fixed, the version set to 1.0.0 in `src/opendta/__init__.py` and `pyproject.toml`, the release notes written, and the tag `v1.0.0` pushed (see [development.md](development.md#publishing-a-version)).
