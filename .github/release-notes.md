@@ -1,11 +1,11 @@
 **English** · [Português](#português)
 
-## What's new in 0.7.0
+## What's new in 0.7.1
 
-Graphs now look like Stata 14's, each change checked against Stata's own PNG output (case 1921 in `compat/`), and the interface got a few touches:
+A visual update to the interface:
 
-- **Graphs**: the `kdensity` bandwidth with `aweight` and `fweight` (the number of observations with `aweight`, the sum of the weights with `fweight`); `graph bar`, `hbar` and `box` with two `over()` (grouped axis); `sort()` and `descending` in `graph dot`; narrower bars; the y axis of bars starting at zero with about four ticks; `blabel(, format())`; light boxes with filled outliers, and a `graph box` axis that follows the data; `lfit` drawn over the scatter; the `histogram` x axis starting at zero and no border between many narrow bins.
-- **Interface**: each toolbar button shows its name under the icon, in English and Portuguese; the update dialog follows the Settings style; the Results tables have solid lines; do-files dropped on the window open in the Do-file Editor instead of running.
+- **Do-file Editor**: each toolbar button shows its name under the icon, as in the main window, in English and Portuguese; rounded tabs, find bar and buttons.
+- **Other windows**: the Graph window, Data Browser, Variables Manager, Graph Editor and the command dialogs got the same rounded tabs, buttons and inputs.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -51,14 +51,12 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.7.0
+### Novidades da 0.7.1
 
-Os gráficos agora ficam como os do Stata 14, cada mudança conferida com os PNGs do próprio Stata (caso 1921 em `compat/`), e a interface ganhou alguns ajustes:
+Atualização visual da interface:
 
-- **Gráficos**: a largura de banda do `kdensity` com `aweight` e `fweight` (nº de observações com `aweight`, soma dos pesos com `fweight`); `graph bar`, `hbar` e `box` com dois `over()` (eixo agrupado); `sort()` e `descending` no `graph dot`; barras mais estreitas; eixo y das barras a partir de zero com cerca de quatro marcas; `blabel(, format())`; caixas claras com outliers preenchidos, e eixo do `graph box` que acompanha os dados; `lfit` desenhado por cima do scatter; eixo x do `histogram` começando em zero e sem borda entre muitos bins estreitos.
-- **Interface**: cada botão da barra de ferramentas mostra o nome sob o ícone, em inglês e português; a janela de atualização segue o estilo de Settings; as tabelas de Results têm linhas sólidas; do-files soltos na janela abrem no Editor de do-files em vez de rodar.
-
-O que ainda falta para a versão 1.0 está no [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10).
+- **Editor de do-files**: cada botão da barra de ferramentas mostra o nome sob o ícone, como na janela principal, em inglês e português; abas, barra de busca e botões arredondados.
+- **Outras janelas**: a janela Graph, o Data Browser, o Variables Manager, o Graph Editor e as caixas de diálogo dos comandos ganharam as mesmas abas, botões e campos arredondados.
 
 ### Download
 

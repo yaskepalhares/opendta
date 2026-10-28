@@ -35,6 +35,9 @@ PALETTE = {
 
 RUN_GREEN = "#2fa84f"      # Do / Run icons
 
+# short name shown under each toolbar icon, as in the main window (the tooltip keeps the long text)
+_SHORT_LABELS = {"Open...": "Open", "Save as...": "Save as", "Comment/uncomment": "Comment"}
+
 
 def editor_colors(palette: str, theme: str) -> dict:
     """Colors of the editor for a color scheme (palettes.py). "classic" is the original look of the
@@ -377,7 +380,7 @@ class DoFileEditor(QMainWindow):
         tb.setObjectName("DoToolbar")
         tb.setMovable(False)
         tb.setIconSize(QSize(22, 22))
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         key = QKeySequence.StandardKey
         edit = self._edit
         # (text, icon, slot, shortcut, bound?) - undo and redo keep the editor's own shortcuts
@@ -413,6 +416,7 @@ class DoFileEditor(QMainWindow):
                 act = QAction(icon(name, accent), tr(text), self)
                 act.setData((name, accent))
                 act.setProperty("key", text)
+                act.setProperty("label", _SHORT_LABELS.get(text, text))
                 act.setProperty("tip", tips.get(text, text))
                 act.setProperty("hint", QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText))
                 act.triggered.connect(slot)
@@ -420,14 +424,10 @@ class DoFileEditor(QMainWindow):
                     act.setShortcut(QKeySequence(shortcut))
                 self._retitle(act)
                 tb.addAction(act)
-                if name in ("play", "play-quiet"):      # Do and Run carry their name beside the icon
-                    button = tb.widgetForAction(act)
-                    if isinstance(button, QToolButton):
-                        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-                        button.setProperty("labeled", True)
                 self.tool_actions[name] = act
         self.addToolBar(tb)
         self.toolbar = tb
+        self._fit_toolbar_buttons()
         self.new_tab_button = QToolButton()          # the + at the end of the tab bar
         self.new_tab_button.setAutoRaise(True)
         self.new_tab_button.setIcon(icon("plus"))
@@ -436,18 +436,26 @@ class DoFileEditor(QMainWindow):
         self.tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
         self._retitle_tab_button()
         self.setStyleSheet("""
-            QToolBar#DoToolbar { border: none; spacing: 3px; padding: 5px 10px; }
-            QToolBar#DoToolbar QToolButton { border: none; border-radius: 8px; padding: 5px; font-size: 13px; }
-            QToolBar#DoToolbar QToolButton[labeled="true"] { padding: 5px 11px 5px 7px; font-weight: 600; }
+            QToolBar#DoToolbar { border: none; spacing: 2px; padding: 4px 10px; }
+            QToolBar#DoToolbar QToolButton { border: none; border-radius: 8px; padding: 4px 4px; }
             QToolBar#DoToolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#DoToolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#DoToolbar::separator { width: 1px; margin: 6px 8px; background: rgba(127, 127, 127, 0.3); }
+            QTabWidget::pane { border: none; }
+            QTabBar { background: transparent; }
+            QTabBar::tab { background: transparent; border: none; border-radius: 8px; padding: 5px 12px;
+                           margin: 4px 2px 4px 2px; }
+            QTabBar::tab:selected { background: rgba(127, 127, 127, 0.22); font-weight: 600; }
+            QTabBar::tab:hover:!selected { background: rgba(127, 127, 127, 0.12); }
+            QTabBar::close-button { border-radius: 6px; subcontrol-position: right; }
+            QTabBar::close-button:hover { background: rgba(127, 127, 127, 0.3); }
             QPlainTextEdit { border: none; }
             QWidget#FindBar { border-top: 1px solid rgba(127, 127, 127, 0.3); }
-            QWidget#FindBar QLineEdit { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px;
-                                        padding: 4px 8px; }
-            QWidget#FindBar QPushButton { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px;
-                                          padding: 4px 12px; }
+            QWidget#FindBar QLineEdit { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
+                                        padding: 5px 10px; }
+            QWidget#FindBar QLineEdit:focus { border: 1px solid #0a84ff; }
+            QWidget#FindBar QPushButton { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
+                                          padding: 5px 14px; }
             QWidget#FindBar QPushButton:hover { background: rgba(127, 127, 127, 0.16); }
         """)
         QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.do_selection)
@@ -456,9 +464,19 @@ class DoFileEditor(QMainWindow):
 
     def _retitle(self, act: QAction) -> None:
         """Name and tooltip (with the shortcut) in the current language."""
-        act.setText(tr(act.property("key")))
+        act.setText(tr(act.property("label") or act.property("key")))
         hint = act.property("hint")
         act.setToolTip(tr(act.property("tip")) + (f"  [{hint}]" if hint else ""))
+
+    def _fit_toolbar_buttons(self) -> None:
+        """Small font and a width that follows the label, as in the main window's toolbar."""
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        for act in self.tool_actions.values():
+            btn = self.toolbar.widgetForAction(act)
+            if isinstance(btn, QToolButton):
+                btn.setFont(font)
+                btn.setFixedWidth(max(40, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
 
     def _retitle_tab_button(self) -> None:
         shortcut = QKeySequence(QKeySequence.StandardKey.New).toString(QKeySequence.SequenceFormat.NativeText)
@@ -704,4 +722,5 @@ class DoFileEditor(QMainWindow):
         for act in self.tool_actions.values():
             self._retitle(act)
         self._retitle_tab_button()
+        self._fit_toolbar_buttons()
         self._update_title()

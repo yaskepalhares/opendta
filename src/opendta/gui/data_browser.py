@@ -13,6 +13,7 @@ and column after the data create new observations and variables.
 from __future__ import annotations
 
 from ..i18n import L, tr
+from .style import apply_rounded
 
 from typing import TYPE_CHECKING, Callable
 
@@ -274,6 +275,7 @@ class DataBrowser(QMainWindow):
         lay.addWidget(self.table, 1)
         lay.addWidget(self.info)
         self.setCentralWidget(box)
+        apply_rounded(self)
         QShortcut(QKeySequence.StandardKey.Close, self, self.close)
         self.table.selectionModel().currentChanged.connect(self._show_cell)
         self.set_mode(False)

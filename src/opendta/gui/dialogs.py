@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ..i18n import tr
+from .style import apply_rounded
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +482,7 @@ def _dialog_class():
             self._run = run
             self._to_command = to_command
             self.setWindowTitle(sp.title)
+            apply_rounded(self)
             self.widgets: dict[str, object] = {}
             names = list(session.data.names) if session is not None else []
 

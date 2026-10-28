@@ -8,6 +8,7 @@ Review, as in Stata.
 from __future__ import annotations
 
 from ..i18n import tr
+from .style import apply_rounded
 
 from typing import TYPE_CHECKING, Callable
 
@@ -121,6 +122,7 @@ class VariablesManager(QMainWindow):
         lay.addWidget(self.filter)
         lay.addWidget(self.table, 1)
         self.setCentralWidget(box)
+        apply_rounded(self)
         QShortcut(QKeySequence.StandardKey.Close, self, self.close)
 
     def refresh(self) -> None:

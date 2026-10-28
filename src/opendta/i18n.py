@@ -296,7 +296,7 @@ PT: dict[str, str] = {
     "You can turn these confirmations off in Settings > General > Safety.":
         "Você pode desligar estas confirmações em Configurações > Geral > Segurança.",
     "New tab": "Nova aba",
-    "Undo": "Desfazer", "Redo": "Refazer", "Comment/uncomment": "Comentar/descomentar",
+    "Undo": "Desfazer", "Redo": "Refazer", "Comment/uncomment": "Comentar/descomentar", "Comment": "Comentar",
     "Indent": "Aumentar recuo", "Outdent": "Diminuir recuo", "Do line": "Executar linha",
     "Execute the current line (do)": "Executa a linha atual (do)",
     # Graph window / editor
