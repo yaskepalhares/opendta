@@ -708,6 +708,83 @@ def test_side_windows_open_and_return_at_their_default_place(app):
     w.close()
 
 
+def test_closed_side_windows_get_a_toolbar_button(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolBar
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    tb = w.findChild(QToolBar, "Toolbar")
+    panels = {"review": (w.dock_review, Qt.DockWidgetArea.LeftDockWidgetArea),
+              "variables": (w.dock_variables, Qt.DockWidgetArea.RightDockWidgetArea),
+              "properties": (w.dock_properties, Qt.DockWidgetArea.RightDockWidgetArea)}
+
+    def shown(name: str) -> bool:
+        app.processEvents()                         # the toolbar lays its buttons out on the next pass
+        return tb.widgetForAction(w.toolbar_actions[name]).isVisible()
+
+    def separators() -> int:
+        app.processEvents()
+        return sum(1 for a in tb.actions() if a.isSeparator() and a.isVisible())
+
+    # open at the start: no button for them, and the groups are still divided by one separator each
+    assert not any(shown(n) for n in panels)
+    open_separators = separators()
+    # closed by the X of the window (or by the Window menu): the button takes its place in the toolbar
+    for name, (dock, _area) in panels.items():
+        dock.close()
+        assert shown(name)
+    assert separators() == open_separators + 1
+    # the button brings the window back to its place and leaves the toolbar; Manager is untouched
+    for name, (dock, area) in panels.items():
+        dock.setFloating(True)
+        w.toolbar_actions[name].trigger()
+        assert dock.isVisible() and not dock.isFloating() and w.dockWidgetArea(dock) == area
+        assert not shown(name)
+    assert separators() == open_separators
+    dock = w.dock_variables
+    dock.toggleViewAction().trigger()               # closed from the Window menu
+    assert shown("variables") and not shown("review") and not shown("properties")
+    # open windows are not buttons after the main window is hidden and shown again
+    dock.toggleViewAction().trigger()
+    w.hide()
+    w.show()
+    assert not any(shown(n) for n in panels)
+    w.close()
+
+
+def test_side_window_buttons_follow_the_language(app):
+    from opendta import i18n
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        act = w.toolbar_actions["variables"]
+        assert (act.text(), act.toolTip()) == ("Variables", "Show the Variables window")
+        i18n.set_language("pt")
+        w.retranslate()
+        assert [w.toolbar_actions[n].text() for n in ("review", "variables", "properties", "varmanager")] == \
+            ["Histórico", "Variáveis", "Propriedades", "Gerenciador"]
+        assert w.toolbar_actions["review"].toolTip() == "Mostrar a janela Histórico"
+    finally:
+        i18n.set_language("en")
+        w.close()
+
+
+def test_variables_manager_button_opens_the_manager(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    w.toolbar_actions["varmanager"].trigger()
+    assert w.varmanager is not None and w.varmanager.isVisible()
+    assert w.dock_variables.isVisible()             # the side window is not the manager
+    w.varmanager.close()
+    w.close()
+
+
 def test_dofile_editor_toolbar_layout(app):
     from PySide6.QtWidgets import QToolBar
 
@@ -769,9 +846,9 @@ def test_toolbar_buttons_show_their_name_under_the_icon(app):
         tb = w.findChild(QToolBar, "Toolbar")
         assert tb.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
         names = ["open", "save", "print", "log", "viewer", "graph", "dofile", "dataeditor", "databrowser",
-                 "variables", "more", "break", "settings"]
+                 "varmanager", "more", "break", "settings"]
         en = ["Open", "Save", "Print", "Log", "Viewer", "Graph", "Do-file Editor", "Data Editor",
-              "Data Browser", "Variables", "More", "Break", "Settings"]
+              "Data Browser", "Manager", "More", "Break", "Settings"]
         assert [w.toolbar_actions[n].text() for n in names] == en
         # the long text stays in the tooltip
         assert w.toolbar_actions["log"].toolTip().startswith("Log (begin or close)")
@@ -786,7 +863,18 @@ def test_toolbar_buttons_show_their_name_under_the_icon(app):
             widths = {n: tb.widgetForAction(a).sizeHint().width() for n, a in w.toolbar_actions.items()}
             if sys.platform != "win32":   # the Windows runner scales the fonts up (unlike the other two)
                 assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width(), widths)
+                # the buttons of the side windows are shown only while their window is closed
+                assert all(tb.widgetForAction(a).isVisible() for n, a in w.toolbar_actions.items()
+                           if n not in ("review", "variables", "properties"))
+                # and with the three side windows closed, when their buttons are all there too
+                docks = (w.dock_review, w.dock_variables, w.dock_properties)
+                for d in docks:
+                    d.close()
+                app.processEvents()
+                assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width())
                 assert all(tb.widgetForAction(a).isVisible() for a in w.toolbar_actions.values())
+                for d in docks:
+                    d.toggleViewAction().trigger()
         assert w.toolbar_actions["dofile"].text() == "Editor de do-files"
         assert w.toolbar_actions["databrowser"].text() == "Navegador de dados"
     finally:
