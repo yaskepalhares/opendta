@@ -200,3 +200,19 @@ def test_graph_bar_blabel_format(run):
     run(SEQ)
     run("graph bar (mean) y, over(g) blabel(bar, format(%4.1f))")
     assert store(run.session).get().panels[0].layers[0].extra["blabel_fmt"] == "%4.1f"
+
+
+def test_histogram_x_axis_starts_at_zero(run):
+    # Stata starts the x axis of a histogram of positive data at zero (also with normal)
+    from opendta.graphics.render import figure
+    run("clear\nset seed 7\nset obs 300\ngen x = 20 + 5*runiform()")
+    run("histogram x, normal name(h)")
+    ax = figure(store(run.session).get()).axes[0]
+    assert ax.get_xlim()[0] == 0
+    assert ax.get_xlim()[1] > 24
+    # data that already include negatives are left alone
+    run("histogram x, name(h2)")
+    run("replace x = x - 22")
+    run("histogram x, name(h3)")
+    ax = figure(store(run.session).get()).axes[0]
+    assert ax.get_xlim()[0] < 0

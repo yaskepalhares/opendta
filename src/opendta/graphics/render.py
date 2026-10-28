@@ -281,6 +281,14 @@ def _draw_twoway_panel(ax, panel: Panel, g: Graph, sch: dict) -> list:
         hs = draw_layer(ax, ly, i, sch)
         if hs and ly.label:
             handles.append((hs[0], ly.label))
+    # histogram: the value axis starts at zero, as in Stata
+    for ly in panel.layers:
+        if ly.kind == "histogram":
+            horiz = bool(ly.style.get("horizontal"))
+            lo, hi = ax.get_ylim() if horiz else ax.get_xlim()
+            if lo > 0:
+                (ax.set_ylim if horiz else ax.set_xlim)(0, hi)
+            break
     if g.opts.get("text"):
         for yv, xv, t in g.opts["text"]:
             ax.text(xv, yv, t, fontsize=8, color=sch["text"], ha="center", va="center")
