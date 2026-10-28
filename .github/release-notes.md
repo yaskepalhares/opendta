@@ -1,11 +1,10 @@
 **English** · [Português](#português)
 
-## What's new in 0.7.2
+## What's new in 0.8.0
 
-Interface polish:
+Interface:
 
-- **Data Editor**: opens with a grid of empty cells, ready to type into, instead of a blank window. New toolbar with Edit, Browse, Filter, Variables, Properties and Snapshots; a cell bar with `var[obs]` and the value of the current cell (editable in Edit mode); Variables and Properties panes (the properties can be edited in Edit mode); a status bar with Vars, Order, Obs, Length and Filter.
-- **Do-file Editor**: the new-tab button sits right after the last tab, every tab shows its close icon, closing an empty tab no longer asks for confirmation, and the save dialog has rounded buttons.
+- **Toolbar**: when you close the Review, Variables or Properties window, a button for it appears in the toolbar and brings the window back to its place; with the window open, the button is not there. The Variables Manager has its own **Manager** button, with a new icon.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -51,12 +50,11 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.7.2
+### Novidades da 0.8.0
 
-Ajustes de interface:
+Interface:
 
-- **Editor de dados**: abre com uma grade de células vazias, pronta para digitar, em vez de uma janela em branco. Nova barra com Editar, Ver, Filtro, Variáveis, Propriedades e Instantâneos; uma barra de célula com `var[obs]` e o valor da célula atual (editável no modo Edição); painéis de Variáveis e Propriedades (as propriedades podem ser editadas no modo Edição); barra de status com Vars, Ordem, Obs, Tamanho e Filtro.
-- **Editor de do-files**: o botão de nova aba fica logo após a última aba, cada aba mostra o ícone de fechar, fechar uma aba vazia não pede mais confirmação e a janela de salvar tem botões arredondados.
+- **Barra de ferramentas**: ao fechar a janela Histórico, Variáveis ou Propriedades, um botão dela aparece na barra e traz a janela de volta ao seu lugar; com a janela aberta, o botão não aparece. O Gerenciador de variáveis tem o seu próprio botão, **Gerenciador**, com ícone novo.
 
 ### Download
 

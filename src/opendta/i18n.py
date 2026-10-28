@@ -216,6 +216,9 @@ PT: dict[str, str] = {
     # toolbar and panels
     "Log (begin or close)": "Log (iniciar ou fechar)", "Data Editor (Edit)": "Editor de dados (editar)",
     "Data Browser (Browse)": "Navegador de dados (ver)", "Variables Manager": "Gerenciador de variáveis",
+    "Manager": "Gerenciador", "Show the Review window": "Mostrar a janela Histórico",
+    "Show the Variables window": "Mostrar a janela Variáveis",
+    "Show the Properties window": "Mostrar a janela Propriedades",
     "Clear --more-- condition": "Limpar a condição --more--", "Break": "Interromper", "Data Browser": "Navegador de dados", "More": "Mais", "Toolbar": "Barra de ferramentas",
     "Filter commands here": "Filtrar comandos aqui", "Filter variables here": "Filtrar variáveis aqui",
     "Name": "Nome", "Label": "Rótulo", "Type": "Tipo", "Format": "Formato", "Value label": "Rótulo de valores",

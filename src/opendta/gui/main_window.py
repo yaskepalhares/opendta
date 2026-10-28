@@ -28,6 +28,7 @@ from PySide6.QtGui import QAction, QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
                                QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar, QToolButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from shiboken6 import isValid
 
 from .. import __version__
 from .. import i18n
@@ -71,7 +72,8 @@ def _human_size(nbytes: int) -> str:
 _TOOLBAR_LABELS = {
     "open": "Open", "save": "Save", "print": "Print", "log": "Log", "viewer": "Viewer", "graph": "Graph",
     "dofile": "Do-file Editor", "dataeditor": "Data Editor", "databrowser": "Data Browser",
-    "variables": "Variables", "more": "More", "break": "Break",
+    "varmanager": "Manager", "review": "Review", "variables": "Variables", "properties": "Properties",
+    "more": "More", "break": "Break",
 }
 
 # toolbar buttons that exist in Stata but do nothing here, with the reason in their tooltip
@@ -406,13 +408,20 @@ class MainWindow(QMainWindow):
              ("dofile", "Do-file Editor", lambda: self.show_dofile_editor(""))],
             [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit")),
              ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse")),
-             ("variables", "Variables Manager", lambda: self.run_command("varmanage"))],
+             ("varmanager", "Variables Manager", lambda: self.run_command("varmanage"))],
+            # the side windows: each button appears only while its window is closed and brings it back
+            [(name, f"Show the {title} window", lambda _=False, d=dock: d.toggleViewAction().trigger())
+             for name, title, dock in (("review", "Review", self.dock_review),
+                                       ("variables", "Variables", self.dock_variables),
+                                       ("properties", "Properties", self.dock_properties))],
             [("more", "Clear --more-- condition", None), ("break", "Break", None)],
         ]
         self.toolbar_actions: dict[str, QAction] = {}
         for gi, group in enumerate(groups):
             if gi:
-                tb.addSeparator()
+                sep = tb.addSeparator()
+                if gi == 3:
+                    panel_separator = sep
             for name, text, slot in group:
                 accent = ACCENT_RED if name == "break" else None
                 label = _TOOLBAR_LABELS[name]
@@ -444,6 +453,24 @@ class MainWindow(QMainWindow):
         self.toolbar_actions["settings"] = act
         self.addToolBar(tb)
         self._fit_toolbar_buttons()
+        self._link_dock_buttons(panel_separator)
+
+    def _link_dock_buttons(self, separator: QAction) -> None:
+        """The Review, Variables and Properties buttons show only while their window is closed (by its
+        X or by the Window menu); open, the window is there and the button leaves the toolbar."""
+        buttons = [(self.toolbar_actions[name], dock) for name, dock in
+                   (("review", self.dock_review), ("variables", self.dock_variables),
+                    ("properties", self.dock_properties))]
+
+        def sync(act: QAction, closed: bool) -> None:
+            if not all(isValid(a) for a in (separator, *(b for b, _ in buttons))):
+                return                      # the window is being destroyed and takes its toolbar along
+            act.setVisible(closed)
+            separator.setVisible(any(a.isVisible() for a, _ in buttons))
+
+        for act, dock in buttons:
+            dock.toggleViewAction().toggled.connect(lambda on, a=act: sync(a, not on))
+            sync(act, dock.isHidden())
 
     def _fit_toolbar_buttons(self) -> None:
         """Small font and a width that follows the label, the same on every platform style."""
@@ -454,7 +481,7 @@ class MainWindow(QMainWindow):
             btn = tb.widgetForAction(act)
             if isinstance(btn, QToolButton):
                 btn.setFont(font)
-                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
+                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 14))
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
