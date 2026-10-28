@@ -196,6 +196,10 @@ PT: dict[str, str] = {
     "Exponential": "Exponencial", "Lognormal": "Lognormal", "Loglogistic": "Loglogística",
     "Survey data analysis": "Amostras complexas (survey)", "Declare design": "Declarar o desenho",
     "Describe design": "Descrever o desenho", "Means": "Médias", "Proportions": "Proporções",
+    "Drag and drop": "Arrastar e soltar", "Run do-files dropped on the window":
+        "Executar do-files soltos na janela",
+    "Off: a do-file dragged onto OpenDTA opens in the Do-file Editor without running.":
+        "Desligado: um do-file arrastado para o OpenDTA abre no Do-file Editor, sem executar.",
     "Tables": "Tabelas", "Design effects": "Efeitos de desenho",
     "Postestimation": "Pós-estimação", "Predictions": "Predições", "Marginal effects": "Efeitos marginais",
     "Wald tests": "Testes de Wald", "Linear combinations": "Combinações lineares",
@@ -230,6 +234,11 @@ PT: dict[str, str] = {
     "Open a dialog to build the command": "Abre uma caixa de diálogo para montar o comando",
     # Preferences
     "Interface appearance": "Aparência da interface", "Light (default)": "Claro (padrão)", "Dark": "Escuro",
+    "Tables": "Tabelas", "Solid table lines": "Linhas contínuas nas tabelas",
+    "Draws the lines of the tables in the Results window as continuous lines. Off: dashes, as in Stata "
+    "and in the logs.":
+        "Desenha as linhas das tabelas na janela Results de forma contínua. Desligado: tracejadas, como "
+        "no Stata e nos logs.",
     "Application icon": "Ícone do aplicativo", "Font of the Results, Command and Review windows":
         "Fonte das janelas Results, Command e Review", "Family": "Família",
     "Default on this system": "Padrão neste sistema", "Language": "Idioma",

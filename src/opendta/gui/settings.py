@@ -61,6 +61,15 @@ class Preferences:
         from .theme import system_theme
         return system_theme() if self.theme == "system" else self.theme
 
+    # table lines in the Results window: continuous (default) or the text's dashes, as in Stata
+    @property
+    def solid_table_lines(self) -> bool:
+        return str(self._s.value("appearance/solid_table_lines", "on")) != "off"
+
+    @solid_table_lines.setter
+    def solid_table_lines(self, on: bool) -> None:
+        self._s.setValue("appearance/solid_table_lines", "on" if on else "off")
+
     # font of the Results, Command and Review windows
     @property
     def hints(self) -> bool:
@@ -196,6 +205,15 @@ class Preferences:
     @editor_files.setter
     def editor_files(self, files: list[str]) -> None:
         self._s.setValue("editor/files", json.dumps(list(files)))
+
+    # do-files dropped on the main window: open in the Do-file Editor (default) or run
+    @property
+    def run_dropped_dofiles(self) -> bool:
+        return str(self._s.value("editor/run_dropped", "off")) == "on"
+
+    @run_dropped_dofiles.setter
+    def run_dropped_dofiles(self, on: bool) -> None:
+        self._s.setValue("editor/run_dropped", "on" if on else "off")
 
     # session: initial folder and automatic log (both applied when OpenDTA opens)
     @property

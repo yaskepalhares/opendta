@@ -539,6 +539,13 @@ class PreferencesDialog(QDialog):
         self.appicon.changed.connect(self._icon_changed)
         p.row(Row(tr("Application icon"), tr("The icon in the Dock or taskbar and in the windows."),
                   self.appicon, "ícone icon"))
+        p.section(tr("Tables"))
+        self.solid_lines = self._switch(self.prefs.solid_table_lines)
+        self.solid_lines.toggled.connect(self._solid_lines_changed)
+        p.row(Row(tr("Solid table lines"),
+                  tr("Draws the lines of the tables in the Results window as continuous lines. Off: dashes, "
+                     "as in Stata and in the logs."), self.solid_lines,
+                  "tabelas tables linhas lines contínuas solid tracejadas dashed"))
         p.section(tr("Font"))
         self.family = QFontComboBox()
         self.family.setObjectName("Menu")
@@ -555,10 +562,11 @@ class PreferencesDialog(QDialog):
         self.size.currentIndexChanged.connect(self._font_changed)
         p.row(Row(tr("Font size"), L(f"Default: {size} pt.", f"Padrão: {size} pt."), self.size,
                   "tamanho size"))
-        self.preview = QLabel(SAMPLE)
-        self.preview.setObjectName("Preview")
+        from .panes import ResultsView          # the same widget as the Results window, so the lines show
+        self.preview = ResultsView()
+        self.preview.append_styled(SAMPLE.rstrip("\n"), "text")
+        self.preview.setFixedHeight(150)
         self.preview.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        self.preview.setContentsMargins(16, 12, 16, 12)
         p.widget_(self._spacer(10))
         p.widget_(self.preview)
         p.finish()
@@ -611,6 +619,12 @@ class PreferencesDialog(QDialog):
         p.row(Row(tr("Reopen last session's files"),
                   tr("When the Do-file Editor opens, reopen the files that were open when it was last used."),
                   self.reopen, "reabrir arquivos reopen files sessão session"))
+        p.section(tr("Drag and drop"))
+        self.run_dropped = self._switch(self.prefs.run_dropped_dofiles)
+        self.run_dropped.toggled.connect(self._run_dropped_changed)
+        p.row(Row(tr("Run do-files dropped on the window"),
+                  tr("Off: a do-file dragged onto OpenDTA opens in the Do-file Editor without running."),
+                  self.run_dropped, "arrastar soltar drag drop do-file executar run abrir open"))
         p.finish()
 
     def _build_updates(self) -> None:
@@ -721,6 +735,10 @@ class PreferencesDialog(QDialog):
         self.logo.setPixmap(app_icon(key).pixmap(64, 64))
         self._apply()
 
+    def _solid_lines_changed(self, on: bool) -> None:
+        self.prefs.solid_table_lines = on
+        self._apply()
+
     def _font_changed(self, *_a) -> None:
         self.prefs.font_family = self.family.currentFont().family()
         try:
@@ -758,6 +776,10 @@ class PreferencesDialog(QDialog):
 
     def _confirm_changed(self, command: str, on: bool) -> None:
         self.prefs.set_confirm(command, on)
+        self.prefs.sync()
+
+    def _run_dropped_changed(self, on: bool) -> None:
+        self.prefs.run_dropped_dofiles = on
         self.prefs.sync()
 
     def _reopen_changed(self, on: bool) -> None:
@@ -826,6 +848,7 @@ class PreferencesDialog(QDialog):
             combo.blockSignals(False)
         self._refresh_start_dir()
         for sw, on in ((self.hints, True), (self.superscript, True), (self.auto, True), (self.translate, False),
+                       (self.solid_lines, True), (self.run_dropped, False),
                        (self.reopen, False), (self.autolog, False),
                        *((sw, True) for sw in self.confirms.values())):
             sw.blockSignals(True)
@@ -867,8 +890,11 @@ class PreferencesDialog(QDialog):
         theme = "dark" if dark else "light"
         rs = results_scheme(theme, self.prefs.results_palette)
         self.preview.setFont(monospace_font(self.prefs))
-        self.preview.setStyleSheet(f"QLabel#Preview {{ background: {rs.background}; color: {rs.colors['text']}; "
-                                   f"border: 1px solid {c['border']}; border-radius: 10px; }}")
+        self.preview.set_scheme(rs)
+        self.preview.set_solid_rules(self.prefs.solid_table_lines)
+        self.preview.setStyleSheet(f"QPlainTextEdit#Results {{ background: {rs.background}; "
+                                   f"color: {rs.colors['text']}; border: 1px solid {c['border']}; "
+                                   f"border-radius: 10px; padding: 6px 10px; }}")
         ec = editor_colors(self.prefs.editor_palette, theme)
         efg = ec.get("fg", c["text"])
         for lab, bg, fg, body in ((self.rpreview, rs.background, rs.colors["text"], _results_html(rs)),

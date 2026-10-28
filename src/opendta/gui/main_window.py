@@ -820,6 +820,7 @@ class MainWindow(QMainWindow):
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
+        self.results.set_solid_rules(self.prefs.solid_table_lines)
         if self.browser is not None:
             self.browser.table.setFont(font)
         if self.dofile_editor is not None:
@@ -1037,7 +1038,10 @@ class MainWindow(QMainWindow):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if path.lower().endswith((".do", ".ado")):
-                self.run_command(f'do "{path}"')
+                if self.prefs.run_dropped_dofiles:
+                    self.run_command(f'do "{path}"')
+                else:
+                    self.show_dofile_editor(path)
             elif path.lower().endswith(".dta"):
                 self.open_dataset(path)
                 break

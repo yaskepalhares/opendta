@@ -132,6 +132,26 @@ def _request(url: str) -> urllib.request.Request:
     })
 
 
+# The release notes hold both languages: English first, then a "## Português" section. Each
+# part starts with (or is preceded by) a line that links to the other language.
+_PT_HEADING = re.compile(r"^#{1,6}[ \t]*Portugu[eê]s[ \t]*$", re.MULTILINE)
+_LANG_LINKS = re.compile(r"^.*English.*Portugu[eê]s.*$\n?", re.MULTILINE)
+_RULE_AT_END = re.compile(r"\n-{3,}[ \t]*\Z")
+
+
+def notes_for(body: str, lang: str) -> str:
+    """The part of the release notes in `lang` ("pt" or anything else for English). Notes without
+    a Portuguese section come back whole, minus the language links."""
+    m = _PT_HEADING.search(body)
+    if m is None:
+        text = body
+    elif lang == "pt":
+        text = body[m.end():]
+    else:
+        text = _RULE_AT_END.sub("", body[:m.start()].rstrip())
+    return _LANG_LINKS.sub("", text).strip()
+
+
 def parse_release(data: dict) -> Release:
     tag = str(data.get("tag_name", ""))
     rel = Release(tag=tag, version=tag.lstrip("vV"), notes=str(data.get("body") or ""),

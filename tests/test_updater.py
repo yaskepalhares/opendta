@@ -75,8 +75,30 @@ def test_update_dialog_builds(monkeypatch, tmp_path):
     from opendta.gui.update_dialog import UpdateDialog
     w = MainWindow()
     d = UpdateDialog(w.updates, updater.parse_release(RELEASE), w)
-    assert "0.9.0" in d.findChildren(QtWidgets.QLabel)[0].text()
+    assert any("0.9.0" in lab.text() for lab in d.findChildren(QtWidgets.QLabel))
     w.close()
+
+
+@pytest.mark.parametrize("lang, shown, hidden", [("pt", "Novidades da 0.6.0", "What's new"),
+                                                 ("en", "What's new in 0.6.0", "Novidades")])
+def test_update_dialog_shows_notes_in_the_interface_language(monkeypatch, tmp_path, lang, shown, hidden):
+    monkeypatch.setenv("OPENDTA_SETTINGS", str(tmp_path / "prefs.ini"))
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets")
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])  # noqa: F841
+    from opendta import i18n
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.update_dialog import UpdateDialog
+    w = MainWindow()
+    try:
+        w.prefs.language = lang
+        w.apply_preferences()
+        rel = updater.parse_release({**RELEASE, "body": NOTES})
+        d = UpdateDialog(w.updates, rel, w)
+        text = d.findChild(QtWidgets.QTextBrowser).toPlainText()
+        assert shown in text and hidden not in text and "English" not in text
+    finally:
+        w.close()
+        i18n.set_language("en")
 
 
 @pytest.mark.parametrize("fails", [True, False])
@@ -120,3 +142,44 @@ def test_ssl_context_uses_certifi():
     assert ctx.verify_mode.name == "CERT_REQUIRED"
     assert ctx.cert_store_stats()["x509_ca"] > 50
     assert certifi.where()
+
+
+NOTES = """**English** · [Português](#português)
+
+## What's new in 0.6.0
+
+New options.
+
+## Notice
+
+Study project.
+
+---
+
+## Português
+
+### Novidades da 0.6.0
+
+Novas opções.
+
+### Aviso
+
+Projeto de estudo.
+"""
+
+
+def test_notes_for_picks_the_interface_language():
+    en = updater.notes_for(NOTES, "en")
+    assert en.startswith("## What's new in 0.6.0") and en.endswith("Study project.")
+    assert "Português" not in en and "Novidades" not in en and "---" not in en
+    pt = updater.notes_for(NOTES, "pt")
+    assert pt.startswith("### Novidades da 0.6.0") and pt.endswith("Projeto de estudo.")
+    assert "What's new" not in pt and "English" not in pt
+    # any other language falls back to English
+    assert updater.notes_for(NOTES, "fr") == en
+
+
+def test_notes_for_without_portuguese_section():
+    body = "**English** · [Português](#português)\n\n## What's new\n\nText."
+    assert updater.notes_for(body, "pt") == "## What's new\n\nText."
+    assert updater.notes_for("", "en") == ""
