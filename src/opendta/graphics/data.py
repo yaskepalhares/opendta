@@ -224,8 +224,8 @@ def default_bandwidth(x: np.ndarray, w: np.ndarray | None, fw: bool = True) -> f
     order = np.argsort(x, kind="stable")
     xs = x[order]
     ws = None if w is None else w[order]
-    mom = S.moments(xs, ws, "aweight" if w is not None else "")
-    n = float(mom.N if w is None or not fw else ws.sum())   # VERIFY: aweight n (compat 1921)
+    mom = S.moments(xs, ws, ("fweight" if fw else "aweight") if w is not None else "")
+    n = float(mom.N)   # VERIFY: aweight n (compat 1921)
     q1 = S.percentile(xs, 25, ws)
     q3 = S.percentile(xs, 75, ws)
     m = min(mom.sd, (q3 - q1) / 1.349)

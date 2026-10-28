@@ -216,3 +216,13 @@ def test_histogram_x_axis_starts_at_zero(run):
     run("histogram x, name(h3)")
     ax = figure(store(run.session).get()).axes[0]
     assert ax.get_xlim()[0] < 0
+
+
+def test_kdensity_bandwidth_fweight_equals_replicated_data():
+    # an fweight means the observation is repeated w times (variance divisor sum(w) - 1)
+    rng = np.random.default_rng(1921)
+    x = np.sort(rng.uniform(size=60))   # sd < IQR/1.349
+    w = rng.integers(1, 6, size=60).astype(float)
+    h_fw = D.default_bandwidth(x, w, True)
+    h_rep = D.default_bandwidth(np.repeat(x, w.astype(int)), None)
+    assert h_fw == pytest.approx(h_rep, rel=1e-12)
