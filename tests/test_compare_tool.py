@@ -42,3 +42,19 @@ def test_parse_limits(tmp_path, monkeypatch):
     assert known["x"].why == "reason here" and known["x"].tol == 1e-3
     assert known["x"].ignore.pattern == "^It" and known["x"].skip.pattern == "llc"
     assert not known["y"].limited()
+
+
+def test_brief_diff_leaves_out_iterations_and_is_cut(tmp_path, capsys):
+    """--brief --show-diff: only the cases that differ, without iteration lines, at most
+    --max-diff lines of diff."""
+    exp = tmp_path / "expected"
+    exp.mkdir()
+    out = C.run_opendta(C.COMPAT / "do" / "1910_programming.do", C.COMPAT / "out", "")
+    lines = out.read_text(encoding="utf-8").splitlines()
+    k = next(i for i, ln in enumerate(lines) if ln.startswith(". constraint"))
+    lines[k + 1:k + 1] = ["Iteration 1:   log likelihood = -1"] + [f"extra {j}" for j in range(10)]
+    (exp / "1910_programming.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    C.main(["1910", "--brief", "--show-diff", "--max-diff", "6", "--expected", str(exp)])
+    text = capsys.readouterr().out
+    assert "XX 1910_programming" in text and "Iteration 1:" not in text
+    assert "more diff lines" in text

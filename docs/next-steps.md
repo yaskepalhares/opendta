@@ -6,7 +6,7 @@ A working plan for the commands still missing in [Missing for 1.0](../ROADMAP.md
 
 ## How to run a block
 
-Start a new session (a long conversation costs more on every step) with an instruction such as:
+Start a new session for each block, or two for a large one (one to implement, one to check against the Stata log): every step rereads the whole conversation, so a step late in a long session costs three to four times one at its start. Begin with an instruction such as:
 
 > Implement the **Programming** block as described in docs/next-steps.md. Open a pull request and merge it when CI passes.
 
@@ -20,6 +20,14 @@ Each block follows the same steps:
 6. `docs/features.md` and `docs/features.pt-BR.md`: one line for the block.
 7. The Stata run, once, for everything the block needs (cases without a reference included): ask the user to run `compat/gerar_esperados.do`, never a loose block of commands. That file already sets `dp period` and `linesize 255`, erases the `odta_*` leftovers and runs `mata clear`. Before asking, check with git that the branch is on GitHub and tell the user to `git pull` it. If a run fails for an environment reason (decimal comma, a file name, leftovers of another run), say so before asking for another. Before asking, also check that the case data is final (models converge, tests are not degenerate): changing the data afterwards costs a second run. The user's clone must be on the block's branch (a run from another branch produces no log); if it has local changes, `git stash -u` first.
 8. `python tools/compare.py` with no new differences; open the PR; merge when the tests pass on Linux, macOS and Windows. The coverage page updates itself after the merge.
+
+Keeping a session small (each step rereads everything said so far):
+
+- Read command output in short form: `python tools/compare.py --brief --show-diff` (only the cases that differ, without iteration lines, each diff cut at 60 lines); `pytest -q` with `tail`; never print a whole log. Run the full `pytest` and the full `compare.py` once, at the end of the block; while fixing, run only the test file or the case being worked on.
+- Wait for CI in one call that loops until the three jobs are done, not in repeated checks.
+- A pull request that changes only documentation (`*.md`, help text) is merged without waiting for CI.
+- The mechanical steps (merging, waiting for CI, publishing a version, roadmap text) can run with a lighter model; implementing a block and checking it against the Stata log use the main one.
+- `progresso.md` (local) holds only the current state and the next step; the history of finished steps goes to `progresso-arquivo.md`, which a session reads only when it needs it.
 
 Notes for sessions that run in the cloud:
 
