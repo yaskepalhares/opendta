@@ -619,6 +619,12 @@ class PreferencesDialog(QDialog):
         p.row(Row(tr("Reopen last session's files"),
                   tr("When the Do-file Editor opens, reopen the files that were open when it was last used."),
                   self.reopen, "reabrir arquivos reopen files sessão session"))
+        p.section(tr("Drag and drop"))
+        self.run_dropped = self._switch(self.prefs.run_dropped_dofiles)
+        self.run_dropped.toggled.connect(self._run_dropped_changed)
+        p.row(Row(tr("Run do-files dropped on the window"),
+                  tr("Off: a do-file dragged onto OpenDTA opens in the Do-file Editor without running."),
+                  self.run_dropped, "arrastar soltar drag drop do-file executar run abrir open"))
         p.finish()
 
     def _build_updates(self) -> None:
@@ -772,6 +778,10 @@ class PreferencesDialog(QDialog):
         self.prefs.set_confirm(command, on)
         self.prefs.sync()
 
+    def _run_dropped_changed(self, on: bool) -> None:
+        self.prefs.run_dropped_dofiles = on
+        self.prefs.sync()
+
     def _reopen_changed(self, on: bool) -> None:
         self.prefs.reopen_files = on
         self.prefs.sync()
@@ -838,7 +848,7 @@ class PreferencesDialog(QDialog):
             combo.blockSignals(False)
         self._refresh_start_dir()
         for sw, on in ((self.hints, True), (self.superscript, True), (self.auto, True), (self.translate, False),
-                       (self.solid_lines, True),
+                       (self.solid_lines, True), (self.run_dropped, False),
                        (self.reopen, False), (self.autolog, False),
                        *((sw, True) for sw in self.confirms.values())):
             sw.blockSignals(True)

@@ -206,6 +206,15 @@ class Preferences:
     def editor_files(self, files: list[str]) -> None:
         self._s.setValue("editor/files", json.dumps(list(files)))
 
+    # do-files dropped on the main window: open in the Do-file Editor (default) or run
+    @property
+    def run_dropped_dofiles(self) -> bool:
+        return str(self._s.value("editor/run_dropped", "off")) == "on"
+
+    @run_dropped_dofiles.setter
+    def run_dropped_dofiles(self, on: bool) -> None:
+        self._s.setValue("editor/run_dropped", "on" if on else "off")
+
     # session: initial folder and automatic log (both applied when OpenDTA opens)
     @property
     def start_dir(self) -> str:

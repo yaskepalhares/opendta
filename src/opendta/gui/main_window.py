@@ -1038,7 +1038,10 @@ class MainWindow(QMainWindow):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if path.lower().endswith((".do", ".ado")):
-                self.run_command(f'do "{path}"')
+                if self.prefs.run_dropped_dofiles:
+                    self.run_command(f'do "{path}"')
+                else:
+                    self.show_dofile_editor(path)
             elif path.lower().endswith(".dta"):
                 self.open_dataset(path)
                 break

@@ -196,6 +196,10 @@ PT: dict[str, str] = {
     "Exponential": "Exponencial", "Lognormal": "Lognormal", "Loglogistic": "Loglogística",
     "Survey data analysis": "Amostras complexas (survey)", "Declare design": "Declarar o desenho",
     "Describe design": "Descrever o desenho", "Means": "Médias", "Proportions": "Proporções",
+    "Drag and drop": "Arrastar e soltar", "Run do-files dropped on the window":
+        "Executar do-files soltos na janela",
+    "Off: a do-file dragged onto OpenDTA opens in the Do-file Editor without running.":
+        "Desligado: um do-file arrastado para o OpenDTA abre no Do-file Editor, sem executar.",
     "Tables": "Tabelas", "Design effects": "Efeitos de desenho",
     "Postestimation": "Pós-estimação", "Predictions": "Predições", "Marginal effects": "Efeitos marginais",
     "Wald tests": "Testes de Wald", "Linear combinations": "Combinações lineares",

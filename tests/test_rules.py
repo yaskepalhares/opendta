@@ -84,3 +84,4 @@ def test_results_view_draws_and_keeps_the_text(win):
         pix = win.results.grab()                # runs paintEvent
         assert not pix.isNull()
     assert RULE in win.results.toPlainText() and "|" in win.results.toPlainText()
+
