@@ -481,7 +481,7 @@ class MainWindow(QMainWindow):
             btn = tb.widgetForAction(act)
             if isinstance(btn, QToolButton):
                 btn.setFont(font)
-                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
+                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 14))
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()

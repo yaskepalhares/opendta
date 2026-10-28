@@ -723,7 +723,10 @@ def test_closed_side_windows_get_a_toolbar_button(app):
 
     def shown(name: str) -> bool:
         app.processEvents()                         # the toolbar lays its buttons out on the next pass
-        return tb.widgetForAction(w.toolbar_actions[name]).isVisible()
+        act = w.toolbar_actions[name]
+        if sys.platform == "win32":                 # the Windows runner scales the fonts up: the last buttons
+            return act.isVisible()                  # go to the overflow menu and their widget is hidden
+        return tb.widgetForAction(act).isVisible()
 
     def separators() -> int:
         app.processEvents()
