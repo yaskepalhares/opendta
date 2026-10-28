@@ -24,3 +24,6 @@ _site/
 # leftovers of test runs in the repository root
 /odta_*.dta
 /tsdata.dta
+
+# impulse-response files written by irf create / varbasic
+*.irf
