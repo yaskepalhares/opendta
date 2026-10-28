@@ -17,6 +17,7 @@ from ..graphics import scheme as SC
 from ..graphics.model import Graph
 from ..graphics.render import DEFAULT_SIZE
 from ..i18n import tr
+from .style import apply_rounded
 
 TEXT_KEYS = ("title", "subtitle", "note", "caption", "xtitle", "ytitle")
 
@@ -100,6 +101,7 @@ def make_editor(parent, on_apply):
     class Editor(QWidget):
         def __init__(self):
             super().__init__(parent)
+            apply_rounded(self)
             lay = QVBoxLayout(self)
             form = QFormLayout()
             self.fields: dict[str, object] = {}
