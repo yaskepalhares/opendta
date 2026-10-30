@@ -335,19 +335,18 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
     else:
         # control function: first-stage residual enters the exponential mean; fitted as an
         # exactly identified GMM problem (first-stage and mean moments together)
-        if len(Xn) != 1:
-            raise StataError(198, "cfunction allows one endogenous regressor in OpenDTA for now")   # VERIFY
-        y2 = Xn[0].values
+        E = len(Xn)
+        y2s = [c.values for c in Xn]
         kz = Z.shape[1]
-        pi = np.linalg.lstsq(Z, y2, rcond=None)[0]
+        pis = [np.linalg.lstsq(Z, y2_, rcond=None)[0] for y2_ in y2s]
 
         def moms(theta):
-            pi_ = theta[:kz]
-            be = theta[kz:]
-            v_ = y2 - Z @ pi_
-            X2_ = np.column_stack([X, v_])
+            vs = [y2s[e] - Z @ theta[e * kz:(e + 1) * kz] for e in range(E)]
+            be = theta[E * kz:]
+            X2_ = np.column_stack([X] + vs)
             mu = np.exp(np.clip(X2_ @ be, -30, 30))
-            return np.column_stack([Z * v_[:, None], X2_ * (y / mu - 1.0)[:, None]])   # multiplicative residual
+            return np.column_stack([Z * v_[:, None] for v_ in vs]
+                                   + [X2_ * (y / mu - 1.0)[:, None]])   # multiplicative residual
 
         def jac(theta):
             h = 1e-6
@@ -358,7 +357,7 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
                 tm[j] -= h
                 A_[:, j] = (moms(tp).mean(0) - moms(tm).mean(0)) / (2 * h)
             return A_
-        theta = np.concatenate([pi, _poisson_start(y, X), [0.0]])
+        theta = np.concatenate(pis + [_poisson_start(y, X), np.zeros(E)])
         M0 = moms(theta)
         W1 = np.linalg.inv(M0.T @ M0 / N + 1e-12 * np.eye(M0.shape[1]))
         out.write("\nStep 1\n", "text")
@@ -385,16 +384,17 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
         Ainv = np.linalg.inv(A)
         Vall = Ainv @ B @ Ainv.T / N
         wm_label = f"Cluster ({smp.clustvar})" if cl is not None else "Robust"
-        n_ex, n_en = len(ex_cols), len(Xn)
-        ib = {"x": [kz + n_en + i for i in range(n_ex)], "w": [kz + i for i in range(n_en)], "c": kz + n_en + n_ex}
-        main_idx = ib["x"] + ib["w"] + [ib["c"]]
+        n_ex = len(ex_cols)
+        b0_ = E * kz                                  # start of the mean-equation coefficients
+        main_idx = [b0_ + E + i for i in range(n_ex)] + [b0_ + j for j in range(E)] + [b0_ + E + n_ex]
         first_idx = [kz - 1 - n_ex + i for i in range(n_ex)] + list(range(len(Zc))) + [kz - 1]
-        c_idx = len(theta) - 1
-        order = main_idx + first_idx + [c_idx]
-        eqs_c = [smp.depname] * len(main_idx) + [Xn[0].name] * len(first_idx) + ["c_" + Xn[0].name]
+        c_idx = [b0_ + k + j for j in range(E)]
+        order = main_idx + [e * kz + i for e in range(E) for i in first_idx] + c_idx
+        eqs_c = ([smp.depname] * len(main_idx) + [Xn[e].name for e in range(E) for _ in first_idx]
+                 + ["c_" + Xn[e].name for e in range(E)])
         nm_main = [c.name for c in ex_cols] + [c.name for c in Xn] + ["_cons"]
         nm_first = [c.name for c in ex_cols] + [c.name for c in Zc] + ["_cons"]
-        rows_names = nm_main + nm_first + ["_cons"]
+        rows_names = nm_main + nm_first * E + ["_cons"] * E
         bfull = theta[order]
         Vfull = Vall[np.ix_(order, order)]
         title = "Exponential mean model with endogenous regressors"
@@ -416,9 +416,14 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
             bm = {nm: float(bfull[lo + i]) for i, nm in enumerate(rows_names[lo:hi])}
             sm = {nm: float(se_all[lo + i]) for i, nm in enumerate(rows_names[lo:hi])}
             return rows_from_columns(cols, bm, sm, ds, constant=True)
-        rows = ([CoefRow("eq", smp.depname)] + eq_rows(ex_cols + Xn, 0, nmain) + [CoefRow("sep"),
-                CoefRow("eq", Xn[0].name)] + eq_rows(ex_cols + Zc, nmain, nmain + nfirst) + [CoefRow("sep"),
-                aux_row("/c_" + Xn[0].name, float(bfull[-1]), float(se_all[-1]), smp.level)])
+        rows = [CoefRow("eq", smp.depname)] + eq_rows(ex_cols + Xn, 0, nmain)
+        for e_ in range(len(Xn)):
+            lo_ = nmain + e_ * nfirst
+            rows += [CoefRow("sep"), CoefRow("eq", Xn[e_].name)] + eq_rows(ex_cols + Zc, lo_, lo_ + nfirst)
+        rows.append(CoefRow("sep"))
+        for e_ in range(len(Xn)):
+            j_ = len(bfull) - len(Xn) + e_
+            rows.append(aux_row("/c_" + Xn[e_].name, float(bfull[j_]), float(se_all[j_]), smp.level))
     est = Estimates("ivpoisson", smp.depname, rows_names, bfull, Vfull, N, "z", None)
     est.rows = rows
     if eqs_c is not None:

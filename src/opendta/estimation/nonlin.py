@@ -578,14 +578,19 @@ def cmd_gmm(s: "Session", args: str) -> None:
     opt_text = p.options
     inst_specs = re.findall(r"instruments\s*\(((?:[^()]|\([^()]*\))*)\)", opt_text)
     opt_text = re.sub(r"instruments\s*\(((?:[^()]|\([^()]*\))*)\)", " ", opt_text)
+    # derivatives() may repeat too: one analytic derivative of an equation's residual per parameter
+    deriv_specs = re.findall(r"derivatives\s*\(((?:[^()]|\([^()]*\))*)\)", opt_text)
+    opt_text = re.sub(r"derivatives\s*\(((?:[^()]|\([^()]*\))*)\)", " ", opt_text)
     o = match_options(opt_text, {"onestep": 3, "twostep": 3, "igmm": 4, "winitial": 4, "wmatrix": 2, "vce": 3,
                                  "level": 1, "nolog": 4, "log": 3, "eps": 3, "iterate": 4, "from": 3, "robust": 1,
                                  "cluster": 2, "noheader": 6, "notable": 5, "nocommonesample": 5, "quickderivatives": 5,
                                  "derivatives": 3, "variables": 3, "hasconstant": 3, "parameters": 5, "nequations": 3,
-                                 "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5}) \
+                                 "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5,
+                                 "igmmiterate": 8, "igmmeps": 7, "igmmweps": 8}) \
         if opt_text.strip() else {}
-    if o.get("derivatives") or o.get("parameters") or o.get("nparameters") or o.get("igmm"):
-        raise StataError(198, "that option of gmm is not available yet")   # VERIFY
+    if o.get("parameters") or o.get("nparameters"):
+        # these name the parameters of a function evaluator program, which gmm does not take yet
+        raise StataError(198, "option parameters() is not available yet in OpenDTA")   # VERIFY
     mask = touse(s, p)
     for se in ses:
         for v in se.variables():
@@ -661,6 +666,33 @@ def cmd_gmm(s: "Session", args: str) -> None:
     def mbar(t):
         return moments(t).mean(axis=0)
 
+    # derivatives(): (equation, parameter) -> expression for d residual / d parameter
+    derivs: dict[tuple[int, str], SubExpr] = {}
+    for spec in deriv_specs:
+        mm = re.match(r"^\s*(?:(\d+)\s*:|(\w*)\s*/)?\s*(\w+)\s*=\s*(.+)$", spec, re.S)
+        if not mm or mm.group(3) not in names:
+            raise StataError(198, "invalid derivatives() specification")   # VERIFY
+        eqno = int(mm.group(1)) - 1 if mm.group(1) else 0
+        if not 0 <= eqno < m:
+            raise StataError(198, "invalid derivatives() specification")   # VERIFY
+        derivs[(eqno, mm.group(3))] = SubExpr(s, mm.group(4))
+    if derivs:
+        # every parameter of an equation needs its derivative (VERIFY: Stata's rule when only some are given)
+        for q, se in enumerate(ses):
+            for nm in se.names:
+                if (q, nm) not in derivs:
+                    raise StataError(198, f"derivatives() required for parameter {nm} of equation {q + 1}")   # VERIFY
+
+    def jac_mbar(t):
+        if not derivs:
+            return _num_jac(mbar, t)
+        J = np.zeros((n_mom, k))
+        for (q, nm), de in derivs.items():
+            with np.errstate(all="ignore"):
+                d = de.evaluate({a: t[names.index(a)] for a in de.names})[mask]
+            J[offs[q]:offs[q + 1], names.index(nm)] = (Zs[q] * d[:, None]).mean(axis=0)
+        return J
+
     def meat(t, kind):
         G_ = moments(t)
         if kind == "clu" and cl is not None:
@@ -674,7 +706,7 @@ def cmd_gmm(s: "Session", args: str) -> None:
         q_old = None
         for it in range(100):
             gb = mbar(t)
-            G = _num_jac(mbar, t)
+            G = jac_mbar(t)
             q = float(gb @ W @ gb)
             if not o.get("nolog"):
                 out.write(f"Iteration {it}:   GMM criterion Q(b) = {g(q, '%10.0g'):>10}\n", "text")
@@ -722,8 +754,31 @@ def cmd_gmm(s: "Session", args: str) -> None:
         W = np.linalg.inv(S)
         theta = step(theta, W, "Step 2")
         wm_label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({clustvar})"}[wkind]
+        if o.get("igmm"):
+            # iterated GMM: re-estimate the weight matrix until the parameters (igmmeps()) or the
+            # weight matrix (igmmweps()) stop changing (VERIFY the defaults and the log)
+            eps = float(o["igmmeps"]) if o.get("igmmeps") else 1e-6
+            weps = float(o["igmmweps"]) if o.get("igmmweps") else 1e-6
+            maxit = int(float(o["igmmiterate"])) if o.get("igmmiterate") else 300
+            for it_ in range(3, maxit + 3):
+                if wkind in ("rob", "clu"):
+                    S = meat(theta, wkind)
+                else:
+                    e1 = resid(theta)
+                    sg = e1.T @ e1 / n
+                    S = np.zeros((n_mom, n_mom))
+                    for a in range(m):
+                        for b in range(m):
+                            S[offs[a]:offs[a + 1], offs[b]:offs[b + 1]] = sg[a, b] * (Zs[a].T @ Zs[b]) / n
+                W_new = np.linalg.inv(S)
+                t_new = step(theta, W_new, f"Step {it_}")
+                dt = float(np.max(np.abs(t_new - theta)) / (1 + np.max(np.abs(theta))))
+                dw = float(np.max(np.abs(W_new - W)) / (1 + np.max(np.abs(W))))
+                theta, W = t_new, W_new
+                if dt < eps or dw < weps:
+                    break
     gb = mbar(theta)
-    G = _num_jac(mbar, theta)
+    G = jac_mbar(theta)
     Q = float(gb @ W @ gb)
     Ainv = np.linalg.inv(G.T @ W @ G)
     vkind = "clu" if (cl is not None) else ("rob" if wkind == "rob" or str(o.get("vce", "")).startswith("rob")
