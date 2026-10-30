@@ -87,6 +87,7 @@ The `compat/` folder holds verification do-files (`compat/do/`) and the referenc
    cd "~/opendta/compat"
    do gerar_esperados.do
    ```
+   Without an argument it runs only the cases that have no log in `compat/expected/` yet. `do gerar_esperados.do 1919` runs the cases whose name starts with `1919`, and `do gerar_esperados.do all` runs every case (use it to regenerate a reference that changed, or after a Stata update). Copy to `compat/expected/` only the logs of the cases that ran.
 3. The `compat/stata/*.log` files appear. The generator forces `set dp period` while it runs and restores your setting at the end. `compat/stata/` is not tracked by git, so the run never blocks a `git pull`.
 4. Review the logs, for example against OpenDTA with `python tools/compare.py --expected compat/stata`, and copy them to `compat/expected/` (the versioned references) in a branch and pull request:
    ```bash
