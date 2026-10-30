@@ -90,6 +90,11 @@ def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
     mats = [("b", Matrix(est.b.reshape(1, -1), ["y1"], list(est.names))),
             ("V", Matrix(est.V, list(est.names), list(est.names)))] + list(extra_mats)
     for name, m in reversed(mats):
+        if name == "Cns" or getattr(m, "keep_eq", False):
+            # its own equations: the last column of e(Cns) is _Cns:_r (compat 1913), and the
+            # matrices of xtrc, betas have none (compat 1914)
+            e[name] = m
+            continue
         m.roweq = eqs if name == "V" else ["_"]
         m.coleq = eqs
         e[name] = m

@@ -90,13 +90,32 @@ def fractional(y, eta, link):
 # count
 # ---------------------------------------------------------------------------
 
+def _gamma_ratio(y, r):
+    """(ln Gamma(y + r) - ln Gamma(r), digamma(y + r) - digamma(r)) for counts y. With a large r
+    (the dispersion going to zero) the differences cancel, so they are summed term by term:
+    sum over j < y of ln(r + j) and 1 / (r + j)."""
+    y = np.asarray(y, dtype=float) * np.ones_like(r)
+    lgd = special.gammaln(y + r) - special.gammaln(r)
+    dgd = special.digamma(y + r) - special.digamma(r)
+    big = (r > 1e4) & (y == np.floor(y))
+    if np.any(big):
+        yb, rb = y[big], r[big]
+        a, b = np.zeros_like(rb), np.zeros_like(rb)
+        for j in range(int(yb.max())):
+            inc = j < yb
+            a += np.where(inc, np.log(rb + j), 0.0)
+            b += np.where(inc, 1.0 / (rb + j), 0.0)
+        lgd[big], dgd[big] = a, b
+    return lgd, dgd
+
+
 def _nb_terms(y, mu, m):
     """ln NB2(y; mu, alpha = 1/m) and the derivatives of it with respect to eta = ln mu and
     to ln alpha."""
-    lg = special.gammaln
-    ll = lg(y + m) - lg(m) - lg(y + 1) + m * np.log(m / (m + mu)) + y * np.log(mu / (m + mu))
+    lgd, dgd = _gamma_ratio(y, m * np.ones_like(mu))
+    ll = lgd - special.gammaln(y + 1) - m * np.log1p(mu / m) + y * np.log(mu / (m + mu))
     d_eta = (y - mu) / (1 + mu / m)
-    dm = special.digamma(y + m) - special.digamma(m) + np.log(m / (m + mu)) + 1 - (m + y) / (m + mu)
+    dm = dgd - np.log1p(mu / m) + 1 - (m + y) / (m + mu)
     return ll, d_eta, -m * dm
 
 
@@ -165,6 +184,58 @@ def tnbreg(y, eta, lnalpha, lower):
         dc_la += pj * dl
     sf = np.maximum(1 - cdf, 1e-300)
     return lnb - np.log(sf), d_eta + dc_eta / sf, d_la + dc_la / sf
+
+
+def _nb1_terms(y, mu, lndelta):
+    """ln NB1(y; mu, delta) (variance mu (1 + delta)) and its derivatives with respect to
+    eta = ln mu and ln delta: size r = mu/delta and probability 1/(1 + delta)."""
+    dl = np.exp(lndelta) * np.ones_like(mu)
+    r = mu / dl
+    l1d = np.log1p(dl)
+    lgd, psi = _gamma_ratio(y, r)
+    ll = lgd - special.gammaln(y + 1) - r * l1d + y * (np.log(dl) - l1d)
+    d_eta = r * (psi - l1d)
+    d_ld = -r * psi + r * l1d - r * dl / (1 + dl) + y / (1 + dl)
+    return ll, d_eta, d_ld
+
+
+def trunc_count(y, eta, lnpar, lower, upper, kind):
+    """Count distribution truncated to lower < y < upper (arrays; upper may be inf): ln f(y) -
+    ln P(lower < Y < upper) and its derivatives with respect to eta and the dispersion
+    parameter. kind: "poisson", "nb2" (lnpar = ln alpha) or "nb1" (lnpar = ln delta)."""
+    mu = np.exp(np.clip(eta, -700, 700))
+
+    def terms(j):
+        jj = np.full_like(mu, j) if np.ndim(j) == 0 else j
+        if kind == "poisson":
+            return -mu + jj * np.log(mu) - special.gammaln(jj + 1), jj - mu, np.zeros_like(mu)
+        if kind == "nb2":
+            return _nb_terms(jj, mu, np.exp(-lnpar) * np.ones_like(mu))
+        return _nb1_terms(jj, mu, lnpar)
+    ll, d_eta, d_par = terms(y)
+    fin = np.isfinite(upper)
+    top = int(max(np.max(lower), np.max(np.where(fin, upper - 1, 0)))) if len(y) else 0
+    Fl, Fl_e, Fl_p = (np.zeros_like(mu) for _ in range(3))
+    Fm, Fm_e, Fm_p = (np.zeros_like(mu) for _ in range(3))
+    for j in range(top + 1):
+        lj, ej, pj_ = terms(j)
+        pj = np.exp(lj)
+        lo = j <= lower
+        # with an upper limit the probability of the window is summed term by term: the
+        # difference of two cumulative probabilities cancels when they are both near 1 or 0
+        mid = fin & (j > lower) & (j <= upper - 1)
+        Fl += np.where(lo, pj, 0)
+        Fl_e += np.where(lo, pj * ej, 0)
+        Fl_p += np.where(lo, pj * pj_, 0)
+        Fm += np.where(mid, pj, 0)
+        Fm_e += np.where(mid, pj * ej, 0)
+        Fm_p += np.where(mid, pj * pj_, 0)
+    P = np.where(fin, Fm, 1.0 - Fl)
+    P_e = np.where(fin, Fm_e, -Fl_e)
+    P_p = np.where(fin, Fm_p, -Fl_p)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        lnP = np.where(P > 0, np.log(np.where(P > 0, P, 1.0)), -np.inf)
+        return ll - lnP, d_eta - P_e / P, d_par - P_p / P
 
 
 def gnbreg(y, eta, zeta):

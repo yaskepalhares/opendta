@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..i18n import tr
 from .icons import icon
+from .style import apply_rounded
 
 import os
 import re
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING, Callable
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import (QAction, QColor, QFont, QKeySequence, QPainter, QShortcut, QSyntaxHighlighter,
                            QTextCharFormat, QTextCursor, QTextDocument)
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QTabBar,
                                QPlainTextEdit, QPushButton, QSizePolicy, QTabWidget, QTextEdit, QToolBar,
                                QToolButton, QWidget)
 
@@ -34,6 +35,9 @@ PALETTE = {
 }
 
 RUN_GREEN = "#2fa84f"      # Do / Run icons
+
+# short name shown under each toolbar icon, as in the main window (the tooltip keeps the long text)
+_SHORT_LABELS = {"Open...": "Open", "Save as...": "Save as", "Comment/uncomment": "Comment"}
 
 
 def editor_colors(palette: str, theme: str) -> dict:
@@ -336,6 +340,63 @@ class _FindBar(QWidget):
             lay.addWidget(b)
 
 
+class _TabBar(QTabBar):
+    """Tab bar with the "new tab" button right after the last tab and a close icon on every tab."""
+
+    def __init__(self):
+        super().__init__()
+        self.plus = QToolButton(self)
+        self.plus.setAutoRaise(True)
+        self.plus.setIconSize(QSize(16, 16))
+        self.plus.setObjectName("NewTab")
+        self.setExpanding(False)
+        self.setDrawBase(False)
+
+    def refresh_icons(self) -> None:
+        self.plus.setIcon(icon("plus"))
+        for i in range(self.count()):
+            self._close_button(i)
+
+    def _close_button(self, i: int) -> None:
+        btn = QToolButton(self)
+        btn.setAutoRaise(True)
+        btn.setObjectName("TabClose")
+        btn.setIcon(icon("close"))
+        btn.setIconSize(QSize(12, 12))
+        btn.setFixedSize(18, 18)
+        btn.clicked.connect(lambda _=False, b=btn: self._close_clicked(b))
+        self.setTabButton(i, QTabBar.ButtonPosition.RightSide, btn)
+
+    def _close_clicked(self, btn: QToolButton) -> None:
+        for i in range(self.count()):
+            if self.tabButton(i, QTabBar.ButtonPosition.RightSide) is btn:
+                self.tabCloseRequested.emit(i)
+                return
+
+    def tabInserted(self, index: int) -> None:  # noqa: N802
+        super().tabInserted(index)
+        self._close_button(index)
+        self._place_plus()
+
+    def tabRemoved(self, index: int) -> None:  # noqa: N802
+        super().tabRemoved(index)
+        self._place_plus()
+
+    def tabLayoutChange(self) -> None:  # noqa: N802
+        super().tabLayoutChange()
+        self._place_plus()
+
+    def resizeEvent(self, e) -> None:  # noqa: N802
+        super().resizeEvent(e)
+        self._place_plus()
+
+    def _place_plus(self) -> None:
+        n = self.count()
+        x = self.tabRect(n - 1).right() + 6 if n else 6
+        self.plus.move(x, max(0, (self.height() - self.plus.height()) // 2))
+        self.plus.raise_()
+
+
 class DoFileEditor(QMainWindow):
     """Do-file Editor window."""
 
@@ -354,12 +415,15 @@ class DoFileEditor(QMainWindow):
         self.resize(860, 640)
         self.untitled = 0
         self.tmpfiles: list[str] = []
+        self.tmp_sources: dict[str, str] = {}     # temporary file -> what it holds, for Review
 
         self.tabs = QTabWidget()
+        self.tab_bar = _TabBar()
+        self.tabs.setTabBar(self.tab_bar)
         self.tabs.setDocumentMode(True)
-        self.tabs.setTabsClosable(True)
+        self.tabs.setTabsClosable(False)      # _TabBar draws its own close icons
         self.tabs.setMovable(True)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tab_bar.tabCloseRequested.connect(self.close_tab)      # a custom bar is not relayed by QTabWidget
         self.tabs.currentChanged.connect(lambda _: (self._update_title(), self._update_undo()))
         self.findbar = _FindBar(self)
         self.findbar.hide()
@@ -376,7 +440,7 @@ class DoFileEditor(QMainWindow):
         tb.setObjectName("DoToolbar")
         tb.setMovable(False)
         tb.setIconSize(QSize(22, 22))
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         key = QKeySequence.StandardKey
         edit = self._edit
         # (text, icon, slot, shortcut, bound?) - undo and redo keep the editor's own shortcuts
@@ -412,6 +476,7 @@ class DoFileEditor(QMainWindow):
                 act = QAction(icon(name, accent), tr(text), self)
                 act.setData((name, accent))
                 act.setProperty("key", text)
+                act.setProperty("label", _SHORT_LABELS.get(text, text))
                 act.setProperty("tip", tips.get(text, text))
                 act.setProperty("hint", QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText))
                 act.triggered.connect(slot)
@@ -419,45 +484,57 @@ class DoFileEditor(QMainWindow):
                     act.setShortcut(QKeySequence(shortcut))
                 self._retitle(act)
                 tb.addAction(act)
-                if name in ("play", "play-quiet"):      # Do and Run carry their name beside the icon
-                    button = tb.widgetForAction(act)
-                    if isinstance(button, QToolButton):
-                        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-                        button.setProperty("labeled", True)
                 self.tool_actions[name] = act
         self.addToolBar(tb)
         self.toolbar = tb
-        self.new_tab_button = QToolButton()          # the + at the end of the tab bar
-        self.new_tab_button.setAutoRaise(True)
-        self.new_tab_button.setIcon(icon("plus"))
-        self.new_tab_button.setIconSize(QSize(16, 16))
+        self._fit_toolbar_buttons()
+        self.new_tab_button = self.tab_bar.plus      # the + right after the last tab
         self.new_tab_button.clicked.connect(self.new_file)
-        self.tabs.setCornerWidget(self.new_tab_button, Qt.Corner.TopRightCorner)
+        self.tab_bar.refresh_icons()
         self._retitle_tab_button()
         self.setStyleSheet("""
-            QToolBar#DoToolbar { border: none; spacing: 3px; padding: 5px 10px; }
-            QToolBar#DoToolbar QToolButton { border: none; border-radius: 8px; padding: 5px; font-size: 13px; }
-            QToolBar#DoToolbar QToolButton[labeled="true"] { padding: 5px 11px 5px 7px; font-weight: 600; }
+            QToolBar#DoToolbar { border: none; spacing: 2px; padding: 4px 10px; }
+            QToolBar#DoToolbar QToolButton { border: none; border-radius: 8px; padding: 4px 4px; }
             QToolBar#DoToolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#DoToolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#DoToolbar::separator { width: 1px; margin: 6px 8px; background: rgba(127, 127, 127, 0.3); }
+            QTabWidget::pane { border: none; }
+            QTabBar { background: transparent; }
+            QTabBar::tab { background: transparent; border: none; border-radius: 8px; padding: 5px 12px;
+                           margin: 4px 2px 4px 2px; }
+            QTabBar::tab:selected { background: rgba(127, 127, 127, 0.22); font-weight: 600; }
+            QTabBar::tab:hover:!selected { background: rgba(127, 127, 127, 0.12); }
+            QTabBar QToolButton { border: none; border-radius: 6px; }
+            QTabBar QToolButton:hover { background: rgba(127, 127, 127, 0.3); }
             QPlainTextEdit { border: none; }
             QWidget#FindBar { border-top: 1px solid rgba(127, 127, 127, 0.3); }
-            QWidget#FindBar QLineEdit { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px;
-                                        padding: 4px 8px; }
-            QWidget#FindBar QPushButton { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 6px;
-                                          padding: 4px 12px; }
+            QWidget#FindBar QLineEdit { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
+                                        padding: 5px 10px; }
+            QWidget#FindBar QLineEdit:focus { border: 1px solid #0a84ff; }
+            QWidget#FindBar QPushButton { border: 1px solid rgba(127, 127, 127, 0.4); border-radius: 8px;
+                                          padding: 5px 14px; }
             QWidget#FindBar QPushButton:hover { background: rgba(127, 127, 127, 0.16); }
         """)
         QShortcut(QKeySequence("Ctrl+Shift+D"), self, self.do_selection)
+        QShortcut(QKeySequence.StandardKey.Close, self, lambda: self.close_tab(self.tabs.currentIndex()))
         QShortcut(QKeySequence("Escape"), self, self.findbar.hide)
         self.new_file()
 
     def _retitle(self, act: QAction) -> None:
         """Name and tooltip (with the shortcut) in the current language."""
-        act.setText(tr(act.property("key")))
+        act.setText(tr(act.property("label") or act.property("key")))
         hint = act.property("hint")
         act.setToolTip(tr(act.property("tip")) + (f"  [{hint}]" if hint else ""))
+
+    def _fit_toolbar_buttons(self) -> None:
+        """Small font and a width that follows the label, as in the main window's toolbar."""
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        for act in self.tool_actions.values():
+            btn = self.toolbar.widgetForAction(act)
+            if isinstance(btn, QToolButton):
+                btn.setFont(font)
+                btn.setFixedWidth(max(40, btn.fontMetrics().horizontalAdvance(act.text()) + 16))
 
     def _retitle_tab_button(self) -> None:
         shortcut = QKeySequence(QKeySequence.StandardKey.New).toString(QKeySequence.SequenceFormat.NativeText)
@@ -576,12 +653,17 @@ class DoFileEditor(QMainWindow):
 
     def close_tab(self, idx: int) -> bool:
         ed = self.tabs.widget(idx)
-        if isinstance(ed, CodeEditor) and ed.document().isModified():
+        if isinstance(ed, CodeEditor) and ed.document().isModified() and ed.toPlainText().strip():
             self.tabs.setCurrentIndex(idx)
-            ans = QMessageBox.question(self, tr("Do-file Editor"),
-                                       tr("Save changes to {name}?").format(name=self._tab_title(ed).rstrip('*')),
-                                       QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
-                                       | QMessageBox.StandardButton.Cancel)
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(tr("Do-file Editor"))
+            box.setText(tr("Save changes to {name}?").format(name=self._tab_title(ed).rstrip('*')))
+            box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
+                                   | QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(QMessageBox.StandardButton.Save)
+            apply_rounded(box)
+            ans = box.exec()
             if ans == QMessageBox.StandardButton.Cancel:
                 return False
             if ans == QMessageBox.StandardButton.Save and not self.save():
@@ -598,7 +680,7 @@ class DoFileEditor(QMainWindow):
         try:
             for i in reversed(range(self.tabs.count())):
                 ed = self.tabs.widget(i)
-                if isinstance(ed, CodeEditor) and ed.document().isModified():
+                if isinstance(ed, CodeEditor) and ed.document().isModified() and ed.toPlainText().strip():
                     if not self.close_tab(i):
                         e.ignore()
                         return
@@ -659,6 +741,13 @@ class DoFileEditor(QMainWindow):
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(code if code.endswith("\n") else code + "\n")
         self.tmpfiles.append(path)
+        name = ed.path.name if ed.path else ed.property("untitled")
+        if line:
+            self.tmp_sources[path] = f"{tr('line')}: {name}"
+        elif ed.textCursor().hasSelection():
+            self.tmp_sources[path] = f"{tr('selection')}: {name}"
+        else:
+            self.tmp_sources[path] = name
         self.run(f'{verb} "{path}"')
         self.ran.emit()
 
@@ -682,7 +771,7 @@ class DoFileEditor(QMainWindow):
         for act in self.tool_actions.values():
             name, accent = act.data()
             act.setIcon(icon(name, accent))
-        self.new_tab_button.setIcon(icon("plus"))
+        self.tab_bar.refresh_icons()
 
     def cleanup(self) -> None:
         for p in self.tmpfiles:
@@ -696,4 +785,6 @@ class DoFileEditor(QMainWindow):
         for act in self.tool_actions.values():
             self._retitle(act)
         self._retitle_tab_button()
+        self.tab_bar.refresh_icons()
+        self._fit_toolbar_buttons()
         self._update_title()

@@ -24,6 +24,7 @@ from ..graphics.model import Graph
 from ..i18n import tr
 from ..lazy import lazy
 from . import graph_editor as GE
+from .style import apply_rounded
 
 # imported with the first graph (start-up time; see opendta/lazy.py)
 _qtagg = lazy("matplotlib.backends.backend_qtagg")
@@ -47,6 +48,7 @@ class GraphWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self._close_tab)
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
+        apply_rounded(self)
         self.canvases: dict[str, FigureCanvasQTAgg] = {}
 
         tb = QToolBar("Graph")

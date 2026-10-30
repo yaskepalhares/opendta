@@ -13,7 +13,14 @@
 - Work on a branch and open a PR for review. Do not push directly to main.
 - At the end of each step, write the state to `progresso.md` (local, not in the repository) and
   give a ready-to-paste prompt to continue the work in a new chat: where the state is, what was
-  done, what the next step is and how to finish it (branch, PR, CI, merge commit).
+  done, what the next step is and how to finish it (branch, PR, CI, merge commit). Keep
+  `progresso.md` short (current state and next step only); move finished steps to
+  `progresso-arquivo.md`.
+- Files on the user's computer (the Stata logs in `compat/stata/`, `progresso.md`): never ask the user to paste or attach them. In every new chat, call `device_request_folder_access` for `~/opendta`, find the file with `device_list_dir` and bring it in with `device_stage_files`. If the computer is not linked, say so and stop.
+- One block per session (two for a large block: implement, then check against Stata). Keep tool
+  output short (`tools/compare.py --brief --show-diff`, `pytest -q` with `tail`); run the full
+  `pytest` and `compare.py` once at the end; wait for CI in a single call; merge documentation-only
+  PRs without waiting for CI. Details in docs/next-steps.md ("Keeping a session small").
 
 ## Working guidelines
 

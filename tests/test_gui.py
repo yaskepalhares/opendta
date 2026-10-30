@@ -1,6 +1,7 @@
 """Smoke test of the interface (runs without a screen, with QT_QPA_PLATFORM=offscreen)."""
 
 import os
+import sys
 
 import pytest
 
@@ -403,6 +404,49 @@ def test_results_highlights_deleted_observations(app):
     assert rv.toPlainText().startswith("(519,227 observations deleted)")
 
 
+def test_review_lists_do_file_commands(app, tmp_path):
+    """Settings > General > Session: with the option on, the commands of the do-files (nested ones
+    too, and run) go under the do line in Review, with the failed ones marked; off, one line (Stata)."""
+    from PySide6.QtGui import QTextCursor
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    inner = tmp_path / "inner.do"
+    inner.write_text("display 5\n")
+    f = tmp_path / "prog.do"
+    f.write_text(f'* comment\nclear\nset obs 2\nforvalues i = 1/2 {{\n    display `i\'\n}}\ndo "{inner}"\nsummarize nothere\n')
+    w.run_command(f'do "{f}"')
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    assert top.childCount() == 0 and top.text(1) == "111"
+    w.prefs.review_do_commands = True
+    w.run_command(f'do "{f}"')
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    kids = [top.child(k).text(0) for k in range(top.childCount())]
+    assert kids == ["clear", "set obs 2", "forvalues i = 1/2 { …", f'do "{inner}"', "summarize nothere"]
+    assert top.child(4).text(1) == "111" and top.child(0).text(1) == ""
+    assert top.child(3).childCount() == 1 and top.child(3).child(0).text(0) == "display 5"
+    assert top.child(2).data(0, 256).startswith("forvalues i = 1/2 {\n    display")
+    # the filter keeps the do line when a command under it matches
+    w._filter_review("display 5")
+    assert not top.isHidden() and not top.child(3).isHidden() and top.child(0).isHidden()
+    w._filter_review("")
+    # Do-file Editor: the temporary file is shown by what it holds
+    w.run_command(f'doedit "{f}"')
+    ed = w.dofile_editor.current()
+    cur = ed.textCursor()
+    cur.setPosition(len("* comment\n"))
+    cur.setPosition(len("* comment\nclear\nset obs 2"), QTextCursor.MoveMode.KeepAnchor)
+    ed.setTextCursor(cur)
+    w.dofile_editor.do_selection()
+    top = w.review.topLevelItem(w.review.topLevelItemCount() - 1)
+    assert top.text(0) == "do (selection: prog.do)" and top.childCount() == 2
+    ed.document().setModified(False)
+    w.dofile_editor.cleanup()
+    w.prefs.review_do_commands = False
+    w.close()
+
+
 def test_dofile_editor_line_tools(app):
     from PySide6.QtGui import QTextCursor
 
@@ -664,6 +708,86 @@ def test_side_windows_open_and_return_at_their_default_place(app):
     w.close()
 
 
+def test_closed_side_windows_get_a_toolbar_button(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolBar
+
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    tb = w.findChild(QToolBar, "Toolbar")
+    panels = {"review": (w.dock_review, Qt.DockWidgetArea.LeftDockWidgetArea),
+              "variables": (w.dock_variables, Qt.DockWidgetArea.RightDockWidgetArea),
+              "properties": (w.dock_properties, Qt.DockWidgetArea.RightDockWidgetArea)}
+
+    def shown(name: str) -> bool:
+        app.processEvents()                         # the toolbar lays its buttons out on the next pass
+        act = w.toolbar_actions[name]
+        if sys.platform == "win32":                 # the Windows runner scales the fonts up: the last buttons
+            return act.isVisible()                  # go to the overflow menu and their widget is hidden
+        return tb.widgetForAction(act).isVisible()
+
+    def separators() -> int:
+        app.processEvents()
+        return sum(1 for a in tb.actions() if a.isSeparator() and a.isVisible())
+
+    # open at the start: no button for them, and the groups are still divided by one separator each
+    assert not any(shown(n) for n in panels)
+    open_separators = separators()
+    # closed by the X of the window (or by the Window menu): the button takes its place in the toolbar
+    for name, (dock, _area) in panels.items():
+        dock.close()
+        assert shown(name)
+    assert separators() == open_separators + 1
+    # the button brings the window back to its place and leaves the toolbar; Manager is untouched
+    for name, (dock, area) in panels.items():
+        dock.setFloating(True)
+        w.toolbar_actions[name].trigger()
+        assert dock.isVisible() and not dock.isFloating() and w.dockWidgetArea(dock) == area
+        assert not shown(name)
+    assert separators() == open_separators
+    dock = w.dock_variables
+    dock.toggleViewAction().trigger()               # closed from the Window menu
+    assert shown("variables") and not shown("review") and not shown("properties")
+    # open windows are not buttons after the main window is hidden and shown again
+    dock.toggleViewAction().trigger()
+    w.hide()
+    w.show()
+    assert not any(shown(n) for n in panels)
+    w.close()
+
+
+def test_side_window_buttons_follow_the_language(app):
+    from opendta import i18n
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        act = w.toolbar_actions["variables"]
+        assert (act.text(), act.toolTip()) == ("Variables", "Show the Variables window")
+        i18n.set_language("pt")
+        w.retranslate()
+        assert [w.toolbar_actions[n].text() for n in ("review", "variables", "properties", "varmanager")] == \
+            ["Histórico", "Variáveis", "Propriedades", "Gerenciador"]
+        assert w.toolbar_actions["review"].toolTip() == "Mostrar a janela Histórico"
+    finally:
+        i18n.set_language("en")
+        w.close()
+
+
+def test_variables_manager_button_opens_the_manager(app):
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    w.toolbar_actions["varmanager"].trigger()
+    assert w.varmanager is not None and w.varmanager.isVisible()
+    assert w.dock_variables.isVisible()             # the side window is not the manager
+    w.varmanager.close()
+    w.close()
+
+
 def test_dofile_editor_toolbar_layout(app):
     from PySide6.QtWidgets import QToolBar
 
@@ -682,3 +806,136 @@ def test_dofile_editor_toolbar_layout(app):
         de.tabs.widget(i).document().setModified(False)
     de.cleanup()
     w.close()
+
+
+def test_window_commands_in_the_interface(app, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+    from opendta.gui.main_window import MainWindow
+    from opendta.gui.window_cmds import qt_filter
+
+    assert qt_filter("Data (*.dta)|*.dta|Text|*.txt;*.csv") == "Data (*.dta);;Text (*.txt *.csv)"
+    w = MainWindow()
+    w.run_command('window menu append submenu "stUser" "Tools"')
+    w.run_command('window menu append item "Tools" "Say hi" "display 123"')
+    w.run_command("window menu refresh")
+    tools = [a.menu() for a in w.user_menu.actions() if a.menu() and a.text() == "Tools"][0]
+    tools.actions()[0].trigger()
+    assert "\n123\n" in w.results.toPlainText()
+    w.run_command('window push display "pushed"')
+    texts = [w.review.topLevelItem(k).text(0) for k in range(w.review.topLevelItemCount())]
+    assert texts[-2:] == ['display "pushed"', 'window push display "pushed"']
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: ("/tmp/x.dta", ""))
+    w.run_command('window fopen fname "Open" "Data (*.dta)|*.dta"')
+    w.run_command('display "$fname"')
+    assert "/tmp/x.dta" in w.results.toPlainText()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Cancel)
+    w.run_command('capture window stopbox rusure "Sure?"')
+    w.run_command("display _rc")
+    assert w.results.toPlainText().rstrip().endswith("1")
+    w.run_command('window manage maintitle "My title"')
+    assert w.windowTitle() == "My title"
+
+
+def test_toolbar_buttons_show_their_name_under_the_icon(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolBar, QToolButton
+
+    from opendta import i18n
+    from opendta.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        w.show()
+        tb = w.findChild(QToolBar, "Toolbar")
+        assert tb.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+        names = ["open", "save", "print", "log", "viewer", "graph", "dofile", "dataeditor", "databrowser",
+                 "varmanager", "more", "break", "settings"]
+        en = ["Open", "Save", "Print", "Log", "Viewer", "Graph", "Do-file Editor", "Data Editor",
+              "Data Browser", "Manager", "More", "Break", "Settings"]
+        assert [w.toolbar_actions[n].text() for n in names] == en
+        # the long text stays in the tooltip
+        assert w.toolbar_actions["log"].toolTip().startswith("Log (begin or close)")
+        # a disabled button keeps its label (the style greys it out)
+        btn = tb.widgetForAction(w.toolbar_actions["more"])
+        assert isinstance(btn, QToolButton) and not btn.isEnabled() and btn.text() == "More"
+        # everything fits in the window, in both languages: no overflow chevron
+        for lang in ("en", "pt"):
+            i18n.set_language(lang)
+            w.retranslate()
+            app.processEvents()
+            widths = {n: tb.widgetForAction(a).sizeHint().width() for n, a in w.toolbar_actions.items()}
+            if sys.platform != "win32":   # the Windows runner scales the fonts up (unlike the other two)
+                assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width(), widths)
+                # the buttons of the side windows are shown only while their window is closed
+                assert all(tb.widgetForAction(a).isVisible() for n, a in w.toolbar_actions.items()
+                           if n not in ("review", "variables", "properties"))
+                # and with the three side windows closed, when their buttons are all there too
+                docks = (w.dock_review, w.dock_variables, w.dock_properties)
+                for d in docks:
+                    d.close()
+                app.processEvents()
+                assert tb.sizeHint().width() <= w.width(), (lang, tb.sizeHint().width())
+                assert all(tb.widgetForAction(a).isVisible() for a in w.toolbar_actions.values())
+                for d in docks:
+                    d.toggleViewAction().trigger()
+        assert w.toolbar_actions["dofile"].text() == "Editor de do-files"
+        assert w.toolbar_actions["databrowser"].text() == "Navegador de dados"
+    finally:
+        i18n.set_language("en")
+        w.close()
+
+
+def test_data_editor_empty_grid_and_panes(app, tmp_path, monkeypatch):
+    from opendta.gui.main_window import MainWindow
+
+    monkeypatch.chdir(tmp_path)
+    w = MainWindow()
+    w.run_command("edit")
+    app.processEvents()
+    b = w.browser
+    m = b.model
+    assert m.rowCount() > 10 and m.columnCount() > 3             # empty cells fill the view
+    assert b.cell_name.text() == "var1[1]"
+    b.table.setCurrentIndex(m.index(0, 0))
+    b.cell_value.setText("4")
+    b._commit_cell()
+    app.processEvents()
+    assert w.session.data.names == ["var1"] and w.session.data.nobs == 1
+    assert m.rowCount() == 2 and m.columnCount() == 2              # no padding once there is data
+    assert b.vars_list.topLevelItemCount() == 1
+    w.close()
+
+
+def test_do_editor_closes_empty_tab_without_asking(app):
+    from opendta.gui.dofile_editor import DoFileEditor
+    from opendta.session import Session
+
+    ed = DoFileEditor(Session(), run=lambda c: None)
+    ed.new_file()
+    ed.current().setPlainText("   ")
+    ed.current().document().setModified(True)
+    assert ed.close_tab(ed.tabs.currentIndex()) is True            # blank: no confirmation
+    assert ed.tab_bar.plus.x() > ed.tab_bar.tabRect(ed.tabs.count() - 1).right() - 1
+
+
+def test_do_editor_close_button_and_shortcut(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QTabBar
+
+    from opendta.gui.dofile_editor import DoFileEditor
+    from opendta.session import Session
+
+    ed = DoFileEditor(Session(), run=lambda c: None)
+    ed.show()
+    ed.new_file()
+    ed.new_file()
+    app.processEvents()
+    assert ed.tabs.count() == 3
+    btn = ed.tab_bar.tabButton(1, QTabBar.ButtonPosition.RightSide)
+    QTest.mouseClick(btn, Qt.MouseButton.LeftButton)            # the x of a tab closes it
+    assert ed.tabs.count() == 2
+    ed.tabs.setCurrentIndex(0)
+    QTest.keyClick(ed, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)   # Ctrl+W (Cmd+W on a Mac)
+    assert ed.tabs.count() == 1
+    ed.close()

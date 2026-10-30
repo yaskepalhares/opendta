@@ -10,7 +10,7 @@
 {p 8 16 2}{cmd:tabulate} {it:varname} [{it:if}] [{it:in}] [{it:weight}] [{cmd:,} {opt m:issing} {opt nol:abel} {opt sort} {opt gen:erate(stub)} {opt matcell(name)} {opt matrow(name)}]{p_end}
 {p 8 16 2}{cmd:tabulate} {it:var1} {it:var2} [{cmd:,} {opt r:ow} {opt col:umn} {opt cell} {opt e:xpected} {opt nof:req} {opt ch:i2} {opt lr:chi2} {opt V} {opt exact} {opt gam:ma} {opt taub}]{p_end}
 {p 8 16 2}{cmd:tab1} {it:varlist}  |  {cmd:tab2} {it:varlist}{p_end}
-{p 8 16 2}{cmd:table} {it:rowvar} [{it:colvar}] [{cmd:,} {opt c:ontents(clist)} {opt row} {opt col} {opt f:ormat(%fmt)}]{p_end}
+{p 8 16 2}{cmd:table} {it:rowvar} [{it:colvar} [{it:supercolvar}]] [{cmd:,} {opt c:ontents(clist)} {opt by(superrowvars)} {opt row} {opt col} {opt sc:ol} {opt f:ormat(%fmt)}]{p_end}
 
 {title:Description}
 
@@ -27,5 +27,7 @@ exact test, computed by enumerating every table with the same margins).
 {cmd:tab1} makes one-way tables of several variables, {cmd:tab2} all
 two-way tables among them. {cmd:table} shows frequencies or other
 statistics ({cmd:mean}, {cmd:sd}, {cmd:sum}, {cmd:min}, {cmd:max},
-{cmd:median}, {cmd:p#}...) in a compact grid.
+{cmd:median}, {cmd:p#}...) in a compact grid. A third variable makes supercolumns, each with its
+own columns; {cmd:by()} (up to four variables) makes groups of rows; {cmd:scol} adds a total
+supercolumn.
 {p_end}

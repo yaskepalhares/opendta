@@ -331,7 +331,40 @@ def icc(Y: np.ndarray, model: str = "random", kind: str = "consistency",
             **a}
 
 
-def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0) -> dict:
+def icc_test(a: dict, model: str, kind: str, r0: float, k: float | None = None) -> dict:
+    """F tests of ICC = r0 for the individual and the average ICC (McGraw and Wong 1996, tables
+    7 and 8). a: the mean squares of anova_two_way (BMS, JMS, EMS, WMS; df2 of the one-way model in
+    a["df2"] when the data are unbalanced). VERIFY: Stata's tests for r0 > 0."""
+    n = a["n"]
+    k = a["k"] if k is None else k
+    BMS, JMS, EMS, WMS = a["BMS"], a["JMS"], a["EMS"], a["WMS"]
+    out = {}
+    for which, kk in (("i", k), ("avg", 1.0)):
+        # the average ICC tests r0 on the scale of an average of k ratings: kk = 1 in the formulas
+        if model == "oneway":
+            F = BMS / WMS * (1 - r0) / (1 + (kk - 1) * r0)
+            df1, df2 = n - 1, a.get("df2", n * (k - 1))
+        elif kind == "consistency":
+            F = BMS / EMS * (1 - r0) / (1 + (kk - 1) * r0)
+            df1, df2 = n - 1, (n - 1) * (k - 1)
+        else:
+            if r0 == 0:
+                aa, bb = 0.0, 1.0
+            elif which == "i":
+                aa, bb = k * r0 / (n * (1 - r0)), 1 + k * r0 * (n - 1) / (n * (1 - r0))
+            else:
+                aa, bb = r0 / (n * (1 - r0)), 1 + r0 * (n - 1) / (n * (1 - r0))
+            F = BMS / (aa * JMS + bb * EMS)
+            df1 = n - 1
+            df2 = (n - 1) * (k - 1) if aa == 0 else \
+                (aa * JMS + bb * EMS) ** 2 / ((aa * JMS) ** 2 / (k - 1) + (bb * EMS) ** 2 / ((n - 1) * (k - 1)))
+        # 1 - F(x), as Stata computes it: a tiny p comes out as a multiple of the machine epsilon
+        # (compat 1913: 8.32667268469e-14)
+        out[which] = (float(F), float(df1), float(df2), float(1 - st.f.cdf(F, df1, df2)))
+    return out
+
+
+def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0, center: str = "", exact: bool = False) -> dict:
     """One-way ANOVA and the intraclass correlation of [R] loneway."""
     N = len(y)
     labels, inv, ng = np.unique(g, return_inverse=True, return_counts=True)
@@ -345,7 +378,10 @@ def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0) -> dict:
     msb, msw = ssb / dfb, ssw / dfw
     F = msb / msw
     n0 = (N - float((ng ** 2).sum()) / N) / (G - 1)
-    rho_raw = (F - 1) / (F + n0 - 1)
+    # mean, median: F is divided by the mean or the median of its F(dfb, dfw) distribution
+    # (VERIFY: [R] loneway gives the options but not the formula)
+    Fc = F / (dfw / (dfw - 2) if center == "mean" else float(st.f.median(dfb, dfw)) if center == "median" else 1.0)
+    rho_raw = (Fc - 1) / (Fc + n0 - 1)
     rho = max(rho_raw, 0.0)
     # Asymptotic variance of rho by the delta method on (MSb, MSw), with the variance of MSb for
     # unbalanced groups; evaluated at the (truncated) estimate. VERIFY: matches the Stata 14 log.
@@ -362,6 +398,12 @@ def loneway(y: np.ndarray, g: np.ndarray, level: float = 95.0) -> dict:
     z = float(st.norm.ppf(1 - (1 - level / 100) / 2))
     lb = max(rho - z * se, 0.0)
     ub = min(rho + z * se, 1.0)
+    if exact:
+        # balanced data: the exact interval from the F distribution (Searle 1971)
+        a = (1 - level / 100) / 2
+        Fu, Fl = float(st.f.ppf(1 - a, dfb, dfw)), float(st.f.ppf(a, dfb, dfw))
+        lb = max((F / Fu - 1) / (F / Fu + n0 - 1), 0.0)
+        ub = min((F / Fl - 1) / (F / Fl + n0 - 1), 1.0)
     sd_b = math.sqrt((msb - msw) / n0) if msb > msw else math.nan
     sd_w = math.sqrt(msw)
     rel = (F - 1) / F
@@ -398,18 +440,31 @@ def _nct_ci(t: float, df: float, level: float) -> tuple[float, float]:
 
 
 def effect_sizes(n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
-                 level: float = 95.0, unequal: bool = False) -> dict:
+                 level: float = 95.0, unequal: bool = False, welch: bool = False) -> dict:
     """Cohen's d, Hedges's g, Glass's Delta (both controls) and the point-biserial correlation
-    of a two-group mean comparison, with noncentral-t confidence intervals."""
-    df = n1 + n2 - 2
-    sp = math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / df)
+    of a two-group mean comparison, with noncentral-t confidence intervals. unequal (or welch):
+    d and g stay those of the pooled standard deviation, and their intervals use Satterthwaite's
+    (or Welch's) degrees of freedom; the point-biserial r comes from the t statistic of unequal
+    variances (compat 1913)."""
+    df0 = n1 + n2 - 2
+    sp = math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / df0)
     diff = m1 - m2
     d = diff / sp
-    J = math.exp(math.lgamma(df / 2) - math.lgamma((df - 1) / 2)) / math.sqrt(df / 2)
     cn = math.sqrt(n1 * n2 / (n1 + n2))
+    df = df0
     t = d * cn
+    if unequal or welch:
+        a1, a2 = s1 * s1 / n1, s2 * s2 / n2
+        if welch:
+            df = (a1 + a2) ** 2 / (a1 * a1 / (n1 + 1) + a2 * a2 / (n2 + 1)) - 2
+        else:
+            df = (a1 + a2) ** 2 / (a1 * a1 / (n1 - 1) + a2 * a2 / (n2 - 1))
+    J = math.exp(math.lgamma(df0 / 2) - math.lgamma((df0 - 1) / 2)) / math.sqrt(df0 / 2)
     lo, hi = _nct_ci(t, df, level)
     out = {"cohen": (d, lo / cn, hi / cn), "hedges": (J * d, J * lo / cn, J * hi / cn)}
+    if unequal or welch:
+        t = diff / math.sqrt(a1 + a2)
+        lo, hi = _nct_ci(t, df, level)
     for key, sd, nc in (("glass1", s1, n1), ("glass2", s2, n2)):
         D = diff / sd
         glo, ghi = _nct_ci(D * cn, nc - 1, level)       # noncentral t with the control's df
@@ -425,26 +480,31 @@ def effect_sizes(n1: int, m1: float, s1: float, n2: int, m2: float, s2: float,
 # means
 # ---------------------------------------------------------------------------
 
-def three_means(x: np.ndarray, level: float = 95.0) -> dict:
+def three_means(x: np.ndarray, level: float = 95.0, w: np.ndarray | None = None, wtype: str = "") -> dict:
     """Arithmetic, geometric and harmonic means with t-based intervals computed on the
-    original, log and reciprocal scales."""
+    original, log and reciprocal scales. Weights: fweight (the number of observations is the sum
+    of the weights) or aweight (weights rescaled to sum to the number of observations)."""
     out = {}
     a = (1 - level / 100) / 2
+    w = np.ones(len(x)) if w is None else np.asarray(w, dtype=float)
 
-    def ci(v):
-        n = len(v)
-        m = v.mean()
-        se = v.std(ddof=1) / math.sqrt(n) if n > 1 else math.nan
+    def ci(v, wv):
+        if wtype == "aweight":
+            wv = wv * len(v) / wv.sum()
+        n = int(round(wv.sum())) if wtype == "fweight" else len(v)
+        m = float((wv * v).sum() / wv.sum())
+        se = math.sqrt(float((wv * (v - m) ** 2).sum()) / (n - 1) / n) if n > 1 else math.nan
         q = st.t.ppf(1 - a, n - 1) if n > 1 else math.nan
         return n, m, se, m - q * se, m + q * se
 
-    n, m, se, lo, hi = ci(x)
+    n, m, se, lo, hi = ci(x, w)
     out["a"] = (n, m, se, lo, hi)
     pos = x[x > 0]
+    wp = w[x > 0]
     if len(pos):
-        n, m, se, lo, hi = ci(np.log(pos))
+        n, m, se, lo, hi = ci(np.log(pos), wp)
         out["g"] = (n, math.exp(m), math.exp(m) * se, math.exp(lo), math.exp(hi))
-        n, m, se, lo, hi = ci(1 / pos)
+        n, m, se, lo, hi = ci(1 / pos, wp)
         out["h"] = (n, 1 / m, se / m ** 2, 1 / hi if hi > 0 else math.nan, 1 / lo if lo > 0 else math.nan)
     return out
 
@@ -569,6 +629,110 @@ def boxcox_fit(y: np.ndarray, X: np.ndarray) -> dict:
     V[0, 0] = se * se          # the profile curvature is the exact theta block; the rest is numeric
     return {"theta": th, "se": se, "ll": f0, "b": b, "sigma": sigma, "V": V,
             "nit": int(getattr(res, "nit", 0)), "ll_at": lambda t: boxcox_ll(t, y, X), "z": z}
+
+
+def profile_newton(f, start):
+    """Newton-Raphson on a concentrated log likelihood f(params) with numerical derivatives, from
+    `start`: the iterations of boxcox (compat 1913: from lambda = 1, the same values as Stata's
+    log). Returns the ml.MLResult."""
+    from ..estimation import ml
+
+    def fun(pv, todo):
+        f0 = f(pv)
+        if todo == 0:
+            return f0, None, None
+        k = len(pv)
+        h = 1e-4 * np.maximum(np.abs(pv), 1.0)
+        g = np.zeros(k)
+        H = np.zeros((k, k))
+        for i in range(k):
+            e = np.zeros(k)
+            e[i] = h[i]
+            fp, fm = f(pv + e), f(pv - e)
+            g[i] = (fp - fm) / (2 * h[i])
+            H[i, i] = (fp - 2 * f0 + fm) / h[i] ** 2
+            for j in range(i):
+                d = np.zeros(k)
+                d[j] = h[j]
+                H[i, j] = H[j, i] = (f(pv + e + d) - f(pv + e - d) - f(pv - e + d) + f(pv - e - d)) / (4 * h[i] * h[j])
+        return f0, g, H
+    return ml.maximize(fun, np.asarray(start, dtype=float))
+
+
+def boxcox_general(y: np.ndarray, Xt: np.ndarray, Xn: np.ndarray, model: str) -> dict:
+    """Box-Cox models with transformed regressors: y^(theta) = Xt^(lambda) b + Xn c + e, where Xn
+    holds the untransformed regressors and the constant. model: rhsonly (theta = 1, y not
+    transformed), lambda (theta = lambda) or theta (theta and lambda free). Estimates by
+    maximizing the likelihood concentrated over the coefficients and sigma; the covariance of
+    every parameter (theta, lambda, b, c, sigma) from the numerical Hessian of the full
+    likelihood."""
+    n = len(y)
+    ly = float(np.log(y).sum())
+
+    def unpack(pv):
+        if model == "rhsonly":
+            return 1.0, pv[0]
+        if model == "lambda":
+            return pv[0], pv[0]
+        return pv[0], pv[1]
+
+    def design(lam):
+        cols = [_bc(Xt[:, j], lam) for j in range(Xt.shape[1])]
+        return np.column_stack(cols + [Xn]) if cols else Xn
+
+    def prof(pv):
+        th, lam = unpack(pv)
+        X = design(lam)
+        z = y if model == "rhsonly" else _bc(y, th)
+        b, *_ = np.linalg.lstsq(X, z, rcond=None)
+        rss = float(((z - X @ b) ** 2).sum())
+        jac = 0.0 if model == "rhsonly" else (th - 1) * ly
+        return -n / 2 * (math.log(2 * math.pi) + 1) - n / 2 * math.log(rss / n) + jac, b, rss
+
+    npar = 2 if model == "theta" else 1
+    # Newton-Raphson from 1 as Stata; a search from several points if it does not converge
+    nr = profile_newton(lambda pv: prof(pv)[0], [1.0] * npar)
+    if nr.converged:
+        pv, log, nit = nr.b, nr.log, nr.iterations
+    else:
+        best = None
+        for start in ([1.0] * npar, [0.0] * npar, [0.5] * npar, [-0.5] * npar):
+            r = so.minimize(lambda pv: -prof(pv)[0], np.array(start), method="Nelder-Mead",
+                            options={"xatol": 1e-10, "fatol": 1e-12, "maxiter": 20000})
+            if best is None or r.fun < best.fun:
+                best = r
+        pv, log, nit = best.x, [], int(best.nit)
+    ll, b, rss = prof(pv)
+    sigma = math.sqrt(rss / n)
+    th, lam = unpack(pv)
+
+    def full(q):
+        th_, lam_ = unpack(q[:npar])
+        X = design(lam_)
+        z = y if model == "rhsonly" else _bc(y, th_)
+        r = z - X @ q[npar:-1]
+        jac = 0.0 if model == "rhsonly" else (th_ - 1) * ly
+        return -n / 2 * math.log(2 * math.pi) - n * math.log(q[-1]) - float((r * r).sum()) / (2 * q[-1] ** 2) + jac
+
+    p0 = np.concatenate([pv, b, [sigma]])
+    q = len(p0)
+    hs = 1e-4 * np.maximum(np.abs(p0), 1e-2)
+    H = np.zeros((q, q))
+    for i in range(q):
+        for j in range(i + 1):
+            def at(si, sj):
+                pp = p0.copy()
+                pp[i] += si * hs[i]
+                pp[j] += sj * hs[j]
+                return full(pp)
+            H[i, j] = H[j, i] = (at(1, 1) - at(1, -1) - at(-1, 1) + at(-1, -1)) / (4 * hs[i] * hs[j])
+    V = np.linalg.inv(-H)
+
+    def ll_at(c: float) -> float:
+        """Log likelihood with every transformation parameter set to c."""
+        return prof(np.full(npar, c))[0]
+    return {"theta": th, "lambda": lam, "params": pv, "ll": ll, "b": b, "sigma": sigma, "V": (V + V.T) / 2,
+            "nit": nit, "log": log, "ll_at": ll_at}
 
 
 # ---------------------------------------------------------------------------

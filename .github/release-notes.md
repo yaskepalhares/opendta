@@ -1,14 +1,17 @@
 **English** · [Português](#português)
 
-## What's new in 0.5.0
+## What's new in 0.9.0
 
-Four new groups of commands, each checked against Stata 14 output (the remaining differences, and why, are in `compat/known_differences.txt`):
+New:
 
-- **Panel data**: random-effects models by quadrature, `quadchk`, dynamic panels by GMM (`xtabond`, `xtdpdsys`, `xtdpd`, with `estat abond` and `estat sargan`), the linear panel estimators, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` and `xtdata`.
-- **Multivariate statistics**: `pca`, `factor` and `rotate`, `alpha`, `cluster` (k-means, k-medians and the hierarchical linkages, with the dendrogram), `discrim` and `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` and `biplot`, with their `estat` subcommands.
-- **Models**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` and `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` and `etpoisson`.
-- **Other suites**: `sem` with `mlmv`, `adf`, groups and the `estat` subcommands; `gsem`; `irt` (`1pl` to `hybrid`) with `irtgraph`; `bayesmh`, the `bayes` prefix for `regress`, `logit`, `probit` and `poisson`, `bayesstats`, `bayestest` and `bayesgraph`; new `power` methods and the `graph` option; `mi impute mvn`, `monotone`, `truncreg`, `intreg` and `nbreg`; `svy:` with sixteen more estimators.
-- **Fixes**: `ivregress` now uses weights; `matrix list` shows equation names (`y:x`, `cut1:_cons`) and lists a 1×1 matrix as symmetric, and `` `:colfullnames' ``, `` `:coleq' `` and `matrix coleq`/`roweq` work with equations.
+- **`power`, part 2**: sample size, power and effect size for `power twoway` (two-way ANOVA), `power repeated` (repeated-measures ANOVA), `power cmh`, `power mcc` (matched case-control), `power trend`, `power cox`, `power exponential` and `power logrank`, with lists of values in tables. The layout and the numbers were checked against the output of a reference run.
+
+Interface:
+
+- **User menu**: when no item has been added yet, it says so and points to the help page that explains how to add items.
+- **Help → Contents** lists every help page with its title, and **Help → Search** asks for words and lists the pages that contain all of them.
+- The **Graph** button says there is no graph yet when nothing has been drawn.
+- **About** describes OpenDTA as an interpreter with a Stata-style interface.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -54,17 +57,18 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.5.0
+### Novidades da 0.9.0
 
-Quatro novos grupos de comandos, cada um conferido com a saída do Stata 14 (as diferenças que restam, e o motivo, estão em `compat/known_differences.txt`):
+Novo:
 
-- **Dados em painel**: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM (`xtabond`, `xtdpdsys`, `xtdpd`, com `estat abond` e `estat sargan`), os estimadores lineares de painel, `xtfrontier`, `xtunitroot` (`ht`, `breitung`, `hadri`, `fisher`), `xtline`, `xttab` e `xtdata`.
-- **Estatística multivariada**: `pca`, `factor` e `rotate`, `alpha`, `cluster` (k-médias, k-medianas e as ligações hierárquicas, com o dendrograma), `discrim` e `candisc`, `manova`, `mvreg`, `mvtest`, `canon`, `hotelling`, `ca`, `mca`, `mds`, `procrustes` e `biplot`, com seus subcomandos de `estat`.
-- **Modelos**: `cloglog`, `scobit`, `hetprobit`, `fracreg`, `binreg`, `glogit`; `zip`, `zinb`, `tpoisson`, `tnbreg`, `gnbreg`; `intreg`, `truncreg`, `heckman`, `heckprobit`, `heckoprobit`, `biprobit`; `ivregress liml` e `gmm`, `ivprobit`, `ivtobit`, `ivpoisson`; `constraint`, `cnsreg`, `sureg`, `reg3`, `eivreg`, `vwls`, `rreg`; `clogit`, `rologit`, `asclogit`, `slogit`, `mprobit`, `asmprobit`, `asroprobit`; `exlogistic`, `expoisson`; `nl`, `nlsur`, `gmm`, `frontier`; `teffects`, `eteffects`, `stteffects`, `etregress` e `etpoisson`.
-- **Outras suítes**: `sem` com `mlmv`, `adf`, grupos e os subcomandos de `estat`; `gsem`; `irt` (do `1pl` ao `hybrid`) com `irtgraph`; `bayesmh`, o prefixo `bayes` para `regress`, `logit`, `probit` e `poisson`, `bayesstats`, `bayestest` e `bayesgraph`; novos métodos do `power` e a opção `graph`; `mi impute mvn`, `monotone`, `truncreg`, `intreg` e `nbreg`; `svy:` com mais dezesseis estimadores.
-- **Correções**: o `ivregress` agora usa os pesos; o `matrix list` mostra os nomes de equação (`y:x`, `cut1:_cons`) e lista uma matriz 1×1 como simétrica, e `` `:colfullnames' ``, `` `:coleq' `` e `matrix coleq`/`roweq` funcionam com equações.
+- **`power`, parte 2**: tamanho de amostra, poder e tamanho de efeito para `power twoway` (ANOVA de dois fatores), `power repeated` (ANOVA de medidas repetidas), `power cmh`, `power mcc` (caso-controle pareado), `power trend`, `power cox`, `power exponential` e `power logrank`, com listas de valores em tabelas. O layout e os números foram conferidos com a saída de uma execução de referência.
 
-O que ainda falta para a versão 1.0 está no [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.pt-BR.md#faltam-para-a-10).
+Interface:
+
+- **Menu User**: enquanto nenhum item foi adicionado, ele avisa e indica a página de ajuda que explica como adicionar itens.
+- **Help → Contents** lista todas as páginas de ajuda com o título, e **Help → Search** pede palavras e lista as páginas que contêm todas elas.
+- O botão **Graph** avisa que ainda não há gráfico quando nada foi desenhado.
+- O **About** descreve o OpenDTA como um interpretador com interface no estilo do Stata.
 
 ### Download
 

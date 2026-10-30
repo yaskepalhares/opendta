@@ -9,6 +9,7 @@ mark and are settled by the reference log of compat case 1906."""
 from __future__ import annotations
 
 import json
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -48,9 +49,10 @@ def _measure(text, default: str) -> tuple[str, float | None]:
         return "Lp", float(t[t.index("(") + 1:-1])
     if low in _MEASURE_NAMES:
         return _MEASURE_NAMES[low], None
-    raise StataError(198, f"measure {t} is not available yet in OpenDTA" if low in (
-        "matching", "jaccard", "russell", "hamann", "dice", "antidice", "sneath", "rogers", "ochiai", "yule", "anderberg",
-        "kulczynski", "pearson", "gower", "binary") else f"invalid measure {t}")
+    binary = {m_.lower(): m_ for m_ in K.BINARY}
+    if low in binary:
+        return binary[low], None
+    raise StataError(198, f"invalid measure {t}")
 
 
 def _store(ds) -> dict:
@@ -126,53 +128,135 @@ def _linkage(s: "Session", sub: str, rest: str) -> None:
     if name in _names(ds):
         raise StataError(110, f"cluster name {name} already exists")                      # VERIFY
     gen = str(o["generate"]).strip() if isinstance(o.get("generate"), str) else name
-    method = _LINKAGES[sub]
+    D = K.pairwise(X, None, meas, power)
+    _hierarchical(s, D, np.flatnonzero(mask), _LINKAGES[sub], name, gen,
+                  meas if power is None else f"L({power:g})", names, f"cluster {sub} {rest.strip()}",
+                  sim=meas in K.BINARY or meas in ("correlation", "angular"))
+    if not isinstance(o.get("name"), str):
+        s.output.write(f"cluster name: {name}\n", "text")                                  # VERIFY
+
+
+def _hierarchical(s: "Session", D: np.ndarray, rows: np.ndarray, method: str, name: str, gen: str,
+                  dissim: str, names: list[str] | None, cmd: str, sim: bool = False) -> None:
+    """Runs the linkage on the dissimilarities D of the observations `rows` and stores the
+    cluster variables and the description of the analysis. Stata's variables are by position in
+    the dendrogram: the k-th observation of the sample holds the id of the k-th leaf (_ord) and
+    the height of the merge that joins it to the next leaf (_hgt, missing for the last one;
+    compat 1917). With a similarity measure (sim), D holds 1 - similarity and the heights are
+    shown as similarities."""
+    ds = s.data
     pseudo = method in ("median", "centroid")
     _check_new(ds, [f"{gen}_id", f"{gen}_ord", f"{gen}_hgt"] + ([f"{gen}_pht"] if pseudo else []))
-    D = K.pairwise(X, None, meas, power)
     merges = K.linkage(D, method)
-    n = X.shape[0]
+    n = D.shape[0]
     order = K.leaf_order(merges, n)
-    rows = np.flatnonzero(mask)
-    pos = np.empty(n, dtype=int)
-    pos[order] = np.arange(1, n + 1)
-    first_h = np.full(n, np.nan)
-    kids = {n + r: (a, b) for r, (a, b, _) in enumerate(merges)}
+
+    def shown(h):
+        return 1.0 - h if sim else h
+
     # pseudo-heights make the heights of median and centroid linkage monotone (VERIFY)
     pseudo_h = {}
     for r, (a, b, h) in enumerate(merges):
         pseudo_h[n + r] = max([h, pseudo_h.get(a, h), pseudo_h.get(b, h)])
-
-    def leaves(c):
-        return [c] if c < n else leaves(kids[c][0]) + leaves(kids[c][1])
-
-    for r, (a, b, h) in enumerate(merges):
-        for lf in leaves(a) + leaves(b):
-            if np.isnan(first_h[lf]):
-                first_h[lf] = h
     ids = np.full(ds.nobs, SYS)
     ords = np.full(ds.nobs, SYS)
     hgts = np.full(ds.nobs, SYS)
     ids[rows] = np.arange(1, n + 1)
-    ords[rows] = pos
-    hgts[rows] = first_h
+    ords[rows] = np.array(order) + 1
+    gaps = K.gap_heights(merges, n)
+    hgts[rows[:-1]] = [shown(h) for h in gaps]
     _put_var(ds, f"{gen}_id", ids)
     _put_var(ds, f"{gen}_ord", ords)
     _put_var(ds, f"{gen}_hgt", hgts)
     if pseudo:
-        first_p = np.full(n, np.nan)
-        for r, (a, b, h) in enumerate(merges):
-            for lf in leaves(a) + leaves(b):
-                if np.isnan(first_p[lf]):
-                    first_p[lf] = pseudo_h[n + r]
         phts = np.full(ds.nobs, SYS)
-        phts[rows] = first_p
+        phts[rows[:-1]] = [shown(h) for h in K.gap_heights(merges, n, [pseudo_h[n + r] for r in range(len(merges))])]
         _put_var(ds, f"{gen}_pht", phts)
-    info = {"type": "hierarchical", "method": method, "dissim": meas if power is None else f"L({power:g})",
+    info = {"type": "hierarchical", "method": method, "dissim": dissim, "sim": sim,
             "vars": names, "gen": gen, "pseudo": pseudo, "rows": rows.tolist(), "merges": [[a, b, h] for a, b, h in merges],
-            "cmd": f"cluster {sub} {rest.strip()}", "n": n}
+            "cmd": cmd, "n": n}
     _store(ds)[f"_clinfo_{name}"] = json.dumps(info)
     s.notify_state()
+
+
+_SHORT = {"singlelinkage": "single", "averagelinkage": "average", "completelinkage": "complete",
+          "waveragelinkage": "waverage", "medianlinkage": "median", "centroidlinkage": "centroid",
+          "wardslinkage": "wards"}
+
+
+@command("clustermat", "clustermat")
+def cmd_clustermat(s: "Session", args: str) -> None:
+    """clustermat linkage matname [if] [in], shape() add clear labelvar() name() generate()
+    ([MV] clustermat): hierarchical clustering of a dissimilarity matrix."""
+    from .matrix import get_matrix
+    words = args.strip().split(None, 2)
+    if len(words) < 2:
+        raise StataError(198, "invalid syntax")
+    sub = words[0]
+    full = next((n for n, m in _SUBS if n in _LINKAGES and (len(sub) >= m and n.startswith(sub) or _SHORT[n] == sub)), None)
+    if full is None:
+        raise StataError(199, f"unrecognized clustermat subcommand {sub}")              # VERIFY
+    rest = words[1] + (" " + words[2] if len(words) > 2 else "")
+    p = parse_standard(rest)
+    o = match_options(p.options, {"shape": 2, "add": 3, "clear": 5, "labelvar": 5, "name": 2, "generate": 3,
+                                  "force": 5}) if p.options.strip() else {}
+    mat = get_matrix(s, p.varlist.strip())
+    shape = str(o.get("shape", "full")).strip().lower()
+    M_ = np.array(mat.data, dtype=float)
+    if shape == "full":
+        if M_.shape[0] != M_.shape[1]:
+            raise StataError(503, "conformability error")
+        if not o.get("force") and not np.allclose(M_, M_.T):
+            raise StataError(505, f"matrix {p.varlist.strip()} not symmetric")         # VERIFY
+        D = (M_ + M_.T) / 2
+        labels = list(mat.rownames)
+    elif shape in ("lower", "llower", "upper", "uupper"):
+        v = M_.ravel()
+        diag = shape in ("lower", "upper")
+        n = int(round((math.sqrt(8 * v.size + 1) + (-1 if diag else 1)) / 2))
+        D = np.zeros((n, n))
+        idx = np.tril_indices(n, 0 if diag else -1) if shape.endswith("lower") else np.triu_indices(n, 0 if diag else 1)
+        if len(idx[0]) != v.size:
+            raise StataError(503, "conformability error")                               # VERIFY
+        D[idx] = v
+        D = D + D.T - np.diag(np.diag(D))
+        labels = [str(i + 1) for i in range(n)]
+    else:
+        raise StataError(198, f"shape({shape}) invalid")
+    np.fill_diagonal(D, 0.0)
+    n = D.shape[0]
+    ds = s.data
+    if o.get("clear") or ds.nobs == 0 and not ds.nvars:
+        if o.get("clear"):
+            ds.clear()
+        old = ds.nobs
+        ds.set_obs(n)
+        s.output.write(f"number of observations (_N) was {old:,}, now {n:,}\n", "text")
+        mask = np.ones(n, dtype=bool)
+    elif o.get("add"):
+        from ._util import touse
+        mask = touse(s, p)
+        if int(mask.sum()) != n:
+            raise StataError(198, f"matrix has {n} rows but there are {int(mask.sum())} observations")   # VERIFY
+    else:
+        raise StataError(198, "add or clear are required when a dataset is present")    # VERIFY rc
+    lv = o["labelvar"].strip() if isinstance(o.get("labelvar"), str) else None
+    if lv:
+        _check_new(ds, [lv])
+    named = isinstance(o.get("name"), str)
+    name = str(o["name"]).strip() if named else _default_name(ds)
+    if name in _names(ds):
+        raise StataError(110, f"cluster name {name} already exists")                      # VERIFY
+    gen = str(o["generate"]).strip() if isinstance(o.get("generate"), str) else name
+    _hierarchical(s, D, np.flatnonzero(mask), _LINKAGES[full], name, gen, f"user matrix {p.varlist.strip()}",
+                  None, f"clustermat {args.strip()}")
+    if lv:
+        # the label variable comes after the cluster variables (compat 1917)
+        vals = np.array([""] * ds.nobs, dtype=object)
+        vals[np.flatnonzero(mask)] = labels
+        ds.add(Variable(lv, f"str{max(len(x) for x in labels)}", vals))
+    if not named:
+        s.output.write(f"cluster name: {name}\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -186,8 +270,6 @@ def _kmeans(s: "Session", sub: str, rest: str) -> None:
                                   "keepcenters": 4, "force": 5}) if p.options.strip() else {}
     median = sub == "kmedians"
     names = numeric_names(s, p.varlist, 1)
-    if o.get("keepcenters"):
-        raise StataError(198, "option keepcenters is not available yet in OpenDTA")
     if not isinstance(o.get("k"), str):
         raise StataError(198, "option k() required")
     k = int(float(o["k"]))
@@ -234,6 +316,15 @@ def _kmeans(s: "Session", sub: str, rest: str) -> None:
     vals = np.full(ds.nobs, SYS)
     vals[rows] = labels + 1
     _put_var(ds, gen, vals)
+    if o.get("keepcenters"):
+        # the k final centers appended as new observations, in the clustered variables (VERIFY
+        # the other variables, missing here, and the group variable of the new observations)
+        n0 = ds.nobs
+        ds.set_obs(n0 + k)
+        for j, nm in enumerate(names):
+            col = ds.get(nm).data.copy()
+            col[n0:] = centers[:, j]
+            ds.get(nm).data = col
     info = {"type": "partition", "method": sub, "dissim": meas if power is None else f"L({power:g})",
             "vars": names, "gen": gen, "rows": rows.tolist(), "k": k, "start": start, "iterations": it,
             "cmd": f"cluster {sub} {rest.strip()}", "n": n}
@@ -273,9 +364,14 @@ def _generate(s: "Session", rest: str) -> None:
     rows = np.array(info["rows"])
     if what in ("groups", "group"):
         ks = [int(x) for x in parse_numlist(arg)]
+        ties = str(o.get("ties", "error")).strip().lower() if isinstance(o.get("ties"), str) else "error"
+        for kk in ks:
+            if ties == "error" and K.has_ties(merges, n, kk):
+                raise StataError(198, f"cannot create {kk} groups because of ties")          # VERIFY rc
         labs = [K.cut_tree(merges, n, kk) for kk in ks]
     elif what == "cut":
-        labs = [K.cut_height(merges, n, float(arg))]
+        cut = float(arg)
+        labs = [K.cut_height(merges, n, 1.0 - cut if info.get("sim") else cut)]
         ks = [len(np.unique(labs[0]))]
     else:
         raise StataError(198, "invalid syntax")
@@ -311,6 +407,8 @@ def _dendrogram(s: "Session", rest: str) -> None:
     order = K.leaf_order(merges, n)
     xpos = {lf: i + 1.0 for i, lf in enumerate(order)}
     ypos = {lf: 0.0 for lf in range(n)}
+    if info.get("sim"):
+        merges = [(a, b, 1.0 - h) for a, b, h in merges]
     xs, ys = [], []
     for r, (a, b, h) in enumerate(merges):
         xa, xb = xpos[a], xpos[b]
@@ -321,7 +419,7 @@ def _dendrogram(s: "Session", rest: str) -> None:
         ypos[n + r] = h
     layers = [Layer("line", xs, ys, {}, {}, "")]
     ttl = f"Dendrogram for {name} cluster analysis"
-    opts = {"_xtitle": "", "_ytitle": f"{info['dissim']} dissimilarity measure", "title": {"lines": [ttl]}, "legend": {"off": True}}
+    opts = {"_xtitle": "", "_ytitle": f"{info['dissim']} {'similarity' if info.get('sim') else 'dissimilarity'} measure", "title": {"lines": [ttl]}, "legend": {"off": True}}
     finish(s, Graph(family="twoway", opts=opts, panels=[Panel("", layers)]), {k: v for k, v in o.items() if k in ("name", "saving", "nodraw")})
 
 
@@ -341,7 +439,8 @@ def _list(s: "Session", rest: str) -> None:
     for nm in names:
         info = _info(ds, nm)
         method = "wards" if info["method"] == "ward" else info["method"]
-        out.write(f"{nm}  (type: {info['type']},  method: {method},  dissimilarity: {info['dissim']})\n", "text")
+        kind = "similarity" if info.get("sim") else "dissimilarity"
+        out.write(f"{nm}  (type: {info['type']},  method: {method},  {kind}: {info['dissim']})\n", "text")
         if info["type"] == "hierarchical":
             g = info["gen"]
             hgt = "real_height" if info.get("pseudo") else "height"
@@ -351,10 +450,23 @@ def _list(s: "Session", rest: str) -> None:
                 out.write(f"            {g}_pht (pseudo_height variable)\n", "text")
         else:
             out.write(f"      vars: {info['gen']} (group variable)\n", "text")
-        out.write(f"     other: cmd: {info['cmd']}\n            varlist: {' '.join(info['vars'])}\n", "text")
+        out.write(f"     other: cmd: {info['cmd']}\n", "text")
+        if info["vars"] is None:
+            # clustermat: no varlist and no range (compat 1917)
+            out.write("\n", "text")
+            continue
+        out.write(f"            varlist: {' '.join(info['vars'])}\n", "text")
         if info["type"] == "partition":
             out.write(f"            k: {info['k']}\n            start: {info['start']}\n", "text")
-        out.write("            range: 0 .\n\n", "text")
+        out.write(f"            range: {_range(info)}\n\n", "text")
+
+
+def _range(info: dict) -> str:
+    """The range of the measure shown by cluster list: "1 0" for the binary similarities
+    (compat 1917); the measures that run from -1 to 1 are VERIFY."""
+    if not info.get("sim"):
+        return "0 ."
+    return "1 -1" if info["dissim"] in ("Hamann", "Yule", "Pearson", "correlation", "angular") else "1 0"
 
 
 def _dir(s: "Session", rest: str) -> None:
@@ -473,18 +585,22 @@ def matrix_dissimilarity(s: "Session", rest: str) -> None:
     if p.options.strip():
         o = match_options(p.options.lower(), {"observations": 3, "variables": 3, "names": 5, "l2": 2, "euclidean": 3, "l2squared": 3,
                                       "l1": 2, "absolute": 3, "linf": 2, "maximum": 3, "canberra": 3,
-                                      "correlation": 4, "angular": 3, "lpower": 2, "dissim": 4})
+                                      "correlation": 4, "angular": 3, "lpower": 2, "dissim": 4,
+                                      **{m_.lower(): len(m_) for m_ in K.BINARY}})
         for key, val in (("l2", "L2"), ("euclidean", "L2"), ("l2squared", "L2squared"), ("l1", "L1"), ("absolute", "L1"),
                          ("linf", "Linf"), ("maximum", "Linf"), ("canberra", "Canberra"), ("correlation", "correlation"),
                          ("angular", "angular")):
             if o.get(key):
                 meas = val
+        for m_ in K.BINARY:
+            if o.get(m_.lower()):
+                meas = m_
         if isinstance(o.get("lpower"), str):
             meas, power = "Lp", float(o["lpower"])
     q = parse_standard(p.exp + (" if " + p.if_ if p.if_ else "") + (" in " + p.in_ if p.in_ else ""))
     names = numeric_names(s, q.varlist, 1) if q.varlist.strip() else [v.name for v in s.data.vars if not v.is_string]
     X, w, wtype, mask = sample(s, q, names, allowed=())
-    similarity = meas in ("correlation", "angular")        # the matrix holds the similarity itself
+    similarity = meas in ("correlation", "angular") or meas in K.BINARY    # the matrix holds the similarity itself (VERIFY dissim())
 
     def dissimilarities(Z):
         D = K.pairwise(Z, None, meas, power)

@@ -157,7 +157,14 @@ PT: dict[str, str] = {
     "Check Now": "Verificar agora",
     "Version": "Versão",
     "About": "Sobre",
-    "Open-source interpreter for do-files and .dta data, compatible with Stata 14.": "Interpretador de código aberto para do-files e dados .dta, compatível com o Stata 14.",
+    "Open-source interpreter for do-files and .dta data, with a Stata-style interface.": "Interpretador de código aberto para do-files e dados .dta, com interface no estilo do Stata.",
+    "No graph yet: draw one with a graph command.": "Ainda não há gráfico: crie um com um comando graph.",
+    "No items yet": "Nenhum item ainda",
+    "How to add items (help window)": "Como adicionar itens (help window)",
+    "Search help": "Pesquisar na ajuda",
+    "Words to search for in the help pages:": "Palavras a procurar nas páginas de ajuda:",
+    "Search results": "Resultados da pesquisa",
+    "no entries found": "nenhuma entrada encontrada",
     "Project": "Projeto",
     "Source code, issues and releases.": "Código-fonte, problemas relatados e versões.",
     "Report a problem": "Relatar um problema",
@@ -196,6 +203,10 @@ PT: dict[str, str] = {
     "Exponential": "Exponencial", "Lognormal": "Lognormal", "Loglogistic": "Loglogística",
     "Survey data analysis": "Amostras complexas (survey)", "Declare design": "Declarar o desenho",
     "Describe design": "Descrever o desenho", "Means": "Médias", "Proportions": "Proporções",
+    "Drag and drop": "Arrastar e soltar", "Run do-files dropped on the window":
+        "Executar do-files soltos na janela",
+    "Off: a do-file dragged onto OpenDTA opens in the Do-file Editor without running.":
+        "Desligado: um do-file arrastado para o OpenDTA abre no Do-file Editor, sem executar.",
     "Tables": "Tabelas", "Design effects": "Efeitos de desenho",
     "Postestimation": "Pós-estimação", "Predictions": "Predições", "Marginal effects": "Efeitos marginais",
     "Wald tests": "Testes de Wald", "Linear combinations": "Combinações lineares",
@@ -212,7 +223,10 @@ PT: dict[str, str] = {
     # toolbar and panels
     "Log (begin or close)": "Log (iniciar ou fechar)", "Data Editor (Edit)": "Editor de dados (editar)",
     "Data Browser (Browse)": "Navegador de dados (ver)", "Variables Manager": "Gerenciador de variáveis",
-    "Clear --more-- condition": "Limpar a condição --more--", "Break": "Interromper", "Toolbar": "Barra de ferramentas",
+    "Manager": "Gerenciador", "Show the Review window": "Mostrar a janela Histórico",
+    "Show the Variables window": "Mostrar a janela Variáveis",
+    "Show the Properties window": "Mostrar a janela Propriedades",
+    "Clear --more-- condition": "Limpar a condição --more--", "Break": "Interromper", "Data Browser": "Navegador de dados", "More": "Mais", "Toolbar": "Barra de ferramentas",
     "Filter commands here": "Filtrar comandos aqui", "Filter variables here": "Filtrar variáveis aqui",
     "Name": "Nome", "Label": "Rótulo", "Type": "Tipo", "Format": "Formato", "Value label": "Rótulo de valores",
     "Notes": "Notas", "Filename": "Arquivo", "Observations": "Observações", "Size": "Tamanho",
@@ -230,6 +244,11 @@ PT: dict[str, str] = {
     "Open a dialog to build the command": "Abre uma caixa de diálogo para montar o comando",
     # Preferences
     "Interface appearance": "Aparência da interface", "Light (default)": "Claro (padrão)", "Dark": "Escuro",
+    "Tables": "Tabelas", "Solid table lines": "Linhas contínuas nas tabelas",
+    "Draws the lines of the tables in the Results window as continuous lines. Off: dashes, as in Stata "
+    "and in the logs.":
+        "Desenha as linhas das tabelas na janela Results de forma contínua. Desligado: tracejadas, como "
+        "no Stata e nos logs.",
     "Application icon": "Ícone do aplicativo", "Font of the Results, Command and Review windows":
         "Fonte das janelas Results, Command e Review", "Family": "Família",
     "Default on this system": "Padrão neste sistema", "Language": "Idioma",
@@ -251,6 +270,13 @@ PT: dict[str, str] = {
     "The working directory OpenDTA starts in. Takes effect the next time OpenDTA opens.":
         "A pasta de trabalho em que o OpenDTA começa. Vale na próxima vez que o OpenDTA abrir.",
     "Save a log of each session": "Salvar um log de cada sessão",
+    "Show the commands of do-files in Review": "Mostrar os comandos dos do-files no Review",
+    "After do, run or the Do button of the Do-file Editor, Review lists the commands the do-files ran, under "
+    "the do line (click the arrow to open them; commands with errors in red). Off: one line per do, as in Stata.":
+        "Depois de do, run ou do botão Do do Editor de do-files, o Review lista os comandos que os do-files "
+        "executaram, sob a linha do do (clique na seta para abri-los; comandos com erro em vermelho). Desligado: "
+        "uma linha por do, como no Stata.",
+    "selection": "seleção", "line": "linha",
     "Starts a text log when OpenDTA opens, in a logs folder inside the initial folder (or your home folder). "
     "Takes effect the next time OpenDTA opens.":
         "Inicia um log em texto ao abrir o OpenDTA, numa pasta logs dentro da pasta inicial (ou da sua pasta "
@@ -280,7 +306,7 @@ PT: dict[str, str] = {
     "You can turn these confirmations off in Settings > General > Safety.":
         "Você pode desligar estas confirmações em Configurações > Geral > Segurança.",
     "New tab": "Nova aba",
-    "Undo": "Desfazer", "Redo": "Refazer", "Comment/uncomment": "Comentar/descomentar",
+    "Undo": "Desfazer", "Redo": "Refazer", "Comment/uncomment": "Comentar/descomentar", "Comment": "Comentar",
     "Indent": "Aumentar recuo", "Outdent": "Diminuir recuo", "Do line": "Executar linha",
     "Execute the current line (do)": "Executa a linha atual (do)",
     # Graph window / editor

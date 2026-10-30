@@ -180,6 +180,11 @@ class Session:
         self._mata = None
         self._state_listeners: list[Callable[[], None]] = []
         self.do_depth = 0
+        # Review in the interface: when review_root is a dict, the lines run by do-files
+        # (do, run, include) are recorded in it as a tree, {"children": [{"text", "rc",
+        # "children"}]}; _review_stack holds the entries being run (the parents of nested files)
+        self.review_root: dict | None = None
+        self._review_stack: list[dict] = []
         self.current_dofile = ""
         # graphical interface hooks (for example "browse"); without a GUI, they stay empty
         self.ui_hooks: dict[str, Callable[..., None]] = {}

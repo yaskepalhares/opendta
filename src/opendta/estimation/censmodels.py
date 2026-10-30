@@ -17,7 +17,7 @@ from . import fvars
 from . import likelihoods as L
 from .ml import maximize
 from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
-                   finish_model, fit_log, lab, make_predict, names_in, peek, std_right, sub_options,
+                   finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right, sub_options,
                    transformed_row)
 from .models import _probit
 from .models2 import _Prep, _log, g
@@ -65,7 +65,20 @@ def _values(ds, name: str, mask) -> np.ndarray:
 
 
 def _weighted_probit(y, X, w, off=None):
-    fun, _ = _probit(y, X, w)
+    if off is None:
+        fun, _ = _probit(y, X, w)
+        return maximize(fun, np.zeros(X.shape[1]), maxiter=300)
+    q = 2 * y - 1
+
+    def fun(b, todo):
+        z = q * (X @ b + off)
+        lc = st.norm.logcdf(z)
+        ll = float(w @ lc)
+        if todo == 0:
+            return ll, None, None
+        lam = q * np.exp(st.norm.logpdf(z) - lc)
+        d2 = -lam * (lam + X @ b + off)
+        return ll, X.T @ (w * lam), (X * (w * d2)[:, None]).T @ X
     return maximize(fun, np.zeros(X.shape[1]), maxiter=300)
 
 
@@ -82,7 +95,7 @@ def cmd_intreg(s: "Session", args: str) -> None:
     o = peek(rest, spec)
     het_vars = str(o["het"]) if o.get("het") not in (None, True) else None
     both_missing = (ds.get(d1).data >= SYS) & (ds.get(d2).data >= SYS)
-    pr = _Prep(s, rest, spec, need_dep=False, restrict=~both_missing, extra_vars=names_in(het_vars))
+    pr = _Prep(s, rest, spec, need_dep=False, restrict=~both_missing, extra_vars=names_in(het_vars, o.get("offset")))
     pr.smp.depname = d1
     pr.write_notes(s.output)
     lo = _values(ds, d1, pr.smp.mask)
@@ -90,6 +103,7 @@ def cmd_intreg(s: "Session", args: str) -> None:
     if np.any(lo > hi):
         raise StataError(498, f"{d1} > {d2} in {int(np.sum(lo > hi))} observations")   # VERIFY
     main = block_from_pr(pr, "model" if het_vars else d1)
+    main.offset, main.off_name = offset_values(pr, o.get("offset"), None)
     hetb = block_from_text(pr, "lnsigma", het_vars, constant=True) if het_vars else None
     w = pr.w
     exact = lo == hi
@@ -109,9 +123,10 @@ def cmd_intreg(s: "Session", args: str) -> None:
         eng = Engine(lik, [main, hetb], w, 0)
     # start: OLS on the exact value, the interval midpoint or the censoring point
     yy = np.where(exact, lo, np.where(inter, (lo + hi) / 2, np.where(left, hi, lo)))
+    off0 = main.offset if main.offset is not None else 0.0
     sw = np.sqrt(w)
-    beta = np.linalg.lstsq(main.X * sw[:, None], yy * sw, rcond=None)[0]
-    sig = float(np.sqrt(np.sum(w * (yy - main.X @ beta) ** 2) / np.sum(w)))
+    beta = np.linalg.lstsq(main.X * sw[:, None], (yy - off0) * sw, rcond=None)[0]
+    sig = float(np.sqrt(np.sum(w * (yy - off0 - main.X @ beta) ** 2) / np.sum(w)))
     if hetb is None:
         b0 = np.concatenate([beta, [np.log(max(sig, 1e-6))]])
     else:
@@ -123,7 +138,7 @@ def cmd_intreg(s: "Session", args: str) -> None:
     null = None
     if main.constant and hetb is None:
         e0 = Engine(lik, [constant_only(main)], w, 1)
-        mu0 = float(np.sum(w * yy) / np.sum(w))
+        mu0 = float(np.sum(w * (yy - off0)) / np.sum(w))
         null = maximize(e0.fun, np.array([mu0, np.log(max(float(np.std(yy)), 1e-6))]), maxiter=300)
         fit_log(s, pr, "Fitting constant-only model:", null)
     fit_log(s, pr, "Fitting full model:", res)
@@ -195,6 +210,8 @@ def cmd_truncreg(s: "Session", args: str) -> None:
     s.output.write(f"(note: {n_trunc} obs. truncated)\n", "text")
     y = pr.y
     main = block_from_pr(pr, pr.smp.depname)
+    main.offset, main.off_name = offset_values(pr, o.get("offset"), None)
+    off0 = main.offset if main.offset is not None else 0.0
     w = pr.w
 
     def lik(etas, th):
@@ -203,8 +220,8 @@ def cmd_truncreg(s: "Session", args: str) -> None:
 
     eng = Engine(lik, [main], w, 1)
     sw = np.sqrt(w)
-    beta = np.linalg.lstsq(main.X * sw[:, None], y * sw, rcond=None)[0]
-    sig = float(np.sqrt(np.sum(w * (y - main.X @ beta) ** 2) / np.sum(w)))
+    beta = np.linalg.lstsq(main.X * sw[:, None], (y - off0) * sw, rcond=None)[0]
+    sig = float(np.sqrt(np.sum(w * (y - off0 - main.X @ beta) ** 2) / np.sum(w)))
     res = pr.maximize(eng.fun, np.concatenate([beta, [np.log(max(sig, 1e-6))]]))
     fit_log(s, pr, "Fitting full model:", res)
     Vl, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
@@ -218,7 +235,7 @@ def cmd_truncreg(s: "Session", args: str) -> None:
     null = None
     if main.constant:
         e0 = Engine(lik, [constant_only(main)], w, 1)
-        null = maximize(e0.fun, np.array([float(np.average(y, weights=w)), np.log(max(float(np.std(y)), 1e-6))]),
+        null = maximize(e0.fun, np.array([float(np.average(y - off0, weights=w)), np.log(max(float(np.std(y)), 1e-6))]),
                         maxiter=300)
     se_sg = float(np.sqrt(V[-1, -1]))
 
@@ -273,7 +290,7 @@ def _selection_setup(s, args: str, spec: dict, outcome_constant: bool | None = N
     else:
         selected = yv < SYS
         restrict = np.ones(n, bool)
-    pr = _Prep(s, rest, spec_with_select(spec), need_dep=False, extra_vars=names_in(sel_vars, sel_name),
+    pr = _Prep(s, rest, spec_with_select(spec), need_dep=False, extra_vars=names_in(sel_vars, sel_name, o.get("offset")),
                restrict=restrict, constant=outcome_constant)
     pr.smp.depname = dep
     return dep, sel_name, sel_vars, pr, selected[pr.smp.mask], o
@@ -288,6 +305,8 @@ def _selection_common(s, pr, dep, sel_vars, selected, ncat=None, sel_name=None):
     yfull = ds.get(dep).data[pr.smp.mask].astype(float)
     y = np.where(selected & (yfull < SYS), yfull, 0.0)
     main = block_from_pr(pr, dep)
+    # offset() belongs to the outcome equation (the selection equation takes its own in select())
+    main.offset, main.off_name = offset_values(pr, pr.o.get("offset"), None)
     sel_blk = block_from_text(pr, sel_name or "select", sel_vars, constant=True)
     for nm in sel_blk.notes:
         s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
@@ -315,19 +334,23 @@ def cmd_heckman(s: "Session", args: str) -> None:
     dep, sel_name, sel_vars, pr, selected, o = _selection_setup(s, args, spec)
     if o.get("twostep"):
         return _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name)
+    mills = o["mills"].strip() if isinstance(o.get("mills"), str) else None
+    if mills and s.data.has(mills):
+        raise StataError(110, f"{mills} already defined")
     pr.write_notes(s.output)
     y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
     sel = selected.astype(float)
     w = pr.w
     n = len(y)
     sw_ = selected
+    yo = y - main.offset if main.offset is not None else y      # for the OLS start and comparison
 
     def lik(etas, th):
         ll, d_eta, d_zeta, d_ath, d_ls = L.heckman(sel, y, etas[0], etas[1], th[0], th[1])
         return ll, [d_eta, d_zeta], np.column_stack([d_ath, d_ls])
 
     eng = Engine(lik, [main, sel_blk], w, 2)
-    b0 = _heckman_start(y, main, sel_blk, sel, w)
+    b0 = _heckman_start(yo, main, sel_blk, sel, w)
     res = pr.maximize(eng.fun, b0)
     _log(s, pr, res)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
@@ -335,7 +358,7 @@ def cmd_heckman(s: "Session", args: str) -> None:
     V2 = V[-2:, -2:]
     # independent equations: probit on the selection + OLS on the selected observations
     rp = _weighted_probit(sel, sel_blk.X, w)
-    Xs, ys, ws = main.X[sw_], y[sw_], w[sw_]
+    Xs, ys, ws = main.X[sw_], yo[sw_], w[sw_]
     swr = np.sqrt(ws)
     bo = np.linalg.lstsq(Xs * swr[:, None], ys * swr, rcond=None)[0]
     rss = float(np.sum(ws * (ys - Xs @ bo) ** 2))
@@ -383,6 +406,16 @@ def cmd_heckman(s: "Session", args: str) -> None:
                        predict_opts={"xbsel": 4, "ycond": 2, "yexpected": 2, "psel": 4})
     est.predict = make_predict(_predict_heckman, "xb")
     est.pred_label = "fitted values"
+    if mills:
+        # the inverse Mills ratio from the selection equation of the ML fit (compat 1918; values
+        # VERIFY)
+        from ..core.dataset import Variable
+        zg = sel_blk.X @ res.b[main.k:main.k + sel_blk.k] + (sel_blk.offset if sel_blk.offset is not None else 0.0)
+        vals = np.full(s.data.nobs, SYS)
+        vals[np.flatnonzero(pr.smp.mask)] = np.exp(st.norm.logpdf(zg) - st.norm.logcdf(zg))
+        var = Variable(mills, "double", np.full(s.data.nobs, SYS))
+        var.data = vals
+        s.data.add(var)
     display_eq(s, est)
 
 
@@ -426,9 +459,11 @@ def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name=None):
     from .ml import MLResult
     from .models2 import _finish  # noqa: F401  (finish_model posts through it)
     if pr.smp.wtype:
-        raise StataError(101, "weights not allowed")   # VERIFY
+        raise StataError(101, "weights not allowed")   # VERIFY ([R] heckman: no weights with twostep)
     pr.write_notes(s.output)
     y, main, sel_blk = _selection_common(s, pr, dep, sel_vars, selected, sel_name=sel_name)
+    if main.offset is not None:
+        y = y - main.offset
     sel = selected.astype(float)
     n = len(y)
     w = np.ones(n)
@@ -437,6 +472,17 @@ def _heckman_twostep(s, args, dep, sel_vars, pr, selected, o, sel_name=None):
     zg = sel_blk.X @ ps.b
     lam = np.exp(st.norm.logpdf(zg) - st.norm.logcdf(zg))
     delta = lam * (lam + zg)
+    if isinstance(o.get("mills"), str):
+        # the inverse Mills ratio of every observation of the estimation sample (VERIFY)
+        from ..core.dataset import Variable
+        nm = o["mills"].strip()
+        if s.data.has(nm):
+            raise StataError(110, f"{nm} already defined")
+        vals = np.full(s.data.nobs, SYS)
+        vals[np.flatnonzero(pr.smp.mask)] = lam
+        var = Variable(nm, "double", np.full(s.data.nobs, SYS))
+        var.data = vals
+        s.data.add(var)
     m = selected
     n1 = int(m.sum())
     Xs = np.column_stack([main.X[m], lam[m]])
@@ -710,7 +756,11 @@ def cmd_biprobit(s: "Session", args: str) -> None:
         pr_args = f"{x1} {rest}" if not rest.startswith(",") else f"{x1} {rest}"
     bad = (ds.get(d1).data >= SYS) | (ds.get(d2).data >= SYS)
     spec = {"partial": 3, "offset1": 7, "offset2": 7}
-    pr = _Prep(s, pr_args, spec, need_dep=False, restrict=~bad, extra_vars=names_in(x2))
+    ob = peek(pr_args, spec)
+    if ob.get("partial"):
+        raise StataError(198, "option partial is not available yet in OpenDTA")   # OpenDTA
+    pr = _Prep(s, pr_args, spec, need_dep=False, restrict=~bad,
+               extra_vars=names_in(x2, ob.get("offset1"), ob.get("offset2")))
     pr.smp.depname = d1
     pr.write_notes(s.output)
     mask = pr.smp.mask
@@ -728,6 +778,8 @@ def cmd_biprobit(s: "Session", args: str) -> None:
         # an independent copy of the columns: omitted terms are marked per equation
     for nm in b2.notes:
         s.output.write(f"note: {nm} omitted because of collinearity\n", "text")
+    b1.offset, b1.off_name = offset_values(pr, ob.get("offset1"), None)
+    b2.offset, b2.off_name = offset_values(pr, ob.get("offset2"), None)
     w = pr.w
 
     def lik(etas, th):
@@ -735,8 +787,8 @@ def cmd_biprobit(s: "Session", args: str) -> None:
         return ll, [d1_, d2_], d_ath.reshape(-1, 1)
 
     eng = Engine(lik, [b1, b2], w, 1)
-    p1 = _weighted_probit(y1, b1.X, w)
-    p2 = _weighted_probit(y2, b2.X, w)
+    p1 = _weighted_probit(y1, b1.X, w, b1.offset)
+    p2 = _weighted_probit(y2, b2.X, w, b2.offset)
     res = pr.maximize(eng.fun, np.concatenate([p1.b, p2.b, [0.0]]))
     fit_log(s, pr, "Fitting comparison equation 1:", p1)
     fit_log(s, pr, "Fitting comparison equation 2:", p2)

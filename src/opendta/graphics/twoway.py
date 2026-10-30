@@ -215,7 +215,7 @@ class Builder:
                 continue
             names, w, p = payload
             m = mask if group is None else (mask & group)
-            out.extend(self._layers_for(pt, names, w, m, style))
+            out.extend(self._layers_for(pt, names, w, m, style, D.is_fweight(p)))
         return out
 
     def _function_layer(self, payload, style) -> Layer:
@@ -237,7 +237,8 @@ class Builder:
         self.ytitles.append(yname)
         return Layer("function", grid.tolist(), y.tolist(), {}, style, f"{yname} = {expr}")
 
-    def _layers_for(self, pt: str, names: list[str], w, m: np.ndarray, style: dict) -> list[Layer]:
+    def _layers_for(self, pt: str, names: list[str], w, m: np.ndarray, style: dict,
+                    fw: bool = True) -> list[Layer]:
         s = self.s
         out: list[Layer] = []
         if pt in ("histogram", "kdensity"):
@@ -256,7 +257,8 @@ class Builder:
             else:
                 kd = D.kdensity(x[mm], ww, kernel=D.kernel_name(style.get("kernel")),
                                 bw=float(style["bwidth"]) if style.get("bwidth") else None,
-                                n=int(style["n"]) if style.get("n") else None)
+                                n=int(style["n"]) if style.get("n") else None,
+                                fw=fw)
                 self.ytitles.append("Density")   # VERIFY
                 out.append(Layer("kdensity", kd["x"].tolist(), kd["d"].tolist(), {}, style, "kdensity " + v))
             return out

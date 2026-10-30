@@ -54,8 +54,8 @@ ALIASES = {
     "vecrank": "vec", "svar": "vec", "arch": "archmodels", "arfima": "archmodels",
     "ucm": "ssm", "sspace": "ssm", "dfactor": "ssm",
     "factor": "pca", "rotate": "pca", "alpha": "pca", "screeplot": "pca", "loadingplot": "pca", "scoreplot": "pca",
-    "mvreg": "hotelling", "manova": "hotelling", "canon": "hotelling", "mvtest": "hotelling",
-    "candisc": "discrim", "mca": "ca", "mds": "ca", "mdsmat": "ca", "procrustes": "ca", "biplot": "ca",
+    "mvreg": "hotelling", "manova": "hotelling", "manovatest": "hotelling", "canon": "hotelling", "mvtest": "hotelling",
+    "candisc": "discrim", "mca": "ca", "mds": "ca", "mdsmat": "ca", "procrustes": "ca", "biplot": "ca", "camat": "ca", "cabiplot": "ca", "caprojection": "ca", "mcaplot": "ca", "mcaprojection": "ca", "mdslong": "ca", "mdsconfig": "ca", "mdsshepard": "ca", "procoverlay": "ca", "clustermat": "cluster",
     "st": "stset", "streset": "stset", "stdes": "stdescribe", "estat_phtest": "stcox",
     "d": "describe", "de": "describe", "des": "describe", "g": "generate", "gen": "generate",
     "replace": "generate", "l": "list", "li": "list", "saveold": "save", "export": "import",
@@ -193,6 +193,21 @@ def cmd_view(s: "Session", args: str) -> None:
     s.output.write(text if text.endswith("\n") else text + "\n", "text")
 
 
+def search_topics(words: list[str] | None = None) -> list[tuple[str, str]]:
+    """(topic, title) of the help pages that contain every word; all the pages without words."""
+    hits = []
+    for path in sorted(HELP_DIR.glob("*.sthlp")):
+        rendered = render_text(_read(path))
+        if all(w in rendered.lower() for w in words or []):
+            lines = [ln.strip() for ln in rendered.splitlines()]
+            k = next((i for i, ln in enumerate(lines) if "--" in ln), None)
+            title = path.stem if k is None else lines[k]
+            if k is not None and title.endswith("--") and k + 1 < len(lines):
+                title += " " + lines[k + 1]          # the title wraps after the dashes
+            hits.append((path.stem, title))
+    return hits
+
+
 @command("search")
 def cmd_search(s: "Session", args: str) -> None:
     """Searches for words in the titles and text of the help pages."""
@@ -200,13 +215,7 @@ def cmd_search(s: "Session", args: str) -> None:
     if not words:
         raise StataError(198, "nothing to search for")   # VERIFY
     out = s.output
-    hits = []
-    for path in sorted(HELP_DIR.glob("*.sthlp")):
-        text = render_text(_read(path)).lower()
-        if all(w in text for w in words):
-            title = next((ln.strip() for ln in render_text(_read(path)).splitlines()
-                          if "--" in ln), path.stem)
-            hits.append((path.stem, title))
+    hits = search_topics(words)
     if not hits:
         out.write(f"no entries found for search on \"{' '.join(words)}\"\n", "text")
         return

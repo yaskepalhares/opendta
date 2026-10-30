@@ -9,11 +9,14 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
                                QPushButton, QTextBrowser, QVBoxLayout)
 
-from .. import __version__, updater
+from .. import __version__, i18n, updater
 from ..i18n import L, tr
+from .icons import app_icon, is_dark
+from .preferences import COLORS, _button, stylesheet
 
 DAY = 24 * 3600
 
@@ -133,40 +136,100 @@ class UpdateController(QObject):
                                       "Ela será oferecida de novo da próxima vez."))
 
 
+def _style(c: dict) -> str:
+    """The Settings window's stylesheet plus what only this dialog has: the notes box, the
+    filled main button and the progress bar."""
+    return stylesheet(c) + f"""
+QTextBrowser#Notes {{ background: transparent; border: none; color: {c['text']}; font-size: 13px;
+                      selection-background-color: {c['accent']}; selection-color: #ffffff; }}
+QTextBrowser#Notes QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+QTextBrowser#Notes QScrollBar::handle:vertical {{ background: {c['border']}; border-radius: 3px;
+                                                 min-height: 28px; }}
+QTextBrowser#Notes QScrollBar::add-line:vertical, QTextBrowser#Notes QScrollBar::sub-line:vertical {{ height: 0; }}
+QTextBrowser#Notes QScrollBar::add-page:vertical, QTextBrowser#Notes QScrollBar::sub-page:vertical {{ background: transparent; }}
+QPushButton#Primary {{ background: {c['accent']}; border: 1px solid {c['accent']}; border-radius: 8px;
+                       padding: 6px 16px; color: #ffffff; font-size: 13px; font-weight: 600; }}
+QPushButton#Primary:hover {{ background: #3b9bff; border-color: #3b9bff; }}
+QPushButton#Primary:disabled {{ background: {c['off']}; border-color: {c['off']}; }}
+QPushButton#Secondary:disabled, QPushButton#Link:disabled {{ color: {c['off']}; }}
+QProgressBar {{ background: {c['control']}; border: none; border-radius: 3px; min-height: 6px;
+                max-height: 6px; text-align: center; color: transparent; }}
+QProgressBar::chunk {{ background: {c['accent']}; border-radius: 3px; }}
+"""
+
+
 class UpdateDialog(QDialog):
+    """Same look as the Settings window. The release notes show only the part in the interface
+    language."""
+
     def __init__(self, ctl: UpdateController, rel: updater.Release, parent=None):
         super().__init__(parent)
         self.ctl, self.rel = ctl, rel
         self.kind = updater.install_kind()
         self.asset = updater.asset_for(rel, self.kind)
         self.setWindowTitle(tr("Update Available"))
-        self.resize(560, 440)
+        self.setObjectName("SettingsRoot")
+        self.resize(600, 560)
+        self.setMinimumSize(480, 420)
+        c = COLORS["dark" if is_dark() else "light"]
+        self.setStyleSheet(_style(c))
         lay = QVBoxLayout(self)
-        head = QLabel(L(f"<b>OpenDTA {rel.version}</b> is available. You have version {__version__}.",
-                        f"O <b>OpenDTA {rel.version}</b> está disponível. Você tem a versão {__version__}."))
-        lay.addWidget(head)
+        lay.setContentsMargins(28, 24, 28, 20)
+        lay.setSpacing(0)
+        head = QHBoxLayout()
+        head.setSpacing(16)
+        tv = QVBoxLayout()
+        tv.setSpacing(2)
+        title = QLabel(L(f"OpenDTA {rel.version} is available", f"O OpenDTA {rel.version} está disponível"))
+        title.setObjectName("BigTitle")
+        have = QLabel(L(f"You have version {__version__}.", f"Você tem a versão {__version__}."))
+        have.setObjectName("Muted")
+        tv.addWidget(title)
+        tv.addWidget(have)
+        logo = QLabel()
+        logo.setPixmap(app_icon(ctl.prefs.app_icon).pixmap(56, 56))
+        head.addWidget(logo)
+        head.addLayout(tv, 1)
+        lay.addLayout(head)
+        lay.addSpacing(18)
+        box = QFrame()
+        box.setObjectName("Preview")
+        bl = QVBoxLayout(box)
+        bl.setContentsMargins(6, 6, 6, 6)
         notes = QTextBrowser()
+        notes.setObjectName("Notes")
         notes.setOpenExternalLinks(True)
-        notes.setMarkdown(rel.notes or L("(no release notes)", "(sem notas da versão)"))
-        lay.addWidget(notes, 1)
+        notes.document().setDocumentMargin(10)
+        pal = notes.palette()
+        pal.setColor(QPalette.ColorRole.Link, QColor(c["accent"]))
+        notes.setPalette(pal)
+        text = updater.notes_for(rel.notes, i18n.language())
+        notes.setMarkdown(text or L("(no release notes)", "(sem notas da versão)"))
+        bl.addWidget(notes)
+        lay.addWidget(box, 1)
+        lay.addSpacing(14)
         self.status = QLabel("")
+        self.status.setObjectName("Muted")
         self.status.setWordWrap(True)
         lay.addWidget(self.status)
         self.bar = QProgressBar()
+        self.bar.setTextVisible(False)
         self.bar.hide()
         lay.addWidget(self.bar)
+        lay.addSpacing(14)
         row = QHBoxLayout()
-        self.skip = QPushButton(tr("Skip This Version"))
-        self.later = QPushButton(tr("Remind Me Later"))
+        row.setSpacing(10)
+        self.skip = _button(tr("Skip This Version"), "Link")
+        self.later = _button(tr("Remind Me Later"))
         if self.kind == "source" or self.asset is None:
-            self.install = QPushButton(tr("Open Download Page"))
+            self.install = _button(tr("Open Download Page"), "Primary")
             if self.kind == "source":
                 self.status.setText(L("OpenDTA is running from source: update it with git pull and "
                                       "pip install -e .",
                                       "O OpenDTA está rodando a partir do código-fonte: atualize com git pull "
                                       "e pip install -e ."))
         else:
-            self.install = QPushButton(tr("Install and Restart"))
+            self.install = _button(tr("Install and Restart"), "Primary")
             self.status.setText(L("OpenDTA will download the update, close and open again.",
                                   "O OpenDTA vai baixar a atualização, fechar e abrir de novo."))
         self.install.setDefault(True)

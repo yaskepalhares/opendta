@@ -305,19 +305,53 @@ def _fit(s: "Session", spec: ModelSpec, xnames: list[str], mask: np.ndarray, o: 
         for i, p in enumerate(spec.params):
             if p.kind == "id" and ("L" in p.label and p.label != "_cons"):
                 u0[i] = 0.0
+    Tm = a_c = Cmat = None
+    if o.get("constraints") not in (None, True):
+        # constraints() on the coefficients (not on the variances, which are estimated on the log
+        # scale): u = Tm uc + a (core/constraints.py)
+        from types import SimpleNamespace
+        from ..core.constraints import constraint_transform
+        from .postest import _constraint
+        from .sysmodels import _constraints, _numlist
+        fake = SimpleNamespace(names=[p.label for p in spec.params], eqnames=[p.eq or "" for p in spec.params])
+        defined = _constraints(s)
+        crow = []
+        for cn_ in _numlist(str(o["constraints"])):
+            if cn_ not in defined:
+                raise StataError(111, f"constraint {cn_} not found")
+            coef, rhs = _constraint(s, fake, defined[cn_])
+            if any(spec.params[j].kind == "var" for j in coef):
+                raise StataError(198, "constraints on variances are not available in OpenDTA")   # OpenDTA
+            row = np.zeros(len(u0) + 1)
+            for j, v in coef.items():
+                row[j] += v
+            row[-1] = rhs
+            crow.append(row)
+        Cmat = np.array(crow)
+        Tm, a_c = constraint_transform(Cmat)
+        a_c = a_c.ravel()
+        u0 = a_c + Tm @ (Tm.T @ (u0 - a_c))
     if not np.isfinite(ll(u0)):
         raise StataError(430, "initial values not feasible")
-    r = maximize(fun, u0, **ml_options(o))
+    if Tm is not None:
+        def cfun(uc, todo):
+            l_, g_, H_ = fun(Tm @ uc + a_c, todo)
+            return (l_, g_, H_) if g_ is None else (l_, Tm.T @ g_, Tm.T @ H_ @ Tm)
+        r = maximize(cfun, Tm.T @ (u0 - a_c), **ml_options(o))
+        r.b = Tm @ r.b + a_c
+    else:
+        r = maximize(fun, u0, **ml_options(o))
     out = s.output
     if not o.get("nolog"):
         out.write("\n", "text")
         print_log(out, r, "log likelihood")
     u = r.b
     _l, _g, Hm = _numderiv(ll, u)
+    Tq = Tm if Tm is not None else np.eye(len(u))
     try:
-        Vu = np.linalg.inv(-Hm)
+        Vu = Tq @ np.linalg.inv(-(Tq.T @ Hm @ Tq)) @ Tq.T
     except np.linalg.LinAlgError:
-        Vu = np.linalg.pinv(-Hm)
+        Vu = Tq @ np.linalg.pinv(-(Tq.T @ Hm @ Tq)) @ Tq.T
     nat = np.array([_to_nat(v, k) for v, k in zip(u, kinds)])
     J = np.array([nat[i] if kinds[i] == "var" else 1.0 for i in range(len(u))])
     V = J[:, None] * Vu * J[None, :]
@@ -326,11 +360,17 @@ def _fit(s: "Session", spec: ModelSpec, xnames: list[str], mask: np.ndarray, o: 
     D, A, S, H, c, d = spec.build(theta(u), Xo)
     # Wald test of all the coefficients other than the variances
     idx = [i for i, p in enumerate(spec.params) if p.kind == "id"]
+    df_w = len(idx)
     try:
-        chi2 = float(nat[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], nat[idx])) if idx else SYS
+        if Tm is not None and idx:
+            # the test has the rank of the constrained variance (VERIFY)
+            df_w = int(np.linalg.matrix_rank(V[np.ix_(idx, idx)]))
+            chi2 = float(nat[idx] @ np.linalg.pinv(V[np.ix_(idx, idx)]) @ nat[idx]) if df_w else SYS
+        else:
+            chi2 = float(nat[idx] @ np.linalg.solve(V[np.ix_(idx, idx)], nat[idx])) if idx else SYS
     except np.linalg.LinAlgError:
         chi2 = SYS
-    pv = float(chi2_tail(chi2, len(idx))) if chi2 < SYS else SYS
+    pv = float(chi2_tail(chi2, df_w)) if chi2 < SYS else SYS
     rows: list[CoefRow] = []
     last, lasth = None, ""
     for i, p in enumerate(spec.params):
@@ -347,16 +387,23 @@ def _fit(s: "Session", spec: ModelSpec, xnames: list[str], mask: np.ndarray, o: 
                 rows.append(CoefRow("blank"))
             rows.append(CoefRow("header", p.hdr))
         lasth = p.hdr
-        rows.append(CoefRow("coef", p.label, nat[i], se[i], name=p.name, tight=p.kind == "var", zero_lo=p.kind == "var"))
+        kind_ = "cons" if Tm is not None and se[i] < 1e-12 else "coef"     # fixed by a constraint
+        rows.append(CoefRow(kind_, p.label, nat[i], se[i], name=p.name, tight=p.kind == "var", zero_lo=p.kind == "var"))
     est = Estimates(spec.cmd, " ".join(spec.deps), names, nat, V, T, "z", None)
     est.eqnames = [p.eq or "_" for p in spec.params]
     est.rows = rows
     est.level = float(o["level"]) if isinstance(o.get("level"), str) else float(s.settings.get("level", "95"))
     est.vcetype = "OIM"
-    est.extra = {"N": float(T), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": len(idx), "title": spec.title,
+    cns_text = []
+    if Cmat is not None:
+        from .postest import _ctext
+        cns_text = [_ctext(fake, {j: float(v) for j, v in enumerate(row[:-1]) if v}, float(row[-1])) for row in Cmat]
+    est.extra = {"N": float(T), "ll": r.ll, "chi2": chi2, "p": pv, "df_m": df_w, "title": spec.title,
+                 "cns_text": cns_text,
                  "sample": _sample_text(s, t0, t1)}
     est.ssm = {"spec": spec, "u": u, "y": y, "X": Xo, "mask": ok.copy(), "order": order}
     est.display = display_ssm
+    est.predict = _predict_ssm
     nvar = sum(1 for k in kinds if k == "var")
     scalars = [("N", float(T)), ("k", float(len(u))), ("k_aux", float(nvar)), ("k_eq", float(len(spec.deps))),
                ("k_dv", float(len(spec.deps))), ("df_m", float(len(idx))), ("ll", r.ll), ("chi2", chi2), ("p", pv),
@@ -379,6 +426,10 @@ def display_ssm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
         _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        if x.get("cns_text"):
+            out.write("\n", "text")
+            for i, t_ in enumerate(x["cns_text"], 1):
+                out.write(f" ({i:>2})  {t_}\n", "text")              # VERIFY: place of the list
     if table:
         coef_table(s, est.depvar.split()[0] if est.cmd == "sspace" else "", est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: Tests of variances against zero are one sided, and the two-sided\n"
@@ -410,7 +461,7 @@ def cmd_sspace(s: "Session", args: str) -> None:
     pre, opts = (rest, "") if c == -1 else (rest[:c], rest[c + 1:])
     p = parse_standard(pre) if pre.strip() else parse_standard("")
     o = match_options(opts, _OPTS) if opts.strip() else {}
-    for bad in ("constraints", "from", "vce"):
+    for bad in ("from", "vce"):
         if o.get(bad):
             raise StataError(198, f"option {bad}() not implemented in OpenDTA")   # OpenDTA
     from ..commands._util import touse
@@ -432,7 +483,7 @@ def cmd_dfactor(s: "Session", args: str) -> None:
     pre, opts = (rest, "") if c == -1 else (rest[:c], rest[c + 1:])
     p = parse_standard(pre) if pre.strip() else parse_standard("")
     o = match_options(opts, _OPTS) if opts.strip() else {}
-    for bad in ("constraints", "from", "vce"):
+    for bad in ("from", "vce"):
         if o.get(bad):
             raise StataError(198, f"option {bad}() not implemented in OpenDTA")   # OpenDTA
     if o.get("covariance") and str(o["covariance"]) != "diagonal":
@@ -457,3 +508,47 @@ def cmd_dfactor(s: "Session", args: str) -> None:
         raise StataError(198, "ma(), arstructure() and error autoregressions not implemented in OpenDTA")   # OpenDTA
     spec, _f = build_dfactor(s, (odeps, exog, "noconstant" in oop.split()), (fd[0], arl))
     _fit(s, spec, exog, touse(s, p), o, cmdline("dfactor", args))
+
+
+def _predict_ssm(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
+    """One-step predictions (xb, the default), residuals and standardized residuals of one observed
+    variable (equation(), the first by default) over the estimation sample. VERIFY: states, the
+    smethod() and dynamic() options."""
+    from .ssm import kalman_onestep
+    M_ = est.ssm
+    spec, u = M_["spec"], M_["u"]
+    th = {p.name: _to_nat(v, p.kind) for p, v in zip(spec.params, u)}
+    th["__T"] = M_["y"].shape[0]
+    D, A, S, H, c, d = spec.build(th, M_["X"])
+    dm = np.ones(A.shape[0], dtype=bool) if spec.diffuse else None
+    yhat, fv, Fs = kalman_onestep(M_["y"], D, A, S, H, c, d, dm, full=True)
+    eq = str((getattr(est, "_pred_opts", {}) or {}).get("equation") or "").strip().lstrip("#")
+    j = 0
+    if eq:
+        j = int(eq) - 1 if eq.isdigit() else (spec.deps.index(eq) if eq in spec.deps else -1)
+        if not 0 <= j < len(spec.deps):
+            raise StataError(198, f"equation {eq} not found")                     # VERIFY
+    rows = np.nonzero(M_["mask"])[0][M_["order"]]
+    out = np.full(s.data.nobs, SYS)
+    if stat in ("", "xb"):
+        out[rows] = yhat[:, j]
+        # dfactor names the default y (compat 1915)
+        return out, "" if stat else f"(option {'y' if est.cmd == 'dfactor' else 'xb'} assumed; fitted values)"
+    e = M_["y"][:, j] - yhat[:, j]
+    if stat == "residuals":
+        out[rows] = np.where(np.isfinite(e), e, SYS)
+    elif stat == "rstandard":
+        # the innovations standardized jointly, by the Cholesky factor of their covariance
+        # (VERIFY, compat 1915: the second equation of a dfactor model has Stata's minimum and
+        # maximum but not its mean; also with missing values)
+        E = M_["y"] - yhat
+        z = np.full(len(e), np.nan)
+        for t in range(len(e)):
+            if np.all(np.isfinite(E[t])):
+                z[t] = np.linalg.solve(np.linalg.cholesky(Fs[t]), E[t])[j]
+            elif np.isfinite(e[t]):
+                z[t] = e[t] / np.sqrt(fv[t, j])
+        out[rows] = np.where(np.isfinite(z), z, SYS)
+    else:
+        raise StataError(198, f"option {stat} not allowed")                      # VERIFY
+    return out, ""

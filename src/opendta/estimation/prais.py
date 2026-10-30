@@ -119,8 +119,8 @@ def cmd_prais(s: "Session", args: str) -> None:
                                      "nolog": 3, "noheader": 6, "notable": 5},
                  weights=())
     o = smp.o
-    if smp.vce != "ols":
-        raise StataError(198, "option vce() not allowed")   # VERIFY: robust variance is not implemented
+    if smp.vce not in ("ols", "robust", "cluster", "hc2", "hc3"):
+        raise StataError(198, f"vcetype '{smp.vce}' not allowed")                   # VERIFY
     rhotype = str(o.get("rhotype") or "regress").lower()
     if rhotype not in RHOTYPES:
         raise StataError(198, "option rhotype() incorrectly specified")
@@ -170,8 +170,31 @@ def cmd_prais(s: "Session", args: str) -> None:
     r2_a = 1 - (1 - r2) * (nn - (1 if smp.constant else 0)) / df_r if tss > 0 else SYS
     F = (mss / df_m) / s2 if df_m > 0 else 0.0
     rmse = float(np.sqrt(s2))
-    ll = -0.5 * nn * (np.log(2 * np.pi) + np.log(rss / nn) + 1) + (0.5 * np.log(1 - rho * rho) if pw else 0.0)
+    # the log likelihood of the transformed regression, without the Jacobian of the first
+    # observation (compat 1915)
+    ll = -0.5 * nn * (np.log(2 * np.pi) + np.log(rss / nn) + 1)
     Vb = s2 * XtXi
+    V_model = Vb
+    vcetype, n_clust = "", None
+    if smp.vce != "ols":
+        # sandwich on the transformed regression, rho taken as known ("semirobust"; VERIFY: the
+        # label and the small-sample factors, as in regress)
+        if smp.vce == "cluster":
+            cl = smp.cluster[order][keep]
+            ids = np.unique(cl, return_inverse=True)[1]
+            U = np.zeros((ids.max() + 1, k))
+            np.add.at(U, ids, Xt * et[:, None])
+            n_clust = U.shape[0]
+            Vb = XtXi @ (U.T @ U) @ XtXi * (n_clust / (n_clust - 1)) * ((nn - 1) / (nn - k))
+            df_r = n_clust - 1
+        else:
+            h = np.einsum("ij,jk,ik->i", Xt, XtXi, Xt)
+            w2 = et ** 2 * {"robust": nn / (nn - k), "hc2": 1 / (1 - h), "hc3": 1 / (1 - h) ** 2}[smp.vce]
+            Vb = XtXi @ (Xt.T @ (Xt * w2[:, None])) @ XtXi
+        vcetype = {"robust": "Semirobust", "cluster": "Semirobust", "hc2": "Semirobust HC2",
+                   "hc3": "Semirobust HC3"}[smp.vce]
+        sl = list(range(k_slopes))
+        F = float(b[sl] @ np.linalg.solve(Vb[np.ix_(sl, sl)], b[sl])) / df_m if df_m > 0 else 0.0
     dw0 = durbin_watson(y - X @ ols(X, y)[0], lagged)
     dw = durbin_watson(et, _lag_after_keep(lagged, keep))
     names = [c.name for c in smp.cols] + (["_cons"] if smp.constant else [])
@@ -190,7 +213,8 @@ def cmd_prais(s: "Session", args: str) -> None:
     est.rows.append(CoefRow("value", "rho", rho))
     est.cols, est.constant, est.terms, est.depcomp = smp.cols, smp.constant, smp.terms, smp.depcomp
     est.level = smp.level
-    est.vcetype = ""
+    est.vcetype = vcetype
+    est.clustvar, est.n_clust = smp.clustvar, n_clust
     method = "twostep" if o.get("twostep") else ("ssesearch" if o.get("ssesearch") else "iterated")
     method_t = {"iterated": "iterated", "twostep": "twostep", "ssesearch": "SSE search"}[method]
     title = ("Prais-Winsten AR(1) regression" if pw else "Cochrane-Orcutt AR(1) regression") + \
@@ -199,13 +223,25 @@ def cmd_prais(s: "Session", args: str) -> None:
                  "r2_a": r2_a, "rmse": rmse, "mss": mss, "rss": rss, "tss": tss, "rho": rho,
                  "dw": dw, "dw0": dw0, "title": title, "nodw": bool(o.get("nodw"))}
     est.display = display_prais
-    scalars = [("N", nn), ("N_gaps", gaps), ("mss", mss), ("df_m", df_m), ("rss", rss), ("df_r", df_r),
-               ("r2", r2), ("r2_a", r2_a), ("F", F), ("rmse", rmse), ("ll", ll), ("rho", rho),
-               ("dw", dw), ("dw_0", dw0), ("rank", k), ("tol", tol), ("max_ic", maxiter), ("ic", it)]
-    macros = [("cmd", "prais"), ("cmdline", cmdline("prais", args)), ("depvar", smp.depname),
-              ("title", title), ("method", method), ("rhotype", rhotype),
-              ("tranmeth", "prais" if pw else "corc"), ("properties", "b V"), ("estat_cmd", "regress_estat")]
-    post(s, est, scalars, macros, smp.mask)
+    # e() in the order of Stata's ereturn list (compat 1915, with vce(robust); VERIFY: N_clust and
+    # clustvar)
+    scalars = [("N", nn), ("df_m", df_m), ("df_r", df_r), ("F", F), ("r2", r2), ("rmse", rmse), ("mss", mss),
+               ("rss", rss), ("r2_a", r2_a), ("ll", ll), ("N_gaps", gaps)]
+    if n_clust is not None:
+        scalars.append(("N_clust", n_clust))
+    scalars += [("tol", tol), ("max_ic", maxiter), ("ic", it), ("dw", dw), ("dw_0", dw0), ("rho", rho), ("rank", k)]
+    macros = [("cmd", "prais"), ("title", "Prais-Winsten AR(1) regression" if pw else "Cochrane-Orcutt AR(1) regression"),
+              ("cmdline", cmdline("prais", args)), ("tranmeth", "prais" if pw else "corc"), ("method", method),
+              ("depvar", smp.depname), ("predict", "prais_p"), ("rhotype", rhotype)]
+    extra = []
+    if vcetype:
+        macros += ([("clustvar", smp.clustvar)] if smp.clustvar else []) + [("vce", smp.vce), ("vcetype", vcetype)]
+        Vm = np.zeros((kk, kk))
+        Vm[np.ix_(pos, pos)] = V_model
+        from ..commands.matrix import Matrix
+        extra = [("V_modelbased", Matrix(Vm, names, names))]
+    macros.append(("properties", "b V"))
+    post(s, est, scalars, macros, smp.mask, extra_mats=extra)
     display_prais(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 
@@ -226,10 +262,23 @@ def display_prais(s: "Session", est: Estimates, *, header: bool = True, table: b
         out.write("\n", "text")
         out.write(x["title"] + "\n", "text")
         out.write("\n", "text")
-        _anova(s, est)
+        if est.vcetype:
+            # the header of regress, vce(robust) (compat 1915)
+            from .regress import comma, g, sig5
+            for i, (lab, val) in enumerate((("Number of obs", comma(x["N"])),
+                             (f"F({int(x['df_m'])}, {int(x['df_r'])})", g(x["F"], "%10.2f")),
+                             ("Prob > F", g(float(st.f.sf(x["F"], x["df_m"], x["df_r"])), "%10.4f")),
+                             ("R-squared", g(x["r2"], "%10.4f")), ("Root MSE", sig5(x["rmse"])))):
+                out.write(f"{'Linear regression' if i == 0 else '':<48}{lab:<18}= ", "text")
+                out.write(f"{val:>10}\n", "result")
+        else:
+            _anova(s, est)
         out.write("\n", "text")
     if table:
-        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level)
+        if est.vcetype and getattr(est, "n_clust", None):
+            out.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
+                      "text")
+        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level, vcetype=est.vcetype)
         if not x["nodw"]:
             out.write(f"Durbin-Watson statistic (original)    {x['dw0']:.6f}\n", "text")
             out.write(f"Durbin-Watson statistic (transformed) {x['dw']:.6f}\n", "text")

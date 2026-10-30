@@ -1,0 +1,552 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1912_epidemiology.log
+  log type:  text
+ opened on:  24 Oct 2026, 09:52:27
+
+. * Epidemiology, second part: rocreg with the parametric ROC model fit by maximum likelihood
+. * (probit ml), with ROC and control covariates, and the cluster() option (cluster-robust standard
+. * errors after ml, cluster resampling in the bootstrap). Every command whose behavior the manual
+. * does not settle runs under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set seed 1912
+
+. set obs 300
+number of observations (_N) was 0, now 300
+
+. gen d = runiform() < .4
+
+. gen x = round(runiform(), .01)
+
+. gen z = runiform() < .5
+
+. gen id = ceil(_n/3)
+
+. gen y = round(10 + 2*z + invnormal(runiform())*(1 + .3*d) + d*(1.2 + .8*x), .01)
+
+. gen y2 = round(y + invnormal(runiform()), .01)
+
+. 
+. * probit ml without covariates: the estimates are those of two normal samples
+. capture noisily rocreg d y, probit ml
+
+                                                Number of obs     =        400
+
+Control standardization: normal
+ROC method             : parametric               Link: probit
+
+  Status     : d
+  Classifiers: y
+
+  Classifier : y
+  Covariate control adjustment model:
+
+Iteration 0:   log likelihood = -541.74064  
+Iteration 1:   log likelihood = -541.73717  
+Iteration 2:   log likelihood = -541.73717  
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+       _cons |   1.910984   .1792216    10.66   0.000     1.559716    2.262252
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |    1.61575   .1034378    15.62   0.000     1.413015    1.818484
+-------------+----------------------------------------------------------------
+ctrlcov      |
+       _cons |     10.795   .1035454   104.25   0.000     10.59205    10.99795
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |   1.381468   .0732177    18.87   0.000     1.237964    1.524972
+------------------------------------------------------------------------------
+
+   Status    : d
+   ROC Model : 
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+      i_cons |   1.182723   .1343002     8.81   0.000     .9194991    1.445946
+      s_cons |   .8550014   .0710596    12.03   0.000     .7157272    .9942755
+         auc |   .8156578   .0247248    32.99   0.000     .7671981    .8641175
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  2
+                  e(N) =  300
+
+macros:
+              e(title) : "Parametric ROC estimation"
+        e(nobootstrap) : "nobootstrap"
+            e(cmdline) : "rocreg d y, probit ml"
+          e(ctrlmodel) : "linear"
+             e(refvar) : "d"
+          e(classvars) : "y"
+                e(cmd) : "rocreg"
+                e(pvc) : "normal"
+             e(fprpts) : "10"
+            e(predict) : "rocreg_p"
+             e(probit) : "probit"
+                 e(ml) : "ml"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily matrix list e(b)
+
+e(b)[1,3]
+            y:         y:         y:
+       i_cons     s_cons        auc
+y1  1.1827226  .85500136  .81565781
+
+. capture noisily matrix list e(V)
+
+symmetric e(V)[3,3]
+                  y:         y:         y:
+             i_cons     s_cons        auc
+y:i_cons  .01803654
+y:s_cons  .00414438  .00504946
+   y:auc   .0031611  .00024183  .00061131
+
+. * ROC and control covariates
+. capture noisily rocreg d y2, probit ml roccov(x) ctrlcov(z)
+
+Parametric ROC estimation                       Number of obs     =        300
+
+Covariate control      : linear regression
+Control variables      : z
+Control standardization: normal
+ROC method             : parametric               Link: probit
+
+  Status     : d
+  Classifiers: y2
+
+  Classifier : y2
+  Covariate control adjustment model:
+
+Iteration 0:   log likelihood = -607.02326  
+Iteration 1:   log likelihood = -571.80465  
+Iteration 2:   log likelihood = -561.74079  
+Iteration 3:   log likelihood = -561.70103  
+Iteration 4:   log likelihood = -561.70099  
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+           x |   .4689076   .5107241     0.92   0.359    -.5320932    1.469908
+       _cons |   1.355816   .3091499     4.39   0.000     .7498929    1.961738
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |   1.615589   .1034656    15.61   0.000     1.412801    1.818378
+-------------+----------------------------------------------------------------
+ctrlcov      |
+           z |   1.864667   .1823754    10.22   0.000     1.507218    2.222116
+       _cons |   9.949644   .1419086    70.11   0.000     9.671508    10.22778
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |   1.545536   .0819338    18.86   0.000     1.384948    1.706123
+------------------------------------------------------------------------------
+
+   Status    : d
+   ROC Model : 
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y2           |
+      i_cons |    .839208   .1987224     4.22   0.000     .4497192    1.228697
+           x |   .2902393   .3166597     0.92   0.359    -.3304023     .910881
+      s_cons |   .9566389    .079556    12.02   0.000     .8007121    1.112566
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  300
+
+macros:
+              e(title) : "Parametric ROC estimation"
+        e(nobootstrap) : "nobootstrap"
+            e(cmdline) : "rocreg d y2, probit ml roccov(x) ctrlcov(z)"
+            e(ctrlcov) : "z"
+          e(ctrlmodel) : "linear"
+             e(refvar) : "d"
+          e(classvars) : "y2"
+                e(cmd) : "rocreg"
+                e(pvc) : "normal"
+             e(fprpts) : "10"
+            e(predict) : "rocreg_p"
+             e(roccov) : "x"
+             e(probit) : "probit"
+                 e(ml) : "ml"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily rocreg d y2, probit ml roccov(x) ctrlcov(z) ctrlmodel(linear)
+
+Parametric ROC estimation                       Number of obs     =        300
+
+Covariate control      : linear regression
+Control variables      : z
+Control standardization: normal
+ROC method             : parametric               Link: probit
+
+  Status     : d
+  Classifiers: y2
+
+  Classifier : y2
+  Covariate control adjustment model:
+
+Iteration 0:   log likelihood = -607.02326  
+Iteration 1:   log likelihood = -571.80465  
+Iteration 2:   log likelihood = -561.74079  
+Iteration 3:   log likelihood = -561.70103  
+Iteration 4:   log likelihood = -561.70099  
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+           x |   .4689076   .5107241     0.92   0.359    -.5320932    1.469908
+       _cons |   1.355816   .3091499     4.39   0.000     .7498929    1.961738
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |   1.615589   .1034656    15.61   0.000     1.412801    1.818378
+-------------+----------------------------------------------------------------
+ctrlcov      |
+           z |   1.864667   .1823754    10.22   0.000     1.507218    2.222116
+       _cons |   9.949644   .1419086    70.11   0.000     9.671508    10.22778
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |   1.545536   .0819338    18.86   0.000     1.384948    1.706123
+------------------------------------------------------------------------------
+
+   Status    : d
+   ROC Model : 
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y2           |
+      i_cons |    .839208   .1987224     4.22   0.000     .4497192    1.228697
+           x |   .2902393   .3166597     0.92   0.359    -.3304023     .910881
+      s_cons |   .9566389    .079556    12.02   0.000     .8007121    1.112566
+------------------------------------------------------------------------------
+
+. capture noisily rocreg d y2, probit ml ctrlcov(z) ctrlmodel(strata)
+ctrlmodel(strata) not allowed with ml;
+specify ctrlmodel(linear) instead
+
+. capture noisily rocreg d y y2, probit ml
+
+Parametric ROC estimation                       Number of obs     =        300
+
+Control standardization: normal
+ROC method             : parametric               Link: probit
+
+  Status     : d
+  Classifiers: y y2
+
+  Classifier : y
+  Covariate control adjustment model:
+
+Iteration 0:   log likelihood = -541.74064  
+Iteration 1:   log likelihood = -541.73717  
+Iteration 2:   log likelihood = -541.73717  
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+       _cons |   1.910984   .1792216    10.66   0.000     1.559716    2.262252
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |    1.61575   .1034378    15.62   0.000     1.413015    1.818484
+-------------+----------------------------------------------------------------
+ctrlcov      |
+       _cons |     10.795   .1035454   104.25   0.000     10.59205    10.99795
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |   1.381468   .0732177    18.87   0.000     1.237964    1.524972
+------------------------------------------------------------------------------
+
+  Classifier : y2
+  Covariate control adjustment model:
+
+Iteration 0:   log likelihood = -607.02326  
+Iteration 1:   log likelihood = -607.01979  
+Iteration 2:   log likelihood = -607.01979  
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+       _cons |   1.706894   .2177219     7.84   0.000     1.280166    2.133621
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |   1.896344    .121401    15.62   0.000     1.658403    2.134286
+-------------+----------------------------------------------------------------
+ctrlcov      |
+       _cons |    10.7877   .1338896    80.57   0.000     10.52528    11.05012
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |    1.78631   .0946742    18.87   0.000     1.600752    1.971868
+------------------------------------------------------------------------------
+
+   Status    : d
+   ROC Model : 
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y            |
+      i_cons |   1.182723   .1352821     8.74   0.000     .9175746    1.447871
+      s_cons |   .8550014   .0642952    13.30   0.000     .7289851    .9810176
+         auc |   .8156578   .0255086    31.98   0.000     .7656618    .8656538
+-------------+----------------------------------------------------------------
+y2           |
+      i_cons |   .9000969   .1352995     6.65   0.000     .6349146    1.165279
+      s_cons |   .9419754   .0734427    12.83   0.000     .7980304     1.08592
+         auc |    .743827   .0295986    25.13   0.000     .6858148    .8018393
+------------------------------------------------------------------------------
+
+Ho: All classifiers have equal AUC values.
+Ha: At least one classifier has a different AUC value.
+
+P-value:      .000017
+
+. * cluster-robust standard errors
+. capture noisily rocreg d y2, probit ml roccov(x) ctrlcov(z) cluster(id)
+
+Parametric ROC estimation                       Number of obs     =        300
+
+Covariate control      : linear regression
+Control variables      : z
+Control standardization: normal
+ROC method             : parametric               Link: probit
+
+  Status     : d
+  Classifiers: y2
+
+  Classifier : y2
+  Covariate control adjustment model:
+
+Iteration 0:   log pseudolikelihood = -607.02326  
+Iteration 1:   log pseudolikelihood = -571.80465  
+Iteration 2:   log pseudolikelihood = -561.74079  
+Iteration 3:   log pseudolikelihood = -561.70103  
+Iteration 4:   log pseudolikelihood = -561.70099  
+                                   (Std. Err. adjusted for 100 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+casecov      |
+           x |   .4689076    .518033     0.91   0.365    -.5464184    1.484234
+       _cons |   1.355816   .2984975     4.54   0.000     .7707713     1.94086
+-------------+----------------------------------------------------------------
+casesd       |
+       _cons |   1.615589   .0899576    17.96   0.000     1.439276    1.791903
+-------------+----------------------------------------------------------------
+ctrlcov      |
+           z |   1.864667   .1798168    10.37   0.000     1.512233    2.217102
+       _cons |   9.949644   .1237032    80.43   0.000      9.70719     10.1921
+-------------+----------------------------------------------------------------
+ctrlsd       |
+       _cons |   1.545536   .1059364    14.59   0.000     1.337904    1.753167
+------------------------------------------------------------------------------
+
+   Status    : d
+   ROC Model : 
+                                   (Std. Err. adjusted for 100 clusters in id)
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y2           |
+      i_cons |    .839208   .2021863     4.15   0.000       .44293    1.235486
+           x |   .2902393   .3191634     0.91   0.363    -.3353094    .9157881
+      s_cons |   .9566389   .0860939    11.11   0.000     .7878979     1.12538
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  300
+            e(N_clust) =  100
+
+macros:
+              e(title) : "Parametric ROC estimation"
+        e(nobootstrap) : "nobootstrap"
+            e(cmdline) : "rocreg d y2, probit ml roccov(x) ctrlcov(z) cluster(id)"
+            e(ctrlcov) : "z"
+          e(ctrlmodel) : "linear"
+             e(refvar) : "d"
+          e(classvars) : "y2"
+                e(cmd) : "rocreg"
+                e(pvc) : "normal"
+                e(vce) : "cluster"
+            e(vcetype) : "Robust"
+           e(clustvar) : "id"
+             e(fprpts) : "10"
+            e(predict) : "rocreg_p"
+             e(roccov) : "x"
+             e(probit) : "probit"
+                 e(ml) : "ml"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily rocreg d y, ml
+probit must be specified if ml is specified
+
+. * cluster() with the bootstrap: the draws depend on Stata's resampling order (VERIFY), so the
+. * layout and e() are what this part checks
+. capture noisily rocreg d y, cluster(id) breps(50) bseed(5) nodots
+
+Bootstrap results                               Number of obs     =        300
+                                                Replications      =         50
+
+Nonparametric ROC estimation
+
+Control standardization: empirical
+ROC method             : empirical
+
+Area under the ROC curve
+
+   Status    : d
+   Classifier: y
+                                    (Replications based on 100 clusters in id)
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8122122  -.0033402    .0214192     .7702313    .854193  (N)
+             |                                        .7619643   .8429825  (P)
+             |                                        .7719415   .8570665 (BC)
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+            e(N_clust) =  100
+                  e(N) =  300
+               e(rank) =  1
+              e(level) =  95
+
+macros:
+         e(properties) : "b V"
+               e(exp1) : "[y]_b[auc]"
+           e(rngstate) : "XAA0000000000000005b999c4e27eeb7be2b18c06fcbb38e662ceb676b0b92a1ee3dd7dbcfaea188d647e12439d3569f42035dcc913d6f148d34081d54382597a1e688b6c50955ad87bc8623fd8895e937b9be7f92185a074229a8fbeac2d7049abfbfabdbcbca4c9c1e5b512abeef8b5.."
+           e(clustvar) : "id"
+                e(vce) : "bootstrap"
+                e(auc) : "auc"
+                e(pvc) : "empirical"
+            e(cmdline) : "rocreg d y, cluster(id) breps(50) bseed(5) nodots"
+          e(classvars) : "y"
+             e(refvar) : "d"
+              e(breps) : "50"
+                e(cmd) : "rocreg"
+              e(title) : "Nonparametric ROC estimation"
+
+matrices:
+                  e(b) :  1 x 1
+                  e(V) :  1 x 1
+              e(ci_bc) :  2 x 1
+      e(ci_percentile) :  2 x 1
+          e(ci_normal) :  2 x 1
+                 e(se) :  1 x 1
+                 e(z0) :  1 x 1
+               e(bias) :  1 x 1
+               e(reps) :  1 x 1
+               e(b_bs) :  1 x 1
+
+functions:
+             e(sample)   
+
+. capture noisily rocreg d y, probit cluster(id) breps(50) bseed(5) nodots
+
+Bootstrap results                               Number of obs     =        300
+                                                Replications      =         50
+
+Parametric ROC estimation
+
+Control standardization: empirical
+ROC method             : parametric             Link: probit
+
+   Status    : d
+   Classifier: y
+   ROC Model : 
+                                    (Replications based on 100 clusters in id)
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+           y |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _cons |    1.137042   .0198097    .1079217     .9255192   1.348564  (N)
+             |                                        .9489754   1.354784  (P)
+             |                                        .8524477   1.254871 (BC)
+-------------+----------------------------------------------------------------
+      probit |
+-------------+----------------------------------------------------------------
+       _cons |    .8473412   .0345909    .0893139     .6722892   1.022393  (N)
+             |                                        .7137727    1.02562  (P)
+             |                                        .6764193   1.006968 (BC)
+------------------------------------------------------------------------------
+
+                                    (Replications based on 100 clusters in id)
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8071643  -.0007703    .0224057     .7632499   .8510787  (N)
+             |                                         .751257   .8367494  (P)
+             |                                         .751257   .8367494 (BC)
+------------------------------------------------------------------------------
+
+. capture noisily rocreg d y, cluster(id) nobstrata breps(50) bseed(5) nodots
+
+Bootstrap results                               Number of obs     =        300
+                                                Replications      =         50
+
+Nonparametric ROC estimation
+
+Control standardization: empirical
+ROC method             : empirical
+
+Area under the ROC curve
+
+   Status    : d
+   Classifier: y
+                                    (Replications based on 100 clusters in id)
+------------------------------------------------------------------------------
+             |    Observed               Bootstrap
+         AUC |       Coef.       Bias    Std. Err.     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+             |    .8122122  -.0033402    .0214192     .7702313    .854193  (N)
+             |                                        .7619643   .8429825  (P)
+             |                                        .7719415   .8570665 (BC)
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1912_epidemiology.log
+  log type:  text
+ closed on:  24 Oct 2026, 09:52:29
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

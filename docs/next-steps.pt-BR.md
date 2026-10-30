@@ -6,7 +6,7 @@ Um plano de trabalho para os comandos que ainda faltam em [Faltam para a 1.0](..
 
 ## Como executar um bloco
 
-Comece uma sessão nova (uma conversa longa custa mais a cada passo) com uma instrução como:
+Comece uma sessão nova para cada bloco, ou duas para um bloco grande (uma para implementar, outra para conferir com o log do Stata): cada passo relê a conversa inteira, então um passo no fim de uma sessão longa custa três a quatro vezes um passo do começo. Comece com uma instrução como:
 
 > Implemente o bloco **Programação** conforme docs/next-steps.md. Abra um pull request e faça o merge quando o CI passar.
 
@@ -20,6 +20,14 @@ Todo bloco segue os mesmos passos:
 6. `docs/features.md` e `docs/features.pt-BR.md`: uma linha para o bloco.
 7. A rodada no Stata, uma só, para tudo o que o bloco precisa (inclusive casos sem referência): peça ao usuário que rode `compat/gerar_esperados.do`, nunca um bloco improvisado de comandos. Esse arquivo já faz `set dp period` e `linesize 255`, apaga as sobras `odta_*` e roda `mata clear`. Antes de pedir, confira com o git que o branch está no GitHub e diga ao usuário que dê `git pull` nele. Se uma rodada falhar por motivo de ambiente (vírgula decimal, nome de arquivo, sobras de outra rodada), diga isso antes de pedir outra. Antes de pedir, confira também que os dados do caso estão definitivos (os modelos convergem, os testes não são degenerados): mudar os dados depois custa uma segunda rodada. O clone do usuário precisa estar no branch do bloco (uma rodada em outro branch não gera o log); se tiver alterações locais, `git stash -u` antes.
 8. `python tools/compare.py` sem diferenças novas; abrir o PR; merge quando os testes passarem no Linux, no macOS e no Windows. A página de cobertura se atualiza sozinha depois do merge.
+
+Para manter a sessão pequena (cada passo relê tudo o que foi dito até ali):
+
+- Leia a saída dos comandos em forma curta: `python tools/compare.py --brief --show-diff` (só os casos que diferem, sem as linhas de iteração, cada diff cortado em 60 linhas); `pytest -q` com `tail`; nunca imprima um log inteiro. Rode o `pytest` completo e o `compare.py` completo uma vez, no fim do bloco; durante as correções, rode só o arquivo de teste ou o caso em que está trabalhando.
+- Espere o CI numa chamada só, que repete até os três jobs terminarem, e não em consultas seguidas.
+- Um pull request que muda só documentação (`*.md`, texto de ajuda) entra sem esperar o CI.
+- Os passos mecânicos (merge, espera do CI, publicação de versão, texto do roadmap) podem rodar com um modelo mais leve; implementar um bloco e conferi-lo com o log do Stata ficam com o principal.
+- O `progresso.md` (local) guarda só o estado atual e o próximo passo; o histórico das etapas concluídas vai para o `progresso-arquivo.md`, que a sessão lê só quando precisa.
 
 Notas para sessões que rodam na nuvem:
 
@@ -50,7 +58,7 @@ Notas para sessões que rodam na nuvem:
 - Logo depois de um push, `gh api repos/<dono>/<repo>/commits/<sha>/check-runs` vem vazio até os jobs serem criados: um laço que espera `status != completed` termina na hora. Espere até existirem os três jobs.
 - Achados dos modelos (caso 1908): monte dados arredondados com coeficientes em décimos pares e evite comparações com zero exato (`round(soma, .01)` cria metades exatas que o Stata e o OpenDTA podem arredondar de modo diferente); evite `rpoisson()`, `rbinomial()` e `rnormal()` e parâmetros na fronteira (uma verossimilhança plana difere por plataforma). Confira que os dados do caso são idênticos nos dois programas antes de gastar a rodada do Stata, e veja o que o Stata rejeita (`nneighbors()` não é opção, `stteffects ipw` não aceita opção de modelo de sobrevivência e exige que toda observação tenha a falha). Primeiro o layout, depois os números: uma hipótese para uma fórmula (variância do `eivreg`, escala do `rreg`) se testa fora do programa num csv dos dados do caso contra o log de referência, e um algoritmo não documentado que não fecha em poucas tentativas vai para a diferença conhecida com o motivo. Uma falha sem anotação num job do CI pode ser uma exceção dentro de um caso: o `tools/compare.py` agora a mostra como `XX` com anotação.
 
-Próximos números livres: casos de comparação a partir de **1910**, fases do roadmap a partir de **24**.
+Próximos números livres: casos de comparação a partir de **1920**, fases do roadmap a partir de **34**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
@@ -79,19 +87,19 @@ Estimativas a partir do trabalho feito até aqui (±50%): tempo de sessão e tok
 
 ### 1. Epidemiologia: completar ✅
 
-Feito na fase 12 (caso de comparação 1601), menos o `rocreg` com `ml` e `cluster()`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 12 e 26 (casos de comparação 1601 e 1912). O plano original:
 
 `rocreg` (regressão ROC não paramétrica e paramétrica; erros padrão por bootstrap); `cs`, `cc` e `ir` com `estandard`, `istandard`, `standard()`, `binomial` e `pool`; `mhodds` com `by()`; `roctab` com `binomial`, `bamber` e `lorenz`; `roccomp` com `binormal`. Reaproveitar `core/epi.py`, `commands/epitab.py`, `commands/roc.py`; tirar os erros "not available yet" correspondentes.
 
 ### 2. Manipulação de dados: opções ✅
 
-Feito na fase 13 (caso de comparação 1701), exceto `import haver` (formato proprietário), `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), `import sasxport, describe` e `member()`, os rótulos de valores do `formats.xpf`, `export sasxport` com `rename` e `vallabfile()`, e `list` com `string()` e `display`, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 13 e 25 (casos de comparação 1701 e 1911). `import haver` (formato proprietário) é uma limitação conhecida, fora da 1.0. Ainda falta: `icd9p` (não foi possível obter uma cópia da lista de procedimentos da ICD-9-CM do CMS), que fica em *Faltam para a 1.0*. O plano original:
 
 `import sas`, `import spss` e `import sasxport` (pelo `pyreadstat`, opcional como para os `.dta` antigos; `io/`), `file` com leitura e gravação binária (`commands/filecmd.py`), `infile` com `byvariable()` (`commands/infile.py`), `putexcel` para `.xls`, as opções que faltam de `list` e `describe`. `import haver` precisa de um formato proprietário: deixar de fora e dizer isso. `icd9p` precisa da lista de procedimentos da ICD-9-CM, de domínio público (CMS); acrescentá-la em `src/opendta/data/icd/` com `tools/make_icd_tables.py` se uma cópia puder ser obtida.
 
 ### 3. Programação ✅
 
-Feito na fase 14 (caso de comparação 1801), exceto `makecns` com lista de restrições e `displaycns` (dependem de `constraint`, do bloco 10), `matlist` com as opções de equações, as caixas de diálogo e os menus de `window` na interface gráfica e o carregamento de plugins, que ficam em *Faltam para a 1.0*. O plano original:
+Feito nas fases 14 e 24 (casos de comparação 1801 e 1910). O carregamento de plugins compilados do Stata é uma limitação conhecida, fora da 1.0; o sistema de classes do Stata fica em *Faltam para a 1.0* para um bloco próprio. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 
@@ -101,27 +109,27 @@ Feito na fase 15 (caso de comparação 1901), exceto as opções que param com o
 
 ### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
 
-Feito na fase 16 (caso 1902), exceto mais de um nível de efeitos aleatórios nos comandos `me`, pesos, `vce(robust)` e as opções `median` e `mean` do `predict` do `mestreg` (e `hazard` depois das distribuições lognormal, loglogística e gama). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
+Feito nas fases 16 e 30 (casos 1902 e 1916), exceto as peças listadas em Modelos multinível em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`meqrlogit` e `meqrpoisson` com mais de um nível, `intmethod(laplace)` com mais de um nível, efeitos cruzados nos comandos `me`). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
 
 ### 6. Dados em painel ✅
 
-Feito na fase 19 (caso 1905), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar`, `xtrc`, `xtivreg` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
+Feito nas fases 19 e 28 (casos 1905 e 1914), exceto as peças listadas em Dados em painel em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`xtunitroot llc` e `ips`, que precisam dos momentos tabelados dos artigos originais, e algumas opções dos comandos de painel dinâmico, `xtregar` e `xtdata`). O plano original: modelos de efeitos aleatórios por quadratura, `quadchk`, painéis dinâmicos por GMM, os estimadores lineares de painel, `xtfrontier`, `xtunitroot` e os comandos de descrição.
 
 ### 7. Estatística básica (3–4 h, ~135 mil tokens)
 
-Feito na fase 17 (caso 1903), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`ml` com os métodos `lf0`, `lf1`, `lf2` e `gf`, `boxcox` com outros modelos, estatísticas de teste do `cusum`…). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
+Feito nas fases 17 e 27 (casos 1903 e 1913), exceto as peças listadas em Estatística básica em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`margins` depois de mais comandos; as estatísticas de teste do `cusum`, cujas fórmulas pedem os Methods and formulas do manual). O plano original: prefixos e reamostragem: `jackknife`, `permute`, `simulate` (reaproveitar `estimation/bootstrap.py`); `ml` (o comando em torno de `estimation/ml.py`), `mlexp`; construção de modelos: `nestreg`, `stepwise`, `xi`, `mkspline`, `fp`, `mfp`; depois da estimação: `contrast`, `pwcompare`, `pwmean`, `margins` depois de mais comandos (`estimation/margins.py`), `suest`, `predictnl`, `testnl`, `linktest`; transformações: `boxcox`, `ladder`, `gladder`, `lnskew0`; testes: `bitest`, `ksmirnov`, `median`, `nptrend`, `runtest`, `tetrachoric`, `ktau`, `pcorr`; concordância e tamanhos de efeito: `icc`, `loneway`, `esize`, `ameans`; exibições: `cumul`, `stem`, `dotplot`, `lv`, `lpoly`, `smooth`, `cusum`, `serrbar`, `sunflower`, `symplot`, `quantile`.
 
 ### 8. Estatística multivariada ✅
 
-Feito na fase 20 (caso 1906), exceto as peças listadas em Estatística multivariada em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (as medidas binárias de similaridade do `cluster`, pontos suplementares em `ca` e `mca`, `mds` com `method(nonmetric)`, `procrustes` com transformações oblíquas e irrestritas, e alguns subcomandos de `estat`). O plano original: `pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
+Feito nas fases 20 e 31 (casos 1906 e 1917), exceto as peças listadas em Estatística multivariada em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (pontos suplementares em `ca` e `mca`, `mds` com `method(nonmetric)`, `manova` com termos de erro, e alguns subcomandos de `estat`). O plano original: `pca`, `factor`, `rotate`, `alpha`, `cluster` (ligações, dendrograma, `cluster generate`), `discrim` (lda, qda, knn, logistic), `manova`, `mvreg`, `mvtest`, `canon`, `ca`, `mca`, `mds`, `biplot`, `procrustes`, `hotelling`, `screeplot`, `scoreplot`, cada um com seus subcomandos de `estat`. Módulo novo `core/multivariate.py`.
 
 ### 9. Séries temporais (3–4 h, ~150 mil tokens)
 
-Feito na fase 18 (caso 1904), exceto as peças listadas em Séries temporais em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (restrições em `vec`, `svar`, `arch`, `ucm` e `sspace`, `mgarch vcc`, `predict` depois dos comandos de espaço de estados…). O plano original: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
+Feito nas fases 18 e 29 (casos 1904 e 1915), exceto as peças listadas em Séries temporais em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (restrições no `vec`, as restrições de longo prazo do `svar`, restrições no `ucm`, `mgarch vcc`, as estatísticas de estado do `predict` depois dos comandos de espaço de estados…). O plano original: `arch`, `arfima`, `mgarch`, `dfactor`, `sspace`, `ucm` (espaço de estados: compartilhar um único filtro de Kalman com o `arima` em `estimation/tsmodels.py`), `vec`, `vecrank`, `svar`, `fcast`, `varbasic`, `varlmar`, `varnorm`, `varstable`, `varwle`, `dfgls`, `pperron`, `prais`, `rolling`, `tsappend`, `tsfill`, `tsreport`, `tsfilter`, `tssmooth`, `pergram`, `cumsp`, `xcorr`, `wntestb`, `wntestq`, `psdensity`; `arima` com `sarima()`, `condition` e `diffuse`; `irf` depois de `svar` e `vec`, com erros padrão por bootstrap, e `irf ctable`, `cgraph`, `ograph`, `add` (`estimation/irf.py`).
 
 ### 10. Modelos (pronto)
 
-Feito nas fases 21 e 22 (casos de compatibilidade 1907 e 1908), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
+Feito nas fases 21, 22 e 32 (casos de compatibilidade 1907, 1908 e 1918), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
 
 ### 11. Outras suítes (pronto)
 
@@ -129,6 +137,6 @@ Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras s
 
 ## Antes da 1.0
 
-Os blocos 1 a 11 saíram na versão 0.5.0. A versão 1.0 espera o que ainda consta em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10): planeje como novos blocos (a partir do bloco 12), uma área por vez, executados como os blocos acima.
+Os blocos 1 a 11 saíram na versão 0.5.0, e os blocos 12 a 20a (fases 24 a 32) na versão 0.6.0. A versão 1.0 espera o que ainda consta em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10): planeje como novos blocos (a partir do bloco 12), uma área por vez, executados como os blocos acima.
 
 Quando essa lista estiver vazia: a rodada no Stata de todos os casos de comparação sem referência, as diferenças corrigidas, a versão 1.0.0 em `src/opendta/__init__.py` e `pyproject.toml`, as notas de lançamento escritas e a tag `v1.0.0` enviada (veja [development.pt-BR.md](development.pt-BR.md#publicar-uma-versão)).

@@ -26,6 +26,14 @@ changed since.
 {cmd:makecns} {it:matname} stores in {cmd:e(Cns)} the matrix of constraints {it:matname}, which has
 the columns of {cmd:e(b)} and one more, so that {it:R} {it:b}' = {it:r} for {it:matname} = ({it:R}, {it:r}).
 {cmd:matcproc} returns {it:T} and {it:a} such that every {it:b} = {it:bc} {it:T}' + {it:a} obeys the
-constraints, and {it:C}, the constraint matrix. Constraints given by number
-({cmd:makecns 1-3}, {cmd:constraint define}) and {cmd:displaycns} are not available yet.
+constraints, and {it:C}, the constraint matrix.
+{p_end}
+
+{pstd}
+{cmd:makecns} {it:clist} builds {cmd:e(Cns)} from the constraints numbered in {it:clist}, defined
+with {cmd:constraint}. A constraint that cannot be read, or that is redundant with or contradicts the
+earlier ones, is left out with a note ({cmd:nocnsnotes} hides the notes). {cmd:displaycns} lists the
+constraints used; {cmd:r} returns them in {cmd:r(cns}{it:#}{cmd:)}, with {cmd:r(k)} and
+{cmd:r(clist)}. {cmd:matrix dispCns} lists the constraints of {cmd:e(Cns)}; with {cmd:, r} it
+returns them instead.
 {p_end}

@@ -24,10 +24,11 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHeaderView, QLabel,
-                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar,
+                               QLineEdit, QMainWindow, QMenu, QMessageBox, QSizePolicy, QSplitter, QToolBar, QToolButton,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from shiboken6 import isValid
 
 from .. import __version__
 from .. import i18n
@@ -47,6 +48,8 @@ from .panes import CommandLine, ResultsView, monospace_font, titled
 from .preferences import PreferencesDialog
 from .settings import Preferences
 from .theme import apply_theme, results_scheme
+from .window_cmds import build_user_menu
+from .window_cmds import install as install_window_hooks
 
 
 def _dta_notes(ds) -> list[str]:
@@ -64,6 +67,14 @@ def _human_size(nbytes: int) -> str:
         nbytes /= 1024
     return str(nbytes)
 
+
+# short name shown under each toolbar icon, as in Stata (the tooltip keeps the long text)
+_TOOLBAR_LABELS = {
+    "open": "Open", "save": "Save", "print": "Print", "log": "Log", "viewer": "Viewer", "graph": "Graph",
+    "dofile": "Do-file Editor", "dataeditor": "Data Editor", "databrowser": "Data Browser",
+    "varmanager": "Manager", "review": "Review", "variables": "Variables", "properties": "Properties",
+    "more": "More", "break": "Break",
+}
 
 # toolbar buttons that exist in Stata but do nothing here, with the reason in their tooltip
 _PENDING = {
@@ -129,6 +140,7 @@ class MainWindow(QMainWindow):
         self.session.ui_hooks.update(browse=self.show_browser, varmanage=self.show_variables_manager,
                                      help=self.show_viewer, view=self.show_viewer, graph=self.show_graph,
                                      graph_close=self.close_graph, doedit=self.show_dofile_editor)
+        install_window_hooks(self)
 
     # -- montagem ------------------------------------------------------------
     def _build_central(self) -> None:
@@ -289,7 +301,8 @@ class MainWindow(QMainWindow):
                 self._template_action(sub, item, cmd)
             sub.setToolTipsVisible(True)
 
-        mb.addMenu(tr("&User"))
+        self.user_menu = mb.addMenu(tr("&User"))
+        build_user_menu(self.user_menu, getattr(self, "_user_items", None) or [], self.run_command)
 
         m = mb.addMenu(tr("&Window"))
         for dock in (self.dock_review, self.dock_variables, self.dock_properties):
@@ -304,7 +317,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(tr("&Help"))
         self._action(m, "Search...", self.search_help)
-        self._action(m, "Contents", lambda: self.run_command("help"))
+        self._action(m, "Contents", self.help_contents)
         m.addSeparator()
         self.act_hints = QAction(tr("Explain Errors (set hints)"), self, checkable=True)
         self.act_hints.setToolTip(tr("After an error message, explain what went wrong and how to fix "
@@ -356,8 +369,9 @@ class MainWindow(QMainWindow):
         self.refresh_state()
         for act in self.toolbar_actions.values():
             key = act.property("key")
-            act.setText(tr(key))
+            act.setText(tr(act.property("label")))
             act.setToolTip(tr(key) + (act.property("suffix") or ""))
+        self._fit_toolbar_buttons()
         for d in (self.dock_review, self.dock_variables, self.dock_properties):
             d.setWindowTitle(tr(d.objectName()))
         for lab in self.findChildren(QLabel, "PaneTitle"):
@@ -382,7 +396,7 @@ class MainWindow(QMainWindow):
         tb.setObjectName("Toolbar")
         tb.setMovable(False)
         tb.setIconSize(TOOLBAR_SIZE)
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         # same arrangement as Stata 14's toolbar; OpenDTA's own drawing (gui/icons/)
         # buttons without a slot are the _PENDING ones: shown disabled, with the reason
         groups = [
@@ -393,17 +407,26 @@ class MainWindow(QMainWindow):
              ("dofile", "Do-file Editor", lambda: self.show_dofile_editor(""))],
             [("dataeditor", "Data Editor (Edit)", lambda: self.run_command("edit")),
              ("databrowser", "Data Browser (Browse)", lambda: self.run_command("browse")),
-             ("variables", "Variables Manager", lambda: self.run_command("varmanage"))],
+             ("varmanager", "Variables Manager", lambda: self.run_command("varmanage"))],
+            # the side windows: each button appears only while its window is closed and brings it back
+            [(name, f"Show the {title} window", lambda _=False, d=dock: d.toggleViewAction().trigger())
+             for name, title, dock in (("review", "Review", self.dock_review),
+                                       ("variables", "Variables", self.dock_variables),
+                                       ("properties", "Properties", self.dock_properties))],
             [("more", "Clear --more-- condition", None), ("break", "Break", None)],
         ]
         self.toolbar_actions: dict[str, QAction] = {}
         for gi, group in enumerate(groups):
             if gi:
-                tb.addSeparator()
+                sep = tb.addSeparator()
+                if gi == 3:
+                    panel_separator = sep
             for name, text, slot in group:
                 accent = ACCENT_RED if name == "break" else None
-                act = QAction(icon(name, accent), tr(text), self)
+                label = _TOOLBAR_LABELS[name]
+                act = QAction(icon(name, accent), tr(label), self)
                 act.setData((name, accent))
+                act.setProperty("label", label)
                 suffix = f" — {tr(_PENDING[name])}" if slot is None else ""
                 act.setProperty("key", text)
                 act.setProperty("suffix", suffix)
@@ -419,6 +442,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(spacer)
         act = QAction(icon("settings"), tr("Settings"), self)
         act.setData(("settings", None))
+        act.setProperty("label", "Settings")
         act.setProperty("key", "Settings")
         suffix = f"  [{QKeySequence('Ctrl+,').toString(QKeySequence.SequenceFormat.NativeText)}]"
         act.setProperty("suffix", suffix)
@@ -427,6 +451,36 @@ class MainWindow(QMainWindow):
         tb.addAction(act)
         self.toolbar_actions["settings"] = act
         self.addToolBar(tb)
+        self._fit_toolbar_buttons()
+        self._link_dock_buttons(panel_separator)
+
+    def _link_dock_buttons(self, separator: QAction) -> None:
+        """The Review, Variables and Properties buttons show only while their window is closed (by its
+        X or by the Window menu); open, the window is there and the button leaves the toolbar."""
+        buttons = [(self.toolbar_actions[name], dock) for name, dock in
+                   (("review", self.dock_review), ("variables", self.dock_variables),
+                    ("properties", self.dock_properties))]
+
+        def sync(act: QAction, closed: bool) -> None:
+            if not all(isValid(a) for a in (separator, *(b for b, _ in buttons))):
+                return                      # the window is being destroyed and takes its toolbar along
+            act.setVisible(closed)
+            separator.setVisible(any(a.isVisible() for a, _ in buttons))
+
+        for act, dock in buttons:
+            dock.toggleViewAction().toggled.connect(lambda on, a=act: sync(a, not on))
+            sync(act, dock.isHidden())
+
+    def _fit_toolbar_buttons(self) -> None:
+        """Small font and a width that follows the label, the same on every platform style."""
+        tb = self.findChild(QToolBar, "Toolbar")
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        for act in tb.actions():
+            btn = tb.widgetForAction(act)
+            if isinstance(btn, QToolButton):
+                btn.setFont(font)
+                btn.setFixedWidth(max(TOOLBAR_SIZE.width() + 16, btn.fontMetrics().horizontalAdvance(act.text()) + 14))
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
@@ -445,7 +499,7 @@ class MainWindow(QMainWindow):
             QSplitter#CentralSplitter::handle { background: palette(window); }
             QSplitter#CentralSplitter::handle:hover { background: palette(mid); }
             QToolBar#Toolbar { border: none; spacing: 2px; padding: 3px 6px; }
-            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 4px; }
+            QToolBar#Toolbar QToolButton { border: none; border-radius: 6px; padding: 3px 4px; }
             QToolBar#Toolbar QToolButton:hover { background: rgba(127, 127, 127, 0.16); }
             QToolBar#Toolbar QToolButton:pressed { background: rgba(127, 127, 127, 0.28); }
             QToolBar#Toolbar::separator { width: 1px; margin: 5px 6px; background: rgba(127, 127, 127, 0.3); }
@@ -473,7 +527,18 @@ class MainWindow(QMainWindow):
         self._add_review(text, rc)
         self.command.setFocus()
 
-    def _add_review(self, text: str, rc: int) -> None:
+    def _add_review(self, text: str, rc: int, children: list | None = None) -> None:
+        item = self._review_item(text, rc, children or [])
+        if children:
+            # Settings > General > Session: the commands of the do-files, under the do line
+            label = self._do_label(text)
+            if label:
+                item.setText(0, label)
+            self.review.setRootIsDecorated(True)
+        self.review.addTopLevelItem(item)
+        self.review.scrollToItem(item)
+
+    def _review_item(self, text: str, rc: int, children: list) -> QTreeWidgetItem:
         first = text.strip().splitlines()[0]
         shown = first + (" …" if "\n" in text.strip() else "")
         item = QTreeWidgetItem([shown, str(rc) if rc else ""])
@@ -481,8 +546,17 @@ class MainWindow(QMainWindow):
         item.setToolTip(0, text)
         if rc:
             _paint(item, QColor(self._scheme().colors["error"]))
-        self.review.addTopLevelItem(item)
-        self.review.scrollToItem(item)
+        for ch in children:
+            item.addChild(self._review_item(ch["text"], ch["rc"], ch["children"]))
+        return item
+
+    def _do_label(self, line: str) -> str:
+        """`do "<temporary file>"` of the Do-file Editor shown as `do (selection: name.do)`."""
+        m = re.match(r'^\s*(\w+)\s+"([^"]+)"\s*$', line)
+        if not m or self.dofile_editor is None:
+            return ""
+        src = self.dofile_editor.tmp_sources.get(m.group(2))
+        return f"{m.group(1)} ({src})" if src else ""
 
     def _startup_session(self) -> None:
         """Initial folder and automatic log (Settings > General > Session)."""
@@ -536,12 +610,19 @@ class MainWindow(QMainWindow):
     def run_command(self, line: str) -> None:
         if not self._confirm(line):
             return
+        collect = self.prefs.review_do_commands
+        if collect:
+            self.session.review_root = {"children": []}
         try:
             rc = self.session.run_command(line)
         except ExitRequest:
             self.close()
             return
-        self._add_review(line, rc)
+        finally:
+            root = self.session.review_root
+            self.session.review_root = None
+            self.session._review_stack.clear()
+        self._add_review(line, rc, root["children"] if collect and root else None)
         self.command.setFocus()
 
     @staticmethod
@@ -550,9 +631,16 @@ class MainWindow(QMainWindow):
         return full if full else item.text(0)
 
     def _filter_review(self, text: str) -> None:
+        """An item stays visible when it or one of the commands under it matches."""
+        t = text.lower()
+
+        def show(it) -> bool:
+            kids = [show(it.child(j)) for j in range(it.childCount())]
+            ok = not t or t in it.text(0).lower() or any(kids)
+            it.setHidden(not ok)
+            return ok
         for k in range(self.review.topLevelItemCount()):
-            it = self.review.topLevelItem(k)
-            it.setHidden(bool(text) and text.lower() not in it.text(0).lower())
+            show(self.review.topLevelItem(k))
 
     # -- data files ---------------------------------------------------
     def _confirm_discard(self) -> bool:
@@ -642,6 +730,8 @@ class MainWindow(QMainWindow):
         if self.graph_window is None or not self.graph_window.canvases:
             if st.current:
                 self.show_graph(st.get())
+            else:
+                self.statusBar().showMessage(tr("No graph yet: draw one with a graph command."), 5000)
             return
         _present(self.graph_window)
 
@@ -703,11 +793,31 @@ class MainWindow(QMainWindow):
             if not self.results.find(text):
                 self.statusBar().showMessage(f'"{text}" not found', 3000)
 
+    def _viewer_window(self) -> Viewer:
+        if self.viewer is None:
+            self.run_command("help")         # creates the Viewer through the help hook
+        self.viewer.dark = self.prefs.effective_theme == "dark"
+        return self.viewer
+
+    def help_contents(self) -> None:
+        """Help > Contents: every help page, with its title."""
+        from ..commands.helpcmd import search_topics
+        v = self._viewer_window()
+        v.show_topic_list(tr("Contents"), search_topics())
+        _present(v)
+
     def search_help(self) -> None:
-        self.run_command("help")
-        if self.viewer is not None:
-            self.viewer.field.setFocus()
-            self.viewer.field.selectAll()
+        """Help > Search: asks for words and lists the help pages that contain all of them."""
+        from PySide6.QtWidgets import QInputDialog
+        from ..commands.helpcmd import search_topics
+        text, ok = QInputDialog.getText(self, tr("Search help"), tr("Words to search for in the help pages:"))
+        words = [w.lower() for w in text.split()]
+        if not ok or not words:
+            return
+        v = self._viewer_window()
+        v.show_topic_list(f"{tr('Search results')}: {' '.join(words)}", search_topics(words),
+                          tr("no entries found"))
+        _present(v)
 
     def begin_log(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, tr("Begin log"), os.path.join(os.getcwd(), "log.smcl"),
@@ -781,6 +891,7 @@ class MainWindow(QMainWindow):
         font = monospace_font(self.prefs)
         for w in (self.results, self.command, self.review):
             w.setFont(font)
+        self.results.set_solid_rules(self.prefs.solid_table_lines)
         if self.browser is not None:
             self.browser.table.setFont(font)
         if self.dofile_editor is not None:
@@ -848,10 +959,14 @@ class MainWindow(QMainWindow):
         set_icon_theme(theme)
         self.results.set_scheme(self._scheme(theme))
         err = QColor(self._scheme(theme).colors["error"])
-        for k in range(self.review.topLevelItemCount()):
-            it = self.review.topLevelItem(k)
+
+        def repaint(it) -> None:
             if it.text(1):
                 _paint(it, err)
+            for j in range(it.childCount()):
+                repaint(it.child(j))
+        for k in range(self.review.topLevelItemCount()):
+            repaint(self.review.topLevelItem(k))
         for act in self.toolbar_actions.values():
             name, accent = act.data()
             act.setIcon(icon(name, accent))
@@ -903,13 +1018,13 @@ class MainWindow(QMainWindow):
     def show_about(self) -> None:
         QMessageBox.about(self, tr("About OpenDTA"),
                           f"<b>OpenDTA {__version__}</b><br>" + i18n.L(
-                              "Do-file interpreter with syntax compatible with Stata 14.<br>"
+                              "Do-file interpreter with a Stata-style interface.<br>"
                               "© 2026 OpenDTA contributors — MIT License.<br>"
                               "Stata is a registered trademark of StataCorp LLC;<br>"
                               "OpenDTA is not affiliated with StataCorp.<br>"
                               '<a href="https://github.com/yaskepalhares/opendta">'
                               "github.com/yaskepalhares/opendta</a>",
-                              "Interpretador de do-files com sintaxe compatível com o Stata 14.<br>"
+                              "Interpretador de do-files com interface no estilo do Stata.<br>"
                               "© 2026 colaboradores do OpenDTA — licença MIT.<br>"
                               "Stata é marca registrada da StataCorp LLC;<br>"
                               "o OpenDTA não é afiliado à StataCorp.<br>"
@@ -925,7 +1040,8 @@ class MainWindow(QMainWindow):
         self.cwd_label.setText(cwd)
         ds = self.session.data
         title = Path(ds.filename).name if ds.filename else (Path(cwd).name or cwd)
-        self.setWindowTitle(f"OpenDTA {__version__} — {title}")
+        # window manage maintitle replaces the title until "maintitle reset"
+        self.setWindowTitle(getattr(self, "main_title", "") or f"OpenDTA {__version__} — {title}")
 
         # Variables
         selected = self._selected_variable()
@@ -993,7 +1109,10 @@ class MainWindow(QMainWindow):
         for url in event.mimeData().urls():
             path = url.toLocalFile()
             if path.lower().endswith((".do", ".ado")):
-                self.run_command(f'do "{path}"')
+                if self.prefs.run_dropped_dofiles:
+                    self.run_command(f'do "{path}"')
+                else:
+                    self.show_dofile_editor(path)
             elif path.lower().endswith(".dta"):
                 self.open_dataset(path)
                 break

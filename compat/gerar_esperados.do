@@ -3,14 +3,17 @@
 * How to use it (in Stata 14):
 *   1. cd to the compat folder of the repository, for example:
 *        cd "~/opendta/compat"
-*   2. do gerar_esperados.do
+*   2. do gerar_esperados.do            only the cases that have no log in expected/ yet
+*      do gerar_esperados.do 1919       the cases whose name starts with 1919
+*      do gerar_esperados.do all        every case
 *
-* Each do-file in compat/do/ is run and its output is written to
+* Each selected do-file in compat/do/ is run and its output is written to
 * compat/stata/<name>.log. That folder is not tracked by git, so a new run never
 * blocks git pull; the logs reach compat/expected/ (the versioned references)
 * through a pull request, after they are reviewed.
 
 version 14
+args padrao
 set more off
 set linesize 255
 capture log close
@@ -20,7 +23,18 @@ local dp_original = c(dp)
 set dp period
 
 capture mkdir "stata"
-local arquivos : dir "do" files "*.do"
+local glob "`padrao'*.do"
+if "`padrao'" == "all" local glob "*.do"
+local todos : dir "do" files "`glob'"
+local arquivos
+foreach f of local todos {
+    local nome = subinstr("`f'", ".do", "", .)
+    * without an argument, a case that already has a reference log is not run again
+    if "`padrao'" != "" | !fileexists("expected/`nome'.log") {
+        local arquivos `"`arquivos' "`f'""'
+    }
+}
+display as text `: word count `arquivos'' " case(s) to run"
 foreach f of local arquivos {
     local nome = subinstr("`f'", ".do", "", .)
     * deletes leftovers (odta_*) of an interrupted case before running the next one

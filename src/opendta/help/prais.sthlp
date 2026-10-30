@@ -11,5 +11,5 @@
 {title:Description}
 
 {pstd}
-Fits a linear regression with AR(1) disturbances by iterated feasible GLS. The default is Prais-Winsten (keeps the first observation); {cmd:corc} drops it. {cmd:rhotype()} chooses the estimator of the autocorrelation, {cmd:ssesearch} searches for rho by minimizing the sum of squared residuals and {cmd:twostep} stops after the first transformation. The output ends with the original and the transformed Durbin-Watson statistics. {cmd:vce(robust)} and {cmd:vce(cluster)} are not available.
+Fits a linear regression with AR(1) disturbances by iterated feasible GLS. The default is Prais-Winsten (keeps the first observation); {cmd:corc} drops it. {cmd:rhotype()} chooses the estimator of the autocorrelation, {cmd:ssesearch} searches for rho by minimizing the sum of squared residuals and {cmd:twostep} stops after the first transformation. The output ends with the original and the transformed Durbin-Watson statistics. {cmd:vce(robust)}, {cmd:vce(hc2)}, {cmd:vce(hc3)} and {cmd:vce(cluster} {it:clustvar}{cmd:)} give semirobust variances of the transformed regression, with rho taken as known.
 {p_end}

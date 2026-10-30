@@ -70,3 +70,28 @@ def test_reset(win, monkeypatch):
     d._reset()
     assert win.prefs.theme == "light" and win.prefs.check_updates is True
     d.close()
+
+
+def test_dropped_dofile_opens_in_the_editor_unless_asked_to_run(win, tmp_path, monkeypatch):
+    from PySide6.QtCore import QMimeData, QUrl
+    do = tmp_path / "a.do"
+    do.write_text("display 1\n")
+
+    class Event:
+        def __init__(self):
+            self._m = QMimeData()
+            self._m.setUrls([QUrl.fromLocalFile(str(do))])
+
+        def mimeData(self):
+            return self._m
+
+    path = QUrl.fromLocalFile(str(do)).toLocalFile()     # Qt uses "/" also on Windows
+    ran, opened = [], []
+    monkeypatch.setattr(win, "run_command", ran.append)
+    monkeypatch.setattr(win, "show_dofile_editor", opened.append)
+    assert not win.prefs.run_dropped_dofiles
+    win.dropEvent(Event())
+    assert opened == [path] and ran == []
+    win.prefs.run_dropped_dofiles = True
+    win.dropEvent(Event())
+    assert ran == [f'do "{path}"'] and opened == [path]
