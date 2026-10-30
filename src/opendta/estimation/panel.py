@@ -883,6 +883,28 @@ def _hac_weights(kernel: str, lags: int, N: int) -> list[float]:
     return out
 
 
+def _nw94_lags(G: np.ndarray, kernel: str) -> int:
+    """Data-dependent lag of Newey and West (1994) for the HAC weight matrix of the moments G (n x
+    moments): the autocovariances of the sum of the moments (the constant column excluded) give the
+    ratio s(q)/s(0), and the bandwidth is c * (ratio^2)^(1/(2q+1)) * n^(1/(2q+1)), with the
+    truncation lag n_trunc = 12 (n/100)^(2/9) (Bartlett), 4 (n/100)^(2/25) (Parzen) or
+    3 (n/100)^(2/25) (quadratic spectral)."""
+    n = G.shape[0]
+    g = G[:, :-1].sum(axis=1) if G.shape[1] > 1 else G[:, 0]
+    q, c, expo, a = {"bartlett": (1, 1.1447, 1 / 3, (12, 2 / 9)), "parzen": (2, 2.6614, 1 / 5, (4, 2 / 25)),
+                     "quadraticspectral": (2, 1.3221, 1 / 5, (3, 2 / 25))}[kernel]
+    m = int(a[0] * (n / 100) ** a[1])
+    m = max(min(m, n - 1), 1)
+    sig = np.array([g[j:] @ g[:n - j] / n for j in range(m + 1)])
+    j = np.arange(1, m + 1)
+    s0 = sig[0] + 2 * np.sum(sig[1:])
+    sq = 2 * np.sum(j ** q * sig[1:])
+    if s0 == 0:
+        return 0
+    gamma = c * ((sq / s0) ** 2) ** (1 / (2 * q + 1))
+    return max(int(gamma * n ** expo), 0)
+
+
 def _gmm_two_step(smp, y, X, Z, b1, small):
     """Two-step (or, with igmm, iterated) efficient GMM: the weight matrix comes from the 2SLS
     residuals (robust, cluster, HAC or unadjusted; center centers the moments); returns b,
@@ -903,8 +925,9 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
             raise StataError(198, "wmatrix(hac) requires a kernel")   # VERIFY
         kern = names[wm[1].lower()]
         if len(wm) > 2 and wm[2].lower() == "opt":
-            raise StataError(198, "wmatrix(hac kernel opt) is not available yet in OpenDTA")   # OpenDTA
-        lags = int(float(wm[2])) if len(wm) > 2 else N - 2          # VERIFY the default
+            lags = _nw94_lags(Z * e1[:, None], kern)                 # VERIFY against Stata (compat 2001)
+        else:
+            lags = int(float(wm[2])) if len(wm) > 2 else N - 2          # VERIFY the default
         hac = (kern, lags, _hac_weights(kern, lags, N))
 
     def meat(e, kind_):
