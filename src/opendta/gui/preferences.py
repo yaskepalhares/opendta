@@ -656,7 +656,7 @@ class PreferencesDialog(QDialog):
         t = QLabel(f"OpenDTA {__version__}")
         t.setObjectName("BigTitle")
         tv.addWidget(t)
-        d = QLabel(tr("Open-source interpreter for do-files and .dta data, compatible with Stata 14."))
+        d = QLabel(tr("Open-source interpreter for do-files and .dta data, with a Stata-style interface."))
         d.setObjectName("Muted")
         d.setWordWrap(True)
         tv.addWidget(d)

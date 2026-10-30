@@ -40,6 +40,12 @@ def build_user_menu(menu: QMenu, items: list[list[str]], run: Callable[[str], No
     ['append', 'submenu'|'item'|'separator', parent, ...]. A parent is stUser, one of the
     USER_SUBMENUS or the title of a submenu appended before."""
     menu.clear()
+    if not any(w[:1] and w[0] in ("append", "add") for w in items):
+        # nothing appended yet: say why the menu is empty and where to read about `window menu`
+        menu.addAction(tr("No items yet")).setEnabled(False)
+        menu.addSeparator()
+        menu.addAction(tr("How to add items (help window)")).triggered.connect(lambda: run("help window"))
+        return
     menus: dict[str, QMenu] = {"stUser": menu}
     for key, title in USER_SUBMENUS:
         menus[key] = menu.addMenu(tr(title))

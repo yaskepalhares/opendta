@@ -302,8 +302,7 @@ class MainWindow(QMainWindow):
             sub.setToolTipsVisible(True)
 
         self.user_menu = mb.addMenu(tr("&User"))
-        if getattr(self, "_user_items", None):
-            build_user_menu(self.user_menu, self._user_items, self.run_command)
+        build_user_menu(self.user_menu, getattr(self, "_user_items", None) or [], self.run_command)
 
         m = mb.addMenu(tr("&Window"))
         for dock in (self.dock_review, self.dock_variables, self.dock_properties):
@@ -318,7 +317,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(tr("&Help"))
         self._action(m, "Search...", self.search_help)
-        self._action(m, "Contents", lambda: self.run_command("help"))
+        self._action(m, "Contents", self.help_contents)
         m.addSeparator()
         self.act_hints = QAction(tr("Explain Errors (set hints)"), self, checkable=True)
         self.act_hints.setToolTip(tr("After an error message, explain what went wrong and how to fix "
@@ -731,6 +730,8 @@ class MainWindow(QMainWindow):
         if self.graph_window is None or not self.graph_window.canvases:
             if st.current:
                 self.show_graph(st.get())
+            else:
+                self.statusBar().showMessage(tr("No graph yet: draw one with a graph command."), 5000)
             return
         _present(self.graph_window)
 
@@ -792,11 +793,31 @@ class MainWindow(QMainWindow):
             if not self.results.find(text):
                 self.statusBar().showMessage(f'"{text}" not found', 3000)
 
+    def _viewer_window(self) -> Viewer:
+        if self.viewer is None:
+            self.run_command("help")         # creates the Viewer through the help hook
+        self.viewer.dark = self.prefs.effective_theme == "dark"
+        return self.viewer
+
+    def help_contents(self) -> None:
+        """Help > Contents: every help page, with its title."""
+        from ..commands.helpcmd import search_topics
+        v = self._viewer_window()
+        v.show_topic_list(tr("Contents"), search_topics())
+        _present(v)
+
     def search_help(self) -> None:
-        self.run_command("help")
-        if self.viewer is not None:
-            self.viewer.field.setFocus()
-            self.viewer.field.selectAll()
+        """Help > Search: asks for words and lists the help pages that contain all of them."""
+        from PySide6.QtWidgets import QInputDialog
+        from ..commands.helpcmd import search_topics
+        text, ok = QInputDialog.getText(self, tr("Search help"), tr("Words to search for in the help pages:"))
+        words = [w.lower() for w in text.split()]
+        if not ok or not words:
+            return
+        v = self._viewer_window()
+        v.show_topic_list(f"{tr('Search results')}: {' '.join(words)}", search_topics(words),
+                          tr("no entries found"))
+        _present(v)
 
     def begin_log(self) -> None:
         path, _ = QFileDialog.getSaveFileName(self, tr("Begin log"), os.path.join(os.getcwd(), "log.smcl"),
@@ -997,13 +1018,13 @@ class MainWindow(QMainWindow):
     def show_about(self) -> None:
         QMessageBox.about(self, tr("About OpenDTA"),
                           f"<b>OpenDTA {__version__}</b><br>" + i18n.L(
-                              "Do-file interpreter with syntax compatible with Stata 14.<br>"
+                              "Do-file interpreter with a Stata-style interface.<br>"
                               "© 2026 OpenDTA contributors — MIT License.<br>"
                               "Stata is a registered trademark of StataCorp LLC;<br>"
                               "OpenDTA is not affiliated with StataCorp.<br>"
                               '<a href="https://github.com/yaskepalhares/opendta">'
                               "github.com/yaskepalhares/opendta</a>",
-                              "Interpretador de do-files com sintaxe compatível com o Stata 14.<br>"
+                              "Interpretador de do-files com interface no estilo do Stata.<br>"
                               "© 2026 colaboradores do OpenDTA — licença MIT.<br>"
                               "Stata é marca registrada da StataCorp LLC;<br>"
                               "o OpenDTA não é afiliado à StataCorp.<br>"
