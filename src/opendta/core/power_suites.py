@@ -148,7 +148,8 @@ def _within_basis(K: int) -> np.ndarray:
 def repeated_summary(J: int, K: int, cov: np.ndarray, which: str, weights: np.ndarray,
                      means: np.ndarray | None = None, var_effect: float | None = None) -> dict:
     """delta^2, degrees of freedom, epsilon and the variance terms of [PSS] power repeated.
-    VERIFY: the scale of U (orthonormal here) fixes Var_w, Var_we and friends."""
+    The columns of U are the orthonormal ones divided by sqrt(K), as in Stata's Var_be, Var_we and
+    Var_w (checked against the Stata 14 log of case 1919)."""
     if which in ("between", "bwithin"):
         if J < 2:
             raise ValueError("at least two groups are required for a between-subjects effect")
@@ -156,6 +157,7 @@ def repeated_summary(J: int, K: int, cov: np.ndarray, which: str, weights: np.nd
     else:
         c = np.ones((1, J)) / J
     u = np.ones((K, 1)) / math.sqrt(K) if which == "between" else _within_basis(K)
+    u = u / math.sqrt(K)
     dc, du = c.shape[0], u.shape[1]
     sstar = u.T @ np.asarray(cov, dtype=float) @ u
     tr_s = float(np.trace(sstar))
@@ -172,15 +174,18 @@ def repeated_summary(J: int, K: int, cov: np.ndarray, which: str, weights: np.nd
             "spherical": abs(eps - 1) < 1e-8}
 
 
-def repeated_power(delta2: float, dc: int, du: int, p: int, n: float, eps: float, alpha: float) -> float:
-    """F test with the Greenhouse-Geisser correction. VERIFY: the manual takes the multiplier m of
-    Muller and Barton (1989) as given; epsilon itself is used here, in the critical value and in
-    the degrees of freedom of the noncentral F."""
+def repeated_power(delta2: float, dc: int, du: int, p: int, n: float, eps: float, alpha: float,
+                   lower: bool = False) -> float:
+    """F test with the Greenhouse-Geisser correction: epsilon scales both degrees of freedom and
+    the noncentrality. Stata's multiplier m of Muller and Barton (1989) is not documented; this
+    form reproduces the spherical cases of the Stata 14 log exactly and a non-spherical one to
+    1e-4 (compat/known_differences.txt)."""
     df1, df2 = dc * du * eps, du * (n - p) * eps
     if df2 <= 0:
         return math.nan
     crit = float(st.f.isf(alpha, df1, df2))
-    return float(min(max(st.ncf.sf(crit, df1, df2, n * delta2), 0.0), 1.0))
+    tail = st.ncf.cdf if lower else st.ncf.sf       # beta from the lower tail: no cancellation
+    return float(min(max(tail(crit, df1, df2, n * delta2 * eps), 0.0), 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +199,7 @@ def odds_probability(p1: np.ndarray, oratio: float) -> np.ndarray:
 
 
 def cmh_power(n1k, n2k, p1k, p2k, alpha: float, sides: int, continuity: bool = False,
-              upper: bool | None = None) -> float:
+              upper: bool | None = None, tail: bool = False) -> float:
     """Asymptotic power of the Cochran-Mantel-Haenszel test (Nam 1992)."""
     n1k, n2k, p1k, p2k = (np.asarray(x, dtype=float) for x in (n1k, n2k, p1k, p2k))
     if (n1k <= 0).any() or (n2k <= 0).any():
@@ -210,22 +215,22 @@ def cmh_power(n1k, n2k, p1k, p2k, alpha: float, sides: int, continuity: bool = F
     uu = (z * math.sqrt(v0) - ew + cc) / math.sqrt(v)
     ul = (-z * math.sqrt(v0) - ew - cc) / math.sqrt(v)
     pu, pl = float(st.norm.sf(uu)), float(st.norm.cdf(ul))
-    if sides == 2:
+    if sides == 2 and not tail:         # tail: only the tail in the direction of the effect
         return pu + pl
     up = (ew > 0) if upper is None else upper
     return pu if up else pl
 
 
 def cmh_sizes(weights: list[float], s: list[float], k: float, fractional: bool = False):
-    """Group sizes per stratum for the multiplier k. Equal groups in every stratum: size
-    weight x k per group; otherwise stratum size weight x k, the experimental group rounded up
-    (VERIFY: parity and rounding rule)."""
+    """Group sizes per stratum for the multiplier k: stratum size weight x k. Equal groups
+    (ratio 1/2 everywhere) split it in halves, which may be fractional (N = 201 gives 33.5 per
+    group and stratum in Stata 14); otherwise the experimental group is rounded up and the
+    control group takes the rest (Stata 14, case 1919)."""
     w = np.asarray(weights, dtype=float)
     sv = np.asarray(s, dtype=float)
-    if np.allclose(sv, 0.5):
-        g = w * k
-        return g, g.copy()
     nk = w * k
+    if np.allclose(sv, 0.5):
+        return nk / 2, nk / 2
     n2 = nk * sv
     if not fractional:
         n2 = np.ceil(n2 - 1e-9)
@@ -289,10 +294,11 @@ def mcc_power(n: float, p0: float, theta: float, rho: float, M: int, alpha: floa
 
 
 def mcc_size_start(p0: float, theta: float, rho: float, M: int, alpha: float, sides: int, power: float) -> float:
-    """One-sided closed form, used as the starting value (n of the manual)."""
+    """Closed form for the tail in the direction of the effect: Stata 14 reports it as r(init),
+    the starting value of its solver (it uses z of 1 - alpha/sides, case 1919)."""
     p1 = mcc_p1(p0, theta, rho)
     e, nu, e1, nu1 = mcc_terms(p0, p1, rho, M, theta)
-    za, zb = sides_z(alpha, 1), zq(power)
+    za, zb = sides_z(alpha, sides), zq(power)
     return (zb * math.sqrt(nu) + za * math.sqrt(nu1)) ** 2 / (e1 - e) ** 2
 
 
@@ -300,7 +306,7 @@ def mcc_size_start(p0: float, theta: float, rho: float, M: int, alpha: float, si
 # trend
 # ---------------------------------------------------------------------------
 
-def trend_power(nj, pj, xj, alpha: float, sides: int, continuity: bool = False) -> float:
+def trend_power(nj, pj, xj, alpha: float, sides: int, continuity: bool = False, tail: bool = False) -> float:
     """Power of the Cochran-Armitage test for logit(p) = a + b x (Nam 1987). VERIFY: the signs of
     the one-sided bounds are the statistically coherent ones; the manual's rendering is garbled."""
     nj, pj, xj = (np.asarray(v, dtype=float) for v in (nj, pj, xj))
@@ -315,7 +321,7 @@ def trend_power(nj, pj, xj, alpha: float, sides: int, continuity: bool = False) 
     uu = (z * math.sqrt(v0) + c - e) / math.sqrt(v)
     ul = (-z * math.sqrt(v0) - c - e) / math.sqrt(v)
     pu, pl = float(st.norm.sf(uu)), float(st.norm.cdf(ul))
-    if sides == 2:
+    if sides == 2 and not tail:
         return pu + pl
     return pu if e > 0 else pl
 

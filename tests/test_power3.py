@@ -88,10 +88,10 @@ def test_core_cmh_single_stratum_is_the_z_test():
 
 
 def test_core_cmh_sizes():
-    n1, n2 = C.cmh_sizes([4.0, 1.0, 4.0], [0.5] * 3, 9)
-    assert list(n1) == [36, 9, 36] and list(n2) == [36, 9, 36]
-    n1, n2 = C.cmh_sizes([4.0, 1.0, 4.0], [0.47, 0.57, 0.51], 18)
-    assert list(n2) == [34, 11, 37] and list(n1 + n2) == [72, 18, 72]       # the manual's example 3
+    n1, n2 = C.cmh_sizes([4.0, 1.0, 4.0], [0.5] * 3, 9)               # equal groups: halves, maybe fractional
+    assert list(n1) == [18, 4.5, 18] and list(n2) == [18, 4.5, 18]
+    n1, n2 = C.cmh_sizes([4.0, 1.0, 4.0], [0.47, 0.57, 0.51], 21)     # Stata 14 (case 1919): N = 189
+    assert list(n2) == [40, 12, 43] and list(n1) == [44, 9, 41]
 
 
 def test_core_mcc_matches_mcnemar_formula():
@@ -104,9 +104,9 @@ def test_core_mcc_matches_mcnemar_formula():
     n_disc = ((za * 0.5 + zb * math.sqrt(pcase * (1 - pcase))) / (pcase - 0.5)) ** 2
     n = C.solve_up(lambda x: C.mcc_power(x, p0, theta, 0.0, 1, 0.05, 2) - 0.8, 1.0, 50.0)
     assert n == pytest.approx(n_disc / t, rel=0.02)         # two-sided: the lower tail adds a little
-    # one-sided closed form
+    # closed form of the tail in the direction of the effect: r(init) of Stata 14 (case 1919)
     e1 = C.mcc_size_start(p0, theta, 0.0, 1, 0.05, 2, 0.8)
-    assert C.mcc_power(e1, p0, theta, 0.0, 1, 0.05, 1) == pytest.approx(0.8, abs=1e-9)
+    assert e1 == pytest.approx(140.7992565426073, rel=1e-12)
     # a correlation changes p1 but keeps the odds ratio p10 / p01
     p1 = C.mcc_p1(0.3, 2.0, 0.3)
     s = 0.3 * math.sqrt(p1 * (1 - p1) * 0.3 * 0.7)
@@ -233,7 +233,7 @@ def test_repeated(run):
     out = run("power repeated, ngroups(2) nrepeated(3) corr(.5) varbetween(1) n(40)")
     assert "F test for between subjects" in out and run.rc == 0
     d2 = run.eval("r(delta)") ** 2
-    assert d2 == pytest.approx(1.0 / 2.0)                                  # Var_b / Var_be
+    assert d2 == pytest.approx(1.5)                                         # Var_b / Var_be, Var_be = 2/3 (Stata 14)
     run("power repeated 10 12 14 \\ 11 13 12, corr(.6) varerror(77) power(.9) factor(within)")
     assert run.rc == 0 and run.eval("r(N)") == 2 * run.eval("r(N_per_group)")
     n = run.eval("r(N)")
@@ -252,10 +252,10 @@ def test_cmh(run):
     out = run("power cmh .2 .1 .3, oratio(2.5)")
     assert "Cochran-Mantel-Haenszel test" in out and "OR = OR_1 = OR_2 = OR_3" in out
     n = run.eval("r(N)")
-    assert n % 6 == 0 and run.eval("r(N_per_group)") == n / 2
+    assert n % 3 == 0 and run.eval("r(N_per_group)") == n / 2             # N 201: 100.5 per group (Stata 14)
     run("power cmh .2 .1 .3, oratio(2.5) n(%d)" % n)
     assert run.eval("r(power)") >= 0.8
-    run("power cmh .2 .1 .3, oratio(2.5) n(%d)" % (n - 6))
+    run("power cmh .2 .1 .3, oratio(2.5) n(%d)" % (n - 3))
     assert run.eval("r(power)") < 0.8
     run("power cmh .2 .1 .3, n(%d) power(.8)" % n)
     assert 1 < run.eval("r(oratio)") <= 2.5 and run.eval("r(delta)") == run.eval("r(oratio)")
@@ -318,9 +318,9 @@ def test_cox(run):
     assert "Wald test" in out and "Cox PH regression" in out
     assert run.eval("r(E)") == 66 and run.eval("r(N)") == 66
     run("power cox, hratio(.5) eventprob(.5)")
-    assert run.eval("r(E)") == 66 and run.eval("r(N)") == 132
+    assert run.eval("r(E)") == 66 and run.eval("r(N)") == 131          # N from the events before rounding
     run("power cox, hratio(.5) eventprob(.5) wdprob(.2)")
-    assert run.eval("r(N)") == 165
+    assert run.eval("r(E)") == 66 and run.eval("r(N)") == 164          # Stata 14, case 1919
     run("power cox %.6f, sd(.5) n(66)" % math.log(.5))
     assert run.eval("r(power)") == pytest.approx(0.8, abs=0.01)
     run("power cox, n(200) power(.8)")
@@ -330,7 +330,7 @@ def test_cox(run):
     run("power cox, hratio(.5) r2(.5)")
     assert run.eval("r(E)") == 131
     out = run("power cox, hratio(.5 .6 .7)")
-    assert "b1" in out
+    assert "hratio" in out and "Pr_E" in out                       # columns of Stata 14 (case 1919)
 
 
 def test_exponential(run):
@@ -365,9 +365,9 @@ def test_exponential(run):
 
 def test_logrank(run):
     out = run("power logrank")
-    assert "Freedman method" in out and run.eval("r(E)") == 71 and run.eval("r(N)") == 72
+    assert "Freedman method" in out and run.eval("r(E)") == 72 and run.eval("r(N)") == 72
     run("power logrank, hratio(.76) schoenfeld power(.9)")
-    assert run.eval("r(E)") == 559
+    assert run.eval("r(E)") == 560                                     # E from the final N (Stata 14)
     run("power logrank .5, hratio(.7) wdprob(.1)")
     assert run.eval("r(Pr_E)") < 1 and run.eval("r(Pr_w)") == .1
     n = run.eval("r(N)")

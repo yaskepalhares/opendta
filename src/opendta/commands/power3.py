@@ -54,6 +54,11 @@ def _I(x) -> str:
     return f"{P._nfmt(x):>9}"
 
 
+def _N(x) -> str:
+    """A size that is fractional when N is odd and the groups are equal (N per group)."""
+    return _I(x) if abs(x - round(x)) < 1e-9 else P._f4(x)
+
+
 def _T(txt: str) -> str:
     return f"{txt:>9}"
 
@@ -91,12 +96,29 @@ def _combos(base: dict, parallel: bool):
     return [dict(zip(keys, r)) for r in rows], any(len(v) > 1 for v in lists)
 
 
-def _solver_block(c: dict) -> list:
-    """The solver's report (VERIFY: iter, deltax and function depend on Stata's root finder)."""
+# The solver's items in the order Stata lists them (VERIFY: iter, deltax and function depend on
+# Stata's root finder; init is its undocumented starting value)
+_SOLVER = ["ftolerance", "function", "tolerance", "deltax", "maxiter", "iter", "converged", "init"]
+
+
+def _MAT(txt: str = "<matrix>") -> str:
+    return f"{txt:>10}"
+
+
+def _solver_vals(c: dict) -> dict:
     if "_init" not in c:
-        return []
-    return [("init", float(c["_init"])), ("converged", 1.0), ("iter", 4.0), ("maxiter", 500.0),
-            ("deltax", 0.0), ("tolerance", 1e-12), ("function", 0.0), ("ftolerance", 1e-12)]
+        return {}
+    return {"init": float(c["_init"]), "converged": 1.0, "iter": 3.0, "maxiter": 500.0,
+            "deltax": 0.0, "tolerance": 1e-12, "function": 0.0, "ftolerance": 1e-12}
+
+
+def _store(s, vals: dict, order: list) -> None:
+    """r() in the order of Stata's `return list` (observed in case 1919: it is not the logical
+    order and differs by method); names missing from `order` go last. VERIFY: the order of
+    variants of a command that the case does not list."""
+    shown = {k: vals[k] for k in order if k in vals}
+    shown.update({k: v for k, v in vals.items() if k not in shown})
+    s.r = dict(reversed(list(shown.items())))
 
 
 class _M:
@@ -115,12 +137,16 @@ class _M:
         if o.get("onesided") and "onesided" not in self.allowed:
             _fail("option onesided not allowed")
 
-    w = 13                     # width of the labels (VERIFY: Stata widens them to the longest label)
+    w = 13                     # width of the labels; fit_width() widens it to the longest label plus two
 
     def line(self, name, val) -> None:
         out = self.s.output
         out.write(f"{name:>{self.w}} = ", "text")
         out.write(f"{val}\n", "result")
+
+    def fit_width(self, items: list) -> None:
+        """Stata widens the labels to the longest one plus two blanks (case 1919)."""
+        self.w = max(13, max(len(n) for n, _ in items) + 2)
 
     def vals(self, name):
         return P._num(self.o, name)
@@ -151,12 +177,21 @@ class _M:
         if c.get("beta") is not None:
             c["power"] = 1 - c["beta"]
 
-    def size(self, pw, lo, target, start=None, fractional=None):
-        """Smallest size (integer unless nfractional) whose power reaches the target."""
+    def size(self, pw, lo, target, start=None, fractional=None, exact=None):
+        """Smallest size (integer unless nfractional) whose power reaches the target. The size
+        before rounding (r(N_a)) is left in self.exact, in the same units."""
         frac = self.flag("nfractional") if fractional is None else fractional
+        f = exact or pw
+        self.exact = None
+        try:
+            self.exact = float(C.solve_up(lambda x: f(x) - target, lo, max(lo * 2, 4.0)))
+        except ValueError:
+            pass
         try:
             if frac:
-                return C.solve_up(lambda x: pw(x) - target, lo, max(lo * 2, 4.0))
+                if self.exact is None:
+                    raise ValueError
+                return self.exact
             return float(C.smallest_int(pw, target, int(math.ceil(lo))))
         except ValueError:
             raise StataError(498, "failed to find a solution")           # VERIFY
@@ -184,6 +219,8 @@ class _M:
     def table(self, rows: list[dict], what: str) -> None:
         out = self.s.output
         self.header(rows[0], what, self.hyp_lines(rows[0], what))
+        if getattr(self, "means", None) is not None:
+            out.write("   means = <matrix>\n", "text")
         cols = self.columns(rows[0], what)
         vals = [self.row(c, what) for c in rows]
         width = [max(7, len(cn)) for cn in cols]
@@ -322,8 +359,11 @@ class TwoWay(_M):
         if what == "power":
             N = float(c["n"]) if c.get("n") is not None else J * K * c["npercell"]
             fr = frac if self.cw is not None else sw_bal / (J * K)
-            c["power_out"] = C.twoway_power(lam(N, fr), J, K, N, which, a)
-            c["N"], c["delta2"] = N, lam(N, fr) / N
+            Ne = N
+            if self.cw is None and not self.flag("nfractional"):       # whole subjects per cell
+                Ne = J * K * math.floor(N / (J * K) + 1e-9)
+            c["power_out"] = C.twoway_power(lam(Ne, fr), J, K, Ne, which, a)
+            c["N"], c["delta2"], c["Ne"] = N, lam(Ne, fr) / Ne, Ne
         elif what == "n":
             sw = w.sum()
 
@@ -333,6 +373,8 @@ class TwoWay(_M):
             c["N"], c["delta2"] = k * sw, lam(k * sw, frac) / (k * sw)
             c["power_out"] = pw(k)
             c["_init"] = float(J * K)
+            if self.exact is not None:
+                c["N_a"] = self.exact * sw
         else:
             if self.cw is not None:
                 _fail("option cellweights() is not available yet in OpenDTA for the effect size")
@@ -342,7 +384,7 @@ class TwoWay(_M):
             c["delta2"] = lm / N
             c["power_out"] = c["power"]
             c["_init"] = 1.0
-        c["veff"] = c["delta2"] * ve if what == "effect" else veff
+        c["veff"] = c["delta2"] * ve if (what == "effect" or self.cw is not None) else veff
         c["balanced"] = self.cw is None
         c["cells"] = (w / w.sum() * c["N"]) if self.cw is not None else None
         c["delta"] = math.sqrt(c["delta2"])
@@ -351,8 +393,8 @@ class TwoWay(_M):
     def sizes(self, c) -> list:
         N = c["N"]
         if c["balanced"]:
-            return [("N", _I(N)), ("N per cell", _I(N / (self.J * self.K)))]
-        return [("N", _I(N)), ("Average N", P._f4(N / (self.J * self.K)))]
+            return [("N", _I(N)), ("N per cell", _I(c.get("Ne", N) / (self.J * self.K)))]
+        return [("N", _I(N)), ("Average N", P._f4(N / (self.J * self.K))), ("Nij", _MAT())]
 
     def show(self, c, what):
         vn = self._VAR[self.which]
@@ -367,7 +409,7 @@ class TwoWay(_M):
             items.append(("delta", P._f4(c["delta"])))
         items += [("N_r", _I(self.J)), ("N_c", _I(self.K))]
         if self.means is not None:
-            items.append(("means", _T("<matrix>")))
+            items.append(("means", _MAT()))
         if what != "effect":
             items.append((vn, P._f4(c["veff"])))
         items.append(("Var_e", P._f4(c["var_e"])))
@@ -396,28 +438,35 @@ class TwoWay(_M):
 
     def row(self, c, what):
         N = c["N"]
-        return {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
-                "N": N, "N_per_cell": N / (self.J * self.K), "N_avg": N / (self.J * self.K),
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
+                "N": N, "N_per_cell": c.get("Ne", N) / (self.J * self.K), "N_avg": N / (self.J * self.K),
                 "delta": c["delta"], "N_r": self.J, "N_c": self.K, self._VAR[self.which]: c["veff"],
                 "Var_e": c["var_e"]}
 
+    _ORDER = (["Var_e", "balanced", "N_per_cell", "N_avg", "N_rc", "N_r", "N_c", "N_a", "m1_1", "m1_2",
+               "delta"] + _SOLVER + ["onesided", "nfractional", "alpha", "beta", "power", "N", "m2_3",
+                                     "m2_2", "m2_1", "m1_3", "type", "method", "means", "Nij"])
+
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        N = c["N"]
-        r = [("N", float(N))]
+        N, JK = c["N"], self.J * self.K
+        v = {"N": float(N), "N_avg": N / JK, "N_rc": float(JK), "N_a": c.get("N_a", float(N)),
+             "power": pw, "beta": 1 - pw, "alpha": c["alpha"], "delta": c["delta"],
+             "nfractional": float(self.flag("nfractional")), "onesided": 0.0,
+             "balanced": float(c["balanced"]), "N_r": float(self.J), "N_c": float(self.K),
+             self._VAR[self.which]: float(c["veff"]), "Var_e": float(c["var_e"])}
         if c["balanced"]:
-            r.append(("N_per_cell", N / (self.J * self.K)))
-        else:
-            r.append(("N_avg", N / (self.J * self.K)))
-        r += [("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", c["delta"]),
-              ("nfractional", float(self.flag("nfractional"))), ("balanced", float(c["balanced"]))]
-        r += _solver_block(c)
-        r += [("N_r", float(self.J)), ("N_c", float(self.K)), (self._VAR[self.which], float(c["veff"])),
-              ("Var_e", float(c["var_e"])), ("type", "test"), ("method", "twoway"),
-              ("factor", self.which)]
+            v["N_per_cell"] = c.get("Ne", N) / JK
+        v.update(_solver_vals(c))
+        v.update({"type": "test", "method": "twoway"})
+        cells = np.full((self.J, self.K), c.get("Ne", N) / JK) if c["balanced"] else c["cells"]
+        v["Nij"] = Matrix(cells)
         if self.means is not None:
-            r.append(("means", Matrix(self.means)))
-        self.s.r = dict(reversed(r))
+            v["means"] = Matrix(self.means)
+            for i in range(self.J):
+                for j in range(self.K):
+                    v[f"m{i + 1}_{j + 1}"] = float(self.means[i, j])
+        _store(self.s, v, [self._VAR[self.which]] + self._ORDER)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -542,11 +591,14 @@ class Repeated(_M):
         if what == "power":
             N = float(c["n"]) if c.get("n") is not None else float(J * c["npergroup"])
             c["N"], c["power_out"], c["delta2"] = N, pw(N, sm["delta2"]), sm["delta2"]
+            c["beta_out"] = C.repeated_power(sm["delta2"], sm["dc"], sm["du"], J, N, sm["eps"], a, lower=True)
         elif what == "n":
             k = self.size(lambda k: pw(k * sw, sm["delta2"]), math.floor(J / sw) + 1, c["power"])
             c["N"], c["delta2"] = k * sw, sm["delta2"]
             c["power_out"] = pw(k * sw, sm["delta2"])
             c["_init"] = float(J)
+            if self.exact is not None:
+                c["N_a"] = self.exact * sw
         else:
             N = float(c["n"]) if c.get("n") is not None else float(J * c["npergroup"])
             try:
@@ -581,12 +633,12 @@ class Repeated(_M):
             items.append(("delta", P._f4(c["delta"])))
         items += [("N_g", _I(self.J)), ("N_rep", _I(self.K))]
         if self.means is not None:
-            items.append(("means", _T("<matrix>")))
+            items.append(("means", _MAT()))
         if what != "effect":
             items.append((vx, P._f4(c["var_x"])))
         items.append((vxe, P._f4(c["sm"]["var_xe"])))
         if self.cov is not None:
-            items += [("Cov", _T("<matrix>")), ("spherical", _T("true" if c["sm"]["spherical"] else "false"))]
+            items += [("Cov", _MAT()), ("spherical", _T("true" if c["sm"]["spherical"] else "false"))]
         else:
             items += [("Var_e", P._f4(c["var_e"])), ("rho", P._f4(c["corr"]))]
         self.put(items)
@@ -606,7 +658,7 @@ class Repeated(_M):
 
     def row(self, c, what):
         vx, vxe = self._VARN[self.which]
-        return {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
                 "N": c["N"], "N_per_group": c["N"] / self.J, "N_avg": c["N"] / self.J,
                 "delta": c["delta"], "N_g": self.J, "N_rep": self.K, vx: c["var_x"],
                 vxe: c["sm"]["var_xe"], "rho": c.get("corr")}
@@ -615,20 +667,24 @@ class Repeated(_M):
         pw = c["power_out"] if what == "power" else c["power"]
         vx, vxe = self._VARN[self.which]
         N = c["N"]
-        r = [("N", float(N)), ("N_per_group", N / self.J), ("power", pw), ("beta", 1 - pw),
-             ("alpha", c["alpha"]), ("delta", c["delta"]),
-             ("nfractional", float(self.flag("nfractional"))), ("balanced", float(c["balanced"]))]
-        r += _solver_block(c)
-        r += [("N_g", float(self.J)), ("N_rep", float(self.K)), (vx, float(c["var_x"])),
-              (vxe, float(c["sm"]["var_xe"])), ("epsilon", float(c["sm"]["eps"])),
-              ("spherical", float(c["sm"]["spherical"]))]
+        v = {"N": float(N), "N_per_group": N / self.J, "N_avg": N / self.J, "N_a": c.get("N_a", float(N)),
+             "power": pw, "beta": c.get("beta_out", 1 - pw), "alpha": c["alpha"],
+             "delta": c["delta"], "nfractional": float(self.flag("nfractional")), "onesided": 0.0,
+             "balanced": float(c["balanced"]), "N_g": float(self.J), "N_rep": float(self.K),
+             vx: float(c["var_x"]), vxe: float(c["sm"]["var_xe"]), "epsilon": float(c["sm"]["eps"]),
+             "epsilon_m": float(c["sm"]["eps"]),                  # VERIFY: epsilon_m when not spherical
+             "spherical": float(c["sm"]["spherical"])}
         if self.cov is None:
-            r += [("Var_e", float(c["var_e"])), ("rho", float(c["corr"]))]
-        r += [("type", "test"), ("method", "repeated"), ("factor", self.which)]
+            v.update({"Var_e": float(c["var_e"]), "corr": float(c["corr"])})
+        v.update(_solver_vals(c))
+        v.update({"factor": self.which, "type": "test", "method": "repeated"})
+        v["Cov"] = Matrix(c["cov"])
         if self.means is not None:
-            r.append(("means", Matrix(self.means)))
-        r.append(("Cov", Matrix(c["cov"])))
-        self.s.r = dict(reversed(r))
+            v["means"] = Matrix(self.means)
+        order = (["balanced", "N_per_group", "N_avg", "N_g", "N_rep", "N_a", "N", "power", "beta", "alpha"]
+                 + _SOLVER + ["nfractional", "onesided", "Var_e", "corr", vx, "delta", "epsilon_m",
+                              "epsilon", "spherical", vxe, "factor", "type", "method", "Cov", "means"])
+        _store(self.s, v, order)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -647,13 +703,13 @@ def _probspec(s, body: str):
 
 class CMH(_M):
     method = "cmh"
-    w = 19
     allowed = {"oratio", "nperstratum", "strweights", "grratios", "continuity", "direction",
                "onesided", "showgrstrsizes"}
 
     def __init__(self, s, body, o):
         super().__init__(s, body, o)
         self.cols, self.rows = _probspec(s, body)
+        self.iterates = not self.flag("onesided")       # Stata 14 prints no iteration message when onesided
         self.K = len(self.cols) if self.cols is not None else len(self.rows[0])
         if self.K < 2:
             _fail("at least two probabilities are required")
@@ -694,8 +750,8 @@ class CMH(_M):
         op = "!=" if self.sides() == 2 else (">" if (self.up_dir if what == "effect" else c["oratio"] > 1) else "<")
         extra = ", OR " + (">" if self.up_dir else "<") + " 1" if (what == "effect" and self.sides() == 2) else ""
         eq = " = ".join(["OR"] + [f"OR_{j + 1}" for j in range(self.K)])
-        return ["Cochran-Mantel-Haenszel test",
-                f"Ho: OR = 1  versus  Ha: OR {op} 1{extra}; {eq}"]
+        cmh = "Cochran-Mantel-Haenszel test" + (" with continuity correction" if self.flag("continuity") else "")
+        return [cmh, f"Ho: OR = 1  versus  Ha: OR {op} 1{extra};  {eq}"]
 
     def p1(self, c):
         if self.cols is not None:
@@ -739,9 +795,17 @@ class CMH(_M):
             def pw(k):
                 n1, n2 = C.cmh_sizes(w, s_, k, self.flag("nfractional"))
                 return power_at(n1, n2, theta)
-            k = self.size(pw, 1.0 / max(w), c["power"])
+            k = self.size(pw, 1.0 / max(w), c["power"], exact=lambda k: power_at(*C.cmh_sizes(w, s_, k, True), theta))
+            if self.exact is not None:
+                c["N_a"] = self.exact * sw
             n1, n2 = C.cmh_sizes(w, s_, k, self.flag("nfractional"))
-            c["power_out"], c["_init"] = pw(k), 1.0
+            c["power_out"] = pw(k)
+            try:        # r(init) of Stata 14: the root when only the tail in the direction of the effect counts
+                c["_init"] = sw * C.solve_up(lambda x: C.cmh_power(*C.cmh_sizes(w, s_, x, True), p1,
+                                                                   C.odds_probability(p1, theta), a, sides, cont,
+                                                                   tail=True) - c["power"], 1.0 / max(w), 4.0)
+            except ValueError:
+                c["_init"] = 1.0
         else:
             N = float(c["n"]) if c.get("n") is not None else K * c["nperstratum"]
             n1, n2 = sizes_total(N)
@@ -766,7 +830,6 @@ class CMH(_M):
         return what
 
     def sizes(self, c):
-        K = self.K
         items = [("N", _I(c["N"]))]
         nk = c["n1k"] + c["n2k"]
         if c["eq_strata"]:
@@ -774,11 +837,11 @@ class CMH(_M):
         else:
             items += [(f"N{j + 1}", _I(v)) for j, v in enumerate(nk)]
         if c["eq_groups"]:
-            items.append(("N per group", _I(c["n1k"].sum())))
+            items.append(("N per group", _N(c["n1k"].sum())))
         else:
             items += [("N group 1", _I(c["n1k"].sum())), ("N group 2", _I(c["n2k"].sum()))]
         if c["balanced"]:
-            items.append(("N per group/stratum", _I(c["n1k"][0])))
+            items.append(("N per group/stratum", _N(c["n1k"][0])))
         return items
 
     def show(self, c, what):
@@ -793,52 +856,67 @@ class CMH(_M):
         items += [(f"p1_{j + 1}", P._f4(v)) for j, v in enumerate(c["p1"])]
         if what != "effect":
             items.append(("oratio", P._f4(c["oratio"])))
-        if self.flag("continuity"):
-            items.append(("continuity", _T("on")))
-        self.put(items)
         if what == "n":
-            self.results("Estimated sample sizes:", self.sizes(c))
+            tail = ("Estimated sample sizes:", self.sizes(c))
         elif what == "power":
-            self.results("Estimated power:", [("power", P._f4(c["power_out"]))])
+            tail = ("Estimated power:", [("power", P._f4(c["power_out"]))])
         else:
-            self.results("Estimated effect size and odds ratio:",
-                         [("delta", P._f4(c["delta"])), ("odds ratio", P._f4(c["oratio"]))])
-        if not c["balanced"]:
+            tail = ("Estimated effect size and odds ratio:",
+                    [("delta", P._f4(c["delta"])), ("odds ratio", P._f4(c["oratio"]))])
+        self.fit_width(items + tail[1])
+        self.put(items)
+        self.results(*tail)
+        if not c["balanced"] and what == "n":
             self.grstr(c)
         self.returns(c, what)
 
-    def grstr(self, c):                           # VERIFY: layout of the group-per-stratum sizes
+    def grstr(self, c):
         out = self.s.output
-        out.write("\nGroup-per-stratum sample sizes:\n\n", "text")
-        out.write("       stratum |" + " ".join(f"{j + 1:>7}" for j in range(self.K)) + "\n", "text")
+        out.write("\nGroup-per-stratum sample sizes:\n", "text")
+        out.write(" " * 15 + "| stratum\n", "text")
+        out.write(" " * 15 + "|" + "".join(f"{j + 1:>{9 if j == 0 else 10}}" for j in range(self.K)) + "\n", "text")
+        out.write("  " + "-" * 13 + "+" + "-" * (10 * self.K) + "\n", "text")
+        out.write("  group".ljust(15) + "|\n", "text")
         for g, arr in ((1, c["n1k"]), (2, c["n2k"])):
-            out.write(f"  group {g:>6} |" + " ".join(f"{P._nfmt(v):>7}" for v in arr) + "\n", "result")
+            out.write(f"{g:>14} |", "text")
+            out.write("".join(f"{P._nfmt(v):>{9 if j == 0 else 10}}" for j, v in enumerate(arr)) + "\n", "result")
 
     def columns(self, c, what):
-        cols = ["alpha", "power", "N", "N_per_stratum" if c["eq_strata"] else "N_avg", "delta", "N_s"]
-        return cols + [f"p1_{j + 1}" for j in range(self.K)] + ["oratio"]
+        cols = ["alpha", "power", "N", "N_per_stratum" if c["eq_strata"] else "N_avg"]
+        if c["balanced"]:
+            cols += ["N_per_group", "N_per_grstr"]
+        return cols + ["delta", "N_s"] + [f"p1_{j + 1}" for j in range(self.K)] + ["oratio"]
 
     def row(self, c, what):
-        d = {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
+        d = {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
              "N": c["N"], "N_per_stratum": c["N"] / self.K, "N_avg": c["N"] / self.K,
+             "N_per_group": c["n1k"].sum(), "N_per_grstr": c["n1k"][0],
              "delta": c["delta"], "N_s": self.K, "oratio": c["oratio"]}
         d.update({f"p1_{j + 1}": v for j, v in enumerate(c["p1"])})
         return d
 
+    _ORDER = (["oratio"] + [f"grratio{j}" for j in range(1, 4)] + ["continuity", "N_per_group", "N_per_grstr",
+              "balanced", "N_per_stratum"] + _SOLVER + ["onesided", "nfractional", "delta", "alpha", "beta",
+              "power", "N"] + [f"p1_{j}" for j in (3, 2, 1)] + ["N_a", "N_s", "N_avg", "type", "method"])
+
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("N", c["N"]), ("N_avg", c["N"] / self.K), ("power", pw), ("beta", 1 - pw),
-             ("alpha", c["alpha"]), ("delta", c["delta"]),
-             ("nfractional", float(self.flag("nfractional"))), ("balanced", float(c["balanced"])),
-             ("onesided", float(self.sides() == 1))]
+        N = c["N"]
+        v = {"N": N, "N_avg": N / self.K, "N_a": c.get("N_a", N), "power": pw, "beta": 1 - pw,
+             "alpha": c["alpha"], "delta": c["delta"], "nfractional": float(self.flag("nfractional")),
+             "balanced": float(c["balanced"]), "onesided": float(self.sides() == 1),
+             "N_per_group": c["n1k"].sum(), "N_s": float(self.K), "oratio": float(c["oratio"]),
+             "continuity": float(self.flag("continuity"))}
         if c["eq_strata"]:
-            r.append(("N_per_stratum", c["N"] / self.K))
-        r += [("N_per_group", c["n1k"].sum()), ("N_s", float(self.K))]
-        r += _solver_block(c)
-        r += [(f"p1_{j + 1}", float(v)) for j, v in enumerate(c["p1"])]
-        r += [("oratio", float(c["oratio"])), ("continuity", float(self.flag("continuity"))),
-              ("type", "test"), ("method", "cmh"), ("direction", "upper" if self.up_dir else "lower")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+            v["N_per_stratum"] = N / self.K
+        if c["balanced"]:
+            v["N_per_grstr"] = c["n1k"][0]
+        s_ = self.gr if self.gr is not None else [0.5] * self.K
+        v.update({f"grratio{j + 1}": float(x) for j, x in enumerate(s_)})
+        v.update({f"p1_{j + 1}": float(x) for j, x in enumerate(c["p1"])})
+        v.update(_solver_vals(c))
+        v.update({"type": "test", "method": "cmh"})
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, self._ORDER)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -908,7 +986,7 @@ class MCC(_M):
                 c["_init"] = C.mcc_size_start(p0, theta, rho, M, a, sides, c["power"])
                 if self.flag("compare"):
                     n1 = self.size(lambda n: C.mcc_power(n, p0, theta, rho, 1, a, sides), 1.0, c["power"])
-                    c["F_M"] = c["N"] / n1                  # VERIFY: n_M / n_1 with the same corr()
+                    c["F_M"] = c["N"] / n1                  # n_M / n_1 with the same corr() (checked, case 1919)
             else:
                 sgn = 1.0 if self.up_dir else -1.0
                 N = float(c["n"])
@@ -918,7 +996,7 @@ class MCC(_M):
                 c["N"], c["power_out"], c["_init"] = N, c["power"], 1.0
         except ValueError as e:
             raise StataError(498, f"failed to find a solution: {e}")
-        c["oratio"], c["delta"] = theta, theta               # VERIFY: delta is taken as the odds ratio
+        c["oratio"], c["delta"] = theta, theta               # delta is the odds ratio (checked, case 1919)
         c["N"] = float(c["N"])
         return what
 
@@ -950,21 +1028,25 @@ class MCC(_M):
         return ["alpha", "power", "N", "delta", "M", "p0", "oratio", "corr"]
 
     def row(self, c, what):
-        return {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
                 "N": c["N"], "delta": c["delta"], "M": c["M"], "p0": c["p0"], "oratio": c["oratio"],
                 "corr": c["rho"]}
 
+    # Stata lists the solver of mcc in the order of the iterations, unlike the other methods
+    _ORDER = (["N", "power", "beta", "alpha", "delta", "nfractional", "onesided"] + _SOLVER[::-1]
+              + ["p0", "corr", "oratio", "M", "p1", "F_M", "type", "method"])
+
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("N", c["N"]), ("power", pw), ("beta", 1 - pw), ("alpha", c["alpha"]), ("delta", c["delta"]),
-             ("nfractional", float(self.flag("nfractional"))), ("onesided", float(self.sides() == 1)),
-             ("p0", c["p0"]), ("M", float(c["M"]))]
+        v = {"N": c["N"], "power": pw, "beta": 1 - pw, "alpha": c["alpha"], "delta": c["delta"],
+             "nfractional": float(self.flag("nfractional")), "onesided": float(self.sides() == 1),
+             "p0": c["p0"], "corr": c["rho"], "oratio": c["oratio"], "M": float(c["M"]),
+             "p1": C.mcc_p1(c["p0"], c["oratio"], c["rho"])}
         if "F_M" in c:
-            r.append(("F_M", c["F_M"]))
-        r += _solver_block(c)
-        r += [("oratio", c["oratio"]), ("corr", c["rho"]), ("type", "test"), ("method", "mcc"),
-              ("direction", "upper" if self.up_dir else "lower")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+            v["F_M"] = c["F_M"]
+        v.update(_solver_vals(c))
+        v.update({"type": "test", "method": "mcc"})
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, self._ORDER)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1019,7 +1101,8 @@ class Trend(_M):
     def hyp_lines(self, c, what):
         up = c["p"][-1] > c["p"][0]
         op = self.hyp_op(c, up)
-        return ["Cochran-Armitage trend test", f"Ho: b = 0  versus  Ha: b {op} 0; logit(p) = a + b*x"]
+        cat = "Cochran-Armitage trend test" + (" with continuity correction" if self.flag("continuity") else "")
+        return [cat, f"Ho: b = 0  versus  Ha: b {op} 0;  logit(p) = a + b*x"]
 
     def compute(self, c):
         self.fix(c)
@@ -1045,9 +1128,15 @@ class Trend(_M):
             k = self.size(lambda k: C.trend_power(np.array(w) * k, p, self.xs, a, sides, cont),
                           1.0 / max(w), c["power"])
             nj = np.array(w) * k
+            if self.exact is not None:
+                c["N_a"] = self.exact * sw
             N = float(nj.sum())
             c["power_out"] = C.trend_power(nj, p, self.xs, a, sides, cont)
-            c["_init"] = 1.0
+            try:        # r(init) of Stata 14: the root when only the tail in the direction of the effect counts
+                c["_init"] = sw * C.solve_up(lambda x: C.trend_power(np.array(w) * x, p, self.xs, a, sides, cont,
+                                                                     tail=True) - c["power"], 1.0 / max(w), 4.0)
+            except ValueError:
+                c["_init"] = 1.0
             what = "n"
         c["N"], c["nj"] = N, nj
         c["balanced"] = bool(np.allclose(nj, nj[0]))
@@ -1078,12 +1167,12 @@ class Trend(_M):
                 out.write(f"{'x' + str(j + 1):>{self.w}} = ", "text")
                 out.write(P._f4(self.x[j]), "result")
             out.write("\n", "text")
-        if not c["mono"]:
-            out.write("\nWarning: Alternative probabilities are not monotonic.\n", "text")
         if what == "n":
             self.results("Estimated sample sizes:", self.sizes(c))
         else:
             self.results("Estimated power:", [("power", P._f4(c["power_out"]))])
+        if not c["mono"]:
+            out.write("\nWarning: Alternative probabilities are not monotonic.\n", "text")
         self.returns(c, what)
 
     def header(self, c, what, lines):
@@ -1096,22 +1185,28 @@ class Trend(_M):
         return cols + [f"p{j + 1}" for j in range(self.J)]
 
     def row(self, c, what):
-        d = {"alpha": c["alpha"], "power": c["power_out"], "N": c["N"], "N_per_group": c["N"] / self.J,
+        d = {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"], "N": c["N"],
+             "N_per_group": c["N"] / self.J,
              "N_avg": c["N"] / self.J, "N_g": self.J}
         d.update({f"p{j + 1}": v for j, v in enumerate(c["p"])})
         return d
 
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("N", c["N"]), ("N_per_group", c["N"] / self.J), ("power", pw), ("beta", 1 - pw),
-             ("alpha", c["alpha"]), ("nfractional", float(self.flag("nfractional"))),
-             ("balanced", float(c["balanced"])), ("onesided", float(self.sides() == 1))]
-        r += _solver_block(c)
-        r += [("N_g", float(self.J))] + [(f"p{j + 1}", float(v)) for j, v in enumerate(c["p"])]
+        J, N = self.J, c["N"]
+        v = {"N": N, "N_per_group": N / J, "N_avg": N / J, "N_a": c.get("N_a", N), "power": pw,
+             "beta": 1 - pw, "alpha": c["alpha"], "nfractional": float(self.flag("nfractional")),
+             "balanced": float(c["balanced"]), "onesided": float(self.sides() == 1), "N_g": float(J),
+             "continuity": float(self.flag("continuity"))}
+        v.update({f"p{j + 1}": float(x) for j, x in enumerate(c["p"])})
         if self.x is not None:
-            r += [(f"x{j + 1}", float(v)) for j, v in enumerate(self.x)]
-        r += [("continuity", float(self.flag("continuity"))), ("type", "test"), ("method", "trend")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+            v.update({f"x{j + 1}": float(x) for j, x in enumerate(self.x)})      # VERIFY: place of x_j
+        v.update(_solver_vals(c))
+        v.update({"type": "test", "method": "trend"})
+        order = (["continuity", "balanced", "N_per_group", "N_avg", "N_g", "N_a"]
+                 + [f"p{j + 1}" for j in range(J)] + [f"x{j + 1}" for j in range(J)]
+                 + ["N", "power", "beta", "alpha"] + _SOLVER + ["onesided", "nfractional", "type", "method"])
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, order)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1120,7 +1215,7 @@ class Trend(_M):
 
 class Cox(_M):
     method = "cox"
-    iterates = False                       # closed forms: no iteration message (VERIFY)
+    iterates = False                       # closed forms: no iteration message (checked, case 1919)
     allowed = {"hratio", "sd", "r2", "eventprob", "failprob", "wdprob", "effect", "direction", "onesided"}
     _EFFN = {"coefficient": "coefficient", "hratio": "hazard ratio", "lnhratio": "log hazard-ratio"}
 
@@ -1156,7 +1251,8 @@ class Cox(_M):
 
     def hyp_lines(self, c, what):
         up = self.up_dir if what == "effect" else c["b1"] > 0
-        return ["Wald test", f"Ho: beta1 = 0  versus  Ha: beta1 {self.hyp_op(c, up)} 0"]
+        extra = f"; beta1 {'>' if self.up_dir else '<'} 0" if (what == "effect" and self.sides() == 2) else ""
+        return ["Wald test", f"Ho: beta1 = 0  versus  Ha: beta1 {self.hyp_op(c, up)} 0{extra}"]
 
     def compute(self, c):
         self.fix(c)
@@ -1185,24 +1281,24 @@ class Cox(_M):
         if what == "n":
             c.setdefault("power", 0.8)
             ev = C.cox_events(b1, sd, r2, a, sides, c["power"])
-            if not self.flag("nfractional"):
-                ev = math.ceil(ev - 1e-9)       # VERIFY: E is rounded up before N = E / Pr_E
-            n = ev / pe
+            n = ev / pe                          # N from the events before rounding (Stata 14: 164 with wdprob(.2))
             if wd > 0:
                 n = n / (1 - wd)
             if not self.flag("nfractional"):
                 n = math.ceil(n - 1e-9)
-            c["E"], c["N"] = float(ev), float(n)
+            ev = n * (1 - wd) * pe                  # events shown: from the final N (Stata 14)
+            c["E"], c["N"] = float(ev if self.flag("nfractional") else math.ceil(ev - 1e-9)), float(n)
             c["power_out"] = C.cox_power(b1, sd, r2, n * (1 - wd), pe, a, sides)
         elif what == "power":
             c["N"] = float(c["n"])
             c["power_out"] = C.cox_power(b1, sd, r2, c["N"], pe, a, sides)
-            c["E"] = c["N"] * pe
+            c["E"] = c["N"] * pe if self.flag("nfractional") else math.ceil(c["N"] * pe - 1e-9)
         else:
             c["N"] = float(c["n"])
             mag = C.cox_effect(sd, r2, c["N"], pe, a, sides, c["power"])
             b1 = mag if self.up_dir else -mag
-            c["power_out"], c["E"] = c["power"], c["N"] * pe
+            c["power_out"] = c["power"]
+            c["E"] = c["N"] * pe if self.flag("nfractional") else math.ceil(c["N"] * pe - 1e-9)
         c["b1"], c["hr"] = b1, math.exp(b1)
         c["delta"] = {"coefficient": b1, "hratio": math.exp(b1), "lnhratio": b1}[self.eff]
         return what
@@ -1214,52 +1310,45 @@ class Cox(_M):
         if what != "n":
             items.append(("N", _I(c["N"])))
         if what != "effect":
-            items.append(("delta", P._f4(c["delta"]) + f" ({self._EFFN[self.eff]})"))
+            items.append(("delta", P._f4(c["delta"]) + f"  ({self._EFFN[self.eff]})"))
             items.append(("hratio" if self.eff == "coefficient" else "b1",
                           P._f4(c["hr"] if self.eff == "coefficient" else c["b1"])))
         items.append(("sd", P._f4(c["sd"])))
         if self.o.get("r2"):
             items.append(("R2", P._f4(c["r2"])))
         self.put(items)
-        if self.o.get("eventprob") or self.o.get("failprob") or self.o.get("wdprob"):
-            self.s.output.write("\nCensoring:\n\n", "text")
-            if self.o.get("eventprob") or self.o.get("failprob"):
-                self.line("Pr_E", P._f4(c["pe"]))
-            if self.o.get("wdprob"):
-                self.line("Pr_w", P._f4(c["wdprob"]))
+        cens = [("Pr_E", P._f4(c["pe"]))] + ([("Pr_w", P._f4(c["wdprob"]))] if self.o.get("wdprob") else [])
         if what == "n":
+            self.results("Censoring and withdrawal:" if self.o.get("wdprob") else "Censoring:", cens)
             self.results("Estimated number of events and sample size:", [("E", _I(c["E"])), ("N", _I(c["N"]))])
         elif what == "power":
-            self.results("Number of events and censoring:", [("E", _I(c["E"]))])
+            self.results("Number of events and censoring:", [("E", _I(c["E"]))] + cens)
             self.results("Estimated power:", [("power", P._f4(c["power_out"]))])
         else:
+            self.results("Number of events and censoring:", [("E", _I(c["E"]))] + cens)
             self.results(f"Estimated effect size and target {self._EFFN[self.eff]}:",
-                         [("delta", P._f4(c["delta"])), ("b1", P._f4(c["b1"]))])
+                         [("delta", P._f4(c["delta"]) + f"  ({self._EFFN[self.eff]})"), ("b1", P._f4(c["b1"]))])
         self.returns(c, what)
 
     def columns(self, c, what):
-        return ["alpha", "power", "N", "E", "delta", "b1", "sd"] + (["R2"] if self.o.get("r2") else []) + (
-            ["Pr_E"] if (self.o.get("eventprob") or self.o.get("failprob")) else [])
+        return ["alpha", "power", "N", "E", "delta", "hratio" if self.eff == "coefficient" else "b1", "sd"] + (
+            ["R2"] if self.o.get("r2") else []) + ["Pr_E"]
 
     def row(self, c, what):
-        return {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
-                "N": c["N"], "E": c["E"], "delta": c["delta"], "b1": c["b1"], "sd": c["sd"],
-                "R2": c["r2"], "Pr_E": c["pe"]}
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
+                "N": c["N"], "E": c["E"], "delta": c["delta"], "b1": c["b1"], "hratio": c["hr"],
+                "sd": c["sd"], "R2": c["r2"], "Pr_E": c["pe"]}
+
+    _ORDER = ["N", "power", "beta", "alpha", "delta", "nfractional", "onesided", "E", "hratio", "b1", "sd",
+              "R2", "Pr_E", "Pr_w", "type", "method", "effect"]
 
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("alpha", c["alpha"]), ("power", pw), ("beta", 1 - pw), ("delta", c["delta"]), ("N", c["N"]),
-             ("nfractional", float(self.flag("nfractional"))), ("onesided", float(self.sides() == 1)),
-             ("E", c["E"]), ("hratio", c["hr"]), ("b1", c["b1"]), ("sd", c["sd"])]
-        if self.o.get("r2"):
-            r.append(("R2", c["r2"]))
-        if self.o.get("eventprob") or self.o.get("failprob"):
-            r.append(("Pr_E", c["pe"]))
-        if self.o.get("wdprob"):
-            r.append(("Pr_w", c["wdprob"]))
-        r += [("type", "test"), ("method", "cox"), ("effect", self.eff),
-              ("direction", "upper" if self.up_dir else "lower")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+        v = {"N": c["N"], "power": pw, "beta": 1 - pw, "alpha": c["alpha"], "delta": c["delta"],
+             "nfractional": float(self.flag("nfractional")), "onesided": float(self.sides() == 1),
+             "E": c["E"], "hratio": c["hr"], "b1": c["b1"], "sd": c["sd"], "R2": c["r2"], "Pr_E": c["pe"],
+             "Pr_w": c["wdprob"], "type": "test", "method": "cox", "effect": self.eff}
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, self._ORDER)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1313,6 +1402,7 @@ class Exponential(_M):
             self.gamma = C.exp_gamma(self.r, self.ta, self.pa)
         # losses
         self.eta1 = self.eta2 = 0.0
+        self.loss = None
         tl = self.one("losstime", 1.0)
         lp, lp1, lp2 = self.one("lossprob"), self.one("lossprob1"), self.one("lossprob2")
         lh, lh1, lh2 = self.one("losshaz"), self.one("losshaz1"), self.one("losshaz2")
@@ -1328,6 +1418,11 @@ class Exponential(_M):
                 return lhg if lhg is not None else (lhc or 0.0)
             self.eta1 = eta_of(lp1, lp, lh1, lh)
             self.eta2 = eta_of(lp2, lp, lh2, lh)
+            if any(v is not None for v in (lp, lp1, lp2)):
+                self.loss = [("lpr1", 1 - math.exp(-self.eta1 * tl)), ("lpr2", 1 - math.exp(-self.eta2 * tl)),
+                             ("lt", tl)]
+            else:
+                self.loss = [("lh1", self.eta1), ("lh2", self.eta2)]                # VERIFY: names with losshaz()
         self.up_dir = None
 
     def base(self):
@@ -1430,8 +1525,6 @@ class Exponential(_M):
 
     def show(self, c, what):
         out = self.s.output
-        if self.surv:
-            out.write("note: input parameters are survival probabilities\n", "text")
         items = [("alpha", P._f4(c["alpha"]))]
         if what == "n":
             items.append(("power", P._f4(c["power"])))
@@ -1440,32 +1533,37 @@ class Exponential(_M):
             if c["N1"] != c["N2"]:
                 items.append(("N2", _I(c["N2"])))
         lab = "log hazard-ratio" if c["logtest"] else "hazard difference"
-        items.append(("delta", P._f4(c["delta"]) + f" ({lab})"))
-        items.append(("N2/N1", P._f4(c["nratio"])))
+        items.append(("delta", P._f4(c["delta"]) + f"  ({lab})"))
+        if c["nratio"] != 1:
+            items.append(("N2/N1", P._f4(c["nratio"])))
         self.put(items)
         if self.T is not None:
             out.write("\nAccrual and follow-up information:\n\n", "text")
             self.line("duration", P._f4(self.T))
             self.line("follow-up", P._f4(self.f))
-            self.line("accrual", P._f4(self.r) + (" (uniform)" if abs(self.gamma) < 1e-6 else " (exponential)"))
+            self.line("accrual", P._f4(self.r) + ("  (uniform)" if abs(self.gamma) < 1e-6 else "  (exponential)"))
             if self.pa is not None:
                 self.line("accrual(%)", P._f4(100 * self.pa))
                 self.line("by time", P._f4(self.ta))
         out.write("\nSurvival information:\n\n", "text")
-        if not c.get("hz_unknown"):
+        if c.get("hz_unknown"):
+            self.line("hratio", P._f4(c["hr"]))
+        elif self.surv:
+            for h, nm in ((c["l1"], "1"), (c["l2"], "2")):
+                sv = c.get("s" + nm) if c.get("s" + nm) is not None else math.exp(-h * c["time"])
+                out.write(f"{'h' + nm:>{self.w}} = ", "text")
+                out.write(P._f4(h), "result")
+                out.write(f"{'s' + nm:>{self.w}} = ", "text")
+                out.write(P._f4(sv) + "\n", "result")
+            out.write(" " * (self.w + 12) + f"{'t':>{self.w}} = ", "text")
+            out.write(P._f4(c["time"]) + "\n", "result")
+        else:
             self.line("h1", P._f4(c["l1"]))
             self.line("h2", P._f4(c["l2"]))
-            self.line("h2 - h1", P._f4(c["l2"] - c["l1"]))
-        if self.surv:
-            self.line("s1", P._f4(c.get("s1") if c.get("s1") is not None else math.exp(-c["l1"] * c["time"])))
-            self.line("s2", P._f4(c.get("s2") if c.get("s2") is not None else math.exp(-c["l2"] * c["time"])))
-        self.line("hratio", P._f4(c["hr"]))
-        if self.surv:
-            self.line("t", P._f4(c["time"]))
-        if self.eta1 or self.eta2:
+        if self.loss is not None:
             out.write("\nLoss-to-follow-up information:\n\n", "text")
-            self.line("lh1", P._f4(self.eta1))
-            self.line("lh2", P._f4(self.eta2))
+            for nm, v in self.loss:
+                self.line(nm, P._f4(v))
         if what == "n":
             res = [("N", _I(c["N"]))]
             if c["N1"] == c["N2"]:
@@ -1475,32 +1573,46 @@ class Exponential(_M):
             self.results("Estimated sample sizes:", res)
         else:
             self.results("Estimated power:", [("power", P._f4(c["power_out"]))])
+        if c.get("hz_unknown"):
+            out.write("Note: Individual hazard rates are not reported because a\n"
+                      "      control-group hazard rate is not specified.\n", "text")
         self.returns(c, what)
+
+    def header(self, c, what, lines):
+        if self.args:
+            self.s.output.write("note: input parameters are " + ("survival probabilities" if self.surv else "hazard rates")
+                                + "\n", "text")
+        super().header(c, what, lines)
 
     def columns(self, c, what):
         return ["alpha", "power", "N", "delta", "h1", "h2", "hratio"]
 
     def row(self, c, what):
-        return {"alpha": c["alpha"], "power": c["power_out"], "N": c["N"], "delta": c["delta"],
-                "h1": c["l1"], "h2": c["l2"], "hratio": c["hr"]}
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"], "N": c["N"],
+                "delta": c["delta"], "h1": c["l1"], "h2": c["l2"], "hratio": c["hr"]}
+
+    _ORDER = ["power", "beta", "alpha", "delta", "nfractional", "onesided", "N", "N1", "N2", "nratio",
+              "hratio", "lnhratio", "h1", "h2", "hdiff", "unconditional", "test", "effect", "type", "method"]
 
     def returns(self, c, what):
+        # r(E0_vec), r(Ea_vec) and r(Pr_vec) of Stata are not stored: the manual does not define them
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("alpha", c["alpha"]), ("power", pw), ("beta", 1 - pw), ("delta", c["delta"]), ("N", c["N"]),
-             ("N1", c["N1"]), ("N2", c["N2"]), ("nratio", c["nratio"]), ("nratio_a", c["R_a"]),
-             ("nfractional", float(self.flag("nfractional"))), ("onesided", float(self.sides() == 1)),
-             ("hratio", c["hr"]), ("lnhratio", math.log(c["hr"])), ("hdiff", c["l2"] - c["l1"]),
-             ("h1", c["l1"]), ("h2", c["l2"])]
+        v = {"power": pw, "beta": 1 - pw, "alpha": c["alpha"], "delta": c["delta"],
+             "nfractional": float(self.flag("nfractional")), "onesided": float(self.sides() == 1),
+             "N": c["N"], "N1": c["N1"], "N2": c["N2"], "nratio": c["nratio"], "hratio": c["hr"],
+             "lnhratio": math.log(c["hr"]), "h1": c["l1"], "h2": c["l2"], "hdiff": c["l2"] - c["l1"],
+             "unconditional": float(self.unc),
+             "test": "log hazard-ratio" if c["logtest"] else "hazard difference",
+             "effect": "lnhratio" if c["logtest"] else "difference",          # VERIFY: effect with loghazard
+             "type": "test", "method": "exponential"}
         if self.surv:
-            r += [("s1", math.exp(-c["l1"] * c["time"])), ("s2", math.exp(-c["l2"] * c["time"])), ("time", c["time"])]
+            v.update({"s1": math.exp(-c["l1"] * c["time"]), "s2": math.exp(-c["l2"] * c["time"]),
+                      "time": c["time"]})
         if self.T is not None:
-            r += [("aperiod", self.r), ("fperiod", self.f), ("studytime", self.T), ("ashape", self.gamma)]
+            v.update({"aperiod": self.r, "fperiod": self.f, "studytime": self.T, "ashape": self.gamma})
         if self.eta1 or self.eta2:
-            r += [("losshaz1", self.eta1), ("losshaz2", self.eta2)]
-        r += [("unconditional", float(self.unc)), ("type", "test"), ("method", "exponential"),
-              ("test", "loghazard" if c["logtest"] else "hdifference"),
-              ("accrual", "uniform" if abs(self.gamma) < 1e-6 else "exponential")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+            v.update({"losshaz1": self.eta1, "losshaz2": self.eta2})
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, self._ORDER)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1551,6 +1663,8 @@ class Logrank(_M):
         op = self.hyp_op(c, up)
         sub = "Log-rank test, Schoenfeld method" if self.schoen else "Log-rank test, Freedman method"
         hyp = f"Ho: ln(HR) = 0  versus  Ha: ln(HR) {op} 0" if self.schoen else f"Ho: HR = 1  versus  Ha: HR {op} 1"
+        if what == "effect" and self.sides() == 2:
+            hyp += f"; {'ln(HR)' if self.schoen else 'HR'} {'>' if self.up_dir else '<'} {'0' if self.schoen else '1'}"
         return [sub, hyp]
 
     def compute(self, c):
@@ -1603,9 +1717,7 @@ class Logrank(_M):
         c["delta"] = math.log(hr) if sch else hr
         if what == "n":
             ev = C.logrank_events(hr, R, a, sides, c["power"], sch)
-            if not self.flag("nfractional"):
-                ev = math.ceil(ev - 1e-9)           # VERIFY: rounding of E
-            n_c = ev / pe / (1 - wd)
+            n_c = ev / pe / (1 - wd)                # N from the events before rounding (Stata 14, wdprob(.1))
             if self.flag("nfractional"):
                 n1 = n_c / (1 + R)
                 n2 = R * n1
@@ -1613,77 +1725,88 @@ class Logrank(_M):
                 n1 = float(math.ceil(n_c / (1 + R) - 1e-9))
                 n2 = float(math.ceil(R * n1 - 1e-9))
             N = n1 + n2
-            c["E"] = float(ev)
+            ev = N * (1 - wd) * pe                  # events shown: from the final N (Stata 14)
+            c["E"] = float(ev if self.flag("nfractional") else math.ceil(ev - 1e-9))
             c["power_out"] = C.logrank_power(hr, R, N * (1 - wd), pe, a, sides, sch)
         else:
             N = float(c["n"])
             n1 = N / (1 + R)
             n2 = N - n1
-            c["E"] = N * pe
+            ev = N * (1 - wd) * pe
+            c["E"] = ev if self.flag("nfractional") else math.ceil(ev - 1e-9)             # Stata 14 shows 81 for 80.46
             c["power_out"] = c["power"] if what == "effect" else C.logrank_power(hr, R, N, pe, a, sides, sch)
         c["N"], c["N1"], c["N2"] = N, n1, n2
         return what
 
-    def show(self, c, what):
+    def header(self, c, what, lines):
         out = self.s.output
         if self.simp is not None:
-            out.write("\nnote: survival at the end of the study is computed with Simpson's rule\n", "text")   # VERIFY
+            s1 = self.simp
+            s2 = [x ** c["hr"] for x in s1]
+            out.write("note: probability of an event is computed using Simpson's rule with\n", "text")
+            for g, v in (("1", s1), ("2", s2)):
+                out.write(f"      S{g}(f) = {v[0]:.2f}, S{g}(f+r/2) = {v[1]:.2f}, S{g}(T) = {v[2]:.2f}\n", "text")
+        self.iterates = what == "effect"              # the other cases are closed forms
+        super().header(c, what, lines)
+
+    def show(self, c, what):
         items = [("alpha", P._f4(c["alpha"]))]
         if what != "power":
             items.append(("power", P._f4(c["power"])))
         if what != "n":
             items += [("N", _I(c["N"])), ("N per group", _I(c["N1"]))] if c["N1"] == c["N2"] else [
                 ("N", _I(c["N"])), ("N1", _I(c["N1"])), ("N2", _I(c["N2"]))]
+        lab = "log hazard-ratio" if self.schoen else "hazard ratio"
         if what != "effect":
-            lab = "log hazard-ratio" if self.schoen else "hazard ratio"
-            items.append(("delta", P._f4(c["delta"]) + f" ({lab})"))
-            items.append(("ln(hratio)" if self.schoen else "hratio", P._f4(math.log(c["hr"]) if self.schoen else c["hr"])))
+            items.append(("delta", P._f4(c["delta"]) + f"  ({lab})"))
+            items.append(("hratio", P._f4(c["hr"])))
         if c["nratio"] != 1:
             items.append(("N2/N1", P._f4(c["nratio"])))
         self.put(items)
-        if self.args or self.simp is not None or c["wd"]:
-            out.write("\nCensoring" + (" and withdrawal" if c["wd"] else "") + ":\n\n", "text")
-            if c.get("s1") is not None:
-                self.line("s1", P._f4(c["s1"]))
-                self.line("s2", P._f4(c["s1"] ** c["hr"]))
-            self.line("Pr_E", P._f4(c["pe"]))
-            if c["wd"]:
-                self.line("Pr_w", P._f4(c["wd"]))
+        cens = []
+        if c.get("s1") is not None:
+            cens += [("s1", P._f4(c["s1"])), ("s2", P._f4(c["s1"] ** c["hr"]))]
+        cens.append(("Pr_E", P._f4(c["pe"])))
+        if c["wd"]:
+            cens.append(("Pr_w", P._f4(c["wd"])))
         if what == "n":
+            self.results("Censoring and withdrawal:" if c["wd"] else "Censoring:", cens)
             res = [("E", _I(c["E"])), ("N", _I(c["N"]))]
             res += ([("N per group", _I(c["N1"]))] if c["N1"] == c["N2"] else
                     [("N1", _I(c["N1"])), ("N2", _I(c["N2"]))])
             self.results("Estimated number of events and sample sizes:", res)
         elif what == "power":
-            self.results("Number of events and censoring:", [("E", _I(c["E"]))])
+            self.results("Number of events and censoring:", [("E", _I(c["E"]))] + cens)
             self.results("Estimated power:", [("power", P._f4(c["power_out"]))])
         else:
+            self.results("Number of events and censoring:", [("E", _I(c["E"]))] + cens)
             self.results("Estimated effect size and hazard ratio:",
-                         [("delta", P._f4(c["delta"])), ("hratio", P._f4(c["hr"]))])
+                         [("delta", P._f4(c["delta"]) + f"  ({lab})"), ("hratio", P._f4(c["hr"]))])
         self.returns(c, what)
 
     def columns(self, c, what):
-        return ["alpha", "power", "N", "E", "delta", "hratio"]
+        return ["alpha", "power", "N", "N1", "N2", "E", "delta", "hratio", "Pr_E"]
 
     def row(self, c, what):
-        return {"alpha": c["alpha"], "power": c["power_out"] if what != "effect" else c["power"],
-                "N": c["N"], "E": c["E"], "delta": c["delta"], "hratio": c["hr"]}
+        return {"alpha": c["alpha"], "power": c["power_out"] if what == "power" else c["power"],
+                "N": c["N"], "N1": c["N1"], "N2": c["N2"], "E": c["E"], "delta": c["delta"],
+                "hratio": c["hr"], "Pr_E": c["pe"]}
+
+    _ORDER = (["power", "beta", "alpha"] + _SOLVER + ["delta", "nfractional", "onesided", "N", "N1", "N2",
+              "nratio", "hratio", "E", "s1", "s2", "Pr_E", "Pr_w", "type", "method", "test", "effect"])
 
     def returns(self, c, what):
         pw = c["power_out"] if what == "power" else c["power"]
-        r = [("alpha", c["alpha"]), ("power", pw), ("beta", 1 - pw), ("delta", c["delta"]), ("N", c["N"]),
-             ("N1", c["N1"]), ("N2", c["N2"]), ("nratio", c["nratio"]),
-             ("nfractional", float(self.flag("nfractional"))), ("onesided", float(self.sides() == 1)),
-             ("E", c["E"]), ("hratio", c["hr"]), ("lnhratio", math.log(c["hr"]))]
+        v = {"power": pw, "beta": 1 - pw, "alpha": c["alpha"], "delta": c["delta"],
+             "nfractional": float(self.flag("nfractional")), "onesided": float(self.sides() == 1),
+             "N": c["N"], "N1": c["N1"], "N2": c["N2"], "nratio": c["nratio"], "hratio": c["hr"],
+             "E": c["E"], "Pr_E": c["pe"], "Pr_w": c["wd"]}
         if c.get("s1") is not None:
-            r += [("s1", c["s1"]), ("s2", c["s1"] ** c["hr"])]
-        r += [("Pr_E", c["pe"])]
-        if c["wd"]:
-            r.append(("Pr_w", c["wd"]))
-        r += _solver_block(c)
-        r += [("type", "test"), ("method", "logrank"), ("test", "schoenfeld" if self.schoen else "freedman"),
-              ("direction", "upper" if self.up_dir else "lower")]
-        self.s.r = dict(reversed([(k, float(v) if not isinstance(v, str) else v) for k, v in r]))
+            v.update({"s1": c["s1"], "s2": c["s1"] ** c["hr"]})
+        v.update(_solver_vals(c))
+        v.update({"type": "test", "method": "logrank", "test": "Schoenfeld" if self.schoen else "Freedman",
+                  "effect": "hratio"})                                  # VERIFY: effect with schoenfeld
+        _store(self.s, {k: (float(x) if not isinstance(x, str) else x) for k, x in v.items()}, self._ORDER)
 
 
 _CLASSES = {"twoway": TwoWay, "repeated": Repeated, "cmh": CMH, "mcc": MCC, "trend": Trend,

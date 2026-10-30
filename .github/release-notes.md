@@ -1,10 +1,17 @@
 **English** · [Português](#português)
 
-## What's new in 0.8.1
+## What's new in 0.9.0
 
-Fix:
+New:
 
-- **Do-file Editor**: the **x** on a tab closes it again, and **Ctrl+W** (Cmd+W on a Mac) closes the current tab. A tab with unsaved text still asks before closing.
+- **`power`, part 2**: sample size, power and effect size for `power twoway` (two-way ANOVA), `power repeated` (repeated-measures ANOVA), `power cmh`, `power mcc` (matched case-control), `power trend`, `power cox`, `power exponential` and `power logrank`, with lists of values in tables. The layout and the numbers were checked against the output of a reference run.
+
+Interface:
+
+- **User menu**: when no item has been added yet, it says so and points to the help page that explains how to add items.
+- **Help → Contents** lists every help page with its title, and **Help → Search** asks for words and lists the pages that contain all of them.
+- The **Graph** button says there is no graph yet when nothing has been drawn.
+- **About** describes OpenDTA as an interpreter with a Stata-style interface.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -50,11 +57,18 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.8.1
+### Novidades da 0.9.0
 
-Correção:
+Novo:
 
-- **Editor de do-files**: o **x** da aba volta a fechá-la, e **Ctrl+W** (Cmd+W no Mac) fecha a aba atual. Uma aba com texto não salvo continua perguntando antes de fechar.
+- **`power`, parte 2**: tamanho de amostra, poder e tamanho de efeito para `power twoway` (ANOVA de dois fatores), `power repeated` (ANOVA de medidas repetidas), `power cmh`, `power mcc` (caso-controle pareado), `power trend`, `power cox`, `power exponential` e `power logrank`, com listas de valores em tabelas. O layout e os números foram conferidos com a saída de uma execução de referência.
+
+Interface:
+
+- **Menu User**: enquanto nenhum item foi adicionado, ele avisa e indica a página de ajuda que explica como adicionar itens.
+- **Help → Contents** lista todas as páginas de ajuda com o título, e **Help → Search** pede palavras e lista as páginas que contêm todas elas.
+- O botão **Graph** avisa que ainda não há gráfico quando nada foi desenhado.
+- O **About** descreve o OpenDTA como um interpretador com interface no estilo do Stata.
 
 ### Download
 
