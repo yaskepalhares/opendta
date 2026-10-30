@@ -14,6 +14,14 @@
 {p 8 16 2}{cmd:power twoproportions} {it:p1} [{it:p2}] [{cmd:,} {opt continuity} {it:options}]{p_end}
 {p 8 16 2}{cmd:power onecorrelation} {it:r0} [{it:ra}] [{cmd:,} {it:options}]{p_end}
 {p 8 16 2}{cmd:power twocorrelations} {it:r1} [{it:r2}] [{cmd:,} {it:options}]{p_end}
+{p 8 16 2}{cmd:power twoway} [{it:means}] [{cmd:,} {opt varerror(#)} {opt nrows(#)} {opt ncols(#)} {opt factor(row|column|rowcol)} {opt cellw:eights(...)} {it:options}]{p_end}
+{p 8 16 2}{cmd:power repeated} [{it:means}] [{cmd:,} {opt ngroups(#)} {opt nrepeated(#)} {opt corr(#)} {opt covmatrix(matname)} {opt factor(between|within|bwithin)} {it:options}]{p_end}
+{p 8 16 2}{cmd:power cmh} {it:p1_1 p1_2 ...} [{cmd:,} {opt oratio(#)} {opt strw:eights(...)} {opt grratios(...)} {opt cont:inuity} {it:options}]{p_end}
+{p 8 16 2}{cmd:power mcc} {it:p0} [{cmd:,} {opt oratio(#)} {opt corr(#)} {opt m(#)} {opt compare} {it:options}]{p_end}
+{p 8 16 2}{cmd:power trend} {it:p_1 p_2 ...} [{cmd:,} {opt expos:ure(...)} {opt grweights(...)} {opt cont:inuity} {it:options}]{p_end}
+{p 8 16 2}{cmd:power cox} [{it:b1}] [{cmd:,} {opt hratio(#)} {opt sd(#)} {opt r2(#)} {opt eventprob(#)} {opt wdprob(#)} {it:options}]{p_end}
+{p 8 16 2}{cmd:power exponential} [{it:h1} [{it:h2}]] [{cmd:,} {opt hratio(#)} {opt hdiff:erence(#)} {opt loghaz:ard} {opt time(#)} {opt fperiod(#)} {opt aperiod(#)} {opt lossprob(#)} {opt uncond:itional} {it:options}]{p_end}
+{p 8 16 2}{cmd:power logrank} [{it:s1} [{it:s2}]] [{cmd:,} {opt hratio(#)} {opt schoenfeld} {opt simpson(...)} {opt wdprob(#)} {it:options}]{p_end}
 
 {p 4 4 2}{it:options}: {opt a:lpha(#)} {opt p:ower(#)} {opt b:eta(#)} {opt n(#)} {opt n1(#)}
 {opt n2(#)} {opt nr:atio(#)} {opt diff(#)} {opt ones:ided} {opt dir:ection(upper|lower)}
@@ -43,6 +51,9 @@ Sample sizes are rounded up unless {cmd:nfractional} is given.
 {phang2}{cmd:. power twomeans 12 14, sd(4) power(.9)}{p_end}
 {phang2}{cmd:. power twoproportions .3 .45, n(200)}{p_end}
 {phang2}{cmd:. power onecorrelation 0 (.2 .3 .4)}{p_end}
+{phang2}{cmd:. power twoway 134 143 91 \ 106 173 145, varerror(1417) power(.8)}{p_end}
+{phang2}{cmd:. power cmh .2 .1 .3, oratio(2.5)}{p_end}
+{phang2}{cmd:. power logrank .5, hratio(.7) wdprob(.1)}{p_end}
 
 {title:Stored results}
 
@@ -55,8 +66,11 @@ Sample sizes are rounded up unless {cmd:nfractional} is given.
 {title:OpenDTA notes}
 
 {pstd}
-{cmd:onevariance}, {cmd:twovariances}, {cmd:pairedproportions} and {cmd:oneway}, the
-{cmd:lrchi2} and {cmd:fisher} tests of {cmd:twoproportions} and the {cmd:graph} option are
-available. The other methods ({cmd:twoway}, {cmd:repeated}, {cmd:cmh}, {cmd:mcc},
-{cmd:trend}, {cmd:cox}, {cmd:exponential}, {cmd:logrank}) are not available yet.
+{cmd:onevariance}, {cmd:twovariances}, {cmd:pairedproportions}, {cmd:oneway}, {cmd:twoway},
+{cmd:repeated}, {cmd:cmh}, {cmd:mcc}, {cmd:trend}, {cmd:cox}, {cmd:exponential} and
+{cmd:logrank} are available, as are the {cmd:lrchi2} and {cmd:fisher} tests of
+{cmd:twoproportions}. The {cmd:graph} option works for the first group of methods. In
+{cmd:twoway}, {cmd:repeated}, {cmd:cmh}, {cmd:mcc}, {cmd:trend}, {cmd:cox}, {cmd:exponential}
+and {cmd:logrank}, the options {cmd:graph()}, {cmd:saving()}, {cmd:show}, {cmd:st1()} and
+{cmd:n1()}/{cmd:n2()} are not available yet.
 {p_end}

@@ -58,7 +58,7 @@ Notas para sessões que rodam na nuvem:
 - Logo depois de um push, `gh api repos/<dono>/<repo>/commits/<sha>/check-runs` vem vazio até os jobs serem criados: um laço que espera `status != completed` termina na hora. Espere até existirem os três jobs.
 - Achados dos modelos (caso 1908): monte dados arredondados com coeficientes em décimos pares e evite comparações com zero exato (`round(soma, .01)` cria metades exatas que o Stata e o OpenDTA podem arredondar de modo diferente); evite `rpoisson()`, `rbinomial()` e `rnormal()` e parâmetros na fronteira (uma verossimilhança plana difere por plataforma). Confira que os dados do caso são idênticos nos dois programas antes de gastar a rodada do Stata, e veja o que o Stata rejeita (`nneighbors()` não é opção, `stteffects ipw` não aceita opção de modelo de sobrevivência e exige que toda observação tenha a falha). Primeiro o layout, depois os números: uma hipótese para uma fórmula (variância do `eivreg`, escala do `rreg`) se testa fora do programa num csv dos dados do caso contra o log de referência, e um algoritmo não documentado que não fecha em poucas tentativas vai para a diferença conhecida com o motivo. Uma falha sem anotação num job do CI pode ser uma exceção dentro de um caso: o `tools/compare.py` agora a mostra como `XX` com anotação.
 
-Próximos números livres: casos de comparação a partir de **1910**, fases do roadmap a partir de **24**.
+Próximos números livres: casos de comparação a partir de **1920**, fases do roadmap a partir de **34**.
 
 ## Regra: a estatística no núcleo, o Stata no comando
 
