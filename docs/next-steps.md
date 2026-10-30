@@ -58,7 +58,7 @@ Notes for sessions that run in the cloud:
 - Right after a push, `gh api repos/<owner>/<repo>/commits/<sha>/check-runs` is empty until the jobs are created: a loop that waits for `status != completed` ends at once. Wait until the three jobs exist.
 - Models findings from case 1908: build rounded data with even-tenth coefficients and avoid comparisons with exact zero (`round(sum, .01)` creates exact halves that Stata and OpenDTA can round differently); avoid `rpoisson()`, `rbinomial()` and `rnormal()` and parameters at the boundary (a flat likelihood differs by platform). Validate that the case data is identical in both programs before spending the Stata run, and check what Stata rejects (`nneighbors()` is not an option, `stteffects ipw` takes no survival-model option and needs every observation to fail). Layout first, then numbers: a hypothesis for a formula (`eivreg` variance, `rreg` scale) is tested offline on a csv of the case data against the reference log, and an undocumented algorithm that does not close in a few tries goes into the known difference with its reason. A failure that shows no annotation in one CI job can be a crash inside a case: `tools/compare.py` now reports it as `XX` with an annotation.
 
-Next free numbers: compat cases from **1910**, roadmap phases from **24**.
+Next free numbers: compat cases from **1920**, roadmap phases from **34**.
 
 ## Rule: statistics in the core, Stata in the command
 

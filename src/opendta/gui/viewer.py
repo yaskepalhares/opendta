@@ -89,6 +89,19 @@ class Viewer(QMainWindow):
         self.act_back.setEnabled(self.pos > 0)
         self.act_fwd.setEnabled(self.pos < len(self.history) - 1)
 
+    def show_topic_list(self, title: str, hits: list[tuple[str, str]], empty: str = "") -> None:
+        """A page of links to help topics (the contents, the result of a search). The pages are
+        not files, so Back and Forward do not return to them."""
+        import html
+        rows = "".join(f'<li><a href="help:{t}">{html.escape(t)}</a> &nbsp;{html.escape(d)}</li>'
+                       for t, d in hits)
+        body = f"<ul>{rows}</ul>" if hits else f"<p>{html.escape(empty)}</p>"
+        color = "#e5e5ea" if self.dark else "#1d1d1f"
+        self.browser.setHtml(f'<body style="font-family:{self.font_family};font-size:{self.font_size}pt;'
+                             f'color:{color}"><h3>{html.escape(title)}</h3>{body}</body>')
+        self.setWindowTitle(f"{tr('Viewer')} — {title}")
+        self.field.clear()
+
     def open_topic(self, topic: str) -> bool:
         from ..commands.helpcmd import find_help
         path = find_help(self.session, topic)

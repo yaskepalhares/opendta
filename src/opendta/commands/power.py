@@ -44,6 +44,9 @@ _OPTS = {"alpha": 1, "power": 1, "beta": 1, "n": 1, "n1": 2, "n2": 2, "nratio": 
          "init": 4, "iterate": 4, "tolerance": 3, "ftolerance": 4, "nolog": 4, "log": 3,
          "dots": 4, "noheader": 6, "saving": 4}
 
+# methods whose arguments are read by commands/power3.py (the raw text before the comma)
+_RAW: set[str] = set()
+
 
 def _values(text: str) -> list[float]:
     t = text.strip()
@@ -97,7 +100,6 @@ def _parse(args: str):
         raise StataError(198, f"method {head} not found")   # VERIFY
     c = find_top(rest, ",")
     body, opts_text = (rest, "") if c == -1 else (rest[:c], rest[c + 1:])
-    pos = [_values(a) for a in _split_args(body)]
     opts: dict[str, object] = {}
     for name, val in parse_options(opts_text) if opts_text.strip() else []:
         low = name.lower()
@@ -105,6 +107,9 @@ def _parse(args: str):
         if full is None:
             raise StataError(198, f"option {name} not allowed")
         opts[full] = True if val is None else val
+    if method in _RAW:
+        return method, body, opts
+    pos = [_values(a) for a in _split_args(body)]
     return method, pos, opts
 
 
@@ -906,6 +911,9 @@ def cmd_power(s: "Session", args: str) -> None:
     if method == "oneway":
         power2.cmd_oneway(s, pos, o)
         return
+    if method in _RAW:
+        power3.cmd(s, method, pos, o)
+        return
     M = _CLASSES[method](pos, o)
     configs, multi = _configs(method, pos, o)
     rows = []
@@ -931,3 +939,4 @@ def cmd_power(s: "Session", args: str) -> None:
 
 
 from . import power2  # noqa: E402  (registers the other methods in the tables above)
+from . import power3  # noqa: E402  (twoway, repeated, cmh, mcc, trend, cox, exponential, logrank)
