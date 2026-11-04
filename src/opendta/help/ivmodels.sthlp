@@ -21,7 +21,7 @@
 {title:Description}
 
 {pstd}
-{cmd:ivprobit} and {cmd:ivtobit} are fitted by joint maximum likelihood with one endogenous regressor, and report {cmd:/athrho}, {cmd:/lnsigma} and a Wald test of exogeneity; the {cmd:twostep} option is not available yet. {cmd:ivpoisson gmm} minimizes the GMM criterion in two steps (robust weight matrix, or one step with {cmd:onestep}); {cmd:cfunction} adds the first-stage residual to the exponential mean. {cmd:ivregress liml} uses the k-class estimator with the smallest eigenvalue as kappa; {cmd:ivregress gmm} is two-step efficient GMM.
+{cmd:ivprobit} and {cmd:ivtobit} are fitted by joint maximum likelihood with one endogenous regressor, and report {cmd:/athrho}, {cmd:/lnsigma} and a Wald test of exogeneity. With {cmd:twostep} they use Newey's minimum chi-squared estimator, also with several endogenous regressors (two-step probit estimates the coefficients divided by sqrt(1 - rho^2)). {cmd:ivpoisson gmm} minimizes the GMM criterion in two steps (robust weight matrix, or one step with {cmd:onestep}); {cmd:cfunction} adds the first-stage residual to the exponential mean. {cmd:ivregress liml} uses the k-class estimator with the smallest eigenvalue as kappa; {cmd:ivregress gmm} is two-step efficient GMM.
 
 {title:Postestimation}
 
