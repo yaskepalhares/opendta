@@ -22,14 +22,13 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
 from . import fvars
 from .ml import maximize_switching, print_log
 from .ml import options as ml_options
-from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+from .results import CoefRow, Estimates, coef_table, g9, post, rows_from_columns
 from .tsops import _fmt_time, require_ts
 
 # imported on first use (start-up time; see opendta/lazy.py)
@@ -40,12 +39,6 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 def _right(out, left: str, lab: str, val: str) -> None:
@@ -441,14 +434,14 @@ def display_arima(s: "Session", est: Estimates, *, header: bool = True, table: b
         from .archmodel import _right_arch
         out.write("\nTime-series regression -- ARMA disturbances\n\n", "text")
         _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        _right_arch(out, "Distribution: Gaussian", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right_arch(out, "Distribution: Gaussian", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {g9(x['ll'], '%9.0g')}", "Prob > chi2", g9(x["p"], "%10.4f"))
         out.write("\n", "text")
     elif header:
         out.write("\nARIMA regression\n\n", "text")
         _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
-        _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right(out, "", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f"))
+        _right(out, f"Log likelihood = {g9(x['ll'], '%9.0g')}", "Prob > chi2", g9(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level,
@@ -661,15 +654,15 @@ def display_var(s: "Session", est: Estimates, *, header: bool = True, table: boo
         _right(out, x["sample"], "Number of obs", f"{int(x['N']):,}")
         for lab, v, rl, rv in (("Log likelihood", x["ll"], "AIC", x["aic"]), ("FPE", x["fpe"], "HQIC", x["hqic"]),
                                ("Det(Sigma_ml)", x["det"], "SBIC", x["sbic"])):
-            left = f"{lab:<15}= {_g(v, '%9.0g'):>10}"
-            _right(out, left, rl, _g(rv, "%9.0g"))
+            left = f"{lab:<15}= {g9(v, '%9.0g'):>10}"
+            _right(out, left, rl, g9(rv, "%9.0g"))
         out.write("\n", "text")
         stat_h = "F" if x["small"] else "chi2"
         out.write(f"{'Equation':<15}{'Parms':>9}{'RMSE':>10}{'R-sq':>9}{stat_h:>10}{'P>' + stat_h:>11}\n", "text")
         out.write("-" * 64 + "\n", "text")
         for dv, mp, rmse, r2, stat, pv in x["eqstats"]:
             out.write(f"{dv[:15]:<15}", "text")
-            out.write(f"{mp:>8}{_g(rmse, '%8.0g'):>12}{r2:>9.4f}{_g(stat, '%9.0g'):>11}{pv:>9.4f}\n", "result")
+            out.write(f"{mp:>8}{g9(rmse, '%8.0g'):>12}{r2:>9.4f}{g9(stat, '%9.0g'):>11}{pv:>9.4f}\n", "result")
         out.write("-" * 64 + "\n\n", "text")
     if table:
         coef_table(s, "", est.rows, stat=est.stat, df=est.df_r, level=level or est.level)
@@ -719,13 +712,13 @@ def cmd_varsoc(s: "Session", args: str) -> None:
     for i, r_ in enumerate(res):
         # widths and digits from compat 1101 (six significant digits for FPE and the criteria),
         # each followed by its column for the asterisk
-        line = f"  |{i:>3} | {_g(r_[3], '%8.0g'):>8}"
+        line = f"  |{i:>3} | {g9(r_[3], '%8.0g'):>8}"
         if i:
-            line += f"{_g(LR[i], '%7.0g'):>8}{'*' if lr_best == i else ' '}{K * K:>4}{pv[i]:>7.3f}"
+            line += f"{g9(LR[i], '%7.0g'):>8}{'*' if lr_best == i else ' '}{K * K:>4}{pv[i]:>7.3f}"
         else:
             line += " " * 20
-        line += f"{_g(r_[7], '%8.0g'):>9}{star('fpe', i)}{_g(r_[4], '%8.0g'):>9}{star('aic', i)}" \
-                f"{_g(r_[5], '%8.0g'):>9}{star('hqic', i)}{_g(r_[6], '%8.0g'):>9}{star('sbic', i)}"
+        line += f"{g9(r_[7], '%8.0g'):>9}{star('fpe', i)}{g9(r_[4], '%8.0g'):>9}{star('aic', i)}" \
+                f"{g9(r_[5], '%8.0g'):>9}{star('hqic', i)}{g9(r_[6], '%8.0g'):>9}{star('sbic', i)}"
         out.write(f"{line} |\n", "result")
     out.write("  +" + "-" * 75 + "+\n", "text")
     out.write(f"{'Endogenous:':>14}  {' '.join(deps)}\n", "text")
@@ -755,7 +748,7 @@ def cmd_vargranger(s: "Session", args: str) -> None:
             chi2 = float(bj @ np.linalg.solve(Vj, bj))
             pv = float(chi2_tail(chi2, len(idx)))
             out.write(f"  |{dv[:18]:>18} {lab[:18]:>18} |", "text")
-            out.write(f" {_g(chi2, '%7.0g'):>7}{len(idx):>6}{pv:>9.3f}    ", "result")
+            out.write(f" {g9(chi2, '%7.0g'):>7}{len(idx):>6}{pv:>9.3f}    ", "result")
             out.write("|\n", "text")
         out.write("  |--------------------------------------+---------------------------|\n" if j < len(deps) - 1
                   else "  +" + "-" * 66 + "+\n", "text")
@@ -1050,8 +1043,8 @@ def display_newey(s: "Session", est: Estimates, *, header: bool = True, table: b
         out.write("\n", "text")
         _right(out, "Regression with Newey-West standard errors", "Number of obs", f"{int(x['N']):,}")
         _right(out, f"maximum lag: {x['lag']}", f"F({int(x['df_m']):>3},{int(x['df_r']):>10})",
-               _g(x["F"], "%10.2f"))
-        _right(out, "", "Prob > F", _g(x["pF"], "%10.4f"))
+               g9(x["F"], "%10.2f"))
+        _right(out, "", "Prob > F", g9(x["pF"], "%10.4f"))
         out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level,

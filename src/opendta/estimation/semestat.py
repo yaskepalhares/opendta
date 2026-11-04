@@ -19,8 +19,8 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
-from .results import crit
-from .sem import Model, _dmoments, _g, _standardized, estat_gof
+from .results import crit, g9
+from .sem import Model, _dmoments, _standardized, estat_gof
 
 st = lazy("scipy.stats")
 SYS = M.SYSMISS
@@ -580,11 +580,11 @@ def estat_teffects(s, est, args):
                             z = b / se
                             pv = 2 * float(st.norm.sf(abs(z)))
                             out.write(f"{a[-W:]:>{W}} |", "text")
-                            out.write(f"  {_g(b):>9}  {_g(se):>9}  {z:>7.2f}  {pv:>6.3f}    "
-                                      f"{_g(b - c * se):>9}   {_g(b + c * se):>9}\n", "result")
+                            out.write(f"  {g9(b):>9}  {g9(se):>9}  {z:>7.2f}  {pv:>6.3f}    "
+                                      f"{g9(b - c * se):>9}   {g9(b + c * se):>9}\n", "result")
                         else:
                             out.write(f"{a[-W:]:>{W}} |", "text")
-                            out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+                            out.write(f"  {g9(b):>9}  {'.':>9}\n", "result")
             out.write("-" * 78 + "\n", "text")
 
 

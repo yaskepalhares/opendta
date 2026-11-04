@@ -29,10 +29,9 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .results import Estimates, crit, post
+from .results import Estimates, crit, g9, post
 
 st = lazy("scipy.stats")
 optimize = lazy("scipy.optimize")
@@ -42,12 +41,6 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 LINE = "-" * 78
-
-
-def _g(x, fmt="%9.0g"):
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +383,7 @@ def _fit(model: Model, mean, cov, N, s: "Session", log: bool, maxiter: int = 300
         out.write("\nFitting target model:\n\n", "text")
         shown = [lines[0]] + [x for i, x in enumerate(lines[1:], 1) if abs(x - lines[i - 1]) > 1e-9 or i == len(lines) - 1]
         for i, x in enumerate(shown):
-            out.write(f"{'Iteration ' + str(i) + ':':<14} log likelihood = {_g(x, '%10.0g'):>10}  \n", "text")
+            out.write(f"{'Iteration ' + str(i) + ':':<14} log likelihood = {g9(x, '%10.0g'):>10}  \n", "text")
     H = hess(th)
     try:
         V = np.linalg.inv(-H)
@@ -522,7 +515,7 @@ def cmd_sem(s: "Session", args: str) -> None:
                       else sum(d.adf["F_b"] for d in datas)))
         for what, word, v in steps:
             out.write(f"\nFitting {what} model:\n\n", "text")
-            out.write(f"Iteration 0:   {word} = {_g(v, '%10.0g'):>10}  \n", "text")
+            out.write(f"Iteration 0:   {word} = {g9(v, '%10.0g'):>10}  \n", "text")
     th, obj, V, conv = semfit.fit_problem(prob, s, not o.get("nolog"))
     ll_s = sum(d.ll_s for d in datas)
     ll_b = sum(d.ll_b for d in datas)
@@ -755,10 +748,10 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write(f"Estimation method  = {x.get('method', 'ml')}\n", "text")
         if x.get("method") != "adf":
             out.write("Log likelihood     = ", "text")
-            out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+            out.write(f"{g9(x['ll'], '%10.0g'):>10}\n", "result")
         else:
             out.write("Discrepancy        = ", "text")
-            out.write(f"{_g(x['chi2_ms'] / x['N'], '%10.0g'):>10}\n", "result")
+            out.write(f"{g9(x['chi2_ms'] / x['N'], '%10.0g'):>10}\n", "result")
         # endogenous latent variables first (compat 1302: [y1]G before [x1]F)
         anchors = sorted(model.anchor.items(), key=lambda la: la[0] not in model.endog)
         fixed_paths = [(a, b, v) for (a, b), v in spec.fixed.items()]
@@ -835,24 +828,24 @@ def display_sem(s: "Session", est: Estimates, *, header: bool = True, table: boo
         else:
             out.write(f"{label:>{W}} |", "text")
         if kind == "constrained":
-            out.write(f"  {_g(b):>9}  (constrained)\n", "result")
+            out.write(f"  {g9(b):>9}  (constrained)\n", "result")
             return
         if s_ > 0 and np.isfinite(s_):
             if kind == "var":
                 # variances: interval on the log scale
                 lo, hi = b * math.exp(-c * s_ / b), b * math.exp(c * s_ / b)
-                out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(lo):>9}   {_g(hi):>9}\n",
+                out.write(f"  {g9(b):>9}  {g9(s_):>9}" + " " * 17 + f"    {g9(lo):>9}   {g9(hi):>9}\n",
                           "result")
                 return
             z = b / s_
             pv = 2 * float(st.norm.sf(abs(z)))
-            out.write(f"  {_g(b):>9}  {_g(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {_g(b - c * s_):>9}"
-                      f"   {_g(b + c * s_):>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {g9(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {g9(b - c * s_):>9}"
+                      f"   {g9(b + c * s_):>9}\n", "result")
         elif kind == "var":
             # a variance fixed by the standardization (var(F) = 1)
-            out.write(f"  {_g(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
         else:
-            out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {'.':>9}\n", "result")
 
     eqs = [n for n in model.names if n in model.endog]
     meas = [n for n in eqs if n in spec.observed and all(a in spec.latent for a, b in spec.paths if b == n)]

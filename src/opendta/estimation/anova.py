@@ -22,6 +22,7 @@ from ..core.stats import chi2_tail as _chi2_tail
 from ..lang.functions import _abbrev
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
+from .results import g9
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -33,9 +34,7 @@ SYS = M.SYSMISS
 
 
 def _g(x: float, fmt: str = "%10.0g") -> str:
-    if x is None or x >= SYS or not math.isfinite(x):
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
+    return g9(x, fmt)
 
 
 def _group_values(s: "Session", name: str, mask: np.ndarray):

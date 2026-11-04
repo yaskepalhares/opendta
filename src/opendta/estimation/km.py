@@ -20,7 +20,8 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
-from .st import STData, _g, _level_label, _qualifiers, header, require_st, st_data
+from .st import STData, _level_label, _qualifiers, header, require_st, st_data
+from .results import g9
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -213,7 +214,7 @@ def _fmt4(v: float) -> str:
 
 
 def _at_row(out, t, n, d, S, se, lo, hi) -> None:
-    out.write(f"{_g(t, '%8.0g'):>8}{_g(n, '%9.0g'):>10}{_g(d, '%8.0g'):>9}", "result")
+    out.write(f"{g9(t, '%8.0g'):>8}{g9(n, '%9.0g'):>10}{g9(d, '%8.0g'):>9}", "result")
     out.write(f"{_fmt4(S):>20}{_fmt4(se):>10}{_fmt4(lo):>11}{_fmt4(hi):>10}\n", "result")
 
 
@@ -222,7 +223,7 @@ def at_risk(sd: STData, x: float) -> float:
 
 
 def _list_row(out, t, n, d, lost, S, se, lo, hi) -> None:
-    out.write(f"{_g(t, '%6.0g'):>6} {_g(n, '%8.0g'):>8} {_g(d, '%6.0g'):>6} {_g(lost, '%6.0g'):>6}", "result")
+    out.write(f"{g9(t, '%6.0g'):>6} {g9(n, '%8.0g'):>8} {g9(d, '%6.0g'):>6} {g9(lost, '%6.0g'):>6}", "result")
     out.write(f"{_fmt4(S):>19} {_fmt4(se):>9} {_fmt4(lo):>10} {_fmt4(hi):>9}\n", "result")
 
 
@@ -414,12 +415,12 @@ def sts_test(s: "Session", args: str) -> None:
     out.write("-" * L + "+" + "-" * width + "\n", "text")
     for i, lab in enumerate(labs):
         out.write(f"{lab:<{L}}|", "text")
-        out.write(f"{_g(O_disp[i], '%9.0g'):>10}{E_disp[i]:>15.2f}" +
-                  (f"{_g(R[i], '%12.0g'):>13}" if extra else "") + "\n", "result")
+        out.write(f"{g9(O_disp[i], '%9.0g'):>10}{E_disp[i]:>15.2f}" +
+                  (f"{g9(R[i], '%12.0g'):>13}" if extra else "") + "\n", "result")
     out.write("-" * L + "+" + "-" * width + "\n", "text")
     out.write(f"{'Total':<{L}}|", "text")
-    out.write(f"{_g(O_disp.sum(), '%9.0g'):>10}{E_disp.sum():>15.2f}" +
-              (f"{_g(R.sum() if abs(R.sum()) > 1e-9 else 0.0, '%12.0g'):>13}" if extra else "") + "\n", "result")
+    out.write(f"{g9(O_disp.sum(), '%9.0g'):>10}{E_disp.sum():>15.2f}" +
+              (f"{g9(R.sum() if abs(R.sum()) > 1e-9 else 0.0, '%12.0g'):>13}" if extra else "") + "\n", "result")
     out.write("\n", "text")
     if stratified:
         svl = " ".join(svars)

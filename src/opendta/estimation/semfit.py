@@ -18,7 +18,8 @@ import numpy as np
 
 from ..core import mvnmiss
 from ..core.errors import StataError
-from .sem import (Model, _dmoments, _g, _grad_blocks, _loglik_blocks, _start, baseline_ex_correlated)
+from .results import g9
+from .sem import (Model, _dmoments, _grad_blocks, _loglik_blocks, _start, baseline_ex_correlated)
 
 PCLASSES = ("scoef", "scons", "mcoef", "mcons", "serrvar", "merrvar", "smerrcov", "meanex", "covex")
 
@@ -374,7 +375,7 @@ def fit_problem(prob: Problem, s, log: bool, maxiter: int = 300):
         word = "discrepancy" if prob.method == "adf" else "log likelihood"
         for i, x in enumerate(shown):
             val = -x if prob.method == "adf" else x
-            out.write(f"{'Iteration ' + str(i) + ':':<14} {word} = {_g(val, '%10.0g'):>10}  \n", "text")
+            out.write(f"{'Iteration ' + str(i) + ':':<14} {word} = {g9(val, '%10.0g'):>10}  \n", "text")
     H = prob.hess(th, exact=True)
     try:
         V = np.linalg.inv(-H)

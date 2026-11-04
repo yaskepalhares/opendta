@@ -418,14 +418,15 @@ def _fit(s: "Session", spec: ModelSpec, xnames: list[str], mask: np.ndarray, o: 
 
 def display_ssm(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .results import g9
+    from .tsmodels import _right
     out = s.output
     x = est.extra
     if header:
         out.write(f"\n{x['title']}\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right(out, "", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f"))
+        _right(out, f"Log likelihood = {g9(x['ll'], '%10.0g'):>10}", "Prob > chi2", g9(x["p"], "%10.4f"))
         if x.get("cns_text"):
             out.write("\n", "text")
             for i, t_ in enumerate(x["cns_text"], 1):

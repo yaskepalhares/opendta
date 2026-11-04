@@ -16,7 +16,8 @@ import numpy as np
 
 from ..core import missing as M
 from .results import Estimates, crit, post
-from .sem import Model, _g, _param_names, _standardized, st
+from .sem import Model, _param_names, _standardized, st
+from .results import g9
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -164,7 +165,7 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
         out.write(f"Estimation method  = {x['method']}\n", "text")
         if x["method"] != "adf":
             out.write("Log likelihood     = ", "text")
-            out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+            out.write(f"{g9(x['ll'], '%10.0g'):>10}\n", "result")
         out.write("\n", "text")
         for k, line in enumerate(constraint_lines(est), 1):
             out.write(f" ({k:2d})  {line}\n", "text")
@@ -208,20 +209,20 @@ def display_groups(s: "Session", est: Estimates, *, header: bool = True, table: 
     def row(label, b, s_, kind="coef"):
         out.write(f"{label:>{W}} |" if label == "[*]" else f"{label:>{W - 1}}  |", "text")
         if kind == "constrained":
-            out.write(f"  {_g(b):>9}  (constrained)\n", "result")
+            out.write(f"  {g9(b):>9}  (constrained)\n", "result")
             return
         if s_ > 0 and np.isfinite(s_):
             if kind == "var":
                 lo, hi = b * math.exp(-c * s_ / b), b * math.exp(c * s_ / b)
-                out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(lo):>9}   {_g(hi):>9}\n",
+                out.write(f"  {g9(b):>9}  {g9(s_):>9}" + " " * 17 + f"    {g9(lo):>9}   {g9(hi):>9}\n",
                           "result")
                 return
             z = b / s_
             pv = 2 * float(st.norm.sf(abs(z)))
-            out.write(f"  {_g(b):>9}  {_g(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {_g(b - c * s_):>9}"
-                      f"   {_g(b + c * s_):>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {g9(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {g9(b - c * s_):>9}"
+                      f"   {g9(b + c * s_):>9}\n", "result")
         else:
-            out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {'.':>9}\n", "result")
 
     def same(item):
         """Constrained equal across groups: one global entry, or fixed at one value everywhere."""

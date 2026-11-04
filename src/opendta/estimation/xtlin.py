@@ -19,7 +19,7 @@ from ..core.stats import chi2_tail
 from ..lazy import lazy
 from . import fvars
 from .regress import Sample, cmdline, comma
-from .results import CoefRow, Estimates, coef_table, crit, post, rows_from_columns
+from .results import CoefRow, Estimates, coef_table, crit, g9, post, rows_from_columns
 from .tsops import panel_info, ts_info
 
 st = lazy("scipy.stats")
@@ -31,9 +31,7 @@ SYS = M.SYSMISS
 
 
 def _g(x, fmt="%10.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
+    return g9(x, fmt)
 
 
 class _Lin:

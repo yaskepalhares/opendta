@@ -19,12 +19,11 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lazy import lazy
 from . import fvars
 from .models2 import _Prep, num_hess
-from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+from .results import CoefRow, Estimates, coef_table, g9, post, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
 special = lazy("scipy.special")
@@ -37,9 +36,7 @@ SYS = M.SYSMISS
 
 
 def _g(x, fmt="%10.0g"):
-    if x is None or x >= SYS or not np.isfinite(x):
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
+    return g9(x, fmt)
 
 
 def _num_grad(f, b, h=1e-5):

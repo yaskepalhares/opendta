@@ -26,9 +26,9 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
+from .results import g9
 
 # imported on first use (start-up time; see opendta/lazy.py)
 special = lazy("scipy.special")
@@ -40,12 +40,6 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 SYSV = ("_mi_m", "_mi_id", "_mi_miss")
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -1206,12 +1200,12 @@ def display_mi(s: "Session", est, *, header: bool = True, table: bool = True, le
         b, sd, d = est.b[i], se[i], X["df"][i]
         if sd <= 0 or not np.isfinite(sd):
             out.write("          0  (omitted)\n" if "o." in nm or "b." in nm else
-                      f"  {_g(b):>9}          .        .       .            .           .\n", "result")
+                      f"  {g9(b):>9}          .        .       .            .           .\n", "result")
             continue
         tv = b / sd
         dd = d if np.isfinite(d) else 1e12
         p = float(2 * st.t.sf(abs(tv), dd))
         c = float(st.t.ppf(1 - a / 2, dd))
-        out.write(f"  {_g(b):>9}  {_g(sd):>9}  {tv:>7.2f}  {p:>6.3f}    {_g(b - c * sd):>9}   {_g(b + c * sd):>9}\n",
+        out.write(f"  {g9(b):>9}  {g9(sd):>9}  {tv:>7.2f}  {p:>6.3f}    {g9(b - c * sd):>9}   {g9(b + c * sd):>9}\n",
                   "result")
     out.write("-" * 78 + "\n", "text")

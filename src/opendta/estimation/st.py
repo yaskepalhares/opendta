@@ -19,6 +19,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_options
+from .results import g9
 
 if TYPE_CHECKING:
     from ..core.dataset import Dataset
@@ -26,12 +27,6 @@ if TYPE_CHECKING:
 
 SYS = M.SYSMISS
 LINE = "-" * 78
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 def _count(x: float) -> str:
@@ -105,7 +100,7 @@ def _fail_text(info: STInfo) -> str:
         return ""
     if info.failvals is None:
         return info.failvar
-    return f"{info.failvar} == {' '.join(_g(v) for v in info.failvals)}"
+    return f"{info.failvar} == {' '.join(g9(v) for v in info.failvals)}"
 
 
 def _analysis_text(info: STInfo, word: str = "") -> str:
@@ -115,7 +110,7 @@ def _analysis_text(info: STInfo, word: str = "") -> str:
     if info.origin:
         t = f"({t}-origin)"
     if info.scale != 1:
-        t = f"{t}/{_g(info.scale)}"
+        t = f"{t}/{g9(info.scale)}"
     return t
 
 
@@ -409,9 +404,9 @@ def _stset(s: "Session", text: str, *, report: bool) -> None:
         ch.pop(k, None)
     shown = "noshow" if o.get("noshow") else ""
     ch.update({"_dta": "st", "st_ver": "2", "st_bt": tvar, "st_bd": failvar,
-               "st_ev": " ".join(_g(v) for v in failvals) if failvals else "", "st_id": idvar,
+               "st_ev": " ".join(g9(v) for v in failvals) if failvals else "", "st_id": idvar,
                "st_bt0": time0, "st_orig": origin, "st_enter": enter, "st_exit": exit_,
-               "st_bs": _g(scale) if scale != 1 else "", "st_ifexp": ifexp, "st_wt": wtype,
+               "st_bs": g9(scale) if scale != 1 else "", "st_ifexp": ifexp, "st_wt": wtype,
                "st_wv": wvar, "st_show": shown, "st_args": text})
     for k in [k for k, v in ch.items() if k.startswith("st_") and v == ""]:
         ch.pop(k)
@@ -495,7 +490,7 @@ def _report_body(out, info: STInfo, keep, excl, n, key_id, dd, tt, tt0, w) -> No
         for lab, val in (("at risk from t =", 0.0), ("earliest observed entry t =", float(tt0[keep].min())),
                          ("last observed exit t =", float(tt[keep].max()))):
             out.write(f"{lab:>64}", "text")
-            out.write(f"{_g(val):>10}\n", "result")
+            out.write(f"{g9(val):>10}\n", "result")
 
 
 def cmd_st(s: "Session", args: str) -> None:
@@ -600,12 +595,12 @@ def cmd_stdescribe(s: "Session", args: str) -> None:
 
     def row(lab, total, vals=None):
         out.write(f"{lab:<22}", "text")
-        out.write(f"{_g(total, '%10.0g') if total is not None else '':>10}", "result")
+        out.write(f"{g9(total, '%10.0g') if total is not None else '':>10}", "result")
         if vals is not None and not len(vals):
             out.write(f" {'.':>11} {'.':>11} {'.':>10} {'.':>10}", "result")
         elif vals is not None:
-            out.write(f" {_g(float(np.mean(vals))):>11} {_g(float(np.min(vals))):>11}"
-                      f" {_g(float(np.median(vals))):>10} {_g(float(np.max(vals))):>10}", "result")
+            out.write(f" {g9(float(np.mean(vals))):>11} {g9(float(np.min(vals))):>11}"
+                      f" {g9(float(np.median(vals))):>10} {g9(float(np.max(vals))):>10}", "result")
         out.write("\n", "text")
 
     row("no. of subjects", float(G))
@@ -670,8 +665,8 @@ def cmd_stsum(s: "Session", args: str) -> None:
         k = km(sd.t, sd.t0, sd.d, sd.w)
         qs = [quantile_time(k, p) for p in (0.25, 0.5, 0.75)]
         out.write(f"{lab:>8} |", "text")
-        out.write(f" {_g(risk, '%12.0g'):>12} {_g(rate):>10} {_g(nsub, '%12.0g'):>13}"
-                  f" {_g(qs[0]):>10} {_g(qs[1]):>9} {_g(qs[2]):>9}\n", "result")
+        out.write(f" {g9(risk, '%12.0g'):>12} {g9(rate):>10} {g9(nsub, '%12.0g'):>13}"
+                  f" {g9(qs[0]):>10} {g9(qs[1]):>9} {g9(qs[2]):>9}\n", "result")
         results = {"risk": risk, "ir": rate, "N_sub": nsub, "p25": qs[0], "p50": qs[1], "p75": qs[2]}
     s.r = results
 
@@ -684,4 +679,4 @@ def _level_label(s: "Session", var: str, lv) -> str:
         lab = s.data.value_labels.get(v.value_label, {}).get(int(lv)) if float(lv).is_integer() else None
         if lab:
             return lab[:8]
-    return _g(lv)
+    return g9(lv)

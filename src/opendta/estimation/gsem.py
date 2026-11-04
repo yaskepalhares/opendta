@@ -32,7 +32,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .results import Estimates, crit, post
+from .results import Estimates, crit, g9, post
 
 st = lazy("scipy.stats")
 optimize = lazy("scipy.optimize")
@@ -988,13 +988,6 @@ def _post(s, args, m: GModel, th, V, ll, conv, iters, level, *, hook=None, quiet
         est.display(s, est)
 
 
-def _g(x, fmt="%9.0g"):
-    from ..core.formats import format_value
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
-
-
 def _auxlabel(m: GModel, i: int) -> str:
     """/cut1 when one response has it, cut1:y when several do (VERIFY)."""
     P = m.P
@@ -1052,7 +1045,7 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
             if e.family == "gamma":
                 # VERIFY: the count and the time at risk with several responses
                 right[0] = f"{'No. of failures':<18}= {len(r.y):>10,}"
-                right[1] = f"{'Time at risk':<18}= {_g(float(np.sum(r.y)), '%10.0g'):>10}"
+                right[1] = f"{'Time at risk':<18}= {g9(float(np.sum(r.y)), '%10.0g'):>10}"
             lines_ = [f"{'Response':<15}: {e.name}", f"{'Family':<15}: {_FAM_TITLE[e.family]}"]
             if e.family == "nbinomial":
                 lines_.append(f"{'Dispersion':<15}: mean")
@@ -1066,7 +1059,7 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
         if many:
             out.write("\n", "text")
         out.write("Log likelihood = ", "text")
-        out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+        out.write(f"{g9(x['ll'], '%10.0g'):>10}\n", "result")
         out.write("\n", "text")
         for k, ln in enumerate(_constraint_lines(m), 1):
             out.write(f" ({k:2d})  {ln}\n", "text")
@@ -1098,7 +1091,7 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
         else:
             out.write(f"{label:>{W}} |", "text")
         if kind == "constrained":
-            out.write(f"  {_g(b):>9}  (constrained)\n", "result")
+            out.write(f"  {g9(b):>9}  (constrained)\n", "result")
             return
         if s_ > 0 and np.isfinite(s_):
             if kind == "var":
@@ -1106,17 +1099,17 @@ def display_gsem(s: "Session", est: Estimates, *, header: bool = True, table: bo
                     lo, hi = b * math.exp(-c * s_ / b), b * math.exp(c * s_ / b)
                 except OverflowError:
                     lo, hi = float("nan"), float("nan")
-                out.write(f"  {_g(b):>9}  {_g(s_):>9}" + " " * 17 + f"    {_g(lo):>9}   {_g(hi):>9}\n",
+                out.write(f"  {g9(b):>9}  {g9(s_):>9}" + " " * 17 + f"    {g9(lo):>9}   {g9(hi):>9}\n",
                           "result")
                 return
             z = b / s_
             pv = 2 * float(st.norm.sf(abs(z)))
-            out.write(f"  {_g(b):>9}  {_g(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {_g(b - c * s_):>9}"
-                      f"   {_g(b + c * s_):>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {g9(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {g9(b - c * s_):>9}"
+                      f"   {g9(b + c * s_):>9}\n", "result")
         elif kind == "var":
-            out.write(f"  {_g(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {'.':>9}" + " " * 17 + f"    {'.':>9}   {'.':>9}\n", "result")
         else:
-            out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+            out.write(f"  {g9(b):>9}  {'.':>9}\n", "result")
 
     first = True
     for e in m.eqs:

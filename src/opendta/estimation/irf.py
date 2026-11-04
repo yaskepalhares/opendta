@@ -28,7 +28,6 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_standard
 from ..lang.words import split_words
 from ..lazy import lazy
@@ -41,12 +40,6 @@ if TYPE_CHECKING:
 SYS = M.SYSMISS
 STATS = ("irf", "oirf", "cirf", "coirf", "fevd")
 _LABELS = {"irf": "irf", "oirf": "oirf", "cirf": "cirf", "coirf": "coirf", "fevd": "fevd"}
-
-
-def _g(x):
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), "%9.0g", pad=False).strip()
 
 
 # ---------------------------------------------------------------------------

@@ -413,7 +413,7 @@ def cmd_mgarch(s: "Session", args: str) -> None:
 
 def display_mgarch(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                    level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g
+    from .results import g9
     from .archmodel import _right_arch
     out = s.output
     x = est.extra
@@ -421,8 +421,8 @@ def display_mgarch(s: "Session", est: Estimates, *, header: bool = True, table: 
         out.write(f"\n{x['title']}\n\n", "text")
         _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         dfm = f"({int(x['df_m'])})" if x["df_m"] else "(.)"
-        _right_arch(out, "Distribution: Gaussian", f"Wald chi2{dfm}", _g(x["chi2"], "%10.2f"))
-        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right_arch(out, "Distribution: Gaussian", f"Wald chi2{dfm}", g9(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {g9(x['ll'], '%9.0g')}", "Prob > chi2", g9(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
         coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level, vcetype=None)

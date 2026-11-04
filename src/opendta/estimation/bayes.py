@@ -29,7 +29,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
-from .results import Estimates, post
+from .results import Estimates, g9, post
 
 special = lazy("scipy.special")
 st = lazy("scipy.stats")
@@ -769,13 +769,6 @@ def _post(s, args, model: Model, draws, info, summ, mask) -> None:
     post(s, est, scalars, macros, sample, extra_mats=mats)
 
 
-def _g(x, fmt="%9.0g"):
-    from ..core.formats import format_value
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
-
-
 def _g4(x: float) -> str:
     """Four significant digits without the leading zero (.2889, .05538)."""
     if x is None or not np.isfinite(x):
@@ -844,7 +837,7 @@ def display_bayes(s: "Session", est: Estimates, *, header: bool = True, table: b
         out.write(f"{'':<49}{'Acceptance rate':<17}= {num(x['acc'])}\n", "text")
         out.write(f"{'':<49}{'Efficiency:  min':<17}= {num(min(eff))}\n", "text")
         out.write(f"{'':<49}{'avg':>16} = {num(float(np.mean(eff)))}\n", "text")
-        lml = f"Log marginal likelihood = {_g(x['lml'], '%10.0g'):>10}" if np.isfinite(x["lml"]) else \
+        lml = f"Log marginal likelihood = {g9(x['lml'], '%10.0g'):>10}" if np.isfinite(x["lml"]) else \
             "Log marginal likelihood =          ."
         out.write(f"{lml:<49}{'max':>16} = {num(max(eff))}\n", "text")
         out.write(" \n", "text")      # Stata writes a line with one space (case 1909)
@@ -858,8 +851,8 @@ def display_bayes(s: "Session", est: Estimates, *, header: bool = True, table: b
 
 def _srow(r) -> str:
     """Mean, Std. Dev., MCSE, Median and the interval as Stata 14 writes them (case 1909)."""
-    return (f"{_g(r['mean']):>10}{_g(r['sd']):>11}{_g(r['mcse'], '%8.0g'):>10}{_g(r['median']):>11}"
-            f"{_g(r['lo']):>11}{_g(r['hi']):>11}")
+    return (f"{g9(r['mean']):>10}{g9(r['sd']):>11}{g9(r['mcse'], '%8.0g'):>10}{g9(r['median']):>11}"
+            f"{g9(r['lo']):>11}{g9(r['hi']):>11}")
 
 
 def _summary_table(s, est, summ, level, use_hpd, names=None) -> None:
@@ -1155,7 +1148,7 @@ def _stats_ic(s, est, body: str, o) -> None:
     for name, e in models:
         x = e.extra
         bf = x["lml"] - base
-        out.write(f"{name:>{W}} |  {_g(x['dic']):>9}  {_g(x['lml']):>8}  {_g(bf):>8}\n", "result")
+        out.write(f"{name:>{W}} |  {g9(x['dic']):>9}  {g9(x['lml']):>8}  {g9(bf):>8}\n", "result")
     out.write("-" * (W + 36) + "\n", "text")
     out.write("Note: Marginal likelihood (ML) is computed using Laplace-Metropolis approximation.\n", "text")
 
@@ -1182,8 +1175,8 @@ def cmd_bayestest(s: "Session", args: str) -> None:
         hi = float(o["upper"]) if o.get("upper") else np.inf
         res = []
         for k, (lab, d, _i) in enumerate(items, 1):
-            cond = (f"{_g(lo)} < {{{lab}}} < {_g(hi)}" if np.isfinite(lo) and np.isfinite(hi) else
-                    f"{{{lab}}} > {_g(lo)}" if np.isfinite(lo) else f"{{{lab}}} < {_g(hi)}")
+            cond = (f"{g9(lo)} < {{{lab}}} < {g9(hi)}" if np.isfinite(lo) and np.isfinite(hi) else
+                    f"{{{lab}}} > {g9(lo)}" if np.isfinite(lo) else f"{{{lab}}} < {g9(hi)}")
             out.write(f"{'prob' + str(k):>12} : {cond}\n", "text")
             ind = ((d > lo) & (d < hi)).astype(float)
             p = float(ind.mean())
@@ -1196,7 +1189,7 @@ def cmd_bayestest(s: "Session", args: str) -> None:
         out.write("-" * (W + 1) + "+" + "-" * 33 + "\n", "text")
         for lab, p, sd, mc in res:
             out.write(f"{lab:>{W}} |", "text")
-            out.write(f"{_g(p):>10}{sd:>12.5f}{_g(mc):>11}\n", "result")
+            out.write(f"{g9(p):>10}{sd:>12.5f}{g9(mc):>11}\n", "result")
         out.write("-" * (W + 35) + "\n", "text")
         return
     models = _stored_models(s, body)
@@ -1214,7 +1207,7 @@ def cmd_bayestest(s: "Session", args: str) -> None:
     out.write(f"{'':>{W}} |    log(ML)    P(M)  P(M|y)\n", "text")
     out.write("-" * (W + 1) + "+" + "-" * 34 + "\n", "text")
     for (n, e), pr, po in zip(models, pri, post_):
-        out.write(f"{n:>{W}} |  {_g(e.extra['lml']):>9}  {pr:>6.4f}  {po:>6.4f}\n", "result")
+        out.write(f"{n:>{W}} |  {g9(e.extra['lml']):>9}  {pr:>6.4f}  {po:>6.4f}\n", "result")
     out.write("-" * (W + 36) + "\n", "text")
 
 

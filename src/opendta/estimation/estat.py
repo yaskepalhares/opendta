@@ -17,7 +17,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
-from .results import current
+from .results import current, g9
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -26,12 +26,6 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or x >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 def cmd_estat(s: "Session", args: str) -> None:
@@ -94,7 +88,7 @@ def _ic(s: "Session", est, rest: str) -> None:
     out.write(f"       Model |{'Obs':>11}{'ll(null)':>10}{'ll(model)':>11}{'df':>8}{'AIC':>12}{'BIC':>11}\n", "text")
     out.write("-" * 13 + "+" + "-" * 63 + "\n", "text")
     out.write(f"{'.':>12} |", "text")
-    out.write(f"{N:>11,.0f}{_g(ll0):>10}{_g(ll):>11}{df:>8.0f}{_g(aic):>12}{_g(bic):>11}\n", "result")
+    out.write(f"{N:>11,.0f}{g9(ll0):>10}{g9(ll):>11}{df:>8.0f}{g9(aic):>12}{g9(bic):>11}\n", "result")
     out.write("-" * 77 + "\n", "text")
     out.write(" " * 15 + "Note: N=Obs used in calculating BIC; see [R] BIC note.\n", "text")
     from ..commands.matrix import Matrix
@@ -192,7 +186,7 @@ def _summarize(s: "Session", est, rest: str) -> None:
         mn, mx = float(x.min()), float(x.max())
         stats.append([mean, sd, mn, mx])
         out.write(f"  {_abbrev(n, 12):>12} |", "text")
-        out.write(f"{_g(mean):>13}{_g(sd):>14}{_g(mn):>13}{_g(mx):>13}\n", "result")
+        out.write(f"{g9(mean):>13}{g9(sd):>14}{g9(mn):>13}{g9(mx):>13}\n", "result")
     out.write("  " + "-" * 67 + "\n", "text")
     from ..commands.matrix import Matrix
     s.r = {"stats": Matrix(np.array(stats), names, ["mean", "sd", "min", "max"])}

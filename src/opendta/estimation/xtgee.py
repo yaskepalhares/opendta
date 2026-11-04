@@ -20,12 +20,11 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from . import fvars
 from .glm import _FAMILY_ALIASES, _FAMILY_DEFAULT_LINK, _link
 from .models2 import _Prep, _bmap, _expand, _semap
-from .results import Estimates, coef_table, post, rows_from_columns
+from .results import Estimates, coef_table, g9, post, rows_from_columns
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -39,12 +38,6 @@ _FAMILY_TEXT = {"gaussian": "Gaussian", "binomial": "binomial", "poisson": "Pois
                 "igaussian": "inverse Gaussian", "nbinomial": "negative binomial"}
 _LINK_TEXT = {"Identity": "identity", "Log": "log", "Logit": "logit", "Probit": "probit",
               "Complementary log-log": "cloglog"}
-
-
-def _g(x, fmt="%9.0g"):
-    if x is None or x >= SYS or not np.isfinite(x):
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 def _tol(x: float) -> str:
@@ -464,11 +457,11 @@ def display_xtgee(s: "Session", est: Estimates, *, header: bool = True, table: b
                 ("Group and time vars:", f"{x['pvar']} {x['tvar']}") if x.get("tvar") else
                 ("Group variable:", x["pvar"]),
                 ("Link:", x["link"]), ("Family:", x["family"]), ("Correlation:", x["corr"]),
-                ("", ""), ("", ""), ("Scale parameter:", _g(x["phi"]))]
+                ("", ""), ("", ""), ("Scale parameter:", g9(x["phi"]))]
         right = [("Number of obs", f"{x['N']:,}"), ("Number of groups", f"{x['G']:,}"),
                  ("Obs per group:", None), ("min", f"{x['tmin']:,}"), ("avg", f"{x['tavg']:.1f}"),
-                 ("max", f"{x['tmax']:,}"), (f"Wald chi2({x['df']})", _g(x["chi2"], "%10.2f")),
-                 ("Prob > chi2", _g(x["p"], "%10.4f"))]
+                 ("max", f"{x['tmax']:,}"), (f"Wald chi2({x['df']})", g9(x["chi2"], "%10.2f")),
+                 ("Prob > chi2", g9(x["p"], "%10.4f"))]
         for (ll, lv), (rl, rv) in zip(left, right):
             if lv:
                 lt = f"{ll}{lv:>{42 - len(ll)}}"
@@ -488,11 +481,11 @@ def display_xtgee(s: "Session", est: Estimates, *, header: bool = True, table: b
             dfp = x["N"]
             out.write("\n", "text")
             lab = f"Pearson chi2({dfp}):"
-            out.write(f"{lab}{_g(x['pearson'], '%10.2f'):>{42 - len(lab)}}      Deviance          = ", "text")
-            out.write(f"{_g(x['deviance'], '%10.2f'):>10}\n", "result")
+            out.write(f"{lab}{g9(x['pearson'], '%10.2f'):>{42 - len(lab)}}      Deviance          = ", "text")
+            out.write(f"{g9(x['deviance'], '%10.2f'):>10}\n", "result")
             lab = "Dispersion (Pearson):"
-            out.write(f"{lab}{_g(x['pearson'] / dfp):>{42 - len(lab)}}      Dispersion        = ", "text")
-            out.write(f"{_g(x['deviance'] / dfp):>10}\n", "result")
+            out.write(f"{lab}{g9(x['pearson'] / dfp):>{42 - len(lab)}}      Dispersion        = ", "text")
+            out.write(f"{g9(x['deviance'] / dfp):>10}\n", "result")
         out.write("\n", "text")
     if table:
         if x.get("robust"):

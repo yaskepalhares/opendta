@@ -311,7 +311,8 @@ def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, 
     """mestreg without random effects: the same model fitted without the || equation, shown as
     Stata does (title without "Mixed-effects", no group lines, no LR test; compat 1902)."""
     from ..core.stats import chi2_tail  # noqa: F401
-    from .meglm import _fit_fixed, _g
+    from .meglm import _fit_fixed
+    from .results import g9
     from .mixed import _right
     from .ml import options as ml_options
     from .ml import print_log
@@ -345,7 +346,7 @@ def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, 
     out.write("\n", "text")
     _right(out, title, "Number of obs", f"{int(n):,}")
     out.write("\n", "text")
-    _right(out, "", f"Wald chi2({k})", _g(wchi2, "%10.2f"))
-    _right(out, f"Log likelihood = {_g(r.ll, '%10.0g'):>10}", "Prob > chi2", _g(wp, "%10.4f"))
+    _right(out, "", f"Wald chi2({k})", g9(wchi2, "%10.2f"))
+    _right(out, f"Log likelihood = {g9(r.ll, '%10.0g'):>10}", "Prob > chi2", g9(wp, "%10.4f"))
     coef_table(s, "_t", rows, stat="z", df=None, level=smp.level, coef_title=eform_ or "Coef.",
                eform=bool(eform_))

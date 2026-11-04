@@ -279,15 +279,16 @@ def _g9(x: float) -> str:
 
 def display_arfima(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                    level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .tsmodels import _right
+    from .results import g9
     out = s.output
     x = est.extra
     if header:
         out.write("\nARFIMA regression\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        _right(out, f"{x.get('lll', 'Log likelihood')} = {_g(x['ll'], '%10.0g'):>10}", "Prob > chi2",
-               _g(x["p"], "%10.4f"))
+        _right(out, "", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f"))
+        _right(out, f"{x.get('lll', 'Log likelihood')} = {g9(x['ll'], '%10.0g'):>10}", "Prob > chi2",
+               g9(x["p"], "%10.4f"))
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=level or est.level, vcetype=est.vcetype)
         out.write("Note: The test of the variance against zero is one sided, and the two-sided\n"

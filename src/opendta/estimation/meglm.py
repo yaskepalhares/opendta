@@ -26,7 +26,6 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top
 from ..lazy import lazy
@@ -45,7 +44,7 @@ from .mixed import (
 )
 from .ml import maximize, print_log
 from .ml import options as ml_options
-from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+from .results import CoefRow, Estimates, coef_table, g9, post, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
 special = lazy("scipy.special")
@@ -55,12 +54,6 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -1303,7 +1296,7 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
             import re as _re
             if not _re.search(r"iterate\(\s*0\s*\)", str(o.get("refineopts") or "")):   # compat 1902
                 out.write("\nRefining starting values:\n\n", "text")
-                out.write(f"{'Iteration 0:':<14} {lab} = {_g(best[0], '%10.0g'):>10}\n", "text")
+                out.write(f"{'Iteration 0:':<14} {lab} = {g9(best[0], '%10.0g'):>10}\n", "text")
             out.write("\nPerforming gradient-based optimization:\n\n", "text")
         else:
             # the fixed-effects fit and the grid show "log likelihood" even with vce(robust) or
@@ -1311,7 +1304,7 @@ def _fit_me(s: "Session", args: str, cmdname: str, F: "Fit") -> None:
             out.write("\nFitting fixed-effects model:\n\n", "text")
             print_log(out, rfe)
             out.write("\nRefining starting values:\n\n", "text")
-            out.write(f"{'Grid node 0:':<14} log likelihood = {_g(best[0], '%10.0g'):>10}\n", "text")
+            out.write(f"{'Grid node 0:':<14} log likelihood = {g9(best[0], '%10.0g'):>10}\n", "text")
             out.write("\nFitting full model:\n\n", "text")
     r = maximize(model.fun, best[1], **kw)
     if not o.get("nolog"):
@@ -1549,7 +1542,7 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
     sp = x["spec"]
     lev = level or est.level
     if header:
-        ll = f"Log {'pseudolikelihood' if x.get('robust') else 'likelihood'} = {_g(x['ll'], '%10.0g'):>10}"
+        ll = f"Log {'pseudolikelihood' if x.get('robust') else 'likelihood'} = {g9(x['ll'], '%10.0g'):>10}"
         meth = x["method"]
         mid = []
         if sp["cmd"] == "meglm":
@@ -1566,8 +1559,8 @@ def display_me(s: "Session", est: Estimates, *, header: bool = True, table: bool
                      [("", "", ""),
                       meth_line,
                       ("", "", ""),
-                      ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
-                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))], gv_right=True, mid=mid)
+                      ("", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f")),
+                      (ll, "Prob > chi2", g9(x["p"], "%10.4f"))], gv_right=True, mid=mid)
     if x.get("robust") and header:
         note = f"(Std. Err. adjusted for {int(x['n_clust']):,} clusters in {x['clustvar']})"   # VERIFY
         out.write(f"{note:>78}\n", "text")
@@ -1634,7 +1627,7 @@ def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: boo
     sp = x["spec"]
     lev = level or est.level
     if header:
-        ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
+        ll = f"Log likelihood = {g9(x['ll'], '%10.0g'):>10}"
         if len(x["groups"]) > 1 and group:
             # nested levels: the group table has a column of integration points (compat 1916)
             out.write("\n", "text")
@@ -1647,8 +1640,8 @@ def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: boo
                 out.write(f"{var[:14]:>15} |", "text")
                 out.write(f" {ng:>10,} {mn:>10,} {av:>10.1f} {mx:>10,} {int(x['npts']):>11}\n", "result")
             out.write("-" * 76 + "\n", "text")
-            for left, lab_, val in [("", "", ""), ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
-                                    (ll, "Prob > chi2", _g(x["p"], "%10.4f"))]:
+            for left, lab_, val in [("", "", ""), ("", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f")),
+                                    (ll, "Prob > chi2", g9(x["p"], "%10.4f"))]:
                 if lab_:
                     _right(out, left, lab_, val)
                 else:
@@ -1657,8 +1650,8 @@ def _display_qr(s: "Session", est: Estimates, *, header: bool = True, table: boo
             group_header(out, sp["title"], x["groups"] if group else [], x["N"],
                          [("", "", ""),
                           (f"Integration points = {int(x['npts']):>3}", f"Wald chi2({int(x['df_m'])})",
-                           _g(x["chi2"], "%10.2f")),
-                          (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
+                           g9(x["chi2"], "%10.2f")),
+                          (ll, "Prob > chi2", g9(x["p"], "%10.4f"))])
     if table:
         ef = est.eform_default if eform is None else eform
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=lev,

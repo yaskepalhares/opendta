@@ -664,7 +664,7 @@ def _right_arch(out, left: str, lab: str, val: str) -> None:
 
 def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                  level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g
+    from .results import g9
     out = s.output
     x = est.extra
     if header:
@@ -672,8 +672,8 @@ def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bo
             else " -- MA disturbances" if x["ma"] else ""
         out.write(f"\nARCH family regression{suffix}\n\n", "text")
         _right_arch(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
-        _right_arch(out, f"Distribution: {x['dist']}", f"Wald chi2({int(x['df_m']) if x['df_m'] else '.'})", _g(x["chi2"], "%10.2f"))
-        _right_arch(out, f"Log likelihood = {_g(x['ll'], '%9.0g')}", "Prob > chi2", _g(x["p"], "%10.4f"))
+        _right_arch(out, f"Distribution: {x['dist']}", f"Wald chi2({int(x['df_m']) if x['df_m'] else '.'})", g9(x["chi2"], "%10.2f"))
+        _right_arch(out, f"Log likelihood = {g9(x['ll'], '%9.0g')}", "Prob > chi2", g9(x["p"], "%10.4f"))
         out.write("\n", "text")
     if table:
         if getattr(est, "cns", None) is not None:

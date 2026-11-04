@@ -418,7 +418,7 @@ def _arrange_rows(deps, unr, b, se, K, mpar, ce, lags):
 
 def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g
+    from .results import g9
     out = s.output
     x = est.extra
     o = x["opts"]
@@ -426,14 +426,14 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
     if header:
         out.write("\nVector error-correction model\n\n", "text")
         out.write(f"{x['sample']:<48}{'Number of obs':<18}= {int(x['N']):>10}\n", "text")
-        out.write(f"{'':<48}{'AIC':<18}= {_g(x['aic'], '%9.0g'):>10}\n", "text")
-        out.write(f"{'Log likelihood = ' + _g(x['ll'], '%9.0g'):<48}{'HQIC':<18}= {_g(x['hqic'], '%9.0g'):>10}\n", "text")
-        out.write(f"{'Det(Sigma_ml)  = ' + _g(x['det'], '%9.0g').rjust(9):<48}{'SBIC':<18}= {_g(x['sbic'], '%9.0g'):>10}\n\n", "text")
+        out.write(f"{'':<48}{'AIC':<18}= {g9(x['aic'], '%9.0g'):>10}\n", "text")
+        out.write(f"{'Log likelihood = ' + g9(x['ll'], '%9.0g'):<48}{'HQIC':<18}= {g9(x['hqic'], '%9.0g'):>10}\n", "text")
+        out.write(f"{'Det(Sigma_ml)  = ' + g9(x['det'], '%9.0g').rjust(9):<48}{'SBIC':<18}= {g9(x['sbic'], '%9.0g'):>10}\n\n", "text")
         out.write(f"{'Equation':<15}{'Parms':>9}{'RMSE':>10}{'R-sq':>9}{'chi2':>10}{'P>chi2':>11}\n", "text")
         out.write("-" * 64 + "\n", "text")
         for dv, mp, rm, r2, chi, pv in x["eqstats"]:
             out.write(f"{dv[:15]:<15}", "text")
-            out.write(f"{mp:>8}{_g(rm, '%8.0g'):>12}{r2:>9.4f}{_g(chi, '%9.0g'):>11}{pv:>9.4f}\n", "result")
+            out.write(f"{mp:>8}{g9(rm, '%8.0g'):>12}{r2:>9.4f}{g9(chi, '%9.0g'):>11}{pv:>9.4f}\n", "result")
         out.write("-" * 64 + "\n\n", "text")
     if table and not o.get("noetable"):
         coef_table(s, "", est.rows, stat="z", df=None, level=lev)
@@ -449,7 +449,7 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
             ids = [free.index(i + e_ * nb) for i in kv_]
             bj = bvec[[i + e_ * nb for i in kv_]]
             chi = float(bj @ np.linalg.solve(Vb[np.ix_(ids, ids)], bj))
-            out.write(f"{c:<18}{len(ids):>5}{_g(chi, '%9.0g'):>11}{float(chi2_tail(chi, len(ids))):>9.4f}\n", "result")
+            out.write(f"{c:<18}{len(ids):>5}{g9(chi, '%9.0g'):>11}{float(chi2_tail(chi, len(ids))):>9.4f}\n", "result")
         out.write("-" * 43 + "\n\n", "text")
         out.write("Identification:  beta is exactly identified\n\n", "text")       # VERIFY layout
         out.write(f"{'Johansen normalization restriction imposed':>59}\n", "text")
@@ -472,7 +472,7 @@ def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: boo
 
 def _display_alpha(s: "Session", est: Estimates, lev: float) -> None:
     """The `alpha` option: Wald tests and table of the adjustment parameters."""
-    from .tsmodels import _g
+    from .results import g9
     out = s.output
     x = est.extra
     r, ce = x["r"], x["ce"]
@@ -486,7 +486,7 @@ def _display_alpha(s: "Session", est: Estimates, lev: float) -> None:
         idx = [j * mpar + k for k in range(r)]
         b = est.b[idx]
         chi = float(b @ np.linalg.solve(est.V[np.ix_(idx, idx)], b))
-        out.write(f"{name[:18]:<18}{r:>5}{_g(chi, '%9.0g'):>11}{float(chi2_tail(chi, r)):>9.4f}\n", "result")
+        out.write(f"{name[:18]:<18}{r:>5}{g9(chi, '%9.0g'):>11}{float(chi2_tail(chi, r)):>9.4f}\n", "result")
         rows.append(CoefRow("eq", name))
         for k, c in enumerate(ce):
             rows.append(CoefRow("header", c))
