@@ -109,7 +109,7 @@ Done in phase 15 (compat case 1901), except the options that stop with error 198
 
 ### 5. Multilevel models (1–1.5 h, ~55k tokens)
 
-Done in phases 16 and 30 (compat cases 1902 and 1916), except the pieces listed under Multilevel models in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`meqrlogit` and `meqrpoisson` with more than one level, `intmethod(laplace)` with more than one level, crossed effects in the `me` commands). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/meglm.py` (adaptive quadrature) and `mixed.py`.
+Done in phases 16 and 30 (compat cases 1902 and 1916), except the pieces listed under Multilevel models in [Missing for 1.0](../ROADMAP.md#missing-for-10) (`meqrlogit` and `meqrpoisson` with more than one level, `intmethod(laplace)` with more than one level, crossed effects in the `me` commands). The original plan: `meglm` (the general form), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` and `meqrpoisson`; crossed random effects in `mixed`. Reuse `estimation/glmm.py` (adaptive quadrature) and `mixed.py`.
 
 ### 6. Panel data ✅
 
@@ -129,11 +129,11 @@ Done in phases 18 and 29 (compat cases 1904 and 1915), except the pieces listed 
 
 ### 10. Models (done)
 
-Done in phases 21, 22 and 32 (compat cases 1907, 1908 and 1918), except the pieces listed under Models in [Missing for 1.0](../ROADMAP.md#missing-for-10). Part 10a (binary and count, censored and selection, instrumental variables) lives in `estimation/binmodels.py`, `censmodels.py` and `ivmodels.py`, on the engine `estimation/mleq.py` and the log likelihoods of `estimation/likelihoods.py`. Part 10b: systems in `estimation/sysmodels.py` (algebra in `core/syseq.py`), choice models in `estimation/choice.py` and `choiceprobit.py` (`core/choice.py`), exact methods in `estimation/exact.py` (`core/exact.py`), nonlinear models in `estimation/nonlin.py` and `frontier.py`, and treatment effects in `estimation/teffects.py` and `treatment.py` (`core/treatfx.py`).
+Done in phases 21, 22 and 32 (compat cases 1907, 1908 and 1918), except the pieces listed under Models in [Missing for 1.0](../ROADMAP.md#missing-for-10). Part 10a (binary and count, censored and selection, instrumental variables) lives in `estimation/binmodels.py`, `censmodels.py` and `ivmodels.py`, on the engine `estimation/mleq.py` and the log likelihoods of `estimation/likelihoods.py`. Part 10b: systems in `estimation/sysmodels.py` (algebra in `core/syseq.py`), choice models in `estimation/choice.py` and `choiceprobit.py` (`core/choice.py`), exact methods in `estimation/exact.py` (`core/exact.py`), nonlinear models in `estimation/nonlin.py` (`gmm` in `gmm.py`) and `frontier.py`, and treatment effects in `estimation/teffects.py` and `treatment.py` (`core/treatfx.py`).
 
 ### 11. Other suites (done)
 
-Done in phase 23 (compat case 1909), except the pieces listed under Other suites in [Missing for 1.0](../ROADMAP.md#missing-for-10). `sem` fits in `estimation/semfit.py` (methods `ml`, `mlmv`, `adf`; normal data with missing values in `core/mvnmiss.py`), with groups in `estimation/semgroup.py` and the `estat` subcommands in `estimation/semestat.py`; `gsem` in `estimation/gsem.py` (adaptive quadrature, "custom" responses), with `irt` on top of it in `estimation/irt.py`; `bayesmh` and the `bayes` commands in `estimation/bayes.py` on the sampler of `core/mcmc.py`; the new `power` methods and the graph in `commands/power2.py`.
+Done in phase 23 (compat case 1909), except the pieces listed under Other suites in [Missing for 1.0](../ROADMAP.md#missing-for-10). `sem` fits in `estimation/semfit.py` (methods `ml`, `mlmv`, `adf`; normal data with missing values in `core/mvnmiss.py`), with groups in `estimation/semgroup.py` and the `estat` subcommands in `estimation/semestat.py` and `semtests.py`; `gsem` in `estimation/gsem.py` (adaptive quadrature, "custom" responses), with `irt` on top of it in `estimation/irt.py`; `bayesmh` and the `bayes` commands in `estimation/bayes.py` on the sampler of `core/mcmc.py`; the new `power` methods and the graph in `commands/power2.py`.
 
 ## Before 1.0
 
