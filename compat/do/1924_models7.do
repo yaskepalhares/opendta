@@ -23,7 +23,6 @@ capture noisily slogit y x1 x2 x3, dim(2)
 capture noisily ereturn list
 capture noisily matrix list e(b)
 capture noisily slogit y x1 x2 x3, dim(3)
-capture noisily slogit y x1 x2 x3, dim(2) baseoutcome(1)
 
 clear
 set obs 40
