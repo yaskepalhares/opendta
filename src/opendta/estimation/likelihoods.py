@@ -393,6 +393,18 @@ def biprobit(y1, y2, eta1, eta2, athrho):
     return (np.log(F), q1 * Fa / F, q2 * Fb / F, q1 * q2 * Fr * (1 - rho * rho) / F)
 
 
+def biprobit_partial(z, eta1, eta2, athrho):
+    """Partial-observability bivariate probit: only z = y1 y2 is seen, P(z = 1) = Phi2(eta1,
+    eta2; rho). Returns the log likelihood, [d/d eta1, d/d eta2] and d/d athrho (n x 1)."""
+    rho = np.tanh(athrho)
+    F, Fa, Fb, Fr = bvn_grad(eta1, eta2, rho * np.ones_like(eta1))
+    F = np.clip(F, 1e-300, 1 - 1e-16)
+    one = z > 0
+    k = np.where(one, 1 / F, -1 / (1 - F))
+    ll = np.where(one, np.log(F), np.log1p(-F))
+    return ll, [k * Fa, k * Fb], (k * Fr * (1 - rho * rho)).reshape(-1, 1)
+
+
 def heckprobit(sel, y, eta, zeta, athrho):
     """Probit for y observed when sel = 1 (selection probit with index zeta)."""
     rho = np.tanh(athrho)

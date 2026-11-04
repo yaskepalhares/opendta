@@ -17,8 +17,8 @@ from . import fvars
 from . import likelihoods as L
 from .ml import maximize
 from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
-                   finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right, sub_options,
-                   transformed_row)
+                   finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, read_constraints, std_right,
+                   sub_options, transformed_row)
 from .models import _probit
 from .models2 import _Prep, _log, g
 from .regress import comma
@@ -755,10 +755,9 @@ def cmd_biprobit(s: "Session", args: str) -> None:
         (d1, x1), (d2, x2), rest = eqs
         pr_args = f"{x1} {rest}" if not rest.startswith(",") else f"{x1} {rest}"
     bad = (ds.get(d1).data >= SYS) | (ds.get(d2).data >= SYS)
-    spec = {"partial": 3, "offset1": 7, "offset2": 7}
+    spec = {"partial": 4, "offset1": 7, "offset2": 7, "constraints": 3}
     ob = peek(pr_args, spec)
-    if ob.get("partial"):
-        raise StataError(198, "option partial is not available yet in OpenDTA")   # OpenDTA
+    partial = bool(ob.get("partial"))
     pr = _Prep(s, pr_args, spec, need_dep=False, restrict=~bad,
                extra_vars=names_in(x2, ob.get("offset1"), ob.get("offset2")))
     pr.smp.depname = d1
@@ -766,7 +765,7 @@ def cmd_biprobit(s: "Session", args: str) -> None:
     mask = pr.smp.mask
     y1 = (ds.get(d1).data[mask] != 0).astype(float)
     y2 = (ds.get(d2).data[mask] != 0).astype(float)
-    for yy in (y1, y2):
+    for yy in ((y1 * y2,) if partial else (y1, y2)):
         if np.all(yy == yy[0]):
             raise StataError(2000, "outcome does not vary; remember:\n"
                              "                                  0 = negative outcome,\n"
@@ -782,23 +781,51 @@ def cmd_biprobit(s: "Session", args: str) -> None:
     b2.offset, b2.off_name = offset_values(pr, ob.get("offset2"), None)
     w = pr.w
 
-    def lik(etas, th):
-        ll, d1_, d2_, d_ath = L.biprobit(y1, y2, etas[0], etas[1], th[0])
-        return ll, [d1_, d2_], d_ath.reshape(-1, 1)
+    if partial:
+        # partial observability: only z = y1 y2 is seen, P(z = 1) = Phi2(eta1, eta2; rho)
+        # ([R] biprobit, Methods and formulas)
+        z = y1 * y2
+
+        def lik(etas, th):
+            return L.biprobit_partial(z, etas[0], etas[1], th[0])
+    else:
+        def lik(etas, th):
+            ll, d1_, d2_, d_ath = L.biprobit(y1, y2, etas[0], etas[1], th[0])
+            return ll, [d1_, d2_], d_ath.reshape(-1, 1)
 
     eng = Engine(lik, [b1, b2], w, 1)
+    read_constraints(s, pr, [b1, b2], [("athrho", "_cons")])
     p1 = _weighted_probit(y1, b1.X, w, b1.offset)
     p2 = _weighted_probit(y2, b2.X, w, b2.offset)
-    res = pr.maximize(eng.fun, np.concatenate([p1.b, p2.b, [0.0]]))
-    fit_log(s, pr, "Fitting comparison equation 1:", p1)
-    fit_log(s, pr, "Fitting comparison equation 2:", p2)
-    s.output.write(f"\nComparison:    log likelihood = {g(p1.ll + p2.ll, '%10.0g'):>10}\n", "text")
-    fit_log(s, pr, "Fitting full model:", res)
+    b0 = np.concatenate([p1.b, p2.b, [0.0]])
+    if partial:
+        # comparison: the partial-observability model with rho = 0, fitted from the two probits
+        # (VERIFY: Stata's comparison model and log for partial)
+        k12 = b1.k + b2.k
+        saved = getattr(pr, "cns", None)
+        pr.cns = None
+        e0 = Engine(lambda et, th: (lambda r_: (r_[0], r_[1], None))(L.biprobit_partial(z, et[0], et[1], 0.0)),
+                    [b1, b2], w, 0)
+        c0 = pr.maximize(e0.fun, b0[:k12])
+        pr.cns = saved
+        b0 = np.concatenate([c0.b, [0.0]])
+        res = pr.maximize(eng.fun, b0)
+        fit_log(s, pr, "Fitting comparison model:", c0)
+        fit_log(s, pr, "Fitting full model:", res)
+        ll_c = c0.ll
+    else:
+        res = pr.maximize(eng.fun, b0)
+        fit_log(s, pr, "Fitting comparison equation 1:", p1)
+        fit_log(s, pr, "Fitting comparison equation 2:", p2)
+        s.output.write(f"\nComparison:    log likelihood = {g(p1.ll + p2.ll, '%10.0g'):>10}\n", "text")
+        fit_log(s, pr, "Fitting full model:", res)
+        ll_c = p1.ll + p2.ll
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     ath, se_ath = float(res.b[-1]), float(np.sqrt(V[-1, -1]))
-    lr = max(2 * (res.ll - (p1.ll + p2.ll)), 0.0)
+    lr = max(2 * (res.ll - ll_c), 0.0)
     p_lr = _chi2p(lr, 1)
-    title_bp = "Seemingly unrelated bivariate probit" if eqs is not None else "Bivariate probit regression"
+    title_bp = ("Partial observability bivariate probit" if partial      # VERIFY title
+                else "Seemingly unrelated bivariate probit" if eqs is not None else "Bivariate probit regression")
 
     def bp_footer(s_, est):
         s_.output.write(f"Likelihood-ratio test of rho=0:     chi2(1) ={g(lr, '%8.0g'):>9}    Prob > chi2 = {p_lr:6.4f}\n",

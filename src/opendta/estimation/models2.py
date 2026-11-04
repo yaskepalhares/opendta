@@ -85,11 +85,29 @@ class _Prep:
 
     def maximize(self, fun, b0):
         o = self.o
-        return maximize(fun, b0, **ml_options(o, maxiter=300))
+        cns = getattr(self, "cns", None)
+        if cns is None:
+            return maximize(fun, b0, **ml_options(o, maxiter=300))
+        # constraints(): b = T bc + a, maximized over bc; res.H stays T' H T (see vce)
+        T, a = cns
+
+        def cfun(bc, todo):
+            ll, g_, H = fun(T @ bc + a, todo)
+            if g_ is None:
+                return ll, g_, H
+            return ll, T.T @ g_, (T.T @ H @ T if H is not None else None)
+        r = maximize(cfun, T.T @ (np.asarray(b0, dtype=float) - a), **ml_options(o, maxiter=300))
+        r.b = T @ r.b + a
+        r.g = fun(r.b, 1)[1]
+        return r
 
     def vce(self, H: np.ndarray, scores: np.ndarray | None) -> tuple[np.ndarray, int | None]:
         """Model V (OIM) or the sandwich with the scores per observation (n x k)."""
-        V = bread(H)
+        cns = getattr(self, "cns", None)
+        if cns is not None and H.shape[0] == cns[0].shape[1]:
+            V = cns[0] @ bread(H) @ cns[0].T
+        else:
+            V = bread(H)
         ctx = getattr(self.s, "_svy_ctx", None)
         if ctx is not None and scores is not None:
             # svy: linearized scores u = w s V carried to the design observations (zero outside the
@@ -275,6 +293,8 @@ def _finish(s: "Session", pr: _Prep, cmd: str, args: str, *, title: str, names: 
         scalars += [(k_, v) for k_, v in sv.items() if k_ not in so]
         macros += [(k_, v) for k_, v in mv.items() if k_ not in mo]
     mlist = [(k_, md[k_]) for k_ in xo if k_ in md]
+    if "Cns" in md and "Cns" not in xo:
+        mlist.insert(0, ("Cns", md["Cns"]))   # constraints(): e(Cns) after e(V) (VERIFY)
     post(s, est, scalars, macros, smp.mask, extra_mats=mlist)
     return est
 

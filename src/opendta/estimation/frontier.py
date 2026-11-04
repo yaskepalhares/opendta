@@ -14,7 +14,7 @@ from ..core.stats import chi2_tail
 from ..lazy import lazy
 from .ml import maximize
 from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq, finish_model, lab,
-                   names_in, peek, std_right, sub_options)
+                   names_in, peek, read_constraints, std_right, sub_options)
 from .models2 import _log, _Prep, g
 from .results import CoefRow
 from .regress import comma
@@ -60,8 +60,6 @@ def cmd_frontier(s: "Session", args: str) -> None:
     pr = _Prep(s, args, spec, extra_vars=names_in(*[t for t, _ in het_txt.values()]))
     pr.write_notes(s.output)
     o = pr.o
-    if o.get("constraints"):
-        raise StataError(198, "option constraints() is not available yet in frontier")   # OpenDTA
     dist = str(o.get("distribution", "hnormal")).strip().lower()
     for full in ("hnormal", "exponential", "tnormal"):
         if dist and full.startswith(dist):
@@ -99,6 +97,8 @@ def cmd_frontier(s: "Session", args: str) -> None:
         return ll, [d_eta], dth
 
     eng = Engine(lik, [main], w, n_theta)
+    names = [("lnsig2v", "_cons"), ("lnsig2u", "_cons")] + ([("mu", "_cons")] if dist == "tnormal" else [])
+    read_constraints(s, pr, [main], names)
     # starting values: OLS, with the residual variance split between v and u
     b_ols = np.linalg.lstsq(main.X, y, rcond=None)[0]
     r = y - main.X @ b_ols
@@ -165,7 +165,6 @@ def cmd_frontier(s: "Session", args: str) -> None:
         s_.output.write(f"Likelihood-ratio test of sigma_u=0: chibar2(01) = {lr:<5.2f}"
                         f"  Prob>=chibar2 = {p_lr:.3f}\n", "text")
 
-    names = [("lnsig2v", "_cons"), ("lnsig2u", "_cons")] + ([("mu", "_cons")] if dist == "tnormal" else [])
     est = finish_model(s, pr, "frontier", args, title=_TITLES[dist], blocks=[main], eng=eng, res=res, V=V,
                        n_clust=n_clust, ll0=SYS, aux_names=names, aux_rows_fn=aux_rows, hdr_fn=hdr, wald=True,
                        footer=footer, k_eq=1 + len(names),
@@ -253,6 +252,10 @@ def _frontier_het(s, args, pr, o, dist, het_txt) -> None:
             b0 = rr.x
     except Exception:
         pass
+    if pr.o.get("constraints") and dist == "tnormal" and thetas == ["lnsig2v", "lnsig2u"]:
+        # the model is fitted in ln sigma_v^2 and ln sigma_u^2 but reported in /lnsigma2 and /ilgtgamma
+        raise StataError(198, "option constraints() is not available yet in frontier with cm()")   # OpenDTA
+    read_constraints(s, pr, blocks, [(nm, "_cons") for nm in thetas])
     res = pr.maximize(eng.fun, b0)
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     off = sum(b.k for b in blocks)
