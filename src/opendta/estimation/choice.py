@@ -440,8 +440,9 @@ def cmd_asclogit(s: "Session", args: str) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_slogit(s: "Session", args: str) -> None:
-    """Stereotype logistic regression with one dimension: ln{P(y=k)/P(y=b)} = theta_k + phi_k x'beta,
-    phi_b = 0, theta_b = 0 and phi = 1 for the lowest non-base outcome."""
+    """Stereotype logistic regression ([R] slogit): ln{P(y=k)/P(y=b)} = theta_k - sum_j phi_jk x'beta_j
+    for the dimensions j = 1..d, with phi_jb = 0 and theta_b = 0 for the base outcome and, for the
+    first d non-base outcomes k_1..k_d, phi_j,k_i = 1 when i = j and 0 otherwise."""
     if _replay(s, "slogit", args):
         return
     spec = {"dimension": 3, "baseoutcome": 3, "or": 2, "nocoefficient": 6}
@@ -449,13 +450,17 @@ def cmd_slogit(s: "Session", args: str) -> None:
     pr = _Prep(s, args, spec, constant=False)
     pr.write_notes(s.output)
     o = pr.o
-    if o.get("dimension") and str(o["dimension"]).strip() != "1":
-        raise StataError(198, "only dimension(1) is available")   # VERIFY
     y = pr.y
     levels = np.unique(y)
     K = len(levels)
     if K < 3:
         raise StataError(148, "outcome does not take at least three values")   # VERIFY
+    try:
+        d = int(str(o.get("dimension", "1")).strip())
+    except ValueError:
+        raise StataError(198, "option dimension() invalid") from None   # VERIFY
+    if d < 1 or d > K - 1:
+        raise StataError(198, f"dimension() must be between 1 and {K - 1}")   # VERIFY
     code = np.searchsorted(levels, y)
     if o.get("baseoutcome"):
         bv = float(o["baseoutcome"])
@@ -464,42 +469,45 @@ def cmd_slogit(s: "Session", args: str) -> None:
         base = int(np.flatnonzero(levels == bv)[0])
     else:
         base = K - 1       # VERIFY: the highest outcome (1908 log: yy=3 is the base while mprobit takes the most frequent)
-    first = 0 if base != 0 else 1                         # phi = 1
-    free_phi = [k for k in range(K) if k != base and k != first]
-    free_th = [k for k in range(K) if k != base]
+    nonbase = [k for k in range(K) if k != base]
+    fixed = nonbase[:d]                                   # phi_j,fixed[i] = (i == j)
+    free_phi = [(j, k) for j in range(d) for k in nonbase if k not in fixed]
+    free_th = list(nonbase)
     nth = len(free_phi) + len(free_th)
-    main = _block(pr, pr.smp.depname, pr.X)
+    blocks = [_block(pr, pr.smp.depname if d == 1 else f"dim{j + 1}", pr.X) for j in range(d)]   # VERIFY names
     w = pr.w
     n = pr.smp.n
     Y = np.zeros((n, K))
     Y[np.arange(n), code] = 1.0
 
     def parts(th):
-        phi = np.zeros(K)
-        phi[first] = 1.0
-        for i, k in enumerate(free_phi):
-            phi[k] = th[i]
+        phi = np.zeros((d, K))
+        for j, k in enumerate(fixed):
+            phi[j, k] = 1.0
+        for i, (j, k) in enumerate(free_phi):
+            phi[j, k] = th[i]
         theta = np.zeros(K)
         for i, k in enumerate(free_th):
             theta[k] = th[len(free_phi) + i]
         return phi, theta
 
     def lik(etas, th):
-        eta = etas[0]
+        E = np.column_stack(etas)                               # n x d
         phi, theta = parts(np.asarray(th))
-        S = theta[None, :] - eta[:, None] * phi[None, :]      # Stata: exp(theta_k - phi_k x b)
+        S = theta[None, :] - E @ phi                            # Stata: exp(theta_k - sum_j phi_jk x b_j)
         lse = np.logaddexp.reduce(S, axis=1)
         P = np.exp(S - lse[:, None])
+        R = Y - P
         ll = (Y * S).sum(axis=1) - lse
-        d_eta = -(Y - P) @ phi
+        d_eta = [-(R @ phi[j]) for j in range(d)]
         dth = np.zeros((n, nth))
-        for i, k in enumerate(free_phi):
-            dth[:, i] = -eta * (Y[:, k] - P[:, k])
+        for i, (j, k) in enumerate(free_phi):
+            dth[:, i] = -E[:, j] * R[:, k]
         for i, k in enumerate(free_th):
-            dth[:, len(free_phi) + i] = Y[:, k] - P[:, k]
-        return ll, [d_eta], dth
+            dth[:, len(free_phi) + i] = R[:, k]
+        return ll, d_eta, dth
 
-    eng = Engine(lik, [main], w, nth)
+    eng = Engine(lik, blocks, w, nth)
 
     def neg(b):
         v = eng.fun(b, 1)
@@ -507,14 +515,18 @@ def cmd_slogit(s: "Session", args: str) -> None:
 
     best = None
     rng = np.random.default_rng(1)
-    Xs = pr.X / (pr.X.std(axis=0) + 1e-12) if pr.X.size else pr.X
+    p = blocks[0].k
     score = np.linalg.lstsq(np.column_stack([pr.X, np.ones(n)]), code.astype(float), rcond=None)[0][:-1]
-    for trial in range(4):
+    for trial in range(4 if d == 1 else 8):
         th0 = np.zeros(nth)
-        for i, k in enumerate(free_phi):
-            th0[i] = 1.0 - (k - first) / max(K - 1 - first, 1) if k > first else 1.0
-        b0 = np.concatenate([score * (1 if trial == 0 else rng.normal(0.5, 0.5)), th0]) if trial < 2 else \
-            np.concatenate([rng.normal(0, 0.5, main.k), th0 + rng.normal(0, 0.3, nth)])
+        for i, (j, k) in enumerate(free_phi):
+            if j == 0:
+                th0[i] = 1.0 - (k - fixed[0]) / max(K - 1 - fixed[0], 1) if k > fixed[0] else 1.0
+        if trial < 2:
+            bb = [score * (1 if trial == 0 else rng.normal(0.5, 0.5))] + [rng.normal(0, 0.3, p) for _ in range(d - 1)]
+            b0 = np.concatenate(bb + [th0])
+        else:
+            b0 = np.concatenate([rng.normal(0, 0.5, p * d), th0 + rng.normal(0, 0.3, nth)])
         try:
             r = opt.minimize(neg, b0, jac=True, method="BFGS", options={"gtol": 1e-8, "maxiter": 2000})
         except Exception:
@@ -527,23 +539,25 @@ def cmd_slogit(s: "Session", args: str) -> None:
     V, n_clust = pr.vce(res.H, eng.scores(res.b) if pr.robust else None)
     nk = np.bincount(code, minlength=K).astype(float)
     ll0 = float(np.sum(nk * np.log(nk / nk.sum())))
-    off = main.k
+    off = p * d
     from .results import CoefRow
     phi_all, th_all = parts(res.b[off:])
     se = np.sqrt(np.maximum(np.diag(V), 0))
     lev_txt = [g(float(v), "%9.0g") for v in levels]
 
     def aux_rows(level):
-        rows = [CoefRow("sep")]
-        for k in range(K):
-            nm = f"/phi1_{k + 1}"
-            if k in free_phi:
-                i = free_phi.index(k)
-                rows.append(aux_row(nm, float(res.b[off + i]), float(se[off + i]), level))
-            else:
-                r = CoefRow("value", nm, float(phi_all[k]))
-                r.eq = f"{phi_all[k]:>9g}  " + ("(base outcome)" if k == base else "(constrained)")
-                rows.append(r)
+        rows = []
+        for j in range(d):
+            rows.append(CoefRow("sep"))
+            for k in range(K):
+                nm = f"/phi{j + 1}_{k + 1}"
+                if (j, k) in free_phi:
+                    i = free_phi.index((j, k))
+                    rows.append(aux_row(nm, float(res.b[off + i]), float(se[off + i]), level))
+                else:
+                    r = CoefRow("value", nm, float(phi_all[j, k]))
+                    r.eq = f"{phi_all[j, k]:>9g}  " + ("(base outcome)" if k == base else "(constrained)")
+                    rows.append(r)
         rows.append(CoefRow("sep"))
         for k in range(K):
             nm = f"/theta{k + 1}"
@@ -556,6 +570,11 @@ def cmd_slogit(s: "Session", args: str) -> None:
                 rows.append(r)
         return rows
 
+    cns_lines = []
+    for j in range(d):
+        for i, k in enumerate(fixed):
+            cns_lines.append(f"[phi{j + 1}_{k + 1}]_cons = {1 if i == j else 0}")
+
     def hdr(est):
         x = est.extra
 
@@ -564,17 +583,19 @@ def cmd_slogit(s: "Session", args: str) -> None:
             _header(s_, [est.title, "", f"{lab(est)} = {ll4:>9}"],
                     [("Number of obs", comma(x["N"])), (f"Wald chi2({int(x['df_m'])})", g(x["chi2"], "%10.2f")),
                      ("Prob > chi2", g(x["p"], "%10.4f"))])
-            s_.output.write(" ( 1)  [phi1_1]_cons = 1\n", "text")
+            for i, line in enumerate(cns_lines, 1):
+                s_.output.write(f" ({i:>2})  {line}\n", "text")
         return write
 
     def footer(s_, est):
-        s_.output.write(f"({main.name}={lev_txt[base]} is the base outcome)\n", "text")
+        s_.output.write(f"({pr.smp.depname}={lev_txt[base]} is the base outcome)\n", "text")
 
-    names = [("phi1_%d" % (k + 1), "_cons") for k in free_phi] + [("theta%d" % (k + 1), "_cons") for k in free_th]
-    est = finish_model(s, pr, "slogit", args, title="Stereotype logistic regression", blocks=[main], eng=eng,
+    names = [("phi%d_%d" % (j + 1, k + 1), "_cons") for j, k in free_phi] + [("theta%d" % (k + 1), "_cons") for k in free_th]
+    slopes = [j * p + i for j in range(d) for i in range(blocks[j].nslopes)]
+    est = finish_model(s, pr, "slogit", args, title="Stereotype logistic regression", blocks=blocks, eng=eng,
                        res=res, V=V, n_clust=n_clust, ll0=ll0, aux_names=names, aux_rows_fn=aux_rows, hdr_fn=hdr,
-                       k_eq=1 + len(names), test_idx=list(range(main.k)), df_m=main.k, wald=True, footer=footer,
-                       extra_scalars=[("k_out", float(K)), ("i_base", float(base + 1)), ("dim", 1.0)],
+                       k_eq=d + len(names), test_idx=slopes, df_m=len(slopes), wald=True, footer=footer,
+                       extra_scalars=[("k_out", float(K)), ("i_base", float(base + 1)), ("dim", float(d))],
                        extra_macros=[("baseoutcome", lev_txt[base])])
     est.coef_title, est.eform_on = "Coef.", False
     display_eq(s, est)
