@@ -275,7 +275,7 @@ class Resp:
 
 class GModel:
     def __init__(self, s, eqs, latent, clat, observed, o, mask):
-        from .meglm import _family, family_of, ordinal_family
+        from .glmm import basic_family, family_of, ordinal_family
         ds = s.data
         self.eqs = eqs
         resps = [e for e in eqs if e.kind == "resp"]
@@ -376,7 +376,7 @@ class GModel:
                                         shape=(self.U, len(idx)))
                 resp_objs.append(r)
                 continue
-            fam, naux, ordered, levels = self._family(e, y, sel, ds, _family, family_of, ordinal_family)
+            fam, naux, ordered, levels = self._family(e, y, sel, ds, basic_family, family_of, ordinal_family)
             if e.family in ("bernoulli",):
                 y = (y != 0).astype(float)
             xref = []
@@ -456,8 +456,8 @@ class GModel:
         self.adaptive = meth in ("mvaghermite", "mcaghermite")
         self.intmethod = meth if meth in ("ghermite", "mvaghermite", "mcaghermite") else "mvaghermite"
         if q:
-            from .meglm import _gh_nodes
-            self.nodes, self.lw = _gh_nodes(self.nint, q)
+            from .glmm import gh_nodes
+            self.nodes, self.lw = gh_nodes(self.nint, q)
             self.lphi = st.norm.logpdf(self.nodes).sum(axis=1)
         self.pm_cols = [np.column_stack(c) if c else None for c in self.gcols]
         self.z_cache = None
@@ -468,7 +468,7 @@ class GModel:
     def _anchor(self, L: str, o) -> bool:
         return L not in self.var_fixed
 
-    def _family(self, e, y, sel, ds, _family, family_of, ordinal_family):
+    def _family(self, e, y, sel, ds, basic_family, family_of, ordinal_family):
         f, lk = e.family, e.link
         if f == "ordinal":
             levels = np.unique(y)
@@ -478,7 +478,7 @@ class GModel:
             fn, naux = ordinal_family(lk, yi)
             return fn, naux, True, levels
         if f == "poisson":
-            return _family("poisson", y), 0, False, None
+            return basic_family("poisson", y), 0, False, None
         if f == "bernoulli":
             yb = (y != 0).astype(float)
             return family_of("binomial", lk, yb, nbin=np.ones(len(y)))[0], 0, False, None
