@@ -212,6 +212,124 @@ def gauss_newton(resid, theta0: np.ndarray, W: np.ndarray, *, eps: float = 1e-5,
 # nl
 # ---------------------------------------------------------------------------
 
+class ProgFunc:
+    """The function evaluator program of nl, nlsur and gmm ([R] nl, [R] nlsur, [R] gmm), called
+    as `prog newvars varlist if touse, at(matrix)`: it fills the m new variables (the fitted
+    values of nl and nlsur, the residuals of gmm). The program runs on every observation and the
+    caller keeps those of its sample. `names` are the parameters (parameters(), or b1, b2, ...
+    with nparameters(#)); `eq(q)` is equation q with the interface of SubExpr."""
+
+    def __init__(self, s: "Session", prog: str, m: int, names: list[str], varlist: list[str]):
+        self.s = s
+        self.prog = prog
+        self.m = m
+        self.names = names
+        self.init: dict[str, float | None] = {nm: None for nm in names}
+        self.vars = varlist
+        self._key = None
+        self._val = None
+
+    def evaluate_all(self, theta: dict) -> np.ndarray:
+        key = tuple(float(theta[nm]) for nm in self.names)
+        if key == self._key:
+            return self._val
+        from ..commands.matrix import Matrix, _store
+        from ..commands.syntaxcmd import _temp_name
+        from ..core.dataset import Variable
+        s, ds = self.s, self.s.data
+        tmp = []
+        for i in range(self.m + 1):
+            nm = _temp_name(s)
+            ds.add(Variable(nm, "double", np.ones(ds.nobs) if i == 0 else np.full(ds.nobs, SYS)))
+            tmp.append(nm)
+        mats = _store(s)
+        mats["__nlat"] = Matrix(np.array([key]), ["r1"], list(self.names))
+        try:
+            with s.output.quietly():
+                s.interp._execute_expanded(f"{self.prog} {' '.join(tmp[1:] + self.vars)} if {tmp[0]}, at(__nlat)")
+            val = np.column_stack([ds.get(nm).data.astype(float) for nm in tmp[1:]])
+        finally:
+            ds.drop_vars([nm for nm in tmp if ds.has(nm)])
+            mats.pop("__nlat", None)
+        self._key, self._val = key, val
+        return val
+
+    def eq(self, q: int) -> "_ProgEq":
+        return _ProgEq(self, q)
+
+
+class _ProgEq:
+    def __init__(self, pf: ProgFunc, q: int):
+        self.pf, self.q = pf, q
+        self.names = pf.names
+        self.init = pf.init
+        self.lcs: dict = {}
+        self.text = ""
+
+    def variables(self) -> list[str]:
+        return list(self.pf.vars)
+
+    def evaluate(self, theta: dict) -> np.ndarray:
+        return self.pf.evaluate_all(theta)[:, self.q]
+
+
+_PROG_FORM = re.compile(r"^\s*([A-Za-z_]\w*)\s*([@:])(.*)$", re.S)
+
+
+def _program(s: "Session", name: str) -> str:
+    if name not in s.programs:
+        raise StataError(199, f"unrecognized command:  {name}")
+    return name
+
+
+def _split_varlist(s: "Session", text: str) -> tuple[list[str], str]:
+    """'y x1 x2 if z, opts' -> (['y', 'x1', 'x2'], 'if z, opts')."""
+    text = text.strip()
+    cut = len(text)
+    for mm in re.finditer(r",|\[|(?<!\S)(?:if|in)(?!\S)", text):
+        cut = mm.start()
+        break
+    head = text[:cut].split()
+    tail = text[cut:].strip()
+    from ..core.varlist import expand
+    return (expand(s.data, " ".join(head)) if head else []), tail
+
+
+def _param_names(opts_text: str) -> list[str]:
+    """parameters(namelist) or nparameters(#) (b1, b2, ...) of a function evaluator program."""
+    m = re.search(r"\bparam\w*\s*\(([^)]*)\)", opts_text)
+    if m and not re.search(r"\bnparam\w*\s*\(", opts_text[:m.start() + 1]):
+        return [nm.split(":")[-1] for nm in m.group(1).split()]
+    m = re.search(r"\bnparam\w*\s*\(\s*(\d+)\s*\)", opts_text)
+    if m:
+        return [f"b{i}" for i in range(1, int(m.group(1)) + 1)]
+    raise StataError(198, "you must specify parameters() or nparameters()")   # VERIFY
+
+
+def _int_option(opts_text: str, stem: str) -> int | None:
+    m = re.search(rf"\b{stem}\w*\s*\(\s*(\d+)\s*\)", opts_text)
+    return int(m.group(1)) if m else None
+
+
+def _sexp_program(s: "Session", prog: str, varlist: list[str], tail: str) -> None:
+    """Runs a substitutable expression program (`nl name : varlist`), whose r() holds the
+    equations."""
+    from ..lang.syntax import parse_standard as _ps
+    p = _ps(tail)
+    cond = ""
+    if p.if_:
+        cond += f" if {p.if_}"
+    if p.in_:
+        cond += f" in {p.in_}"
+    with s.output.quietly():
+        s.interp._execute_expanded(f"{prog} {' '.join(varlist)}{cond}")
+
+
+def _options_tail(tail: str) -> str:
+    i = tail.find(",")
+    return tail[i + 1:] if i >= 0 else ""
+
+
 def cmd_nl(s: "Session", args: str) -> None:
     from ..commands._util import touse
     from ..commands.summarize import weights as get_weights
@@ -219,20 +337,47 @@ def cmd_nl(s: "Session", args: str) -> None:
     if not args.strip() or args.strip().startswith(","):
         replay(s, "nl", args)
         return
-    eqs, tail = _split_equations(args)
-    if len(eqs) != 1:
-        raise StataError(198, "nl requires one equation: (depvar = expression)")   # VERIFY
-    dep, rhs = _lhs_rhs(eqs[0])
     ds = s.data
-    depname = resolve_name(ds, dep)
-    se = SubExpr(s, rhs)
-    if not se.names:
-        raise StataError(198, "no parameters in the expression")   # VERIFY
+    pm = _PROG_FORM.match(args)
+    funcprog = ""
+    if pm and pm.group(2) == ":":
+        # substitutable expression program: nl<name> leaves the equation in r(eq) and a title in
+        # r(title)
+        prog = _program(s, "nl" + pm.group(1))
+        varlist, tail = _split_varlist(s, pm.group(3))
+        _sexp_program(s, prog, varlist, tail)
+        eq = str(s.r.get("eq", ""))
+        if not eq:
+            raise StataError(198, f"{prog} did not return r(eq)")   # VERIFY
+        if "=" not in eq.split("{")[0]:
+            eq = f"{varlist[0]} = {eq}"
+        title = str(s.r.get("title", ""))
+        if title and not re.search(r"\btitle\s*\(", tail):
+            tail = (tail + ("" if "," in tail else ",") + f' title("{title}")')
+        args = f"({eq}) {tail}"
+    if pm and pm.group(2) == "@":
+        # function evaluator program: nl<name> fills the dependent variable (a temporary one)
+        funcprog = _program(s, "nl" + pm.group(1))
+        varlist, tail = _split_varlist(s, pm.group(3))
+        if not varlist:
+            raise StataError(102, "too few variables specified")
+        depname, rhs = varlist[0], ""
+        se = ProgFunc(s, funcprog, 1, _param_names(_options_tail(tail)), varlist[1:]).eq(0)
+    else:
+        eqs, tail = _split_equations(args)
+        if len(eqs) != 1:
+            raise StataError(198, "nl requires one equation: (depvar = expression)")   # VERIFY
+        dep, rhs = _lhs_rhs(eqs[0])
+        depname = resolve_name(ds, dep)
+        se = SubExpr(s, rhs)
+        if not se.names:
+            raise StataError(198, "no parameters in the expression")   # VERIFY
     p = parse_standard(tail)
     o = match_options(p.options, {"initial": 4, "nolog": 4, "log": 3, "eps": 3, "iterate": 4, "level": 1,
                                   "variables": 3, "lnlsq": 3, "title": 5, "robust": 1, "vce": 3, "cluster": 2,
                                   "noconstant": 4, "hasconstant": 3, "nocnsreport": 5, "noheader": 6,
-                                  "notable": 5, "delta": 3}) if p.options.strip() else {}
+                                  "notable": 5, "delta": 3, "parameters": 5, "nparameters": 6}) \
+        if p.options.strip() else {}
     mask = touse(s, p)
     y_all = ds.get(depname).data.astype(float)
     mask &= y_all < SYS
@@ -328,7 +473,7 @@ def cmd_nl(s: "Session", args: str) -> None:
     est.extra = {"N": N, "mss": mss, "rss": rss, "tss": tss, "df_m": df_m, "df_r": df_r, "df_t": df_tot,
                  "r2": r2, "r2_a": r2_a, "rmse": rmse, "dev": dev, "const": se.names[const_idx] if const_idx is not None else ""}
     est.sexp = se
-    est.title = str(o.get("title") or "")
+    est.title = str(o.get("title") or "").strip().strip('"')
     est.display = _display_nl
 
     def predict(s_, e, stat, mask_):
@@ -344,8 +489,8 @@ def cmd_nl(s: "Session", args: str) -> None:
     scalars = [("N", N), ("df_m", df_m), ("df_r", df_r), ("mss", mss), ("rss", rss), ("r2", r2),
                ("r2_a", r2_a), ("rmse", rmse), ("dev", dev), ("ic", iters), ("converged", 1.0)]
     macros = [("cmdline", cmdline("nl", args)), ("title", est.title or "Nonlinear regression"),
-              ("depvar", depname), ("cmd", "nl"), ("properties", "b V"), ("predict", "nl_p"),
-              ("expression", rhs)]
+              ("depvar", depname), ("cmd", "nl"), ("properties", "b V"), ("predict", "nl_p")]
+    macros.append(("funcprog", funcprog) if funcprog else ("expression", rhs))   # VERIFY: e(funcprog)
     post(s, est, scalars, macros, mask)
     _display_nl(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
@@ -396,15 +541,44 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     if not args.strip() or args.strip().startswith(","):
         replay(s, "nlsur", args)
         return
-    eqs, tail = _split_equations(args)
-    if not eqs:
-        raise StataError(198, "equation required")   # VERIFY
     ds = s.data
+    pm = _PROG_FORM.match(args)
+    funcprog = ""
+    if pm and pm.group(2) == ":":
+        # substitutable expression program: nlsur<name> returns r(n_eq) and the equations in
+        # r(eq_1), r(eq_2), ... (VERIFY)
+        prog = _program(s, "nlsur" + pm.group(1))
+        varlist, tail = _split_varlist(s, pm.group(3))
+        _sexp_program(s, prog, varlist, tail)
+        try:
+            neq = int(float(s.r.get("n_eq", 0)))
+        except (TypeError, ValueError):
+            neq = 0
+        if neq < 1:
+            raise StataError(198, f"{prog} did not return r(n_eq)")   # VERIFY
+        args = " ".join(f"({s.r.get(f'eq_{q}', '')})" for q in range(1, neq + 1)) + " " + tail
     deps, ses = [], []
-    for body in eqs:
-        dep, rhs = _lhs_rhs(body)
-        deps.append(resolve_name(ds, dep))
-        ses.append(SubExpr(s, rhs))
+    if pm and pm.group(2) == "@":
+        # function evaluator program: nlsur<name> fills the dependent variables (temporary ones)
+        funcprog = _program(s, "nlsur" + pm.group(1))
+        varlist, tail = _split_varlist(s, pm.group(3))
+        neq = _int_option(_options_tail(tail), "neq")
+        if not neq:
+            raise StataError(198, "option nequations() required")   # VERIFY
+        if len(varlist) < neq:
+            raise StataError(102, "too few variables specified")
+        deps = varlist[:neq]
+        pf = ProgFunc(s, funcprog, neq, _param_names(_options_tail(tail)), varlist[neq:])
+        ses = [pf.eq(q) for q in range(neq)]
+        eqs = ["" for _ in range(neq)]
+    else:
+        eqs, tail = _split_equations(args)
+        if not eqs:
+            raise StataError(198, "equation required")   # VERIFY
+        for body in eqs:
+            dep, rhs = _lhs_rhs(body)
+            deps.append(resolve_name(ds, dep))
+            ses.append(SubExpr(s, rhs))
     names: list[str] = []
     init: dict = {}
     for se in ses:
@@ -417,7 +591,8 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     o = match_options(p.options, {"fgnls": 2, "ifgnls": 2, "nls": 3, "initial": 4, "nolog": 4, "log": 3, "eps": 3,
                                   "iterate": 4, "level": 1, "variables": 3, "noconstant": 4, "title": 5,
                                   "noheader": 6, "notable": 5, "delta": 3, "robust": 1, "nequations": 3,
-                                  "parameters": 5, "lnlsq": 3, "ifgnls": 3}) if p.options.strip() else {}
+                                  "parameters": 5, "nparameters": 6, "lnlsq": 3, "ifgnls": 3}) \
+        if p.options.strip() else {}
     mask = touse(s, p)
     for dn in deps:
         mask &= ds.get(dn).data < SYS
@@ -527,6 +702,8 @@ def cmd_nlsur(s: "Session", args: str) -> None:
     macros = [("cmdline", cmdline("nlsur", args)), ("title", {"fgnls": "FGNLS regression", "ifgnls": "Iterated FGNLS regression",
                                                              "nls": "NLS regression"}[method]),
               ("depvar", " ".join(deps)), ("cmd", "nlsur"), ("properties", "b V"), ("method", method)]
+    if funcprog:
+        macros.append(("funcprog", funcprog))   # VERIFY: e(funcprog)
     post(s, est, scalars, macros, mask)
     _display_nlsur(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
@@ -560,11 +737,30 @@ def cmd_gmm(s: "Session", args: str) -> None:
     if not args.strip() or args.strip().startswith(","):
         replay(s, "gmm", args)
         return
-    eqs, tail = _split_equations(args)
-    if not eqs:
-        raise StataError(198, "equation required")   # VERIFY
     ds = s.data
-    ses = [SubExpr(s, body) for body in eqs]
+    eqnames: list[str] = []
+    pm = re.match(r"^\s*([A-Za-z_]\w*)(.*)$", args, re.S)
+    if pm and not args.lstrip().startswith("("):
+        # moment-evaluator program: called as `prog residual_vars if touse, at(b)` ([R] gmm)
+        prog = _program(s, pm.group(1))
+        tail = pm.group(2).strip()
+        ot = _options_tail(tail)
+        mq = re.search(r"\beq\w*\s*\(([^)]*)\)", ot)
+        if mq and not re.match(r"neq", ot[mq.start():mq.start() + 3]):
+            eqnames = mq.group(1).split()
+        neq = _int_option(ot, "neq") or len(eqnames)
+        if not neq:
+            raise StataError(198, "option nequations() or equations() required")   # VERIFY
+        eqnames = eqnames or [str(q) for q in range(1, neq + 1)]
+        pf = ProgFunc(s, prog, neq, _param_names(ot), [])
+        ses = [pf.eq(q) for q in range(neq)]
+        eqs = ["" for _ in range(neq)]
+        tail = re.sub(r"\beq\w*\s*\([^)]*\)", " ", tail) if mq else tail
+    else:
+        eqs, tail = _split_equations(args)
+        if not eqs:
+            raise StataError(198, "equation required")   # VERIFY
+        ses = [SubExpr(s, body) for body in eqs]
     names: list[str] = []
     init: dict = {}
     for se in ses:
@@ -588,9 +784,13 @@ def cmd_gmm(s: "Session", args: str) -> None:
                                  "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5,
                                  "igmmiterate": 8, "igmmeps": 7, "igmmweps": 8}) \
         if opt_text.strip() else {}
-    if o.get("parameters") or o.get("nparameters"):
-        # these name the parameters of a function evaluator program, which gmm does not take yet
-        raise StataError(198, "option parameters() is not available yet in OpenDTA")   # VERIFY
+    if (o.get("parameters") or o.get("nparameters")) and not eqnames:
+        # with substitutable expressions, parameters() must name the parameters of the
+        # expressions and sets their order (VERIFY)
+        given = _param_names(opt_text)
+        if sorted(given) != sorted(names):
+            raise StataError(198, "parameters() does not match the parameters of the expressions")   # VERIFY
+        names = given
     mask = touse(s, p)
     for se in ses:
         for v in se.variables():
@@ -598,8 +798,13 @@ def cmd_gmm(s: "Session", args: str) -> None:
     # instruments per equation (eqno: list), or one list for all
     inst_by_eq: dict[int, tuple[list[str], bool]] = {}
     for spec in inst_specs:
-        mm = re.match(r"^\s*(?:(\d+)\s*:)?\s*(.*)$", spec, re.S)
-        eqno = int(mm.group(1)) - 1 if mm.group(1) else None
+        mm = re.match(r"^\s*(?:(\w+)\s*:)?\s*(.*)$", spec, re.S)
+        if mm.group(1) and not mm.group(1).isdigit():
+            if mm.group(1) not in eqnames:
+                raise StataError(198, f"equation {mm.group(1)} not found")   # VERIFY
+            eqno = eqnames.index(mm.group(1))
+        else:
+            eqno = int(mm.group(1)) - 1 if mm.group(1) else None
         body = mm.group(2)
         noc = False
         if "," in body:
