@@ -14,10 +14,8 @@ import numpy as np
 from ..core import choice as C
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.varlist import resolve_name
-from . import fvars
-from .choice import (_Alt, _asc_design, _asc_finish, _cluster_by_group, _replay, _restrict, display_eq)
-from .mleq import (Block, Engine, add_base_row, aux_row, block_from_text, finish_model, lab, names_in, peek, std_right)
+from .choice import (_asc_design, _asc_finish, _replay, display_eq)
+from .mleq import (Engine, add_base_row, aux_row, finish_model)
 from .models2 import _Prep, g
 from .regress import comma
 

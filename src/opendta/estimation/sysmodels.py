@@ -15,7 +15,6 @@ import numpy as np
 from ..core import missing as M
 from ..core import syseq
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
@@ -23,7 +22,7 @@ from . import fvars
 from .mleq import Block, assemble, block_from_text
 from .models2 import _header, g
 from .regress import cmdline, comma, sig5
-from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+from .results import Estimates, coef_table, post, rows_from_columns
 
 st = lazy("scipy.stats")
 
@@ -396,7 +395,7 @@ def cmd_vwls(s: "Session", args: str) -> None:
     if not args.strip() or args.strip().startswith(","):
         replay(s, "vwls", args)
         return
-    from .regress import Sample, wexp_macros
+    from .regress import Sample
     smp = Sample(s, args, opts_spec={"sd": 2, "noheader": 6, "notable": 5}, weights=(), extra_vars="")
     o = smp.o
     ds = s.data

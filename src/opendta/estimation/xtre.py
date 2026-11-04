@@ -21,7 +21,7 @@ from ..lazy import lazy
 from .ml import maximize, print_log
 from .models2 import num_hess
 from .panel2 import _finish, _num_grad, _Panel
-from .results import CoefRow, crit
+from .results import CoefRow, crit, g9
 
 special = lazy("scipy.special")
 st = lazy("scipy.stats")
@@ -256,8 +256,7 @@ def _binary_re(s: "Session", cmd: str, args: str, kind: str, title: str) -> None
 
 
 def _g(x):
-    from ..core.formats import format_value
-    return format_value(float(x), "%10.0g", pad=False).strip()
+    return g9(x, "%10.0g")
 
 
 def cmd_xtprobit(s: "Session", args: str) -> None:

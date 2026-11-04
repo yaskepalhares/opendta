@@ -109,7 +109,7 @@ Feito na fase 15 (caso de comparação 1901), exceto as opções que param com o
 
 ### 5. Modelos multinível (1–1,5 h, ~55 mil tokens)
 
-Feito nas fases 16 e 30 (casos 1902 e 1916), exceto as peças listadas em Modelos multinível em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`meqrlogit` e `meqrpoisson` com mais de um nível, `intmethod(laplace)` com mais de um nível, efeitos cruzados nos comandos `me`). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/meglm.py` (quadratura adaptativa) e `mixed.py`.
+Feito nas fases 16 e 30 (casos 1902 e 1916), exceto as peças listadas em Modelos multinível em [Faltam para a 1.0](../ROADMAP.pt-BR.md#faltam-para-a-10) (`meqrlogit` e `meqrpoisson` com mais de um nível, `intmethod(laplace)` com mais de um nível, efeitos cruzados nos comandos `me`). O plano original: `meglm` (a forma geral), `mecloglog`, `menbreg`, `meologit`, `meoprobit`, `mestreg`, `meqrlogit` e `meqrpoisson`; efeitos aleatórios cruzados no `mixed`. Reaproveitar `estimation/glmm.py` (quadratura adaptativa) e `mixed.py`.
 
 ### 6. Dados em painel ✅
 
@@ -129,11 +129,11 @@ Feito nas fases 18 e 29 (casos 1904 e 1915), exceto as peças listadas em Série
 
 ### 10. Modelos (pronto)
 
-Feito nas fases 21, 22 e 32 (casos de compatibilidade 1907, 1908 e 1918), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
+Feito nas fases 21, 22 e 32 (casos de compatibilidade 1907, 1908 e 1918), exceto o que consta em Modelos em [Faltam para a 1.0](../ROADMAP.pt-BR.md). A parte 10a (binários e contagem, censura e seleção, variáveis instrumentais) está em `estimation/binmodels.py`, `censmodels.py` e `ivmodels.py`, sobre o motor `estimation/mleq.py` e as verossimilhanças de `estimation/likelihoods.py`. A parte 10b: sistemas em `estimation/sysmodels.py` (álgebra em `core/syseq.py`), modelos de escolha em `estimation/choice.py` e `choiceprobit.py` (`core/choice.py`), métodos exatos em `estimation/exact.py` (`core/exact.py`), modelos não lineares em `estimation/nonlin.py` (o `gmm` em `gmm.py`) e `frontier.py`, e efeitos de tratamento em `estimation/teffects.py` e `treatment.py` (`core/treatfx.py`).
 
 ### 11. Outras suítes (pronto)
 
-Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras suítes em [Faltam para a 1.0](../ROADMAP.pt-BR.md). O ajuste do `sem` está em `estimation/semfit.py` (métodos `ml`, `mlmv`, `adf`; dados normais com valores ausentes em `core/mvnmiss.py`), com os grupos em `estimation/semgroup.py` e os subcomandos de `estat` em `estimation/semestat.py`; o `gsem` em `estimation/gsem.py` (quadratura adaptativa, respostas "custom"), com o `irt` sobre ele em `estimation/irt.py`; o `bayesmh` e os comandos `bayes` em `estimation/bayes.py`, sobre o amostrador de `core/mcmc.py`; os novos métodos do `power` e o gráfico em `commands/power2.py`.
+Feito na fase 23 (caso de compatibilidade 1909), exceto o que consta em Outras suítes em [Faltam para a 1.0](../ROADMAP.pt-BR.md). O ajuste do `sem` está em `estimation/semfit.py` (métodos `ml`, `mlmv`, `adf`; dados normais com valores ausentes em `core/mvnmiss.py`), com os grupos em `estimation/semgroup.py` e os subcomandos de `estat` em `estimation/semestat.py` e `semtests.py`; o `gsem` em `estimation/gsem.py` (quadratura adaptativa, respostas "custom"), com o `irt` sobre ele em `estimation/irt.py`; o `bayesmh` e os comandos `bayes` em `estimation/bayes.py`, sobre o amostrador de `core/mcmc.py`; os novos métodos do `power` e o gráfico em `commands/power2.py`.
 
 ## Antes da 1.0
 

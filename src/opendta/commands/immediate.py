@@ -15,7 +15,8 @@ from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options
 from ..lazy import lazy
 from .registry import command
-from .summarize import _clopper, _level, _prtest_one, _ttest_one, _ttest_two, g9, name12
+from .summarize import _level, g9, name12
+from .ttest import _clopper, _prtest_one, _ttest_one, _ttest_two
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -258,7 +259,7 @@ def cmd_prtesti(s: "Session", args: str) -> None:
         n1, p1, n2, p2 = vals
         if o.get("count"):
             p1, p2 = p1 / n1, p2 / n2
-        from .summarize import _prtest_two
+        from .ttest import _prtest_two
         _prtest_two(s, ["x", "y"], None, None, level, stats=(int(n1), p1, int(n2), p2))
         return
     raise StataError(198, "invalid syntax")

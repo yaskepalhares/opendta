@@ -21,8 +21,8 @@ from ..estimation.tsops import require_ts, shift
 from ..lang.syntax import match_options, parse_standard
 from ._util import eval_vector, touse
 from .registry import command
-from .tshelp import (PERIODS_PER_YEAR, append_periods, from_nan, kv, new_variable, panels,
-                     split_type, to_nan, unit_code, unit_name)
+from .tshelp import (PERIODS_PER_YEAR, append_periods, kv, new_variable, panels, split_type,
+                     to_nan, unit_code, unit_name)
 
 if TYPE_CHECKING:
     from ..session import Session

@@ -102,7 +102,7 @@ ALIASES = {
     "scalar": "macro", "tokenize": "macro", "set_language": "language",
     "set_messages": "language", "messages": "language", "cd": "files", "pwd": "files",
     "erase": "files", "rm": "files", "type": "files", "which": "files", "findfile": "files",
-    "sysdir": "files", "adopath": "files", "discard": "files", "dir": "files", "copy": "files",
+    "sysdir": "files", "adopath": "files", "discard": "files",
     "run": "do", "include": "do", "capture": "do", "exit": "do", "continue": "do",
     "error": "do", "confirm": "do", "version": "do", "timer": "do", "quietly": "do",
     "browse": "interface", "edit": "interface", "varmanage": "interface", "help": "interface",

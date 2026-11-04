@@ -21,12 +21,12 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top
 from ..lazy import lazy
-from . import fvars
-from .meglm import Fit, _fit_me, _posterior_eta, level_weights
+from .meglm import Fit, fit_me, level_weights
+from .meglm_out import posterior_eta
 from .mixed import build_levels, split_levels
 from .results import CoefRow, Estimates
 from .stfit import STSample
-from .streg import DISTS, Dist
+from .streg import DISTS
 
 special = lazy("scipy.special")
 st = lazy("scipy.stats")
@@ -99,9 +99,7 @@ def _dist(text: str):
 
 
 def cmd_mestreg(s: "Session", args: str) -> None:
-    from .meglm import _p_chibar  # noqa: F401  (kept next to the other me helpers)
     from .postest import replay
-    from .regress import cmdline  # noqa: F401
     if not args.strip() or args.strip().startswith(","):
         replay(s, "mestreg", args)
         return
@@ -246,12 +244,12 @@ def cmd_mestreg(s: "Session", args: str) -> None:
             aux_in_table=bool(naux), aux_rows=aux_rows if naux else None, eform=eform,
             predict=_predict_mestreg, macro_edit=edit, late_error=late,
             predict_opts={"xb": 2, "eta": 3, "reffects": 4, "hazard": 3, "median": 3, "mean": 2})
-    _fit_me(s, args, "mestreg", F)
+    fit_me(s, args, "mestreg", F)
 
 
 def _predict_mestreg(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     if stat in ("xb", "eta"):
-        eta, ok = _posterior_eta(s, est, fixedonly=stat != "eta")
+        eta, ok = posterior_eta(s, est, fixedonly=stat != "eta")
         return np.where(ok, eta, SYS), ""
     if stat not in ("hazard", "median", "mean"):
         raise StataError(198, f"option {stat or 'xb'} is not available yet in OpenDTA after mestreg")   # OpenDTA
@@ -259,7 +257,7 @@ def _predict_mestreg(s: "Session", est: Estimates, stat: str, mask: np.ndarray):
     # distributions other than gamma takes the fixed effects only, without a note (compat 1916;
     # VERIFY)
     fixed_med = stat == "median" and est.extra["spec"]["fam"] != "gamma"
-    eta, ok = _posterior_eta(s, est, fixedonly=fixed_med)
+    eta, ok = posterior_eta(s, est, fixedonly=fixed_med)
     fam = est.extra["spec"]["fam"]
     aft = est.extra["spec"]["title"].endswith("-- AFT")
     a = float(est.glmm["aux"][0]) if len(est.glmm["aux"]) else 0.0
@@ -314,7 +312,8 @@ def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, 
     """mestreg without random effects: the same model fitted without the || equation, shown as
     Stata does (title without "Mixed-effects", no group lines, no LR test; compat 1902)."""
     from ..core.stats import chi2_tail  # noqa: F401
-    from .meglm import _fit_fixed, _g
+    from .meglm import fit_fixed
+    from .results import g9
     from .mixed import _right
     from .ml import options as ml_options
     from .ml import print_log
@@ -323,7 +322,7 @@ def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, 
     n = smp.n
     F = Fit(smp=smp, o=o, sp={}, X=X, off=np.zeros(n), lv=None, fam_f=fam_f, naux=naux, b0=b0, npts=0,
             method="", family=name, link="", aux_eq=[])
-    r = _fit_fixed(F, ml_options(o))
+    r = fit_fixed(F, ml_options(o))
     if not o.get("nolog"):
         out.write("\n", "text")
         print_log(out, r, "log likelihood")
@@ -348,7 +347,7 @@ def _plain_mestreg(s, smp, X, fam_f, naux, b0, o, name, *, shown_, time_metric, 
     out.write("\n", "text")
     _right(out, title, "Number of obs", f"{int(n):,}")
     out.write("\n", "text")
-    _right(out, "", f"Wald chi2({k})", _g(wchi2, "%10.2f"))
-    _right(out, f"Log likelihood = {_g(r.ll, '%10.0g'):>10}", "Prob > chi2", _g(wp, "%10.4f"))
+    _right(out, "", f"Wald chi2({k})", g9(wchi2, "%10.2f"))
+    _right(out, f"Log likelihood = {g9(r.ll, '%10.0g'):>10}", "Prob > chi2", g9(wp, "%10.4f"))
     coef_table(s, "_t", rows, stat="z", df=None, level=smp.level, coef_title=eform_ or "Coef.",
                eform=bool(eform_))

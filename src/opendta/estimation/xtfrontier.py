@@ -15,7 +15,7 @@ from ..core import missing as M
 from ..core import panelfrontier as pf
 from ..core.errors import StataError
 from ..core.panelquad import Groups
-from .ml import maximize, print_log
+from .ml import print_log
 from .panel2 import _finish, _Panel
 from .results import CoefRow, crit
 from .tsops import ts_info

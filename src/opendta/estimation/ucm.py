@@ -337,7 +337,8 @@ def cmd_ucm(s: "Session", args: str) -> None:
 
 def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .tsmodels import _right
+    from .results import g9
     out = s.output
     x = est.extra
     if header:
@@ -345,10 +346,10 @@ def display_ucm(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write(f"Components: {x['components']}".rstrip() + "\n\n", "text")
         _right(out, x["sample"].replace("Sample:  ", "Sample: "), "Number of obs", f"{int(x['N']):,}")
         if x["df_m"]:
-            _right(out, "", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f"))
-        ll = f"Log likelihood = {_g(x['ll'], '%10.0g'):>10}"
+            _right(out, "", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f"))
+        ll = f"Log likelihood = {g9(x['ll'], '%10.0g'):>10}"
         if x["df_m"]:
-            _right(out, ll, "Prob > chi2", _g(x["p"], "%10.4f"))
+            _right(out, ll, "Prob > chi2", g9(x["p"], "%10.4f"))
         else:
             out.write(ll + "\n", "text")
     if table:

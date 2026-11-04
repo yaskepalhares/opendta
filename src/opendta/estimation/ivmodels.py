@@ -16,8 +16,8 @@ from ..core.stats import chi2_tail
 from ..lazy import lazy
 from . import likelihoods as L
 from .censmodels import _replay, _weighted_probit
-from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, fit_log,
-                   lab, names_in, peek, transformed_row)
+from .mleq import (Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, fit_log, lab,
+                   peek, transformed_row)
 from .models2 import _Prep, _tobit_footer, g
 from .regress import comma
 from .results import CoefRow
@@ -239,7 +239,6 @@ def _iv_twostep(s: "Session", args: str, cmd: str, dep: str, exog: str, endog: s
     and the residuals (2SIV), giving beta; (4) Omega = the covariance of alpha~ plus that of the
     regression of y2 (lambda - beta) on X; (5) delta = (D' Omega^-1 D)^-1 D' Omega^-1 alpha~ with
     D = (Pi, I1); (6) the Wald test of lambda = 0 in the 2SIV fit."""
-    from .models2 import _header
     tobit = cmd == "ivtobit"
     pr = _Prep(s, f"{dep} {endog} {exog} , {opts}".replace(", ,", ","), spec, extra_vars=inst,
                weights=("fweight", "aweight"))
@@ -472,7 +471,6 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
     from .postest import replay
     from .regress import Sample, cmdline
     from .results import Estimates, coef_table, post, rows_from_columns
-    from .models2 import _header
     t = args.strip()
     if not t or t.startswith(","):
         replay(s, "ivpoisson", args)
@@ -681,7 +679,7 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
     inst_all = " ".join([c.name for c in ex_cols] + [c.name for c in Zc])
     est.extra = dict(N=N, df_m=kk, instd=" ".join(c.name for c in Xn), insts=inst_all,
                      title=title, wm_label=wm_label, Q=gcrit, n_par=n_par, n_mom=n_mom)
-    from .panel import _retarget
+    from .ivregress import _retarget
     _retarget(est, Xn, ex_cols, endog_terms, smp.terms)
 
     def display(s_, e, *, header=True, table=True, level=None, **_kw):

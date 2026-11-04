@@ -12,10 +12,9 @@ import numpy as np
 from ..core import exact as X
 from ..core import missing as M
 from ..core.errors import StataError
-from . import fvars
-from .models2 import _header, g
+from .models2 import g
 from .regress import Sample, cmdline, comma
-from .results import CoefRow, Estimates, post
+from .results import Estimates, post
 
 if TYPE_CHECKING:
     from ..session import Session

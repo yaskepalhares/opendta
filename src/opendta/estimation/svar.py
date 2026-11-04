@@ -128,7 +128,8 @@ def cmd_svar(s: "Session", args: str) -> None:
     from ..commands._util import touse
     from .ml import print_log
     from .regress import cmdline
-    from .tsmodels import _check_gaps, _lags, _sample_text, _var_fit, _var_stats
+    from .tsmodels import _check_gaps, _lags, _sample_text
+    from .varmodel import _var_fit, _var_stats
     from .tsops import require_ts
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
@@ -327,20 +328,20 @@ def cmd_svar(s: "Session", args: str) -> None:
 def _cns_texts(x: dict) -> list[str]:
     """The constraints in the order Stata lists them: those of aconstraints() and bconstraints(),
     then the fixed entries of aeq() and beq() (compat 1915)."""
-    from .tsmodels import _g
+    from .results import g9
     out = list(x.get("cns_text", []))
     K = x["A"].shape[0]
     for tag, fix in (("a", x["Afix"]), ("b", x["Bfix"])):
         for r in range(K):
             for c in range(K):
                 if not np.isnan(fix[r, c]):
-                    out.append(f"[{tag}_{r + 1}_{c + 1}]_cons = {_g(fix[r, c])}")
+                    out.append(f"[{tag}_{r + 1}_{c + 1}]_cons = {g9(fix[r, c])}")
     return out
 
 
 def display_svar(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                  level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g
+    from .results import g9
     out = s.output
     x = est.extra
     if header:
@@ -351,7 +352,7 @@ def display_svar(s: "Session", est: Estimates, *, header: bool = True, table: bo
         out.write("\n", "text")
         kind = "Overidentified model" if x["df_oid"] > 0 else "Exactly identified model"
         out.write(f"{x['sample']:<48}{'Number of obs':<18}= {int(x['N']):>10}\n", "text")
-        out.write(f"{kind:<48}{'Log likelihood':<18}= {_g(x['ll'], '%9.0g'):>10}\n\n", "text")
+        out.write(f"{kind:<48}{'Log likelihood':<18}= {g9(x['ll'], '%9.0g'):>10}\n\n", "text")
     if table:
         coef_table(s, "", est.rows, stat="z", df=None, level=level or est.level)
         if x["df_oid"] > 0:

@@ -18,7 +18,6 @@ from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
 from ._util import touse
-from .nptests import _set_r
 from .registry import command
 from .summarize import g9, numeric_vars, weights
 

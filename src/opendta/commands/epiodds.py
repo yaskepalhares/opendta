@@ -15,7 +15,7 @@ from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
 from ._util import touse
-from .epitab import _p4, _r, _set_r, _strata
+from .epitab import _p4, _set_r, _strata
 from .registry import command
 from .summarize import _level, name12, weights
 

@@ -22,7 +22,7 @@ from ..lazy import lazy
 from ._util import eval_vector, touse
 from .nptests import _royston_adjust, _set_r, _sk_z
 from .registry import command
-from .summarize import _level, g9, name12, numeric_vars, weights
+from .summarize import _level, g9, name12, numeric_vars
 
 st = lazy("scipy.stats")
 

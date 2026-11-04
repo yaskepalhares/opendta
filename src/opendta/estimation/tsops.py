@@ -179,7 +179,6 @@ def _fmt_time(ds: "Dataset", tvar: str, x: float) -> str:
 
 
 def _declare(s: "Session", args: str, *, xt: bool) -> None:
-    from ..commands._util import plural  # noqa: F401
     from ..core.varlist import resolve_name
     from ..lang.syntax import match_options
     ds = s.data

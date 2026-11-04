@@ -19,7 +19,7 @@ from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
 from . import fvars
-from .results import CoefRow, Estimates, coef_table, crit, current, g9, post, pvalue
+from .results import CoefRow, Estimates, coef_table, crit, current, g9, post
 
 st = lazy("scipy.stats")
 
@@ -294,7 +294,6 @@ def _term_cells(s: "Session", est, tokens: list[str], asbalanced: bool, rows: np
 
 
 def _label_level(s: "Session", var: str, lv: float) -> str:
-    from .. import core
     return f"{int(lv)}" if float(lv).is_integer() else f"{lv:g}"
 
 
@@ -646,7 +645,7 @@ def cmd_pwmean(s: "Session", args: str) -> None:
 def _scores_hessian(s: "Session", est):
     """Per-observation scores (n × p) over all rows, Hessian (p × p), parameter names and the
     equation names, for regress, logit, probit and poisson."""
-    from .postest import design_all, xb_all
+    from .postest import design_all
     cmd = getattr(est, "ml_cmd", est.cmd)
     if cmd == "logistic":
         cmd = "logit"

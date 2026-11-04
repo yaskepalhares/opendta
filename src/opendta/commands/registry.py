@@ -7,6 +7,7 @@ underlined part in the manual's syntax diagram). E.g.: display -> "di".
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -37,6 +38,18 @@ def command(name: str, abbrev: str | None = None, *, prefix: bool = False, byabl
         REGISTRY[name] = CommandSpec(name, len(minimal), fn, prefix, byable)
         return fn
     return deco
+
+
+def lazy_commands(module: str, *names: str | tuple[str, str], prefix: bool = False) -> None:
+    """Registers commands whose code, cmd_<name> in opendta.estimation.<module>, is imported on
+    first use (start-up time). A name may be given with its minimal abbreviation: ("regress", "reg")."""
+    for entry in names:
+        name, abbrev = entry if isinstance(entry, tuple) else (entry, entry)
+
+        def run(s: "Session", args: str, _target=f"cmd_{name}") -> None:
+            getattr(import_module(f"opendta.estimation.{module}"), _target)(s, args)
+        run.__name__ = f"cmd_{name}"
+        command(name, abbrev, prefix=prefix)(run)
 
 
 def lookup(word: str) -> CommandSpec | None:

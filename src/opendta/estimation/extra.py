@@ -17,7 +17,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .results import CoefRow, Estimates, coef_table, post
+from .results import Estimates, coef_table, g9, post
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -26,12 +26,6 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or x >= SYS or not np.isfinite(x):
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 def _opts(text: str, spec: dict) -> tuple[str, dict]:
@@ -147,7 +141,7 @@ def cmd_hausman(s: "Session", args: str) -> None:
     for j, c in enumerate(common):
         se = math.sqrt(diag[j]) if diag[j] > 0 else SYS
         out.write(f"{c[:12]:>12} |", "text")
-        out.write(f"{_g(b1[j]):>12}{_g(b2[j]):>13}{_g(d[j]):>16}{_g(se):>16}\n", "result")
+        out.write(f"{g9(b1[j]):>12}{g9(b2[j]):>13}{g9(d[j]):>16}{g9(se):>16}\n", "result")
     out.write("-" * 78 + "\n", "text")
     cmd_a = ea.get("cmd", "")
     cmd_b = eb.get("cmd", "")
@@ -212,9 +206,9 @@ def cmd_xtsum(s: "Session", args: str) -> None:
         balanced = bool(np.all(cnt == cnt[0]))
         tlab = "T" if balanced else "T-bar"
         tval = f"{int(cnt[0]):>7}" if balanced else f"{N / G:>7.4g}"
-        rows = [(f"{n[:8]:<8} overall", _g(grand), _g(sd_o), _g(xs.min()), _g(xs.max()), "N", f"{N:>7}"),
-                (f"{'':<8} between", "", _g(sd_b), _g(means.min()), _g(means.max()), "n", f"{G:>7}"),
-                (f"{'':<8} within ", "", _g(sd_w), _g(within.min()), _g(within.max()), tlab, tval)]
+        rows = [(f"{n[:8]:<8} overall", g9(grand), g9(sd_o), g9(xs.min()), g9(xs.max()), "N", f"{N:>7}"),
+                (f"{'':<8} between", "", g9(sd_b), g9(means.min()), g9(means.max()), "n", f"{G:>7}"),
+                (f"{'':<8} within ", "", g9(sd_w), g9(within.min()), g9(within.max()), tlab, tval)]
         if k:
             out.write(f"{'':<17}|{'':<44}|\n", "text")
         for lab, mn, sd, lo, hi, ol, ov in rows:
@@ -412,8 +406,8 @@ def _display_qreg(s: "Session", est, *, header: bool = True, table: bool = True,
         out.write("\n", "text")
         out.write(f"{title:<52}Number of obs = ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
-        out.write(f"  Raw sum of deviations {_g(x['raw'], '%9.0g'):>8} (about {_g(x['yq'], '%10.0g').strip()})\n", "text")
-        out.write(f"  Min sum of deviations {_g(x['min'], '%9.0g'):>8}{'':<20}Pseudo R2     = ", "text")
+        out.write(f"  Raw sum of deviations {g9(x['raw'], '%9.0g'):>8} (about {g9(x['yq'], '%10.0g').strip()})\n", "text")
+        out.write(f"  Min sum of deviations {g9(x['min'], '%9.0g'):>8}{'':<20}Pseudo R2     = ", "text")
         out.write(f"{x['r2_p']:>10.4f}\n", "result")
         out.write("\n", "text")
     if table:

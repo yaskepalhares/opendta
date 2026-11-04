@@ -19,8 +19,8 @@ from .ml import maximize
 from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
                    finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, std_right,
                    sub_options, transformed_row)
-from .models import _logit, _poisson, _probit
-from .models2 import _header, _Prep, _log, chibar_text, g
+from .models import _poisson, _probit
+from .models2 import _Prep, _log, chibar_text, g
 from .regress import comma
 from .results import CoefRow
 

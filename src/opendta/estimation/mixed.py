@@ -26,14 +26,13 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top
 from ..lazy import lazy
 from . import fvars
 from .ml import maximize, print_log
 from .ml import options as ml_options
-from .results import Estimates, coef_table, post, rows_from_columns
+from .results import Estimates, coef_table, g9, post, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")
@@ -42,12 +41,6 @@ if TYPE_CHECKING:
     from ..session import Session
 
 SYS = M.SYSMISS
-
-
-def _g(x: float, fmt: str = "%9.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -619,10 +612,10 @@ def display_mixed(s: "Session", est: Estimates, *, header: bool = True, table: b
     if header:
         title = "Mixed-effects REML regression" if x["reml"] else "Mixed-effects ML regression"
         lab = "Log restricted-likelihood" if x["reml"] else "Log likelihood"
-        ll = f"{lab} = {_g(x['ll'], '%10.0g'):>10}"
+        ll = f"{lab} = {g9(x['ll'], '%10.0g'):>10}"
         group_header(out, title, x["groups"] if group else [], x["N"],
-                     [("", "", ""), ("", f"Wald chi2({int(x['df_m'])})", _g(x["chi2"], "%10.2f")),
-                      (ll, "Prob > chi2", _g(x["p"], "%10.4f"))])
+                     [("", "", ""), ("", f"Wald chi2({int(x['df_m'])})", g9(x["chi2"], "%10.2f")),
+                      (ll, "Prob > chi2", g9(x["p"], "%10.4f"))])
         out.write("\n", "text")
     if table:
         coef_table(s, est.depvar, est.rows, stat="z", df=None, level=lev)
@@ -709,7 +702,7 @@ def _vc_rows(lv: Level, th: np.ndarray, V: np.ndarray, sd: bool, z: float):
 
 def _re_row(out, lab, est_, se, lo, hi) -> None:
     out.write(f"{lab[:28]:>28} |", "text")
-    out.write(f"{_g(est_):>11}{_g(se):>11}{_g(lo):>14}{_g(hi):>12}\n", "result")
+    out.write(f"{g9(est_):>11}{g9(se):>11}{g9(lo):>14}{g9(hi):>12}\n", "result")
 
 
 def re_table(s: "Session", est: Estimates, lev: float) -> None:
@@ -893,7 +886,7 @@ def estat_recov(s: "Session", est: Estimates, rest: str) -> None:
         out.write(f"{'':>13}|" + "".join(f"{c:>10} " for c in nm) + "\n", "text")
         out.write("-" * 13 + "+" + "-" * (11 * len(nm)) + "\n", "text")
         for i, r_ in enumerate(nm):
-            out.write(f"{r_:>12} |" + "".join(f"{_g(S[i, j]):>10} " for j in range(len(nm))) + "\n", "text")
+            out.write(f"{r_:>12} |" + "".join(f"{g9(S[i, j]):>10} " for j in range(len(nm))) + "\n", "text")
         s.r = {"cov": m}
 
 

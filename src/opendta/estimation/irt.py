@@ -30,7 +30,8 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .gsem import Eq, GModel, _g, _post, fit, lse
+from .gsem import Eq, GModel, _post, fit, lse
+from .results import g9
 from .results import Estimates, crit
 
 st = lazy("scipy.stats")
@@ -395,10 +396,10 @@ def _line(out, label, b, s_, c, W=12, left=False, cat=False):
     if s_ > 0 and np.isfinite(s_):
         z = b / s_
         pv = 2 * float(st.norm.sf(abs(z)))
-        out.write(f"  {_g(b):>9}  {_g(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {_g(b - c * s_):>9}"
-                  f"   {_g(b + c * s_):>9}\n", "result")
+        out.write(f"  {g9(b):>9}  {g9(s_):>9}  {z:>7.2f}  {pv:>6.3f}    {g9(b - c * s_):>9}"
+                  f"   {g9(b + c * s_):>9}\n", "result")
     else:
-        out.write(f"  {_g(b):>9}  {'.':>9}\n", "result")
+        out.write(f"  {g9(b):>9}  {'.':>9}\n", "result")
 
 
 def display_irt(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
@@ -411,7 +412,7 @@ def display_irt(s: "Session", est: Estimates, *, header: bool = True, table: boo
         out.write("\n" + f"{info['title']:<48}{'Number of obs':<18}= ", "text")
         out.write(f"{x['N']:>10,}\n", "result")
         out.write("Log likelihood = ", "text")
-        out.write(f"{_g(x['ll'], '%10.0g'):>10}\n", "result")
+        out.write(f"{g9(x['ll'], '%10.0g'):>10}\n", "result")
     if not table:
         return
     _print(s, est, _table_rows(est), lv)

@@ -14,11 +14,11 @@ import numpy as np
 from ..core import missing as M
 from ..core import panelroot as pr
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
 from .tsmodels import mackinnon_p
 from .tsops import panel_info, ts_info
+from .results import g9
 
 st = lazy("scipy.stats")
 
@@ -30,7 +30,7 @@ METHODS = ("llc", "ips", "fisher", "hadri", "breitung", "ht")
 
 
 def _g(x, fmt="%9.4f") -> str:
-    return format_value(float(x), fmt, pad=False).strip()
+    return g9(x, fmt)
 
 
 def _matrix(s: "Session", name: str, mask: np.ndarray, require_balanced: bool):

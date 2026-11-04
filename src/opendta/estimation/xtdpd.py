@@ -17,12 +17,10 @@ import numpy as np
 from ..core import missing as M
 from ..core import panelgmm as pg
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import match_options
-from . import fvars
 from .regress import Sample, cmdline, comma
-from .results import CoefRow, Estimates, coef_table, post
+from .results import CoefRow, Estimates, coef_table, g9, post
 from .tsops import panel_info, ts_info
 
 if TYPE_CHECKING:
@@ -32,9 +30,7 @@ SYS = M.SYSMISS
 
 
 def _g(x, fmt="%10.0g") -> str:
-    if x is None or not np.isfinite(x) or abs(x) >= SYS:
-        return "."
-    return format_value(float(x), fmt, pad=False).strip()
+    return g9(x, fmt)
 
 
 def _varlist(s: "Session", txt) -> list[str]:

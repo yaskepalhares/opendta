@@ -14,14 +14,13 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..estimation.tsops import require_ts
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
 from ._util import touse
 from .registry import command
-from .tshelp import kv, new_variable, panels, to_nan
+from .tshelp import kv, new_variable, panels
 
 st = lazy("scipy.stats")
 
