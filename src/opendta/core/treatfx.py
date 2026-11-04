@@ -248,54 +248,52 @@ def teffects(est, y, t, Xo, Z, omodel, tmodel, stat, clusters=None):
 # control function (eteffects)
 # ---------------------------------------------------------------------------
 
-def eteffects(y, t, Xo, Z, stat, clusters=None):
-    """Linear outcome with an endogenous binary treatment (probit): in each arm the outcome
-    regression includes the generalized residual of the treatment probit (Wooldridge). Exactly
-    identified moment conditions: theta = [mu0, mu1, beta0, rho0, beta1, rho1, gamma]."""
+def eteffects(y, t, Xo, Z, stat, clusters=None, omodel="linear"):
+    """Control-function estimator of [TE] eteffects (Methods and formulas): a probit treatment
+    model, the residual nu = t - Phi(z'pi), and in each arm an outcome model in x and nu (linear,
+    probit, fractional probit or exponential mean), all fitted together with the potential-outcome
+    means as an exactly identified GMM problem. POM_j is the mean over the sample (the treated with
+    atet) of m(x'b_1j + nu b_2j). theta = [mu0, mu1, beta0, rho0, beta1, rho1, pi]."""
     n, ko = Xo.shape
-    kz = Z.shape[1]
     d = np.ones(n) if stat != "atet" else t.copy()
     t0 = 1 - t
+    kind = {"linear": "linear", "probit": "probit", "fractional": "probit", "exponential": "poisson"}[omodel]
 
-    def gres(g):
-        zg = Z @ g
-        return t * stats.norm.pdf(zg) / np.clip(stats.norm.cdf(zg), 1e-15, 1) - \
-            t0 * stats.norm.pdf(zg) / np.clip(stats.norm.cdf(-zg), 1e-15, 1)
+    def resid_t(g):
+        return t - stats.norm.cdf(Z @ g)
+
+    def mean(W, a):
+        return _mean(kind, W @ a)[0] if kind != "linear" else W @ a
+
+    def score(W, yv, a):
+        if kind == "linear":
+            return W * (yv - W @ a)[:, None]
+        return glm_score(kind, W, yv, a)
 
     g = glm_fit("probit", Z, t)
-    r = gres(g)
+    W = np.column_stack([Xo, resid_t(g)])
     arms = []
     for tj in (t0, t):
-        W = np.column_stack([Xo, r])
         m = tj > 0
-        arms.append(np.linalg.lstsq(W[m], y[m], rcond=None)[0])
-    (c0, c1) = arms
-
-    def cf(g_, j):                      # control-function term averaged over the target group
-        if stat != "atet":
-            return np.zeros(n)
-        zg = Z @ g_
-        return stats.norm.pdf(zg) / np.clip(stats.norm.cdf(zg), 1e-15, 1)
-
-    m0 = Xo @ c0[:-1] + c0[-1] * cf(g, 0)
-    m1 = Xo @ c1[:-1] + c1[-1] * cf(g, 1)
-    mu = np.array([np.sum(d * m0) / d.sum(), np.sum(d * m1) / d.sum()])
+        if kind == "linear":
+            arms.append(np.linalg.lstsq(W[m], y[m], rcond=None)[0])
+        else:
+            arms.append(glm_fit(kind, W[m], y[m]))
+    c0, c1 = arms
+    mu = np.array([np.sum(d * mean(W, c0)) / d.sum(), np.sum(d * mean(W, c1)) / d.sum()])
     theta = np.concatenate([mu, c0, c1, g])
     k1 = ko + 1
 
+    # the variance takes the probit coefficients as known: the sandwich of the outcome and POM
+    # moments at the estimated residual reproduces Stata's standard errors (compat 1908)
     def gfun(th):
-        mu_, a0, a1, g_ = th[:2], th[2:2 + k1], th[2 + k1:2 + 2 * k1], th[2 + 2 * k1:]
-        r_ = gres(g_)
-        W = np.column_stack([Xo, r_])
-        s0 = t0[:, None] * W * (y - W @ a0)[:, None]
-        s1 = t[:, None] * W * (y - W @ a1)[:, None]
-        sg = glm_score("probit", Z, t, g_)
-        q0 = Xo @ a0[:-1] + a0[-1] * cf(g_, 0)
-        q1 = Xo @ a1[:-1] + a1[-1] * cf(g_, 1)
-        mom = np.column_stack([d * (q0 - mu_[0]), d * (q1 - mu_[1])])
-        return np.column_stack([mom, s0, s1, sg])
+        mu_, a0, a1 = th[:2], th[2:2 + k1], th[2 + k1:2 + 2 * k1]
+        s0 = t0[:, None] * score(W, y, a0)
+        s1 = t[:, None] * score(W, y, a1)
+        mom = np.column_stack([d * (mean(W, a0) - mu_[0]), d * (mean(W, a1) - mu_[1])])
+        return np.column_stack([mom, s0, s1])
 
-    V = sandwich_m(gfun, theta, n, clusters)
+    V = sandwich_m(gfun, theta[:2 + 2 * k1], n, clusters)
     return theta, V, k1
 
 
