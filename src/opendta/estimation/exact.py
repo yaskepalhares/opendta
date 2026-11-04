@@ -40,11 +40,23 @@ def _exact(s: "Session", args: str, cmd: str) -> None:
     smp = Sample(s, args, opts_spec={"test": 2, "condvars": 4, "coef": 4, "midp": 4, "nolog": 4, "memory": 3,
                                      "saving": 3, "estconstant": 4, "terms": 5, "group": 3, "binomial": 3,
                                      "exposure": 3, "offset": 3, "irr": 3, "or": 2},
-                 weights=("fweight",))
+                 weights=("fweight",), extra_vars=" ".join(str(o_) for o_ in _opt_vars(args)))
     o = smp.o
-    for bad in ("terms", "group", "binomial", "exposure", "offset", "condvars", "saving", "estconstant"):
+    for bad in ("terms", "saving"):
         if o.get(bad):
-            raise StataError(198, f"option {bad}() is not available yet in {cmd}")   # VERIFY
+            raise StataError(198, f"option {bad}() is not available yet in {cmd}")   # OpenDTA
+    allowed = ("binomial", "group", "estconstant") if logistic else ("exposure", "offset")
+    for opt_ in ("binomial", "group", "estconstant", "exposure", "offset"):
+        if o.get(opt_) and opt_ not in allowed:
+            raise StataError(198, f"option {opt_}() not allowed")   # VERIFY
+    if o.get("group") and o.get("estconstant"):
+        raise StataError(198, "options group() and estconstant may not be combined")   # VERIFY
+    ds = s.data
+    mask = smp.mask
+
+    def var(name):
+        from ..core.varlist import resolve_name
+        return ds.get(resolve_name(ds, str(name).strip())).data[mask].astype(float)
     test = str(o.get("test", "sufficient")).strip().lower()   # VERIFY: probability keeps the sufficient layout
     if test not in ("score", "sufficient", "probability", "s", "su", "p", "pr", "sc"):
         raise StataError(198, "option test() invalid")   # VERIFY
@@ -53,35 +65,66 @@ def _exact(s: "Session", args: str, cmd: str) -> None:
         raise StataError(102, "too few variables specified")
     y = smp.y.astype(float)
     n = smp.n
+    trials = var(o["binomial"]) if o.get("binomial") else None
     if logistic:
-        if not np.all((y == 0) | (y == 1)):
-            raise StataError(450, f"{smp.depname} must be 0 or 1")   # VERIFY
-        if np.all(y == y[0]):
-            raise StataError(2000, "outcome does not vary")
+        if trials is not None:
+            if np.any(trials < 0) or np.any(trials != np.floor(trials)) or np.any(y < 0) or np.any(y > trials) \
+                    or np.any(y != np.floor(y)):
+                raise StataError(459, f"{smp.depname} must be between 0 and {o['binomial']}")   # VERIFY
+            if np.all(y == 0) or np.all(y == trials):
+                raise StataError(2000, "outcome does not vary")
+        else:
+            if not np.all((y == 0) | (y == 1)):
+                raise StataError(450, f"{smp.depname} must be 0 or 1")   # VERIFY
+            if np.all(y == y[0]):
+                raise StataError(2000, "outcome does not vary")
     else:
         if np.any(y < 0) or np.any(y != np.floor(y)):
             raise StataError(459, f"{smp.depname} must be a nonnegative integer")   # VERIFY
-    Xm = np.column_stack([np.ones(n)] + [c.values for c in est_cols])
+    # condvars(): variables whose statistics are conditioned on and not reported (after the others)
+    cond_names = []
+    if o.get("condvars"):
+        from ..core.varlist import expand
+        cond_names = expand(ds, str(o["condvars"]))
+    cond_cols = [var(v) for v in cond_names]
+    Xm = np.column_stack([np.ones(n)] + [c.values for c in est_cols] + cond_cols)
+    k_rep = 1 + len(est_cols)
     obs = tuple(round(float(v), 9) for v in (Xm * y[:, None]).sum(axis=0))
+    mult = None
+    if o.get("exposure"):
+        mult = var(o["exposure"])
+    if o.get("offset"):
+        mult = (mult if mult is not None else 1.0) * np.exp(var(o["offset"]))
+    general = bool(trials is not None or o.get("group") or mult is not None or cond_names)
     if logistic:
-        dist = X.suff_dist_logistic(Xm)
+        if o.get("group"):
+            dist = X.suff_dist_logistic_groups(Xm, var(o["group"]), y, trials)
+        else:
+            dist = X.suff_dist_logistic(Xm, trials)
         pbar = float(y.mean())
     else:
         total = int(y.sum())
         try:
-            dist = X.suff_dist_poisson(Xm, total)
+            dist = X.suff_dist_poisson(Xm, total, None if mult is None else np.asarray(mult, dtype=float))
         except ValueError:
             raise StataError(459, "the covariates of expoisson must be integers")   # VERIFY
         except MemoryError:
             raise StataError(950, "insufficient memory")
         pbar = float(y.mean())
-    sc, p_sc = X.score_test(dist, obs, pbar, Xm, "logistic" if logistic else "poisson")
-    if logistic:
-        sc *= (n - 1) / n
+    if general:
+        # the conditional moments of the statistics (VERIFY with binomial(), group(), offsets)
+        sc, p_sc = X.score_test_moments(dist, obs, [0] + list(range(k_rep, Xm.shape[1])), list(range(1, k_rep)))
+    else:
+        sc, p_sc = X.score_test(dist, obs, pbar, Xm, "logistic" if logistic else "poisson")
+        if logistic:
+            sc *= (n - 1) / n
     mid = bool(o.get("midp"))
     alpha = 1 - smp.level / 100
     rows = []
-    for j, c in enumerate(est_cols, start=1):
+    report = [(j, c.name) for j, c in enumerate(est_cols, start=1)]
+    if o.get("estconstant"):
+        report.append((0, "_cons"))          # VERIFY: _cons last, from T0 given the others
+    for j, name in report:
         sup, wts = X.conditional(dist, obs, j)
         t = obs[j]
         b = X.cmle(sup, wts, t)
@@ -93,7 +136,7 @@ def _exact(s: "Session", args: str, cmd: str) -> None:
             tstat, pv = X.score_conditional(sup, wts, t)
         else:
             tstat, pv = t, X.exact_p(sup, wts, t, mid)
-        rows.append((c.name, b, is_mue, tstat, pv, lo, hi))
+        rows.append((name, b, is_mue, tstat, pv, lo, hi))
     names = [r[0] for r in rows]
     b_vec = np.array([r[1] for r in rows])
     est = Estimates(cmd, smp.depname, names, b_vec, np.zeros((len(names), len(names))), n, "z", None)
@@ -111,6 +154,16 @@ def _exact(s: "Session", args: str, cmd: str) -> None:
               ("properties", "b"), ("level", f"{smp.level:g}")]
     post(s, est, scalars, macros, smp.mask)
     _display_exact(s, est)
+
+
+def _opt_vars(args: str) -> list[str]:
+    """The variables named by binomial(), group(), exposure(), offset() and condvars(), which the
+    sample must also cover."""
+    import re
+    out = []
+    for m in re.finditer(r"\b(bin\w*|gr\w*|exp\w*|off\w*|condv\w*)\s*\(([^)]*)\)", args.split(",", 1)[1] if "," in args else ""):
+        out.append(m.group(2))
+    return out
 
 
 def _display_exact(s, est, *, header=True, table=True, level=None, **_kw) -> None:

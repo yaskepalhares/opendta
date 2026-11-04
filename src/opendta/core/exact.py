@@ -15,17 +15,21 @@ def _key(vec) -> tuple:
     return tuple(round(float(v), 9) for v in vec)
 
 
-def _groups(X: np.ndarray):
-    """Distinct rows of X and how many times each occurs (the statistics only depend on the sums)."""
-    rows, counts = np.unique(np.round(X, 9), axis=0, return_counts=True)
+def _groups(X: np.ndarray, weights: np.ndarray | None = None):
+    """Distinct rows of X and how many times each occurs (the statistics only depend on the sums);
+    with `weights`, the sum of the weights of the observations of each row."""
+    rows, inv, counts = np.unique(np.round(X, 9), axis=0, return_inverse=True, return_counts=True)
+    if weights is not None:
+        counts = np.bincount(inv.ravel(), weights=weights, minlength=len(rows))
     return rows, counts
 
 
-def suff_dist_logistic(X: np.ndarray) -> dict:
+def suff_dist_logistic(X: np.ndarray, trials: np.ndarray | None = None) -> dict:
     """{t: number of 0/1 vectors y with sum_i y_i x_i = t}. X has the constant first. Identical
     rows are handled together: s of the n_g observations with y = 1 can be chosen in C(n_g, s)
-    ways. Counts are rescaled along the way (only ratios are used)."""
-    rows, counts = _groups(X)
+    ways. With `trials` (binomial(): y_i successes out of trials_i), n_g is the number of trials of
+    the row. Counts are rescaled along the way (only ratios are used)."""
+    rows, counts = _groups(X, trials)
     k = X.shape[1]
     dist: dict[tuple, float] = {(0.0,) * k: 1.0}
     for xg, ng in zip(rows, counts):
@@ -39,12 +43,14 @@ def suff_dist_logistic(X: np.ndarray) -> dict:
     return dist
 
 
-def suff_dist_poisson(X: np.ndarray, total: int) -> dict:
+def suff_dist_poisson(X: np.ndarray, total: int, mult: np.ndarray | None = None) -> dict:
     """{t: sum over the count vectors y with sum y = total and sum_i y_i x_i = t of prod 1/y_i!}.
     X has the constant first (its statistic is sum y). The n_g observations with the same row
     contribute m = their total count with weight n_g^m / m!. The covariates must be integers: the
-    distribution lives on an integer lattice kept in a dense array."""
-    rows, counts = _groups(X)
+    distribution lives on an integer lattice kept in a dense array. `mult`: exp(offset) of each
+    observation (exposure() and offset()); n_g is then the sum of mult over the row's observations
+    (multinomial theorem)."""
+    rows, counts = _groups(X, mult)
     k = X.shape[1]
     R = np.round(rows[:, 1:]).astype(int)
     if not np.allclose(rows[:, 1:], R):
@@ -190,3 +196,44 @@ def score_conditional(sup, p, t_obs: float):
     s = (sup - m) ** 2 / v
     so = (t_obs - m) ** 2 / v
     return float(so), float(p[s >= so - 1e-9].sum())
+
+
+def suff_dist_logistic_groups(X: np.ndarray, gid: np.ndarray, y: np.ndarray,
+                              trials: np.ndarray | None = None) -> dict:
+    """exlogistic, group(): the distribution conditional on the number of successes of each group
+    (a constant per group). Each group's distribution is cut at its observed total and the groups
+    are convolved; the first statistic stays the overall total."""
+    dist: dict[tuple, float] = {(0.0,) * X.shape[1]: 1.0}
+    for gv in np.unique(gid):
+        sel = gid == gv
+        tg = suff_dist_logistic(X[sel], None if trials is None else trials[sel])
+        sg = float(y[sel].sum())
+        part = {t: c for t, c in tg.items() if abs(t[0] - sg) < 1e-7}
+        new: dict[tuple, float] = {}
+        for t1, c1 in dist.items():
+            for t2, c2 in part.items():
+                k = _key(np.array(t1) + np.array(t2))
+                new[k] = new.get(k, 0.0) + c1 * c2
+        mx = max(new.values())
+        dist = {t: c / mx for t, c in new.items()}
+    return dist
+
+
+def score_test_moments(dist: dict, obs: tuple, given: list[int], tested: list[int]):
+    """Exact score test of the `tested` coefficients being zero, with the mean and covariance of
+    their statistics in the distribution conditional on the `given` statistics (for 0/1 and
+    Poisson outcomes these are the moments that score_test uses). Returns the statistic and
+    Pr(statistic >= observed)."""
+    keys = [t for t in dist if all(abs(t[m] - obs[m]) < 1e-7 for m in given)]
+    T = np.array([[t[m] for m in tested] for t in keys])
+    c = np.array([dist[t] for t in keys])
+    c = c / c.sum()
+    mu = c @ T
+    U = T - mu
+    C = (U * c[:, None]).T @ U
+    Ci = np.linalg.pinv(C)
+    stat = np.einsum("ij,jk,ik->i", U, Ci, U)
+    uo = np.array([obs[m] for m in tested]) - mu
+    s_obs = float(uo @ Ci @ uo)
+    p = float(c[stat >= s_obs - 1e-9 * max(1.0, s_obs)].sum())
+    return s_obs, p

@@ -18,4 +18,4 @@
 Estimates, confidence intervals and p-values come from the exact conditional distribution of the sufficient statistics. The conditional maximum likelihood estimate is shown, or the median unbiased estimate (marked with an asterisk) when the first is infinite.
 
 {pstd}
-Not available: {cmd:terms}, {cmd:group()}, {cmd:binomial()}, {cmd:condvars()}, {cmd:saving()}, {cmd:exposure()} and {cmd:offset()}.
+{cmd:exlogistic} takes {cmd:binomial(}varname{cmd:)}, {cmd:group(}varname{cmd:)}, {cmd:condvars(}varlist{cmd:)} and {cmd:estconstant}; {cmd:expoisson} takes {cmd:exposure(}varname{cmd:)}, {cmd:offset(}varname{cmd:)} and {cmd:condvars(}varlist{cmd:)}. Not available: {cmd:terms} and {cmd:saving()}.
