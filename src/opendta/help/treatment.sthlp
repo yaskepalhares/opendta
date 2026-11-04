@@ -10,7 +10,7 @@
 {cmd:teffects} {c -(}{cmd:ra}|{cmd:ipw}|{cmd:ipwra}|{cmd:aipw}|{cmd:nnmatch}|{cmd:psmatch}{c )-} {cmd:(}ovar [omvarlist] [{cmd:,} omodel]{cmd:)} {cmd:(}tvar [tmvarlist] [{cmd:,} tmodel]{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans} {cmd:nneighbor(}#{cmd:)} {cmd:metric(}{cmd:mahalanobis}|{cmd:euclidean}|{cmd:ivariance}{cmd:)} {cmd:vce(}{cmd:robust}[{cmd:, nn(}#{cmd:)}]{cmd:)}]
 
 {p 8 16 2}
-{cmd:eteffects} {cmd:(}ovar omvarlist{cmd:)} {cmd:(}tvar tmvarlist{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans}]
+{cmd:eteffects} {cmd:(}ovar omvarlist [{cmd:,} {cmd:probit}|{cmd:fractional}|{cmd:exponential}]{cmd:)} {cmd:(}tvar tmvarlist{cmd:)} [if] [in] [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans}]
 
 {p 8 16 2}
 {cmd:stteffects} {c -(}{cmd:ra}|{cmd:ipw}|{cmd:ipwra}{c )-} ... [{cmd:,} {cmd:ate}|{cmd:atet}|{cmd:pomeans}]
@@ -21,7 +21,7 @@
 {title:Description}
 
 {pstd}
-Binary treatments, and in {cmd:teffects ra}, {cmd:ipw}, {cmd:ipwra} and {cmd:aipw} multivalued treatments (one outcome model per level, a multinomial logit treatment model, {cmd:control()} and {cmd:tlevel()}). The outcome model is {cmd:linear}, {cmd:logit}, {cmd:probit} or {cmd:poisson} and the treatment model {cmd:logit} or {cmd:probit}; the variance is robust (stacked estimating equations, matching: Abadie and Imbens). {cmd:eteffects} takes a linear outcome and a probit treatment (control function). {cmd:stteffects} fits {cmd:exponential}, {cmd:weibull} or {cmd:lognormal} survival models and reports mean survival times. {cmd:etregress} is maximum likelihood or two-step, and {cmd:etpoisson} integrates the unobserved heterogeneity by Gauss-Hermite quadrature.
+Binary treatments, and in {cmd:teffects ra}, {cmd:ipw}, {cmd:ipwra} and {cmd:aipw} multivalued treatments (one outcome model per level, a multinomial logit treatment model, {cmd:control()} and {cmd:tlevel()}). The outcome model is {cmd:linear}, {cmd:logit}, {cmd:probit} or {cmd:poisson} and the treatment model {cmd:logit} or {cmd:probit}; the variance is robust (stacked estimating equations, matching: Abadie and Imbens). {cmd:eteffects} takes a linear, probit, fractional probit or exponential-mean outcome and a probit treatment; the control function is the probit residual t - Phi(z'pi). {cmd:stteffects} fits {cmd:exponential}, {cmd:weibull} or {cmd:lognormal} survival models and reports mean survival times. {cmd:etregress} is maximum likelihood or two-step, and {cmd:etpoisson} integrates the unobserved heterogeneity by Gauss-Hermite quadrature.
 
 {pstd}
 Not available: multivalued treatments in the matching estimators, other outcome models, {cmd:stteffects wra}, {cmd:predict} after {cmd:teffects}.

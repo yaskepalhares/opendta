@@ -25,6 +25,7 @@ SYS = M.SYSMISS
 
 _OMODELS = ("linear", "logit", "probit", "poisson")
 _TMODELS = ("logit", "probit")
+_ETMODELS = ("linear", "probit", "fractional", "exponential")
 
 
 def _groups(text: str) -> tuple[list[str], str]:
@@ -193,14 +194,15 @@ def _run(s, cmd, sub, rest, full):
         ovar, omodel, onoc = groups[0].split()[0] if groups[0].split() else "", "linear", False
         omv = ""
     else:
-        head, omodel, onoc = _group(groups[0], _OMODELS if not match else ("linear",), oden)
+        omodels = _ETMODELS if cmd == "eteffects" else (_OMODELS if not match else ("linear",))
+        head, omodel, onoc = _group(groups[0], omodels, oden)
         ovar, _, omv = head.partition(" ")
         omv = omv.strip()
     thead, tmodel, tnoc = _group(groups[1], _TMODELS, "probit" if cmd == "eteffects" else "logit")
     tvar, _, tmv = thead.partition(" ")
     tmv = tmv.strip()
-    if cmd == "eteffects" and (omodel != "linear" or tmodel != "probit"):
-        raise StataError(198, "only linear outcome and probit treatment models are available")   # VERIFY
+    if cmd == "eteffects" and tmodel != "probit":
+        raise StataError(198, "the treatment model of eteffects is probit")   # VERIFY
     spec = {"ate": 3, "atet": 4, "pomeans": 3, "control": 3, "tlevel": 3, "nneighbor": 3,
             "metric": 3, "aequations": 4, "osample": 3, "logit": 4, "probit": 4, "vce": 3,
             "level": 1, "noconstant": 4}
@@ -262,12 +264,20 @@ def _run(s, cmd, sub, rest, full):
                 CoefRow("coef", f"({lv1} vs {lv0}) ", tau, se, name=names[0])]
     else:
         if cmd == "eteffects":
-            th, Vf, _k = T.eteffects(y, t, Xo, Z, stat, clusters)
+            if omodel in ("probit", "fractional") and np.any((y < 0) | (y > 1)):
+                raise StataError(459, f"{ovar} must be between 0 and 1")   # VERIFY
+            if omodel == "probit" and np.any((y != 0) & (y != 1)):
+                raise StataError(2000, f"{ovar} must be 0 or 1")   # VERIFY
+            if omodel == "exponential" and np.any(y < 0):
+                raise StataError(459, f"{ovar} must be nonnegative")   # VERIFY
+            th, Vf, _k = T.eteffects(y, t, Xo, Z, stat, clusters, omodel=omodel)
         else:
             th, Vf, _lay = T.teffects(sub, y, t, Xo, Z, omodel, tmodel, stat, clusters)
         mu, Vm = th[:2], Vf[:2, :2]
         b, V, names, eq, rows = _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1)
         omodel_txt = {"ipw": "weighted mean", "aipw": "linear by ML"}.get(sub, omodel)
+        if cmd == "eteffects":
+            omodel_txt = {"fractional": "fractional probit", "exponential": "exponential mean"}.get(omodel, omodel)   # VERIFY
         tmodel_txt = tmodel if sub not in ("ra",) else "none"
         dist = ""
     title = "Endogenous treatment-effects estimation" if cmd == "eteffects" else "Treatment-effects estimation"
