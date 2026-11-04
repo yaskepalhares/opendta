@@ -4,39 +4,25 @@ the names and abbreviations are registered."""
 
 from __future__ import annotations
 
-from importlib import import_module
-from typing import TYPE_CHECKING
+from .registry import lazy_commands
 
-from .registry import command
+lazy_commands("binmodels", "scobit", "hetprobit", "fracreg", "zip", "zinb", "tpoisson", "tnbreg",
+              "gnbreg", "binreg", "glogit")
 
-if TYPE_CHECKING:
-    from ..session import Session
+lazy_commands("censmodels", "intreg", "truncreg", "heckman", "heckprobit", "heckoprobit", "biprobit")
 
+lazy_commands("ivmodels", "ivprobit", "ivtobit", "ivpoisson")
 
-def _register(module: str, names: list[str]) -> None:
-    for name in names:
-        def run(s: "Session", args: str, _name=name, _module=module) -> None:
-            getattr(import_module(f"opendta.estimation.{_module}"), f"cmd_{_name}")(s, args)
-        run.__name__ = f"cmd_{name}"
-        command(name, name)(run)
+lazy_commands("sysmodels", "constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3", "rreg")
 
+lazy_commands("choice", "clogit", "rologit", "asclogit", "slogit")
 
-_register("binmodels", ["scobit", "hetprobit", "fracreg", "zip", "zinb", "tpoisson", "tnbreg", "gnbreg", "binreg", "glogit"])
+lazy_commands("choiceprobit", "mprobit", "asmprobit", "asroprobit")
 
-_register("censmodels", ["intreg", "truncreg", "heckman", "heckprobit", "heckoprobit", "biprobit"])
+lazy_commands("exact", "exlogistic", "expoisson")
 
-_register("ivmodels", ["ivprobit", "ivtobit", "ivpoisson"])
+lazy_commands("nonlin", "nl", "nlsur", "gmm")
 
-_register("sysmodels", ["constraint", "cnsreg", "eivreg", "vwls", "sureg", "reg3", "rreg"])
-
-_register("choice", ["clogit", "rologit", "asclogit", "slogit"])
-
-_register("choiceprobit", ["mprobit", "asmprobit", "asroprobit"])
-
-_register("exact", ["exlogistic", "expoisson"])
-
-_register("nonlin", ["nl", "nlsur", "gmm"])
-
-_register("frontier", ["frontier"])
-_register("treatment", ["etregress", "etpoisson"])
-_register("teffects", ["teffects", "eteffects", "stteffects"])
+lazy_commands("frontier", "frontier")
+lazy_commands("treatment", "etregress", "etpoisson")
+lazy_commands("teffects", "teffects", "eteffects", "stteffects")
