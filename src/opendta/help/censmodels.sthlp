@@ -22,7 +22,7 @@
 {cmd:heckoprobit} depvar [indepvars] [if] [in] {cmd:,} {cmd:select(}...{cmd:)} [...]
 
 {p 8 16 2}
-{cmd:biprobit} depvar1 depvar2 [indepvars] [if] [in] [weight] [{cmd:,} {cmd:offset1(}varname{cmd:)} {cmd:offset2(}varname{cmd:)} ...] ({cmd:partial} is not available yet){p_end}
+{cmd:biprobit} depvar1 depvar2 [indepvars] [if] [in] [weight] [{cmd:,} {cmd:offset1(}varname{cmd:)} {cmd:offset2(}varname{cmd:)} {cmd:partial} {cmd:constraints(}numlist{cmd:)} ...]{p_end}
 {p 8 16 2}
 {cmd:biprobit} {cmd:(}depvar1 {cmd:=} indepvars1{cmd:)} {cmd:(}depvar2 {cmd:=} indepvars2{cmd:)} [if] [in] [weight] [{cmd:,} ...]
 

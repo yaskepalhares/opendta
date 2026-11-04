@@ -216,6 +216,63 @@ def assemble(pr, blocks: list[Block], b: np.ndarray, V: np.ndarray, aux_names: l
     return names, eqs, b_full, V_full, rows
 
 
+def read_constraints(s, pr, blocks: list[Block], aux_names: list[tuple[str, str]]) -> None:
+    """constraints(numlist): the constraints read against the names of e(b) and turned into the
+    transformation b = T bc + a of the free parameters, kept on `pr` (pr.cns) for its maximize
+    and vce; pr.cns_C is e(Cns) and pr.cns_names the names it is read against."""
+    numlist = pr.o.get("constraints")
+    if numlist in (None, True, False):
+        return
+    from types import SimpleNamespace
+    from ..core.constraints import constraint_transform
+    from ..core.errors import StataError
+    from .postest import _constraint
+    from .sysmodels import _constraints, _numlist
+    K = sum(blk.k for blk in blocks) + len(aux_names)
+    names, eqs, *_ = assemble(pr, blocks, np.zeros(K), np.zeros((K, K)), aux_names)
+    free = []
+    pos = 0
+    for blk in blocks:
+        for c in blk.cols:
+            if c.values is not None:
+                free.append(pos)
+            pos += 1
+        if blk.constant:
+            free.append(pos)
+            pos += 1
+    free += list(range(pos, pos + len(aux_names)))
+    defined = _constraints(s)
+    fake = SimpleNamespace(names=names, eqnames=eqs)
+    rows = []
+    for n in _numlist(str(numlist)):
+        if n not in defined:
+            raise StataError(111, f"constraint {n} not found")
+        coef, rhs = _constraint(s, fake, defined[n])
+        row = np.zeros(len(names) + 1)
+        for j, v in coef.items():
+            row[j] += v
+        row[-1] = rhs
+        rows.append(row)
+    C = np.array(rows).reshape(-1, len(names) + 1)
+    T, a = constraint_transform(np.column_stack([C[:, free], C[:, -1]]))
+    pr.cns = (T, a.ravel())
+    pr.cns_C = C
+    pr.cns_names = (names, eqs)
+
+
+def constraint_lines(est) -> list[str]:
+    """' ( 1)  [y1]x1 - [y2]x1 = 0', one per row of e(Cns), as the table header lists them."""
+    C = getattr(est, "cns_C", None)
+    if C is None:
+        return []
+    from types import SimpleNamespace
+    from .postest import _ctext
+    names, eqs = est.cns_names
+    fake = SimpleNamespace(names=names, eqnames=eqs)
+    return [f" ({i:>2})  {_ctext(fake, {j: float(v) for j, v in enumerate(row[:-1]) if v != 0}, float(row[-1]))}"
+            for i, row in enumerate(C, 1)]
+
+
 def display_eq(s, est, *, header: bool = True, table: bool = True, level: float | None = None, **_kw) -> None:
     """Header (left lines, right pairs), table and footer of a model made with `Engine`."""
     lev = level if level is not None else est.level
@@ -232,6 +289,15 @@ def display_eq(s, est, *, header: bool = True, table: bool = True, level: float 
             s.output.write(f"{'(Std. Err. adjusted for ' + format(int(est.n_clust), ',') + ' clusters in ' + est.clustvar + ')':>78}\n",
                            "text")
         rows = est.rows_fn(lev) if getattr(est, "rows_fn", None) else est.rows
+        lines = constraint_lines(est)
+        if lines:
+            for line in lines:
+                s.output.write(line + "\n", "text")
+            # a parameter fixed by the constraints has no variance: "(constrained)"; the rows
+            # transformed from it (rho, sigma_v) keep their numbers (VERIFY)
+            from dataclasses import replace
+            rows = [replace(r, kind="cons") if r.se == 0 and (r.kind == "coef" or (r.kind == "aux" and r.label.startswith("/")))
+                    else r for r in rows]
         coef_table(s, est.depvar_cell, rows, stat="z", df=None, level=lev, vcetype=est.vcetype,
                    coef_title=getattr(est, "coef_title", "Coef."), eform=getattr(est, "eform_on", False))
         foot = getattr(est, "footer", None)
@@ -277,7 +343,20 @@ def finish_model(s, pr, cmd: str, args: str, *, title: str, blocks: list[Block],
     from .models2 import _finish, _model_test
     names, eqs, b_full, V_full, rows = assemble(pr, blocks, res.b, V, aux_names, heads=heads)
     idx = list(range(blocks[0].nslopes)) if test_idx is None else test_idx
-    if wald:
+    cns = getattr(pr, "cns", None)
+    if cns is not None and idx:
+        # with constraints the test has the rank of the constrained variance (VERIFY)
+        from ..core.stats import chi2_tail
+        Vk = V[np.ix_(idx, idx)]
+        df_m = int(np.linalg.matrix_rank(Vk))
+        kind, chi2 = "Wald", float(res.b[idx] @ np.linalg.pinv(Vk) @ res.b[idx]) if df_m else SYS
+        pv = float(chi2_tail(chi2, df_m)) if df_m else SYS
+        C = pr.cns_C
+        from ..commands.matrix import Matrix
+        cm = Matrix(C.copy(), [f"r{i}" for i in range(1, len(C) + 1)], names + ["_r"])
+        cm.coleq = eqs + ["_Cns"]
+        mats = [("Cns", cm)] + list(mats)   # VERIFY: place of e(Cns) in ereturn list
+    elif wald:
         saved = pr.robust
         pr.robust = True
         kind, chi2, pv = _model_test(pr, res.b, V, idx, res.ll, ll0)
@@ -305,6 +384,8 @@ def finish_model(s, pr, cmd: str, args: str, *, title: str, blocks: list[Block],
                   constant=blocks[0].constant, mats=mats, order=order, k_free=len(res.b))
     est.rows_fn = rows_fn
     est.hdr_fn = hdr_fn
+    if cns is not None:
+        est.cns_C, est.cns_names = pr.cns_C, pr.cns_names
     est.depvar_cell = pr.smp.depname if depvar_cell is None else depvar_cell
     est.footer = footer
     est.blocks = blocks
