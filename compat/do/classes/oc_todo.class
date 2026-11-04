@@ -1,0 +1,10 @@
+class oc_todo {
+    double n = 0
+    string name = "nobody"
+    array list = {"show second syntax", "mark as done"}
+    double z = (2+3)/sqrt(5)
+    double b = (.b)
+    string s2 = `"quotes "inside" strings"'
+    string s3 = ("no" + "body")
+    mixed = {1, 2, "three", 4}
+}

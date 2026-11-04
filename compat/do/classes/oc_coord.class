@@ -1,0 +1,19 @@
+*! version 1.0.0  coordinate of [P] class, with .new, .set and .macroexpand
+class oc_coord {
+    double x
+    double y
+}
+program .new
+    if "`0'" != "" {
+        .set `0'
+    }
+end
+program .set
+    args x y
+    .x = `x'
+    .y = `y'
+end
+program .macroexpand
+    local tosub : display "(" `.x' "," `.y' ")"
+    class exit "`tosub'"
+end

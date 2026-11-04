@@ -1,0 +1,9 @@
+*! version 1.0.1
+class oc_coord2 {
+classwide:
+    double x_origin = 0
+    double y_origin = 0
+instancespecific:
+    double x = 0
+    double y = 0
+}

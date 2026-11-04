@@ -9,6 +9,7 @@ Expansion (manual [U] 18.3 and [P] macro):
 * `++i', `i++', `--i', `i--' increment/decrement the local
 * a nonexistent macro expands to nothing
 * the text resulting from the expansion is not expanded again
+* `.obj.member' is the printable form of a class object (lang/classeval.py)
 * `"' opens compound quotes and is not treated as a macro reference
 """
 
@@ -72,7 +73,8 @@ Resolver = Callable[[str], str]
 def expand(text: str, store: MacroStore, *,
            eval_inline: Resolver | None = None,
            extended: Resolver | None = None,
-           results: Callable[[str, str], str] | None = None) -> str:
+           results: Callable[[str, str], str] | None = None,
+           objects: Resolver | None = None) -> str:
     """Expands all macro references in `text`.
 
     eval_inline receives the text after '=' in `=exp' and returns the resulting string.
@@ -93,7 +95,7 @@ def expand(text: str, store: MacroStore, *,
         if c == "'" and stack:
             p = stack.pop()
             inner = s[p + 1:i]
-            value = _resolve_local(inner, store, eval_inline, extended, results)
+            value = _resolve_local(inner, store, eval_inline, extended, results, objects)
             s = s[:p] + value + s[i + 1:]
             i = p + len(value)
             continue
@@ -122,8 +124,13 @@ _RESULT_REF = re.compile(r"^([recs])\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)$")
 def _resolve_local(inner: str, store: MacroStore,
                    eval_inline: Resolver | None,
                    extended: Resolver | None,
-                   results: Callable[[str, str], str] | None = None) -> str:
+                   results: Callable[[str, str], str] | None = None,
+                   objects: Resolver | None = None) -> str:
     stripped = inner.strip()
+    if objects is not None and len(stripped) > 1 and stripped[0] == "." and (
+            stripped[1].isalpha() or stripped[1] == "_"):
+        # `.obj.member': printable form of a class object ([P] class)
+        return objects(stripped)
     m = _RESULT_REF.match(stripped)
     if m and results is not None:
         # `r(name)', `e(name)', `s(name)', `c(name)'

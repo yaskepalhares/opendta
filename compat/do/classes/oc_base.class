@@ -1,0 +1,13 @@
+class oc_base {
+    double size = 1
+}
+program .new
+    .size = 10
+    display "base new"
+end
+program .zifl
+    display "base zifl size `.size'"
+end
+program .who
+    class exit "base"
+end

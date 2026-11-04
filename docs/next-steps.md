@@ -99,7 +99,7 @@ Done in phases 13 and 25 (compat cases 1701 and 1911). `import haver` (a proprie
 
 ### 3. Programming ✅
 
-Done in phases 14 and 24 (compat cases 1801 and 1910). Loading compiled Stata plugins is a known limitation, left out of 1.0; Stata's class system stays in *Missing for 1.0* for a block of its own. The original plan:
+Done in phases 14 and 24 (compat cases 1801 and 1910). Loading compiled Stata plugins is a known limitation, left out of 1.0; Stata's class system was done as block 22, in phase 41 (compat case 1928): the object model and the `.class` files in `lang/classes.py`, the references, rvalues and built-ins in `lang/classeval.py`, `class exit` and `classutil` in `commands/classcmd.py`; the interpreter only sends lines that start with `.name` and `` `.name' `` macros to them. The original plan:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (program option), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (dialog commands, as far as the interface allows), `plugin` (cannot load Stata plugins: explain), `viewsource` (show OpenDTA's own source of a command, not Stata's). Mostly in `lang/` and `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; factor variables in `estimation/fvars.py`.
 

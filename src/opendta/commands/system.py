@@ -129,6 +129,8 @@ def cmd_clear(s: "Session", args: str) -> None:
             s.sret.clear()
         if t in ("all", "*"):
             s.scalars.clear()
+            from ..lang.classes import clear_classes
+            clear_classes(s)
         if t in ("", "all", "*"):
             s.data.clear()
         if t in ("all", "*"):

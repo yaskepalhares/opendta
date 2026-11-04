@@ -1,0 +1,10 @@
+class oc_multi {
+}, inherit(oc_base oc_other)
+program .test
+    display "`.who' `.Super(oc_base).who' `.Super(oc_other).who'"
+    display "`.size' `.q' `.Global.q' |`.Local.nothere'|"
+    .Global.q = 42
+    display "`.q' `.Global.q'"
+    local k `.objkey'
+    display "`.`k'.q'"
+end

@@ -1,0 +1,7 @@
+class oc_other {
+    double size = 2
+    double q = 1
+}
+program .who
+    class exit "other"
+end

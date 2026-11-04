@@ -99,7 +99,7 @@ Feito nas fases 13 e 25 (casos de comparação 1701 e 1911). `import haver` (for
 
 ### 3. Programação ✅
 
-Feito nas fases 14 e 24 (casos de comparação 1801 e 1910). O carregamento de plugins compilados do Stata é uma limitação conhecida, fora da 1.0; o sistema de classes do Stata fica em *Faltam para a 1.0* para um bloco próprio. O plano original:
+Feito nas fases 14 e 24 (casos de comparação 1801 e 1910). O carregamento de plugins compilados do Stata é uma limitação conhecida, fora da 1.0; o sistema de classes do Stata foi feito como bloco 22, na fase 41 (caso de comparação 1928): o modelo de objetos e os arquivos `.class` em `lang/classes.py`, as referências, os rvalues e os embutidos em `lang/classeval.py`, `class exit` e `classutil` em `commands/classcmd.py`; o interpretador só passa a eles as linhas que começam com `.nome` e as macros `` `.nome' ``. O plano original:
 
 `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `mark`, `_rmcoll`, `matlist`, `tabdisp`, `sortpreserve` (opção de program), `signestimationsample`, `makecns`, `postfile`/`post`/`postclose`, `pause`, `sleep`, `window` (comandos de diálogo, até onde a interface permitir), `plugin` (não carrega plugins do Stata: explicar), `viewsource` (mostrar o código do próprio OpenDTA, não o do Stata). Quase tudo em `lang/` e `commands/program.py`, `commands/progcmd.py`, `commands/syntaxcmd.py`; variáveis de fator em `estimation/fvars.py`.
 

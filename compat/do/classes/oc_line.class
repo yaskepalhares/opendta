@@ -1,0 +1,25 @@
+class oc_line {
+    oc_coord c0
+    oc_coord c1
+}
+program .set
+    args x0 y0 x1 y1
+    .c0.set `x0' `y0'
+    .c1.set `x1' `y1'
+end
+program .length
+    class exit sqrt((`.c0.y'-`.c1.y')^2 + (`.c0.x'-`.c1.x')^2)
+end
+program .midpoint
+    local cx = (`.c0.x' + `.c1.x')/2
+    local cy = (`.c0.y' + `.c1.y')/2
+    tempname b
+    .`b' = .oc_coord.new
+    .`b'.set `cx' `cy'
+    class exit .`b'
+end
+program .back
+    tempname a
+    .`a' = .oc_coord.new 7 8
+    class exit .`a'.ref
+end

@@ -1,0 +1,34 @@
+class oc_varc {
+classwide:
+    n = 0
+instancespecific:
+    string x
+    string y
+}
+program .new
+    .nextnames
+    if "`0'" != "" {
+        .set `0'
+    }
+end
+program .set
+    args x y
+    replace `.x' = `x'
+    replace `.y' = `y'
+end
+program .nextnames
+    .n = `.n' + 1
+    .x = "odta_vc_`.n'"
+    .n = `.n' + 1
+    .y = "odta_vc_`.n'"
+    generate `.x' = .
+    generate `.y' = .
+end
+program .oncopy
+    .nextnames
+    .set `.`.oncopy_src'.x' `.`.oncopy_src'.y'
+end
+program .destructor
+    capture drop `.x'
+    capture drop `.y'
+end
