@@ -126,7 +126,7 @@ ALIASES = {
     "pause": "progutil", "sleep": "progutil", "window": "progutil", "plugin": "progutil",
     "viewsource": "progutil", "signestimationsample": "estprog", "checkestimationsample": "estprog",
     "makecns": "estprog", "matcproc": "estprog", "mark": "syntax", "markin": "syntax",
-    "sortpreserve": "program",
+    "sortpreserve": "program", "cutil": "classutil",
 }
 
 

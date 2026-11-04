@@ -1,0 +1,11 @@
+class oc_alt {
+    double extra = 5
+}, inherit(oc_base)
+program .new
+    .Super.new
+    display "alt new extra `.extra'"
+end
+program .zifl
+    .Super.zifl
+    display "alt zifl extra `.extra'"
+end

@@ -21,6 +21,7 @@ OpenDTA covers the core commands: the do-file language, data management, descrip
 - text console and batch mode (`opendta -b do file.do`, which writes `file.log` like `stata -b`);
 - programming: `program`, `syntax`, `gettoken`, `marksample`, `return`/`ereturn`, `tempvar`/`tempfile`, `preserve`/`restore`, extended macro functions, `matrix`, third-party `.ado` files on the adopath, `log`/`cmdlog`, `assert`, `set trace` and `timer`;
 - variable-list and programming utilities: `unab`, `tsunab`, `fvunab`, `unabcmd`, `fvexpand`, `fvrevar`, `tsrevar`, `_rmcoll`, `mark`, `markin`, `markout`; `postfile`, `post` and `postclose`; `matlist` and `tabdisp`; `program, sortpreserve`; `pause`, `sleep`, `window`, `viewsource`; `signestimationsample`, `makecns` (with a constraint matrix or a list of constraints) and `matcproc`, `matrix dispCns`;
+- Stata's class system: `.class` files with classwide and instance-specific members, inheritance and `.Super`, member programs and `class exit`, `.ref` references, arrays, the built-ins (`.objtype`, `.isofclass`, `.Declare`, `.Arrpush`…), `.oncopy`, `.destructor`, `` `.obj.member' `` in macros and `classutil`;
 - `matlist` with equation names (`showcoleq()`, `roweqonly`, `coleqonly`, `keepcoleq`, `lines(eq)`), and the `window` file dialogs, message boxes, User menu and window management in the graphical interface;
 - Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
 - data in memory with Stata's storage types (including `float` precision), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` and subscripts;

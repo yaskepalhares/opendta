@@ -117,9 +117,12 @@ def cmd_findfile(s: "Session", args: str) -> None:
 
 @command("discard")
 def cmd_discard(s: "Session", args: str) -> None:
-    """Forgets the programs loaded from .ado files (they are read again on next use)."""
+    """Forgets the programs loaded from .ado files (they are read again on next use) and the
+    class system."""
     for name in [n for n, p in s.programs.items() if p.source.endswith(".ado")]:
         del s.programs[name]
+    from ..lang.classes import clear_classes
+    clear_classes(s)                # every class definition and instance ([P] class)
 
 
 

@@ -576,6 +576,12 @@ class Interpreter:
             return
         if text.startswith("!"):
             text = "shell " + text[1:]      # !cmd is a synonym for shell cmd
+        from .classeval import is_statement
+        if is_statement(text):
+            # .obj = .classname.new, .obj.prog args, ... ([P] class)
+            from .classeval import statement
+            statement(self.s, text)
+            return
         word, rest = split_command(text)
         if not word:
             raise StataError(198, "invalid syntax")
