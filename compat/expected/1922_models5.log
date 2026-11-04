@@ -1,0 +1,486 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1922_models5.log
+  log type:  text
+ opened on:   4 Nov 2026, 09:22:12
+
+. * Models, part 5 (block 20c): biprobit with partial and constraints(), frontier with
+. * constraints(). No reference until the Stata run. Every command whose behavior the manual does
+. * not settle runs under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set seed 1922
+
+. set obs 2000
+number of observations (_N) was 0, now 2,000
+
+. gen x1 = round(invnormal(runiform()), .01)
+
+. gen x2 = round(invnormal(runiform()), .01)
+
+. gen x3 = round(invnormal(runiform()), .01)
+
+. gen u1 = round(invnormal(runiform()), .01)
+
+. gen u2 = round(.3*u1 + sqrt(.91)*invnormal(runiform()), .01)
+
+. gen y1 = (.8 + x2 + .3*x1 + u1 > 0)
+
+. gen y2 = (.5 - x3 + .3*x1 + u2 > 0)
+
+. gen e = round(invnormal(runiform())*.3, .01) - abs(round(invnormal(runiform())*.4, .01))
+
+. gen yf = 1 + .5*x1 + .3*x2 + e
+
+. 
+. * biprobit with constraints(): the constraint list above the table, e(Cns), the Wald test
+. constraint 1 [y1]x1 = [y2]x1
+
+. capture noisily biprobit (y1 = x1 x2) (y2 = x1 x3), constraints(1)
+
+Fitting comparison equation 1:
+
+(note: constraint number 1 caused error r(303))
+Iteration 0:   log likelihood = -1206.9786  
+Iteration 1:   log likelihood = -853.79879  
+Iteration 2:   log likelihood = -846.37455  
+Iteration 3:   log likelihood = -846.34103  
+Iteration 4:   log likelihood = -846.34102  
+
+Fitting comparison equation 2:
+
+(note: constraint number 1 caused error r(303))
+Iteration 0:   log likelihood = -1313.0344  
+Iteration 1:   log likelihood = -932.18053  
+Iteration 2:   log likelihood =  -929.1122  
+Iteration 3:   log likelihood = -929.10653  
+Iteration 4:   log likelihood = -929.10653  
+
+Comparison:    log likelihood = -1775.4476
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -1775.4965  
+Iteration 1:   log likelihood = -1755.1992  
+Iteration 2:   log likelihood =  -1755.102  
+Iteration 3:   log likelihood =  -1755.102  
+
+Seemingly unrelated bivariate probit            Number of obs     =      2,000
+                                                Wald chi2(3)      =    1005.47
+Log likelihood =  -1755.102                     Prob > chi2       =     0.0000
+
+ ( 1)  [y1]x1 - [y2]x1 = 0
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+          x1 |   .2815183    .026294    10.71   0.000     .2299829    .3330536
+          x2 |   .9936898   .0455189    21.83   0.000     .9044743    1.082905
+       _cons |   .8352415   .0393514    21.23   0.000     .7581143    .9123688
+-------------+----------------------------------------------------------------
+y2           |
+          x1 |   .2815183    .026294    10.71   0.000     .2299829    .3330536
+          x3 |  -1.014095   .0441861   -22.95   0.000    -1.100698   -.9274916
+       _cons |   .5126489   .0347398    14.76   0.000     .4445602    .5807377
+-------------+----------------------------------------------------------------
+     /athrho |   .3325692   .0531395     6.26   0.000     .2284177    .4367207
+-------------+----------------------------------------------------------------
+         rho |   .3208274   .0476698                      .2245264    .4109225
+------------------------------------------------------------------------------
+Wald test of rho=0:                 chi2(1) =  39.1678    Prob > chi2 = 0.0000
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  6
+                  e(N) =  2000
+                 e(ic) =  3
+                  e(k) =  7
+               e(k_eq) =  3
+               e(k_dv) =  2
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -1755.10201335228
+               e(df_m) =  3
+               e(chi2) =  1005.474572083931
+                  e(p) =  1.1682282921e-217
+                e(rho) =  .3208274206362766
+             e(chi2_c) =  39.16782328358865
+              e(k_aux) =  1
+         e(k_eq_model) =  2
+
+macros:
+            e(cmdline) : "biprobit (y1 = x1 x2) (y2 = x1 x3), constraints(1)"
+                e(cmd) : "biprobit"
+            e(predict) : "bipr_p"
+            e(chi2_ct) : "Wald"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Seemingly unrelated bivariate probit"
+               e(user) : "bipr_lf"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y1 y2"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 7
+                  e(V) :  7 x 7
+                e(Cns) :  1 x 8
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 7
+
+functions:
+             e(sample)   
+
+. capture noisily matrix list e(Cns)
+
+e(Cns)[1,8]
+         y1:      y1:      y1:      y2:      y2:      y2:  athrho:    _Cns:
+         x1       x2    _cons       x1       x3    _cons    _cons       _r
+r1        1        0        0       -1        0        0        0        0
+
+. constraint 2 [athrho]_cons = .25
+
+. capture noisily biprobit y1 y2 x1 x2 x3, constraints(2)
+
+Fitting comparison equation 1:
+
+(note: constraint number 2 caused error r(303))
+Iteration 0:   log likelihood = -1206.9786  
+Iteration 1:   log likelihood = -852.72946  
+Iteration 2:   log likelihood = -845.08185  
+Iteration 3:   log likelihood = -845.04599  
+Iteration 4:   log likelihood = -845.04599  
+
+Fitting comparison equation 2:
+
+(note: constraint number 2 caused error r(303))
+Iteration 0:   log likelihood = -1313.0344  
+Iteration 1:   log likelihood = -931.28202  
+Iteration 2:   log likelihood = -928.22756  
+Iteration 3:   log likelihood = -928.22188  
+Iteration 4:   log likelihood = -928.22188  
+
+Comparison:    log likelihood = -1773.2679
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -1754.2222  
+Iteration 1:   log likelihood = -1754.2162  
+Iteration 2:   log likelihood = -1754.2162  
+
+Bivariate probit regression                     Number of obs     =      2,000
+                                                Wald chi2(6)      =    1000.84
+Log likelihood = -1754.2162                     Prob > chi2       =     0.0000
+
+ ( 1)  [athrho]_cons = .25
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+          x1 |   .2696886   .0356762     7.56   0.000     .1997646    .3396126
+          x2 |   .9901875   .0463535    21.36   0.000     .8993364    1.081039
+          x3 |   .0550552   .0351868     1.56   0.118    -.0139096      .12402
+       _cons |    .836517   .0397197    21.06   0.000     .7586679    .9143662
+-------------+----------------------------------------------------------------
+y2           |
+          x1 |   .2896374   .0342629     8.45   0.000     .2224833    .3567915
+          x2 |  -.0423996   .0328115    -1.29   0.196     -.106709    .0219098
+          x3 |  -1.010056   .0451031   -22.39   0.000    -1.098457   -.9216558
+       _cons |   .5122064    .034985    14.64   0.000     .4436371    .5807757
+-------------+----------------------------------------------------------------
+     /athrho |        .25  (constrained)
+-------------+----------------------------------------------------------------
+         rho |   .2449187  (constrained)
+------------------------------------------------------------------------------
+Wald test of rho=0:                 chi2(1) =        .    Prob > chi2 =      .
+
+. 
+. * biprobit with partial observability: only y1*y2 is used
+. capture noisily biprobit (y1 = x1 x2) (y2 = x1 x3), partial
+
+Fitting comparison model: 
+
+initial:       log likelihood = -2333.1096
+rescale:       log likelihood = -2131.2387
+rescale eq:    log likelihood = -2074.0234
+Iteration 0:   log likelihood = -2074.0234  
+Iteration 1:   log likelihood = -930.31859  (not concave)
+Iteration 2:   log likelihood = -855.51471  
+Iteration 3:   log likelihood =  -848.0209  
+Iteration 4:   log likelihood = -846.27777  
+Iteration 5:   log likelihood = -845.64733  
+Iteration 6:   log likelihood = -844.94852  
+Iteration 7:   log likelihood = -844.85275  
+Iteration 8:   log likelihood = -844.84092  
+Iteration 9:   log likelihood = -844.84084  
+
+Fitting full model:
+
+Iteration 0:   log likelihood = -1480.9988  (not concave)
+Iteration 1:   log likelihood = -1112.9844  (not concave)
+Iteration 2:   log likelihood = -1081.2355  
+Iteration 3:   log likelihood = -1072.7843  
+Iteration 4:   log likelihood =  -1067.521  
+Iteration 5:   log likelihood = -1067.3695  
+Iteration 6:   log likelihood = -1067.3662  
+Iteration 7:   log likelihood = -1067.3662  
+
+Partial observability bivariate probit          Number of obs     =      2,000
+                                                Wald chi2(4)      =     502.03
+Log likelihood = -1067.3662                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+y1           |
+          x1 |   .3543133   .0552441     6.41   0.000      .246037    .4625897
+          x2 |   .9659569   .0793569    12.17   0.000     .8104202    1.121494
+       _cons |   .6979678   .0934129     7.47   0.000     .5148819    .8810536
+-------------+----------------------------------------------------------------
+y2           |
+          x1 |   .2568487   .0487543     5.27   0.000     .1612921    .3524054
+          x3 |  -1.039886   .0726056   -14.32   0.000    -1.182191   -.8975819
+       _cons |   .4396473   .0723275     6.08   0.000      .297888    .5814066
+-------------+----------------------------------------------------------------
+     /athrho |   .9492724   .3366141     2.82   0.005     .2895208    1.609024
+-------------+----------------------------------------------------------------
+         rho |   .7394535   .1525564                      .2816937    .9230157
+------------------------------------------------------------------------------
+Likelihood-ratio test of rho=0:     chi2(1) =  445.051    Prob > chi2 = 0.0000
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  7
+                  e(N) =  2000
+                 e(ic) =  7
+                  e(k) =  7
+               e(k_eq) =  3
+               e(k_dv) =  2
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -1067.366204125235
+               e(df_m) =  4
+               e(chi2) =  502.0314834920765
+                  e(p) =  2.4359936842e-107
+                e(rho) =  .739453464729727
+               e(ll_c) =  -844.8408426635918
+             e(chi2_c) =  445.0507229232869
+              e(k_aux) =  1
+         e(k_eq_model) =  2
+
+macros:
+            e(cmdline) : "biprobit (y1 = x1 x2) (y2 = x1 x3), partial"
+                e(cmd) : "biprobit"
+            e(predict) : "bipr_p"
+            e(chi2_ct) : "LR"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Partial observability bivariate probit"
+               e(user) : "bipp_lf"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y1 y2"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 7
+                  e(V) :  7 x 7
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 7
+
+functions:
+             e(sample)   
+
+. capture noisily predict double p11, p11
+
+. capture noisily summarize p11
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+         p11 |      2,000    .4684505    .2628922   .0001856   .9909193
+
+. 
+. * frontier with constraints() on the frontier and on a variance
+. constraint 3 x1 + x2 = .8
+
+. capture noisily frontier yf x1 x2, constraints(3)
+
+Iteration 0:   log likelihood = -909.10685  
+Iteration 1:   log likelihood = -909.07842  
+Iteration 2:   log likelihood = -909.07828  
+Iteration 3:   log likelihood = -909.07828  
+
+Stoc. frontier normal/half-normal model         Number of obs     =      2,000
+                                                Wald chi2(1)      =    7206.12
+Log likelihood = -909.07828                     Prob > chi2       =     0.0000
+
+ ( 1)  [yf]x1 + [yf]x2 = .8
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5041163   .0059385    84.89   0.000      .492477    .5157556
+          x2 |   .2958837   .0059385    49.82   0.000     .2842444     .307523
+       _cons |   .9636488   .0338254    28.49   0.000     .8973522    1.029945
+-------------+----------------------------------------------------------------
+    /lnsig2v |  -2.252585   .0952282   -23.65   0.000    -2.439229   -2.065941
+    /lnsig2u |  -2.188401   .2470895    -8.86   0.000    -2.672688   -1.704115
+-------------+----------------------------------------------------------------
+     sigma_v |   .3242332   .0154381                      .2953441    .3559481
+     sigma_u |   .3348071   .0413637                      .2628047    .4265365
+      sigma2 |   .2172229   .0193212                       .179354    .2550919
+      lambda |   1.032612   .0555619                      .9237129    1.141511
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  4
+                  e(N) =  2000
+                 e(ic) =  3
+                  e(k) =  5
+               e(k_eq) =  3
+               e(k_dv) =  1
+          e(converged) =  1
+                 e(rc) =  0
+                 e(ll) =  -909.0782793754767
+         e(k_eq_model) =  1
+               e(df_m) =  1
+               e(chi2) =  7206.115211180952
+                  e(p) =  0
+                  e(z) =  -2.873497393968393
+                e(p_z) =  .0020297721363097
+            e(sigma_u) =  .3348071088561883
+            e(sigma_v) =  .3242331603905902
+              e(k_aux) =  2
+
+macros:
+            e(cmdline) : "frontier yf x1 x2, constraints(3)"
+                e(cmd) : "frontier"
+           e(function) : "production"
+               e(dist) : "hnormal"
+            e(predict) : "fron_p"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+              e(title) : "Stoc. frontier normal/half-normal model"
+               e(user) : "fron_hn"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "yf"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 5
+                  e(V) :  5 x 5
+                e(Cns) :  1 x 6
+               e(ilog) :  1 x 20
+           e(gradient) :  1 x 5
+
+functions:
+             e(sample)   
+
+. constraint 4 [lnsig2v]_cons = -2
+
+. capture noisily frontier yf x1 x2, constraints(4)
+
+Iteration 0:   log likelihood =  -927.9605  
+Iteration 1:   log likelihood = -914.43605  
+Iteration 2:   log likelihood = -912.07913  
+Iteration 3:   log likelihood = -911.91672  
+Iteration 4:   log likelihood = -911.91481  
+Iteration 5:   log likelihood = -911.91481  
+
+Stoc. frontier normal/half-normal model         Number of obs     =      2,000
+                                                Wald chi2(2)      =    4680.76
+Log likelihood = -911.91481                     Prob > chi2       =     0.0000
+
+ ( 1)  [lnsig2v]_cons = -2
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |   .5055518   .0085808    58.92   0.000     .4887336    .5223699
+          x2 |   .2960969   .0084617    34.99   0.000     .2795123    .3126814
+       _cons |   .8472064   .0286961    29.52   0.000     .7909632    .9034496
+-------------+----------------------------------------------------------------
+    /lnsig2v |         -2  (constrained)
+    /lnsig2u |  -3.333699   .3657237    -9.12   0.000    -4.050504   -2.616893
+-------------+----------------------------------------------------------------
+     sigma_v |   .3678794  (constrained)
+     sigma_u |   .1888411   .0345318                      .1319606    .2702395
+      sigma2 |   .1709962          .                             .           .
+      lambda |   .5133233          .                             .           .
+------------------------------------------------------------------------------
+
+. capture noisily frontier yf x1 x2, distribution(exponential) constraints(3)
+
+Iteration 0:   log likelihood =  -908.7457  
+Iteration 1:   log likelihood = -908.73796  
+Iteration 2:   log likelihood = -908.73795  
+
+Stoc. frontier normal/exponential model         Number of obs     =      2,000
+                                                Wald chi2(1)      =    7224.80
+Log likelihood = -908.73795                     Prob > chi2       =     0.0000
+
+ ( 1)  [yf]x1 + [yf]x2 = .8
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          x1 |    .504272   .0059327    85.00   0.000     .4926441    .5158998
+          x2 |    .295728   .0059327    49.85   0.000     .2841002    .3073559
+       _cons |   .8620906   .0235989    36.53   0.000     .8158375    .9083436
+-------------+----------------------------------------------------------------
+    /lnsig2v |  -2.132091   .0638596   -33.39   0.000    -2.257254   -2.006929
+    /lnsig2u |  -3.597421   .2730622   -13.17   0.000    -4.132613   -3.062229
+-------------+----------------------------------------------------------------
+     sigma_v |   .3443676   .0109956                      .3234771    .3666072
+     sigma_u |   .1655122   .0225976                      .1266527    .2162945
+      sigma2 |   .1459833   .0048507                      .1364762    .1554905
+      lambda |   .4806265   .0320208                      .4178668    .5433862
+------------------------------------------------------------------------------
+
+. capture noisily frontier yf x1 x2, uhet(x3) constraints(3)
+
+Iteration 0:   log likelihood = -909.10685  
+Iteration 1:   log likelihood = -907.86496  
+Iteration 2:   log likelihood = -907.83836  
+Iteration 3:   log likelihood = -907.83812  
+Iteration 4:   log likelihood = -907.83812  
+
+Stoc. frontier normal/half-normal model         Number of obs     =      2,000
+                                                Wald chi2(1)      =    7229.55
+Log likelihood = -907.83812                     Prob > chi2       =     0.0000
+
+ ( 1)  [yf]x1 + [yf]x2 = .8
+------------------------------------------------------------------------------
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yf           |
+          x1 |   .5040785   .0059285    85.03   0.000     .4924589     .515698
+          x2 |   .2959215   .0059285    49.92   0.000      .284302    .3075411
+       _cons |   .9637369   .0335047    28.76   0.000     .8980689    1.029405
+-------------+----------------------------------------------------------------
+lnsig2v      |
+       _cons |  -2.254873   .0943766   -23.89   0.000    -2.439848   -2.069898
+-------------+----------------------------------------------------------------
+lnsig2u      |
+          x3 |  -.0923747   .0594259    -1.55   0.120    -.2088473     .024098
+       _cons |  -2.187115   .2446757    -8.94   0.000     -2.66667   -1.707559
+-------------+----------------------------------------------------------------
+     sigma_v |   .3238624   .0152825                      .2952527    .3552444
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1922_models5.log
+  log type:  text
+ closed on:   4 Nov 2026, 09:22:13
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

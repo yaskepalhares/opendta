@@ -45,9 +45,10 @@ def _is_delimit(cmd: str) -> str | None:
     return None
 
 
-def split_commands(source: str) -> list[LogicalLine]:
+def split_commands(source: str, *, blanks: bool = False) -> list[LogicalLine]:
     """Whole-line comments (`*` and `//`) also go into the list, with
-    kind="comment": Stata echoes them when running a do-file."""
+    kind="comment": Stata echoes them when running a do-file. With `blanks` (do-files), the blank
+    lines of the top level go in too, with kind="blank" (Stata echoes them as ". ")."""
     physical = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[LogicalLine] = []
     mode = "cr"
@@ -59,6 +60,7 @@ def split_commands(source: str) -> list[LogicalLine]:
     block = 0        # /* */ depth
     in_str = False   # inside "..."
     compound = 0     # `" "' depth
+    nest = [0, False, False]   # { } depth, inside program define ... end, inside mata ... end
 
     def at_word_start(pos: int) -> bool:
         return pos == 0 or source[pos - 1] in " \t\n\r"
@@ -66,12 +68,33 @@ def split_commands(source: str) -> list[LogicalLine]:
     def raw_lines(first: int, last: int) -> tuple[str, ...]:
         return tuple(ln.rstrip() for ln in physical[first - 1:last])
 
+    def track(text: str) -> None:
+        """Nesting of the top level, for the echo of blank lines (only top-level ones echo)."""
+        words = text.split()
+        first = words[0] if words else ""
+        if nest[1] or nest[2]:
+            if text == "end":
+                nest[1] = nest[2] = False
+            return
+        if len(first) >= 3 and "program".startswith(first) and not (len(words) > 1 and words[1] in (
+                "drop", "dir", "list")):
+            nest[1] = True
+            return
+        if first == "mata" and text.rstrip(":").strip() in ("mata", "mata:"):
+            nest[2] = True
+            return
+        if text.endswith("{"):
+            nest[0] += 1
+        if text.startswith("}"):
+            nest[0] = max(nest[0] - 1, 0)
+
     def flush() -> None:
         nonlocal buf, start_line, mode
         text = "".join(buf).strip()
         buf = []
         if not text:
             return
+        track(text)
         raw = raw_lines(start_line, line)
         if text.startswith("*"):
             out.append(LogicalLine(text, start_line, raw, "comment"))
@@ -161,6 +184,10 @@ def split_commands(source: str) -> list[LogicalLine]:
             continue
         if c == "\n":
             current = "".join(buf).strip()
+            if (blanks and mode == "cr" and not current and not physical[line - 1].strip() and nest[0] == 0
+                    and not nest[1] and not nest[2]):
+                # a blank line of the do-file: Stata echoes it as ". " (compat 1920)
+                out.append(LogicalLine("", line, ("",), "blank"))
             if mode == "cr" or _is_delimit(current) is not None:
                 flush()
             elif current.startswith("*"):

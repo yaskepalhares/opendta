@@ -130,7 +130,13 @@ def _effect_rows_multi(tvar, labels, ci, stat, mu, Vm):
 
 
 def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o, *, title,
-          est_title, omodel_txt, tmodel_txt, match=False, extra_hdr=(), dist="", cens="", control_treated=None):
+          est_title, omodel_txt, tmodel_txt, match=False, extra_hdr=(), dist="", cens="", control_treated=None,
+          et_aux=None, nt=None, multi=None):
+    if multi is not None:
+        names, b, V, eq = multi[0]
+    if et_aux is not None:
+        # eteffects posts every parameter (compat 1927: e(b) is 1 x 11 with one regressor)
+        names, b, V, eq = et_aux
     est = Estimates(cmd, ovar, names, b, V, n, "z", None)
     est.level, est.vcetype = level, "AI Robust" if match else "Robust"
     est.rows = rows
@@ -163,8 +169,58 @@ def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n,
     macros = [("cmdline", cmdline(cmd, full)), ("cmd", cmd), ("subcmd", sub), ("title", title),
               ("stat", stat), ("tvar", tvar), ("depvar", ovar), ("omodel", omodel_txt),
               ("tmodel", tmodel_txt), ("vce", "robust"), ("vcetype", "Robust"), ("properties", "b V")]
+    if multi is not None:
+        # Stata's lists and order with multivalued treatments (compat 1925)
+        _, counts, tlevels = multi
+        scalars = [("N", n)] + [(f"n{lb}", c) for lb, c in reversed(list(zip(tlevels.split(), counts)))] + \
+                  [("k_eq", float(len(dict.fromkeys(eq)))), ("k_levels", float(len(levels))),
+                   ("treated", float(tv_)), ("control", float(cv)), ("converged", 1.0)]
+        macros = [("cmd", cmd), ("cmdline", cmdline(cmd, full)), ("predict", "teffects_p"),
+                  ("estat_cmd", "teffects_estat"), ("marginsnotok", "_ALL"), ("vcetype", "Robust"),
+                  ("vce", "robust"), ("depvar", ovar), ("tvar", tvar), ("subcmd", sub), ("omodel", omodel_txt)]
+        if sub != "ra":
+            macros.append(("tmodel", tmodel_txt))   # VERIFY: place of e(tmodel)
+        macros += [("stat", stat), ("title", title), ("tlevels", tlevels), ("properties", "b V")]
+    if cmd == "eteffects":
+        # Stata's lists and order (compat 1927)
+        scalars = [("N", n), ("converged", 1.0), ("rank", float(np.linalg.matrix_rank(V))),
+                   ("k_eq", float(len(dict.fromkeys(eq)))), ("k_levels", float(len(levels))),
+                   ("n1", float(n - nt)), ("n0", nt)]   # Stata's e(n1) is 900 with 1100 treated (compat 1927; VERIFY)
+        macros = [("cmdline", cmdline(cmd, full)), ("marginsnotok", "_ALL"), ("cmd", cmd),
+                  ("estat_cmd", "eteffects_estat"), ("predict", "eteffects_p"), ("vcetype", "Robust"),
+                  ("vce", "robust"), ("omodel", omodel_txt), ("stat", stat), ("tvar", tvar), ("depvar", ovar),
+                  ("properties", "b V")]
     post(s, est, scalars, macros, mask)
     display(s, est, header=not o.get("noheader"), table=not o.get("notable"))
+
+
+def _et_aux(th, Vf, k1, Xo, Z, t, b, V, names, eq, ovar, tvar, omv, tmv):
+    """e(b) and e(V) of eteffects with the auxiliary equations: the outcome equations of each arm
+    (OME0, OME1), the treatment probit (TME1) and the coefficients of the residual in each arm
+    (TEOM0, TEOM1: VERIFY names and order). The probit block of e(V) is its inverse information,
+    with no covariance with the rest (the variance takes it as known)."""
+    from scipy import stats
+    ko = Xo.shape[1]
+    xn = omv.split() + ["_cons"]
+    zn = tmv.split() + ["_cons"]
+    c0, c1, g = th[2:2 + k1], th[2 + k1:2 + 2 * k1], th[2 + 2 * k1:]
+    bb = list(b) + list(c0[:ko]) + list(c1[:ko]) + list(g) + [c0[-1], c1[-1]]
+    nm = list(names) + xn + xn + zn + [tvar, tvar]
+    eqs = list(eq) + ["OME0"] * ko + ["OME1"] * ko + ["TME1"] * len(zn) + ["TEOM0", "TEOM1"]
+    m = len(bb)
+    Vb = np.zeros((m, m))
+    Vb[:2, :2] = V
+    # arms: from the sandwich (mu0, mu1, c0, c1); the first two rows are the reported effects
+    sel = list(range(2, 2 + 2 * k1))
+    pos = list(range(2, 2 + ko)) + [m - 2] + list(range(2 + ko, 2 + 2 * ko)) + [m - 1]
+    Vb[np.ix_(pos, pos)] = Vf[np.ix_(sel, sel)]
+    e = Z @ g
+    F = np.clip(stats.norm.cdf(e), 1e-15, 1 - 1e-15)
+    f = stats.norm.pdf(e)
+    info = (Z * (f * f / (F * (1 - F)))[:, None]).T @ Z
+    zp = list(range(2 + 2 * ko, 2 + 2 * ko + len(zn)))
+    Vb[np.ix_(zp, zp)] = np.linalg.inv(info)
+    return nm, np.array(bb), Vb, eqs
 
 
 def cmd_teffects(s: "Session", args: str) -> None:
@@ -241,6 +297,7 @@ def _run(s, cmd, sub, rest, full):
                  "nnmatch": "nearest-neighbor matching", "psmatch": "propensity-score matching",
                  "": "extended regression"}[sub]
     extra_hdr: list[str] = []
+    et_aux = None
     if match:
         if sub == "psmatch":
             zb = T.glm_fit(tmodel, Z, t)
@@ -275,15 +332,21 @@ def _run(s, cmd, sub, rest, full):
             th, Vf, _lay = T.teffects(sub, y, t, Xo, Z, omodel, tmodel, stat, clusters)
         mu, Vm = th[:2], Vf[:2, :2]
         b, V, names, eq, rows = _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1)
+        et_aux = _et_aux(th, Vf, _k, Xo, Z, t, b, V, names, eq, ovar, tvar, omv, tmv) if cmd == "eteffects" else None
         omodel_txt = {"ipw": "weighted mean", "aipw": "linear by ML"}.get(sub, omodel)
-        if cmd == "eteffects":
-            omodel_txt = {"fractional": "fractional probit", "exponential": "exponential mean"}.get(omodel, omodel)   # VERIFY
+
         tmodel_txt = tmodel if sub not in ("ra",) else "none"
         dist = ""
     title = "Endogenous treatment-effects estimation" if cmd == "eteffects" else "Treatment-effects estimation"
     _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o, title=title,
           est_title=est_title, omodel_txt=omodel_txt, tmodel_txt=tmodel_txt, match=match, extra_hdr=extra_hdr,
-          dist=dist)
+          dist=dist, et_aux=et_aux, nt=float(t.sum()))
+
+
+def omv_names(pr, ovar):
+    """Names of the outcome-model columns (with _cons when there is one)."""
+    blk = block_from_pr(pr, ovar)
+    return [c.name for c in blk.cols if c.values is not None] + (["_cons"] if blk.constant else [])
 
 
 def _level_option(o, key, levels, default):
@@ -299,11 +362,12 @@ def _run_multi(s, sub, full, pr, o, tvar, tmv, tnoc, tmodel, omodel, ovar, level
     """teffects ra, ipw, ipwra and aipw with more than two treatment levels: one outcome model per
     level and a multinomial logit treatment model ([TE] teffects multivalued)."""
     if sub != "ra" and tmodel != "logit":
-        raise StataError(198, "multivalued treatments require a logit treatment model")   # VERIFY
+        raise StataError(198, f"treatment-model {tmodel} requires 2 levels in treatment variable {tvar}, "
+                              f"but {len(levels)} were found")   # compat 1925 (VERIFY: return code)
     L = len(levels)
     tcode = np.searchsorted(levels, tv)
     ci = _level_option(o, "control", levels, 0)                 # VERIFY: lowest level by default
-    tl = _level_option(o, "tlevel", levels, L - 1 if ci != L - 1 else L - 2)   # VERIFY: highest level by default
+    tl = _level_option(o, "tlevel", levels, 1 if ci == 0 else 0)   # the first level after the control (compat 1925)
     y = pr.y
     n = len(y)
     Xo = block_from_pr(pr, ovar).X if sub != "ipw" else np.ones((n, 1))
@@ -317,9 +381,33 @@ def _run_multi(s, sub, full, pr, o, tvar, tmv, tnoc, tmodel, omodel, ovar, level
                  "ipwra": "IPW regression adjustment", "aipw": "augmented IPW"}[sub]
     omodel_txt = {"ipw": "weighted mean", "aipw": "linear by ML"}.get(sub, omodel)
     tmodel_txt = "(multinomial) logit" if sub != "ra" else "none"     # VERIFY
+    # e(b) and e(V) with every parameter: the effects, the outcome equations OME0, OME1, ... and the
+    # multinomial logit TME1, TME2, ... (compat 1925: 1 x 9 for ra with one regressor; VERIFY the
+    # names of the auxiliary equations)
+    kb = Xo.shape[1] if sub != "ipw" else 0
+    xn = (omv_names(pr, ovar) if sub != "ipw" else [])
+    zn = [nm for nm in tmv.split()] + ([] if tnoc else ["_cons"])
+    aux_b = list(th[L:])
+    aux_names = []
+    aux_eq = []
+    if kb:
+        for l in range(L):
+            aux_names += xn
+            aux_eq += [f"OME{labels[l]}"] * kb
+    if sub != "ra":
+        for l in range(1, L):
+            aux_names += zn
+            aux_eq += [f"TME{labels[l]}"] * len(zn)
+    m = len(b) + len(aux_b)
+    Vb = np.zeros((m, m))
+    Vb[:len(b), :len(b)] = V
+    Vb[len(b):, len(b):] = Vf[L:, L:]
+    full_post = (list(names) + aux_names, np.concatenate([b, aux_b]), Vb, list(eq) + aux_eq)
+    counts = [float(np.sum(tcode == l)) for l in range(L)]
     _post(s, "teffects", sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o,
           title="Treatment-effects estimation", est_title=est_title, omodel_txt=omodel_txt,
-          tmodel_txt=tmodel_txt, control_treated=(levels[ci], levels[tl]))
+          tmodel_txt=tmodel_txt, control_treated=(levels[ci], levels[tl]),
+          multi=(full_post, counts, " ".join(labels)))
 
 
 # ---------------------------------------------------------------------------

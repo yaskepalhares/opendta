@@ -1,0 +1,534 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1920_models4.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:20:15
+
+. * Models, part 4 (block 20b): gmm with igmm and derivatives(), ivpoisson cfunction with more
+. * than one endogenous regressor, ivregress gmm with wmatrix(hac kernel opt). No reference until
+. * the Stata run. Every command whose behavior the manual does not settle runs under capture
+. * noisily, so that one Stata run shows the whole case.
+. clear
+
+. set seed 1920
+
+. set obs 400
+number of observations (_N) was 0, now 400
+
+. gen t = _n
+
+. tsset t
+        time variable:  t, 1 to 400
+                delta:  1 unit
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen z = round(invnormal(runiform()), .01)
+
+. gen w = round(invnormal(runiform()), .01)
+
+. gen u = round(invnormal(runiform()), .01)
+
+. gen e = round(invnormal(runiform()), .01)
+
+. gen e2 = round(invnormal(runiform()), .01)
+
+. gen e3 = round(invnormal(runiform()), .01)
+
+. gen yy = 1 + x + e
+
+. gen xe = round(x + .5*e + z + .3*w, .01)
+
+. gen w2 = round(x + z + .5*e2 + .3*w, .01)
+
+. gen w3 = round(x - z + .5*e3 + .3*u, .01)
+
+. gen double lam = exp(.2 + .3*x + .2*w2 - .1*w3)
+
+. gen double pu = runiform()
+
+. gen double pk = exp(-lam)
+
+. gen double cp = pk
+
+. gen yc = 0
+
+. forvalues k = 1/40 {
+  2.     quietly replace yc = yc + 1 if pu > cp
+  3.     quietly replace pk = pk*lam/`k'
+  4.     quietly replace cp = cp + pk
+  5. }
+
+. drop lam pu pk cp
+
+. 
+. * gmm: iterated weight matrix and analytic derivatives
+. gmm (yy - {b1}*xe - {b0}), instruments(z w)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  .91230787  
+Iteration 1:   GMM criterion Q(b) =  .00285875  
+Iteration 2:   GMM criterion Q(b) =  .00285875  
+
+Step 2
+Iteration 0:   GMM criterion Q(b) =  .00154533  
+Iteration 1:   GMM criterion Q(b) =  .00154481  
+Iteration 2:   GMM criterion Q(b) =  .00154481  
+
+GMM estimation 
+
+Number of parameters =   2
+Number of moments    =   3
+Initial weight matrix: Unadjusted                 Number of obs   =        400
+GMM weight matrix:     Robust
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |  -.0001118   .0630817    -0.00   0.999    -.1237496    .1235261
+         /b0 |   .9538712    .072768    13.11   0.000     .8112485    1.096494
+------------------------------------------------------------------------------
+Instruments for equation 1: z w _cons
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  2
+                  e(N) =  400
+                  e(Q) =  .0015448067243043
+                  e(J) =  .6179226897217025
+               e(J_df) =  1
+                e(k_1) =  2
+          e(converged) =  1
+         e(has_xtinst) =  0
+               e(type) =  1
+               e(n_eq) =  1
+                  e(k) =  2
+          e(n_moments) =  3
+               e(k_eq) =  2
+              e(k_aux) =  2
+         e(k_eq_model) =  0
+
+macros:
+            e(cmdline) : "gmm (yy - {b1}*xe - {b0}), instruments(z w)"
+                e(cmd) : "gmm"
+          e(estat_cmd) : "gmm_estat"
+            e(predict) : "gmm_p"
+       e(marginsnotok) : "_ALL"
+            e(eqnames) : "1"
+          e(technique) : "gn"
+              e(winit) : "Unadjusted"
+          e(estimator) : "twostep"
+            e(wmatrix) : "robust"
+                e(vce) : "robust"
+            e(vcetype) : "Robust"
+             e(params) : "b1:_cons b0:_cons"
+             e(inst_1) : "z w _cons"
+           e(params_1) : "b1:_cons b0:_cons"
+             e(sexp_1) : "yy-{b1:_cons}*xe-{b0:_cons}"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+               e(init) :  1 x 2
+       e(V_modelbased) :  2 x 2
+                  e(S) :  3 x 3
+                  e(W) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily gmm (yy - {b1}*xe - {b0}), instruments(z w) igmm
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  .91230787  
+Iteration 1:   GMM criterion Q(b) =  .00285875  
+Iteration 2:   GMM criterion Q(b) =  .00285875  
+
+Step 2
+Iteration 0:   GMM criterion Q(b) =  .00154533  
+Iteration 1:   GMM criterion Q(b) =  .00154481  
+Iteration 2:   GMM criterion Q(b) =  .00154481  
+
+Step 3
+Iteration 0:   GMM criterion Q(b) =  .00154268  
+Iteration 1:   GMM criterion Q(b) =  .00154268  
+
+Step 4
+Iteration 0:   GMM criterion Q(b) =  .00154267  
+Iteration 1:   GMM criterion Q(b) =  .00154267  
+
+note: iterative GMM parameter vector converged
+
+GMM estimation 
+
+Number of parameters =   2
+Number of moments    =   3
+Initial weight matrix: Unadjusted                 Number of obs   =        400
+GMM weight matrix:     Robust
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |  -.0001164   .0630818    -0.00   0.999    -.1237545    .1235217
+         /b0 |   .9538761   .0727683    13.11   0.000     .8112529    1.096499
+------------------------------------------------------------------------------
+Instruments for equation 1: z w _cons
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  2
+                  e(N) =  400
+                  e(Q) =  .0015426721015365
+                  e(J) =  .617068840614592
+               e(J_df) =  1
+                e(k_1) =  2
+          e(converged) =  1
+         e(has_xtinst) =  0
+               e(type) =  1
+               e(n_eq) =  1
+                  e(k) =  2
+          e(n_moments) =  3
+               e(k_eq) =  2
+              e(k_aux) =  2
+         e(k_eq_model) =  0
+                 e(ic) =  4
+
+macros:
+            e(cmdline) : "gmm (yy - {b1}*xe - {b0}), instruments(z w) igmm"
+                e(cmd) : "gmm"
+          e(estat_cmd) : "gmm_estat"
+            e(predict) : "gmm_p"
+       e(marginsnotok) : "_ALL"
+            e(eqnames) : "1"
+          e(technique) : "gn"
+              e(winit) : "Unadjusted"
+          e(estimator) : "igmm"
+            e(wmatrix) : "robust"
+                e(vce) : "robust"
+            e(vcetype) : "Robust"
+             e(params) : "b1:_cons b0:_cons"
+             e(inst_1) : "z w _cons"
+           e(params_1) : "b1:_cons b0:_cons"
+             e(sexp_1) : "yy-{b1:_cons}*xe-{b0:_cons}"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+               e(init) :  1 x 2
+       e(V_modelbased) :  2 x 2
+                  e(S) :  3 x 3
+                  e(W) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily gmm (yy - {b1}*xe - {b0}), instruments(z w) igmm igmmeps(1e-4) igmmweps(1e-4) igmmiterate(10)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  .91230787  
+Iteration 1:   GMM criterion Q(b) =  .00285875  
+Iteration 2:   GMM criterion Q(b) =  .00285875  
+
+Step 2
+Iteration 0:   GMM criterion Q(b) =  .00154533  
+Iteration 1:   GMM criterion Q(b) =  .00154481  
+Iteration 2:   GMM criterion Q(b) =  .00154481  
+
+Step 3
+Iteration 0:   GMM criterion Q(b) =  .00154268  
+Iteration 1:   GMM criterion Q(b) =  .00154268  
+
+note: iterative GMM parameter vector converged
+
+GMM estimation 
+
+Number of parameters =   2
+Number of moments    =   3
+Initial weight matrix: Unadjusted                 Number of obs   =        400
+GMM weight matrix:     Robust
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |  -.0001164   .0630818    -0.00   0.999    -.1237545    .1235217
+         /b0 |    .953876   .0727683    13.11   0.000     .8112528    1.096499
+------------------------------------------------------------------------------
+Instruments for equation 1: z w _cons
+
+. capture noisily gmm (yy - {b1}*xe - {b0}), instruments(z w) derivatives(/b1 = -xe) derivatives(/b0 = -1)
+derivatives(/b1 = -xe) derivatives(/b0 = -1) not allowed with interactive version
+
+. capture noisily gmm (yy - {b1}*xe - {b0}), instruments(z w) derivatives(/b1 = -xe)
+derivatives(/b1 = -xe) not allowed with interactive version
+
+. capture noisily gmm (yy - {b1}*xe - {b0}), instruments(z w) igmm derivatives(/b1 = -xe) derivatives(/b0 = -1)
+derivatives(/b1 = -xe) derivatives(/b0 = -1) not allowed with interactive version
+
+. 
+. * ivpoisson cfunction with two endogenous regressors
+. capture noisily ivpoisson cfunction yc x (w2 w3 = z w u)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  .00942637  
+Iteration 1:   GMM criterion Q(b) =  7.769e-06  
+Iteration 2:   GMM criterion Q(b) =  2.070e-11  
+Iteration 3:   GMM criterion Q(b) =  1.981e-22  
+
+note: model is exactly identified
+
+Exponential mean model with endogenous regressors
+
+Number of parameters =  16                         Number of obs  =        400
+Number of moments    =  16
+Initial weight matrix: Unadjusted
+GMM weight matrix:     Robust
+
+------------------------------------------------------------------------------
+             |               Robust
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yc           |
+           x |   .5192453   .2391583     2.17   0.030     .0505037    .9879869
+          w2 |   .0791283   .1121933     0.71   0.481    -.1407664    .2990231
+          w3 |  -.1750409   .1156511    -1.51   0.130    -.4017128    .0516311
+       _cons |   .1508064   .0465235     3.24   0.001     .0596221    .2419907
+-------------+----------------------------------------------------------------
+w2           |
+           x |   1.014807   .0262325    38.69   0.000     .9633923    1.066222
+           z |   1.034466   .0238714    43.34   0.000      .987679    1.081253
+           w |   .3049108   .0244952    12.45   0.000     .2569011    .3529204
+           u |  -.0130992   .0260308    -0.50   0.615    -.0641187    .0379203
+       _cons |   .0301219    .024969     1.21   0.228    -.0188164    .0790602
+-------------+----------------------------------------------------------------
+w3           |
+           x |   1.030441   .0246716    41.77   0.000     .9820859    1.078797
+           z |  -1.054593   .0249545   -42.26   0.000    -1.103503   -1.005683
+           w |   .0406062   .0245521     1.65   0.098     -.007515    .0887275
+           u |   .2848751   .0266352    10.70   0.000      .232671    .3370792
+       _cons |   .0351083   .0263486     1.33   0.183     -.016534    .0867507
+-------------+----------------------------------------------------------------
+       /c_w2 |   .1429502   .1525408     0.94   0.349    -.1560243    .4419247
+       /c_w3 |  -.0421774   .1379614    -0.31   0.760    -.3125767     .228222
+------------------------------------------------------------------------------
+Instrumented:  w2 w3
+Instruments:   x z w u
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  400
+                  e(k) =  16
+               e(k_eq) =  5
+              e(k_aux) =  2
+               e(k_dv) =  3
+                  e(Q) =  2.25496321555e-22
+                  e(J) =  9.01985286220e-20
+               e(J_df) =  0
+               e(rank) =  16
+          e(converged) =  1
+
+macros:
+                e(cmd) : "ivpoisson"
+            e(cmdline) : "ivpoisson cfunction yc x (w2 w3 = z w u)"
+             e(depvar) : "yc"
+              e(instd) : "w2 w3"
+              e(insts) : "x z w u"
+          e(estimator) : "cfunction"
+     e(multiplicative) : "multiplicative"
+              e(title) : "Exponential mean model with endogenous regressors"
+              e(winit) : "Unadjusted"
+       e(gmmestimator) : "onestep"
+            e(wmatrix) : "robust"
+                e(vce) : "robust"
+            e(vcetype) : "Robust"
+          e(technique) : "gn"
+         e(properties) : "b V"
+          e(estat_cmd) : "ivpoisson_estat"
+            e(predict) : "ivpoisson_p"
+           e(footnote) : "ivpoisson_footnote"
+          e(marginsok) : "xb default n pr XBTotal"
+
+matrices:
+                  e(b) :  1 x 16
+                  e(V) :  16 x 16
+               e(init) :  1 x 16
+                  e(W) :  16 x 16
+                  e(S) :  16 x 16
+       e(V_modelbased) :  16 x 16
+
+functions:
+             e(sample)   
+
+. capture noisily ivpoisson cfunction yc x (w2 w3 = z w u), vce(cluster t)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  .00942637  
+Iteration 1:   GMM criterion Q(b) =  7.769e-06  
+Iteration 2:   GMM criterion Q(b) =  2.070e-11  
+Iteration 3:   GMM criterion Q(b) =  1.981e-22  
+
+note: model is exactly identified
+
+Exponential mean model with endogenous regressors
+
+Number of parameters =  16                         Number of obs  =        400
+Number of moments    =  16
+Initial weight matrix: Unadjusted
+GMM weight matrix:     Cluster (t)
+
+                                    (Std. Err. adjusted for 400 clusters in t)
+------------------------------------------------------------------------------
+             |               Robust
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+yc           |
+           x |   .5192453   .2391583     2.17   0.030     .0505037    .9879869
+          w2 |   .0791283   .1121933     0.71   0.481    -.1407664    .2990231
+          w3 |  -.1750409   .1156511    -1.51   0.130    -.4017128    .0516311
+       _cons |   .1508064   .0465235     3.24   0.001     .0596221    .2419907
+-------------+----------------------------------------------------------------
+w2           |
+           x |   1.014807   .0262325    38.69   0.000     .9633923    1.066222
+           z |   1.034466   .0238714    43.34   0.000      .987679    1.081253
+           w |   .3049108   .0244952    12.45   0.000     .2569011    .3529204
+           u |  -.0130992   .0260308    -0.50   0.615    -.0641187    .0379203
+       _cons |   .0301219    .024969     1.21   0.228    -.0188164    .0790602
+-------------+----------------------------------------------------------------
+w3           |
+           x |   1.030441   .0246716    41.77   0.000     .9820859    1.078797
+           z |  -1.054593   .0249545   -42.26   0.000    -1.103503   -1.005683
+           w |   .0406062   .0245521     1.65   0.098     -.007515    .0887275
+           u |   .2848751   .0266352    10.70   0.000      .232671    .3370792
+       _cons |   .0351083   .0263486     1.33   0.183     -.016534    .0867507
+-------------+----------------------------------------------------------------
+       /c_w2 |   .1429502   .1525408     0.94   0.349    -.1560243    .4419247
+       /c_w3 |  -.0421774   .1379614    -0.31   0.760    -.3125767     .228222
+------------------------------------------------------------------------------
+Instrumented:  w2 w3
+Instruments:   x z w u
+
+. 
+. * ivregress gmm with the Newey-West (1994) lag choice
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(hac bartlett opt)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.00
+                                                  Prob > chi2     =     0.9836
+                                                  R-squared       =          .
+GMM weight matrix: HAC Bartlett 27                Root MSE        =     1.4568
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |  -.0009726   .0473889    -0.02   0.984    -.0938532     .091908
+       _cons |   .9385023    .081611    11.50   0.000     .7785476    1.098457
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Bartlett kernel with 27 lags
+HAC Lags:      Chosen by Newey-West method
+WMat Lags:     Chosen by Newey-West method
+
+. capture noisily ereturn list
+
+scalars:
+                  e(J) =  .851460005555306
+                e(rss) =  848.9489653136941
+                  e(N) =  400
+               e(df_m) =  1
+               e(rmse) =  1.456836440127798
+                e(mss) =  -1.309488812713653
+                 e(r2) =  .
+               e(r2_a) =  .
+               e(chi2) =  .0004212211656895
+         e(iterations) =  1
+            e(wlagopt) =  27
+          e(vcelagopt) =  27
+            e(hac_lag) =  27
+               e(rank) =  2
+
+macros:
+            e(cmdline) : "ivregress gmm yy (xe = z w), wmatrix(hac bartlett opt)"
+                e(cmd) : "ivregress"
+          e(estat_cmd) : "ivregress_estat"
+         e(hac_kernel) : "Bartlett"
+            e(wmatrix) : "hac bartlett opt"
+                e(vce) : "hac bartlett opt"
+            e(vcetype) : "HAC"
+          e(estimator) : "gmm"
+           e(footnote) : "ivreg_footnote"
+       e(marginsnotok) : "Residuals SCores"
+          e(marginsok) : "XB default"
+            e(predict) : "ivregress_p"
+             e(depvar) : "yy"
+              e(insts) : "z w"
+              e(instd) : "xe"
+              e(title) : "Instrumental variables (GMM) regression"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+                  e(S) :  3 x 3
+                  e(W) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(hac parzen opt)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.00
+                                                  Prob > chi2     =     0.9933
+                                                  R-squared       =          .
+GMM weight matrix: HAC Parzen 24                  Root MSE        =     1.4563
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |  -.0004562   .0541687    -0.01   0.993    -.1066248    .1057125
+       _cons |   .9347392   .0771895    12.11   0.000     .7834505    1.086028
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Parzen kernel with 24 lags
+HAC Lags:      Chosen by Newey-West method
+WMat Lags:     Chosen by Newey-West method
+
+. capture noisily ivregress gmm yy (xe = z w), wmatrix(hac quadraticspectral opt)
+
+Instrumental variables (GMM) regression           Number of obs   =        400
+                                                  Wald chi2(1)    =       0.00
+                                                  Prob > chi2     =     0.9716
+                                                  R-squared       =          .
+GMM weight matrix: HAC quadratic spectral 22.000  Root MSE        =     1.4575
+
+------------------------------------------------------------------------------
+             |                 HAC
+          yy |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          xe |   -.001593   .0446842    -0.04   0.972    -.0891725    .0859865
+       _cons |    .936454   .0816645    11.47   0.000     .7763945    1.096513
+------------------------------------------------------------------------------
+Instrumented:  xe
+Instruments:   z w
+HAC VCE:       Quadratic spectral kernel with 22 lags
+HAC Lags:      Chosen by Newey-West method
+WMat Lags:     Chosen by Newey-West method
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1920_models4.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:20:16
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

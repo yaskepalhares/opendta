@@ -1,0 +1,195 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1927_models10.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:19:24
+
+. * Models, part 10 (block 20h): eteffects with probit, fractional and exponential outcome models
+. * (the linear model is checked in case 1908). No reference until the Stata run. Every command
+. * whose behavior the manual does not settle runs under capture noisily, so that one Stata run
+. * shows the whole case.
+. clear
+
+. set obs 2000
+number of observations (_N) was 0, now 2,000
+
+. set seed 1927
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen z = round(invnormal(runiform()), .01)
+
+. gen u = round(invnormal(runiform()), .01)
+
+. gen t = (.2 + .7*z + .5*x + u) > 0
+
+. gen yl = round(1 + x + 1.5*t + .6*u + .7*invnormal(runiform()), .01)
+
+. gen yb = (-.2 + .5*x + .8*t + .5*u + invnormal(runiform()) > 0)
+
+. gen yf = invlogit(-.2 + .5*x + .8*t + .5*u + invnormal(runiform()))
+
+. gen yc = round(exp(.2 + .3*x + .5*t + .3*u)*runiform()*2)
+
+. capture noisily eteffects (yl x) (t x z), atet
+
+Iteration 0:   EE criterion =  7.690e-26  
+Iteration 1:   EE criterion =  5.129e-26  
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : linear
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yl |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATET         |
+           t |
+   (1 vs 0)  |   1.394342   .1223185    11.40   0.000     1.154602    1.634081
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   1.637904   .1196079    13.69   0.000     1.403477    1.872331
+------------------------------------------------------------------------------
+
+. capture noisily eteffects (yb x, probit) (t x z)
+
+Iteration 0:   EE criterion =  2.692e-16  
+Iteration 1:   EE criterion =  2.692e-16  (backed up)
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : probit
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   .1213399    .053848     2.25   0.024     .0157997      .22688
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .5031418   .0508398     9.90   0.000     .4034976    .6027859
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  2000
+          e(converged) =  1
+               e(rank) =  11
+               e(k_eq) =  7
+           e(k_levels) =  2
+                 e(n1) =  900
+                 e(n0) =  1100
+
+macros:
+            e(cmdline) : "eteffects (yb x, probit) (t x z)"
+       e(marginsnotok) : "_ALL"
+                e(cmd) : "eteffects"
+          e(estat_cmd) : "eteffects_estat"
+            e(predict) : "eteffects_p"
+            e(vcetype) : "Robust"
+                e(vce) : "robust"
+             e(omodel) : "probit"
+               e(stat) : "ate"
+               e(tvar) : "t"
+             e(depvar) : "yb"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 11
+                  e(V) :  11 x 11
+
+functions:
+             e(sample)   
+
+. capture noisily eteffects (yb x, probit) (t x z), pomeans
+
+Iteration 0:   EE criterion =  2.692e-16  
+Iteration 1:   EE criterion =  4.766e-17  
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : probit
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yb |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+POmeans      |
+           t |
+          0  |   .5031418   .0508398     9.90   0.000     .4034976    .6027859
+          1  |   .6244816   .0190307    32.81   0.000     .5871821    .6617811
+------------------------------------------------------------------------------
+
+. capture noisily eteffects (yf x, fractional) (t x z)
+
+Iteration 0:   EE criterion =  1.311e-19  
+Iteration 1:   EE criterion =  1.311e-19  (backed up)
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : fractional
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yf |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   .1345371    .024585     5.47   0.000     .0863514    .1827228
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .4597772   .0226057    20.34   0.000     .4154709    .5040836
+------------------------------------------------------------------------------
+
+. capture noisily eteffects (yc x, exponential) (t x z)
+
+Iteration 0:   EE criterion =  7.666e-17  
+Iteration 1:   EE criterion =  6.417e-26  
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : exponential
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   .4360264    .140546     3.10   0.002     .1605613    .7114915
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   1.620734    .125588    12.91   0.000     1.374586    1.866882
+------------------------------------------------------------------------------
+
+. capture noisily eteffects (yc x, exponential) (t x z), atet
+
+Iteration 0:   EE criterion =  7.868e-17  
+Iteration 1:   EE criterion =  5.441e-26  
+
+Endogenous treatment-effects estimation         Number of obs     =      2,000
+Outcome model  : exponential
+Treatment model: probit
+------------------------------------------------------------------------------
+             |               Robust
+          yc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATET         |
+           t |
+   (1 vs 0)  |   .4850295   .2283283     2.12   0.034     .0375143    .9325446
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   2.180425   .2223583     9.81   0.000     1.744611    2.616239
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1927_models10.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:19:25
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -425,7 +425,7 @@ def _anova(s: "Session", est: Estimates) -> None:
 
 
 def _ss_row(name: str, ss: float, df: float, ms: float) -> str:
-    return f"{name:>12} | {g(ss, '%11.0g'):>11}{int(df):>10}{g(ms, '%11.0g'):>12}"
+    return f"{name:>12} | {g(ss, '%11.0g'):>11}{int(df):>10,}{g(ms, '%11.0g'):>12}"   # 2,996 (compat 1926)
 
 
 def _robust_header(s: "Session", est: Estimates) -> None:

@@ -51,12 +51,18 @@ def test_gmm_igmm_matches_ivregress_igmm():
 def test_gmm_derivatives_equal_numeric():
     s, _ = _run(DATA + "quietly gmm (yy - {b1}*xe - {b0}), instruments(z w)\n")
     b, V = s.e["b"].data.ravel().copy(), s.e["V"].data.copy()
-    s, _ = _run("quietly gmm (yy - {b1}*xe - {b0}), instruments(z w) derivatives(/b1 = -xe) "
-                "derivatives(/b0 = -1)\n", s)
+    s, _ = _run("quietly gmm (yy - {b1}*xe - {b0}), instruments(z w) derivative(/b1 = -xe) "
+                "derivative(/b0 = -1)\n", s)
     assert np.allclose(s.e["b"].data.ravel(), b, atol=1e-8) and np.allclose(s.e["V"].data, V, atol=1e-8)
     # a parameter without its derivative is an error
-    rc = s.run_text("gmm (yy - {b1}*xe - {b0}), instruments(z w) derivatives(/b1 = -xe)\n")
+    rc = s.run_text("gmm (yy - {b1}*xe - {b0}), instruments(z w) derivative(/b1 = -xe)\n")
     assert rc == 198
+    # the plural derivatives() is for moment-evaluator programs (compat 1920)
+    lines = []
+    s.output.add_listener(lambda t_, style: lines.append(t_))
+    rc = s.run_text("gmm (yy - {b1}*xe - {b0}), instruments(z w) derivatives(/b1 = -xe) derivatives(/b0 = -1)\n")
+    assert rc == 198
+    assert "derivatives(/b1 = -xe) derivatives(/b0 = -1) not allowed with interactive version" in "".join(lines)
 
 
 def test_ivpoisson_cfunction_two_endogenous():
@@ -78,9 +84,17 @@ def test_ivpoisson_cfunction_two_endogenous():
 
 def test_hac_optimal_lag():
     s, _ = _run(DATA)
+    # [R] ivregress, Methods and formulas: the lag is at most m* = int(20 (T/100)^a); Bartlett and
+    # Parzen truncate it, the quadratic spectral keeps it real (compat 1920)
+    mstar = {"bartlett": int(20 * 4 ** (2 / 9)), "parzen": int(20 * 4 ** (4 / 25)),
+             "quadraticspectral": int(20 * 4 ** (2 / 25))}
     for kern in ("bartlett", "parzen", "quadraticspectral"):
         s, out = _run(f"ivregress gmm yy (xe = z w), wmatrix(hac {kern} opt)\n", s)
-        lag = int(s.e["hac_lag"])
-        assert lag >= 0 and f"{lag} lags" in out
-        s2, _ = _run(f"quietly ivregress gmm yy (xe = z w), wmatrix(hac {kern} {lag})\n", s)
-        assert np.allclose(s2.e["b"].data, s.e["b"].data)
+        lag = float(s.e["wlagopt"])
+        assert 0 <= lag <= mstar[kern]
+        if kern != "quadraticspectral":
+            assert lag == int(lag)
+        assert "WMat Lags:     Chosen by Newey-West method" in out
+        if lag == int(lag):
+            s2, _ = _run(f"quietly ivregress gmm yy (xe = z w), wmatrix(hac {kern} {int(lag)})\n", s)
+            assert np.allclose(s2.e["b"].data, s.e["b"].data)

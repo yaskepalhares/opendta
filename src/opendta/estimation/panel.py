@@ -740,6 +740,10 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     est.predict = _predict_xt
     est.predict_opts = {"u": 1, "e": 1, "ue": 2, "xbu": 3}
     r2_a = 1 - (1 - r2) * (N - 1) / (N - k)
+    if tss - rss < 0:
+        # a negative model sum of squares: Stata reports R-squared as missing (compat 1920)
+        r2 = r2_a = SYS
+        est.extra["r2"] = SYS
     est.extra.update(mss=tss - rss, rss=rss, tss=tss, r2_a=r2_a, k=k)
     # e(): order observed in Stata 14 with small (compat 0510); without small, VERIFY
     gmm = estimator == "gmm"
@@ -753,8 +757,10 @@ def cmd_ivregress(s: "Session", args: str) -> None:
     if n_clust is not None:
         scalars.append(("N_clust", float(n_clust)))
     scalars += [("iterations", float(ginfo["iterations"]) if gmm else 0.0)]
+    if gmm and ginfo.get("opt") is not None:
+        scalars += [("wlagopt", float(ginfo["opt"][0])), ("vcelagopt", float(ginfo["opt"][1]))]
     if gmm and ginfo["hac"] is not None:
-        scalars.append(("hac_lag", float(ginfo["hac"][1])))
+        scalars.append(("hac_lag", float(ginfo["opt"][1] if ginfo.get("opt") else ginfo["hac"][1])))
     scalars.append(("rank", float(k)))
     exogr = " ".join(c.name for c in ex_cols)
     macros = [("cmdline", cmdline("ivregress", args)), ("cmd", "ivregress"), ("estat_cmd", "ivregress_estat")]
@@ -762,7 +768,9 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         wtext = " ".join(str(smp.o.get("wmatrix") or "robust").split())
         if ginfo["hac"] is not None:
             macros.append(("hac_kernel", {"quadraticspectral": "Quadratic spectral"}.get(ginfo["hac"][0], ginfo["hac"][0].capitalize())))
-            wtext = f"hac {ginfo['hac'][0]} {ginfo['hac'][1]}"
+            if ginfo.get("opt") is None:
+                wtext = f"hac {ginfo['hac'][0]} {ginfo['hac'][1]}"
+            # with opt Stata keeps the option as typed: "hac bartlett opt" (compat 1920)
         macros += [("wmatrix", wtext), ("vce", wtext if ginfo["hac"] is not None else (smp.vce if vcetype else "unadjusted"))]
     else:
         macros.append(("vce", smp.vce if vcetype else "unadjusted"))
@@ -786,6 +794,7 @@ def cmd_ivregress(s: "Session", args: str) -> None:
         zn = [c.name for c in Zc] + [c.name for c in ex_cols] + ["_cons"]
         mats = [("S", Matrix(ginfo["S"], zn, zn)), ("W", Matrix(ginfo["W"], zn, zn))]
         est.extra["hac"] = ginfo["hac"]
+        est.extra["opt"] = ginfo.get("opt")
     post(s, est, scalars, macros, mask, extra_mats=mats)
     display_iv(s, est)
 
@@ -843,7 +852,14 @@ def display_iv(s, est, *, header=True, table=True, level=None, **_kw):
     if x.get("hac") is not None:
         kern, lags = x["hac"][0], x["hac"][1]
         kname = {"quadraticspectral": "Quadratic spectral"}.get(kern, kern.capitalize())
+        opt = x.get("opt")
+        if opt is not None:
+            lags = opt[1]
+        lags = int(lags) if float(lags) == int(lags) else g(float(lags), "%9.0g").strip()   # VERIFY a fractional lag
         out.write(f"HAC VCE:       {kname} kernel with {lags} lags\n", "text")
+        if opt is not None:
+            out.write("HAC Lags:      Chosen by Newey-West method\n", "text")
+            out.write("WMat Lags:     Chosen by Newey-West method\n", "text")
 
 
 def _liml_kappa(y, Xn, ex_cols, X, Z) -> float:
@@ -883,26 +899,29 @@ def _hac_weights(kernel: str, lags: int, N: int) -> list[float]:
     return out
 
 
-def _nw94_lags(G: np.ndarray, kernel: str) -> int:
-    """Data-dependent lag of Newey and West (1994) for the HAC weight matrix of the moments G (n x
-    moments): the autocovariances of the sum of the moments (the constant column excluded) give the
-    ratio s(q)/s(0), and the bandwidth is c * (ratio^2)^(1/(2q+1)) * n^(1/(2q+1)), with the
-    truncation lag n_trunc = 12 (n/100)^(2/9) (Bartlett), 4 (n/100)^(2/25) (Parzen) or
-    3 (n/100)^(2/25) (quadratic spectral)."""
+def _nw94_lags(G: np.ndarray, kernel: str, tune: float = 20.0) -> float:
+    """Newey and West's (1994) lag selection as [R] ivregress (Methods and formulas) gives it:
+    f_i = (u_i z_i) h with h = 1 except a 0 for the constant (the last column of G), sigma_j the
+    autocovariances of f up to m* = int(tune (T/100)^a), s(0) and s(q), gamma = c (s(q)/s(0))^(2/(2q+1))
+    and m = gamma T^(1/(2q+1)). The lag is min(int(m), m*) for Bartlett and Parzen and min(m, m*)
+    for the quadratic spectral (compat 1920: 27, 24 and 22 with T = 400, all at m*)."""
     n = G.shape[0]
-    g = G[:, :-1].sum(axis=1) if G.shape[1] > 1 else G[:, 0]
-    q, c, expo, a = {"bartlett": (1, 1.1447, 1 / 3, (12, 2 / 9)), "parzen": (2, 2.6614, 1 / 5, (4, 2 / 25)),
-                     "quadraticspectral": (2, 1.3221, 1 / 5, (3, 2 / 25))}[kernel]
-    m = int(a[0] * (n / 100) ** a[1])
-    m = max(min(m, n - 1), 1)
-    sig = np.array([g[j:] @ g[:n - j] / n for j in range(m + 1)])
-    j = np.arange(1, m + 1)
+    f = G[:, :-1].sum(axis=1) if G.shape[1] > 1 else G[:, 0]
+    q, c, a = {"bartlett": (1, 1.1447, 2 / 9), "parzen": (2, 2.6614, 4 / 25),
+               "quadraticspectral": (2, 1.3221, 2 / 25)}[kernel]
+    mstar = int(tune * (n / 100) ** a)
+    mstar = max(min(mstar, n - 1), 1)
+    sig = np.array([f[j:] @ f[:n - j] / n for j in range(mstar + 1)])
+    jj = np.arange(1, mstar + 1)
     s0 = sig[0] + 2 * np.sum(sig[1:])
-    sq = 2 * np.sum(j ** q * sig[1:])
+    sq = 2 * np.sum(jj ** q * sig[1:])
     if s0 == 0:
         return 0
     gamma = c * ((sq / s0) ** 2) ** (1 / (2 * q + 1))
-    return max(int(gamma * n ** expo), 0)
+    m = gamma * n ** (1 / (2 * q + 1))
+    if kernel == "quadraticspectral":
+        return float(min(m, mstar))
+    return int(min(int(m), mstar))
 
 
 def _gmm_two_step(smp, y, X, Z, b1, small):
@@ -924,20 +943,25 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
         if len(wm) < 2 or wm[1].lower() not in names:
             raise StataError(198, "wmatrix(hac) requires a kernel")   # VERIFY
         kern = names[wm[1].lower()]
-        if len(wm) > 2 and wm[2].lower() == "opt":
-            lags = _nw94_lags(Z * e1[:, None], kern)                 # VERIFY against Stata (compat 2001)
+        opt = len(wm) > 2 and wm[2].lower() == "opt"
+        if opt:
+            tune = float(wm[3]) if len(wm) > 3 else 20.0
+            Gc = Z * e1[:, None]
+            if center:
+                Gc = Gc - Gc.mean(axis=0)
+            lags = _nw94_lags(Gc, kern, tune)
         else:
             lags = int(float(wm[2])) if len(wm) > 2 else N - 2          # VERIFY the default
         hac = (kern, lags, _hac_weights(kern, lags, N))
 
-    def meat(e, kind_):
+    def meat(e, kind_, weights=None):
         nonlocal n_cl
         G = Z * e[:, None]
         if center and not kind_.startswith("una"):
             G = G - G.mean(axis=0)
         if kind_ == "hac":
             S = G.T @ G
-            for j, wj in enumerate(hac[2], start=1):
+            for j, wj in enumerate(hac[2] if weights is None else weights, start=1):
                 if wj != 0:
                     Gj = G[j:].T @ G[:-j]
                     S += wj * (Gj + Gj.T)
@@ -982,14 +1006,25 @@ def _gmm_two_step(smp, y, X, Z, b1, small):
     if smp.vce in ("robust", "cluster") or kind[:3] in ("rob", "clu", "hac"):
         # a robust or cluster weight matrix gives the sandwich variance (compat 1907)
         k2 = "hac" if kind == "hac" else ("cluster" if (smp.vce == "cluster" or kind.startswith("clu")) else "robust")
-        S2 = meat(e, k2)
+        vce_w = None
+        if hac is not None and opt:
+            # the VCE lag is chosen again with the GMM residuals ([R] ivregress: S uses b_GMM)
+            Gv = Z * e[:, None]
+            if center:
+                Gv = Gv - Gv.mean(axis=0)
+            vcelag = _nw94_lags(Gv, hac[0], tune)
+            vce_w = _hac_weights(hac[0], vcelag, N)
+        S2 = meat(e, k2, vce_w)
         V = Ainv @ (ZX.T @ W @ S2 @ W @ ZX) @ Ainv
+    lagtxt = (lambda v: f"{v:.3f}" if isinstance(v, float) else str(v))   # quadratic spectral opt: 22.000 (compat 1920)
     if hac is not None:
-        label = f"HAC {hac[0].capitalize() if hac[0] != 'quadraticspectral' else 'quadratic spectral'} {hac[1]}"   # compat 1918
+        label = f"HAC {hac[0].capitalize() if hac[0] != 'quadraticspectral' else 'quadratic spectral'} {lagtxt(hac[1])}"   # compat 1918
     else:
         label = {"rob": "Robust", "una": "Unadjusted", "clu": f"Cluster ({wm[1] if len(wm) > 1 else smp.clustvar})"}[kind[:3]]
     Ze = Z.T @ e
     J = float(Ze @ W @ Ze)              # with the weight matrix of the estimates (compat 1918)
     info = {"J": J, "S": meat(e, kind) / N, "W": W * N, "trace": trace, "iterations": max(len(trace), 1),
-            "hac": hac}
+            "hac": hac, "opt": None}
+    if hac is not None and opt:
+        info["opt"] = (hac[1], vcelag if vce_w is not None else hac[1])
     return b, e, (V + V.T) / 2, label, n_cl, info

@@ -46,7 +46,7 @@ def test_ivprobit_twostep_estimates_scaled_coefficients():
     assert np.allclose(_b(s), b_ml / np.sqrt(1 - rho ** 2), rtol=0.03)
     assert "Two-step probit with endogenous regressors" in out
     assert "Checking reduced-form model..." in out
-    assert "Wald test of exogeneity: chi2(1)" in out
+    assert "Wald test of exogeneity:     chi2(1)" in out
     assert s.eval("e(df_exog)") == 1
 
 

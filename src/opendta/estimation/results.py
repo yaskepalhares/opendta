@@ -76,8 +76,9 @@ class Estimates:
 
 
 def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
-         macros: list[tuple[str, str]], sample: np.ndarray, *, extra_mats=()) -> None:
-    """Stores e(): Stata lists in the reverse order of storage (see progcmd)."""
+         macros: list[tuple[str, str]], sample: np.ndarray, *, extra_mats=(), no_V: bool = False) -> None:
+    """Stores e(): Stata lists in the reverse order of storage (see progcmd). no_V: no e(V)
+    (exlogistic and expoisson, compat 1924)."""
     from ..commands.matrix import Matrix
     e: dict = {}
     for k, v in reversed(macros):
@@ -87,8 +88,8 @@ def post(s: "Session", est: Estimates, scalars: list[tuple[str, float]],
         e[k] = float(v) if v is not None else SYS
     k = len(est.names)
     eqs = est.eqnames or ["_"] * k
-    mats = [("b", Matrix(est.b.reshape(1, -1), ["y1"], list(est.names))),
-            ("V", Matrix(est.V, list(est.names), list(est.names)))] + list(extra_mats)
+    mats = [("b", Matrix(est.b.reshape(1, -1), ["y1"], list(est.names)))] + \
+        ([] if no_V else [("V", Matrix(est.V, list(est.names), list(est.names)))]) + list(extra_mats)
     for name, m in reversed(mats):
         if name == "Cns" or getattr(m, "keep_eq", False):
             # its own equations: the last column of e(Cns) is _Cns:_r (compat 1913), and the

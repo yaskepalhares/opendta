@@ -149,6 +149,9 @@ def cmd_frontier(s: "Session", args: str) -> None:
                 l_, se_l = (lsv, np.sqrt(V[off, off])) if i == 0 else (lsu, np.sqrt(V[off + 1, off + 1]))
                 rows.append(aux_row(nm, float(val), float(se_), level,
                                     ci=(float(np.exp((l_ - c * se_l) / 2)), float(np.exp((l_ + c * se_l) / 2)))))
+            elif V[off, off] == 0 or V[off + 1, off + 1] == 0:
+                # a variance fixed by constraints: no standard error for sigma2 and lambda (compat 1922)
+                rows.append(CoefRow("aux", nm, float(val), SYS))
             else:
                 rows.append(aux_row(nm, float(val), float(se_), level, ci=(float(val - c * se_), float(val + c * se_))))
         return rows
@@ -161,17 +164,38 @@ def cmd_frontier(s: "Session", args: str) -> None:
                  ("Prob > chi2", g(x["p"], "%10.4f"))]
         return left, right
 
+    constrained = pr.o.get("constraints") not in (None, True, False)
+
     def footer(s_, est):
+        if constrained:
+            return          # the LR test of sigma_u = 0 is not reported under constraints (compat 1922)
         s_.output.write(f"Likelihood-ratio test of sigma_u=0: chibar2(01) = {lr:<5.2f}"
                         f"  Prob>=chibar2 = {p_lr:.3f}\n", "text")
 
+    # the skewness test of the OLS residuals, m3 / sqrt(6 m2^3 / N), stored as e(z) under
+    # constraints (compat 1922; one-sided p-value in the direction of the inefficiency)
+    m2, m3 = float(np.mean(r * r)), float(np.mean(r ** 3))
+    z_sk = m3 / np.sqrt(6 * m2 ** 3 / n)
+    p_sk = float(st.norm.cdf(sign * z_sk))
+    if constrained:
+        tests = [("z", z_sk), ("p_z", p_sk)]
+    else:
+        tests = [("chi2_c", lr), ("p_c", p_lr)]
+    # e() in Stata's order (compat 1922 under constraints; VERIFY without them)
+    order = (["rank", "N", "ic", "k", "k_eq", "k_dv", "converged", "rc", "ll", "N_clust", "k_eq_model", "df_m",
+              "chi2", "p", "chi2_c", "p_c", "z", "p_z", "sigma_u", "sigma_v", "k_aux"],
+             ["cmdline", "cmd", "function", "dist", "predict", "chi2type", "opt", "vce", "vcetype", "clustvar",
+              "title", "user", "ml_method", "technique", "which", "wtype", "wexp", "depvar", "properties"],
+             ["Cns", "ilog", "gradient"])
+
     est = finish_model(s, pr, "frontier", args, title=_TITLES[dist], blocks=[main], eng=eng, res=res, V=V,
                        n_clust=n_clust, ll0=SYS, aux_names=names, aux_rows_fn=aux_rows, hdr_fn=hdr, wald=True,
-                       footer=footer, k_eq=1 + len(names),
-                       extra_scalars=[("sigma_u", float(np.exp(lsu / 2))), ("sigma_v", float(np.exp(lsv / 2))),
-                                      ("lambda", float(np.exp((lsu - lsv) / 2))), ("sigma2", float(sv2 + su2)),
-                                      ("chi2_c", lr), ("p_c", p_lr)],
-                       extra_macros=[("function", "cost" if o.get("cost") else "production"), ("dist", dist)])
+                       footer=footer, k_eq=1 + len(names), order=order,
+                       extra_scalars=[("sigma_u", float(np.exp(lsu / 2))), ("sigma_v", float(np.exp(lsv / 2)))] + tests,
+                       extra_macros=[("function", "cost" if o.get("cost") else "production"), ("dist", dist),
+                                     ("predict", "fron_p"),
+                                     ("user", f"fron_{ {'hnormal': 'hn', 'exponential': 'ex', 'tnormal': 'tn'}[dist]}"),
+                                     ("ml_method", "e2")])
     est.coef_title, est.eform_on = "Coef.", False
     display_eq(s, est)
 

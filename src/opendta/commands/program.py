@@ -49,7 +49,7 @@ def _run_file(s: "Session", args: str, *, echo: bool, new_scope: bool) -> None:
         source = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         source = path.read_text(encoding="latin-1")
-    lines = split_commands(source)
+    lines = split_commands(source, blanks=echo)
 
     out = s.output
     scope = None

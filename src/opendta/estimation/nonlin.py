@@ -219,8 +219,10 @@ class ProgFunc:
     caller keeps those of its sample. `names` are the parameters (parameters(), or b1, b2, ...
     with nparameters(#)); `eq(q)` is equation q with the interface of SubExpr."""
 
-    def __init__(self, s: "Session", prog: str, m: int, names: list[str], varlist: list[str]):
+    def __init__(self, s: "Session", prog: str, m: int, names: list[str], varlist: list[str],
+                 noisy_first: bool = False):
         self.s = s
+        self.noisy_first = noisy_first      # gmm shows the output of the first call (compat 1923)
         self.prog = prog
         self.m = m
         self.names = names
@@ -245,8 +247,13 @@ class ProgFunc:
         mats = _store(s)
         mats["__nlat"] = Matrix(np.array([key]), ["r1"], list(self.names))
         try:
-            with s.output.quietly():
-                s.interp._execute_expanded(f"{self.prog} {' '.join(tmp[1:] + self.vars)} if {tmp[0]}, at(__nlat)")
+            call = f"{self.prog} {' '.join(tmp[1:] + self.vars)} if {tmp[0]}, at(__nlat)"
+            if self.noisy_first:
+                self.noisy_first = False
+                s.interp._execute_expanded(call)
+            else:
+                with s.output.quietly():
+                    s.interp._execute_expanded(call)
             val = np.column_stack([ds.get(nm).data.astype(float) for nm in tmp[1:]])
         finally:
             ds.drop_vars([nm for nm in tmp if ds.has(nm)])
@@ -338,8 +345,10 @@ def cmd_nl(s: "Session", args: str) -> None:
         replay(s, "nl", args)
         return
     ds = s.data
+    orig_args = args
     pm = _PROG_FORM.match(args)
     funcprog = ""
+    nl_type = "3" if pm and pm.group(2) == "@" else ("2" if pm else "1")
     if pm and pm.group(2) == ":":
         # substitutable expression program: nl<name> leaves the equation in r(eq) and a title in
         # r(title)
@@ -480,18 +489,38 @@ def cmd_nl(s: "Session", args: str) -> None:
         t = dict(zip(e.sexp.names, e.b))
         v = e.sexp.evaluate(t)
         if stat in ("", "yhat"):
-            return v, ""
+            return v, ("(option yhat assumed; fitted values)" if not stat else "")   # compat 1923
         if stat == "residuals":
             return ds.get(e.depvar).data.astype(float) - v, ""
         raise StataError(198, f"option {stat} not allowed")   # VERIFY
     est.predict = predict
     est.predict_opts = {"yhat": 1, "residuals": 3}
-    scalars = [("N", N), ("df_m", df_m), ("df_r", df_r), ("mss", mss), ("rss", rss), ("r2", r2),
-               ("r2_a", r2_a), ("rmse", rmse), ("dev", dev), ("ic", iters), ("converged", 1.0)]
-    macros = [("cmdline", cmdline("nl", args)), ("title", est.title or "Nonlinear regression"),
-              ("depvar", depname), ("cmd", "nl"), ("properties", "b V"), ("predict", "nl_p")]
-    macros.append(("funcprog", funcprog) if funcprog else ("expression", rhs))   # VERIFY: e(funcprog)
-    post(s, est, scalars, macros, mask)
+    # e() as Stata lists it (compat 1923)
+    scalars = [("df_m", df_m), ("df_r", df_r), ("mss", mss), ("mms", mss / df_m if df_m else SYS),
+               ("msr", rss / df_r), ("rmse", rmse), ("ll", -dev / 2), ("r2", r2), ("r2_a", r2_a), ("dev", dev),
+               ("converge", 1.0), ("N", N), ("rss", rss), ("df_t", df_tot), ("tss", tss),
+               ("cj", float(const_idx + 1) if const_idx is not None else 0.0), ("gm_2", 1.0),   # VERIFY gm_2
+               ("delta", float(o["delta"]) if o.get("delta") else 4e-7), ("k", float(k)), ("k_eq_model", 0.0),
+               ("rank", float(np.linalg.matrix_rank(V))), ("log_t", 1.0 if o.get("lnlsq") else 0.0), ("ic", iters)]
+    covs = " ".join(se.variables()) if nl_type == "3" else " ".join(dict.fromkeys(
+        w for w in re.findall(r"[A-Za-z_]\w*", _BRACE.sub(" ", rhs)) if ds.has(w)))
+    macros = [("cmdline", cmdline("nl", orig_args)), ("cmd", "nl"), ("predict", "nl_p"),
+              ("marginsnotok", "SCores Residuals"), ("marginsok", "default Yhat"), ("vce", "gnr")]
+    if funcprog:
+        macros.append(("funcprog", funcprog))
+    macros += [("covariates", covs), ("rhs", covs), ("type", nl_type)]
+    if est.title:
+        macros.append(("title", est.title))
+    if nl_type != "3":
+        # the expression as Stata stores it: "{a} *xp^ {b}" (compat 1923; VERIFY the general rule)
+        def _sx(mm_):
+            return "{" + mm_.group(1).split("=")[0].strip() + "}" + (" " if mm_.start() == 0 else "")
+        sx = re.sub(r"\s+", "", rhs)
+        sx = re.sub(r"\{([^}]*)\}", lambda mm_: _sx(mm_) if mm_.start() == 0 else " " + _sx(mm_), sx)
+        macros.append(("sexp", sx))
+    macros += [("params", " ".join(se.names)), ("depvar", depname), ("properties", "b V")]
+    from ..commands.matrix import Matrix
+    post(s, est, scalars, macros, mask, extra_mats=[("init", Matrix(theta0.reshape(1, -1), ["y1"], list(se.names)))])
     _display_nl(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 
@@ -542,6 +571,7 @@ def cmd_nlsur(s: "Session", args: str) -> None:
         replay(s, "nlsur", args)
         return
     ds = s.data
+    orig_args = args
     pm = _PROG_FORM.match(args)
     funcprog = ""
     if pm and pm.group(2) == ":":
@@ -661,13 +691,14 @@ def cmd_nlsur(s: "Session", args: str) -> None:
         A = J.T @ Wm @ J
         V = np.linalg.inv(A)
     else:
+        # Stata's nls: the equations weighted by the inverse of their residual variances from the
+        # unweighted fit (no covariances), one more Gauss-Newton fit, V = (J' W J)^-1 (compat 1923)
         E = (Y - fit_vals(theta))
-        sigma = E.T @ E / n
-        A = J.T @ J
-        Ai = np.linalg.inv(A)
-        # equation-by-equation residual variances
+        sigma = np.diag(np.diag(E.T @ E / n))
         Wm = np.kron(np.linalg.inv(sigma), np.eye(n))
-        V = Ai @ (J.T @ np.kron(sigma, np.eye(n)) @ J) @ Ai
+        theta, J, r, it = gauss_newton(resid_vec, theta, Wm, log=None)
+        J = _num_jac(lambda t: -resid_vec(t), theta)
+        V = np.linalg.inv(J.T @ Wm @ J)
     V = (V + V.T) / 2
     k = len(names)
     E = Y - fit_vals(theta)
@@ -683,8 +714,15 @@ def cmd_nlsur(s: "Session", args: str) -> None:
             if nm in ses[i].names and np.allclose(np.abs(Jf[i * n:(i + 1) * n, j]), 1.0, atol=1e-6):
                 const = nm
                 break
-        info.append({"obs": n, "parms": kp, "rmse": float(np.sqrt(rss / n)), "r2": 1 - rss / tss if tss > 0 else SYS,
-                     "rss": rss, "const": const})
+        if funcprog:
+            # a function evaluator program: Stata cannot tell the parameters or the constant of each
+            # equation, and reports the uncentered R-squared (compat 1923)
+            tss_u = float(yy @ yy)
+            info.append({"obs": n, "parms": ".", "rmse": float(np.sqrt(rss / n)), "r2": 1 - rss / tss_u,
+                         "rss": rss, "mss": tss_u - rss, "const": "(none)", "uncentered": True})
+        else:
+            info.append({"obs": n, "parms": kp, "rmse": float(np.sqrt(rss / n)), "r2": 1 - rss / tss if tss > 0 else SYS,
+                         "rss": rss, "mss": tss - rss, "const": const})
     est = Estimates("nlsur", deps[0], list(names), theta, V, n, "z", None)
     est.level, est.vcetype, est.clustvar, est.n_clust = level, "", "", None
     est.eqnames = ["/"] * k
@@ -698,13 +736,31 @@ def cmd_nlsur(s: "Session", args: str) -> None:
         v = e.sexps[0].evaluate(t)
         return v, ""
     est.predict = predict
-    scalars = [("N", n), ("k", k), ("k_eq", m), ("rank", np.linalg.matrix_rank(V)), ("converged", 1.0)]
-    macros = [("cmdline", cmdline("nlsur", args)), ("title", {"fgnls": "FGNLS regression", "ifgnls": "Iterated FGNLS regression",
-                                                             "nls": "NLS regression"}[method]),
-              ("depvar", " ".join(deps)), ("cmd", "nlsur"), ("properties", "b V"), ("method", method)]
+    # e() as Stata lists it (compat 1923, function evaluator program; VERIFY the other forms)
+    scalars = [("N", n)]
+    for i, e in enumerate(info, 1):
+        scalars += [(f"rss_{i}", e["rss"]), (f"mss_{i}", e["mss"]), (f"r2_{i}", e["r2"]), (f"rmse_{i}", e["rmse"])]
+    Sfin = sigma if sigma is not None else (E.T @ E / n)
+    # the log likelihood with the covariance of the final residuals (compat 1923)
+    ll = -0.5 * n * (m * (1 + np.log(2 * np.pi)) + np.linalg.slogdet(E.T @ E / n)[1])
+    scalars += [("ll", ll), ("n_eq", float(m)), ("k", float(k)), ("k_eq_model", 0.0), ("converge", 1.0),
+                ("rank", float(np.linalg.matrix_rank(V))), ("k_eq", float(m))]
+    covs = " ".join(ses[0].variables()) if funcprog else " ".join(dict.fromkeys(
+        v for se in ses for v in re.findall(r"[A-Za-z_]\w*", _BRACE.sub(" ", se.text)) if ds.has(v) and v not in deps))
+    macros = [("cmdline", cmdline("nlsur", orig_args)), ("cmd", "nlsur"), ("predict", "nlsur_p"),
+              ("estat_cmd", "nlsur_estat"), ("covariates", covs), ("rhs", covs)]
     if funcprog:
-        macros.append(("funcprog", funcprog))   # VERIFY: e(funcprog)
-    post(s, est, scalars, macros, mask)
+        macros.append(("funcprog", funcprog))
+    macros += [("vce", "gnr"), ("method", method),
+               ("constants", " ".join(e["const"] if e["const"] not in ("", "(none)") else "." for e in info)),
+               ("type", "3" if funcprog else ("2" if pm else "1")), ("params", " ".join(names)),
+               ("depvar", " ".join(deps))]
+    macros += [(f"depvar_{i}", deps[i - 1]) for i in range(m, 0, -1)]
+    macros.append(("properties", "b V"))
+    from ..commands.matrix import Matrix
+    nlsur_mats = [("init", Matrix(theta0.reshape(1, -1), ["y1"], list(names))),
+                  ("Sigma", Matrix(Sfin, list(deps), list(deps)))]
+    post(s, est, scalars, macros, mask, extra_mats=nlsur_mats)
     _display_nlsur(s, est, header=not o.get("noheader"), table=not o.get("notable"))
 
 
@@ -713,15 +769,21 @@ def _display_nlsur(s, est, *, header=True, table=True, level=None, **_kw) -> Non
     x = est.extra
     lev = level if level is not None else est.level
     if header:
-        title = {"fgnls": "FGNLS regression", "ifgnls": "Iterated FGNLS regression", "nls": "NLS regression"}[x["method"]]
+        title = {"fgnls": "FGNLS regression", "ifgnls": "Iterated FGNLS regression",
+                 "nls": "Nonlinear least-squares regression"}[x["method"]]   # compat 1923
         out.write(f"\n{title} \n", "text")
         out.write("-" * 71 + "\n", "text")
         out.write(f"{'Equation':>15} |{'Obs':>11}{'Parms':>8}{'RMSE':>11}{'R-sq':>10}{'Constant':>13}\n", "text")
         out.write("-" * 16 + "+" + "-" * 54 + "\n", "text")
         for i, (dn, e) in enumerate(zip(x["deps"], x["info"]), 1):
+            # R-sq is written from column 4 of its field, so a negative value shifts the rest
+            r2 = g(e['r2'], '%9.4f').strip() + ("*" if e.get("uncentered") else "")
             out.write(f"{i:>2}{dn:>13} |{e['obs']:>11}{e['parms']:>8}{g(e['rmse'], '%9.0g'):>11}"
-                      f"{g(e['r2'], '%10.4f'):>10}{e['const'] or '.':>13}\n", "text")
-        out.write("-" * 71 + "\n\n", "text")
+                      f"    {r2:<7}{e['const'] or '.':>12}\n", "text")
+        out.write("-" * 71 + "\n", "text")
+        if any(e.get("uncentered") for e in x["info"]):
+            out.write("* Uncentered R-sq\n", "text")
+        out.write("\n", "text")
     if table:
         coef_table(s, "", est.rows, stat="z", df=None, level=lev)
 
@@ -739,6 +801,7 @@ def cmd_gmm(s: "Session", args: str) -> None:
         return
     ds = s.data
     eqnames: list[str] = []
+    evalprog = ""
     pm = re.match(r"^\s*([A-Za-z_]\w*)(.*)$", args, re.S)
     if pm and not args.lstrip().startswith("("):
         # moment-evaluator program: called as `prog residual_vars if touse, at(b)` ([R] gmm)
@@ -752,9 +815,10 @@ def cmd_gmm(s: "Session", args: str) -> None:
         if not neq:
             raise StataError(198, "option nequations() or equations() required")   # VERIFY
         eqnames = eqnames or [str(q) for q in range(1, neq + 1)]
-        pf = ProgFunc(s, prog, neq, _param_names(ot), [])
+        pf = ProgFunc(s, prog, neq, _param_names(ot), [], noisy_first=True)
         ses = [pf.eq(q) for q in range(neq)]
         eqs = ["" for _ in range(neq)]
+        evalprog = prog
         tail = re.sub(r"\beq\w*\s*\([^)]*\)", " ", tail) if mq else tail
     else:
         eqs, tail = _split_equations(args)
@@ -774,9 +838,15 @@ def cmd_gmm(s: "Session", args: str) -> None:
     opt_text = p.options
     inst_specs = re.findall(r"instruments\s*\(((?:[^()]|\([^()]*\))*)\)", opt_text)
     opt_text = re.sub(r"instruments\s*\(((?:[^()]|\([^()]*\))*)\)", " ", opt_text)
-    # derivatives() may repeat too: one analytic derivative of an equation's residual per parameter
-    deriv_specs = re.findall(r"derivatives\s*\(((?:[^()]|\([^()]*\))*)\)", opt_text)
-    opt_text = re.sub(r"derivatives\s*\(((?:[^()]|\([^()]*\))*)\)", " ", opt_text)
+    # derivative() may repeat too: one analytic derivative of an equation's residual per parameter.
+    # The plural derivatives() belongs to moment-evaluator programs: with expressions Stata refuses
+    # it (compat 1920)
+    plural = re.findall(r"derivatives\s*\((?:[^()]|\([^()]*\))*\)", opt_text)
+    if plural and not evalprog:
+        raise StataError(198, " ".join(plural) + " not allowed with interactive version")
+    opt_text = re.sub(r"derivatives\s*\((?:[^()]|\([^()]*\))*\)", " ", opt_text)
+    deriv_specs = re.findall(r"\bderivative\s*\(((?:[^()]|\([^()]*\))*)\)", opt_text)
+    opt_text = re.sub(r"\bderivative\s*\(((?:[^()]|\([^()]*\))*)\)", " ", opt_text)
     o = match_options(opt_text, {"onestep": 3, "twostep": 3, "igmm": 4, "winitial": 4, "wmatrix": 2, "vce": 3,
                                  "level": 1, "nolog": 4, "log": 3, "eps": 3, "iterate": 4, "from": 3, "robust": 1,
                                  "cluster": 2, "noheader": 6, "notable": 5, "nocommonesample": 5, "quickderivatives": 5,
@@ -784,13 +854,10 @@ def cmd_gmm(s: "Session", args: str) -> None:
                                  "haslfderivatives": 5, "conv_maxiter": 5, "technique": 4, "nparameters": 5,
                                  "igmmiterate": 8, "igmmeps": 7, "igmmweps": 8}) \
         if opt_text.strip() else {}
-    if (o.get("parameters") or o.get("nparameters")) and not eqnames:
-        # with substitutable expressions, parameters() must name the parameters of the
-        # expressions and sets their order (VERIFY)
-        given = _param_names(opt_text)
-        if sorted(given) != sorted(names):
-            raise StataError(198, "parameters() does not match the parameters of the expressions")   # VERIFY
-        names = given
+    if (o.get("parameters") or o.get("nparameters")) and not evalprog:
+        # parameters() and nparameters() belong to moment-evaluator programs (compat 1923)
+        mt = re.search(r"\bn?param\w*\s*\([^)]*\)", opt_text)
+        raise StataError(198, f"{mt.group(0) if mt else 'parameters()'} not allowed with interactive version")
     mask = touse(s, p)
     for se in ses:
         for v in se.variables():
@@ -944,6 +1011,7 @@ def cmd_gmm(s: "Session", args: str) -> None:
         W1 = np.linalg.inv(S0 + 1e-12 * np.eye(n_mom))
         winit_label = "Unadjusted"
     theta = step(theta0, W1, "Step 1")
+    n_steps = 0
     if o.get("onestep"):
         W = W1
         wm_label = winit_label
@@ -980,7 +1048,11 @@ def cmd_gmm(s: "Session", args: str) -> None:
                 dt = float(np.max(np.abs(t_new - theta)) / (1 + np.max(np.abs(theta))))
                 dw = float(np.max(np.abs(W_new - W)) / (1 + np.max(np.abs(W))))
                 theta, W = t_new, W_new
+                n_steps = it_
                 if dt < eps or dw < weps:
+                    if not o.get("nolog"):
+                        out.write("note: iterative GMM parameter vector converged\n" if dt < eps else
+                                  "note: iterative GMM weight matrix converged\n", "text")   # compat 1920 (VERIFY the second)
                     break
     gb = mbar(theta)
     G = jac_mbar(theta)
@@ -1001,7 +1073,7 @@ def cmd_gmm(s: "Session", args: str) -> None:
     est.eqnames = ["/"] * k
     est.rows = [aux_row("/" + nm, float(theta[i]), float(np.sqrt(max(V[i, i], 0))), level) for i, nm in enumerate(names)]
     est.extra = dict(N=n, n_par=k, n_mom=n_mom, wm_label=wm_label, winit=winit_label, Q=Q, znames=znames,
-                     onestep=bool(o.get("onestep")))
+                     onestep=bool(o.get("onestep")), eqn=eqnames if eqnames and not eqnames[0].isdigit() else None)
     est.sexps, est.pnames = ses, names
 
     def display(s_, e, *, header=True, table=True, level=None, **_kw):
@@ -1020,11 +1092,54 @@ def cmd_gmm(s: "Session", args: str) -> None:
             return
         coef_table(s_, "", e.rows, stat="z", df=None, level=level or e.level, vcetype=e.vcetype)
         for i, zn in enumerate(x["znames"], 1):
-            o_.write(f"Instruments for equation {i}: {zn}\n", "text")
+            label = x["eqn"][i - 1] if x.get("eqn") else str(i)    # equations() names (compat 1923)
+            o_.write(f"Instruments for equation {label}: {zn}\n", "text")
     est.display = display
-    scalars = [("N", n), ("k", k), ("k_eq", m), ("n_moments", n_mom), ("Q", Q), ("J", n * Q), ("J_df", n_mom - k),
-               ("rank", np.linalg.matrix_rank(V)), ("converged", 1.0)]
-    macros = [("cmdline", cmdline("gmm", args)), ("cmd", "gmm"), ("title", "GMM estimation"),
-              ("wmatrix", wm_label.lower().split()[0]), ("estat_cmd", "gmm_estat"), ("properties", "b V")]
-    post(s, est, scalars, macros, mask)
+    # e() as Stata lists it (compat 1920); each parameter is an equation of its own (b1:_cons)
+    eqn = eqnames or [str(q) for q in range(1, m + 1)]
+    pq = [[nm for nm in names if nm in se.names] for se in ses]
+    scalars = [("rank", float(np.linalg.matrix_rank(V))), ("N", n), ("Q", Q), ("J", n * Q), ("J_df", n_mom - k)]
+    if not evalprog:
+        scalars += [(f"k_{q + 1}", float(len(pq[q]))) for q in range(m)]
+    scalars += [("converged", 1.0), ("has_xtinst", 0.0), ("type", 2.0 if eqnames else 1.0),   # VERIFY type 2
+                ("n_eq", float(m)), ("k", float(k)), ("n_moments", float(n_mom)), ("k_eq", float(k)),
+                ("k_aux", float(k)), ("k_eq_model", 0.0)]
+    if n_steps:
+        scalars.append(("ic", float(n_steps)))
+    estimator = "onestep" if o.get("onestep") else ("igmm" if o.get("igmm") else "twostep")
+    vce_name = {"rob": "robust", "clu": "cluster", "una": "unadjusted"}[vkind]
+    macros = [("cmdline", cmdline("gmm", args)), ("cmd", "gmm"), ("estat_cmd", "gmm_estat"), ("predict", "gmm_p"),
+              ("marginsnotok", "_ALL"), ("eqnames", " ".join(eqn)), ("technique", "gn"), ("winit", winit_label),
+              ("estimator", estimator), ("wmatrix", wm_label.lower().split()[0] if not o.get("onestep") else
+                                         winit_label.lower()),
+              ("vce", vce_name)]
+    if vkind != "una":
+        macros.append(("vcetype", "Robust"))
+    if clustvar:
+        macros.append(("clustvar", clustvar))
+    if evalprog:
+        # compat 1923: the program, the parameter names as given, no per-equation parameters
+        macros += [("evalprog", evalprog), ("params", " ".join(names))]
+    else:
+        macros.append(("params", " ".join(f"{nm}:_cons" for nm in names)))
+    for q in range(m):
+        macros.append((f"inst_{q + 1}", znames[q]))
+        if not evalprog:
+            macros.append((f"params_{q + 1}", " ".join(f"{nm}:_cons" for nm in pq[q])))
+        if getattr(ses[q], "text", ""):
+            sx = re.sub(r"\s+", "", ses[q].text)
+            sx = re.sub(r"\{(\w+)(=[^}]*)?\}", lambda mm_: "{" + mm_.group(1) + ":_cons}", sx)   # VERIFY {lc:} terms
+            macros.append((f"sexp_{q + 1}", sx))
+    macros.append(("properties", "b V"))
+    from ..commands.matrix import Matrix
+    cn = [f"{nm}:_cons" for nm in names]
+
+    def _mat(a, rows, cols):
+        mt = Matrix(np.atleast_2d(a), rows, [c.split(":")[1] for c in cols])
+        mt.coleq = [c.split(":")[0] for c in cols]
+        return mt
+    S_fin = meat(theta, vkind if vkind != "una" else "rob")
+    mats = [("init", _mat(theta0.reshape(1, -1), ["y1"], cn)), ("V_modelbased", _mat(Ainv / n, cn, cn)),
+            ("S", Matrix(S_fin)), ("W", Matrix(W))]
+    post(s, est, scalars, macros, mask, extra_mats=mats)
     display(s, est, header=not o.get("noheader"), table=not o.get("notable"))

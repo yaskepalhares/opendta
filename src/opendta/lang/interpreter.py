@@ -118,6 +118,10 @@ class Interpreter:
         if ln.kind == "comment":
             self._echo(ln, echo)
             return i + 1
+        if ln.kind == "blank":
+            if echo == "top":
+                self._echo(ln, echo)
+            return i + 1
         if ln.kind == "delimit":
             self._echo(ln, echo)
             out.write(f"delimiter now {ln.text.split()[-1]}\n", "text")

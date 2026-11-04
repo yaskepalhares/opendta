@@ -368,51 +368,57 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 - Conferido com o log do Stata 14: caso `1919` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Achados e corrigidos no caminho: o `return list` tem ordem própria em cada método, com `r(N_a)` (o tamanho antes de arredondar) e os itens do solucionador, e `r(init)` é a raiz da cauda na direção do efeito em `cmh`, `mcc` e `trend`; `power repeated` divide as variâncias efetivas pelo número de medidas repetidas (`Var_be` = variância x (1 + (M - 1) corr) / M, `Var_w` é a variância das médias) e multiplica a não centralidade por epsilon; `power twoway` com `n()` usa sujeitos inteiros por célula, mostra a variância ponderada com `cellweights()` e lista `Nij` quando as células diferem; `power cmh` toma N como múltiplo da soma dos pesos dos estratos, divide grupos iguais ao meio (fracionário quando N é ímpar), arredonda para cima o grupo experimental com `grratios()`, não mostra a mensagem de iteração com `onesided` e tem a tabela de grupo por estrato no layout do Stata; `power cox` e `power logrank` calculam N a partir dos eventos antes de arredondar e mostram E = teto de N (1 - Pr_w) Pr_E; a largura dos rótulos cresce com o maior rótulo e as tabelas mostram o poder pedido quando o tamanho é calculado
 - Ainda não disponíveis nesses métodos: `graph()`, `saving()`, `show`, `st1()`, `n1()` e `n2()`
 
-## Fase 34: modelos, parte 4 (ainda sem rodada no Stata)
+## Fase 34: modelos, parte 4 ✅
 
 - [x] `gmm` com `igmm` (matriz de pesos iterada; `igmmiterate()`, `igmmeps()` e `igmmweps()`) e com `derivatives()` (derivadas analíticas do resíduo de cada equação, uma por parâmetro)
 - [x] `ivpoisson cfunction` com mais de um regressor endógeno (uma equação de primeiro estágio e um parâmetro `/c_` para cada um)
 - [x] `ivregress gmm` com `wmatrix(hac kernel opt)`: o número de defasagens vem da regra de Newey e West (1994), que depende dos dados
-- Testes em `tests/test_models_block_d.py`; o caso `1920` ainda não tem referência do Stata (os itens `VERIFY` são os padrões do `igmm`, as regras de `derivatives()` e a regra exata de defasagens do `opt`).
+- Testes em `tests/test_models_block_d.py`.
+- Conferido com o log do Stata 14: caso `1920` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Encontrado e corrigido no caminho: na forma interativa as derivadas analíticas são `derivative()` (singular) e o plural `derivatives()` é recusado; `gmm` guarda o e() do Stata (e(params), e(sexp_1), e(inst_1), e(init), e(S), e(W), e(V_modelbased)...) e `igmm` informa a convergência do vetor de parâmetros; a defasagem de `wmatrix(hac kernel opt)` segue o [R] ivregress: m* = int(20 (T/100)^a) a limita, Bartlett e Parzen a truncam e a quadrática espectral a mantém real (22.000), a defasagem da VCE é escolhida de novo com os resíduos do GMM, e a saída diz que as defasagens vieram do método de Newey-West; o R-quadrado fica ausente quando a soma de quadrados do modelo é negativa; `ivpoisson cfunction` guarda o e() do Stata e escreve a nota de cluster; o Stata ecoa as linhas em branco de um do-file como ". ".
 - Não feito nesta parte: `ivprobit` e `ivtobit` com `twostep` e com mais de um regressor endógeno (o estimador em dois passos e a verossimilhança multivariada precisam das fórmulas de Methods and formulas do manual).
 
-## Fase 35: modelos, parte 5 (ainda sem rodada no Stata)
+## Fase 35: modelos, parte 5 ✅
 
 - [x] `constraints()` nos modelos de máxima verossimilhança feitos com o motor de várias equações, usado por `biprobit` e `frontier` (também com `uhet()` e `vhet()`): as restrições são lidas contra os nomes de e(b), o modelo é maximizado nos parâmetros livres, e(Cns) é guardada, as restrições aparecem acima da tabela e um parâmetro fixado por elas mostra `(constrained)`
 - [x] `biprobit` com `partial` (observabilidade parcial: só o produto dos dois desfechos é observado)
-- Testes em `tests/test_models_block_e.py`; o caso `1922` ainda não tem referência do Stata (os itens `VERIFY` são o modelo de comparação e o log do `partial`, o título, os graus de liberdade do teste de Wald com restrições e o lugar de e(Cns) no `ereturn list`).
+- Testes em `tests/test_models_block_e.py`.
+- Conferido com o log do Stata 14: caso `1922` (as diferenças e o motivo de cada uma estão em `compat/known_differences.txt`). Encontrado e corrigido no caminho: cada probit de comparação avisa as restrições que não consegue aplicar ("constraint number 1 caused error r(303)"); com restrições o `biprobit` informa o teste de Wald de rho = 0 (e(chi2_c), e(chi2_ct) Wald), mostra rho como restrito quando athrho é, e guarda o e() do Stata; com restrições o `frontier` testa as primeiras inclinações independentes, não informa o teste LR de sigma_u = 0 e guarda e(z) e e(p_z), o teste de assimetria dos resíduos de MQO, e não mostra erro-padrão para sigma2 e lambda quando uma variância é fixada. O modelo de comparação do `partial` no Stata não é o do manual (ver a diferença conhecida).
 - Não feito nesta parte: `frontier` com `cm()` e `constraints()` juntos (o modelo é ajustado em ln sigma_v^2 e ln sigma_u^2, mas mostrado em `/lnsigma2` e `/ilgtgamma`).
 
-## Fase 36: modelos, parte 6 (ainda sem rodada no Stata)
+## Fase 36: modelos, parte 6 ✅
 
 - [x] As formas com programa de `nl` (programa avaliador `nl func @ ...` com `parameters()` ou `nparameters()`, e programa de expressão substituível `nl sexp : ...` que devolve `r(eq)` e `r(title)`), `nlsur` (`nlsur func @ ...` com `nequations()`, e `nlsur sexp : ...` que devolve `r(n_eq)` e `r(eq_1)`, ...) e `gmm` (programa de momentos com `nequations()` ou `equations()`, `parameters()` ou `nparameters()`, e instrumentos pelo nome da equação)
-- [x] `gmm` com `parameters()` na forma com expressões substituíveis (define a ordem dos parâmetros)
-- Testes em `tests/test_models_block_f.py`; o caso `1923` ainda não tem referência do Stata (os itens `VERIFY` são os itens devolvidos por um programa de expressão substituível do `nlsur`, e(funcprog), a ordem dada por `parameters()` e o rótulo da linha de instrumentos com `equations()`).
+- Testes em `tests/test_models_block_f.py`.
+- Conferido com o log do Stata 14: caso `1923`. Encontrado e corrigido no caminho: `gmm` recusa `parameters()` com expressões (a opção é dos programas de momentos), mostra a saída da primeira chamada do programa de momentos, guarda e(evalprog) e rotula os instrumentos com os nomes de `equations()`; `nl` e `nlsur` guardam o e() do Stata (e(type), e(params), e(sexp), e(init), e(Sigma)...), mantêm a linha de comando da forma com `:`, e `predict` depois de `nl` avisa que a opção yhat foi assumida; o `nlsur, nls` do Stata pondera cada equação pelo inverso da variância residual do ajuste sem pesos e informa V = (J'WJ)^-1; com programa avaliador o `nlsur` mostra Parms ".", o R-quadrado não centrado e Constant (none); e(ll) do `nlsur` usa a covariância dos resíduos finais.
 - Não feito nesta parte: derivadas analíticas devolvidas pelos programas (`hasderivatives`, as variáveis de `derivatives()` de um programa de momentos); as derivadas continuam numéricas.
 
-## Fase 37: modelos, parte 7 (ainda sem rodada no Stata)
+## Fase 37: modelos, parte 7 ✅
 
 - [x] `slogit` com `dimension()` acima de 1: uma equação de coeficientes por dimensão (`dim1`, `dim2`, ...), os parâmetros phi de cada dimensão e as restrições identidade nas primeiras categorias que não são a base
 - [x] `exlogistic` com `binomial()`, `group()` (a distribuição condicional aos sucessos de cada grupo), `condvars()` e `estconstant`; `expoisson` com `exposure()`, `offset()` e `condvars()`; com essas opções o teste escore do modelo usa os momentos condicionais das estatísticas
-- Testes em `tests/test_models_block_g.py`; o caso `1924` ainda não tem referência do Stata (os itens `VERIFY` são os nomes das equações e a ordem de e(b) do `slogit` com mais de uma dimensão, se `condvars()` aceita variáveis fora da varlist, o lugar de `_cons` com `estconstant` e o teste escore com as novas opções).
+- Testes em `tests/test_models_block_g.py`.
+- Conferido com o log do Stata 14: caso `1924`. Encontrado e corrigido no caminho: os parâmetros phi fixados em 0 aparecem como `(omitted)` e o e(b) do `slogit` tem todos os phi das categorias que não são a base, com e(Cns), e(outcomes) e os demais resultados do Stata; o `exlogistic` com uma só variável não mostra o escore do modelo, com `estconstant` e razões de chances não mostra a linha da constante, com `binomial()` conta as tentativas como observações e nomeia a variável binomial, e com `group()` mostra os grupos no cabeçalho; o `expoisson` mostra a linha da exposição ou do offset; ambos imprimem as linhas de progresso do Stata e guardam o e() do Stata (sem e(V)).
 - Não feito nesta parte: `terms()` e `saving()` de `exlogistic` e `expoisson` (o manual não mostra o layout dos testes conjuntos nem as variáveis da distribuição salva).
 
-## Fase 38: modelos, parte 8 (ainda sem rodada no Stata)
+## Fase 38: modelos, parte 8 ✅
 
 - [x] `teffects ra`, `ipw`, `ipwra` e `aipw` com tratamentos de vários níveis: um modelo de desfecho por nível, modelo de tratamento logit multinomial, os efeitos de cada nível contra `control()` (e o ATET de `tlevel()`), as médias dos desfechos potenciais de todos os níveis com `pomeans`; variância robusta das equações de estimação empilhadas
-- Estimadores em `core/treatfx.py` (`teffects_multi`, `mlogit_fit`); testes em `tests/test_models_block_h.py`; o caso `1925` ainda não tem referência do Stata (os itens `VERIFY` são o nível tratado padrão do ATET, o rótulo do modelo de tratamento e as mensagens de erro).
+- Estimadores em `core/treatfx.py` (`teffects_multi`, `mlogit_fit`); testes em `tests/test_models_block_h.py`.
+- Conferido com o log do Stata 14: caso `1925`. Encontrado e corrigido no caminho: o nível tratado padrão do ATET é o primeiro nível depois do controle; e(b) tem todos os parâmetros e o e() segue a lista do Stata (contagens por nível, e(tlevels)); um modelo de tratamento probit é recusado com a mensagem do Stata.
 - Não feito nesta parte: tratamentos de vários níveis em `nnmatch` e `psmatch`, outros modelos de desfecho, `predict` depois de `teffects`.
 
-## Fase 39: modelos, parte 9 (ainda sem rodada no Stata)
+## Fase 39: modelos, parte 9 ✅
 
 - [x] `ivprobit` e `ivtobit` com `twostep`: o estimador de mínimo qui-quadrado de Newey (1987), pelos seis passos de Methods and formulas do manual (primeiros estágios, probit ou tobit nas variáveis exógenas e nos resíduos, o ajuste 2SIV, Omega, a estimativa de distância mínima e o teste de Wald de exogeneidade), com um ou mais regressores endógenos
-- Testes em `tests/test_models_block_i.py` (o probit em dois passos dá os coeficientes de máxima verossimilhança divididos por sqrt(1 - rho^2); o tobit em dois passos dá os de máxima verossimilhança); o caso `1926` ainda não tem referência do Stata (os itens `VERIFY` são o layout do cabeçalho e do rodapé, os graus de liberdade da variância residual em Omega e `first`).
+- Testes em `tests/test_models_block_i.py` (o probit em dois passos dá os coeficientes de máxima verossimilhança divididos por sqrt(1 - rho^2); o tobit em dois passos dá os de máxima verossimilhança).
+- Conferido com o log do Stata 14: caso `1926`. Encontrado e corrigido no caminho: o layout do cabeçalho e do rodapé e o e() dos estimadores em dois passos, as regressões de primeiro estágio de `first`, as contagens de censura com separador de milhar, e os graus de liberdade do `regress` com separador de milhar. A máxima verossimilhança com dois regressores endógenos chega ao máximo do Stata, mas os erros-padrão e a parametrização do teste de exogeneidade não foram identificados (ver a diferença conhecida).
 - Não feito nesta parte: máxima verossimilhança com mais de um regressor endógeno (o manual dá a verossimilhança, mas não a parametrização de Sigma que o Stata mostra).
 
-## Fase 40: modelos, parte 10 (ainda sem rodada no Stata para os modelos novos)
+## Fase 40: modelos, parte 10 ✅
 
 - [x] `eteffects` pela função de controle de Methods and formulas do manual: o resíduo do modelo de tratamento probit é t - Phi(z'pi), e o modelo de desfecho de cada braço (`linear`, `probit`, `fractional` ou `exponential`) o inclui; a variância trata os coeficientes do probit como conhecidos, como o Stata faz
-- Conferido com o log do Stata 14 do caso `1908`: o `eteffects` linear agora coincide (estimativas e erros-padrão), e as suas linhas saem da diferença conhecida. Testes em `tests/test_models_block_j.py`; o caso `1927` ainda não tem referência do Stata (os itens `VERIFY` são os rótulos dos modelos de desfecho e as verificações dos valores do desfecho).
+- Conferido com o log do Stata 14 do caso `1908`: o `eteffects` linear agora coincide (estimativas e erros-padrão), e as suas linhas saem da diferença conhecida. Testes em `tests/test_models_block_j.py`.
+- Conferido com o log do Stata 14: caso `1927`. Encontrado e corrigido no caminho: no ATET o momento do efeito é t (m1 - POM0) n/nt - ATET em todas as observações, o e() segue a lista do Stata com todos os parâmetros em e(b), e os modelos de desfecho são rotulados pelo nome da opção; os erros-padrão dos desfechos probit e fracionário diferem (ver a diferença conhecida).
 - `etregress` e `etpoisson` com `cfunction` não estão nos manuais do Stata 14 (a opção veio numa versão posterior): saem de "Faltam para a 1.0".
 
 ## Distribuição e documentação

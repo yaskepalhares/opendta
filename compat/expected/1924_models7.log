@@ -1,0 +1,828 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1924_models7.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:24:24
+
+. * Models, part 7 (block 20e): slogit with dimension() above 1; exlogistic with binomial(),
+. * group(), condvars() and estconstant; expoisson with exposure(), offset() and condvars(). No
+. * reference until the Stata run. Every command whose behavior the manual does not settle runs
+. * under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set obs 1500
+number of observations (_N) was 0, now 1,500
+
+. set seed 1924
+
+. gen x1 = round(invnormal(runiform()), .01)
+
+. gen x2 = round(invnormal(runiform()), .01)
+
+. gen x3 = round(invnormal(runiform()), .01)
+
+. gen double u1 = runiform()
+
+. gen double e1 = .5*x1 + .3*x2
+
+. gen double e2 = .4*x2 - .6*x3
+
+. gen double s1 = exp(.5 - e1)
+
+. gen double s2 = exp(.2 - e2)
+
+. gen double s3 = exp(-.1 - .5*e1 - .5*e2)
+
+. gen double tot = 1 + s1 + s2 + s3
+
+. gen y = 4
+
+. replace y = 1 if u1 < s1/tot
+(491 real changes made)
+
+. replace y = 2 if u1 >= s1/tot & u1 < (s1+s2)/tot
+(439 real changes made)
+
+. replace y = 3 if u1 >= (s1+s2)/tot & u1 < (s1+s2+s3)/tot
+(245 real changes made)
+
+. capture noisily slogit y x1 x2 x3, dim(2)
+
+Iteration 0:   log likelihood = -1943.1063  
+Iteration 1:   log likelihood = -1939.9516  
+Iteration 2:   log likelihood =  -1939.834  
+Iteration 3:   log likelihood = -1939.8335  
+Iteration 4:   log likelihood = -1939.8335  
+
+Stereotype logistic regression                  Number of obs     =      1,500
+                                                Wald chi2(6)      =     155.28
+Log likelihood = -1939.8335                     Prob > chi2       =     0.0000
+
+ ( 1)  [phi1_1]_cons = 1
+ ( 2)  [phi1_2]_cons = 0
+ ( 3)  [phi2_1]_cons = 0
+ ( 4)  [phi2_2]_cons = 1
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+dim1         |
+          x1 |   .4547074   .0730508     6.22   0.000     .3115305    .5978844
+          x2 |   .3522369   .0758606     4.64   0.000     .2035529    .5009209
+          x3 |   .1244869   .0775441     1.61   0.108    -.0274967    .2764705
+-------------+----------------------------------------------------------------
+dim2         |
+          x1 |  -.0510873    .076149    -0.67   0.502    -.2003366     .098162
+          x2 |   .3705917   .0785285     4.72   0.000     .2166788    .5245047
+          x3 |  -.5004515   .0805635    -6.21   0.000     -.658353   -.3425499
+-------------+----------------------------------------------------------------
+     /phi1_1 |          1  (constrained)
+     /phi1_2 |          0  (omitted)
+     /phi1_3 |   .6672299   .1306399     5.11   0.000     .4111803    .9232795
+     /phi1_4 |          0  (base outcome)
+-------------+----------------------------------------------------------------
+     /phi2_1 |          0  (omitted)
+     /phi2_2 |          1  (constrained)
+     /phi2_3 |   .4261712   .1282169     3.32   0.001     .1748707    .6774717
+     /phi2_4 |          0  (base outcome)
+-------------+----------------------------------------------------------------
+     /theta1 |   .4022629   .0755316     5.33   0.000     .2542236    .5503022
+     /theta2 |   .2569578   .0783963     3.28   0.001     .1033039    .4106116
+     /theta3 |  -.2443674   .0873119    -2.80   0.005    -.4154955   -.0732392
+     /theta4 |          0  (base outcome)
+------------------------------------------------------------------------------
+(y=4 is the base outcome)
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  11
+                  e(N) =  1500
+                  e(k) =  15
+               e(k_eq) =  11
+                 e(ll) =  -1939.833531589318
+         e(k_eq_model) =  2
+               e(df_m) =  6
+               e(chi2) =  155.28032108642
+                  e(p) =  5.91065633997e-31
+              e(k_dim) =  2
+          e(k_indvars) =  3
+              e(k_out) =  4
+             e(i_base) =  4
+               e(ll_0) =  -2028.729825707719
+               e(df_0) =  3
+                 e(ic) =  4
+          e(converged) =  1
+                 e(rc) =  0
+
+macros:
+            e(cmdline) : "slogit y x1 x2 x3, dim(2)"
+                e(cmd) : "slogit"
+            e(predict) : "slogit_p"
+       e(marginsnotok) : "SCores stdp"
+           e(footnote) : "slogit_footnote"
+     e(marginsdefault) : "predict(pr outcome(#1)) predict(pr outcome(#2)) predict(pr outcome(#3)) predict(pr outcome(#4))"
+              e(title) : "Stereotype logistic regression"
+            e(indvars) : "x1 x2 x3"
+               e(out1) : "1"
+               e(out2) : "2"
+               e(out3) : "3"
+               e(out4) : "4"
+           e(chi2type) : "Wald"
+                e(opt) : "moptimize"
+                e(vce) : "oim"
+               e(user) : "slogit_d2"
+          e(ml_method) : "e2"
+          e(technique) : "nr"
+              e(which) : "max"
+             e(depvar) : "y"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 15
+                  e(V) :  15 x 15
+                e(Cns) :  4 x 16
+               e(ilog) :  1 x 20
+           e(outcomes) :  4 x 1
+           e(gradient) :  1 x 15
+
+functions:
+             e(sample)   
+
+. capture noisily matrix list e(b)
+
+e(b)[1,15]
+          dim1:       dim1:       dim1:       dim2:       dim2:       dim2:     phi1_1:     phi1_2:     phi1_3:     phi2_1:     phi2_2:     phi2_3:     theta1:     theta2:     theta3:
+            x1          x2          x3          x1          x2          x3       _cons       _cons       _cons       _cons       _cons       _cons       _cons       _cons       _cons
+y1   .45470744   .35223689   .12448692  -.05108733   .37059175  -.50045147           1           0    .6672299           0           1   .42617121   .40226292   .25695775  -.24436735
+
+. capture noisily slogit y x1 x2 x3, dim(3)
+
+Iteration 0:   log likelihood = -1939.0975  
+Iteration 1:   log likelihood = -1939.0975  
+
+Stereotype logistic regression                  Number of obs     =      1,500
+                                                Wald chi2(9)      =     161.47
+Log likelihood = -1939.0975                     Prob > chi2       =     0.0000
+
+ ( 1)  [phi1_1]_cons = 1
+ ( 2)  [phi1_2]_cons = 0
+ ( 3)  [phi1_3]_cons = 0
+ ( 4)  [phi2_1]_cons = 0
+ ( 5)  [phi2_2]_cons = 1
+ ( 6)  [phi2_3]_cons = 0
+ ( 7)  [phi3_1]_cons = 0
+ ( 8)  [phi3_2]_cons = 0
+ ( 9)  [phi3_3]_cons = 1
+------------------------------------------------------------------------------
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+dim1         |
+          x1 |   .4378411   .0752731     5.82   0.000     .2903085    .5853738
+          x2 |   .3683092   .0750714     4.91   0.000     .2211719    .5154465
+          x3 |   .1397194   .0785785     1.78   0.075    -.0142916    .2937304
+-------------+----------------------------------------------------------------
+dim2         |
+          x1 |  -.0636094   .0768296    -0.83   0.408    -.2141926    .0869738
+          x2 |   .3831891    .077559     4.94   0.000     .2311762    .5352021
+          x3 |  -.4891183   .0817075    -5.99   0.000    -.6492621   -.3289745
+-------------+----------------------------------------------------------------
+dim3         |
+          x1 |   .3200706   .0878194     3.64   0.000     .1479477    .4921935
+          x2 |   .3565601   .0877215     4.06   0.000     .1846292     .528491
+          x3 |  -.1643163   .0919654    -1.79   0.074    -.3445652    .0159325
+-------------+----------------------------------------------------------------
+     /phi1_1 |          1  (constrained)
+     /phi1_2 |          0  (omitted)
+     /phi1_3 |          0  (omitted)
+     /phi1_4 |          0  (base outcome)
+-------------+----------------------------------------------------------------
+     /phi2_1 |          0  (omitted)
+     /phi2_2 |          1  (constrained)
+     /phi2_3 |          0  (omitted)
+     /phi2_4 |          0  (base outcome)
+-------------+----------------------------------------------------------------
+     /phi3_1 |          0  (omitted)
+     /phi3_2 |          0  (omitted)
+     /phi3_3 |          1  (constrained)
+     /phi3_4 |          0  (base outcome)
+-------------+----------------------------------------------------------------
+     /theta1 |   .4032717   .0755395     5.34   0.000      .255217    .5513264
+     /theta2 |   .2577305    .078405     3.29   0.001     .1040596    .4114014
+     /theta3 |   -.249304   .0875104    -2.85   0.004    -.4208212   -.0777868
+     /theta4 |          0  (base outcome)
+------------------------------------------------------------------------------
+(y=4 is the base outcome)
+
+. 
+. clear
+
+. set obs 40
+number of observations (_N) was 0, now 40
+
+. set seed 1924
+
+. gen g = ceil(_n/8)
+
+. gen x1 = round(runiform())
+
+. gen x2 = round(runiform()*2)
+
+. gen n = 1 + round(runiform()*3)
+
+. gen y = (runiform() < .3 + .3*x1)
+
+. gen yb = round(n*(.2 + .4*x1*runiform()))
+
+. gen t = 1 + round(runiform()*2)
+
+. gen c = round(t*exp(.2*x1)*runiform()*2)
+
+. capture noisily exlogistic y x1, condvars(x2)
+
+Enumerating sample-space combinations:
+observation 1:   enumerations =          2
+observation 2:   enumerations =          4
+observation 3:   enumerations =          6
+observation 4:   enumerations =          9
+observation 5:   enumerations =         12
+observation 6:   enumerations =         16
+observation 7:   enumerations =         20
+observation 8:   enumerations =         24
+observation 9:   enumerations =         48
+observation 10:  enumerations =         72
+observation 11:  enumerations =         95
+observation 12:  enumerations =        144
+observation 13:  enumerations =        173
+observation 14:  enumerations =        201
+observation 15:  enumerations =        258
+observation 16:  enumerations =        289
+observation 17:  enumerations =        315
+observation 18:  enumerations =        340
+observation 19:  enumerations =        360
+observation 20:  enumerations =        379
+observation 21:  enumerations =        445
+observation 22:  enumerations =        461
+observation 23:  enumerations =        470
+observation 24:  enumerations =        524
+observation 25:  enumerations =        519
+observation 26:  enumerations =        551
+observation 27:  enumerations =        527
+observation 28:  enumerations =        492
+observation 29:  enumerations =        448
+observation 30:  enumerations =        437
+observation 31:  enumerations =        376
+observation 32:  enumerations =        340
+observation 33:  enumerations =         74
+observation 34:  enumerations =         81
+observation 35:  enumerations =         74
+observation 36:  enumerations =         64
+observation 37:  enumerations =         56
+observation 38:  enumerations =         45
+observation 39:  enumerations =         30
+observation 40:  enumerations =         16
+
+Exact logistic regression
+                                                 Number of obs =         40
+---------------------------------------------------------------------------
+           y | Odds Ratio       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   3.204359          10      0.1428      .7307928    15.72151
+---------------------------------------------------------------------------
+
+. capture noisily exlogistic y x1 x2, estconstant
+
+Enumerating sample-space combinations:
+observation 1:   enumerations =          2
+observation 2:   enumerations =          4
+observation 3:   enumerations =          6
+observation 4:   enumerations =          8
+observation 5:   enumerations =         16
+observation 6:   enumerations =         29
+observation 7:   enumerations =         36
+observation 8:   enumerations =         43
+observation 9:   enumerations =         62
+observation 10:  enumerations =         96
+observation 11:  enumerations =        110
+observation 12:  enumerations =        124
+observation 13:  enumerations =        138
+observation 14:  enumerations =        152
+observation 15:  enumerations =        232
+observation 16:  enumerations =        312
+observation 17:  enumerations =        340
+observation 18:  enumerations =        414
+observation 19:  enumerations =        448
+observation 20:  enumerations =        482
+observation 21:  enumerations =        568
+observation 22:  enumerations =        704
+observation 23:  enumerations =        840
+observation 24:  enumerations =       1008
+observation 25:  enumerations =       1072
+observation 26:  enumerations =       1225
+observation 27:  enumerations =       1492
+observation 28:  enumerations =       1580
+observation 29:  enumerations =       1862
+observation 30:  enumerations =       1965
+observation 31:  enumerations =       2068
+observation 32:  enumerations =       2424
+observation 33:  enumerations =       2670
+observation 34:  enumerations =       2802
+observation 35:  enumerations =       3142
+observation 36:  enumerations =       3482
+observation 37:  enumerations =       3796
+observation 38:  enumerations =       4248
+observation 39:  enumerations =       4778
+observation 40:  enumerations =       5152
+
+Exact logistic regression                        Number of obs =         40
+                                                 Model score   =   3.740751
+                                                 Pr >= score   =     0.1597
+---------------------------------------------------------------------------
+           y | Odds Ratio       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   3.204359          10      0.1428      .7307928    15.72151
+          x2 |   .7407248          18      0.7692      .2128505     2.41864
+---------------------------------------------------------------------------
+
+. capture noisily exlogistic yb x1 x2, binomial(n)
+
+Enumerating sample-space combinations:
+observation 1:   enumerations =          2
+observation 2:   enumerations =          4
+observation 3:   enumerations =          8
+observation 4:   enumerations =         12
+observation 5:   enumerations =         22
+observation 6:   enumerations =         32
+observation 7:   enumerations =         42
+observation 8:   enumerations =         68
+observation 9:   enumerations =         82
+observation 10:  enumerations =         96
+observation 11:  enumerations =        156
+observation 12:  enumerations =        178
+observation 13:  enumerations =        228
+observation 14:  enumerations =        256
+observation 15:  enumerations =        312
+observation 16:  enumerations =        395
+observation 17:  enumerations =        492
+observation 18:  enumerations =        540
+observation 19:  enumerations =        632
+observation 20:  enumerations =        763
+observation 21:  enumerations =        946
+observation 22:  enumerations =       1129
+observation 23:  enumerations =       1226
+observation 24:  enumerations =       1323
+observation 25:  enumerations =       1476
+observation 26:  enumerations =       1584
+observation 27:  enumerations =       1823
+observation 28:  enumerations =       2057
+observation 29:  enumerations =       2250
+observation 30:  enumerations =       2539
+observation 31:  enumerations =       2724
+observation 32:  enumerations =       2956
+observation 33:  enumerations =       3132
+observation 34:  enumerations =       3460
+observation 35:  enumerations =       4058
+observation 36:  enumerations =       4151
+observation 37:  enumerations =       4200
+observation 38:  enumerations =       4856
+observation 39:  enumerations =       5408
+observation 40:  enumerations =       5856
+observation 41:  enumerations =       6082
+observation 42:  enumerations =       6100
+observation 43:  enumerations =       6254
+observation 44:  enumerations =       6739
+observation 45:  enumerations =       6740
+observation 46:  enumerations =       6837
+observation 47:  enumerations =       6837
+observation 48:  enumerations =       7370
+observation 49:  enumerations =       7795
+observation 50:  enumerations =       7808
+observation 51:  enumerations =       8208
+observation 52:  enumerations =       8525
+observation 53:  enumerations =       8966
+observation 54:  enumerations =       9180
+observation 55:  enumerations =       8970
+observation 56:  enumerations =       8777
+observation 57:  enumerations =       7891
+observation 58:  enumerations =       6655
+observation 59:  enumerations =       5068
+observation 60:  enumerations =       3130
+observation 61:  enumerations =        841
+
+Exact logistic regression                        Number of obs =         97
+Binomial variable: n                             Model score   =   8.835158
+                                                 Pr >= score   =     0.0103
+---------------------------------------------------------------------------
+          yb | Odds Ratio       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   4.032021          18      0.0066      1.414863    12.51761
+          x2 |    1.39966          29      0.4859      .6231891    3.229887
+---------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  97
+         e(n_possible) =  9.28672241957e+19
+              e(sum_y) =  26
+            e(k_terms) =  0
+         e(k_condvars) =  0
+          e(k_indvars) =  2
+           e(condcons) =  1
+               e(midp) =  0
+           e(k_groups) =  1
+                e(eps) =  .00001
+
+macros:
+            e(cmdline) : "exlogistic yb x1 x2, binomial(n)"
+                e(cmd) : "exlogistic"
+       e(marginsnotok) : "_ALL"
+          e(estat_cmd) : "exlogistic_estat"
+              e(title) : "Exact logistic regression"
+  e(datasignaturevars) : "yb x1 x2 n"
+      e(datasignature) : "40:4:2498015836:3597898129"
+           e(binomial) : "n"
+            e(indvars) : "x1 x2"
+             e(depvar) : "yb"
+              e(level) : "95"
+         e(properties) : "b"
+
+matrices:
+                  e(b) :  1 x 2
+        e(scoretest_m) :  1 x 1
+      e(p_scoretest_m) :  1 x 1
+       e(p_probtest_m) :  1 x 1
+         e(probtest_m) :  1 x 1
+         e(sufficient) :  1 x 2
+     e(mue_indicators) :  1 x 2
+          e(scoretest) :  1 x 2
+           e(probtest) :  1 x 2
+        e(p_scoretest) :  1 x 2
+         e(p_probtest) :  1 x 2
+       e(p_sufficient) :  1 x 2
+                 e(ci) :  2 x 2
+                 e(se) :  1 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily exlogistic y x1 x2, group(g)
+
+Enumerating sample-space combinations:
+observation 1:   enumerations =          2
+observation 2:   enumerations =          4
+observation 3:   enumerations =          6
+observation 4:   enumerations =          7
+observation 5:   enumerations =         12
+observation 6:   enumerations =         17
+observation 7:   enumerations =         13
+observation 8:   enumerations =          7
+observation 9:   enumerations =         14
+observation 10:  enumerations =         26
+observation 11:  enumerations =         40
+observation 12:  enumerations =         47
+observation 13:  enumerations =         48
+observation 14:  enumerations =         41
+observation 15:  enumerations =         41
+observation 16:  enumerations =         27
+observation 17:  enumerations =         54
+observation 18:  enumerations =         87
+observation 19:  enumerations =         93
+observation 20:  enumerations =         93
+observation 21:  enumerations =         99
+observation 22:  enumerations =        110
+observation 23:  enumerations =         88
+observation 24:  enumerations =         55
+observation 25:  enumerations =        110
+observation 26:  enumerations =        174
+observation 27:  enumerations =        195
+observation 28:  enumerations =        201
+observation 29:  enumerations =        214
+observation 30:  enumerations =        214
+observation 31:  enumerations =        159
+observation 32:  enumerations =         90
+observation 33:  enumerations =        180
+observation 34:  enumerations =        282
+observation 35:  enumerations =        398
+observation 36:  enumerations =        424
+observation 37:  enumerations =        447
+observation 38:  enumerations =        387
+observation 39:  enumerations =        298
+observation 40:  enumerations =        157
+
+Exact logistic regression                    Number of obs     =         40
+Group variable: g                            Number of groups  =          5
+
+                                             Obs per group:
+                                                           min =          8
+                                                           avg =        8.0
+                                                           max =          8
+
+                                             Model score       =   3.235034
+                                             Pr >= score       =     0.1992
+---------------------------------------------------------------------------
+           y | Odds Ratio       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   3.165741          10      0.1729      .6762091    17.60756
+          x2 |   .8132748          18      0.9533      .2013171    3.092984
+---------------------------------------------------------------------------
+
+. capture noisily expoisson c x1 x2, exposure(t)
+
+Estimating: x1
+Enumerating sample-space combinations:
+observation 1:   enumerations =         39
+observation 2:   enumerations =        780
+observation 3:   enumerations =        780
+observation 4:   enumerations =        780
+observation 5:   enumerations =        780
+observation 6:   enumerations =        780
+observation 7:   enumerations =        780
+observation 8:   enumerations =        765
+observation 9:   enumerations =      20230
+observation 10:  enumerations =      20230
+observation 11:  enumerations =      20230
+observation 12:  enumerations =      47005
+observation 13:  enumerations =      47005
+observation 14:  enumerations =      47005
+observation 15:  enumerations =      47005
+observation 16:  enumerations =      47005
+observation 17:  enumerations =      47005
+observation 18:  enumerations =      47005
+observation 19:  enumerations =      47005
+observation 20:  enumerations =      47005
+observation 21:  enumerations =      47005
+observation 22:  enumerations =      47005
+observation 23:  enumerations =      47005
+observation 24:  enumerations =      47005
+observation 25:  enumerations =      47005
+observation 26:  enumerations =      47005
+observation 27:  enumerations =      47005
+observation 28:  enumerations =      47005
+observation 29:  enumerations =      47005
+observation 30:  enumerations =      47005
+observation 31:  enumerations =      47005
+observation 32:  enumerations =      47005
+observation 33:  enumerations =       1921
+observation 34:  enumerations =       1921
+observation 35:  enumerations =       1921
+observation 36:  enumerations =       1921
+observation 37:  enumerations =       1921
+observation 38:  enumerations =       1921
+observation 39:  enumerations =       1921
+observation 40:  enumerations =         73
+
+Estimating: x2
+Enumerating sample-space combinations:
+observation 1:   enumerations =         27
+observation 2:   enumerations =        378
+observation 3:   enumerations =        378
+observation 4:   enumerations =        729
+observation 5:   enumerations =        729
+observation 6:   enumerations =        729
+observation 7:   enumerations =        729
+observation 8:   enumerations =        729
+observation 9:   enumerations =        729
+observation 10:  enumerations =        729
+observation 11:  enumerations =        729
+observation 12:  enumerations =        729
+observation 13:  enumerations =        729
+observation 14:  enumerations =        729
+observation 15:  enumerations =         53
+observation 16:  enumerations =       2491
+observation 17:  enumerations =       3572
+observation 18:  enumerations =       3572
+observation 19:  enumerations =       3572
+observation 20:  enumerations =       3572
+observation 21:  enumerations =       3572
+observation 22:  enumerations =       4653
+observation 23:  enumerations =       4653
+observation 24:  enumerations =       4653
+observation 25:  enumerations =       4653
+observation 26:  enumerations =       4653
+observation 27:  enumerations =       4653
+observation 28:  enumerations =       4653
+observation 29:  enumerations =       4653
+observation 30:  enumerations =       4653
+observation 31:  enumerations =       4653
+observation 32:  enumerations =       4653
+observation 33:  enumerations =       4653
+observation 34:  enumerations =       4653
+observation 35:  enumerations =       4653
+observation 36:  enumerations =       4653
+observation 37:  enumerations =       4653
+observation 38:  enumerations =       4653
+observation 39:  enumerations =       4653
+observation 40:  enumerations =        145
+
+Exact Poisson regression
+                                                 Number of obs =         40
+---------------------------------------------------------------------------
+           c |      Coef.       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   .0827785          26      0.8282     -.4489067    .5945147
+          x2 |   .1575876          77      0.4741     -.2426376    .5560805
+       ln(t) |          1  (exposure)
+---------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  40
+    e(relative_weight) =  609890202874.8881
+              e(sum_y) =  72
+         e(k_condvars) =  0
+          e(k_indvars) =  2
+               e(midp) =  0
+           e(k_groups) =  1
+                e(eps) =  .00001
+
+macros:
+            e(cmdline) : "expoisson c x1 x2, exposure(t)"
+                e(cmd) : "expoisson"
+       e(marginsnotok) : "_ALL"
+          e(estat_cmd) : "expoisson_estat"
+              e(title) : "Exact Poisson regression"
+  e(datasignaturevars) : "c x1 x2 t"
+      e(datasignature) : "40:4:2627459081:3913372499"
+           e(exposure) : "t"
+            e(indvars) : "x1 x2"
+             e(depvar) : "c"
+              e(level) : "95"
+         e(properties) : "b"
+
+matrices:
+                  e(b) :  1 x 2
+         e(sufficient) :  1 x 2
+     e(mue_indicators) :  1 x 2
+          e(scoretest) :  1 x 2
+           e(probtest) :  1 x 2
+        e(p_scoretest) :  1 x 2
+         e(p_probtest) :  1 x 2
+       e(p_sufficient) :  1 x 2
+                 e(ci) :  2 x 2
+                 e(se) :  1 x 2
+
+functions:
+             e(sample)   
+
+. gen lt = ln(t)
+
+. capture noisily expoisson c x1 x2, offset(lt)
+
+Estimating: x1
+Enumerating sample-space combinations:
+observation 1:   enumerations =         39
+observation 2:   enumerations =        780
+observation 3:   enumerations =        780
+observation 4:   enumerations =        780
+observation 5:   enumerations =        780
+observation 6:   enumerations =        780
+observation 7:   enumerations =        780
+observation 8:   enumerations =        765
+observation 9:   enumerations =      20230
+observation 10:  enumerations =      20230
+observation 11:  enumerations =      20230
+observation 12:  enumerations =      47005
+observation 13:  enumerations =      47005
+observation 14:  enumerations =      47005
+observation 15:  enumerations =      47005
+observation 16:  enumerations =      47005
+observation 17:  enumerations =      47005
+observation 18:  enumerations =      47005
+observation 19:  enumerations =      47005
+observation 20:  enumerations =      47005
+observation 21:  enumerations =      47005
+observation 22:  enumerations =      47005
+observation 23:  enumerations =      47005
+observation 24:  enumerations =      47005
+observation 25:  enumerations =      47005
+observation 26:  enumerations =      47005
+observation 27:  enumerations =      47005
+observation 28:  enumerations =      47005
+observation 29:  enumerations =      47005
+observation 30:  enumerations =      47005
+observation 31:  enumerations =      47005
+observation 32:  enumerations =      47005
+observation 33:  enumerations =       1921
+observation 34:  enumerations =       1921
+observation 35:  enumerations =       1921
+observation 36:  enumerations =       1921
+observation 37:  enumerations =       1921
+observation 38:  enumerations =       1921
+observation 39:  enumerations =       1921
+observation 40:  enumerations =         73
+
+Estimating: x2
+Enumerating sample-space combinations:
+observation 1:   enumerations =         27
+observation 2:   enumerations =        378
+observation 3:   enumerations =        378
+observation 4:   enumerations =        729
+observation 5:   enumerations =        729
+observation 6:   enumerations =        729
+observation 7:   enumerations =        729
+observation 8:   enumerations =        729
+observation 9:   enumerations =        729
+observation 10:  enumerations =        729
+observation 11:  enumerations =        729
+observation 12:  enumerations =        729
+observation 13:  enumerations =        729
+observation 14:  enumerations =        729
+observation 15:  enumerations =         53
+observation 16:  enumerations =       2491
+observation 17:  enumerations =       3572
+observation 18:  enumerations =       3572
+observation 19:  enumerations =       3572
+observation 20:  enumerations =       3572
+observation 21:  enumerations =       3572
+observation 22:  enumerations =       4653
+observation 23:  enumerations =       4653
+observation 24:  enumerations =       4653
+observation 25:  enumerations =       4653
+observation 26:  enumerations =       4653
+observation 27:  enumerations =       4653
+observation 28:  enumerations =       4653
+observation 29:  enumerations =       4653
+observation 30:  enumerations =       4653
+observation 31:  enumerations =       4653
+observation 32:  enumerations =       4653
+observation 33:  enumerations =       4653
+observation 34:  enumerations =       4653
+observation 35:  enumerations =       4653
+observation 36:  enumerations =       4653
+observation 37:  enumerations =       4653
+observation 38:  enumerations =       4653
+observation 39:  enumerations =       4653
+observation 40:  enumerations =        145
+
+Exact Poisson regression
+                                                 Number of obs =         40
+---------------------------------------------------------------------------
+           c |      Coef.       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |   .0827785          26      0.8282     -.4489067    .5945147
+          x2 |   .1575876          77      0.4741     -.2426376    .5560805
+          lt |          1  (offset)
+---------------------------------------------------------------------------
+
+. capture noisily expoisson c x1, condvars(x2) offset(x2)
+
+Estimating: x1
+Enumerating sample-space combinations:
+observation 1:   enumerations =         39
+observation 2:   enumerations =        780
+observation 3:   enumerations =        780
+observation 4:   enumerations =        780
+observation 5:   enumerations =        780
+observation 6:   enumerations =        780
+observation 7:   enumerations =        780
+observation 8:   enumerations =        765
+observation 9:   enumerations =      20230
+observation 10:  enumerations =      20230
+observation 11:  enumerations =      20230
+observation 12:  enumerations =      47005
+observation 13:  enumerations =      47005
+observation 14:  enumerations =      47005
+observation 15:  enumerations =      47005
+observation 16:  enumerations =      47005
+observation 17:  enumerations =      47005
+observation 18:  enumerations =      47005
+observation 19:  enumerations =      47005
+observation 20:  enumerations =      47005
+observation 21:  enumerations =      47005
+observation 22:  enumerations =      47005
+observation 23:  enumerations =      47005
+observation 24:  enumerations =      47005
+observation 25:  enumerations =      47005
+observation 26:  enumerations =      47005
+observation 27:  enumerations =      47005
+observation 28:  enumerations =      47005
+observation 29:  enumerations =      47005
+observation 30:  enumerations =      47005
+observation 31:  enumerations =      47005
+observation 32:  enumerations =      47005
+observation 33:  enumerations =       1921
+observation 34:  enumerations =       1921
+observation 35:  enumerations =       1921
+observation 36:  enumerations =       1921
+observation 37:  enumerations =       1921
+observation 38:  enumerations =       1921
+observation 39:  enumerations =       1921
+observation 40:  enumerations =         73
+
+Exact Poisson regression
+                                                 Number of obs =         40
+---------------------------------------------------------------------------
+           c |      Coef.       Suff.  2*Pr(Suff.)     [95% Conf. Interval]
+-------------+-------------------------------------------------------------
+          x1 |  -.0409174          26      0.9739     -.5654597    .4637315
+          x2 |          1  (offset)
+---------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1924_models7.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:24:31
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
