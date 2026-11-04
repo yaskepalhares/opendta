@@ -128,7 +128,8 @@ def cmd_svar(s: "Session", args: str) -> None:
     from ..commands._util import touse
     from .ml import print_log
     from .regress import cmdline
-    from .tsmodels import _check_gaps, _lags, _sample_text, _var_fit, _var_stats
+    from .tsmodels import _check_gaps, _lags, _sample_text
+    from .varmodel import _var_fit, _var_stats
     from .tsops import require_ts
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):

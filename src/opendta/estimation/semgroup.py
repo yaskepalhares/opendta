@@ -80,8 +80,8 @@ def finish_groups(s: "Session", args: str, prob, spec, th, obj, V, conv, o, info
                      hidden=hidden, T=T, cols=cols, groups=True)
     est.display = display_groups
     est.predict = None
-    from .semestat import ESTAT
-    est.estat = dict(ESTAT)
+    from .semestat import estat_table
+    est.estat = estat_table()
     ilog = list(prob.ilog) if prob.ilog else [ll]
     pobs = model.p
     df_s = pobs * (pobs + 3) // 2

@@ -20,7 +20,8 @@ from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
 from ._util import touse
 from .registry import command
-from .summarize import _corr_table, _level, _ttest_table, g9, name12, numeric_vars
+from .summarize import _corr_table, _level, g9, name12, numeric_vars
+from .ttest import _ttest_table
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")

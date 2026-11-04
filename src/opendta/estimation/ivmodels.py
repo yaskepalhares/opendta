@@ -679,7 +679,7 @@ def cmd_ivpoisson(s: "Session", args: str) -> None:
     inst_all = " ".join([c.name for c in ex_cols] + [c.name for c in Zc])
     est.extra = dict(N=N, df_m=kk, instd=" ".join(c.name for c in Xn), insts=inst_all,
                      title=title, wm_label=wm_label, Q=gcrit, n_par=n_par, n_mom=n_mom)
-    from .panel import _retarget
+    from .ivregress import _retarget
     _retarget(est, Xn, ex_cols, endog_terms, smp.terms)
 
     def display(s_, e, *, header=True, table=True, level=None, **_kw):

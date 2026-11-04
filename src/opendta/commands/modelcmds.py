@@ -21,7 +21,8 @@ lazy_commands("choiceprobit", "mprobit", "asmprobit", "asroprobit")
 
 lazy_commands("exact", "exlogistic", "expoisson")
 
-lazy_commands("nonlin", "nl", "nlsur", "gmm")
+lazy_commands("nonlin", "nl", "nlsur")
+lazy_commands("gmm", "gmm")
 
 lazy_commands("frontier", "frontier")
 lazy_commands("treatment", "etregress", "etpoisson")
