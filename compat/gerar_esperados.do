@@ -11,6 +11,10 @@
 * compat/stata/<name>.log. That folder is not tracked by git, so a new run never
 * blocks git pull; the logs reach compat/expected/ (the versioned references)
 * through a pull request, after they are reviewed.
+*
+* compat/stata/ holds only the current round: before running, the logs of the
+* cases that already have a reference in expected/ are deleted, so what is left
+* after the run is exactly the new logs to review.
 
 version 14
 args padrao
@@ -23,6 +27,11 @@ local dp_original = c(dp)
 set dp period
 
 capture mkdir "stata"
+* logs of earlier rounds whose reference is already in expected/ are not needed
+local antigos : dir "stata" files "*.log"
+foreach f of local antigos {
+    if fileexists("expected/`f'") capture erase "stata/`f'"
+}
 local glob "`padrao'*.do"
 if "`padrao'" == "all" local glob "*.do"
 local todos : dir "do" files "`glob'"
@@ -34,7 +43,7 @@ foreach f of local todos {
         local arquivos `"`arquivos' "`f'""'
     }
 }
-display as text `: word count `arquivos'' " case(s) to run"
+display as text `: word count `arquivos'' " case(s) to run:" `"`arquivos'"'
 foreach f of local arquivos {
     local nome = subinstr("`f'", ".do", "", .)
     * deletes leftovers (odta_*) of an interrupted case before running the next one
