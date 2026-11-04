@@ -370,3 +370,98 @@ def nnmatch(y, t, X, stat="ate", nn=1, metric="maha", vce_nn=2, S=None):
         var = (np.sum((diff[one] - tau) ** 2) + np.sum(K[zero] * (K[zero] - 1 / M) * s2[zero])) / n1 ** 2
         mu = (yh[one, 0].mean(), y[one].mean())
     return float(tau), float(np.sqrt(max(var, 0.0))), mu, (min(counts), max(counts))
+
+
+# ---------------------------------------------------------------------------
+# multivalued treatments (multinomial logit treatment model)
+# ---------------------------------------------------------------------------
+
+def mlogit_prob(Z, g, L):
+    """P(t = l), l = 0..L-1, with level 0 as the base of the multinomial logit; g stacks the
+    (L - 1) coefficient vectors."""
+    k = Z.shape[1]
+    E = np.column_stack([np.zeros(len(Z))] + [Z @ g[(l - 1) * k:l * k] for l in range(1, L)])
+    E -= E.max(axis=1, keepdims=True)
+    P = np.exp(E)
+    return P / P.sum(axis=1, keepdims=True)
+
+
+def mlogit_score(Z, tcode, g, L):
+    P = mlogit_prob(Z, g, L)
+    return np.column_stack([Z * ((tcode == l) - P[:, l])[:, None] for l in range(1, L)])
+
+
+def mlogit_fit(Z, tcode, L, tol=1e-12, maxit=100):
+    """Multinomial logit by Newton-Raphson."""
+    n, k = Z.shape
+    g = np.zeros(k * (L - 1))
+    for _ in range(maxit):
+        P = mlogit_prob(Z, g, L)
+        grad = mlogit_score(Z, tcode, g, L).sum(axis=0)
+        H = np.zeros((len(g), len(g)))
+        for a in range(1, L):
+            for b in range(1, L):
+                wab = P[:, a] * ((a == b) - P[:, b])
+                H[(a - 1) * k:a * k, (b - 1) * k:b * k] = -(Z * wab[:, None]).T @ Z
+        step = np.linalg.solve(H, grad)
+        g = g - step
+        if np.max(np.abs(step)) < tol:
+            break
+    return g
+
+
+def teffects_multi(est, y, tcode, L, Xo, Z, omodel, stat, tl, clusters=None):
+    """teffects ra, ipw, ipwra and aipw with L >= 2 treatment levels coded 0..L-1 (multinomial
+    logit treatment model). stat: ate, atet (treated level tl) or pomeans. theta = [mu_0 ..
+    mu_{L-1}, beta_0 .. beta_{L-1}, gamma]; returns (theta, V)."""
+    n, ko = Xo.shape
+    om = GLMOutcome(omodel, y) if isinstance(omodel, str) else omodel
+    use_out, use_trt = est != "ipw", est != "ra"
+    kb = (ko + getattr(om, "kaux", 0)) if use_out else 0
+    kz = Z.shape[1] * (L - 1) if use_trt else 0
+    T_ = np.column_stack([(tcode == l).astype(float) for l in range(L)])
+    d = np.ones(n) if stat != "atet" else T_[:, tl]
+
+    def weights(P):
+        if stat == "atet":
+            return T_ * (P[:, [tl]] / P)
+        return T_ / P
+
+    g = mlogit_fit(Z, tcode, L) if use_trt else np.zeros(0)
+    W = weights(mlogit_prob(Z, g, L)) if use_trt else None
+    bs = []
+    if use_out:
+        for l in range(L):
+            bs.append(om.fit(Xo, T_[:, l] if est in ("ra", "aipw") else W[:, l]))
+    if est == "ipw":
+        mu = np.array([np.sum(W[:, l] * y) / np.sum(W[:, l]) for l in range(L)])
+    else:
+        M_ = np.column_stack([om.mean(Xo, b) for b in bs])
+        if est == "aipw":
+            mu = (M_ + W * (y[:, None] - M_)).mean(axis=0)
+        else:
+            mu = (d[:, None] * M_).sum(axis=0) / d.sum()
+    theta = np.concatenate([mu] + bs + [g])
+
+    def gfun(th):
+        mu_ = th[:L]
+        bs_ = [th[L + l * kb:L + (l + 1) * kb] for l in range(L)] if use_out else []
+        g_ = th[L + L * kb:]
+        cols = []
+        if use_trt:
+            W_ = weights(mlogit_prob(Z, g_, L))
+        if est == "ipw":
+            mom = W_ * (y[:, None] - mu_[None, :])
+        else:
+            M2 = np.column_stack([om.mean(Xo, b) for b in bs_])
+            a = T_ if est in ("ra", "aipw") else W_
+            cols = [a[:, [l]] * om.score(Xo, bs_[l]) for l in range(L)]
+            if est == "aipw":
+                mom = M2 + W_ * (y[:, None] - M2) - mu_[None, :]
+            else:
+                mom = d[:, None] * (M2 - mu_[None, :])
+        parts = [mom] + cols + ([mlogit_score(Z, tcode, g_, L)] if use_trt else [])
+        return np.column_stack(parts)
+
+    V = sandwich_m(gfun, theta, n, clusters)
+    return theta, V

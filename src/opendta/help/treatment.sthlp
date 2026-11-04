@@ -21,7 +21,7 @@
 {title:Description}
 
 {pstd}
-Binary treatments. The outcome model is {cmd:linear}, {cmd:logit}, {cmd:probit} or {cmd:poisson} and the treatment model {cmd:logit} or {cmd:probit}; the variance is robust (stacked estimating equations, matching: Abadie and Imbens). {cmd:eteffects} takes a linear outcome and a probit treatment (control function). {cmd:stteffects} fits {cmd:exponential}, {cmd:weibull} or {cmd:lognormal} survival models and reports mean survival times. {cmd:etregress} is maximum likelihood or two-step, and {cmd:etpoisson} integrates the unobserved heterogeneity by Gauss-Hermite quadrature.
+Binary treatments, and in {cmd:teffects ra}, {cmd:ipw}, {cmd:ipwra} and {cmd:aipw} multivalued treatments (one outcome model per level, a multinomial logit treatment model, {cmd:control()} and {cmd:tlevel()}). The outcome model is {cmd:linear}, {cmd:logit}, {cmd:probit} or {cmd:poisson} and the treatment model {cmd:logit} or {cmd:probit}; the variance is robust (stacked estimating equations, matching: Abadie and Imbens). {cmd:eteffects} takes a linear outcome and a probit treatment (control function). {cmd:stteffects} fits {cmd:exponential}, {cmd:weibull} or {cmd:lognormal} survival models and reports mean survival times. {cmd:etregress} is maximum likelihood or two-step, and {cmd:etpoisson} integrates the unobserved heterogeneity by Gauss-Hermite quadrature.
 
 {pstd}
-Not available: multivalued treatments, other outcome models, {cmd:stteffects wra}, {cmd:predict} after {cmd:teffects}.
+Not available: multivalued treatments in the matching estimators, other outcome models, {cmd:stteffects wra}, {cmd:predict} after {cmd:teffects}.

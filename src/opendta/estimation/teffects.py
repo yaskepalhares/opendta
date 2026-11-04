@@ -97,8 +97,39 @@ def _effect_rows(tvar, levels, stat, mu, Vm, lv0, lv1):
     return b, V, names, eq, rows
 
 
+def _effect_rows_multi(tvar, labels, ci, stat, mu, Vm):
+    """_effect_rows for L treatment levels: the effects of each level against the control ci (and
+    its POmean), or the L POmeans."""
+    L = len(mu)
+    if stat == "pomeans":
+        M_ = np.eye(L)
+        names = [f"{lb}.{tvar}" for lb in labels]
+        eq = ["POmeans"] * L
+    else:
+        others = [l for l in range(L) if l != ci]
+        M_ = np.zeros((L, L))
+        for r, l in enumerate(others):
+            M_[r, l], M_[r, ci] = 1.0, -1.0
+        M_[L - 1, ci] = 1.0
+        names = [f"r{labels[l]}vs{labels[ci]}.{tvar}" for l in others] + [f"{labels[ci]}.{tvar}"]
+        eq = ["ATE" if stat == "ate" else "ATET"] * (L - 1) + ["POmean"]
+    b = M_ @ mu
+    V = M_ @ Vm @ M_.T
+    se = np.sqrt(np.diag(V))
+    if stat == "pomeans":
+        rows = [CoefRow("eq", "POmeans"), CoefRow("header", tvar)]
+        rows += [CoefRow("coef", f"{labels[l]} ", b[l], se[l], name=names[l]) for l in range(L)]
+    else:
+        rows = [CoefRow("eq", eq[0]), CoefRow("header", tvar)]
+        rows += [CoefRow("coef", f"({labels[l]} vs {labels[ci]}) ", b[r], se[r], name=names[r])
+                 for r, l in enumerate(others)]
+        rows += [CoefRow("sep"), CoefRow("eq", "POmean"), CoefRow("header", tvar),
+                 CoefRow("coef", f"{labels[ci]} ", b[-1], se[-1], name=names[-1])]
+    return b, V, names, eq, rows
+
+
 def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o, *, title,
-          est_title, omodel_txt, tmodel_txt, match=False, extra_hdr=(), dist="", cens=""):
+          est_title, omodel_txt, tmodel_txt, match=False, extra_hdr=(), dist="", cens="", control_treated=None):
     est = Estimates(cmd, ovar, names, b, V, n, "z", None)
     est.level, est.vcetype = level, "AI Robust" if match else "Robust"
     est.rows = rows
@@ -126,7 +157,8 @@ def _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n,
         if table:
             coef_table(s_, ovar, e.rows, stat="z", df=None, level=level or e.level, vcetype=e.vcetype)
     est.display = display
-    scalars = [("N", n), ("n_levels", 2), ("k", len(names)), ("treated", float(levels[1])), ("control", float(levels[0]))]
+    cv, tv_ = control_treated if control_treated else (levels[0], levels[1])
+    scalars = [("N", n), ("n_levels", len(levels)), ("k", len(names)), ("treated", float(tv_)), ("control", float(cv))]
     macros = [("cmdline", cmdline(cmd, full)), ("cmd", cmd), ("subcmd", sub), ("title", title),
               ("stat", stat), ("tvar", tvar), ("depvar", ovar), ("omodel", omodel_txt),
               ("tmodel", tmodel_txt), ("vce", "robust"), ("vcetype", "Robust"), ("properties", "b V")]
@@ -185,9 +217,12 @@ def _run(s, cmd, sub, rest, full):
     mask = pr.smp.mask
     tv = s.data.get(tvar).data[mask].astype(float)
     levels = np.unique(tv)
-    if len(levels) != 2:
-        raise StataError(420, f"treatment variable {tvar} must have 2 levels") if len(levels) < 2 else \
-            StataError(198, "multivalued treatments are not available")   # VERIFY
+    if len(levels) < 2:
+        raise StataError(420, f"treatment variable {tvar} must have 2 levels")   # VERIFY
+    if len(levels) > 2:
+        if match or cmd != "teffects":
+            raise StataError(198, "multivalued treatments are not allowed with this estimator")   # VERIFY
+        return _run_multi(s, sub, full, pr, o, tvar, tmv, tnoc, tmodel, omodel, ovar, levels, tv, mask, stat)
     t = (tv == levels[1]).astype(float)
     y = pr.y
     n = len(y)
@@ -239,6 +274,42 @@ def _run(s, cmd, sub, rest, full):
     _post(s, cmd, sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o, title=title,
           est_title=est_title, omodel_txt=omodel_txt, tmodel_txt=tmodel_txt, match=match, extra_hdr=extra_hdr,
           dist=dist)
+
+
+def _level_option(o, key, levels, default):
+    if not o.get(key):
+        return default
+    v = float(o[key])
+    if v not in levels:
+        raise StataError(198, f"{key}({o[key]}) is not a level of the treatment")   # VERIFY
+    return int(np.flatnonzero(levels == v)[0])
+
+
+def _run_multi(s, sub, full, pr, o, tvar, tmv, tnoc, tmodel, omodel, ovar, levels, tv, mask, stat):
+    """teffects ra, ipw, ipwra and aipw with more than two treatment levels: one outcome model per
+    level and a multinomial logit treatment model ([TE] teffects multivalued)."""
+    if sub != "ra" and tmodel != "logit":
+        raise StataError(198, "multivalued treatments require a logit treatment model")   # VERIFY
+    L = len(levels)
+    tcode = np.searchsorted(levels, tv)
+    ci = _level_option(o, "control", levels, 0)                 # VERIFY: lowest level by default
+    tl = _level_option(o, "tlevel", levels, L - 1 if ci != L - 1 else L - 2)   # VERIFY: highest level by default
+    y = pr.y
+    n = len(y)
+    Xo = block_from_pr(pr, ovar).X if sub != "ipw" else np.ones((n, 1))
+    Z = block_from_text(pr, tvar, tmv, constant=not tnoc).X if tmv or not tnoc else np.ones((n, 1))
+    clusters = pr.smp.cluster if pr.smp.vce == "cluster" else None
+    level = float(o["level"]) if o.get("level") else float(s.settings.get("level", "95"))
+    th, Vf = T.teffects_multi(sub, y, tcode, L, Xo, Z, omodel, stat, tl, clusters)
+    labels = [_level_label(s, tvar, v) for v in levels]
+    b, V, names, eq, rows = _effect_rows_multi(tvar, labels, ci, stat, th[:L], Vf[:L, :L])
+    est_title = {"ra": "regression adjustment", "ipw": "inverse-probability weights",
+                 "ipwra": "IPW regression adjustment", "aipw": "augmented IPW"}[sub]
+    omodel_txt = {"ipw": "weighted mean", "aipw": "linear by ML"}.get(sub, omodel)
+    tmodel_txt = "(multinomial) logit" if sub != "ra" else "none"     # VERIFY
+    _post(s, "teffects", sub, full, ovar, tvar, levels, stat, names, b, V, eq, rows, n, level, mask, o,
+          title="Treatment-effects estimation", est_title=est_title, omodel_txt=omodel_txt,
+          tmodel_txt=tmodel_txt, control_treated=(levels[ci], levels[tl]))
 
 
 # ---------------------------------------------------------------------------
