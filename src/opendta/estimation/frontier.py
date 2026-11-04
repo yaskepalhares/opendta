@@ -149,6 +149,9 @@ def cmd_frontier(s: "Session", args: str) -> None:
                 l_, se_l = (lsv, np.sqrt(V[off, off])) if i == 0 else (lsu, np.sqrt(V[off + 1, off + 1]))
                 rows.append(aux_row(nm, float(val), float(se_), level,
                                     ci=(float(np.exp((l_ - c * se_l) / 2)), float(np.exp((l_ + c * se_l) / 2)))))
+            elif V[off, off] == 0 or V[off + 1, off + 1] == 0:
+                # a variance fixed by constraints: no standard error for sigma2 and lambda (compat 1922)
+                rows.append(CoefRow("aux", nm, float(val), SYS))
             else:
                 rows.append(aux_row(nm, float(val), float(se_), level, ci=(float(val - c * se_), float(val + c * se_))))
         return rows
