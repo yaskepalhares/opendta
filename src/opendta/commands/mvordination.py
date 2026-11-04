@@ -17,7 +17,6 @@ from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
 from .mvcluster import _measure
 from .mvcommon import chi2_p, g as gnum, matrix, numeric_names, post_e, sample
-from .mvfactor import _header, _right
 from .registry import command
 from .summarize import weights
 from .tabulate import _categories, _codes

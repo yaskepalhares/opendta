@@ -287,7 +287,7 @@ def _archm_fn(expr: str):
 def cmd_arch(s: "Session", args: str) -> None:
     from .postest import replay
     from .regress import Sample, cmdline
-    from .tsmodels import _check_gaps, _hr_start, _numderiv, _right, _g, _sample_text, _scores
+    from .tsmodels import _check_gaps, _hr_start, _numderiv, _sample_text, _scores
     if not args.strip() or args.strip().startswith(","):
         replay(s, "arch", args)
         return
@@ -664,7 +664,7 @@ def _right_arch(out, left: str, lab: str, val: str) -> None:
 
 def display_arch(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                  level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .tsmodels import _g
     out = s.output
     x = est.extra
     if header:

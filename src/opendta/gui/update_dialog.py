@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QProgressBar,
-                               QPushButton, QTextBrowser, QVBoxLayout)
+                               QTextBrowser, QVBoxLayout)
 
 from .. import __version__, i18n, updater
 from ..i18n import L, tr

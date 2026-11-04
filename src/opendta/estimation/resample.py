@@ -212,7 +212,6 @@ def cmd_jackknife(s: "Session", args: str) -> None:
 
 def _post_jk(s, names, observed, V, command, items, eclass_b, est0, e0, cmdname, sample, n, mis, level,
              df, o) -> None:
-    from ..commands.matrix import Matrix
     cols = [x.split(":")[-1] for x in names]
     eqs = [x.split(":")[0] if ":" in x else "_" for x in names]
     se = np.sqrt(np.diag(V))

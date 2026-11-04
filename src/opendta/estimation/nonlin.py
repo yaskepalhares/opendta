@@ -14,15 +14,13 @@ import numpy as np
 
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.stats import chi2_tail
 from ..core.varlist import resolve_name
 from ..lang.syntax import match_options, parse_standard
 from ..lazy import lazy
-from . import fvars
 from .mleq import aux_row
-from .models2 import _header, g
-from .regress import cmdline, comma, sig5
-from .results import CoefRow, Estimates, coef_table, post
+from .models2 import g
+from .regress import cmdline, comma
+from .results import Estimates, coef_table, post
 
 st = lazy("scipy.stats")
 
@@ -618,7 +616,7 @@ def cmd_nlsur(s: "Session", args: str) -> None:
             if se.init.get(nm) is not None:
                 init[nm] = se.init[nm]
     p = parse_standard(tail)
-    o = match_options(p.options, {"fgnls": 2, "ifgnls": 2, "nls": 3, "initial": 4, "nolog": 4, "log": 3, "eps": 3,
+    o = match_options(p.options, {"fgnls": 2, "nls": 3, "initial": 4, "nolog": 4, "log": 3, "eps": 3,
                                   "iterate": 4, "level": 1, "variables": 3, "noconstant": 4, "title": 5,
                                   "noheader": 6, "notable": 5, "delta": 3, "robust": 1, "nequations": 3,
                                   "parameters": 5, "nparameters": 6, "lnlsq": 3, "ifgnls": 3}) \
@@ -794,7 +792,6 @@ def _display_nlsur(s, est, *, header=True, table=True, level=None, **_kw) -> Non
 
 def cmd_gmm(s: "Session", args: str) -> None:
     from ..commands._util import touse
-    from ..commands.summarize import weights as get_weights
     from .postest import replay
     if not args.strip() or args.strip().startswith(","):
         replay(s, "gmm", args)

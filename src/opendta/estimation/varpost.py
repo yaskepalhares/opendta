@@ -267,7 +267,6 @@ def cmd_varstable(s: "Session", args: str) -> None:
     ev = ev[order]
     mod = np.abs(ev)
     out = s.output
-    from .tsmodels import _g
     out.write("\n   Eigenvalue stability condition\n", "text")
     out.write("  +" + "-" * 40 + "+\n", "text")
     out.write("  |        Eigenvalue        |   Modulus   |\n", "text")

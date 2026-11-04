@@ -15,7 +15,6 @@ from ..core.stats import chi2_tail
 from ..lang.syntax import match_options, parse_standard
 from .results import CoefRow, Estimates, coef_table, post
 from .tsops import _fmt_time, require_ts
-from .varpost import _cg
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -419,7 +418,7 @@ def _arrange_rows(deps, unr, b, se, K, mpar, ce, lags):
 
 def display_vec(s: "Session", est: Estimates, *, header: bool = True, table: bool = True,
                 level: float | None = None, **_kw) -> None:
-    from .tsmodels import _g, _right
+    from .tsmodels import _g
     out = s.output
     x = est.extra
     o = x["opts"]

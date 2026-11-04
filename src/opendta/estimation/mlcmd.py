@@ -185,7 +185,6 @@ def _model(s: "Session", args: str) -> None:
     method, prog, tail = words[0].lower(), words[1], words[2]
     if method not in _METHODS:
         raise StataError(198, f"unknown method {method}")
-    from ..lang.programs import Program      # noqa: F401
     if prog not in s.programs:
         raise StataError(111, f"program {prog} not found")   # VERIFY
     eqs, rest = _eqs_tail(s, tail)

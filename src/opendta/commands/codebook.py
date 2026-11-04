@@ -20,7 +20,7 @@ from ._util import touse
 from .registry import command
 
 if TYPE_CHECKING:
-    from ..core.dataset import Dataset, Variable
+    from ..core.dataset import Variable
     from ..session import Session
 
 SYS = M.SYSMISS

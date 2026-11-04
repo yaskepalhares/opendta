@@ -21,12 +21,11 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lang.syntax import find_top
 from ..lazy import lazy
-from . import fvars
 from .meglm import Fit, _fit_me, _posterior_eta, level_weights
 from .mixed import build_levels, split_levels
 from .results import CoefRow, Estimates
 from .stfit import STSample
-from .streg import DISTS, Dist
+from .streg import DISTS
 
 special = lazy("scipy.special")
 st = lazy("scipy.stats")
@@ -99,9 +98,7 @@ def _dist(text: str):
 
 
 def cmd_mestreg(s: "Session", args: str) -> None:
-    from .meglm import _p_chibar  # noqa: F401  (kept next to the other me helpers)
     from .postest import replay
-    from .regress import cmdline  # noqa: F401
     if not args.strip() or args.strip().startswith(","):
         replay(s, "mestreg", args)
         return

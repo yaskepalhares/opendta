@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import copy
 import math
-import re
 
 import numpy as np
 
@@ -100,7 +99,6 @@ def estat_eqgof(s, est, args):
     from ..commands.matrix import Matrix
     _, o = _opts(args, {"format": 3})
     fmt = _fmt(o)
-    from ..core.formats import format_value
     out = s.output
     r = {"N_groups": float(len(est.extra["prob"].data))}
     mats = {}
@@ -242,7 +240,7 @@ def estat_eqtest(s, est, args):
 # ---------------------------------------------------------------------------
 
 def estat_framework(s, est, args):
-    from ..commands.matrix import Matrix, list_matrix
+    from ..commands.matrix import Matrix
     _, o = _opts(args, {"standardized": 5, "compact": 4, "fitted": 3, "format": 3})
     if o.get("standardized") or o.get("compact"):
         raise StataError(198, "option standardized and compact are not available yet in OpenDTA")
@@ -328,7 +326,7 @@ def _fw_table(out, name, mat, rows, cols, grp, fmt, lower=None):
 # ---------------------------------------------------------------------------
 
 def estat_residuals(s, est, args):
-    from ..commands.matrix import Matrix, list_matrix
+    from ..commands.matrix import Matrix
     _, o = _opts(args, {"normalized": 4, "standardized": 5, "sample": 3, "zerotolerance": 4, "format": 3})
     fmt = _fmt(o, "%9.3f")
     out = s.output

@@ -14,11 +14,10 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail as _chi2_tail
-from ..lang.syntax import match_options
 from ..lazy import lazy
 from . import fvars
-from .regress import Sample, cmdline, comma, sig5, wexp_macros
-from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
+from .regress import Sample, cmdline, comma, sig5
+from .results import Estimates, coef_table, post, rows_from_columns
 from .tsops import panel_info
 
 # imported on first use (start-up time; see opendta/lazy.py)

@@ -23,9 +23,8 @@ from .models2 import (
     _log,
     _Prep,
     _semap,
-    num_hess,
 )
-from .results import CoefRow, Estimates, coef_table, rows_from_columns
+from .results import Estimates, coef_table, rows_from_columns
 
 # imported on first use (start-up time; see opendta/lazy.py)
 special = lazy("scipy.special")

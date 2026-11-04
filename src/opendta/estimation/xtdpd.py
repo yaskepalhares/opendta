@@ -20,7 +20,6 @@ from ..core.errors import StataError
 from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import match_options
-from . import fvars
 from .regress import Sample, cmdline, comma
 from .results import CoefRow, Estimates, coef_table, post
 from .tsops import panel_info, ts_info

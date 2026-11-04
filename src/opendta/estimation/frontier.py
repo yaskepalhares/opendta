@@ -12,9 +12,8 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..core.stats import chi2_tail
 from ..lazy import lazy
-from .ml import maximize
-from .mleq import (Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq, finish_model, lab,
-                   names_in, peek, read_constraints, std_right, sub_options)
+from .mleq import (Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, lab, names_in,
+                   peek, read_constraints, sub_options)
 from .models2 import _log, _Prep, g
 from .results import CoefRow
 from .regress import comma

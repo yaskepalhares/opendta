@@ -1124,7 +1124,6 @@ def _flat_table(s, labels, summ, level, use_hpd) -> None:
 
 
 def _stored_models(s, names: str):
-    from .results import current
     if not names.strip():
         est = _current(s)
         return [("active", est)]

@@ -16,7 +16,7 @@ from ..core import multivariate as mv
 from ..core import mvtests as T
 from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
-from .mvcommon import chi2_p, g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
+from .mvcommon import g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
 from .mvfactor import _g6
 from .registry import command
 
@@ -112,7 +112,7 @@ def cmd_mvreg(s: "Session", args: str) -> None:
         replay(s, "mvreg", args)
         return
     from ..estimation import fvars
-    from ..estimation.results import CoefRow, Estimates, coef_table, post, rows_from_columns
+    from ..estimation.results import CoefRow, Estimates, post, rows_from_columns
     from ._util import touse
     from .summarize import weights
     p = parse_standard(args)

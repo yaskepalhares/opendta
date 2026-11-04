@@ -952,7 +952,7 @@ class Fit:
 
 def cmd_me(s: "Session", args: str, cmdname: str) -> None:
     from .postest import replay
-    from .regress import Sample, cmdline
+    from .regress import Sample
     if not args.strip() or args.strip().startswith(","):
         replay(s, cmdname, args)
         return

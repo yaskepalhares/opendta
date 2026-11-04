@@ -17,7 +17,7 @@ from ..core.formats import format_value
 from ..core.stats import chi2_tail
 from ..lang.syntax import find_top, match_options, parse_standard
 from ..lazy import lazy
-from .results import CoefRow, Estimates, coef_table, post
+from .results import Estimates, coef_table, post
 
 # imported on first use (start-up time; see opendta/lazy.py)
 st = lazy("scipy.stats")

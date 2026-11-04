@@ -444,7 +444,6 @@ _OPTS = {"covstate": 3, "covobserved": 3, "constraints": 3, "from": 3, "vce": 3,
 
 def _prep(s, args, name):
     from .postest import replay
-    from ..commands._util import touse
     if not args.strip() or args.strip().startswith(","):
         replay(s, name, args)
         return None

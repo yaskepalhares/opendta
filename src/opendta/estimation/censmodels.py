@@ -13,12 +13,11 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..core.stats import chi2_tail
 from ..lazy import lazy
-from . import fvars
 from . import likelihoods as L
 from .ml import maximize
 from .mleq import (Block, Engine, aux_row, block_from_pr, block_from_text, constant_only, display_eq,
                    finish_model, fit_log, lab, make_predict, names_in, offset_values, peek, read_constraints, std_right,
-                   sub_options, transformed_row)
+                   transformed_row)
 from .models import _probit
 from .models2 import _Prep, _log, g
 from .regress import comma

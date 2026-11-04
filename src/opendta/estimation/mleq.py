@@ -17,7 +17,7 @@ import numpy as np
 
 from ..core import missing as M
 from . import fvars
-from .models2 import _expand, _header, g, num_hess
+from .models2 import _header, g, num_hess
 from .results import CoefRow, crit, coef_table, rows_from_columns
 
 SYS = M.SYSMISS

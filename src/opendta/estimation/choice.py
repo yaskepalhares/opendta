@@ -13,9 +13,7 @@ import numpy as np
 from ..core import choice as C
 from ..core import missing as M
 from ..core.errors import StataError
-from ..core.stats import chi2_tail
 from ..core.varlist import resolve_name
-from . import fvars
 from .mleq import (Block, Engine, add_base_row, aux_row, display_eq, finish_model, lab, names_in, peek, std_right)
 from .models2 import _Prep, _header, g
 from .regress import comma
@@ -129,7 +127,6 @@ def cmd_clogit(s: "Session", args: str) -> None:
 
     eng = Engine(lik, [main], w, 0)
     res = pr.maximize(eng.fun, np.zeros(main.k))
-    from .mleq import fit_log
     V, n_clust = pr.vce(res.H, _group_scores(eng, res.b, groups) if pr.robust else None)
     ll0 = C.clogit_null(y, groups)
     ngroups = len(groups)
@@ -609,7 +606,6 @@ def _post_slogit(s, est, pr, res, V, d, K, p, base, nonbase, fixed, free_phi, fr
     ones included, and e(Cns) the identification constraints."""
     from ..commands.matrix import Matrix
     from .results import post
-    from ..core.stats import chi2_tail
     xnames = [c.name for c in pr.smp.cols if c.values is not None]
     names, eqs, vals, src = [], [], [], []
     for j in range(d):

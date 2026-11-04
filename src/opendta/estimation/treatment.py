@@ -10,7 +10,7 @@ from ..core import missing as M
 from ..core.errors import StataError
 from ..lazy import lazy
 from . import likelihoods as L
-from .censmodels import _chi2p, _replay, _rho_rows, _weighted_probit, _lambda_row
+from .censmodels import _chi2p, _replay, _weighted_probit, _lambda_row
 from .mleq import (Engine, aux_row, block_from_pr, block_from_text, display_eq, finish_model, lab,
                    make_predict, names_in, peek, transformed_row)
 from .models2 import _Prep, _log, g

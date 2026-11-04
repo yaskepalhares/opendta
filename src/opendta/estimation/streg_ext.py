@@ -19,7 +19,7 @@ from ..lazy import lazy
 from .ml import maximize, print_log
 from .ml import options as ml_options
 from .results import CoefRow, Estimates, coef_table, post, rows_from_columns
-from .stfit import STSample, cluster_note, fmt, place
+from .stfit import STSample, fmt, place
 from .vce import bread
 
 special = lazy("scipy.special")
