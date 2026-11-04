@@ -556,7 +556,9 @@ def cmd_slogit(s: "Session", args: str) -> None:
                     rows.append(aux_row(nm, float(res.b[off + i]), float(se[off + i]), level))
                 else:
                     r = CoefRow("value", nm, float(phi_all[j, k]))
-                    r.eq = f"{phi_all[j, k]:>9g}  " + ("(base outcome)" if k == base else "(constrained)")
+                    # a phi fixed at 0 by the identification shows "(omitted)" (compat 1924)
+                    r.eq = f"{phi_all[j, k]:>9g}  " + ("(base outcome)" if k == base else
+                                                       "(constrained)" if phi_all[j, k] else "(omitted)")
                     rows.append(r)
         rows.append(CoefRow("sep"))
         for k in range(K):
@@ -598,4 +600,82 @@ def cmd_slogit(s: "Session", args: str) -> None:
                        extra_scalars=[("k_out", float(K)), ("i_base", float(base + 1)), ("dim", float(d))],
                        extra_macros=[("baseoutcome", lev_txt[base])])
     est.coef_title, est.eform_on = "Coef.", False
+    _post_slogit(s, est, pr, res, V, d, K, p, base, nonbase, fixed, free_phi, free_th, levels, lev_txt, phi_all)
     display_eq(s, est)
+
+
+def _post_slogit(s, est, pr, res, V, d, K, p, base, nonbase, fixed, free_phi, free_th, levels, lev_txt, phi_all):
+    """e() as Stata lists it (compat 1924): e(b) has every phi of the non-base outcomes, the fixed
+    ones included, and e(Cns) the identification constraints."""
+    from ..commands.matrix import Matrix
+    from .results import post
+    from ..core.stats import chi2_tail
+    xnames = [c.name for c in pr.smp.cols if c.values is not None]
+    names, eqs, vals, src = [], [], [], []
+    for j in range(d):
+        for i_, nm in enumerate(xnames):
+            names.append(nm)
+            eqs.append(pr.smp.depname if d == 1 else f"dim{j + 1}")
+            vals.append(float(res.b[j * p + i_]))
+            src.append(j * p + i_)
+    off = p * d
+    for j in range(d):
+        for k in nonbase:
+            names.append("_cons")
+            eqs.append(f"phi{j + 1}_{k + 1}")
+            if (j, k) in free_phi:
+                pos = off + free_phi.index((j, k))
+                vals.append(float(res.b[pos]))
+                src.append(pos)
+            else:
+                vals.append(float(phi_all[j, k]))
+                src.append(None)
+    for k in free_th:
+        names.append("_cons")
+        eqs.append(f"theta{k + 1}")
+        pos = off + len(free_phi) + free_th.index(k)
+        vals.append(float(res.b[pos]))
+        src.append(pos)
+    m = len(vals)
+    Vb = np.zeros((m, m))
+    idx = [i_ for i_, sv in enumerate(src) if sv is not None]
+    sv_ = [src[i_] for i_ in idx]
+    Vb[np.ix_(idx, idx)] = V[np.ix_(sv_, sv_)]
+    C = np.zeros((d * len(fixed), m + 1))
+    r_ = 0
+    for j in range(d):
+        for i_, k in enumerate(fixed):
+            C[r_, eqs.index(f"phi{j + 1}_{k + 1}")] = 1.0
+            C[r_, -1] = 1.0 if i_ == j else 0.0
+            r_ += 1
+    cm = Matrix(C, [f"r{i_}" for i_ in range(1, len(C) + 1)], names + ["_r"])
+    cm.coleq = eqs + ["_Cns"]
+    est.names, est.eqnames, est.b, est.V = names, eqs, np.array(vals), Vb
+    x = est.extra
+    nk = K - 1
+    scalars = [("rank", float(len(res.b))), ("N", float(pr.N)), ("k", float(m)),
+               ("k_eq", float(d + d * nk + nk)), ("ll", res.ll), ("k_eq_model", float(d)),
+               ("df_m", float(x["df_m"])), ("chi2", x["chi2"]), ("p", x["p"]), ("k_dim", float(d)),
+               ("k_indvars", float(len(xnames))), ("k_out", float(K)), ("i_base", float(base + 1)),
+               ("ll_0", x.get("ll_0", M.SYSMISS)), ("df_0", float(nk)), ("ic", float(res.iterations)),
+               ("converged", 1.0 if res.converged else 0.0), ("rc", 0.0)]
+    macros = [("cmdline", s.e["cmdline"] if "cmdline" in s.e else ""), ("cmd", "slogit"), ("predict", "slogit_p"),
+              ("marginsnotok", "SCores stdp"), ("footnote", "slogit_footnote"),
+              ("marginsdefault", " ".join(f"predict(pr outcome(#{i_}))" for i_ in range(1, K + 1))),
+              ("title", "Stereotype logistic regression"), ("indvars", " ".join(xnames))]
+    macros += [(f"out{i_ + 1}", lev_txt[i_]) for i_ in range(K)]
+    macros += [("chi2type", "Wald"), ("opt", "moptimize"), ("vce", "oim"), ("user", "slogit_d2"),
+               ("ml_method", "e2"), ("technique", "nr"), ("which", "max"), ("depvar", pr.smp.depname),
+               ("properties", "b V")]
+    ilog = np.zeros((1, 20))
+    lv = [ll for it_, ll, _ in res.log if it_ >= 0][:20]
+    ilog[0, :len(lv)] = lv
+    grad = np.zeros(m)
+    for i_, sv in enumerate(src):
+        if sv is not None:
+            grad[i_] = float(np.asarray(res.g)[sv])
+    mats = [("Cns", cm), ("ilog", Matrix(ilog)), ("outcomes", Matrix(np.asarray(levels, dtype=float).reshape(-1, 1))),
+            ("gradient", Matrix(grad.reshape(1, -1), ["y1"], names))]
+    post(s, est, scalars, macros, pr.smp.mask, extra_mats=mats)
+    est.cns_C = None
+

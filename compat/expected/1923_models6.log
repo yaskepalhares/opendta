@@ -1,0 +1,544 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1923_models6.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:20:16
+
+. * Models, part 6 (block 20d): the program-based forms of nl, nlsur and gmm, and gmm with
+. * parameters(). No reference until the Stata run. Every command whose behavior the manual does
+. * not settle runs under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set obs 400
+number of observations (_N) was 0, now 400
+
+. set seed 1923
+
+. gen x1 = round(invnormal(runiform()), .01)
+
+. gen x2 = round(invnormal(runiform()), .01)
+
+. gen z = round(invnormal(runiform()), .01)
+
+. gen xp = round(runiform()*4 + 1, .01)
+
+. gen yp = round(2*xp^.7 + invnormal(runiform())*.2, .01)
+
+. gen y = round(exp(.3 + .5*x1 - .4*x2) + invnormal(runiform())*.5, .01)
+
+. gen y1 = round(1 + 2*x1 + invnormal(runiform())*.5, .01)
+
+. gen y2 = round(-1 + .5*x1 + 3*x2 + invnormal(runiform())*.5, .01)
+
+. capture program drop nlpow
+
+. program nlpow
+  1.     syntax varlist(min=2 max=2) if, at(name)
+  2.     local y : word 1 of `varlist'
+  3.     local x : word 2 of `varlist'
+  4.     replace `y' = `at'[1,1]*`x'^`at'[1,2] `if'
+  5. end
+
+. capture program drop nlpow2
+
+. program nlpow2, rclass
+  1.     syntax varlist(min=2 max=2) [if]
+  2.     local y : word 1 of `varlist'
+  3.     local x : word 2 of `varlist'
+  4.     return local eq "`y' = {a}*`x'^{b=1}"
+  5.     return local title "Power curve"
+  6. end
+
+. capture program drop gmm_poi
+
+. program gmm_poi
+  1.     syntax varlist if, at(name)
+  2.     replace `varlist' = y - exp(`at'[1,1]*x1 + `at'[1,2]*x2 + `at'[1,3]) `if'
+  3. end
+
+. capture program drop nlsurlin
+
+. program nlsurlin
+  1.     syntax varlist(min=3 max=3) if, at(name)
+  2.     tokenize `varlist'
+  3.     replace `1' = `at'[1,1] + `at'[1,2]*`3' `if'
+  4.     replace `2' = `at'[1,3] + `at'[1,2]*`3' `if'
+  5. end
+
+. capture program drop nlsurlin2
+
+. program nlsurlin2, rclass
+  1.     syntax varlist(min=3 max=3) [if]
+  2.     tokenize `varlist'
+  3.     return scalar n_eq = 2
+  4.     return local eq_1 "`1' = {a1} + {b}*`3'"
+  5.     return local eq_2 "`2' = {a2} + {b}*`3'"
+  6. end
+
+. 
+. * nl: function evaluator (parameters() and nparameters()) and substitutable expression program
+. capture noisily nl pow @ yp xp, parameters(a b) initial(b 1)
+(obs = 400)
+
+Iteration 0:  residual SS =    100.97
+Iteration 1:  residual SS =  47.84727
+Iteration 2:  residual SS =  17.32895
+Iteration 3:  residual SS =  17.30817
+Iteration 4:  residual SS =  17.30817
+
+
+      Source |      SS            df       MS
+-------------+----------------------------------    Number of obs =        400
+       Model |  7491.6834          2  3745.84171    R-squared     =     0.9977
+    Residual |  17.308169        398  .043487861    Adj R-squared =     0.9977
+-------------+----------------------------------    Root MSE      =   .2085374
+       Total |  7508.9916        400   18.772479    Res. dev.     =  -120.9636
+
+------------------------------------------------------------------------------
+          yp |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          /a |    2.02138    .016843   120.01   0.000     1.988268    2.054493
+          /b |   .6904136     .00656   105.25   0.000     .6775169    .7033103
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(df_m) =  2
+               e(df_r) =  398
+                e(mss) =  7491.683420547314
+                e(mms) =  3745.841710273657
+                e(msr) =  .043487861443007
+               e(rmse) =  .2085374341527367
+                 e(ll) =  60.48178050596624
+                 e(r2) =  .9976950075588384
+               e(r2_a) =  .9976834246822497
+                e(dev) =  -120.9635610119325
+           e(converge) =  1
+                  e(N) =  400
+                e(rss) =  17.30816885431679
+               e(df_t) =  400
+                e(tss) =  7508.991589401631
+                 e(cj) =  0
+               e(gm_2) =  1
+              e(delta) =  4.00000000000e-07
+                  e(k) =  2
+         e(k_eq_model) =  0
+               e(rank) =  2
+              e(log_t) =  0
+                 e(ic) =  5
+
+macros:
+            e(cmdline) : "nl pow @ yp xp, parameters(a b) initial(b 1)"
+                e(cmd) : "nl"
+            e(predict) : "nl_p"
+       e(marginsnotok) : "SCores Residuals"
+          e(marginsok) : "default Yhat"
+                e(vce) : "gnr"
+           e(funcprog) : "nlpow"
+         e(covariates) : "xp"
+                e(rhs) : "xp"
+               e(type) : "3"
+             e(params) : "a b"
+             e(depvar) : "yp"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+               e(init) :  1 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily nl pow @ yp xp, nparameters(2) initial(b2 1)
+(obs = 400)
+
+Iteration 0:  residual SS =    100.97
+Iteration 1:  residual SS =  47.84727
+Iteration 2:  residual SS =  17.32895
+Iteration 3:  residual SS =  17.30817
+Iteration 4:  residual SS =  17.30817
+
+
+      Source |      SS            df       MS
+-------------+----------------------------------    Number of obs =        400
+       Model |  7491.6834          2  3745.84171    R-squared     =     0.9977
+    Residual |  17.308169        398  .043487861    Adj R-squared =     0.9977
+-------------+----------------------------------    Root MSE      =   .2085374
+       Total |  7508.9916        400   18.772479    Res. dev.     =  -120.9636
+
+------------------------------------------------------------------------------
+          yp |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |    2.02138    .016843   120.01   0.000     1.988268    2.054493
+         /b2 |   .6904136     .00656   105.25   0.000     .6775169    .7033103
+------------------------------------------------------------------------------
+
+. capture noisily nl pow2 : yp xp
+(obs = 400)
+
+Iteration 0:  residual SS =    100.97
+Iteration 1:  residual SS =  47.84727
+Iteration 2:  residual SS =  17.32895
+Iteration 3:  residual SS =  17.30817
+Iteration 4:  residual SS =  17.30817
+
+
+      Source |      SS            df       MS
+-------------+----------------------------------    Number of obs =        400
+       Model |  7491.6834          2  3745.84171    R-squared     =     0.9977
+    Residual |  17.308169        398  .043487861    Adj R-squared =     0.9977
+-------------+----------------------------------    Root MSE      =   .2085374
+       Total |  7508.9916        400   18.772479    Res. dev.     =  -120.9636
+
+Power curve
+------------------------------------------------------------------------------
+          yp |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          /a |    2.02138    .016843   120.01   0.000     1.988268    2.054493
+          /b |   .6904136     .00656   105.25   0.000     .6775169    .7033103
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+               e(df_m) =  2
+               e(df_r) =  398
+                e(mss) =  7491.683420547314
+                e(mms) =  3745.841710273657
+                e(msr) =  .043487861443007
+               e(rmse) =  .2085374341527367
+                 e(ll) =  60.48178050596624
+                 e(r2) =  .9976950075588384
+               e(r2_a) =  .9976834246822497
+                e(dev) =  -120.9635610119325
+           e(converge) =  1
+                  e(N) =  400
+                e(rss) =  17.30816885431679
+               e(df_t) =  400
+                e(tss) =  7508.991589401631
+                 e(cj) =  0
+               e(gm_2) =  1
+              e(delta) =  4.00000000000e-07
+                  e(k) =  2
+         e(k_eq_model) =  0
+               e(rank) =  2
+              e(log_t) =  0
+                 e(ic) =  5
+
+macros:
+            e(cmdline) : "nl pow2 : yp xp"
+                e(cmd) : "nl"
+            e(predict) : "nl_p"
+       e(marginsnotok) : "SCores Residuals"
+          e(marginsok) : "default Yhat"
+                e(vce) : "gnr"
+         e(covariates) : "xp"
+                e(rhs) : "xp"
+               e(type) : "2"
+              e(title) : "Power curve"
+               e(sexp) : "{a} *xp^ {b}"
+             e(params) : "a b"
+             e(depvar) : "yp"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 2
+                  e(V) :  2 x 2
+               e(init) :  1 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily predict double yphat
+(option yhat assumed; fitted values)
+
+. capture noisily summarize yphat
+
+    Variable |        Obs        Mean    Std. Dev.       Min        Max
+-------------+---------------------------------------------------------
+       yphat |        400    4.147101    1.238787    2.02138   6.140821
+
+. 
+. * gmm: moment-evaluator program; parameters() with substitutable expressions
+. capture noisily gmm gmm_poi, nequations(1) instruments(x1 x2 z) parameters(b1 b2 b0)
+(400 real changes made)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  2.2098045  
+Iteration 1:   GMM criterion Q(b) =  .00851424  
+Iteration 2:   GMM criterion Q(b) =  .00253199  
+Iteration 3:   GMM criterion Q(b) =  .00252532  
+Iteration 4:   GMM criterion Q(b) =  .00252532  
+
+Step 2
+Iteration 0:   GMM criterion Q(b) =    .010273  
+Iteration 1:   GMM criterion Q(b) =  .01019626  
+Iteration 2:   GMM criterion Q(b) =  .01019626  
+
+GMM estimation 
+
+Number of parameters =   3
+Number of moments    =   4
+Initial weight matrix: Unadjusted                 Number of obs   =        400
+GMM weight matrix:     Robust
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |   .5089224   .0156504    32.52   0.000     .4782483    .5395966
+         /b2 |   -.410398   .0120865   -33.96   0.000     -.434087    -.386709
+         /b0 |   .2968974   .0211876    14.01   0.000     .2553705    .3384242
+------------------------------------------------------------------------------
+Instruments for equation 1: x1 x2 z _cons
+
+. capture noisily ereturn list
+
+scalars:
+               e(rank) =  3
+                  e(N) =  400
+                  e(Q) =  .0101962598759278
+                  e(J) =  4.078503950371113
+               e(J_df) =  1
+          e(converged) =  1
+         e(has_xtinst) =  0
+               e(type) =  2
+               e(n_eq) =  1
+                  e(k) =  3
+          e(n_moments) =  4
+               e(k_eq) =  3
+              e(k_aux) =  3
+         e(k_eq_model) =  0
+
+macros:
+            e(cmdline) : "gmm gmm_poi, nequations(1) instruments(x1 x2 z) parameters(b1 b2 b0)"
+                e(cmd) : "gmm"
+          e(estat_cmd) : "gmm_estat"
+            e(predict) : "gmm_p"
+       e(marginsnotok) : "_ALL"
+            e(eqnames) : "1"
+          e(technique) : "gn"
+              e(winit) : "Unadjusted"
+          e(estimator) : "twostep"
+            e(wmatrix) : "robust"
+                e(vce) : "robust"
+            e(vcetype) : "Robust"
+           e(evalprog) : "gmm_poi"
+             e(params) : "b1 b2 b0"
+             e(inst_1) : "x1 x2 z _cons"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(init) :  1 x 3
+       e(V_modelbased) :  3 x 3
+                  e(S) :  4 x 4
+                  e(W) :  4 x 4
+
+functions:
+             e(sample)   
+
+. capture noisily gmm gmm_poi, equations(m1) instruments(m1: x1 x2 z) nparameters(3) onestep
+(400 real changes made)
+
+Step 1
+Iteration 0:   GMM criterion Q(b) =  2.2098045  
+Iteration 1:   GMM criterion Q(b) =  .00851424  
+Iteration 2:   GMM criterion Q(b) =  .00253199  
+Iteration 3:   GMM criterion Q(b) =  .00252532  
+Iteration 4:   GMM criterion Q(b) =  .00252532  
+
+GMM estimation 
+
+Number of parameters =   3
+Number of moments    =   4
+Initial weight matrix: Unadjusted                 Number of obs   =        400
+
+------------------------------------------------------------------------------
+             |               Robust
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /b1 |   .5068546   .0156309    32.43   0.000     .4762187    .5374905
+         /b2 |  -.4093479   .0120711   -33.91   0.000    -.4330069   -.3856889
+         /b3 |   .2990474   .0211604    14.13   0.000     .2575738     .340521
+------------------------------------------------------------------------------
+Instruments for equation m1: x1 x2 z _cons
+
+. capture noisily gmm (y - exp({b1}*x1 + {b2}*x2 + {b0})), instruments(x1 x2 z) parameters(b0 b1 b2)
+parameters(b0 b1 b2) not allowed with interactive version
+
+. 
+. * nlsur: function evaluator and substitutable expression program
+. capture noisily nlsur lin @ y1 y2 x1, nequations(2) parameters(a1 b a2)
+(obs = 400)
+
+Calculating NLS estimates...
+(400 real changes made)
+(400 real changes made)
+Iteration 0:  (400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(399 real changes made)
+(399 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+Residual SS =  4550.713
+Iteration 1:  (400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(399 real changes made)
+(399 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(399 real changes made)
+(400 real changes made)
+(399 real changes made)
+(396 real changes made)
+(399 real changes made)
+(396 real changes made)
+(397 real changes made)
+(398 real changes made)
+Residual SS =  4550.713
+(0 real changes made)
+(0 real changes made)
+Calculating FGNLS estimates...
+(0 real changes made)
+(0 real changes made)
+Iteration 0:  (400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(399 real changes made)
+(399 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+Scaled RSS =  588.9058
+Iteration 1:  (400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(399 real changes made)
+(399 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+(400 real changes made)
+Scaled RSS =  588.9058
+(0 real changes made)
+(0 real changes made)
+
+FGNLS regression 
+-----------------------------------------------------------------------
+       Equation |        Obs   Parms       RMSE      R-sq     Constant
+----------------+------------------------------------------------------
+ 1           y1 |        400       .   .5103305    0.9538*      (none)
+ 2           y2 |        400       .   3.434052    -0.0205*      (none)
+-----------------------------------------------------------------------
+* Uncentered R-sq
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /a1 |   .9871179   .0443747    22.25   0.000     .9001451    1.074091
+          /b |   1.862479   .0404885    46.00   0.000     1.783123    1.941835
+         /a2 |  -1.309857   .1628217    -8.04   0.000    -1.628982   -.9907324
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  400
+              e(rss_1) =  104.1749059377751
+              e(mss_1) =  2150.089283270767
+               e(r2_1) =  .9537876232801487
+             e(rmse_1) =  .5103305446908285
+              e(rss_2) =  4717.086476193604
+              e(mss_2) =  -94.79479422009535
+               e(r2_2) =  -.0205081809505415
+             e(rmse_2) =  3.434052444340943
+                 e(ll) =  -1356.992535544046
+               e(n_eq) =  2
+                  e(k) =  3
+         e(k_eq_model) =  0
+           e(converge) =  1
+               e(rank) =  3
+               e(k_eq) =  2
+
+macros:
+            e(cmdline) : "nlsur lin @ y1 y2 x1, nequations(2) parameters(a1 b a2)"
+                e(cmd) : "nlsur"
+            e(predict) : "nlsur_p"
+          e(estat_cmd) : "nlsur_estat"
+         e(covariates) : "x1"
+                e(rhs) : "x1"
+           e(funcprog) : "nlsurlin"
+                e(vce) : "gnr"
+             e(method) : "fgnls"
+          e(constants) : ". ."
+               e(type) : "3"
+             e(params) : "a1 b a2"
+             e(depvar) : "y1 y2"
+           e(depvar_2) : "y2"
+           e(depvar_1) : "y1"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+               e(init) :  1 x 3
+              e(Sigma) :  2 x 2
+
+functions:
+             e(sample)   
+
+. capture noisily nlsur lin2 : y1 y2 x1, nls
+(obs = 400)
+
+Calculating NLS estimates...
+Iteration 0:  Residual SS =  4550.713
+Iteration 1:  Residual SS =  4550.713
+
+Nonlinear least-squares regression 
+-----------------------------------------------------------------------
+       Equation |        Obs   Parms       RMSE      R-sq     Constant
+----------------+------------------------------------------------------
+ 1           y1 |        400       2   .4963236    0.9417           a1
+ 2           y2 |        400       2   3.455489    -0.1564          a2
+-----------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         /a1 |   .9811404   .0444034    22.10   0.000     .8941114    1.068169
+          /b |   1.917954   .0431117    44.49   0.000     1.833457    2.002452
+         /a2 |  -1.315835   .1628295    -8.08   0.000    -1.634975   -.9966946
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1923_models6.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:20:17
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

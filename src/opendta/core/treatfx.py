@@ -285,15 +285,30 @@ def eteffects(y, t, Xo, Z, stat, clusters=None, omodel="linear"):
     k1 = ko + 1
 
     # the variance takes the probit coefficients as known: the sandwich of the outcome and POM
-    # moments at the estimated residual reproduces Stata's standard errors (compat 1908)
+    # moments at the estimated residual reproduces Stata's standard errors (compat 1908, 1927).
+    # With atet the parameters are POM0 and ATET, and the ATET moment is t (m1 - POM0) n/nt - ATET
+    # for every observation (the untreated contribute -ATET), as Stata writes it (compat 1927)
+    nt = float(t.sum())
+
     def gfun(th):
-        mu_, a0, a1 = th[:2], th[2:2 + k1], th[2 + k1:2 + 2 * k1]
+        p0, p1, a0, a1 = th[0], th[1], th[2:2 + k1], th[2 + k1:2 + 2 * k1]
         s0 = t0[:, None] * score(W, y, a0)
         s1 = t[:, None] * score(W, y, a1)
-        mom = np.column_stack([d * (mean(W, a0) - mu_[0]), d * (mean(W, a1) - mu_[1])])
+        if stat == "atet":
+            mom = np.column_stack([t * (mean(W, a0) - p0) * n / nt, t * (mean(W, a1) - p0) * n / nt - p1])
+        else:
+            mom = np.column_stack([d * (mean(W, a0) - p0), d * (mean(W, a1) - p1)])
         return np.column_stack([mom, s0, s1])
 
-    V = sandwich_m(gfun, theta[:2 + 2 * k1], n, clusters)
+    th0 = theta[:2 + 2 * k1].copy()
+    if stat == "atet":
+        th0[1] = mu[1] - mu[0]
+    V = sandwich_m(gfun, th0, n, clusters)
+    if stat == "atet":
+        # back to (mu0, mu1) = (POM0, POM0 + ATET)
+        J = np.eye(len(th0))
+        J[1, 0] = 1.0
+        V = J @ V @ J.T
     return theta, V, k1
 
 

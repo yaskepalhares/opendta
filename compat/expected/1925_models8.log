@@ -1,0 +1,264 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1925_models8.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:20:14
+
+. * Models, part 8 (block 20f): teffects ra, ipw, ipwra and aipw with multivalued treatments. No
+. * reference until the Stata run. Every command whose behavior the manual does not settle runs
+. * under capture noisily, so that one Stata run shows the whole case.
+. clear
+
+. set obs 1200
+number of observations (_N) was 0, now 1,200
+
+. set seed 1925
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen z = round(invnormal(runiform()), .01)
+
+. gen double u = runiform()
+
+. gen double p1 = exp(.3*x + .2*z)
+
+. gen double p2 = exp(-.2 + .5*x - .3*z)
+
+. gen t = 0
+
+. replace t = 1 if u < p1/(1+p1+p2)
+(426 real changes made)
+
+. replace t = 2 if u >= p1/(1+p1+p2) & u < (p1+p2)/(1+p1+p2)
+(321 real changes made)
+
+. gen y = round(1 + .5*x + t + .3*t*x + invnormal(runiform()), .01)
+
+. capture noisily teffects ra (y x) (t)
+
+Iteration 0:   EE criterion =  2.150e-31  
+Iteration 1:   EE criterion =  7.519e-33  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : regression adjustment
+Outcome model  : linear
+Treatment model: none
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   1.089788   .0736574    14.80   0.000     .9454221    1.234154
+   (2 vs 0)  |   2.045999   .0793117    25.80   0.000     1.890551    2.201447
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9502592   .0525155    18.09   0.000     .8473308    1.053188
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  1200
+                 e(n2) =  321
+                 e(n1) =  426
+                 e(n0) =  453
+               e(k_eq) =  5
+           e(k_levels) =  3
+            e(treated) =  1
+            e(control) =  0
+          e(converged) =  1
+
+macros:
+                e(cmd) : "teffects"
+            e(cmdline) : "teffects ra (y x) (t)"
+            e(predict) : "teffects_p"
+          e(estat_cmd) : "teffects_estat"
+       e(marginsnotok) : "_ALL"
+            e(vcetype) : "Robust"
+                e(vce) : "robust"
+             e(depvar) : "y"
+               e(tvar) : "t"
+             e(subcmd) : "ra"
+             e(omodel) : "linear"
+               e(stat) : "ate"
+              e(title) : "Treatment-effects estimation"
+            e(tlevels) : "0 1 2"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 9
+                  e(V) :  9 x 9
+
+functions:
+             e(sample)   
+
+. capture noisily teffects ra (y x) (t), pomeans
+
+Iteration 0:   EE criterion =  2.150e-31  
+Iteration 1:   EE criterion =  3.199e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : regression adjustment
+Outcome model  : linear
+Treatment model: none
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+POmeans      |
+           t |
+          0  |   .9502592   .0525155    18.09   0.000     .8473308    1.053188
+          1  |   2.040047   .0565084    36.10   0.000     1.929293    2.150801
+          2  |   2.996258   .0660693    45.35   0.000     2.866765    3.125751
+------------------------------------------------------------------------------
+
+. capture noisily teffects ipw (y) (t x z)
+
+Iteration 0:   EE criterion =  7.807e-26  
+Iteration 1:   EE criterion =  3.472e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : inverse-probability weights
+Outcome model  : weighted mean
+Treatment model: (multinomial) logit
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   1.094227   .0765083    14.30   0.000     .9442738    1.244181
+   (2 vs 0)  |   2.069424    .085455    24.22   0.000     1.901935    2.236912
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9431084   .0535217    17.62   0.000     .8382078    1.048009
+------------------------------------------------------------------------------
+
+. capture noisily teffects ipwra (y x) (t x z)
+
+Iteration 0:   EE criterion =  7.807e-26  
+Iteration 1:   EE criterion =  8.956e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : IPW regression adjustment
+Outcome model  : linear
+Treatment model: (multinomial) logit
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   1.093594   .0755544    14.47   0.000       .94551    1.241678
+   (2 vs 0)  |   2.051079   .0842014    24.36   0.000     1.886048    2.216111
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9430171   .0535816    17.60   0.000     .8379992    1.048035
+------------------------------------------------------------------------------
+
+. capture noisily teffects aipw (y x) (t x z)
+
+Iteration 0:   EE criterion =  7.807e-26  
+Iteration 1:   EE criterion =  1.012e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : augmented IPW
+Outcome model  : linear by ML
+Treatment model: (multinomial) logit
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (1 vs 0)  |   1.093597   .0756037    14.46   0.000     .9454166    1.241778
+   (2 vs 0)  |   2.050843   .0842061    24.36   0.000     1.885802    2.215884
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9430183   .0536307    17.58   0.000     .8379041    1.048133
+------------------------------------------------------------------------------
+
+. capture noisily teffects ipwra (y x) (t x z), atet
+
+Iteration 0:   EE criterion =  7.809e-26  
+Iteration 1:   EE criterion =  1.034e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : IPW regression adjustment
+Outcome model  : linear
+Treatment model: (multinomial) logit
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATET         |
+           t |
+   (1 vs 0)  |   1.152323   .0792983    14.53   0.000     .9969011    1.307745
+   (2 vs 0)  |   2.156281   .0978488    22.04   0.000     1.964501    2.348061
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9787805   .0612312    15.98   0.000     .8587695    1.098791
+------------------------------------------------------------------------------
+
+. capture noisily teffects ipwra (y x) (t x z), atet tlevel(1)
+
+Iteration 0:   EE criterion =  7.809e-26  
+Iteration 1:   EE criterion =  1.034e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : IPW regression adjustment
+Outcome model  : linear
+Treatment model: (multinomial) logit
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATET         |
+           t |
+   (1 vs 0)  |   1.152323   .0792983    14.53   0.000     .9969011    1.307745
+   (2 vs 0)  |   2.156281   .0978488    22.04   0.000     1.964501    2.348061
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          0  |   .9787805   .0612312    15.98   0.000     .8587695    1.098791
+------------------------------------------------------------------------------
+
+. capture noisily teffects ra (y x) (t), control(1)
+
+Iteration 0:   EE criterion =  2.142e-31  
+Iteration 1:   EE criterion =  3.955e-32  
+
+Treatment-effects estimation                    Number of obs     =      1,200
+Estimator      : regression adjustment
+Outcome model  : linear
+Treatment model: none
+------------------------------------------------------------------------------
+             |               Robust
+           y |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+ATE          |
+           t |
+   (0 vs 1)  |  -1.089788   .0736574   -14.80   0.000    -1.234154   -.9454221
+   (2 vs 1)  |   .9562111   .0779151    12.27   0.000     .8035003    1.108922
+-------------+----------------------------------------------------------------
+POmean       |
+           t |
+          1  |   2.040047   .0565084    36.10   0.000     1.929293    2.150801
+------------------------------------------------------------------------------
+
+. capture noisily teffects ipw (y) (t x z, probit)
+treatment-model probit requires 2 levels in treatment variable t, but 3 were found
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1925_models8.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:20:15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

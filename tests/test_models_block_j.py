@@ -52,7 +52,7 @@ def test_linear_pomeans_by_hand():
         a = np.linalg.lstsq(W[t == lv], y[t == lv], rcond=None)[0]
         pom.append(float((W @ a).mean()))
     _run("eteffects (yl x) (t x z), pomeans\n", s)
-    assert np.allclose(_b(s), pom, atol=1e-6)
+    assert np.allclose(_b(s)[:2], pom, atol=1e-6)
 
 
 def test_exponential_pomeans_by_hand():
@@ -69,8 +69,8 @@ def test_exponential_pomeans_by_hand():
             a = a + np.linalg.solve((W[m] * mu[:, None]).T @ W[m], W[m].T @ (y[m] - mu))
         pom.append(float(np.exp(W @ a).mean()))
     _, out = _run("eteffects (yc x, exponential) (t x z), pomeans\n", s)
-    assert np.allclose(_b(s), pom, atol=1e-6)
-    assert "exponential mean" in out
+    assert np.allclose(_b(s)[:2], pom, atol=1e-6)
+    assert "Outcome model  : exponential" in out
 
 
 def test_probit_and_fractional_outcomes():
@@ -91,9 +91,9 @@ def test_probit_and_fractional_outcomes():
             a = a + np.linalg.solve(H, g)
         pom.append(float(stats.norm.cdf(W @ a).mean()))
     _run("eteffects (yb x, probit) (t x z)\n", s)
-    assert np.allclose(_b(s), [pom[1] - pom[0], pom[0]], atol=1e-6)
+    assert np.allclose(_b(s)[:2], [pom[1] - pom[0], pom[0]], atol=1e-6)
     _, out = _run("eteffects (yf x, fractional) (t x z)\n", s)
-    assert "fractional probit" in out
+    assert "Outcome model  : fractional" in out
 
 
 def test_outcome_checks():

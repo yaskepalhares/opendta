@@ -293,11 +293,10 @@ def display_eq(s, est, *, header: bool = True, table: bool = True, level: float 
         if lines:
             for line in lines:
                 s.output.write(line + "\n", "text")
-            # a parameter fixed by the constraints has no variance: "(constrained)"; the rows
-            # transformed from it (rho, sigma_v) keep their numbers (VERIFY)
+            # a parameter fixed by the constraints has no variance: "(constrained)", and so do the
+            # rows transformed from it (rho in biprobit, compat 1922)
             from dataclasses import replace
-            rows = [replace(r, kind="cons") if r.se == 0 and (r.kind == "coef" or (r.kind == "aux" and r.label.startswith("/")))
-                    else r for r in rows]
+            rows = [replace(r, kind="cons") if r.se == 0 and r.kind in ("coef", "aux") else r for r in rows]
         coef_table(s, est.depvar_cell, rows, stat="z", df=None, level=lev, vcetype=est.vcetype,
                    coef_title=getattr(est, "coef_title", "Coef."), eform=getattr(est, "eform_on", False))
         foot = getattr(est, "footer", None)
@@ -345,11 +344,17 @@ def finish_model(s, pr, cmd: str, args: str, *, title: str, blocks: list[Block],
     idx = list(range(blocks[0].nslopes)) if test_idx is None else test_idx
     cns = getattr(pr, "cns", None)
     if cns is not None and idx:
-        # with constraints the test has the rank of the constrained variance (VERIFY)
+        # with constraints the test keeps the coefficients, in order, that are not implied by the
+        # ones before (as test drops the dependent rows): x1 + x2 = .8 leaves the test of x1 (compat 1922)
         from ..core.stats import chi2_tail
-        Vk = V[np.ix_(idx, idx)]
-        df_m = int(np.linalg.matrix_rank(Vk))
-        kind, chi2 = "Wald", float(res.b[idx] @ np.linalg.pinv(Vk) @ res.b[idx]) if df_m else SYS
+        keep = []
+        for j in idx:
+            cand = keep + [j]
+            if np.linalg.matrix_rank(V[np.ix_(cand, cand)], tol=1e-10 * max(1.0, float(np.max(np.abs(V))))) == len(cand):
+                keep = cand
+        Vk = V[np.ix_(keep, keep)]
+        df_m = len(keep)
+        kind, chi2 = "Wald", float(res.b[keep] @ np.linalg.solve(Vk, res.b[keep])) if df_m else SYS
         pv = float(chi2_tail(chi2, df_m)) if df_m else SYS
         C = pr.cns_C
         from ..commands.matrix import Matrix

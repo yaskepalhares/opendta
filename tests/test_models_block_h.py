@@ -45,8 +45,8 @@ def test_ra_pomeans_are_arm_regression_means():
     for lv in (0, 1, 2):
         b = np.linalg.lstsq(X[t == lv], y[t == lv], rcond=None)[0]
         ref.append(float((X @ b).mean()))
-    assert np.allclose(_b(s), ref, atol=1e-8)
-    assert list(s._estimates.names) == ["0.t", "1.t", "2.t"]
+    assert np.allclose(_b(s)[:3], ref, atol=1e-8)
+    assert list(s._estimates.names)[:3] == ["0.t", "1.t", "2.t"]
 
 
 def test_ate_rows_and_control():
@@ -56,7 +56,7 @@ def test_ate_rows_and_control():
     assert abs(b[0] - 1.0) < .2 and abs(b[1] - 2.0) < .2
     _, out = _run("teffects ra (y x) (t), control(1)\n", s)
     assert "(0 vs 1)" in out and "(2 vs 1)" in out
-    assert s.eval("e(n_levels)") == 3 and s.eval("e(control)") == 1
+    assert s.eval("e(k_levels)") == 3 and s.eval("e(control)") == 1
 
 
 def test_multi_with_two_levels_matches_binary():

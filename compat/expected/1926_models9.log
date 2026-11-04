@@ -1,0 +1,321 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1926_models9.log
+  log type:  text
+ opened on:   4 Nov 2026, 01:20:17
+
+. * Models, part 9 (block 20g): ivprobit and ivtobit with twostep (Newey's minimum chi-squared
+. * estimator), also with more than one endogenous regressor. No reference until the Stata run.
+. * Every command whose behavior the manual does not settle runs under capture noisily, so that
+. * one Stata run shows the whole case.
+. clear
+
+. set obs 3000
+number of observations (_N) was 0, now 3,000
+
+. set seed 1926
+
+. gen x = round(invnormal(runiform()), .01)
+
+. gen z1 = round(invnormal(runiform()), .01)
+
+. gen z2 = round(invnormal(runiform()), .01)
+
+. gen v = round(invnormal(runiform()), .01)
+
+. gen v2 = round(invnormal(runiform()), .01)
+
+. gen u = round(.5*v + sqrt(.75)*invnormal(runiform()), .01)
+
+. gen y2 = round(.5*x + z1 + .5*z2 + v, .01)
+
+. gen y3 = round(-.3*x + .4*z1 + z2 + v2, .01)
+
+. gen ys = .5 + .4*y2 - .6*x + u
+
+. gen yb = ys > 0
+
+. gen yt = max(ys, 0)
+
+. gen ys3 = .5 + .4*y2 - .3*y3 - .6*x + u
+
+. gen yb3 = ys3 > 0
+
+. capture noisily ivprobit yb x (y2 = z1 z2), twostep
+Checking reduced-form model...
+
+Two-step probit with endogenous regressors        Number of obs   =      3,000
+                                                  Wald chi2(2)    =     398.91
+                                                  Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |   .4651091    .029261    15.90   0.000     .4077585    .5224597
+           x |  -.6862258   .0369265   -18.58   0.000    -.7586004   -.6138513
+       _cons |   .5826081   .0322959    18.04   0.000     .5193093    .6459068
+------------------------------------------------------------------------------
+Instrumented:  y2
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(1) =   193.53           Prob > chi2 = 0.0000
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  3000
+          e(chi2_exog) =  193.5329146649718
+            e(df_exog) =  1
+             e(p_exog) =  5.38528176061e-44
+               e(chi2) =  398.9061530116066
+               e(df_m) =  2
+                  e(p) =  2.39127473260e-87
+               e(rank) =  3
+              e(N_cds) =  0
+              e(N_cdf) =  0
+
+macros:
+            e(cmdline) : "ivprobit yb x (y2 = z1 z2), twostep"
+                e(cmd) : "ivprobit"
+          e(marginsok) : "Pr XB default"
+            e(predict) : "ivprobit_p"
+          e(estat_cmd) : "ivprobit_estat"
+           e(footnote) : "ivprobit_footnote"
+                e(vce) : "twostep"
+             e(depvar) : "yb y2"
+              e(insts) : "x z1 z2"
+              e(instd) : "y2"
+             e(method) : "twostep"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+              e(rules) :  2 x 4
+
+functions:
+             e(sample)   
+
+. capture noisily ivprobit yb x (y2 = z1 z2), twostep first
+Checking reduced-form model...
+First-stage regression
+
+      Source |       SS           df       MS      Number of obs   =     3,000
+-------------+----------------------------------   F(3, 2996)      =   1498.72
+       Model |  4557.64242         3  1519.21414   Prob > F        =    0.0000
+    Residual |   3036.9592     2,996   1.0136713   R-squared       =    0.6001
+-------------+----------------------------------   Adj R-squared   =    0.5997
+       Total |  7594.60163     2,999    2.532378   Root MSE        =    1.0068
+
+------------------------------------------------------------------------------
+          y2 |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          z1 |   1.008735   .0186269    54.15   0.000     .9722125    1.045258
+          z2 |   .5116035   .0185085    27.64   0.000     .4753127    .5478942
+           x |   .5095504   .0181509    28.07   0.000     .4739609    .5451398
+       _cons |  -.0469522   .0183834    -2.55   0.011    -.0829976   -.0109068
+------------------------------------------------------------------------------
+
+Two-step probit with endogenous regressors        Number of obs   =      3,000
+                                                  Wald chi2(2)    =     398.91
+                                                  Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |   .4651091    .029261    15.90   0.000     .4077585    .5224597
+           x |  -.6862258   .0369265   -18.58   0.000    -.7586004   -.6138513
+       _cons |   .5826081   .0322959    18.04   0.000     .5193093    .6459068
+------------------------------------------------------------------------------
+Instrumented:  y2
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(1) =   193.53           Prob > chi2 = 0.0000
+
+. capture noisily ivtobit yt x (y2 = z1 z2), ll(0) twostep
+
+Two-step tobit with endogenous regressors         Number of obs   =      3,000
+                                                  Wald chi2(2)    =     902.76
+                                                  Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |   .4111154   .0175263    23.46   0.000     .3767645    .4454663
+           x |  -.5879521   .0215085   -27.34   0.000     -.630108   -.5457961
+       _cons |   .4951837   .0203843    24.29   0.000     .4552312    .5351363
+------------------------------------------------------------------------------
+Instrumented:  y2
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(1) =   403.19           Prob > chi2 = 0.0000
+
+         1,077  left-censored observations at yt <= 0
+         1,923     uncensored observations
+             0 right-censored observations
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  3000
+          e(chi2_exog) =  403.1866063605455
+            e(df_exog) =  1
+             e(p_exog) =  1.11495489099e-89
+               e(chi2) =  902.7571046469479
+               e(df_m) =  2
+                  e(p) =  9.3064806015e-197
+           e(endog_ct) =  1
+               e(rank) =  3
+              e(N_unc) =  1923
+               e(N_lc) =  1077
+               e(N_rc) =  0
+              e(llopt) =  0
+
+macros:
+            e(cmdline) : "ivtobit yt x (y2 = z1 z2), ll(0) twostep"
+                e(cmd) : "ivtobit"
+          e(marginsok) : "XB E(passthru) Pr(passthru) YStar(passthru) default"
+            e(predict) : "ivtobit_p"
+           e(footnote) : "ivtobit_footnote"
+             e(depvar) : "yt y2"
+              e(insts) : "x z1 z2"
+              e(instd) : "y2"
+             e(method) : "twostep"
+         e(properties) : "b V"
+
+matrices:
+                  e(b) :  1 x 3
+                  e(V) :  3 x 3
+
+functions:
+             e(sample)   
+
+. capture noisily ivprobit yb3 x (y2 y3 = z1 z2), twostep
+Checking reduced-form model...
+
+Two-step probit with endogenous regressors        Number of obs   =      3,000
+                                                  Wald chi2(3)    =     243.15
+                                                  Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |    .501056   .0424254    11.81   0.000     .4179037    .5842083
+          y3 |  -.3449826   .0432307    -7.98   0.000    -.4297132    -.260252
+           x |  -.7044886   .0471637   -14.94   0.000    -.7969277   -.6120494
+       _cons |    .547091   .0316792    17.27   0.000      .485001     .609181
+------------------------------------------------------------------------------
+Instrumented:  y2 y3
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(2) =   178.63           Prob > chi2 = 0.0000
+
+. capture noisily ivtobit yt x (y2 y3 = z1 z2), ll(0) twostep
+
+Two-step tobit with endogenous regressors         Number of obs   =      3,000
+                                                  Wald chi2(3)    =     892.94
+                                                  Prob > chi2     =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |    .396757   .0259157    15.31   0.000     .3459632    .4475509
+          y3 |   .0201726   .0268654     0.75   0.453    -.0324827    .0728279
+           x |  -.5739932   .0284081   -20.21   0.000    -.6296721   -.5183142
+       _cons |   .4948052   .0205065    24.13   0.000     .4546132    .5349973
+------------------------------------------------------------------------------
+Instrumented:  y2 y3
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(2) =   357.86           Prob > chi2 = 0.0000
+
+         1,077  left-censored observations at yt <= 0
+         1,923     uncensored observations
+             0 right-censored observations
+
+. capture noisily ivprobit yb3 x (y2 y3 = z1 z2)
+
+Fitting exogenous probit model
+
+Iteration 0:   log likelihood = -1968.1682  
+Iteration 1:   log likelihood = -1382.5235  
+Iteration 2:   log likelihood = -1377.0702  
+Iteration 3:   log likelihood = -1377.0556  
+Iteration 4:   log likelihood = -1377.0556  
+
+Fitting full model
+
+Iteration 0:   log likelihood = -9904.2106  (not concave)
+Iteration 1:   log likelihood = -9898.0886  (not concave)
+Iteration 2:   log likelihood = -9883.5259  (not concave)
+Iteration 3:   log likelihood =  -9878.537  (not concave)
+Iteration 4:   log likelihood = -9877.4758  (not concave)
+Iteration 5:   log likelihood = -9874.9808  (not concave)
+Iteration 6:   log likelihood =  -9869.558  (not concave)
+Iteration 7:   log likelihood = -9866.9798  (not concave)
+Iteration 8:   log likelihood = -9866.9027  (not concave)
+Iteration 9:   log likelihood =  -9834.359  (not concave)
+Iteration 10:  log likelihood = -9833.6382  (not concave)
+Iteration 11:  log likelihood = -9831.8108  (not concave)
+Iteration 12:  log likelihood = -9830.0317  (not concave)
+Iteration 13:  log likelihood =  -9829.434  (not concave)
+Iteration 14:  log likelihood = -9828.2975  (not concave)
+Iteration 15:  log likelihood = -9827.7545  (not concave)
+Iteration 16:  log likelihood = -9826.3655  (not concave)
+Iteration 17:  log likelihood = -9821.2284  (not concave)
+Iteration 18:  log likelihood = -9820.1217  (not concave)
+Iteration 19:  log likelihood = -9817.7741  (not concave)
+Iteration 20:  log likelihood = -9817.7531  (not concave)
+Iteration 21:  log likelihood =  -9816.037  (not concave)
+Iteration 22:  log likelihood = -9814.7574  (not concave)
+Iteration 23:  log likelihood = -9814.3313  (not concave)
+Iteration 24:  log likelihood = -9813.6764  (not concave)
+Iteration 25:  log likelihood = -9813.5815  (not concave)
+Iteration 26:  log likelihood = -9812.8655  (not concave)
+Iteration 27:  log likelihood = -9812.4899  (not concave)
+Iteration 28:  log likelihood = -9812.2167  (not concave)
+Iteration 29:  log likelihood = -9812.2094  (not concave)
+Iteration 30:  log likelihood = -9810.9371  (not concave)
+Iteration 31:  log likelihood = -9810.3106  (not concave)
+Iteration 32:  log likelihood = -9809.9839  (not concave)
+Iteration 33:  log likelihood = -9809.3034  
+Iteration 34:  log likelihood = -9809.0462  
+Iteration 35:  log likelihood = -9808.9677  (not concave)
+Iteration 36:  log likelihood = -9808.3089  (not concave)
+Iteration 37:  log likelihood = -9807.9135  (not concave)
+Iteration 38:  log likelihood = -9807.8886  
+Iteration 39:  log likelihood = -9807.5695  (not concave)
+Iteration 40:  log likelihood = -9807.4291  (not concave)
+Iteration 41:  log likelihood = -9807.4205  
+Iteration 42:  log likelihood = -9807.3858  (not concave)
+Iteration 43:  log likelihood =  -9807.275  
+Iteration 44:  log likelihood = -9807.2626  
+Iteration 45:  log likelihood = -9807.2624  
+Iteration 46:  log likelihood = -9807.2624  
+Iteration 47:  log likelihood = -9807.2624  (backed up)
+Iteration 48:  log likelihood = -9807.2624  
+
+Probit model with endogenous regressors         Number of obs     =      3,000
+                                                Wald chi2(3)      =     192.17
+Log likelihood = -9807.2624                     Prob > chi2       =     0.0000
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+          y2 |   .4383731   .0416936    10.51   0.000     .3566552    .5200911
+          y3 |  -.3018246   .0397014    -7.60   0.000    -.3796379   -.2240112
+           x |  -.6163552   .0460588   -13.38   0.000    -.7066289   -.5260815
+       _cons |   .4786472   .0284162    16.84   0.000     .4229524     .534342
+------------------------------------------------------------------------------
+Instrumented:  y2 y3
+Instruments:   x z1 z2
+------------------------------------------------------------------------------
+Wald test of exogeneity:     chi2(2) =   259.34           Prob > chi2 = 0.0000
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1926_models9.log
+  log type:  text
+ closed on:   4 Nov 2026, 01:20:29
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

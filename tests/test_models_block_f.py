@@ -90,16 +90,18 @@ def test_gmm_moment_program_and_parameters():
     assert np.allclose(_bV(s)[1], V0, rtol=1e-4)
     _run("gmm gmm_poi, equations(m1) instruments(m1: x1 x2 z) nparameters(3)\n", s)
     assert list(s._estimates.names) == ["b1", "b2", "b3"]
-    _run("gmm (y - exp({b1}*x1 + {b2}*x2 + {b0})), instruments(x1 x2 z) parameters(b0 b1 b2)\n", s)
-    assert list(s._estimates.names) == ["b0", "b1", "b2"]
-    assert np.allclose(_bV(s)[0], b0[[2, 0, 1]], atol=1e-6)
 
 
-def test_gmm_parameters_must_match():
+
+def test_gmm_parameters_not_allowed_with_expressions():
+    # parameters() belongs to moment-evaluator programs (compat 1923)
     s = Session()
     _run(DATA, s)
-    rc = s.run_text("gmm (y - exp({b1}*x1 + {b0})), instruments(x1 z) parameters(b0 c)\n")
+    lines = []
+    s.output.add_listener(lambda t_, style: lines.append(t_))
+    rc = s.run_text("gmm (y - exp({b1}*x1 + {b0})), instruments(x1 z) parameters(b0 b1)\n")
     assert rc == 198
+    assert "parameters(b0 b1) not allowed with interactive version" in "".join(lines)
 
 
 def test_nlsur_programs():

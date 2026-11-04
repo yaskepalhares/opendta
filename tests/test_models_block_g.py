@@ -57,7 +57,7 @@ def test_slogit_dim2_constraints_and_fit():
                  " ( 4)  [phi2_2]_cons = 1"):
         assert line in out
     assert "dim1" in out and "dim2" in out and "/phi2_3" in out
-    assert s.eval("e(dim)") == 2.0
+    assert s.eval("e(k_dim)") == 2.0
     ll2 = s._estimates.extra["ll"]
     # the maximum: zero score, and dim(2) fits at least as well as dim(1)
     _run("slogit y x1 x2 x3\n", s)
@@ -105,7 +105,8 @@ def test_expoisson_condvars_absorbs_offset():
     b = _b(s)
     _, out = _run("expoisson c x1, condvars(x2) offset(x2)\n", s)
     assert abs(_b(s)[0] - b[0]) < 1e-8
-    assert "x2 |" not in out
+    # x2 only appears as the offset row (compat 1924)
+    assert "x2 |          1  (offset)" in out and out.count("x2 |") == 1
 
 
 def test_exlogistic_binomial_equals_expanded_data():
@@ -123,8 +124,11 @@ def test_exlogistic_group_condvars_estconstant():
     b_g = _b(s2)
     _run("exlogistic y x1 x2\n", s2)
     assert np.allclose(_b(s2), b_g, atol=1e-8)
-    _, out = _run("exlogistic y x1 x2, estconstant\n", s2)
+    _, out = _run("exlogistic y x1 x2, estconstant coef\n", s2)
     assert "_cons" in out
+    # with odds ratios the constant has no row (compat 1924)
+    _, out = _run("exlogistic y x1 x2, estconstant\n", s2)
+    assert "_cons" not in out
     _run("exlogistic y x1, condvars(x2)\n", s2)
     assert np.allclose(_b(s2), b_g[:1], atol=1e-8)
 
