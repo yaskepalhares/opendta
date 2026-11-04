@@ -87,7 +87,7 @@ A pasta `compat/` guarda do-files de verificação (`compat/do/`) e as saídas d
    cd "~/opendta/compat"
    do gerar_esperados.do
    ```
-   Sem argumento, ele roda só os casos que ainda não têm log em `compat/expected/`. `do gerar_esperados.do 1919` roda os casos cujo nome começa com `1919`, e `do gerar_esperados.do all` roda todos (use para refazer uma referência que mudou, ou depois de atualizar o Stata). Copie para `compat/expected/` só os logs dos casos que rodaram.
+   Sem argumento, ele roda só os casos que ainda não têm log em `compat/expected/`. `do gerar_esperados.do 1919` roda os casos cujo nome começa com `1919`, e `do gerar_esperados.do all` roda todos (use para refazer uma referência que mudou, ou depois de atualizar o Stata). Antes de rodar, ele apaga de `compat/stata/` os logs dos casos que já têm referência, de modo que depois de cada rodada essa pasta guarda só os logs novos; copie todos para `compat/expected/`. Um caso é novo até o seu log estar em `compat/expected/`: a partir daí, uma rodada sem argumento não o repete.
 3. Os arquivos `compat/stata/*.log` aparecem. O gerador força `set dp period` durante a execução e restaura a sua configuração no fim. A pasta `compat/stata/` não é rastreada pelo git, então a execução nunca bloqueia um `git pull`.
 4. Revise os logs, por exemplo contra o OpenDTA com `python tools/compare.py --expected compat/stata`, e copie-os para `compat/expected/` (as referências versionadas) num branch e pull request:
    ```bash
