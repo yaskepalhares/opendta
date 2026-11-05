@@ -283,6 +283,20 @@ def _resid_sscp(X: np.ndarray, Y: np.ndarray, w: np.ndarray):
     return R.T @ R, int(np.linalg.matrix_rank(Xw))
 
 
+def _test_mats(lam, stats, q: int, dfh: float, dfe: float) -> tuple:
+    """(eigvals, aux, stat) of one test: the s = min(q, df) nonzero eigenvalues, (s, m, n) and the
+    4 x 6 table of the statistics (type 1 = exact, 2 = approximate, 3 = upper bound)."""
+    sdim = int(min(q, dfh))
+    mpar, npar = (abs(q - dfh) - 1.0) / 2.0, (dfe - q - 1.0) / 2.0
+    code = {"e": 1.0, "a": 2.0, "u": 3.0}
+    stat = None
+    if stats:
+        stat = matrix(np.array([[r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"], code[r_["flag"]]]
+                                for r_ in stats]), ["W", "P", "L", "R"], ["statistic", "df1", "df2", "F", "p", "type"])
+    aux = matrix(np.array([[sdim], [mpar], [npar]], dtype=float), ["s", "m", "n"], ["aux"])
+    return matrix(np.asarray(lam[:sdim], dtype=float).reshape(1, -1)), aux, stat
+
+
 def _stat_rows(out, label: str, stats: list[dict], df_h: float) -> None:
     pieces = _wrap_label(label)
     for i, r in enumerate(stats):
@@ -386,26 +400,54 @@ def cmd_manova(s: "Session", args: str) -> None:
             out.write(rule + "\n", "text")
     out.write(f"{'Total':>20} |{int(N - 1):>20}\n{'':>10}{'-' * 67}\n", "text")
     out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
-    names_cols = ["statistic", "df1", "df2", "F", "p"]
-    mats = [("E", matrix(E, deps, deps)), ("H_m", matrix(Hm, deps, deps)),
-            ("eigvals_m", matrix(lam_m.reshape(1, -1), ["eigvals"], [f"c{i + 1}" for i in range(len(lam_m))])),
-            ("stat_m", matrix(np.array([[r["stat"], r["df1"], r["df2"], r["F"], r["p"]] for r in res["model"][0]]),
-                              ["W", "P", "L", "R"], names_cols))]
-    for j, (label, (stats, dfh, H)) in enumerate(rows[1:], start=1):
-        mats.append((f"H_{j}", matrix(H, deps, deps)))
-    scalars = [("N", N), ("k_dv", q), ("df_m", df_m), ("df_r", df_r), ("rank", rank)]
-    macros = [("cmdline", "manova " + args.strip()), ("cmd", "manova"), ("depvar", " ".join(deps)),
-              ("title", "Multivariate model"), ("model", "ols"), ("properties", "nob noV"), ("wtype", wtype)]
+    # e() in the order of Stata 14's ereturn list (compat 1929)
+    Xo = np.column_stack([_overparam_block(t_, data) for t_ in terms] + [one])
+    Xw = Xo * ww[:, None]
+    G = np.linalg.pinv(Xo.T @ Xw)
+    B = G @ Xw.T @ Y
+    fv = _design_fvnames(terms, data)
+    bm = matrix(B.T.reshape(1, -1), ["y1"], fv * q)
+    bm.coleq = [d_ for d_ in deps for _ in fv]
+    Vm = matrix(np.kron(E / df_r, G), fv * q, fv * q)
+    Vm.roweq = Vm.coleq = bm.coleq
+    mats = [("b", bm), ("V", Vm)]
+    for j in range(len(terms), 0, -1):
+        stats, err = tested.get(j - 1, (rows[j][1][0], None))
+        dfh, H = rows[j][1][1], rows[j][1][2]
+        He, dfe = (E, df_r) if err is None else (rows[err + 1][1][2], rows[err + 1][1][1])
+        lam = T.eig_ratio(He, H) if dfh > 0 and dfe > 0 else np.zeros(0)
+        eig, aux, stat = _test_mats(lam, stats, q, dfh, dfe)
+        mats += [(f"eigvals_{j}", eig), (f"aux_{j}", aux), (f"stat_{j}", stat), (f"H_{j}", matrix(H, deps, deps))]
+    eig, aux, stat = _test_mats(lam_m, res["model"][0], q, df_m, df_r)
+    mats += [("eigvals_m", eig), ("aux_m", aux), ("stat_m", stat), ("H_m", matrix(Hm, deps, deps)),
+             ("E", matrix(E, deps, deps)), ("B", matrix(B, fv, deps)), ("xpxinv", matrix(G, fv, fv))]
+    mats = [(k_, v_) for k_, v_ in mats if v_ is not None]
+    scalars = [("N", N), ("k", float(rank)), ("rank", float(rank * q)), ("df_m", df_m), ("df_r", df_r),
+               ("k_eq", float(q))] + [(f"df_{j}", float(rows[j][1][1])) for j in range(1, len(terms) + 1)]
+    # the univariate regression of each dependent variable (VERIFY: the number formats)
+    rss, tss = np.diag(E), np.diag(Ttot)
+    F_ = (tss - rss) / df_m / (rss / df_r)
+    pF = [float(T.st.f.sf(f_, df_m, df_r)) for f_ in F_]
+    indep = list(dict.fromkeys(n_ for t_ in terms for n_ in t_.variables))
+    macros = [("cmdline", "manova " + args.strip()), ("marginsnotok", "stdp Residuals STDDp"),
+              ("marginsdefault", " ".join(f"predict(xb equation({d_}))" for d_ in deps)),
+              ("p_F", " ".join(f"{x:.4f}" for x in pF)), ("F", " ".join(gnum(x).strip() for x in F_)),
+              ("r2", " ".join(f"{1 - r_ / t_:.4f}" for r_, t_ in zip(rss, tss))),
+              ("rmse", " ".join(gnum(math.sqrt(r_ / df_r)).strip() for r_ in rss)),
+              ("cmd", "manova"), ("predict", "manova_p"), ("estat_cmd", "manova_estat"), ("properties", "b V"),
+              ("depvar", " ".join(deps)), ("indepvars", " ".join(indep)), ("wtype", wtype)]
+    tm = []
     for j, t_ in enumerate(terms, start=1):
-        macros.append((f"term_{j}", t_.name))
+        tm.append((f"term_{j}", t_.name))
         err = tested.get(j - 1, (None, None))[1]
         if err is not None:
-            macros.append((f"errorterm_{j}", terms[err].name))
+            tm.append((f"errorterm_{j}", terms[err].name))
+    macros += tm[::-1]
     post_e(s, "manova", scalars, macros, mats, mask, int(N),
            extra={"manova": {"Y": Y, "w": ww, "blocks": blocks, "terms": [t_.name for t_ in terms],
                              "order": _design_order(terms, data),
                              "fvnames": _design_fvnames(terms, data),
-                             "Xo": np.column_stack([_overparam_block(t_, data) for t_ in terms] + [one]),
+                             "Xo": Xo,
                              "ref_blocks": [_reference_block(t_, data) for t_ in terms],
                              "nested": [bool(t_.nest) for t_ in terms],
                              "E": E, "rank": rank, "df_r": df_r, "deps": deps}})
@@ -630,15 +672,16 @@ def cmd_manovatest(s: "Session", args: str) -> None:
         raise StataError(506, "error matrix is singular")                                   # VERIFY
     lam = T.eig_ratio(Eh, H) if dfh > 0 else np.zeros(0)
     stats = T.mv_statistics(lam, q, dfh, dfe) if dfh > 0 else []
+    if Mt is not None:
+        lines = _ytransform_lines(Mt, m["deps"])
+        out.write(f"\n Transformation{'s' if len(lines) > 1 else ''} of the dependent variables\n", "text")
+        for i, line in enumerate(lines, start=1):
+            out.write(f" ({i})    {line}\n", "text")
     if Cm is not None:
         lines = _ytransform_lines(Cm, m["fvnames"])
-        out.write(f"\n Test constraint{'s' if len(lines) > 1 else ''}\n", "text")             # VERIFY: plural
+        out.write(f"\n Test constraint{'s' if len(lines) > 1 else ''}\n", "text")
         for i, line in enumerate(lines, start=1):
             out.write(f" ({i})    {line} = 0\n", "text")
-    if Mt is not None:
-        out.write("\n Transformations of the dependent variables\n", "text")
-        for i, line in enumerate(_ytransform_lines(Mt, m["deps"]), start=1):
-            out.write(f" ({i})    {line}\n", "text")
     out.write(f"\n{'':>23}W = Wilks' lambda      L = Lawley-Hotelling trace\n", "text")
     out.write(f"{'':>23}P = Pillai's trace     R = Roy's largest root\n\n", "text")
     out.write(f"{'Source':>20} | Statistic        df    F(df1,     df2) =   F   Prob>F\n", "text")
@@ -649,20 +692,14 @@ def cmd_manovatest(s: "Session", args: str) -> None:
     _label_df_row(out, elab, dfe)
     out.write(f"{'':>10}{'-' * 67}\n", "text")
     out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
-    # r() as Stata lists it: df, df_r; eigvals (the s = min(q, df) nonzero eigenvalues), aux
-    # (s, m, n), stat (4 x 6), E, H (compat 1917); the contents of aux and stat are VERIFY
-    sdim = int(min(q, dfh))
-    mpar, npar = (abs(q - dfh) - 1.0) / 2.0, (dfe - q - 1.0) / 2.0
-    code = {"e": 1.0, "a": 2.0, "u": 3.0}
-    stat = None
-    if stats:
-        stat = matrix(np.array([[r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"], code[r_["flag"]]]
-                                for r_ in stats]), ["W", "P", "L", "R"], ["statistic", "df1", "df2", "F", "p", "type"])
-    # return list shows the last stored first
-    s.r = {"H": matrix(H), "E": matrix(Eh), "stat": stat,
-           "aux": matrix(np.array([[sdim], [mpar], [npar]], dtype=float), ["s", "m", "n"], ["aux"]),
-           "eigvals": matrix(np.asarray(lam[:sdim], dtype=float).reshape(1, -1)),
-           "df_r": float(dfe), "df": float(dfh)}
+    # r() as Stata lists it (return list shows the last stored first): df, df_r, then eigvals,
+    # aux, stat, E, H; with an error term after the slash aux, stat, H, E, eigvals (compat 1917, 1929)
+    eig, aux, stat = _test_mats(lam, stats, q, dfh, dfe)
+    if den.strip():
+        s.r = {"eigvals": eig, "E": matrix(Eh), "H": matrix(H), "stat": stat, "aux": aux}
+    else:
+        s.r = {"H": matrix(H), "E": matrix(Eh), "stat": stat, "aux": aux, "eigvals": eig}
+    s.r.update({"df_r": float(dfe), "df": float(dfh)})
     s.r = {k_: v_ for k_, v_ in s.r.items() if v_ is not None}
 
 

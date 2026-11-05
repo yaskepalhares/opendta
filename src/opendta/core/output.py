@@ -26,6 +26,7 @@ class Output:
         self.quiet_depth = 0      # > 0 inside quietly
         self.noisy_depth = 0      # noisily inside quietly
         self.capture_depth = 0    # > 0 inside capture: silences even errors
+        self.linesize = lambda: 0   # the session's linesize; echoed lines wrap at it
 
     # -- ouvintes -------------------------------------------------------
     def add_listener(self, fn: Listener) -> None:
@@ -96,10 +97,13 @@ class Output:
         if isinstance(lines, str):
             lines = (lines,)
         self.ensure_line_start()
-        first, *rest = lines
-        self.write(". " + first + "\n", "command")
-        for cont in rest:
-            self.write("> " + cont + "\n", "command")
+        w = self.linesize() - 2
+        for k, line in enumerate(lines):
+            prefix = ". " if k == 0 else "> "
+            while w > 0 and len(line) > w:
+                self.write(prefix + line[:w] + "\n", "command")
+                line, prefix = line[w:], "> "
+            self.write(prefix + line + "\n", "command")
 
     def end_command(self) -> None:
         """Blank line after each command (as in Stata)."""

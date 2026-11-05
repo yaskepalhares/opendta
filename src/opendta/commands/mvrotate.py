@@ -55,7 +55,8 @@ def _spec(s, o: dict, p: int, k: int) -> dict:
     if method == "promax" and o.get("orthogonal"):
         raise StataError(198, "promax rotation is oblique; option orthogonal not allowed")   # VERIFY
     if oblique and method in ("varimax",) + R.ORTHOGONAL_ONLY:
-        raise StataError(198, f"{method} rotation is orthogonal only; option oblique not allowed")   # VERIFY
+        # VERIFY: seen for entropy only
+        raise StataError(198, f"the {method} criterion is not suitable for oblique rotations")
     arg, carg = None, ""
     val = o.get(method)
     if method == "promax":
@@ -71,7 +72,7 @@ def _spec(s, o: dict, p: int, k: int) -> dict:
             raise StataError(198, "option cf() requires an argument")                       # VERIFY
         arg = float(val)
         if not 0 <= arg <= 1:
-            raise StataError(198, "cf() must be in [0,1]")                                  # VERIFY
+            raise StataError(198, "cf() must be between 0 and 1")
         carg = f"{arg:g}"
     elif method in ("target", "partial"):
         names = str(val).split() if isinstance(val, str) else []
@@ -99,11 +100,17 @@ def _spec(s, o: dict, p: int, k: int) -> dict:
 def _ctitle(spec: dict) -> tuple[str, str]:
     """(criterion, ctitle) as rotatemat stores them in r(criterion) and r(ctitle)."""
     m = spec["method"]
-    if m in ("promax", "oblimin", "cf"):
+    if m in ("promax", "oblimin"):
         return m, f"{m}({spec['carg']})"
+    if m == "cf":
+        return m, f"Crawford-Ferguson({spec['carg']})"
     if m == "vgpf":
         return "varimax", "varimax"                                                          # VERIFY
-    return m, m
+    return m, _TITLES.get(m, m)
+
+
+_TITLES = {"entropy": "minimum entropy", "tandem1": "Comrey's principle 1", "tandem2": "Comrey's principle 2",
+           "bentler": "Bentler's invariant pattern simplicity"}
 
 
 def _random_T(k: int, oblique: bool) -> np.ndarray:
@@ -122,11 +129,11 @@ def rotate_matrix(s, A: np.ndarray, spec: dict) -> dict:
     trials = []
     if m == "varimax":
         L, T, _ = mv.orthomax(B, 1.0)
-        f, it = SYS, SYS
+        f, it, conv = SYS, SYS, True
     elif m == "promax":
         L, Tp, _ = mv.promax(B, spec["arg"])
         T = np.linalg.inv(Tp).T
-        f, it = SYS, SYS
+        f, it, conv = SYS, SYS, True
     else:
         opts = dict(oblique=obl, maxiter=spec["iterate"], tol=spec["tol"], gtol=spec["gtol"], ltol=spec["ltol"],
                     maxstep=spec["maxstep"])
@@ -143,15 +150,15 @@ def rotate_matrix(s, A: np.ndarray, spec: dict) -> dict:
         else:
             T0 = spec["T0"] if spec["T0"] is not None else (_random_T(k, obl) if spec["random"] else None)
             r_ = R.gpf(B, name, spec["arg"], T0=T0, **opts)
-        L, T, f, it = r_["L"], r_["T"], r_["f"], r_["iter"]
+        L, T, f, it, conv = r_["L"], r_["T"], r_["f"], r_["iter"], r_["converged"]
     L, T = R.orient(L, T)
-    return {"L": L * h[:, None], "T": T, "f": f, "iter": it, "trials": trials}
+    return {"L": L * h[:, None], "T": T, "f": f, "iter": it, "converged": conv, "trials": trials}
 
 
 def _trials(out, trials) -> None:
-    """protect(): one line per trial (VERIFY: spacing; the manual's example shows the values in %9.0g)."""
+    """protect(): one line per trial."""
     for i, r_ in enumerate(trials, start=1):
-        out.write(f"Trial {i:>2} : min criterion {gnum(r_['f']).strip()}\n", "text")
+        out.write(f"Trial {i:>3} : min criterion {gnum(r_['f']).strip():>10}\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +223,7 @@ def cmd_rotate(s: "Session", args: str) -> None:
     N = d["N"]
     var = ((As @ T) ** 2).sum(0)
     if kind == "factor" and oblique:
-        var = ((Lr @ Phi) ** 2).sum(0)                  # variance of the structure (VERIFY)
+        var = ((Lr @ Phi) ** 2).sum(0)                  # variance of the structure (compat 1929)
     if kind == "pca":
         unexpl = mv.pca_unexplained(d["C"], d["ev"], d["V"], kk)
         rho = float(d["ev"][:kk].sum() / d["trace"])
@@ -247,7 +254,7 @@ def cmd_rotate(s: "Session", args: str) -> None:
         resid = d["psi"]
     cn = ("Comp" if kind == "pca" else "Factor")
     cols = [f"{cn}{j + 1}" for j in range(kk)]
-    # pca shows the matrix with rotated = unrotated T; factor shows its inverse transpose (VERIFY)
+    # pca shows the matrix with rotated = unrotated T; factor shows its inverse transpose (compat 1929)
     Tshow = np.linalg.inv(T).T if kind == "factor" and oblique else T
     _table(out, ("Component" if kind == "pca" else "Factor") + " rotation matrix", cols, cols, Tshow, _f4, stub="",
            cw=9 if kind == "pca" else 8)
@@ -256,8 +263,8 @@ def cmd_rotate(s: "Session", args: str) -> None:
                  "ctitle": ctitle, "crit": crit, "norm": norm}
     est.extra["mv"] = d2
     base_s, base_m, base_t = est.extra["elist"]
-    # VERIFY: the layout of the r_ results follows the oblimin case of the reference log; r_fmin
-    # (the value of the rotation criterion) is stored only for the criteria that have one
+    # the r_ results as Stata 14 lists them (compat 1906, 1929); r_fmin (the value of the rotation
+    # criterion) is stored only for the criteria that have one
     rs = ([("r_fmin", fmin)] if fmin != SYS else []) + [("r_f", kk)]
     rm = [("r_normalization", "kaiser" if norm else "none"), ("r_ctitle", ctitle), ("r_criterion", crit),
           ("r_class", "oblique" if oblique else "orthogonal")]
@@ -282,7 +289,7 @@ def _fmt_cell(fmt: str):
 @command("rotatemat", "rotatemat")
 def cmd_rotatemat(s: "Session", args: str) -> None:
     """rotatemat matname [, options] ([MV] rotatemat): rotation of a Stata matrix. The layout
-    follows the manual's examples; the spacing of the header lines is VERIFY."""
+    follows Stata 14's output (compat/do/1929_multivariate2.do)."""
     from .matrix import get_matrix
     body, _, opt = args.partition(",")
     name = body.strip()
@@ -311,8 +318,10 @@ def cmd_rotatemat(s: "Session", args: str) -> None:
         if r_["f"] != SYS:
             lines += [("Criterion value", gnum(r_["f"]).strip()), ("Number of iterations", str(r_["iter"]))]
         for lab, val in lines:
-            out.write(f"    {lab:<22}{val}\n", "text")
-        cw = max(len(format_value(0.0, fmt)), 8)
+            out.write(f"    {lab:<24}{val}\n", "text")
+        if not r_["converged"]:
+            out.write("    Warning: convergence not achieved\n", "text")
+        cw = len(format_value(0.0, fmt)) + 1
         cname = str(o["colnames"]) if isinstance(o.get("colnames"), str) else "factors"
         if not o.get("noloading"):
             title = f"Rotated {cname}" + (f" (blanks represent abs()<{gnum(blanks).strip()})" if blanks else "")
@@ -320,12 +329,16 @@ def cmd_rotatemat(s: "Session", args: str) -> None:
         if not o.get("norotation"):
             _table(out, f"{'Oblique' if spec['oblique'] else 'Orthogonal'} rotation", cols, cols, r_["T"],
                    _fmt_cell(fmt), stub="", cw=cw)
-    res = {"AT": matrix(r_["L"], rows, cols), "T": matrix(r_["T"], cols, cols)}
+    # return list shows the results in reverse order of creation
+    res = {"T": matrix(r_["T"], cols, cols), "AT": matrix(r_["L"], rows, cols)}
     if r_["trials"]:
         res["fmin"] = matrix(np.array([[t_["f"] for t_ in r_["trials"]]]))
-    res.update({"carg": spec["carg"], "normalization": "kaiser" if spec["norm"] else "none", "class": cls,
-                "criterion": crit, "ctitle12": ctitle[:12], "ctitle": ctitle, "cmd": "rotatemat"})
+    res.update({"ctitle": ctitle, "ctitle12": ctitle[:12], "criterion": crit, "class": cls,
+                "normalization": "kaiser" if spec["norm"] else "none"})
+    if spec["carg"]:
+        res["carg"] = spec["carg"]
+    res["cmd"] = "rotatemat"
     if r_["trials"]:
         res["nnconv"] = float(sum(not t_["converged"] for t_ in r_["trials"]))
     res.update({"rc": 0.0, "iter": float(r_["iter"]) if r_["iter"] != SYS else SYS, "f": float(r_["f"])})
-    s.r = {k_: v_ for k_, v_ in res.items() if not (isinstance(v_, float) and v_ == SYS)}
+    s.r = res

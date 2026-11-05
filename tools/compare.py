@@ -54,10 +54,15 @@ _ABSPATH = re.compile(r"(?<=\(file )(?:[A-Za-z]:)?[\\/]\S*[\\/](odta_\S+)")
 def normalize(text: str) -> list[str]:
     out: list[str] = []
     lines = text.splitlines()
+    skipping = False
     for k, raw in enumerate(lines):
         line = _ABSPATH.sub(r"<folder>/\1", _STAMP.sub("<date>", raw.rstrip()))
         line = _DATASIG.sub(r'\1:<checksum>"', line)
-        if not line or _HEADER.match(line) or _SKIP.match(line):
+        # a skipped command takes its continuation lines (> ...) with it: a long path wraps
+        if skipping and line.startswith("> "):
+            continue
+        skipping = bool(_SKIP.match(line))
+        if not line or _HEADER.match(line) or skipping:
             continue
         if set(line) <= {"-"}:
             # only the dashed lines of the log header and footer are dropped; those of the tables

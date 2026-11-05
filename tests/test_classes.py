@@ -140,9 +140,10 @@ def test_instances_and_member_programs(cls):
 
 def test_type_mismatch_and_references(cls):
     cls(".coord = .coordinate.new 1 2\n.li = .line.new\n.newthing = 2")
-    for line in ('.newthing = "new"', ".coord.x = .li.midpoint", ".li.c0 = .li.length"):
+    for line, rc in (('.newthing = "new"', 4027), (".coord.x = .li.midpoint", 4027),
+                     (".li.c0 = .li.length", 4026)):
         cls(line)
-        assert cls.rc == 109
+        assert cls.rc == rc
     cls(".a.ref = .coord.ref\n.a.x = 99")
     assert show(cls, "`.coord.x' `.coord.ref_n'") == "99 2"
     cls(".a.ref = .a\n.a.x = 5")
@@ -173,7 +174,7 @@ def test_initialization_and_arrays(cls):
     cls(".t.list.Arrpop\n.t.list = {\"a\", , (1+1)}")
     assert show(cls, "`.t.list.arrnels' `.t.list[3]' `.t.list[3].objtype'") == "3 2 double"
     cls('.t.list[3] = "x"')
-    assert cls.rc == 109
+    assert cls.rc == 4027
     cls(".t.list.Arrdropall")
     assert show(cls, "`.t.list.arrnels'") == "0"
 
@@ -182,7 +183,7 @@ def test_declare_keys_and_builtins(cls):
     cls(".t = .todolist.new\n.t.Declare double extra = 3\n.t.Declare more = \"x\"")
     assert show(cls, "`.t.extra' `.t.more' `.t.dynamicmv.arrnels'") == "3 x 2"
     cls(".t.Declare double extra")
-    assert cls.rc == 110
+    assert cls.rc == 4017
     cls("local k `.t.objkey'")
     assert show(cls, "`.`k'.name'") == "nobody"
     assert show(cls, "`.t.isa' `.todolist.isa' `.t.n.isa' `.t.classname' |`.t.n.classname'|") \
@@ -221,15 +222,15 @@ def test_class_exit_outside_and_unknown_class(cls):
     cls("class exit 1")
     assert cls.rc == 198
     cls(".z = .nosuchclass.new")
-    assert cls.rc == 111
+    assert cls.rc == 4023
 
 
 def test_classutil(cls):
     cls(".coord = .coordinate.new 1 2\n.n1 = 3")
-    assert cls("classutil dir") == "  .coord\n  .n1\n"
+    assert cls("classutil dir") == ".coord  .n1\n"
     assert cls.session.r["list"] == ".coord .n1"
     cls("classutil describe .coord")
-    assert cls.session.r == {"type": "classname", "bitype": "instance"}
+    assert cls.session.r == {"type": "coordinate", "bitype": "instance"}
     cls("cutil describe coordinate")
     assert cls.session.r["bitype"] == "class"
     cls("classutil cdir coord*")
@@ -239,6 +240,6 @@ def test_classutil(cls):
     cls("classutil which nosuch")
     assert cls.rc == 601
     cls("classutil drop .coord.x")
-    assert cls.rc == 198
+    assert cls.rc == 459
     cls("classutil drop coord n1")
     assert cls("classutil dir") == ""

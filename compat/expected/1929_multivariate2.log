@@ -1,0 +1,1976 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1929_multivariate2.log
+  log type:  text
+ opened on:   5 Nov 2026, 15:46:43
+
+. * Multivariate statistics, part 3 (block 23a): rotate and rotatemat with the gradient projection
+. * criteria (vgpf, entropy, tandem1, tandem2, cf(), bentler, oblimax, quartimin, target(),
+. * partial(), protect()), pca with vce(normal) and means, estat factors and estat rotatecompare,
+. * the estat subcommands of canon, mvtest covariances with compound, block() and equals(),
+. * mvtest correlations with equals() and by() (Jennrich), mvtest normality with univariate and
+. * bivariate, manova with error terms (/ and nested terms) and manovatest with test().
+. * Every command whose layout or results the manual does not settle runs under capture noisily,
+. * so that one Stata run shows the whole case.
+. clear
+
+. * the data come from runiform(): OpenDTA does not reproduce Stata's rnormal() (case 0307)
+. set seed 1929
+
+. set obs 200
+number of observations (_N) was 0, now 200
+
+. gen f1 = invnormal(runiform())
+
+. gen f2 = invnormal(runiform())
+
+. gen g = 1 + mod(_n, 3)
+
+. gen h = 1 + mod(_n, 2)
+
+. forvalues i = 1/4 {
+  2.     gen x`i' = f1 + 0.4*f2 + invnormal(runiform())*.6
+  3. }
+
+. forvalues i = 5/8 {
+  2.     gen x`i' = f2 + 0.3*f1 + invnormal(runiform())*.6
+  3. }
+
+. gen y1 = x1 + g + invnormal(runiform())
+
+. gen y2 = x5 - h + invnormal(runiform())
+
+. 
+. * ---- rotatemat (the loading matrix of [MV] rotatemat)
+. matrix L = (601,019,388,221\372,-025,252,132\413,-117,388,144\487,-100,254,192\691,-304,-279,035\690,-409,-200,-076\677,-409,-292,084\674,-189,-099,122\697,-454,-212,-080\476,534,-486,092\558,332,-142,-090\472,508,-139,256\602,244,028,295\423,058,015,-4
+> 15\394,089,097,-362\510,095,347,-249\466,197,-004,-381\515,312,152,-147\443,089,109,-150\614,-118,126,-038\589,227,057,123\608,-107,127,-038\687,-044,138,098\651,177,-212,-017)
+
+. matrix colnames L = F1 F2 F3 F4
+
+. matrix L = L/1000
+
+. capture noisily rotatemat L, format(%6.3f)
+
+Rotation of L[24,4]
+
+    Criterion               varimax
+    Rotation class          orthogonal
+    Kaiser normalization    off
+
+Rotated factors
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              r1 |  0.247   0.151   0.679   0.128 
+              r2 |  0.171   0.060   0.425   0.078 
+              r3 |  0.206  -0.049   0.549   0.097 
+              r4 |  0.295   0.068   0.504   0.050 
+              r5 |  0.765   0.214   0.117   0.067 
+              r6 |  0.802   0.074   0.122   0.160 
+              r7 |  0.826   0.148   0.117  -0.008 
+              r8 |  0.612   0.230   0.290   0.061 
+              r9 |  0.840   0.049   0.112   0.152 
+             r10 |  0.166   0.846  -0.076   0.082 
+             r11 |  0.222   0.533   0.134   0.313 
+             r12 |  0.048   0.705   0.257   0.025 
+             r13 |  0.240   0.500   0.450   0.020 
+             r14 |  0.249   0.124   0.032   0.526 
+             r15 |  0.178   0.109   0.106   0.499 
+             r16 |  0.158   0.076   0.401   0.510 
+             r17 |  0.197   0.262   0.060   0.539 
+             r18 |  0.096   0.352   0.311   0.422 
+             r19 |  0.204   0.175   0.232   0.336 
+             r20 |  0.443   0.115   0.365   0.255 
+             r21 |  0.233   0.428   0.389   0.169 
+             r22 |  0.432   0.120   0.363   0.256 
+             r23 |  0.440   0.228   0.472   0.184 
+             r24 |  0.409   0.509   0.150   0.228 
+    ----------------------------------------------
+
+Orthogonal rotation
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              F1 |  0.677   0.438   0.475   0.352 
+              F2 | -0.632   0.737   0.049   0.232 
+              F3 | -0.376  -0.458   0.760   0.268 
+              F4 | -0.011   0.234   0.441  -0.866 
+    ----------------------------------------------
+
+. capture noisily return list
+
+scalars:
+                  r(f) =  .
+               r(iter) =  .
+                 r(rc) =  0
+
+macros:
+                r(cmd) : "rotatemat"
+      r(normalization) : "none"
+              r(class) : "orthogonal"
+          r(criterion) : "varimax"
+           r(ctitle12) : "varimax"
+             r(ctitle) : "varimax"
+
+matrices:
+                 r(AT) :  24 x 4
+                  r(T) :  4 x 4
+
+. capture noisily rotatemat L, quartimax format(%6.3f) norotation blanks(0.3)
+
+Rotation of L[24,4]
+
+    Criterion               quartimax
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         -1.032898
+    Number of iterations    35
+
+Rotated factors (blanks represent abs()<.3)
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              r1 |  0.374           0.630         
+              r2 |                  0.393         
+              r3 |                  0.513         
+              r4 |  0.379           0.450         
+              r5 |  0.791                         
+              r6 |  0.827                         
+              r7 |  0.838                         
+              r8 |  0.669                         
+              r9 |  0.860                         
+             r10 |          0.829                 
+             r11 |  0.316   0.521                 
+             r12 |          0.701                 
+             r13 |  0.348   0.482   0.393         
+             r14 |  0.316                   0.492 
+             r15 |                          0.469 
+             r16 |                  0.382   0.470 
+             r17 |                          0.503 
+             r18 |          0.357           0.383 
+             r19 |                                
+             r20 |  0.528                         
+             r21 |  0.342   0.414   0.340         
+             r22 |  0.517                         
+             r23 |  0.543           0.395         
+             r24 |  0.490   0.478                 
+    ----------------------------------------------
+
+. capture noisily return list
+
+scalars:
+                  r(f) =  -1.032897983346466
+               r(iter) =  35
+                 r(rc) =  0
+
+macros:
+                r(cmd) : "rotatemat"
+      r(normalization) : "none"
+              r(class) : "orthogonal"
+          r(criterion) : "quartimax"
+           r(ctitle12) : "quartimax"
+             r(ctitle) : "quartimax"
+
+matrices:
+                 r(AT) :  24 x 4
+                  r(T) :  4 x 4
+
+. capture noisily rotatemat L, oblimin oblique format(%6.3f) blanks(0.3)
+
+Rotation of L[24,4]
+
+    Criterion               oblimin(0)
+    Rotation class          oblique
+    Kaiser normalization    off
+    Criterion value         .1957363
+    Number of iterations    78
+
+Rotated factors (blanks represent abs()<.3)
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              r1 |          0.686                 
+              r2 |          0.430                 
+              r3 |          0.564                 
+              r4 |          0.507                 
+              r5 |  0.771                         
+              r6 |  0.808                         
+              r7 |  0.865                         
+              r8 |  0.560                         
+              r9 |  0.857                         
+             r10 |                  0.864         
+             r11 |                  0.460   0.305 
+             r12 |                  0.701         
+             r13 |          0.437   0.442         
+             r14 |                          0.571 
+             r15 |                          0.543 
+             r16 |          0.314           0.540 
+             r17 |                          0.584 
+             r18 |                          0.438 
+             r19 |                          0.341 
+             r20 |  0.325                         
+             r21 |          0.344   0.347         
+             r22 |  0.311                         
+             r23 |          0.417                 
+             r24 |                  0.428         
+    ----------------------------------------------
+
+Oblique rotation
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              F1 |  0.823   0.715   0.584   0.699 
+              F2 | -0.483   0.019   0.651   0.213 
+              F3 | -0.299   0.587  -0.435   0.207 
+              F4 | -0.006   0.379   0.213  -0.651 
+    ----------------------------------------------
+
+. capture noisily matlist r(T)'*r(T)
+
+             |        F1         F2         F3         F4 
+-------------+--------------------------------------------
+          F1 |         1                                  
+          F2 |  .4026978          1                       
+          F3 |   .294928   .2555824          1            
+          F4 |  .4146879   .3784689   .3183115          1 
+
+. capture noisily rotatemat L, promax blanks(0.3) format(%6.3f)
+
+Rotation of L[24,4]
+
+    Criterion               promax(3)
+    Rotation class          oblique
+    Kaiser normalization    off
+
+Rotated factors (blanks represent abs()<.3)
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              r1 |          0.775                 
+              r2 |          0.487                 
+              r3 |          0.647                 
+              r4 |          0.572                 
+              r5 |  0.786                         
+              r6 |  0.825                         
+              r7 |  0.888                         
+              r8 |  0.543                         
+              r9 |  0.878                         
+             r10 |                  0.921         
+             r11 |                  0.466         
+             r12 |                  0.728         
+             r13 |          0.468   0.441         
+             r14 |                          0.606 
+             r15 |                          0.570 
+             r16 |          0.364           0.539 
+             r17 |                          0.610 
+             r18 |                          0.425 
+             r19 |                          0.337 
+             r20 |          0.323                 
+             r21 |          0.369   0.336         
+             r22 |          0.322                 
+             r23 |          0.462                 
+             r24 |                  0.436         
+    ----------------------------------------------
+
+Oblique rotation
+
+    ----------------------------------------------
+                 |     F1      F2      F3      F4 
+    -------------+--------------------------------
+              F1 |  0.841   0.829   0.663   0.743 
+              F2 | -0.462   0.020   0.614   0.215 
+              F3 | -0.282   0.478  -0.386   0.159 
+              F4 | -0.012   0.290   0.184  -0.614 
+    ----------------------------------------------
+
+. capture noisily rotatemat L, vgpf norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               varimax
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         -.4962929
+    Number of iterations    32
+
+. capture noisily rotatemat L, entropy norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               minimum entropy
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         7.631619
+    Number of iterations    34
+
+. capture noisily rotatemat L, tandem1 norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               Comrey's principle 1
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         -9.956851
+    Number of iterations    258
+    Warning: convergence not achieved
+
+. capture noisily rotatemat L, tandem2 norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               Comrey's principle 2
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         26.12458
+    Number of iterations    240
+    Warning: convergence not achieved
+
+. capture noisily rotatemat L, cf(0.25) oblique norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               Crawford-Ferguson(0.25)
+    Rotation class          oblique
+    Kaiser normalization    off
+    Criterion value         1.354938
+    Number of iterations    70
+
+. capture noisily rotatemat L, bentler oblique norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               Bentler's invariant pattern simplicity
+    Rotation class          oblique
+    Kaiser normalization    off
+    Criterion value         .0444744
+    Number of iterations    69
+
+. capture noisily rotatemat L, oblimax norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               oblimax
+    Rotation class          orthogonal
+    Kaiser normalization    off
+    Criterion value         3.459796
+    Number of iterations    32
+
+. capture noisily rotatemat L, quartimin oblique norotation noloading
+
+Rotation of L[24,4]
+
+    Criterion               quartimin
+    Rotation class          oblique
+    Kaiser normalization    off
+    Criterion value         .1957363
+    Number of iterations    78
+
+. capture noisily rotatemat L, entropy oblique
+the entropy criterion is not suitable for oblique rotations
+
+. capture noisily rotatemat L, cf(2)
+cf() must be between 0 and 1
+
+. capture noisily rotatemat L, varimax normalize nodisplay
+
+. capture noisily return list
+
+scalars:
+                  r(f) =  .
+               r(iter) =  .
+                 r(rc) =  0
+
+macros:
+                r(cmd) : "rotatemat"
+      r(normalization) : "kaiser"
+              r(class) : "orthogonal"
+          r(criterion) : "varimax"
+           r(ctitle12) : "varimax"
+             r(ctitle) : "varimax"
+
+matrices:
+                 r(AT) :  24 x 4
+                  r(T) :  4 x 4
+
+. 
+. * ---- rotate after factor and pca
+. factor x1-x8, ipf factors(2)
+(obs=200)
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: (unrotated)                        Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |   Eigenvalue   Difference        Proportion   Cumulative
+    -------------+------------------------------------------------------------
+        Factor1  |      4.91057      3.69188            0.8012       0.8012
+        Factor2  |      1.21869      1.17738            0.1988       1.0000
+        Factor3  |      0.04131      0.00611            0.0067       1.0067
+        Factor4  |      0.03520      0.02790            0.0057       1.0125
+        Factor5  |      0.00730      0.01707            0.0012       1.0137
+        Factor6  |     -0.00977      0.01120           -0.0016       1.0121
+        Factor7  |     -0.02097      0.03210           -0.0034       1.0087
+        Factor8  |     -0.05308            .           -0.0087       1.0000
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.7869   -0.3961 |      0.2239  
+              x2 |   0.7864   -0.4574 |      0.1725  
+              x3 |   0.7948   -0.3742 |      0.2282  
+              x4 |   0.7917   -0.3099 |      0.2772  
+              x5 |   0.7700    0.4246 |      0.2268  
+              x6 |   0.7827    0.4025 |      0.2254  
+              x7 |   0.7876    0.4140 |      0.2084  
+              x8 |   0.7673    0.3207 |      0.3083  
+    -------------------------------------------------
+
+. capture noisily rotate, oblimin
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: orthogonal oblimin (Kaiser off)    Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Difference        Proportion   Cumulative
+    -------------+------------------------------------------------------------
+        Factor1  |      3.13642      0.14357            0.5117       0.5117
+        Factor2  |      2.99285            .            0.4883       1.0000
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8417    0.2600 |      0.2239  
+              x2 |   0.8838    0.2155 |      0.1725  
+              x3 |   0.8323    0.2812 |      0.2282  
+              x4 |   0.7854    0.3255 |      0.2772  
+              x5 |   0.2606    0.8398 |      0.2268  
+              x6 |   0.2851    0.8327 |      0.2254  
+              x7 |   0.2806    0.8443 |      0.2084  
+              x8 |   0.3307    0.7631 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.7207   0.6932 
+         Factor2 | -0.6932   0.7207 
+    --------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(f) =  2
+                  e(N) =  200
+               e(df_m) =  15
+               e(df_r) =  13
+             e(chi2_i) =  1336.91330442002
+               e(df_i) =  28
+                e(p_i) =  4.2968743618e-264
+              e(evsum) =  6.129246248501933
+             e(r_fmin) =  .2141904906656562
+                e(r_f) =  2
+
+macros:
+    e(r_normalization) : "none"
+            e(r_class) : "orthogonal"
+        e(r_criterion) : "oblimin"
+           e(r_ctitle) : "oblimin(0)"
+            e(cmdline) : "factor x1-x8, ipf factors(2)"
+                e(cmd) : "factor"
+       e(marginsnotok) : "_ALL"
+         e(properties) : "nob noV eigen"
+              e(title) : "Factor analysis"
+            e(predict) : "factor_p"
+          e(estat_cmd) : "factor_estat"
+         e(rotate_cmd) : "factor_rotate"
+           e(rngstate) : "XAAd5fd9d35e4cd216df316d7207844ea747edb3ac26847654d375bc90862776ee96dbb3f4395424b8bdb9de32d6fe6d7ae9f1be30325133d839b46ee8b8a35f6d211cc3c9666233b38802953bd0679e6c73d28529a4f64dca6c8f408347dce59e855db69ffcb5aaaa38e945ca67b22dd.."
+            e(factors) : "factors(2)"
+             e(mtitle) : "iterated principal factors"
+             e(method) : "ipf"
+
+matrices:
+               e(r_Ev) :  1 x 2
+              e(r_Phi) :  2 x 2
+                e(r_T) :  2 x 2
+                e(r_L) :  8 x 2
+                e(sds) :  1 x 8
+              e(means) :  1 x 8
+                  e(C) :  8 x 8
+                e(Phi) :  2 x 2
+                  e(L) :  8 x 2
+                e(Psi) :  1 x 8
+                 e(Ev) :  1 x 8
+
+functions:
+             e(sample)   
+
+. capture noisily rotate, cf(0.5) oblique
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: oblique cf (Kaiser off)            Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Proportion    Rotated factors are correlated
+    -------------+------------------------------------------------------------
+        Factor1  |      3.76849       0.6148
+        Factor2  |      3.75424       0.6125
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8300    0.1171 |      0.2239  
+              x2 |   0.8845    0.0619 |      0.1725  
+              x3 |   0.8153    0.1415 |      0.2282  
+              x4 |   0.7558    0.1974 |      0.2772  
+              x5 |   0.0854    0.8435 |      0.2268  
+              x6 |   0.1128    0.8313 |      0.2254  
+              x7 |   0.1054    0.8446 |      0.2084  
+              x8 |   0.1768    0.7487 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.8311   0.8287 
+         Factor2 | -0.5562   0.5597 
+    --------------------------------
+
+. capture noisily rotate, bentler oblique
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: oblique bentler (Kaiser off)       Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Proportion    Rotated factors are correlated
+    -------------+------------------------------------------------------------
+        Factor1  |      4.17293       0.6808
+        Factor2  |      4.14824       0.6768
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8829   -0.0033 |      0.2239  
+              x2 |   0.9504   -0.0716 |      0.1725  
+              x3 |   0.8631    0.0255 |      0.2282  
+              x4 |   0.7901    0.0953 |      0.2772  
+              x5 |  -0.0352    0.8997 |      0.2268  
+              x6 |  -0.0036    0.8822 |      0.2254  
+              x7 |  -0.0136    0.8977 |      0.2084  
+              x8 |   0.0783    0.7828 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.8945   0.8908 
+         Factor2 | -0.4470   0.4544 
+    --------------------------------
+
+. capture noisily rotate, oblimax
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: orthogonal oblimax (Kaiser off)    Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Difference        Proportion   Cumulative
+    -------------+------------------------------------------------------------
+        Factor1  |      3.13642      0.14358            0.5117       0.5117
+        Factor2  |      2.99284            .            0.4883       1.0000
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8417    0.2600 |      0.2239  
+              x2 |   0.8838    0.2155 |      0.1725  
+              x3 |   0.8323    0.2812 |      0.2282  
+              x4 |   0.7854    0.3255 |      0.2772  
+              x5 |   0.2606    0.8398 |      0.2268  
+              x6 |   0.2851    0.8327 |      0.2254  
+              x7 |   0.2806    0.8443 |      0.2084  
+              x8 |   0.3307    0.7631 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.7207   0.6932 
+         Factor2 | -0.6932   0.7207 
+    --------------------------------
+
+. capture noisily rotate, entropy
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: orthogonal entropy (Kaiser off)    Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Difference        Proportion   Cumulative
+    -------------+------------------------------------------------------------
+        Factor1  |      3.84985      1.57044            0.6281       0.6281
+        Factor2  |      2.27941            .            0.3719       1.0000
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.4519    0.7562 |      0.2239  
+              x2 |   0.4187    0.8076 |      0.1725  
+              x3 |   0.4704    0.7420 |      0.2282  
+              x4 |   0.5023    0.6859 |      0.2772  
+              x5 |   0.8776    0.0543 |      0.2268  
+              x6 |   0.8765    0.0797 |      0.2254  
+              x7 |   0.8868    0.0726 |      0.2084  
+              x8 |   0.8197    0.1406 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.8442   0.5360 
+         Factor2 |  0.5360  -0.8442 
+    --------------------------------
+
+. matrix W = (1,0\1,0\1,0\1,0\0,1\0,1\0,1\0,1)
+
+. capture noisily rotate, target(W) normalize
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: orthogonal target (Kaiser on)      Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Difference        Proportion   Cumulative
+    -------------+------------------------------------------------------------
+        Factor1  |      3.08843      0.04760            0.5039       0.5039
+        Factor2  |      3.04083            .            0.4961       1.0000
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8383    0.2709 |      0.2239  
+              x2 |   0.8809    0.2270 |      0.1725  
+              x3 |   0.8285    0.2920 |      0.2282  
+              x4 |   0.7811    0.3357 |      0.2772  
+              x5 |   0.2497    0.8431 |      0.2268  
+              x6 |   0.2742    0.8363 |      0.2254  
+              x7 |   0.2696    0.8479 |      0.2084  
+              x8 |   0.3208    0.7673 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.7117   0.7025 
+         Factor2 | -0.7025   0.7117 
+    --------------------------------
+
+. matrix Wt = J(8,2,1)
+
+. capture noisily rotate, partial(W Wt) oblique
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: oblique partial (Kaiser off)       Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Proportion    Rotated factors are correlated
+    -------------+------------------------------------------------------------
+        Factor1  |      4.32314       0.7053
+        Factor2  |      4.29730       0.7011
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.9247   -0.0669 |      0.2239  
+              x2 |   1.0002   -0.1433 |      0.1725  
+              x3 |   0.9020   -0.0354 |      0.2282  
+              x4 |   0.8206    0.0429 |      0.2772  
+              x5 |  -0.1001    0.9437 |      0.2268  
+              x6 |  -0.0658    0.9232 |      0.2254  
+              x7 |  -0.0773    0.9401 |      0.2084  
+              x8 |   0.0270    0.8132 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.9170   0.9132 
+         Factor2 | -0.3989   0.4076 
+    --------------------------------
+
+. set seed 123
+
+. capture noisily rotate, oblimin oblique normalize protect(5)
+
+Trial   1 : min criterion   .0141081
+Trial   2 : min criterion   .0141081
+Trial   3 : min criterion   .0141081
+Trial   4 : min criterion   .0141081
+Trial   5 : min criterion   .0141081
+
+Factor analysis/correlation                      Number of obs    =        200
+    Method: iterated principal factors           Retained factors =          2
+    Rotation: oblique oblimin (Kaiser on)        Number of params =         15
+
+    --------------------------------------------------------------------------
+         Factor  |     Variance   Proportion    Rotated factors are correlated
+    -------------+------------------------------------------------------------
+        Factor1  |      4.17781       0.6816
+        Factor2  |      4.14809       0.6768
+    --------------------------------------------------------------------------
+    LR test: independent vs. saturated:  chi2(28) = 1336.91 Prob>chi2 = 0.0000
+
+Rotated factor loadings (pattern matrix) and unique variances
+
+    -------------------------------------------------
+        Variable |  Factor1   Factor2 |   Uniqueness 
+    -------------+--------------------+--------------
+              x1 |   0.8840   -0.0051 |      0.2239  
+              x2 |   0.9515   -0.0736 |      0.1725  
+              x3 |   0.8642    0.0237 |      0.2282  
+              x4 |   0.7911    0.0937 |      0.2772  
+              x5 |  -0.0352    0.8998 |      0.2268  
+              x6 |  -0.0035    0.8822 |      0.2254  
+              x7 |  -0.0135    0.8977 |      0.2084  
+              x8 |   0.0785    0.7826 |      0.3083  
+    -------------------------------------------------
+
+Factor rotation matrix
+
+    --------------------------------
+                 | Factor1  Factor2 
+    -------------+------------------
+         Factor1 |  0.8953   0.8908 
+         Factor2 | -0.4455   0.4545 
+    --------------------------------
+
+. capture noisily estat rotatecompare
+
+Rotation matrix -- oblique oblimin (Kaiser on)
+
+    ------------------------------------
+        Variable |   Factor1    Factor2 
+    -------------+----------------------
+         Factor1 |    0.8953     0.8908 
+         Factor2 |   -0.4455     0.4545 
+    ------------------------------------
+
+Factor loadings
+
+    -----------------------------------------------------------
+                 |        Rotated       |       Unrotated      
+        Variable |   Factor1    Factor2 |   Factor1    Factor2 
+    -------------+----------------------+----------------------
+              x1 |    0.8840    -0.0051 |    0.7869    -0.3961 
+              x2 |    0.9515    -0.0736 |    0.7864    -0.4574 
+              x3 |    0.8642     0.0237 |    0.7948    -0.3742 
+              x4 |    0.7911     0.0937 |    0.7917    -0.3099 
+              x5 |   -0.0352     0.8998 |    0.7700     0.4246 
+              x6 |   -0.0035     0.8822 |    0.7827     0.4025 
+              x7 |   -0.0135     0.8977 |    0.7876     0.4140 
+              x8 |    0.0785     0.7826 |    0.7673     0.3207 
+    -----------------------------------------------------------
+
+. capture noisily estat common
+
+Correlation matrix of the oblimin(0) rotated common factors
+
+    ----------------------------------
+         Factors |  Factor1   Factor2 
+    -------------+--------------------
+         Factor1 |        1           
+         Factor2 |     .595         1 
+    ----------------------------------
+
+. capture noisily estat factors
+
+Factor analysis with different numbers of factors (maximum likelihood)
+
+    ----------------------------------------------------------
+    #factors |     loglik   df_m   df_r        AIC        BIC 
+    ---------+------------------------------------------------
+           1 |  -209.1658      8     20   434.3317   460.7182 
+           2 |  -6.668916     15     13   43.33783   92.81259 
+           3 |  -2.542783     21      7   47.08557   116.3502 
+           4 |  -.4680098     26      2   52.93602   138.6923 
+    ----------------------------------------------------------
+    the models with 3 4 factors are Heywood cases
+
+. capture noisily return list
+
+matrices:
+              r(stats) :  4 x 5
+
+. capture noisily estat factors, factors(2)
+
+Factor analysis with different numbers of factors (maximum likelihood)
+
+    ----------------------------------------------------------
+    #factors |     loglik   df_m   df_r        AIC        BIC 
+    ---------+------------------------------------------------
+           1 |  -209.1658      8     20   434.3317   460.7182 
+           2 |  -6.668916     15     13   43.33783   92.81259 
+    ----------------------------------------------------------
+    no Heywood cases encountered
+
+. pca x1-x8, comp(3)
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          3
+                                                 Trace            =          8
+    Rotation: (unrotated = principal)            Rho              =     0.8613
+
+    --------------------------------------------------------------------------
+       Component |   Eigenvalue   Difference         Proportion   Cumulative
+    -------------+------------------------------------------------------------
+           Comp1 |      5.14437      3.69932             0.6430       0.6430
+           Comp2 |      1.44506      1.14414             0.1806       0.8237
+           Comp3 |      .300916     .0292626             0.0376       0.8613
+           Comp4 |      .271653      .022301             0.0340       0.8953
+           Comp5 |      .249352     .0145307             0.0312       0.9264
+           Comp6 |      .234821     .0474297             0.0294       0.9558
+           Comp7 |      .187392     .0209567             0.0234       0.9792
+           Comp8 |      .166435            .             0.0208       1.0000
+    --------------------------------------------------------------------------
+
+Principal components (eigenvectors) 
+
+    ----------------------------------------------------------
+        Variable |    Comp1     Comp2     Comp3 | Unexplained 
+    -------------+------------------------------+-------------
+              x1 |   0.3541   -0.3612   -0.0797 |       .1643 
+              x2 |   0.3502   -0.3998    0.0562 |        .137 
+              x3 |   0.3580   -0.3429    0.1512 |       .1637 
+              x4 |   0.3603   -0.2962   -0.2096 |       .1923 
+              x5 |   0.3472    0.3817   -0.2217 |       .1546 
+              x6 |   0.3528    0.3603   -0.4849 |       .1014 
+              x7 |   0.3538    0.3662   -0.0093 |       .1623 
+              x8 |   0.3518    0.3078    0.7996 |      .03411 
+    ----------------------------------------------------------
+
+. capture noisily rotate, tandem1
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          3
+                                                 Trace            =          8
+    Rotation: orthogonal tandem1 (Kaiser off)    Rho              =     0.8613
+
+    --------------------------------------------------------------------------
+       Component |     Variance   Difference         Proportion   Cumulative
+    -------------+------------------------------------------------------------
+           Comp1 |       3.2734      .822077             0.4092       0.4092
+           Comp2 |      2.45133      1.28571             0.3064       0.7156
+           Comp3 |      1.16562            .             0.1457       0.8613
+    --------------------------------------------------------------------------
+
+Rotated components 
+
+    ----------------------------------------------------------
+        Variable |    Comp1     Comp2     Comp3 | Unexplained 
+    -------------+------------------------------+-------------
+              x1 |   0.5083    0.0299   -0.0546 |       .1643 
+              x2 |   0.5283   -0.0664    0.0470 |        .137 
+              x3 |   0.4901   -0.0758    0.1508 |       .1637 
+              x4 |   0.4709    0.1407   -0.1410 |       .1923 
+              x5 |  -0.0192    0.5561    0.0760 |       .1546 
+              x6 |   0.0091    0.6823   -0.1542 |       .1014 
+              x7 |  -0.0109    0.4407    0.2550 |       .1623 
+              x8 |   0.0012   -0.0145    0.9261 |      .03411 
+    ----------------------------------------------------------
+
+Component rotation matrix
+
+    --------------------------------------------
+                 |    Comp1     Comp2     Comp3 
+    -------------+------------------------------
+           Comp1 |   0.7033    0.5955    0.3883 
+           Comp2 |  -0.7101    0.6150    0.3429 
+           Comp3 |  -0.0346   -0.5169    0.8554 
+    --------------------------------------------
+
+. capture noisily rotate, quartimin oblique
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          3
+                                                 Trace            =          8
+    Rotation: oblique quartimin (Kaiser off)     Rho              =     0.8613
+
+    --------------------------------------------------------------------------
+       Component |     Variance   Proportion     Rotated comp. are correlated
+    -------------+------------------------------------------------------------
+           Comp1 |      3.28132       0.4102
+           Comp2 |      2.49318       0.3116
+           Comp3 |       1.3222       0.1653
+    --------------------------------------------------------------------------
+
+Rotated components 
+
+    ----------------------------------------------------------
+        Variable |    Comp1     Comp2     Comp3 | Unexplained 
+    -------------+------------------------------+-------------
+              x1 |   0.5083    0.0295   -0.0537 |       .1643 
+              x2 |   0.5283   -0.0659    0.0426 |        .137 
+              x3 |   0.4903   -0.0742    0.1459 |       .1637 
+              x4 |   0.4709    0.1395   -0.1340 |       .1923 
+              x5 |  -0.0183    0.5581    0.1069 |       .1546 
+              x6 |   0.0096    0.6820   -0.1166 |       .1014 
+              x7 |  -0.0098    0.4445    0.2796 |       .1623 
+              x8 |   0.0029   -0.0041    0.9259 |      .03411 
+    ----------------------------------------------------------
+
+Component rotation matrix
+
+    --------------------------------------------
+                 |    Comp1     Comp2     Comp3 
+    -------------+------------------------------
+           Comp1 |   0.7048    0.6013    0.4205 
+           Comp2 |  -0.7086    0.6201    0.3782 
+           Comp3 |  -0.0336   -0.5084    0.8274 
+    --------------------------------------------
+
+. capture noisily estat rotatecompare
+
+Rotation matrix -- oblique quartimin (Kaiser off)
+
+    -----------------------------------------------
+        Variable |     Comp1      Comp2      Comp3 
+    -------------+---------------------------------
+           Comp1 |    0.7048     0.6013     0.4205 
+           Comp2 |   -0.7086     0.6201     0.3782 
+           Comp3 |   -0.0336    -0.5084     0.8274 
+    -----------------------------------------------
+
+Component loadings
+
+    ---------------------------------------------------------------------------------
+                 |             Rotated             |            Unrotated            
+        Variable |     Comp1      Comp2      Comp3 |     Comp1      Comp2      Comp3 
+    -------------+---------------------------------+---------------------------------
+              x1 |    0.5083     0.0295    -0.0537 |    0.3541    -0.3612    -0.0797 
+              x2 |    0.5283    -0.0659     0.0426 |    0.3502    -0.3998     0.0562 
+              x3 |    0.4903    -0.0742     0.1459 |    0.3580    -0.3429     0.1512 
+              x4 |    0.4709     0.1395    -0.1340 |    0.3603    -0.2962    -0.2096 
+              x5 |   -0.0183     0.5581     0.1069 |    0.3472     0.3817    -0.2217 
+              x6 |    0.0096     0.6820    -0.1166 |    0.3528     0.3603    -0.4849 
+              x7 |   -0.0098     0.4445     0.2796 |    0.3538     0.3662    -0.0093 
+              x8 |    0.0029    -0.0041     0.9259 |    0.3518     0.3078     0.7996 
+    ---------------------------------------------------------------------------------
+
+. 
+. * ---- pca with vce(normal) and means
+. pca x1-x4, comp(2) vce(normal)
+(with PCA/correlation, SEs and tests are approximate)
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          2
+                                                 Trace            =          4
+                                                 Rho              =     0.8967
+SEs assume multivariate normality                SE(Rho)          =     0.0108
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+Eigenvalues  |
+       Comp1 |   3.312877   .3312736    10.00   0.000     2.663593    3.962162
+       Comp2 |   .2739832   .0257983    10.62   0.000     .2234195    .3245469
+-------------+----------------------------------------------------------------
+Comp1        |
+          x1 |   .5010434   .0171221    29.26   0.000     .4674847     .534602
+          x2 |   .5078613   .0157542    32.24   0.000     .4769837    .5387389
+          x3 |   .5004294   .0172286    29.05   0.000      .466662    .5341969
+          x4 |   .4905128   .0190478    25.75   0.000     .4531797    .5278459
+-------------+----------------------------------------------------------------
+Comp2        |
+          x1 |  -.4205687   .2094403    -2.01   0.045    -.8310642   -.0100732
+          x2 |  -.0381721   .1835432    -0.21   0.835    -.3979102    .3215659
+          x3 |  -.3569025   .2437507    -1.46   0.143    -.8346452    .1208401
+          x4 |   .8332379   .0539355    15.45   0.000     .7275262    .9389496
+------------------------------------------------------------------------------
+LR test for independence:       chi2(6)   =     643.83   Prob > chi2 =  0.0000
+LR test for   sphericity:       chi2(9)   =     645.73   Prob > chi2 =  0.0000
+
+Explained variance by components
+
+  Components | Eigenvalue  Proportion  SE_Prop  Cumulative   SE_Cum       Bias
+-------------+----------------------------------------------------------------
+     Comp1   |   3.312877      0.8282   0.0165      0.8282   0.0165    .003697
+     Comp2   |   .2739832      0.0685   0.0086      0.8967   0.0108    .007257
+     Comp3   |   .2184231      0.0546   0.0069      0.9513   0.0062    .002415
+     Comp4   |   .1947165      0.0487   0.0062      1.0000   0.0000    -.01337
+------------------------------------------------------------------------------
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  200
+              e(v_rho) =  .0001167066515793
+             e(chi2_i) =  643.8294489201376
+               e(df_i) =  6
+                e(p_i) =  8.1538250746e-136
+             e(chi2_s) =  645.7278508335497
+               e(df_s) =  9
+                e(p_s) =  3.1745201034e-136
+               e(rank) =  7
+                  e(f) =  2
+                e(rho) =  .8967151013221053
+              e(trace) =  4
+              e(lndet) =  -3.254403280135488
+               e(cond) =  4.12478464418644
+
+macros:
+            e(cmdline) : "pca x1-x4, comp(2) vce(normal)"
+                e(cmd) : "pca"
+              e(title) : "Principal components"
+       e(marginsnotok) : "_ALL"
+          e(estat_cmd) : "pca_estat"
+         e(rotate_cmd) : "pca_rotate"
+            e(predict) : "pca_p"
+              e(Ctype) : "correlation"
+                e(vce) : "multivariate normality"
+         e(properties) : "b V eigen"
+
+matrices:
+                  e(b) :  1 x 10
+                  e(V) :  10 x 10
+                e(sds) :  1 x 4
+              e(means) :  1 x 4
+                  e(C) :  4 x 4
+                e(Psi) :  1 x 4
+                 e(Ev) :  1 x 4
+                  e(L) :  4 x 2
+           e(Ev_stats) :  4 x 5
+            e(Ev_bias) :  1 x 4
+
+functions:
+             e(sample)   
+
+. capture noisily pca x1-x4, comp(2) vce(normal) novce
+(with PCA/correlation, SEs and tests are approximate)
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          2
+                                                 Trace            =          4
+    Rotation: (unrotated = principal)            Rho              =     0.8967
+
+    --------------------------------------------------------------------------
+       Component |   Eigenvalue   Difference         Proportion   Cumulative
+    -------------+------------------------------------------------------------
+           Comp1 |      3.31288      3.03889             0.8282       0.8282
+           Comp2 |      .273983     .0555601             0.0685       0.8967
+           Comp3 |      .218423     .0237066             0.0546       0.9513
+           Comp4 |      .194717            .             0.0487       1.0000
+    --------------------------------------------------------------------------
+
+Principal components (eigenvectors) 
+
+    ------------------------------------------------
+        Variable |    Comp1     Comp2 | Unexplained 
+    -------------+--------------------+-------------
+              x1 |   0.5010   -0.4206 |       .1199 
+              x2 |   0.5079   -0.0382 |       .1451 
+              x3 |   0.5004   -0.3569 |       .1355 
+              x4 |   0.4905    0.8332 |      .01269 
+    ------------------------------------------------
+
+. capture noisily pca x1-x4, means
+
+Principal components/correlation                 Number of obs    =        200
+                                                 Number of comp.  =          4
+                                                 Trace            =          4
+    Rotation: (unrotated = principal)            Rho              =     1.0000
+
+    --------------------------------------------------------------------------
+       Component |   Eigenvalue   Difference         Proportion   Cumulative
+    -------------+------------------------------------------------------------
+           Comp1 |      3.31288      3.03889             0.8282       0.8282
+           Comp2 |      .273983     .0555601             0.0685       0.8967
+           Comp3 |      .218423     .0237066             0.0546       0.9513
+           Comp4 |      .194717            .             0.0487       1.0000
+    --------------------------------------------------------------------------
+
+Principal components (eigenvectors) 
+
+    --------------------------------------------------------------------
+        Variable |    Comp1     Comp2     Comp3     Comp4 | Unexplained 
+    -------------+----------------------------------------+-------------
+              x1 |   0.5010   -0.4206   -0.5976    0.4636 |           0 
+              x2 |   0.5079   -0.0382   -0.1972   -0.8377 |           0 
+              x3 |   0.5004   -0.3569    0.7768    0.1367 |           0 
+              x4 |   0.4905    0.8332    0.0221    0.2542 |           0 
+    --------------------------------------------------------------------
+
+Summary statistics of the variables
+
+  -------------------------------------------------------------------
+      Variable |         Mean      Std. Dev.         Min          Max
+  -------------+-----------------------------------------------------
+            x1 |     .0921998      1.217645    -2.911861     3.643735
+            x2 |    -.0118511      1.194602    -3.514382     3.051367
+            x3 |      .053111       1.17301    -3.294151     3.641413
+            x4 |     .0108969      1.185056    -2.858506     3.115414
+  -------------------------------------------------------------------
+
+. capture noisily pca x1-x4, comp(2) covariance vce(normal) level(90)
+
+Principal components/covariance                  Number of obs    =        200
+                                                 Number of comp.  =          2
+                                                 Trace            =   5.690045
+                                                 Rho              =     0.8966
+SEs assume multivariate normality                SE(Rho)          =     0.0108
+
+------------------------------------------------------------------------------
+             |      Coef.   Std. Err.      z    P>|z|     [90% Conf. Interval]
+-------------+----------------------------------------------------------------
+Eigenvalues  |
+       Comp1 |    4.71369    .471349    10.00   0.000      3.93839     5.48899
+       Comp2 |   .3882266    .036526    10.63   0.000     .3281466    .4483065
+-------------+----------------------------------------------------------------
+Comp1        |
+          x1 |   .5130277   .0172467    29.75   0.000     .4846594     .541396
+          x2 |   .5087467   .0157541    32.29   0.000     .4828334    .5346599
+          x3 |   .4910111   .0170933    28.73   0.000     .4628951    .5191271
+          x4 |   .4867109   .0190033    25.61   0.000     .4554533    .5179686
+-------------+----------------------------------------------------------------
+Comp2        |
+          x1 |  -.4819764   .2039283    -2.36   0.018    -.8174086   -.1465441
+          x2 |  -.0254817   .1845155    -0.14   0.890    -.3289827    .2780194
+          x3 |  -.2893915   .2489295    -1.16   0.245    -.6988441     .120061
+          x4 |   .8266208   .0637982    12.96   0.000     .7216821    .9315596
+------------------------------------------------------------------------------
+LR test for independence:       chi2(6)   =     643.83   Prob > chi2 =  0.0000
+LR test for   sphericity:       chi2(9)   =     646.03   Prob > chi2 =  0.0000
+
+Explained variance by components
+
+  Components | Eigenvalue  Proportion  SE_Prop  Cumulative   SE_Cum       Bias
+-------------+----------------------------------------------------------------
+     Comp1   |    4.71369      0.8284   0.0165      0.8284   0.0165    .005252
+     Comp2   |   .3882266      0.0682   0.0085      0.8966   0.0108    .010425
+     Comp3   |    .309057      0.0543   0.0068      0.9510   0.0062     .00515
+     Comp4   |   .2790714      0.0490   0.0062      1.0000   0.0000   -.020828
+------------------------------------------------------------------------------
+
+. 
+. * ---- estat after canon
+. quietly canon (x1 x2 x3 y1) (x5 x6 x7 y2)
+
+. capture noisily estat correlations
+
+Correlations for variable list 1
+
+                 |       x1        x2        x3        y1 
+    -------------+----------------------------------------
+              x1 |   1.0000                               
+              x2 |   0.7975    1.0000                     
+              x3 |   0.7827    0.7899    1.0000           
+              y1 |   0.6723    0.5044    0.4921    1.0000 
+    ------------------------------------------------------
+
+Correlations for variable list 2
+
+                 |       x5        x6        x7        y2 
+    -------------+----------------------------------------
+              x5 |   1.0000                               
+              x6 |   0.7835    1.0000                     
+              x7 |   0.7697    0.7853    1.0000           
+              y2 |   0.7701    0.6136    0.6239    1.0000 
+    ------------------------------------------------------
+
+Correlations between variable lists 1 and 2
+
+                 |       x1        x2        x3        y1 
+    -------------+----------------------------------------
+              x5 |   0.4297    0.4276    0.4434    0.2567 
+              x6 |   0.4815    0.4160    0.4583    0.2708 
+              x7 |   0.4405    0.4253    0.4920    0.2559 
+              y2 |   0.2986    0.3070    0.3307    0.1466 
+    ------------------------------------------------------
+
+
+. capture noisily return list
+
+matrices:
+         r(corr_mixed) :  4 x 4
+          r(corr_var2) :  4 x 4
+          r(corr_var1) :  4 x 4
+
+. capture noisily estat loadings
+
+Canonical loadings for variable list 1
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |   0.9274    0.3272    0.1560    0.0923 
+              x2 |   0.8571   -0.1662    0.4603   -0.1606 
+              x3 |   0.9517   -0.2685   -0.1249    0.0806 
+              y1 |   0.5417    0.1267    0.3890    0.7343 
+    ------------------------------------------------------
+
+Canonical loadings for variable list 2
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x5 |   0.8750   -0.1363    0.4014   -0.2339 
+              x6 |   0.9369    0.3267   -0.0467   -0.1154 
+              x7 |   0.9353   -0.2916   -0.1957    0.0424 
+              y2 |   0.6391   -0.2123    0.0227   -0.7389 
+    ------------------------------------------------------
+
+Correlation between variable list 1 and canonical variates from list 2
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |   0.4939    0.0622    0.0182    0.0057 
+              x2 |   0.4565   -0.0316    0.0536   -0.0100 
+              x3 |   0.5069   -0.0510   -0.0146    0.0050 
+              y1 |   0.2885    0.0241    0.0453    0.0456 
+    ------------------------------------------------------
+
+Correlation between variable list 2 and canonical variates from list 1
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x5 |   0.4660   -0.0259    0.0468   -0.0145 
+              x6 |   0.4990    0.0621   -0.0054   -0.0072 
+              x7 |   0.4981   -0.0554   -0.0228    0.0026 
+              y2 |   0.3403   -0.0403    0.0026   -0.0459 
+    ------------------------------------------------------
+
+
+. capture noisily estat rotatecompare
+rotated coefficients not available
+
+. capture noisily estat rotate
+
+    Criterion         varimax
+    Rotation class    orthogonal
+    Normalization     none
+
+
+Rotated raw coefficients
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |  -0.2976   -0.4551    1.6097   -0.2816 
+              x2 |   1.3655   -0.4470   -0.5691    0.0828 
+              x3 |  -0.4215    1.4204   -0.3310   -0.1753 
+              y1 |  -0.1321    0.0166   -0.3187    0.7215 
+              x5 |   1.0902   -0.4773   -0.4220    1.0866 
+              x6 |  -0.4290   -0.3438    1.3910   -0.0689 
+              x7 |  -0.3649    1.2627   -0.4903    0.0888 
+              y2 |   0.1732    0.0515    0.0322   -0.8931 
+    ------------------------------------------------------
+
+Rotation matrix
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+               1 |   0.4703    0.6293    0.5730    0.2335 
+               2 |  -0.2853   -0.5364    0.7901    0.0816 
+               3 |   0.6691   -0.5295   -0.1688    0.4935 
+               4 |  -0.4997    0.1896   -0.1378    0.8339 
+    ------------------------------------------------------
+
+. capture noisily return list
+
+macros:
+       r(coefficients) : "raw coefficients"
+              r(class) : "orthogonal"
+          r(criterion) : "varimax"
+
+matrices:
+                 r(AT) :  8 x 4
+                  r(T) :  4 x 4
+
+. capture noisily estat rotate, stdcoefs format(%9.3f)
+
+    Criterion         varimax
+    Rotation class    orthogonal
+    Normalization     none
+
+
+Rotated standardized coefficients
+
+                 |         1          2          3          4 
+    -------------+--------------------------------------------
+              x1 |    -0.362     -0.554      1.960     -0.343 
+              x2 |     1.631     -0.534     -0.680      0.099 
+              x3 |    -0.494      1.666     -0.388     -0.206 
+              y1 |    -0.224      0.028     -0.540      1.223 
+              x5 |     1.366     -0.598     -0.529      1.361 
+              x6 |    -0.519     -0.416      1.683     -0.083 
+              x7 |    -0.459      1.588     -0.617      0.112 
+              y2 |     0.299      0.089      0.056     -1.540 
+    ----------------------------------------------------------
+
+Rotation matrix
+
+                 |         1          2          3          4 
+    -------------+--------------------------------------------
+               1 |     0.470      0.629      0.573      0.233 
+               2 |    -0.285     -0.536      0.790      0.082 
+               3 |     0.669     -0.530     -0.169      0.493 
+               4 |    -0.500      0.190     -0.138      0.834 
+    ----------------------------------------------------------
+
+. capture noisily estat rotate, loadings
+
+    Criterion         varimax
+    Rotation class    orthogonal
+    Normalization     none
+
+
+Rotated canonical loadings
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |   0.4011    0.3430    0.7508    0.3972 
+              x2 |   0.8388    0.3543    0.3042    0.2798 
+              x3 |   0.4004    0.8244    0.3431    0.2059 
+              y1 |   0.1120    0.2061    0.2436    0.9411 
+              x5 |   0.8359    0.3668    0.3582    0.1962 
+              x6 |   0.3739    0.4171    0.8187    0.1261 
+              x7 |   0.3710    0.8567    0.3328    0.1334 
+              y2 |   0.7456    0.3639    0.2965   -0.4731 
+    ------------------------------------------------------
+
+Rotation matrix
+
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+               1 |   0.4703    0.6293    0.5730    0.2335 
+               2 |  -0.2853   -0.5364    0.7901    0.0816 
+               3 |   0.6691   -0.5295   -0.1688    0.4935 
+               4 |  -0.4997    0.1896   -0.1378    0.8339 
+    ------------------------------------------------------
+
+. capture noisily estat rotatecompare
+
+Rotated canonical loadings -- orthogonal varimax
+
+    ------------------------------------------------------
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |   0.4011    0.3430    0.7508    0.3972 
+              x2 |   0.8388    0.3543    0.3042    0.2798 
+              x3 |   0.4004    0.8244    0.3431    0.2059 
+              y1 |   0.1120    0.2061    0.2436    0.9411 
+              x5 |   0.8359    0.3668    0.3582    0.1962 
+              x6 |   0.3739    0.4171    0.8187    0.1261 
+              x7 |   0.3710    0.8567    0.3328    0.1334 
+              y2 |   0.7456    0.3639    0.2965   -0.4731 
+    ------------------------------------------------------
+
+Unrotated canonical loadings
+
+    ------------------------------------------------------
+                 |        1         2         3         4 
+    -------------+----------------------------------------
+              x1 |   0.9274    0.3272    0.1560    0.0923 
+              x2 |   0.8571   -0.1662    0.4603   -0.1606 
+              x3 |   0.9517   -0.2685   -0.1249    0.0806 
+              y1 |   0.5417    0.1267    0.3890    0.7343 
+              x5 |   0.8750   -0.1363    0.4014   -0.2339 
+              x6 |   0.9369    0.3267   -0.0467   -0.1154 
+              x7 |   0.9353   -0.2916   -0.1957    0.0424 
+              y2 |   0.6391   -0.2123    0.0227   -0.7389 
+    ------------------------------------------------------
+
+. 
+. * ---- mvtest covariances and correlations
+. mvtest covariances x1 x2 x5, compound
+
+Test that covariance matrix is compound symmetric
+
+   Adjusted LR chi2(4) =     77.61
+           Prob > chi2 =    0.0000
+
+. capture noisily return list
+
+scalars:
+             r(p_chi2) =  5.58041912388e-16
+                 r(df) =  4
+               r(chi2) =  77.61223645461249
+
+macros:
+           r(chi2type) : "Adjusted LR"
+
+. mvtest covariances x1 x2 x5 x6, block(x1 x2 || x5 x6)
+
+Test that covariance matrix is block diagonal
+
+   Adjusted LR chi2(4) =     59.72
+           Prob > chi2 =    0.0000
+
+. capture noisily mvtest covariances x1 x2 x5 x6, block(x1 x2)
+
+Test that covariance matrix is block diagonal
+
+   Adjusted LR chi2(4) =     59.72
+           Prob > chi2 =    0.0000
+
+. quietly correlate x1 x2 x5, covariance
+
+. matrix S0 = r(C)
+
+. mvtest covariances x1 x2 x5, equals(S0)
+
+Test that covariance matrix equals matrix S0
+
+   Adjusted LR chi2(6) =     -0.00
+           Prob > chi2 =    1.0000
+
+. capture noisily mvtest covariances x1 x2 x5, by(g)
+
+Test of equality of covariance matrices across 3 samples
+
+      Modified LR chi2 =   13.4307
+    Box F(12,187988.9) =      1.09      Prob > F =  0.3594
+          Box chi2(12) =     13.14   Prob > chi2 =  0.3593
+
+. capture noisily return list
+
+scalars:
+             r(p_chi2) =  .3592871211143706
+                 r(df) =  12
+               r(chi2) =  13.1352524316371
+            r(p_F_Box) =  .3593562912030532
+           r(df_r_Box) =  187988.8815221551
+           r(df_m_Box) =  12
+              r(F_Box) =  1.094532925186401
+
+macros:
+           r(chi2type) : "Box"
+
+. capture noisily mvtest covariances x1 x2, compound spherical
+only one hypothesis may be specified
+
+. matrix C = (1, 0.75, 0 \ 0.75, 1, 0 \ 0, 0, 1)
+
+. mvtest correlations x1 x2 x5, equals(C)
+
+Test that correlation matrix equals specified pattern C
+
+      Jennrich chi2(3) =     44.35
+           Prob > chi2 =    0.0000
+
+. capture noisily return list
+
+scalars:
+             r(p_chi2) =  1.26999988588e-09
+                 r(df) =  3
+               r(chi2) =  44.35274840779299
+
+macros:
+           r(chi2type) : "Jennrich"
+
+. mvtest correlations x1 x2 x5, by(g)
+
+Test of equality of correlation matrices across samples
+
+      Jennrich chi2(6) =      9.49
+           Prob > chi2 =    0.1478
+
+. capture noisily mvtest correlations x1 x2 x5, by(g h)
+
+Test of equality of correlation matrices across samples
+
+     Jennrich chi2(15) =     14.69
+           Prob > chi2 =    0.4741
+
+. capture noisily return list
+
+scalars:
+             r(p_chi2) =  .4741129903282505
+                 r(df) =  15
+               r(chi2) =  14.68803846378701
+
+macros:
+           r(chi2type) : "Jennrich"
+
+. 
+. * ---- mvtest normality
+. mvtest normality x1 x2 x3, univariate bivariate stats(all)
+
+Test for univariate normality
+
+    ---------------------------------------------------------------------
+                 |                                   ------- joint ------
+        Variable |  Pr(Skewness)   Pr(Kurtosis)  adj chi2(2)    Prob>chi2
+    -------------+-------------------------------------------------------
+              x1 |     0.1130         0.8293           2.59       0.2743
+              x2 |     0.4860         0.8066           0.55       0.7593
+              x3 |     0.5365         0.4795           0.89       0.6404
+    ---------------------------------------------------------------------
+
+Doornik-Hansen test for bivariate normality
+
+    --------------------------------------------------------
+    Pair of variables          |      chi2    df   Prob>chi2
+    ---------------------------+----------------------------
+    x1            x2           |      3.93     4     0.4155
+                  x3           |      5.16     4     0.2708
+    x2            x3           |      3.72     4     0.4455
+    --------------------------------------------------------
+
+Test for multivariate normality
+
+    Mardia mSkewness =  .4676581    chi2(10) =   15.941   Prob>chi2 =  0.1013
+    Mardia mKurtosis =  15.37541     chi2(1) =    0.235   Prob>chi2 =  0.6279
+    Henze-Zirkler    =  .7162977     chi2(1) =    0.114   Prob>chi2 =  0.7361
+    Doornik-Hansen                   chi2(6) =    5.487   Prob>chi2 =  0.4830
+
+. capture noisily return list
+
+scalars:
+               r(p_dh) =  .4830199822984719
+              r(df_dh) =  6
+            r(chi2_dh) =  5.487077140711104
+            r(rank_hz) =  3
+               r(p_hz) =  .736143789854698
+               r(z_hz) =  -.3369643298189329
+               r(V_hz) =  .0203126042151764
+               r(E_hz) =  .7745150912240182
+                 r(hz) =  .7162976507963439
+         r(rank_mkurt) =  3
+            r(p_mkurt) =  .6279251225000635
+         r(chi2_mkurt) =  .2348849628452658
+            r(z_mkurt) =  .4846493194519784
+              r(mkurt) =  15.37540774859765
+         r(rank_mskew) =  3
+            r(p_mskew) =  .101322294244703
+           r(df_mskew) =  10
+         r(chi2_mskew) =  15.94139762305394
+              r(mskew) =  .4676580877581444
+
+matrices:
+               r(U_dh) :  3 x 4
+              r(Btest) :  3 x 3
+              r(Utest) :  3 x 4
+
+. capture noisily matrix list r(Utest)
+
+r(Utest)[3,4]
+       P_skew     P_kurt       chi2     P_chi2
+x1  .11296526   .8292626  2.5868645   .2743276
+x2  .48600866  .80655751  .55078094  .75927559
+x3  .53645554  .47948721  .89148052  .64035007
+
+. capture noisily matrix list r(Btest)
+
+r(Btest)[3,3]
+            chi2         df          p
+x1:x2  3.9301986          4  .41553485
+x1:x3  5.1643416          4  .27084684
+x2:x3  3.7181654          4  .44548939
+
+. capture noisily matrix list r(U_dh)
+
+r(U_dh)[3,4]
+            b1          b2          z1          z2
+x1   .10171391    3.274168   .60612137   1.1262673
+x2   .20769036   3.0803465   1.2288042   .28232977
+x3  -.15342029   3.3356012   -.9115865   1.1960587
+
+. capture noisily by h, sort: mvtest normality x1 x2 x3
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-> h = 1
+
+Test for multivariate normality
+
+    Doornik-Hansen                   chi2(6) =    6.808   Prob>chi2 =  0.3390
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-> h = 2
+
+Test for multivariate normality
+
+    Doornik-Hansen                   chi2(6) =    4.773   Prob>chi2 =  0.5733
+
+. 
+. * ---- manova with error terms
+. clear
+
+. * the data come from runiform(): OpenDTA does not reproduce Stata's rnormal() (case 0307)
+. set seed 2923
+
+. set obs 48
+number of observations (_N) was 0, now 48
+
+. gen a = 1 + mod(_n, 2)
+
+. gen b = 1 + mod(floor((_n - 1) / 2), 3)
+
+. gen c = 1 + mod(floor((_n - 1) / 6), 2)
+
+. gen u = invnormal(runiform()) + a + 0.3*b
+
+. gen v = invnormal(runiform()) - a + 0.2*c
+
+. manova u v = a / b|a /
+
+                       Number of obs =         48
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+               Model |W   0.4660         5     10.0     82.0     3.81 0.0003 e
+                     |P   0.5397               10.0     84.0     3.10 0.0021 a
+                     |L   1.1339               10.0     80.0     4.54 0.0000 a
+                     |R   1.1230                5.0     42.0     9.43 0.0000 u
+                     |-------------------------------------------------------
+            Residual |                  42
+          -----------+-------------------------------------------------------
+                   a |W   0.1903         1      2.0      3.0     6.38 0.0830 e
+                     |P   0.8097                2.0      3.0     6.38 0.0830 e
+                     |L   4.2552                2.0      3.0     6.38 0.0830 e
+                     |R   4.2552                2.0      3.0     6.38 0.0830 e
+                     |-------------------------------------------------------
+                 b|a |                   4
+          -----------+-------------------------------------------------------
+                 b|a |W   0.8057         4      8.0     82.0     1.17 0.3277 e
+                     |P   0.1962                8.0     84.0     1.14 0.3443 a
+                     |L   0.2388                8.0     80.0     1.19 0.3131 a
+                     |R   0.2286                4.0     42.0     2.40 0.0650 u
+                     |-------------------------------------------------------
+            Residual |                  42
+          -----------+-------------------------------------------------------
+               Total |                  47
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily ereturn list
+
+scalars:
+                  e(N) =  48
+                  e(k) =  6
+               e(rank) =  12
+               e(df_m) =  5
+               e(df_r) =  42
+               e(k_eq) =  2
+               e(df_1) =  1
+               e(df_2) =  4
+
+macros:
+            e(cmdline) : "manova u v = a / b|a /"
+       e(marginsnotok) : "stdp Residuals STDDp"
+     e(marginsdefault) : "predict(xb equation(u)) predict(xb equation(v))"
+                e(p_F) : "0.0443 0.0111"
+                  e(F) : "2.515943 3.416645"
+                 e(r2) : "0.2305 0.2891"
+               e(rmse) : ".918659 1.091493"
+                e(cmd) : "manova"
+            e(predict) : "manova_p"
+          e(estat_cmd) : "manova_estat"
+         e(properties) : "b V"
+             e(depvar) : "u v"
+          e(indepvars) : "a b"
+             e(term_2) : "b|a"
+        e(errorterm_1) : "b|a"
+             e(term_1) : "a"
+
+matrices:
+                  e(b) :  1 x 18
+                  e(V) :  18 x 18
+          e(eigvals_2) :  1 x 2
+              e(aux_2) :  3 x 1
+             e(stat_2) :  4 x 6
+                e(H_2) :  2 x 2
+          e(eigvals_1) :  1 x 1
+              e(aux_1) :  3 x 1
+             e(stat_1) :  4 x 6
+                e(H_1) :  2 x 2
+          e(eigvals_m) :  1 x 2
+              e(aux_m) :  3 x 1
+             e(stat_m) :  4 x 6
+                e(H_m) :  2 x 2
+                  e(E) :  2 x 2
+                  e(B) :  9 x 2
+             e(xpxinv) :  9 x 9
+
+functions:
+             e(sample)   
+
+. capture noisily manova u v = a / b|a / c|b|a /, dropemptycells
+
+                       Number of obs =         48
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+               Model |W   0.3828        11     22.0     70.0     1.96 0.0179 e
+                     |P   0.6858               22.0     72.0     1.71 0.0470 a
+                     |L   1.4328               22.0     68.0     2.21 0.0067 a
+                     |R   1.2942               11.0     36.0     4.24 0.0005 u
+                     |-------------------------------------------------------
+            Residual |                  36
+          -----------+-------------------------------------------------------
+                   a |W   0.1903         1      2.0      3.0     6.38 0.0830 e
+                     |P   0.8097                2.0      3.0     6.38 0.0830 e
+                     |L   4.2552                2.0      3.0     6.38 0.0830 e
+                     |R   4.2552                2.0      3.0     6.38 0.0830 e
+                     |-------------------------------------------------------
+                 b|a |                   4
+          -----------+-------------------------------------------------------
+                 b|a |W   0.1318         4      8.0     10.0     2.19 0.1218 e
+                     |P   0.9400                8.0     12.0     1.33 0.3164 a
+                     |L   6.0420                8.0      8.0     3.02 0.0694 a
+                     |R   5.9505                4.0      6.0     8.93 0.0106 u
+                     |-------------------------------------------------------
+               c|b|a |                   6
+          -----------+-------------------------------------------------------
+               c|b|a |W   0.8216         6     12.0     70.0     0.60 0.8331 e
+                     |P   0.1827               12.0     72.0     0.60 0.8326 a
+                     |L   0.2120               12.0     68.0     0.60 0.8343 a
+                     |R   0.1836                6.0     36.0     1.10 0.3804 u
+                     |-------------------------------------------------------
+            Residual |                  36
+          -----------+-------------------------------------------------------
+               Total |                  47
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily manovatest a / b|a
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+                   a |W   0.1903         1      2.0      3.0     6.38 0.0830 e
+                     |P   0.8097                2.0      3.0     6.38 0.0830 e
+                     |L   4.2552                2.0      3.0     6.38 0.0830 e
+                     |R   4.2552                2.0      3.0     6.38 0.0830 e
+                     |-------------------------------------------------------
+                 b|a |                   4
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily manovatest a / b|a c|b|a
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+                   a |W   0.2201         1      2.0      9.0    15.95 0.0011 e
+                     |P   0.7799                2.0      9.0    15.95 0.0011 e
+                     |L   3.5435                2.0      9.0    15.95 0.0011 e
+                     |R   3.5435                2.0      9.0    15.95 0.0011 e
+                     |-------------------------------------------------------
+           b|a c|b|a |                  10
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily return list
+
+scalars:
+                 r(df) =  1
+               r(df_r) =  10
+
+matrices:
+                r(aux) :  3 x 1
+               r(stat) :  4 x 6
+                  r(H) :  2 x 2
+                  r(E) :  2 x 2
+            r(eigvals) :  1 x 1
+
+. capture noisily manova u v = c / b|c a /
+
+                       Number of obs =         48
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+               Model |W   0.4589         6     12.0     80.0     3.17 0.0010 e
+                     |P   0.5631               12.0     82.0     2.68 0.0044 a
+                     |L   1.1308               12.0     78.0     3.68 0.0002 a
+                     |R   1.0865                6.0     41.0     7.42 0.0000 u
+                     |-------------------------------------------------------
+            Residual |                  41
+          -----------+-------------------------------------------------------
+                   c |W   0.9082         1      2.0      3.0     0.15 0.8656 e
+                     |P   0.0918                2.0      3.0     0.15 0.8656 e
+                     |L   0.1010                2.0      3.0     0.15 0.8656 e
+                     |R   0.1010                2.0      3.0     0.15 0.8656 e
+                     |-------------------------------------------------------
+                 b|c |                   4
+          -----------+-------------------------------------------------------
+                   a |W   0.5325         1      2.0     40.0    17.56 0.0000 e
+                     |P   0.4675                2.0     40.0    17.56 0.0000 e
+                     |L   0.8779                2.0     40.0    17.56 0.0000 e
+                     |R   0.8779                2.0     40.0    17.56 0.0000 e
+                     |-------------------------------------------------------
+            Residual |                  41
+          -----------+-------------------------------------------------------
+               Total |                  47
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. 
+. * ---- manovatest with test()
+. quietly manova u v = b
+
+. manovatest, showorder
+
+ Order of columns in the design matrix
+      1: (b==1)
+      2: (b==2)
+      3: (b==3)
+      4: _cons
+
+. matrix C = (1,-1,0,0 \ 1,0,-1,0)
+
+. capture noisily manovatest, test(C)
+
+ Test constraints
+ (1)    1.b - 2.b = 0
+ (2)    1.b - 3.b = 0
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+          manovatest |W   0.9264         2      4.0     88.0     0.86 0.4928 e
+                     |P   0.0736                4.0     90.0     0.86 0.4912 a
+                     |L   0.0795                4.0     86.0     0.85 0.4948 a
+                     |R   0.0794                2.0     45.0     1.79 0.1791 u
+                     |-------------------------------------------------------
+            Residual |                  45
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. capture noisily return list
+
+scalars:
+                 r(df) =  2
+               r(df_r) =  45
+
+matrices:
+            r(eigvals) :  1 x 2
+                r(aux) :  3 x 1
+               r(stat) :  4 x 6
+                  r(E) :  2 x 2
+                  r(H) :  2 x 2
+
+. matrix C1 = (2,-1,-1,0)
+
+. capture noisily manovatest, test(C1)
+
+ Test constraint
+ (1)    2*1.b - 2.b - 3.b = 0
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+          manovatest |W   0.9283         1      2.0     44.0     1.70 0.1948 e
+                     |P   0.0717                2.0     44.0     1.70 0.1948 e
+                     |L   0.0772                2.0     44.0     1.70 0.1948 e
+                     |R   0.0772                2.0     44.0     1.70 0.1948 e
+                     |-------------------------------------------------------
+            Residual |                  45
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. matrix Y1 = (1,-1)
+
+. capture noisily manovatest, test(C1) ytransform(Y1)
+
+ Transformation of the dependent variables
+ (1)    u - v
+
+ Test constraint
+ (1)    2*1.b - 2.b - 3.b = 0
+
+                       W = Wilks' lambda      L = Lawley-Hotelling trace
+                       P = Pillai's trace     R = Roy's largest root
+
+              Source | Statistic        df    F(df1,     df2) =   F   Prob>F
+          -----------+-------------------------------------------------------
+          manovatest |W   0.9294         1      1.0     45.0     3.42 0.0710 e
+                     |P   0.0706                1.0     45.0     3.42 0.0710 e
+                     |L   0.0760                1.0     45.0     3.42 0.0710 e
+                     |R   0.0760                1.0     45.0     3.42 0.0710 e
+                     |-------------------------------------------------------
+            Residual |                  45
+          -------------------------------------------------------------------
+                       e = exact, a = approximate, u = upper bound on F
+
+. matrix Cbad = (1,-1,0)
+
+. capture noisily manovatest, test(Cbad)
+conformability error
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1929_multivariate2.log
+  log type:  text
+ closed on:   5 Nov 2026, 15:46:45
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

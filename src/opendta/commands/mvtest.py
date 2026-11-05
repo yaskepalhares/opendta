@@ -133,7 +133,7 @@ def _mvtest_cov(s, rest: str) -> None:
     names = numeric_names(s, p.varlist, 2)
     hyp = [h for h in ("diagonal", "spherical", "compound", "equals", "block") if o.get(h)]
     if len(hyp) > 1:
-        raise StataError(198, f"options {hyp[0]} and {hyp[1]} may not be combined")       # VERIFY
+        raise StataError(198, "only one hypothesis may be specified")
     if o.get("by") and hyp:
         raise StataError(198, f"option {hyp[0]} not allowed with by()")                   # VERIFY
     X, w, g, mask, by = _groups(s, p, names, o)
@@ -148,13 +148,13 @@ def _mvtest_cov(s, rest: str) -> None:
             ns.append(sw)
         r = T.box_m(Ss, ns)
         out.write(f"\nTest of equality of covariance matrices across {len(levels)} samples\n\n", "text")
-        out.write(f"{'Modified LR chi2 =':>24}{r['M']:>10.5f}\n", "text")
+        out.write(f"{'Modified LR chi2 =':>24}{gnum(r['M']):>10}\n", "text")
         out.write(f"{'Box F(' + gnum(r['df']) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.2f}"
                   f"{'Prob > F =':>16}{r['p_F']:>8.4f}\n", "text")
         out.write(f"{'Box chi2(' + gnum(r['df']) + ') =':>24}{r['chi2']:>10.2f}{'Prob > chi2 =':>16}{r['p']:>8.4f}\n", "text")
-        # names as the manual's Stored results list them; the order of return list is VERIFY
-        s.r = {"chi2type": "Box", "p_F_Box": r["p_F"], "df_r_Box": r["df2"], "df_m_Box": r["df"], "F_Box": r["F"],
-               "p_chi2": r["p"], "df": r["df"], "chi2": r["chi2"]}
+        # return list shows them in reverse order
+        s.r = {"chi2type": "Box", "F_Box": r["F"], "df_m_Box": r["df"], "df_r_Box": r["df2"], "p_F_Box": r["p_F"],
+               "chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
         return
     mean, S, R, n = mv.weighted_moments(X, w)
     SN = S * (n - 1.0) / n
@@ -186,7 +186,7 @@ def _mvtest_cov(s, rest: str) -> None:
         r = T.lr_diagonal(R, n)
         title = "Test that covariance matrix is diagonal"
     _chi_lines(out, title, "Adjusted LR chi2", r["chi2"], r["df"], r["p"])
-    s.r = {"chi2type": "LR", "p_chi2": r["p"], "df": r["df"], "chi2": r["chi2"]}
+    s.r = {"chi2type": "Adjusted LR", "chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}   # VERIFY: seen for compound
 
 
 def _mvtest_corr(s, rest: str) -> None:
@@ -209,7 +209,7 @@ def _mvtest_corr(s, rest: str) -> None:
             ns.append(sw)
         r = T.jennrich_equal(Rs, ns)
         _chi_lines(out, "Test of equality of correlation matrices across samples", "Jennrich chi2", r["chi2"], r["df"], r["p"])
-        typ = "Wald"
+        typ = "Jennrich"
     else:
         mean, S, R, n = mv.weighted_moments(X, w)
         if isinstance(o.get("equals"), str):
@@ -222,16 +222,22 @@ def _mvtest_corr(s, rest: str) -> None:
             r = T.jennrich_one(R, C / np.outer(sd, sd), n)
             _chi_lines(out, f"Test that correlation matrix equals specified pattern {mname}", "Jennrich chi2",
                        r["chi2"], r["df"], r["p"])
-            typ = "Wald"
+            typ = "Jennrich"
         else:
             r = T.lawley(R, n)
             _chi_lines(out, "Test that correlation matrix is compound symmetric (all correlations equal)",
                        "Lawley chi2", r["chi2"], r["df"], r["p"])
             typ = "Lawley"                                                                     # VERIFY
-    s.r = {"chi2type": typ, "p_chi2": r["p"], "df": r["df"], "chi2": r["chi2"]}
+    s.r = {"chi2type": typ, "chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
 
 
 _NORM_STATS = ("dhansen", "hzirkler", "kurtosis", "skewness")
+
+
+def _mv_line(label: str, value, chi: str, chi2: float, p: float) -> str:
+    """One line of the multivariate normality tests."""
+    head = f"{label:<16} = {gnum(value):>9}" if value is not None else f"{label:<28}"
+    return f"    {head}{chi:>12} = {chi2:8.3f}   Prob>chi2 = {p:7.4f}\n"
 
 
 def _mvtest_norm(s, rest: str) -> None:
@@ -256,61 +262,62 @@ def _mvtest_norm(s, rest: str) -> None:
     res: dict = {}
     if o.get("univariate"):
         out.write("\nTest for univariate normality\n\n", "text")
-        out.write(f"{'':>46}------- joint ------\n", "text")
-        out.write("    Variable | Pr(Skewness)   Pr(Kurtosis)  adj chi2(2)    Prob>chi2\n", "text")
-        out.write(f"{'-' * 13}+{'-' * 58}\n", "text")
+        out.write(f"    {'-' * 69}\n{'':>17}|{'':>35}------- joint ------\n", "text")
+        out.write("        Variable |  Pr(Skewness)   Pr(Kurtosis)  adj chi2(2)    Prob>chi2\n", "text")
+        out.write(f"    {'-' * 13}+{'-' * 55}\n", "text")
         U = []
         for j, nm in enumerate(names):
             z1, z2 = _sk_z(X[:, j])
             ps, pk = 2 * float(T.st.norm.sf(abs(z1))), 2 * float(T.st.norm.sf(abs(z2)))
             K2, pj = _royston_adjust(z1 * z1 + z2 * z2, X.shape[0])
             U.append([ps, pk, K2, pj])
-            out.write(f"{nm[:12]:>12} |{ps:>11.4f}{pk:>15.4f}{K2:>13.2f}{pj:>13.4f}\n", "text")
-        out.write(f"{'-' * 72}\n", "text")
-        res["Utest"] = matrix(np.array(U), names, ["Pr_skew", "Pr_kurt", "adj_chi2", "Prob_chi2"])   # VERIFY: names
+            out.write(f"    {nm[:12]:>12} |{ps:>11.4f}{pk:>15.4f}{K2:>15.2f}{pj:>13.4f}\n", "text")
+        out.write(f"    {'-' * 69}\n", "text")
+        res["Utest"] = matrix(np.array(U), names, ["P_skew", "P_kurt", "chi2", "P_chi2"])
     if o.get("bivariate"):
         out.write("\nDoornik-Hansen test for bivariate normality\n\n", "text")
-        out.write(f"{'-' * 51}\n", "text")
-        out.write("   Pair of variables |      chi2    df   Prob>chi2\n", "text")
-        out.write(f"{'-' * 21}+{'-' * 29}\n", "text")
-        B = []
+        out.write(f"    {'-' * 56}\n", "text")
+        out.write(f"    {'Pair of variables':<27}|      chi2    df   Prob>chi2\n", "text")
+        out.write(f"    {'-' * 27}+{'-' * 28}\n", "text")
+        B, bnames = [], []
         for i in range(len(names)):
             for j in range(i + 1, len(names)):
                 d = T.doornik_hansen(X[:, [i, j]])
-                B.append([i + 1, j + 1, d["chi2"], d["df"], d["p"]])
-                left = names[i][:9] if j == i + 1 else ""
-                out.write(f"{left:>9} {names[j][:9]:<10} |{d['chi2']:>10.2f}{gnum(d['df']):>6}{d['p']:>12.4f}\n", "text")
-        out.write(f"{'-' * 51}\n", "text")
-        res["Btest"] = matrix(np.array(B), cols=["var1", "var2", "chi2", "df", "p"])          # VERIFY: names
+                B.append([d["chi2"], d["df"], d["p"]])
+                bnames.append((names[i], names[j]))
+                left = names[i][:12] if j == i + 1 else ""
+                out.write(f"    {left:<14}{names[j][:12]:<13}|{d['chi2']:>10.2f}{gnum(d['df']):>6}{d['p']:>11.4f}\n",
+                          "text")
+        out.write(f"    {'-' * 56}\n", "text")
+        Bm = matrix(np.array(B), [b_ for _, b_ in bnames], ["chi2", "df", "p"])
+        Bm.roweq = [a_ for a_, _ in bnames]
+        res["Btest"] = Bm
     out.write("\nTest for multivariate normality\n\n", "text")
     rank = float(np.linalg.matrix_rank(np.cov(X, rowvar=False)))
     if "skewness" in want or "kurtosis" in want:
         m = T.mardia(X)
     if "skewness" in want:
-        out.write(f"{'Mardia mSkewness =':>25}{gnum(m['b1']):>10}   chi2({gnum(m['df_skew'])}) = {m['chi2_skew']:>8.3f}"
-                  f"   Prob>chi2 = {m['p_skew']:.4f}\n", "text")
+        out.write(_mv_line("Mardia mSkewness", m["b1"], f"chi2({gnum(m['df_skew'])})", m["chi2_skew"], m["p_skew"]),
+                  "text")
         res.update({"mskew": m["b1"], "chi2_mskew": m["chi2_skew"], "df_mskew": m["df_skew"], "p_mskew": m["p_skew"],
                     "rank_mskew": rank})
     if "kurtosis" in want:
-        out.write(f"{'Mardia mKurtosis =':>25}{gnum(m['b2']):>10}   chi2(1) = {m['z_kurt'] ** 2:>8.3f}"
-                  f"   Prob>chi2 = {m['p_kurt']:.4f}\n", "text")
+        out.write(_mv_line("Mardia mKurtosis", m["b2"], "chi2(1)", m["z_kurt"] ** 2, m["p_kurt"]), "text")
         res.update({"mkurt": m["b2"], "chi2_mkurt": m["z_kurt"] ** 2, "z_mkurt": m["z_kurt"], "p_mkurt": m["p_kurt"],
                     "rank_mkurt": rank})
     if "hzirkler" in want:
         h = T.henze_zirkler(X)
-        out.write(f"{'Henze-Zirkler =':>25}{gnum(h['hz']):>10}   chi2(1) = {h['z'] ** 2:>8.3f}"
-                  f"   Prob>chi2 = {h['p']:.4f}\n", "text")
+        out.write(_mv_line("Henze-Zirkler", h["hz"], "chi2(1)", h["z"] ** 2, h["p"]), "text")
         res.update({k_: h[v_] for k_, v_ in (("hz", "hz"), ("E_hz", "E"), ("V_hz", "V"), ("z_hz", "z"), ("p_hz", "p"))
                     if v_ in h})
         res["rank_hz"] = rank
     if "dhansen" in want:
         d = T.doornik_hansen(X)
-        out.write(f"{'Doornik-Hansen':>18}{'':>19}chi2({gnum(d['df'])}) = {d['chi2']:>8.3f}   Prob>chi2 = {d['p']:>7.4f}\n", "text")
+        out.write(_mv_line("Doornik-Hansen", None, f"chi2({gnum(d['df'])})", d["chi2"], d["p"]), "text")
         res.update({"chi2_dh": d["chi2"], "df_dh": d["df"], "p_dh": d["p"]})
-        res["U_dh"] = matrix(d["U"], names, ["b1", "b2", "z(b1)", "z(b2)"])
-    # return list shows them in the order of the manual's Stored results (compat 1906 for the
-    # Doornik-Hansen results; VERIFY for the others); the dictionary is filled in reverse
+        res["U_dh"] = matrix(d["U"], names, ["b1", "b2", "z1", "z2"])
+    # return list shows them in this order (compat 1906, 1929); the dictionary is filled in reverse
     order = ["p_dh", "df_dh", "chi2_dh", "rank_hz", "p_hz", "z_hz", "V_hz", "E_hz", "hz", "rank_mkurt", "p_mkurt",
-             "z_mkurt", "chi2_mkurt", "mkurt", "rank_mskew", "p_mskew", "df_mskew", "chi2_mskew", "mskew",
+             "chi2_mkurt", "z_mkurt", "mkurt", "rank_mskew", "p_mskew", "df_mskew", "chi2_mskew", "mskew",
              "U_dh", "Btest", "Utest"]
     s.r = {k_: res[k_] for k_ in reversed(order) if k_ in res}
