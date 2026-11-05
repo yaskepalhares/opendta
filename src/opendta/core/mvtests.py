@@ -176,16 +176,67 @@ def lr_spherical(S: np.ndarray, n: float) -> dict:
     return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
 
 
-def lr_equal_correlations(Rs: list[np.ndarray], ns: list[float]) -> dict:
-    """Likelihood-ratio test that the correlation matrices of the groups are equal (Jennrich's
-    test is used by Stata for the general case; here the LR test with the pooled correlation)."""
-    g = len(Rs)
-    p = Rs[0].shape[0]
-    dfs = [n - 1.0 for n in ns]
-    Rp = sum(d * R for d, R in zip(dfs, Rs)) / sum(dfs)
-    stat = sum(dfs) * np.linalg.slogdet(Rp)[1] - sum(d * np.linalg.slogdet(R)[1] for d, R in zip(dfs, Rs))
-    df = (g - 1) * p * (p - 1) / 2.0
-    return {"chi2": float(stat), "df": df, "p": float(st.chi2.sf(stat, df))}
+def lr_equals_cov(S: np.ndarray, S0: np.ndarray, n: float) -> dict:
+    """LR test that the covariance matrix equals S0, with Bartlett's correction ([MV] mvtest
+    covariances, Methods and formulas; S has divisor n)."""
+    k = S.shape[0]
+    Su = S * n / (n - 1.0)
+    u = np.linalg.slogdet(S0)[1] - np.linalg.slogdet(Su)[1] + float(np.trace(Su @ np.linalg.inv(S0))) - k
+    chi2 = float((n - 1.0) * (1.0 - (2.0 * k + 1.0 - 2.0 / (k + 1.0)) / (6.0 * (n - 1.0) - 1.0)) * u)
+    df = k * (k + 1) / 2.0
+    return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
+
+
+def lr_compound_cov(S: np.ndarray, n: float) -> dict:
+    """LR test of a compound-symmetric covariance matrix (common variance and correlation), with
+    first-order Bartlett correction ([MV] mvtest covariances)."""
+    k = S.shape[0]
+    s2 = float(np.trace(S)) / k
+    r = float(S.sum() - np.trace(S)) / (k * (k - 1.0) * s2)
+    c = n - 1.0 - k * (k + 1.0) ** 2 * (2.0 * k - 3.0) / (6.0 * (k - 1.0) * (k * k + k - 4.0))
+    chi2 = float(c * (k * math.log(s2) + (k - 1.0) * math.log(1.0 - r) + math.log(1.0 + (k - 1.0) * r)
+                      - np.linalg.slogdet(S)[1]))
+    df = k * (k + 1) / 2.0 - 2.0
+    return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
+
+
+def lr_block_cov(S: np.ndarray, blocks: list[list[int]], n: float) -> dict:
+    """LR test that the covariance matrix is block diagonal with the given blocks of variable
+    indices, with first-order Bartlett correction ([MV] mvtest covariances)."""
+    k = S.shape[0]
+    ks = [len(b_) for b_ in blocks]
+    a2 = k ** 2 - sum(x ** 2 for x in ks)
+    a3 = k ** 3 - sum(x ** 3 for x in ks)
+    stat = sum(np.linalg.slogdet(S[np.ix_(b_, b_)])[1] for b_ in blocks) - np.linalg.slogdet(S)[1]
+    chi2 = float((n - 1.0 - (2.0 * a3 + 3.0 * a2) / (6.0 * a2)) * stat)
+    df = a2 / 2.0
+    return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
+
+
+def _jennrich_term(R: np.ndarray, R0: np.ndarray, n: float) -> float:
+    R0i = np.linalg.inv(R0)
+    Z = math.sqrt(n) * R0i @ (R - R0)
+    dz = np.diag(Z)
+    return float(0.5 * np.trace(Z @ Z) - dz @ np.linalg.solve(np.eye(len(R)) + R0 * R0i, dz))
+
+
+def jennrich_one(R: np.ndarray, R0: np.ndarray, n: float) -> dict:
+    """Jennrich's (1970) Wald test that the correlation matrix equals R0 ([MV] mvtest
+    correlations)."""
+    k = R.shape[0]
+    chi2 = _jennrich_term(R, R0, n)
+    df = k * (k - 1) / 2.0
+    return {"chi2": chi2, "df": df, "p": float(st.chi2.sf(chi2, df))}
+
+
+def jennrich_equal(Rs: list[np.ndarray], ns: list[float]) -> dict:
+    """Jennrich's (1970) Wald test that the correlation matrices of m samples are equal, against
+    the n-weighted mean correlation matrix ([MV] mvtest correlations)."""
+    k = Rs[0].shape[0]
+    Rbar = sum(n_ * R_ for n_, R_ in zip(ns, Rs)) / sum(ns)
+    chi2 = sum(_jennrich_term(R_, Rbar, n_) for n_, R_ in zip(ns, Rs))
+    df = (len(Rs) - 1) * k * (k - 1) / 2.0
+    return {"chi2": float(chi2), "df": df, "p": float(st.chi2.sf(chi2, df))}
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +252,8 @@ def mardia(X: np.ndarray) -> dict:
     G = Xc @ Si @ Xc.T
     b1 = float((G ** 3).sum() / (n * n))
     b2 = float((np.diag(G) ** 2).sum() / n)
-    chi_s = n * b1 / 6.0
+    # small-sample corrected statistic of [MV] mvtest normality, Methods and formulas
+    chi_s = (p + 1.0) * (n + 1.0) * (n + 3.0) / (6.0 * ((n + 1.0) * (p + 1.0) - 6.0)) * b1
     df_s = p * (p + 1) * (p + 2) / 6.0
     z_k = (b2 - p * (p + 2.0)) / math.sqrt(8.0 * p * (p + 2.0) / n)
     return {"b1": b1, "b2": b2, "chi2_skew": chi_s, "df_skew": df_s, "p_skew": float(st.chi2.sf(chi_s, df_s)),
@@ -262,7 +314,8 @@ def henze_zirkler(X: np.ndarray) -> dict:
     s2 = (2.0 * (1.0 + 4.0 * b2) ** (-p / 2.0)
           + 2.0 * a ** (-p) * (1.0 + 2.0 * p * b2 * b2 / (a * a) + 3.0 * p * (p + 2.0) * b2 ** 4 / (4.0 * a ** 4))
           - 4.0 * w ** (-p / 2.0) * (1.0 + 3.0 * p * b2 * b2 / (2.0 * w) + p * (p + 2.0) * b2 ** 4 / (2.0 * w * w)))
-    pmu = math.log(math.sqrt(mu ** 4 / (s2 + mu * mu)))
-    psig = math.sqrt(math.log((s2 + mu * mu) / (mu * mu)))
-    z = (math.log(hz) - pmu) / psig if hz > 0 else float("-inf")
-    return {"hz": hz, "z": z, "p": float(st.norm.sf(z))}
+    VZ = math.log(1.0 + s2 / (mu * mu))
+    EZ = math.log(mu) - VZ / 2.0
+    z = (math.log(hz) - EZ) / math.sqrt(VZ) if hz > 0 else float("-inf")
+    # the p-value is two-sided, p = 2 Phi(-|Z|) ([MV] mvtest normality, Methods and formulas)
+    return {"hz": hz, "z": z, "p": float(2.0 * st.norm.sf(abs(z))), "E": EZ, "V": VZ}

@@ -174,7 +174,8 @@ def test_canon_correlations_are_the_square_roots_of_the_eigenvalues(run):
 def test_mvtest_normality_stores_the_p_values(run):
     run(MV + "quietly mvtest normality x1 x2 x3, stats(all)")
     r = run.session.r
-    assert all(0 < r[k] < 1 for k in ("p_skew", "p_kurt", "p_hz", "p_dh"))
+    # the names of [MV] mvtest normality, Stored results
+    assert all(0 < r[k] < 1 for k in ("p_mskew", "p_mkurt", "p_hz", "p_dh"))
 
 
 # ---------------------------------------------------------------------------

@@ -226,13 +226,18 @@ _TERM = re.compile(r"^(?:(c|i)\.)?([A-Za-z_]\w*)$")
 class _Term:
     """A model term: crossed components (a#b) optionally nested in other variables (a|b)."""
 
-    def __init__(self, comps: list[tuple[str, bool]], nest: list[str]):
-        self.comps, self.nest = comps, nest
+    def __init__(self, comps: list[tuple[str, bool]], nest: list[str], seps: list[str] | None = None):
+        # seps: the separators between the nesting variables as typed (A|B|C nests A in the cells
+        # of B and C; the name keeps the "|")
+        self.comps, self.nest, self.seps = comps, nest, seps or ["#"] * max(len(nest) - 1, 0)
 
     @property
     def name(self) -> str:
         left = "#".join(n for n, _ in self.comps)
-        return left + ("|" + "#".join(self.nest) if self.nest else "")
+        if not self.nest:
+            return left
+        right = self.nest[0] + "".join(sp + n for sp, n in zip(self.seps, self.nest[1:]))
+        return left + "|" + right
 
     @property
     def variables(self) -> list[str]:
@@ -251,7 +256,8 @@ def _parse_terms(s: "Session", text: str, continuous: set[str]):
             segments.append([])
             continue
         left, bar, right = tok.partition("|")
-        nest = [s.expand_varlist(n)[0] for n in right.split("#")] if bar else []
+        nest = [s.expand_varlist(n)[0] for n in re.split(r"[|#]", right)] if bar else []
+        seps = re.findall(r"[|#]", right) if bar else []
         if "##" in left:
             from itertools import combinations
             comps = [_comp(s, p_, continuous) for p_ in left.split("##")]
@@ -259,7 +265,7 @@ def _parse_terms(s: "Session", text: str, continuous: set[str]):
         else:
             new = [[_comp(s, p_, continuous) for p_ in left.split("#")]]
         for c in new:
-            term = _Term(c, nest)
+            term = _Term(c, nest, seps)
             if term.key() not in seen:
                 seen.add(term.key())
                 segments[-1].append(term)
