@@ -567,6 +567,39 @@ def read_dta(path: str | Path) -> Dataset:
     return _read_legacy(p)
 
 
+def _goto(r: _Reader, pos: int, name: str) -> None:
+    """Moves past the opening tag of a section. Some files (Stata 13 ones
+    among them) hold 0 in a map entry: when the offset does not point at the
+    tag, look for it from the current position, since sections come in order."""
+    tag = f"<{name}>".encode()
+    if pos < 0 or not r.b.startswith(tag, pos):
+        pos = r.b.find(tag, r.p)
+        if pos == -1:
+            raise StataError(610, "file not Stata format")
+    r.p = pos + len(tag)
+
+
+def _find_data(f, pos: int) -> int:
+    """Offset of <data>: the map's when it points at the tag, otherwise the
+    first "</characteristics><data>" in the file."""
+    f.seek(pos)
+    if pos > 0 and f.read(6) == b"<data>":
+        return pos
+    tag = b"</characteristics><data>"
+    f.seek(0)
+    start, tail = 0, b""
+    while True:
+        chunk = f.read(CHUNK_BYTES)
+        if not chunk:
+            raise StataError(610, "file not Stata format")
+        buf = tail + chunk
+        j = buf.find(tag)
+        if j != -1:
+            return start - len(tail) + j + len(tag) - 6
+        tail = buf[-(len(tag) - 1):]
+        start += len(chunk)
+
+
 def _read_117plus(f, path: Path) -> Dataset:
     """Reads the metadata at once, the data in blocks of lines straight into
     the native vectors of each variable, and the end of the file (strLs and labels)
@@ -594,13 +627,13 @@ def _read_117plus(f, path: Path) -> Dataset:
     bo = r.bo
 
     # metadata: everything before <data>
+    data_pos = _find_data(f, offsets[9])
     f.seek(0)
-    r = _Reader(f.read(offsets[9]))
+    r = _Reader(f.read(data_pos))
     r.bo = bo
 
     def seek(k: int, name: str) -> None:
-        r.p = offsets[k]
-        r.expect(f"<{name}>")
+        _goto(r, offsets[k], name)
 
     seek(2, "variable_types")
     codes = [r.uint(2) for _ in range(K)]
@@ -642,9 +675,7 @@ def _read_117plus(f, path: Path) -> Dataset:
             raise StataError(610, f"unknown variable type {c}")
 
     # data, in blocks
-    f.seek(offsets[9])
-    if f.read(6) != b"<data>":
-        raise StataError(610, "file not Stata format")
+    f.seek(data_pos + 6)
     rec = sum(widths)
     cols: list[np.ndarray] = []
     for vtype in vtypes:
@@ -692,14 +723,12 @@ def _read_117plus(f, path: Path) -> Dataset:
         del block, buf
 
     # end of the file: strLs and value labels
-    f.seek(offsets[10])
+    base = f.tell()                          # right after the data: "</data><strls>"
     r = _Reader(f.read())
     r.bo = bo
-    base = offsets[10]
 
     def seek_tail(k: int, name: str) -> None:
-        r.p = offsets[k] - base
-        r.expect(f"<{name}>")
+        _goto(r, offsets[k] - base, name)
 
     seek_tail(10, "strls")
     gso: dict[tuple[int, int], str] = {}
