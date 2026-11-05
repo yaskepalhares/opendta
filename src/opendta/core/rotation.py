@@ -50,13 +50,12 @@ def criterion(name: str, L: np.ndarray, arg=None) -> tuple[float, np.ndarray]:
         Q = (np.ones((p, p)) - LL2) @ L2
         return float((L2 * Q).sum()), 4.0 * L * Q - G2
     if name == "bentler":
-        # VERIFY: the manual writes log det{(L2)'L2} - log det[diag{(L2)'L2}]; the scale and sign
-        # here (minus one quarter, so that simple structure is the minimum) are those of
-        # Bernaards and Jennrich (2005), whose notation the manual follows
+        # -log det{(L2)'L2} + log det[diag{(L2)'L2}]: the manual's criterion with the sign that
+        # makes simple structure the minimum; Stata 14 reports it at this scale
         M_ = L2.T @ L2
         D = np.diag(np.diag(M_))
-        f = -(np.linalg.slogdet(M_)[1] - np.linalg.slogdet(D)[1]) / 4.0
-        return float(f), -L * (L2 @ (np.linalg.inv(M_) - np.linalg.inv(D)))
+        f = -(np.linalg.slogdet(M_)[1] - np.linalg.slogdet(D)[1])
+        return float(f), -4.0 * L * (L2 @ (np.linalg.inv(M_) - np.linalg.inv(D)))
     if name == "oblimax":
         s4, s2 = float((L2 * L2).sum()), float(L2.sum())
         return -(np.log(s4) - 2.0 * np.log(s2)), -(4.0 * L ** 3 / s4 - 4.0 * L / s2)

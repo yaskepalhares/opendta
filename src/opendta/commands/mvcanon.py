@@ -82,13 +82,13 @@ def cmd_canon(s: "Session", args: str) -> None:
     S11, S22, S12 = C[:p1, :p1], C[p1:, p1:], C[:p1, p1:]
     cc = T.canonical(S11, S22, S12)
     r, A1, A2 = cc["r"], cc["A1"], cc["A2"]
-    # sign convention: the largest standardized coefficient (in absolute value) of each second-set
-    # column is positive; it reproduces the auto example of [MV] canon and compat 1906 (VERIFY)
+    # sign convention: the largest standardized coefficient (in absolute value) of each first-set
+    # column is positive; it reproduces the auto example of [MV] canon and compat 1906 and 1929
     k = len(r)
     sd1, sd2 = np.sqrt(np.diag(S11)), np.sqrt(np.diag(S22))
     for j in range(k):
-        z2 = A2[:, j] * sd2
-        if z2[np.argmax(np.abs(z2))] < 0:
+        z1 = A1[:, j] * sd1
+        if z1[np.argmax(np.abs(z1))] < 0:
             A1[:, j] *= -1
             A2[:, j] *= -1
     R11, R22 = S11 / np.outer(sd1, sd1), S22 / np.outer(sd2, sd2)
@@ -164,15 +164,15 @@ def _fmt_opt(rest: str, extra=None) -> tuple[str, dict]:
     return (str(o["format"]).strip() if isinstance(o.get("format"), str) else "%8.4f"), o
 
 
-def _show(s, title: str, M_, rows, cols, fmt: str) -> None:
-    """A titled matrix listed by matlist with the given format (VERIFY: border style)."""
+def _show(s, title: str, M_, rows, cols, fmt: str, border: str = "bottom") -> None:
+    """A titled matrix listed by matlist with the given format, indented by 4."""
     from .matrix import _store
     store = _store(s)
     tmp = "__canon_show"
     store[tmp] = matrix(M_, rows, cols)
     try:
         s.output.write(f"\n{title}\n", "text")
-        s.interp._execute_expanded(f"matlist {tmp}, format({fmt}) border(bottom)")
+        s.interp._execute_expanded(f"matlist {tmp}, format({fmt}) border({border}) left(4)")
     finally:
         store.pop(tmp, None)
 
@@ -186,9 +186,10 @@ def _estat_corr(s, est, rest):
     c = _canon(est)
     _show(s, "Correlations for variable list 1", c["R11"], c["n1"], c["n1"], fmt)
     _show(s, "Correlations for variable list 2", c["R22"], c["n2"], c["n2"], fmt)
-    _show(s, "Correlations between variable lists 1 and 2", c["R12"], c["n1"], c["n2"], fmt)
-    s.r = {"corr_mixed": matrix(c["R12"], c["n1"], c["n2"]), "corr_var2": matrix(c["R22"], c["n2"], c["n2"]),
-           "corr_var1": matrix(c["R11"], c["n1"], c["n1"])}
+    _show(s, "Correlations between variable lists 1 and 2", c["R12"].T, c["n2"], c["n1"], fmt)
+    # VERIFY: the orientation of r(corr_mixed)
+    s.r = {"corr_var1": matrix(c["R11"], c["n1"], c["n1"]), "corr_var2": matrix(c["R22"], c["n2"], c["n2"]),
+           "corr_mixed": matrix(c["R12"], c["n1"], c["n2"])}
 
 
 def _loadings(c) -> dict:
@@ -237,13 +238,13 @@ def _estat_rotate(s, est, rest):
     out = s.output
     out.write("\n", "text")
     for lab, val in (("Criterion", "varimax"), ("Rotation class", "orthogonal"), ("Normalization", "none")):
-        out.write(f"    {lab:<19}{val}\n", "text")                                        # VERIFY: spacing
+        out.write(f"    {lab:<18}{val}\n", "text")
     title = "Rotated " + _WHAT[what][0]
     _show(s, title, AT, rows, c["cn"], fmt)
     _show(s, "Rotation matrix", T, c["cn"], c["cn"], fmt)
     c["rot"] = {"AT": AT, "T": T, "what": what, "base": base, "rows": rows}
     s.r = {"T": matrix(T, c["cn"], c["cn"]), "AT": matrix(AT, rows, c["cn"]), "criterion": "varimax",
-           "class": "orthogonal", "coefficients": _WHAT[what][1]}
+           "class": "orthogonal", "coefficients": _WHAT[what][0]}   # VERIFY: seen for rawcoefs
 
 
 def _estat_rotatecompare(s, est, rest):
@@ -251,7 +252,7 @@ def _estat_rotatecompare(s, est, rest):
     c = _canon(est)
     rot = c["rot"]
     if rot is None:
-        raise StataError(321, "estat rotate must be run first")                               # VERIFY
+        raise StataError(321, "rotated coefficients not available")                          # VERIFY: code
     w_ = _WHAT[rot["what"]][0]
-    _show(s, f"Rotated {w_} orthogonal varimax", rot["AT"], rot["rows"], c["cn"], fmt)
-    _show(s, f"Unrotated {w_}", rot["base"], rot["rows"], c["cn"], fmt)
+    _show(s, f"Rotated {w_} -- orthogonal varimax", rot["AT"], rot["rows"], c["cn"], fmt, "top bottom")
+    _show(s, f"Unrotated {w_}", rot["base"], rot["rows"], c["cn"], fmt, "top bottom")

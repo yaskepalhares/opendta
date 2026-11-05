@@ -8,8 +8,7 @@
     classutil which classname [, all]
 
 `cutil` is a synonym of classutil. The object model is in lang/classes.py and lang/classeval.py.
-VERIFY: the manual does not show the output of classutil describe and classutil dir; the layout
-here is OpenDTA's own until it is checked against Stata (compat/do/1928_classes.do).
+The layout of classutil describe, dir and cdir follows Stata 14's output (compat/do/1928_classes.do).
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ import re
 from typing import TYPE_CHECKING
 
 from ..core.errors import ExitRequest, StataError
-from ..lang.classes import Array, ClassDef, Instance, system, type_of
+from ..lang.classes import ClassDef, Instance, system, type_of
 from ..lang.classeval import evaluator, parse_path
 from ..lang.words import split_words
 from ..lang.syntax import match_options
@@ -36,8 +35,7 @@ def cmd_class(s: "Session", args: str) -> None:
         raise StataError(198, "invalid syntax")
     cs = system(s)
     if not cs.ctx:
-        # VERIFY: Stata's message outside a member program
-        raise StataError(198, "class exit may be used only from class-member programs")
+        raise StataError(198, "command -class exit- can only be used in a class program")
     frame = cs.ctx[-1]
     if rest.strip():
         frame.retval = evaluator(s).rvalue(rest)
@@ -57,9 +55,9 @@ def _drop(s: "Session", rest: str) -> None:
     for n in names:
         n = n.lstrip(".")
         if "." in n or "[" in n:
-            raise StataError(198, f".{n} is not a top-level instance")     # VERIFY
+            raise StataError(459, f"{n}:  can only drop top-level objects")
         if n not in cs.globals:
-            raise StataError(111, f".{n} not found")                         # VERIFY
+            raise StataError(111, f".{n}:  object not found")
         cs.drop(n)
 
 
@@ -80,50 +78,54 @@ def _describe(s: "Session", rest: str) -> None:
         value, name = r[1].value, _dotted(target)
     else:
         raise StataError(198, f"{_dotted(target)} is not an object")       # VERIFY
-    out = s.output
-    out.write("\n")
+    if isinstance(value, (Instance, ClassDef)):
+        s.output.write("\n")
     _describe_value(s, name, value, bool(o.get("recurse")), set())
-    typ = "classname" if isinstance(value, (Instance, ClassDef)) else type_of(value)
-    bitype = ("class" if isinstance(value, ClassDef) else "instance") if typ == "classname" else typ
+    if isinstance(value, (Instance, ClassDef)):
+        typ = value.cls.name if isinstance(value, Instance) else value.name
+        bitype = "class" if isinstance(value, ClassDef) else "instance"
+    else:
+        typ = bitype = type_of(value)
     s.r = {"type": typ, "bitype": bitype}
+
+
+def _line(typ: str, name: str, v: object) -> str:
+    """One member: type, name and, for doubles and strings, the value."""
+    out = f"{typ:<12} {name}"
+    if isinstance(v, (float, str)):
+        out = f"{typ:<12} {name:<14}{_short(v)}"
+    return out
 
 
 def _describe_value(s: "Session", name: str, value: object, recurse: bool, seen: set) -> None:
     out = s.output
     if isinstance(value, ClassDef):
-        cls, inst = value, None
-        out.write(f"{name} is a class\n")
-    elif isinstance(value, Instance):
-        cls, inst = value.cls, value
-        out.write(f"{name} is an instance of {cls.name}\n")
-    else:
-        out.write(f"{name} is {_article(type_of(value))}{_short(value)}\n")
+        out.write(f"class {value.name} {{\n")
+        for scope in ("classwide", "instancespecific"):
+            decls = [d for d in value.effective().values() if d.scope == scope]
+            if decls:
+                out.write(f"   {scope}:\n")
+                for d in decls:
+                    out.write(f"       {d.type:<13} {d.name}\n")
+        out.write("}\n")
         return
-    if cls.parents:
-        out.write(f"  inherits from {' '.join(p.name for p in cls.parents)}\n")
+    if not isinstance(value, Instance):
+        out.write(_line(type_of(value), name, value) + "\n")
+        return
+    # VERIFY: classwide and dynamic members of an instance; arrays
+    out.write(f"{value.cls.name} {name}:\n")
     nested = []
-    for scope in ("classwide", "instancespecific"):
-        decls = [d for d in cls.effective().values() if d.scope == scope]
-        if not decls:
+    names = [n for n, d in value.cls.effective().items() if d.scope != "classwide"]
+    for n in names + value.dynamic:
+        hit = value.member(n)
+        if hit is None:
             continue
-        out.write(f"  {scope}:\n")
-        for d in decls:
-            v = d.value
-            if inst is not None and inst.member(d.name):
-                v = inst.member(d.name)[1].value
-            out.write(f"    {d.type:<12} .{d.name}{_short(v)}\n")
-            if isinstance(v, Instance):
-                nested.append((f"{name}.{d.name}", v))
-    if inst is not None and inst.dynamic:
-        out.write("  dynamic:\n")
-        for n in inst.dynamic:
-            v = inst.members[n].value
-            out.write(f"    {type_of(v):<12} .{n}{_short(v)}\n")
-            if isinstance(v, Instance):
-                nested.append((f"{name}.{n}", v))
-    programs = sorted({p for c in cls.mro() for p in c.programs})
-    if programs:
-        out.write("  programs: " + " ".join("." + p for p in programs) + "\n")
+        v = hit[1].value
+        decl = value.cls.effective().get(n)
+        typ = decl.type if decl is not None else type_of(v)
+        out.write("        " + _line(typ, "." + n, v) + "\n")
+        if isinstance(v, Instance):
+            nested.append((f"{name}.{n}", v))
     if recurse:
         for n, v in nested:
             if id(v) not in seen:
@@ -132,19 +134,23 @@ def _describe_value(s: "Session", name: str, value: object, recurse: bool, seen:
                 _describe_value(s, n, v, recurse, seen)
 
 
-def _article(t: str) -> str:
-    return ("an " if t[:1] in "aeiou" else "a ") + t
-
-
 def _short(v: object) -> str:
     if isinstance(v, float):
         from ..core.formats import number_to_macro
         return f" = {number_to_macro(v)}"
     if isinstance(v, str):
         return f' = "{v}"'
-    if isinstance(v, Array):
-        return f" ({len(v.items)} element{'s' if len(v.items) != 1 else ''})"
     return ""
+
+
+def _columns(s: "Session", names: list[str]) -> None:
+    """Names side by side, each column two wider than the longest name."""
+    if not names:
+        return
+    w = max(len(n) for n in names) + 2
+    per = max(1, (int(float(s.settings.get("linesize", 80))) + 2) // w)   # VERIFY: where Stata wraps
+    for i in range(0, len(names), per):
+        s.output.write("".join(f"{n:<{w}}" for n in names[i:i + per]).rstrip() + "\n")
 
 
 def _dir(s: "Session", rest: str) -> None:
@@ -156,12 +162,12 @@ def _dir(s: "Session", rest: str) -> None:
              if fnmatch.fnmatchcase(n, pattern.lstrip("."))]
     if o.get("all"):
         names += [(n, d) for n, d in cs.defs.items() if fnmatch.fnmatchcase(n, pattern)]
-    for n, v in names:
-        if o.get("detail"):
+    if o.get("detail"):
+        for n, v in names:
             kind = "class" if isinstance(v, ClassDef) else type_of(v)
-            s.output.write(f"  {n:<20} {kind}{_short(v)}\n")
-        else:
-            s.output.write(f"  {n}\n")
+            s.output.write(_line(kind, n, v) + "\n")
+    else:
+        _columns(s, [n for n, _ in names])
     s.r = {"list": " ".join(n for n, _ in names)}
 
 
@@ -181,8 +187,7 @@ def _class_files(s: "Session") -> list[str]:
 def _cdir(s: "Session", rest: str) -> None:
     pattern = rest.strip() or "*"
     names = sorted(n for n in _class_files(s) if fnmatch.fnmatchcase(n, pattern))
-    for n in names:
-        s.output.write(f"  {n}\n")
+    _columns(s, names)
     s.r = {"list": " ".join(names)}
 
 

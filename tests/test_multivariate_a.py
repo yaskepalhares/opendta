@@ -107,12 +107,12 @@ def test_orthogonal_criteria_that_the_manual_calls_equivalent():
 
 def test_rotatemat_varimax_promax_and_quartimax_output(run):
     out = run(L24_DO + "rotatemat L, format(%6.3f)")
-    assert "Criterion             varimax" in out and "Rotation class        orthogonal" in out
+    assert "Criterion               varimax" in out and "Rotation class          orthogonal" in out
     T_ = _m(run, "T")
     assert np.allclose(T_[0], [0.677, 0.438, 0.475, 0.352], atol=6e-4)        # manual
     assert np.allclose(_m(run, "AT")[0], [0.247, 0.151, 0.679, 0.128], atol=6e-4)
     out = run("rotatemat L, quartimax norotation blanks(0.3) format(%6.3f)")
-    assert "Criterion value       -1.032898" in out and "Number of iterations  35" in out
+    assert "Criterion value         -1.032898" in out and "Number of iterations    35" in out
     assert "Orthogonal rotation" not in out and "(blanks represent abs()<.3)" in out
     assert run.session.r["ctitle"] == "quartimax" and run.session.r["iter"] == 35
     run("rotatemat L, promax")
@@ -138,7 +138,7 @@ def test_rotate_after_factor_with_new_criteria(run):
     assert np.allclose(_m(run, "r_Phi"), np.eye(2))
     out = run("rotate, cf(0.5) oblique")
     assert "oblique cf (Kaiser off)" in out and "Rotated factors are correlated" in out
-    assert run.session.e["r_ctitle"] == "cf(0.5)" and "r_fmin" in run.session.e
+    assert run.session.e["r_ctitle"] == "Crawford-Ferguson(0.5)" and "r_fmin" in run.session.e
     run("matrix W = (1,0\\1,0\\1,0\\1,0\\0,1\\0,1\\0,1\\0,1)")
     out = run("rotate, target(W) normalize")
     assert "orthogonal target (Kaiser on)" in out
@@ -210,7 +210,7 @@ def test_pca_vce_against_the_audiometric_example():
     # manual (the correlations are printed with 4 decimals, hence the tolerances)
     assert se[0] == pytest.approx(0.5556453, abs=2e-4)
     assert v["b"][0] / se[0] == pytest.approx(np.sqrt(50))
-    assert se[8] == pytest.approx(0.0429963, abs=2e-4)                 # lft500 in Comp1
+    assert se[2] == pytest.approx(0.0429963, abs=2e-4)                 # lft500 in Comp1
     assert np.sqrt(v["v_rho"]) == pytest.approx(0.0273, abs=1e-4)
     assert v["se_prop"][0] == pytest.approx(0.0394, abs=1e-4) and v["se_prop"][1] == pytest.approx(0.0271, abs=1e-4)
     assert v["bias"][0] == pytest.approx(0.056663, abs=2e-4)
@@ -226,8 +226,8 @@ def test_pca_vce_normal_and_means(run):
     assert "(with PCA/correlation, SEs and tests are approximate)" in out
     assert "SEs assume multivariate normality" in out and "Explained variance by components" in out
     e = run.session.e
-    assert e["properties"] == "b V" and e["vce"] == "multivariate normality"
-    assert e["b"].data.shape == (1, 4 + 2 * 4) and e["b"].coleq[0] == "Eigenvalues" and e["b"].coleq[4] == "Comp1"
+    assert e["properties"] == "b V eigen" and e["vce"] == "multivariate normality"
+    assert e["b"].data.shape == (1, 2 + 2 * 4) and e["b"].coleq[0] == "Eigenvalues" and e["b"].coleq[2] == "Comp1"
     assert e["Ev_stats"].data.shape == (4, 5)
     out = run("pca x1-x4, comp(2) vce(normal) novce")
     assert "Principal components (eigenvectors)" in out and "Std. Err." not in out
@@ -252,11 +252,11 @@ def test_canon_estat_loadings_and_rotation(run):
     T_, AT = _m(run, "T"), _m(run, "AT")
     assert np.allclose(T_.T @ T_, np.eye(3), atol=1e-10)
     assert np.allclose(AT, np.vstack([L11, L22]) @ T_)
-    assert run.session.r["coefficients"] == "loadings" and run.session.r["criterion"] == "varimax"
+    assert run.session.r["coefficients"] == "canonical loadings" and run.session.r["criterion"] == "varimax"
     out = run("estat rotatecompare")
     assert "Unrotated canonical loadings" in out
     run("estat rotate, stdcoefs")
-    assert run.session.r["coefficients"] == "stdcoefs"
+    assert run.session.r["coefficients"] == "standardized coefficients"
     out = run("estat correlations")
     assert "Correlations between variable lists 1 and 2" in out
     assert _m(run, "corr_var1").shape == (3, 3)
@@ -292,7 +292,7 @@ def test_mvtest_covariances_and_correlations(run):
     out = run("mvtest covariances x1 x2 x5, compound")
     assert "Test that covariance matrix is compound symmetric" in out and run.session.r["df"] == 4
     out = run("mvtest covariances x1 x2 x5 x6, block(x1 x2 || x5 x6)")
-    assert "block diagonal" in out and run.session.r["df"] == 4 and run.session.r["chi2type"] == "LR"
+    assert "block diagonal" in out and run.session.r["df"] == 4 and run.session.r["chi2type"] == "Adjusted LR"
     run("quietly correlate x1 x2 x5, covariance\nmatrix S0 = r(C)")
     run("mvtest covariances x1 x2 x5, equals(S0)")
     assert run.session.r["chi2"] == pytest.approx(0.0, abs=1e-8) and run.session.r["df"] == 6
@@ -300,7 +300,7 @@ def test_mvtest_covariances_and_correlations(run):
     assert {"F_Box", "df_m_Box", "df_r_Box", "p_F_Box"} <= set(run.session.r)
     run("matrix C = I(3)")
     out = run("mvtest correlations x1 x2 x5, equals(C)")
-    assert "Jennrich chi2(3)" in out and run.session.r["chi2type"] == "Wald"
+    assert "Jennrich chi2(3)" in out and run.session.r["chi2type"] == "Jennrich"
     out = run("mvtest correlations x1 x2 x5, by(g h)")
     assert "Test of equality of correlation matrices across samples" in out and run.session.r["df"] == 15
     run("mvtest covariances x1 x2, compound spherical")
@@ -313,11 +313,11 @@ def test_mvtest_normality_univariate_and_bivariate(run):
     assert out.index("Test for univariate normality") < out.index("Doornik-Hansen test for bivariate normality") \
         < out.index("Mardia mSkewness") < out.index("Henze-Zirkler") < out.index("Doornik-Hansen  ")
     U, B = _m(run, "Utest"), _m(run, "Btest")
-    assert U.shape == (3, 4) and B.shape == (3, 5)
+    assert U.shape == (3, 4) and B.shape == (3, 3)
     run("quietly sktest x2")
     assert U[1, 3] == pytest.approx(run.session.r["P_chi2"])
     X = np.column_stack([run.session.data.get(v).data for v in ("x1", "x3")])
-    assert B[1, 2] == pytest.approx(T.doornik_hansen(X)["chi2"])
+    assert B[1, 0] == pytest.approx(T.doornik_hansen(X)["chi2"])
     run("mvtest normality x1 x2 x3, stats(hz kurt)")
     r = run.session.r
     assert {"hz", "E_hz", "V_hz", "z_hz", "p_hz", "mkurt", "z_mkurt"} <= set(r) and "p_dh" not in r

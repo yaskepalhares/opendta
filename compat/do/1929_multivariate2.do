@@ -7,20 +7,21 @@
 * Every command whose layout or results the manual does not settle runs under capture noisily,
 * so that one Stata run shows the whole case.
 clear
+* the data come from runiform(): OpenDTA does not reproduce Stata's rnormal() (case 0307)
 set seed 1929
 set obs 200
-gen f1 = rnormal()
-gen f2 = rnormal()
+gen f1 = invnormal(runiform())
+gen f2 = invnormal(runiform())
 gen g = 1 + mod(_n, 3)
 gen h = 1 + mod(_n, 2)
 forvalues i = 1/4 {
-    gen x`i' = f1 + 0.4*f2 + rnormal()*.6
+    gen x`i' = f1 + 0.4*f2 + invnormal(runiform())*.6
 }
 forvalues i = 5/8 {
-    gen x`i' = f2 + 0.3*f1 + rnormal()*.6
+    gen x`i' = f2 + 0.3*f1 + invnormal(runiform())*.6
 }
-gen y1 = x1 + g + rnormal()
-gen y2 = x5 - h + rnormal()
+gen y1 = x1 + g + invnormal(runiform())
+gen y2 = x5 - h + invnormal(runiform())
 
 * ---- rotatemat (the loading matrix of [MV] rotatemat)
 matrix L = (601,019,388,221\372,-025,252,132\413,-117,388,144\487,-100,254,192\691,-304,-279,035\690,-409,-200,-076\677,-409,-292,084\674,-189,-099,122\697,-454,-212,-080\476,534,-486,092\558,332,-142,-090\472,508,-139,256\602,244,028,295\423,058,015,-415\394,089,097,-362\510,095,347,-249\466,197,-004,-381\515,312,152,-147\443,089,109,-150\614,-118,126,-038\589,227,057,123\608,-107,127,-038\687,-044,138,098\651,177,-212,-017)
@@ -117,13 +118,14 @@ capture noisily by h, sort: mvtest normality x1 x2 x3
 
 * ---- manova with error terms
 clear
+* the data come from runiform(): OpenDTA does not reproduce Stata's rnormal() (case 0307)
 set seed 2923
 set obs 48
 gen a = 1 + mod(_n, 2)
 gen b = 1 + mod(floor((_n - 1) / 2), 3)
 gen c = 1 + mod(floor((_n - 1) / 6), 2)
-gen u = rnormal() + a + 0.3*b
-gen v = rnormal() - a + 0.2*c
+gen u = invnormal(runiform()) + a + 0.3*b
+gen v = invnormal(runiform()) - a + 0.2*c
 manova u v = a / b|a /
 capture noisily ereturn list
 capture noisily manova u v = a / b|a / c|b|a /, dropemptycells

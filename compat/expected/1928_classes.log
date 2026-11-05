@@ -1,0 +1,564 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1928_classes.log
+  log type:  text
+ opened on:   5 Nov 2026, 15:39:02
+
+. * Stata's class system ([P] class, [P] class exit, [P] classutil)
+. * The .class files are in compat/do/classes; Stata runs the cases from compat/ and OpenDTA from
+. * compat/out/, so both forms of the folder go on the adopath.
+. discard
+
+. clear
+
+. capture quietly adopath ++ "do/classes"
+
+. capture quietly adopath ++ "../do/classes"
+
+. 
+. * -- instances, member programs, return values ([P] class, sections 1, 4.4, 6)
+. .coord = .oc_coord.new
+
+. display "`.coord.x' `.coord.y'"
+. .
+
+. .coord.set 1 2
+
+. display "`.coord.x' `.coord.y'"
+1 2
+
+. display "`.coord'"
+(1,2)
+
+. .c2 = .oc_coord.new 2 4
+
+. display "`.c2'"
+(2,4)
+
+. .li = .oc_line.new
+
+. .li.set 1 2 2 4
+
+. .len = .li.length
+
+. display `.len'
+2.236068
+
+. display "`.len'"
+2.23606797749979
+
+. .mid = .li.midpoint
+
+. display "`.mid'"
+(1.5,3)
+
+. display `.li.length'
+2.236068
+
+. .li.length
+
+. .coord.x = .li.length
+
+. display "`.coord.x'"
+2.23606797749979
+
+. * Not tested: in Stata 14 an object returned by class exit (.li.midpoint) assigned to a declared
+. * member (.li.c0), or to an object that already exists, is left dangling: its members vanish,
+. * later calls print garbage and Stata segfaults.
+. .l2 = .oc_line.new
+
+. .l2.set 1 2 3 4
+
+. .l2.c0 = .coord
+
+. display "`.l2.c0'"
+(2.236068,2)
+
+. capture noisily .l2.c0.x = 7
+
+. display _rc
+0
+
+. .l3 = .oc_line.new
+
+. .l3.c1 = .oc_coord.new 5 6
+
+. display "`.l3.c1'"
+(5,6)
+
+. capture noisily .l3.c1.x = 7
+
+. display _rc
+0
+
+. .l4 = .oc_line.new
+
+. .l4.set 1 2 3 4
+
+. capture noisily .l4.c0 = .l4.back
+= assignment of a reference is not allowed
+
+. display _rc
+9999
+
+. display "`.l4.c0'"
+(1,2)
+
+. capture noisily .l4.c0.x = 7
+
+. display _rc
+0
+
+. 
+. * -- built-in functions
+. display "`.mid.objtype' `.mid.isa' `.oc_coord.isa' `.mid.classname' `.len.objtype' `.len.isa'"
+oc_coord class classtype oc_coord double double
+
+. display "|`.len.classname'| `.mid.isofclass oc_coord' `.mid.isofclass oc_line'"
+|| 1 0
+
+. .c = .li.back
+
+. display "`.c' `.c.ref_n'"
+(7,8) 1
+
+. .d = .c.copy
+
+. .d.x = 0
+
+. display "`.c' `.d'"
+(7,8) (0,8)
+
+. .e = .c.new 3 3
+
+. display "`.e' `.c'"
+(3,3) (7,8)
+
+. display ("`.e.uname'" == "`.c.uname'")
+0
+
+. .f.ref = .e.ref
+
+. display ("`.f.uname'" == "`.e.uname'")
+1
+
+. 
+. * -- type matching (section 7.1)
+. .newthing = 2
+
+. capture noisily .newthing = "new"
+incompatible types
+     may not assign string to double
+
+. display _rc
+4027
+
+. capture noisily .coord.x = .li.midpoint
+incompatible types
+     may not assign class to double
+
+. display _rc
+4027
+
+. capture noisily .li.c0 = .li.length
+rvalue invalid
+
+. display _rc
+4026
+
+. 
+. * -- references (section 7.4)
+. .a.ref = .coord.ref
+
+. .a.x = 99
+
+. display "`.coord.x' `.coord.ref_n' `.a.ref_n'"
+99 2 2
+
+. .i.ref = .a.ref
+
+. display "`.coord.ref_n'"
+3
+
+. .a.ref = .a
+
+. .a.x = 5
+
+. display "`.coord.x' `.a.x' `.coord.ref_n' `.a.ref_n'"
+99 5 2 1
+
+. 
+. * -- classwide variables and arrays of member variables (sections 4.6, 12.3)
+. .ac = .oc_coord2.new
+
+. .bc = .oc_coord2.new
+
+. .ac.x_origin = 2
+
+. display "`.bc.x_origin' `.bc.x'"
+2 0
+
+. display "`.ac.classmv.arrnels' `.ac.instancemv.arrnels' 0`.ac.dynamicmv.arrnels'"
+2 2 0
+
+. .ac.classmv[1] = 7
+
+. display "`.bc.x_origin'"
+7
+
+. classutil drop .ac .bc
+
+. .ac = .oc_coord2.new
+
+. display "`.ac.x_origin'"
+0
+
+. 
+. * -- initialization and arrays (sections 4.3, 7.2, 8.2)
+. .t = .oc_todo.new
+
+. display `"`.t.n' `.t.name' `.t.list[1]' `.t.list.arrnels' `.t.z' `.t.b' |`.t.s2'| `.t.s3'"'
+0 nobody show second syntax 2 2.23606797749979 .b |quotes "inside" strings| nobody
+
+. display "`.t.mixed[3]' `.t.mixed.arrnels' `.t.mixed[4].objtype' `.t.mixed[3].objtype'"
+three 4 double string
+
+. .t.list[4] = "four"
+
+. display "`.t.list.arrnels' |`.t.list[3]'| `.t.list.arrindexof "four"' `.t.list.arrindexof "zz"'"
+4 || 4 0
+
+. .t.list[1].Arrdropel
+
+. display "|`.t.list[1]'| `.t.list.arrnels'"
+|| 4
+
+. .t.list.Arrpush "five"
+
+. display "`.t.list.arrnels' `.t.list[5]'"
+5 five
+
+. .t.list.Arrpop
+
+. .t.list.Arrpop
+
+. display "`.t.list.arrnels'"
+3
+
+. .t.list = {"a", , (1+1), [.li.length]}
+
+. display "`.t.list.arrnels' `.t.list[1]' `.t.list[3]' `.t.list[4]' |`.t.list[2].objtype'|"
+4 a 2 2.23606797749979 ||
+
+. .t.list[2] = .li.c1
+
+. display "`.t.list[2]' `.t.list[2].objtype'"
+(2,4) oc_coord
+
+. capture noisily .t.list[2] = "Clear the coordinate"
+rvalue invalid
+
+. display _rc
+4026
+
+. .t.list[2].Arrdropel
+
+. .t.list[2] = "Clear the coordinate"
+
+. display "`.t.list[2]'"
+Clear the coordinate
+
+. .t.list.Arrdropall
+
+. display "`.t.list.arrnels'"
+0
+
+. 
+. * -- adding members dynamically (section 4.7)
+. .t.Declare double extra = 3
+
+. .t.Declare string who
+
+. .t.who = "me"
+
+. .t.Declare more = "inferred"
+
+. display "`.t.extra' `.t.who' `.t.more' `.t.dynamicmv.arrnels' `.t.more.objtype'"
+3 me inferred 3 string
+
+. .t.Declare oc_coord where = .oc_coord.new 5 6
+
+. display "`.t.where'"
+(5,6)
+
+. 
+. * -- keys (section 12.1)
+. local k `.t.objkey'
+
+. display "`.`k'.name'"
+nobody
+
+. .keep = .t.objkey
+
+. display "`.`.keep'.n'"
+0
+
+. 
+. * -- inheritance (section 5)
+. .o = .oc_alt.new
+base new
+alt new extra 5
+
+. .o.zifl
+base zifl size 10
+alt zifl extra 5
+
+. display "`.o.who' `.o.isofclass oc_base' `.o.isofclass oc_alt' `.o.size'"
+base 1 1 10
+
+. .q = 1
+
+. .m = .oc_multi.new
+base new
+
+. .m.test
+base base other
+10 1 1 ||
+1 42
+1
+
+. display "`.q' `.m.superclass.arrnels' `.oc_multi.superclass[1].classname'"
+42 2 oc_base
+
+. 
+. * -- .oncopy and .destructor (sections 4.8, 4.9)
+. set obs 3
+number of observations (_N) was 0, now 3
+
+. generate a = _n
+
+. generate b = 2*_n
+
+. .v = .oc_varc.new a b
+(3 missing values generated)
+(3 missing values generated)
+(3 real changes made)
+(3 real changes made)
+
+. .w = .v
+(3 missing values generated)
+(3 missing values generated)
+(3 real changes made)
+(3 real changes made)
+
+. list
+
+     +---------------------------------------------------+
+     | a   b   odta_v~1   odta_v~2   odta_v~3   odta_v~4 |
+     |---------------------------------------------------|
+  1. | 1   2          1          2          1          2 |
+  2. | 2   4          2          4          2          4 |
+  3. | 3   6          3          6          3          6 |
+     +---------------------------------------------------+
+
+. .w = .oc_varc.new
+(3 missing values generated)
+(3 missing values generated)
+
+. describe, short
+
+Contains data
+  obs:             3                          
+ vars:             6                          
+ size:            72                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. classutil drop .v
+
+. describe, short
+
+Contains data
+  obs:             3                          
+ vars:             4                          
+ size:            48                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. discard
+
+. describe, short
+
+Contains data
+  obs:             3                          
+ vars:             2                          
+ size:            24                          
+Sorted by: 
+     Note: Dataset has changed since last saved.
+
+. 
+. * -- classutil ([P] classutil)
+. .coord = .oc_coord.new 1 2
+
+. .li = .oc_line.new
+
+. .n1 = 3
+
+. .s1 = "text"
+
+. capture noisily classutil dir
+.coord  .li     .n1     .s1
+
+. capture noisily classutil dir, detail
+oc_coord     .coord
+oc_line      .li
+double       .n1            = 3
+string       .s1            = "text"
+
+. capture noisily classutil dir c*
+.coord
+
+. return list
+
+macros:
+               r(list) : ".coord"
+
+. capture noisily classutil describe .coord
+
+oc_coord .coord:
+        double       .x             = 1
+        double       .y             = 2
+
+. return list
+
+macros:
+             r(bitype) : "instance"
+               r(type) : "oc_coord"
+
+. capture noisily classutil describe .li, recurse
+
+oc_line .li:
+        oc_coord     .c0
+        oc_coord     .c1
+
+oc_coord .li.c0:
+        double       .x             = .
+        double       .y             = .
+
+oc_coord .li.c1:
+        double       .x             = .
+        double       .y             = .
+
+. capture noisily classutil describe oc_coord2, newok
+
+class oc_coord2 {
+   classwide:
+       double        x_origin
+       double        y_origin
+   instancespecific:
+       double        x
+       double        y
+}
+
+. return list
+
+macros:
+             r(bitype) : "class"
+               r(type) : "oc_coord2"
+
+. capture noisily classutil describe .n1
+double       .n1            = 3
+
+. return list
+
+macros:
+             r(bitype) : "double"
+               r(type) : "double"
+
+. classutil cdir oc_c*
+oc_coord   oc_coord2
+
+. return list
+
+macros:
+               r(list) : "oc_coord oc_coord2"
+
+. quietly classutil which oc_coord2
+
+. display strpos(`"`r(fn)'"', "oc_coord2.class") > 0
+1
+
+. capture noisily classutil which nosuchclass
+file "nosuchclass.class" not found
+
+. display _rc
+601
+
+. cutil drop .n1 .s1
+
+. capture noisily classutil drop .li.c0
+li.c0:  can only drop top-level objects
+
+. display _rc
+459
+
+. capture noisily classutil drop .nothere
+.nothere:  object not found
+
+. display _rc
+111
+
+. 
+. * -- errors the manual does not describe
+. capture noisily .z = .nosuchclass.new
+nosuchclass.new: class member function not found
+
+. display _rc
+4023
+
+. capture noisily .coord.nomember = 1
+coord.nomember invalid name
+
+. display _rc
+198
+
+. capture noisily display "|`.coord.nomember'|"
+||
+
+. capture noisily class exit 1
+command -class exit- can only be used in a class program
+
+. display _rc
+198
+
+. capture noisily .coord.Arrpush "x"
+not an array
+
+. display _rc
+4020
+
+. capture noisily .coord.Declare double x
+x: name already declared in current class
+
+. display _rc
+4017
+
+. capture noisily .coord
+
+. display _rc
+0
+
+. 
+. discard
+
+. capture quietly adopath - "do/classes"
+
+. capture quietly adopath - "../do/classes"
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/1928_classes.log
+  log type:  text
+ closed on:   5 Nov 2026, 15:39:02
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

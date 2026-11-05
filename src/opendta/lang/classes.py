@@ -59,11 +59,12 @@ class Cell:
 class Array:
     """Arrays are sparse and untyped: each element has its own type."""
 
-    def __init__(self, items: dict[int, Cell] | None = None):
+    def __init__(self, items: dict[int, Cell] | None = None, top: int = 0):
         self.items: dict[int, Cell] = items if items is not None else {}
+        self.top = top      # .Arrpop lowers .arrnels by one even past unset elements
 
     def nels(self) -> int:
-        return max(self.items, default=0)
+        return max(self.top, max(self.items, default=0))
 
 
 @dataclass(eq=False)
@@ -104,9 +105,13 @@ class ClassDef:
         return out
 
     def find_program(self, name: str) -> tuple["ClassDef", Program] | None:
-        for c in self.mro():
-            if name in c.programs:
-                return c, c.programs[name]
+        """Member programs: the class, then its parents; the leftmost parent wins (Stata 14)."""
+        if name in self.programs:
+            return self, self.programs[name]
+        for p in self.parents:
+            hit = p.find_program(name)
+            if hit is not None:
+                return hit
         return None
 
     def isof(self, name: str) -> bool:
@@ -338,7 +343,7 @@ class ClassSystem:
     def copy_value(self, v: object, *, oncopy: bool = True) -> object:
         if isinstance(v, Array):
             return Array({k: Cell(self.copy_value(c.value, oncopy=oncopy))
-                          for k, c in v.items.items()})
+                          for k, c in v.items.items()}, v.top)
         if not isinstance(v, Instance):
             return v
         new = Instance(v.cls)
@@ -363,6 +368,7 @@ class ClassSystem:
             for c in list(v.items.values()):
                 self.release_cell(c)
             v.items.clear()
+            v.top = 0
         elif isinstance(v, Instance):
             self.destroy(v)
 

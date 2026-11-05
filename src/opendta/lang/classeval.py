@@ -155,6 +155,13 @@ def _dotted(segs: list[Seg]) -> str:
     return "".join(f".{g.name}" + (f"[{g.index}]" if g.index is not None else "") for g in segs)
 
 
+def _kind(v: object) -> str:
+    """Type names of Stata's "may not assign" message."""
+    if isinstance(v, (Instance, ClassDef)):
+        return "class"
+    return type_of(v)
+
+
 def not_found(segs: list[Seg]) -> StataError:
     return StataError(111, f"{_dotted(segs)} not found")           # VERIFY: message and code
 
@@ -195,7 +202,12 @@ class Evaluator:
                 return ("new", (cs.globals, name))
             raise not_found(segs[:1])
         else:
-            cls = cs.load(name)
+            try:
+                cls = cs.load(name)
+            except StataError as e:
+                if len(segs) > 1 and e.message == f"class {name} not found":
+                    raise StataError(4023, f"{_dotted(segs)[1:]}: class member function not found")
+                raise
             if first.index is not None:
                 raise StataError(198, "invalid syntax")
             if len(segs) == 1:
@@ -233,7 +245,7 @@ class Evaluator:
                 pname = segs[i + 1].name
                 if i + 1 != len(segs) - 1:
                     raise StataError(198, "invalid syntax")
-                for p in reversed(parents):
+                for p in parents:
                     found = p.find_program(pname)
                     if found is not None:
                         return ("prog", node, found[0], found[1])
@@ -262,6 +274,8 @@ class Evaluator:
                     if not last or seg.index is not None:
                         raise StataError(198, "invalid syntax")
                     return ("prog", node, found[0], found[1])
+            if lvalue:
+                raise StataError(198, f"{_dotted(full)[1:]} invalid name")
             raise not_found(full[:len(full) - len(segs) + i + 1])
         return ("var", node)
 
@@ -418,10 +432,17 @@ class Evaluator:
             cs.drop_rv(rv)
             raise StataError(198, "invalid syntax")    # VERIFY: assignment to a program/built-in
         node = r[1]
+        if not ref and rv.cell is not None:
+            cs.drop_rv(rv)
+            raise StataError(9999, "= assignment of a reference is not allowed")
         new_value = rv.cell.value if rv.cell is not None else rv.value
         if not same_type(node.value, new_value):
             cs.drop_rv(rv)
-            raise mismatch()
+            if isinstance(node.value, Instance) and not isinstance(new_value, Instance):
+                raise StataError(4026, "rvalue invalid")
+            # VERIFY: an instance of another class, and arrays
+            raise StataError(4027, "incompatible types\n     may not assign "
+                             f"{_kind(new_value)} to {_kind(node.value)}")
         holder, key = node.slot
         if ref:
             if rv.cell is node.cell:
@@ -480,7 +501,7 @@ class Evaluator:
             src = next((f.oncopy_src for f in reversed(cs.ctx) if f.oncopy_src), "")
             return RV(src)
         if not isinstance(v, Array):
-            raise StataError(198, f".{name} may be used only with arrays")      # VERIFY
+            raise StataError(4020, "not an array")      # VERIFY: seen for .Arrpush only
         if name == "arrnels":
             return RV(float(v.nels()))
         if name == "arrindexof":
@@ -502,7 +523,7 @@ class Evaluator:
             d = cs.declaration(a, "instancespecific")
             if v.member(d.name) is not None:
                 cs.release_value(d.value)
-                raise StataError(110, f"{d.name} already defined")             # VERIFY
+                raise StataError(4017, f"{d.name}: name already declared in current class")
             v.members[d.name] = Cell(d.value)
             v.dynamic.append(d.name)
             return
@@ -514,7 +535,7 @@ class Evaluator:
             cs.release_cell(holder.pop(node.slot[1]))
             return
         if not isinstance(v, Array):
-            raise StataError(198, f".{name} may be used only with arrays")      # VERIFY
+            raise StataError(4020, "not an array")
         if name == "Arrdropel":
             k = math.trunc(float(self.s.eval(a)))
             if k in v.items:
@@ -522,8 +543,11 @@ class Evaluator:
         elif name == "Arrdropall":
             cs.release_value(v)
         elif name == "Arrpop":
-            if v.items:
-                cs.release_cell(v.items.pop(v.nels()))
+            n = v.nels()
+            if n:
+                if n in v.items:
+                    cs.release_cell(v.items.pop(n))
+                v.top = n - 1
         elif name == "Arrpush":
             v.items[v.nels() + 1] = Cell(self.value_of(a))
 

@@ -69,37 +69,41 @@ def pca_unexplained(C: np.ndarray, ev: np.ndarray, V: np.ndarray, k: int) -> np.
     return np.diag(C) - explained
 
 
-def pca_vce(ev: np.ndarray, V: np.ndarray, n: float, k: int) -> dict:
+def pca_vce(ev: np.ndarray, V: np.ndarray, n: float, k: int, second_order: bool = False) -> dict:
     """Asymptotic moments of the eigenvalues and eigenvectors under multivariate normality ([MV]
     pca, Methods and formulas; Girshick 1939, Anderson 1963): b = (all eigenvalues, the k retained
     eigenvectors stacked), its VCE, the bias of the eigenvalues, the standard errors of the
     explained proportions (Kshirsagar 1972) and the LR tests of independence and sphericity of C.
 
-    VERIFY: the variances of the eigenvalues are the first-order 2 l_i^2 / n (the manual's example
-    matches it, not the second-order term); their covariances take the manual's n^-2 term; the
-    covariance of two eigenvectors is -(1/n) l_i l_j/(l_i - l_j)^2 v_j v_i' (Anderson's form)."""
+    b and its VCE hold the k retained eigenvalues only, as Stata 14 posts them. The variance of an
+    eigenvalue is 2 l_i^2 / n, times [1 - (1/n) sum_j l_j^2/(l_i - l_j)^2] when second_order (Stata
+    14's pca on data does that, compat 1929; its pcamat and the manual's example do not); their
+    covariances take the manual's n^-2 term; the covariance of two eigenvectors is
+    -(1/n) l_i l_j/(l_i - l_j)^2 v_j v_i' (Anderson's form)."""
     p = len(ev)
     lam = np.asarray(ev, dtype=float)
-    Vl = np.diag(2.0 * lam ** 2 / n)
+    Vl = np.zeros((p, p))
     for i in range(p):
+        corr = sum((lam[j] / (lam[i] - lam[j])) ** 2 for j in range(p) if j != i and lam[j] != lam[i]) / n
+        Vl[i, i] = 2.0 * lam[i] ** 2 / n * (1.0 - corr if second_order else 1.0)
         for j in range(p):
             if i != j and lam[i] != lam[j]:
                 Vl[i, j] = 2.0 / n ** 2 * (lam[i] * lam[j] / (lam[i] - lam[j])) ** 2
-    m = p + k * p
+    m = k + k * p
     Vb = np.zeros((m, m))
-    Vb[:p, :p] = Vl
+    Vb[:k, :k] = Vl[:k, :k]
     w = np.zeros((p, p))
     for i in range(p):
         for j in range(p):
             if i != j:
                 w[i, j] = lam[i] * lam[j] / (lam[i] - lam[j]) ** 2 / n
     for a in range(k):
-        ra = slice(p + a * p, p + (a + 1) * p)
+        ra = slice(k + a * p, k + (a + 1) * p)
         Vb[ra, ra] = sum(w[a, j] * np.outer(V[:, j], V[:, j]) for j in range(p) if j != a)
         for c in range(k):
             if c != a:
-                Vb[ra, slice(p + c * p, p + (c + 1) * p)] = -w[a, c] * np.outer(V[:, c], V[:, a])
-    b = np.concatenate([lam, V[:, :k].T.ravel()])
+                Vb[ra, slice(k + c * p, k + (c + 1) * p)] = -w[a, c] * np.outer(V[:, c], V[:, a])
+    b = np.concatenate([lam[:k], V[:, :k].T.ravel()])
     bias = np.array([lam[i] / n * sum(lam[j] / (lam[i] - lam[j]) for j in range(p) if j != i) for i in range(p)])
     tr, ss = lam.sum(), (lam ** 2).sum()
 
@@ -111,18 +115,18 @@ def pca_vce(ev: np.ndarray, V: np.ndarray, n: float, k: int) -> dict:
     se_prop = np.sqrt([var_share([i]) for i in range(p)])
     cum = np.cumsum(prop)
     se_cum = np.sqrt(np.maximum([var_share(list(range(i + 1))) for i in range(p)], 0.0))
-    return {"b": b, "V": Vb, "bias": bias, "prop": prop, "se_prop": se_prop, "cum": cum, "se_cum": se_cum,
+    return {"ev": lam, "b": b, "V": Vb, "bias": bias, "prop": prop, "se_prop": se_prop, "cum": cum, "se_cum": se_cum,
             "v_rho": float(var_share(list(range(k))))}
 
 
 def pca_lr_tests(C: np.ndarray, ev: np.ndarray, n: float) -> dict:
     """LR tests of independence and of sphericity of the analyzed matrix ([MV] pca, Methods and
-    formulas, Basilevsky 1994); for sphericity the eigenvalues are those of the correlation matrix
-    (VERIFY: with the covariance option the manual's formula is applied to C's eigenvalues)."""
+    formulas, Basilevsky 1994): independence from the correlation matrix, sphericity from the
+    eigenvalues ev of the analyzed matrix (correlation or covariance)."""
     p = len(ev)
     sd = np.sqrt(np.diag(C))
     R = C / np.outer(sd, sd)
-    lr = np.clip(np.linalg.eigvalsh(R), 1e-300, None)
+    lr = np.clip(np.asarray(ev, dtype=float), 1e-300, None)
     chi_i = -(n - (2 * p + 5) / 6.0) * float(np.linalg.slogdet(R)[1])
     chi_s = -(n - (2 * p * p + p + 2) / (6.0 * p)) * float(np.log(lr).sum() - p * np.log(lr.sum() / p))
     return {"chi2_i": chi_i, "df_i": p * (p - 1) / 2.0, "chi2_s": chi_s, "df_s": (p + 2) * (p - 1) / 2.0}

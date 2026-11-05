@@ -318,4 +318,5 @@ def henze_zirkler(X: np.ndarray) -> dict:
     EZ = math.log(mu) - VZ / 2.0
     z = (math.log(hz) - EZ) / math.sqrt(VZ) if hz > 0 else float("-inf")
     # the p-value is two-sided, p = 2 Phi(-|Z|) ([MV] mvtest normality, Methods and formulas)
-    return {"hz": hz, "z": z, "p": float(2.0 * st.norm.sf(abs(z))), "E": EZ, "V": VZ}
+    # E and V: the mean and variance of HZ under the null (Stata's r(E_hz) and r(V_hz))
+    return {"hz": hz, "z": z, "p": float(2.0 * st.norm.sf(abs(z))), "E": mu, "V": s2}

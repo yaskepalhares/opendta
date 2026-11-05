@@ -156,6 +156,7 @@ class EvalContext:
 class Session:
     def __init__(self) -> None:
         self.output = Output()
+        self.output.linesize = lambda: int(float(self.settings.get("linesize", 80)))
         self.macros = MacroStore()
         self.macros.globals.update(DEFAULT_GLOBALS)
         self.scalars: dict[str, Value] = {}

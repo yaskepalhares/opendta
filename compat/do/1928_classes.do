@@ -25,10 +25,27 @@ display `.li.length'
 .li.length
 .coord.x = .li.length
 display "`.coord.x'"
-.li.c0 = .li.midpoint
-display "`.li.c0'"
-.li.c0.x = 2+2
-display "`.li.c0.x'"
+* Not tested: in Stata 14 an object returned by class exit (.li.midpoint) assigned to a declared
+* member (.li.c0), or to an object that already exists, is left dangling: its members vanish,
+* later calls print garbage and Stata segfaults.
+.l2 = .oc_line.new
+.l2.set 1 2 3 4
+.l2.c0 = .coord
+display "`.l2.c0'"
+capture noisily .l2.c0.x = 7
+display _rc
+.l3 = .oc_line.new
+.l3.c1 = .oc_coord.new 5 6
+display "`.l3.c1'"
+capture noisily .l3.c1.x = 7
+display _rc
+.l4 = .oc_line.new
+.l4.set 1 2 3 4
+capture noisily .l4.c0 = .l4.back
+display _rc
+display "`.l4.c0'"
+capture noisily .l4.c0.x = 7
+display _rc
 
 * -- built-in functions
 display "`.mid.objtype' `.mid.isa' `.oc_coord.isa' `.mid.classname' `.len.objtype' `.len.isa'"
