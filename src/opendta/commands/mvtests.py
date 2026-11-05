@@ -17,7 +17,6 @@ from ..core import mvtests as T
 from ..core.errors import StataError
 from ..lang.syntax import match_options, parse_standard
 from .mvcommon import g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
-from .mvfactor import _g6
 from .registry import command
 
 if TYPE_CHECKING:
@@ -285,8 +284,9 @@ def _resid_sscp(X: np.ndarray, Y: np.ndarray, w: np.ndarray):
 
 
 def _stat_rows(out, label: str, stats: list[dict], df_h: float) -> None:
+    pieces = _wrap_label(label)
     for i, r in enumerate(stats):
-        src = label if i == 0 else ""
+        src = pieces[i] if i < len(pieces) else ""
         dfc = f"{int(df_h):>10}" if i == 0 else f"{'':>10}"
         out.write(f"{src:>20} |{r['name']}{r['stat']:>9.4f}{dfc}{r['df1']:>9.1f}{r['df2']:>9.1f}"
                   f"{r['F']:>9.2f} {r['p']:.4f} {r['flag']}\n", "text")
@@ -305,9 +305,7 @@ def cmd_manova(s: "Session", args: str) -> None:
     deps = numeric_names(s, p.varlist, 2)
     continuous = set(s.expand_varlist(o["continuous"])) if isinstance(o.get("continuous"), str) else set()
     segments = A._parse_terms(s, p.exp, continuous)
-    if len(segments) > 1:
-        raise StataError(198, "error terms (/) are not available yet in OpenDTA")
-    terms = segments[0]
+    terms = [t_ for seg in segments for t_ in seg]
     if not terms:
         raise StataError(102, "too few variables specified")
     allvars = sorted({n for t_ in terms for n in t_.variables})
@@ -363,14 +361,29 @@ def cmd_manova(s: "Session", args: str) -> None:
             H, dfh = Er - E, rank - rk
         lam = T.eig_ratio(E, H) if dfh > 0 else np.zeros(0)
         rows.append((t_.name, (T.mv_statistics(lam, q, dfh, df_r) if dfh > 0 else [], dfh, H)))
-    shown = rows if len(terms) > 1 else rows[1:]
+    index = {id(t_): k_ for k_, t_ in enumerate(terms)}
+    groups = _error_groups(segments, index)
     resid = f"{'Residual':>20} |{int(df_r):>20}\n"
-    for i_, (label, (stats, dfh, H)) in enumerate(shown):
-        _stat_rows(out, label, stats, dfh)
-        out.write(sep + "\n", "text")
-        if label == "Model":
+    if len(terms) > 1:
+        _stat_rows(out, "Model", rows[0][1][0], rows[0][1][1])
+        out.write(sep + "\n" + resid + rule + "\n", "text")
+    tested = {}
+    for members, err in groups:
+        for k_ in members:
+            label, (_, dfh, H) = rows[k_ + 1]
+            if err is None:
+                stats = rows[k_ + 1][1][0]
+            else:
+                He, dfe = rows[err + 1][1][2], rows[err + 1][1][1]
+                stats = T.mv_statistics(T.eig_ratio(He, H), q, dfh, dfe) if dfh > 0 and dfe > 0 else []
+            tested[k_] = (stats, err)
+            _stat_rows(out, label, stats, dfh)
+            out.write(sep + "\n", "text")
+        if err is None:
             out.write(resid + rule + "\n", "text")
-    out.write(resid + rule + "\n", "text")
+        else:
+            _label_df_row(out, terms[err].name, rows[err + 1][1][1])
+            out.write(rule + "\n", "text")
     out.write(f"{'Total':>20} |{int(N - 1):>20}\n{'':>10}{'-' * 67}\n", "text")
     out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
     names_cols = ["statistic", "df1", "df2", "F", "p"]
@@ -383,12 +396,99 @@ def cmd_manova(s: "Session", args: str) -> None:
     scalars = [("N", N), ("k_dv", q), ("df_m", df_m), ("df_r", df_r), ("rank", rank)]
     macros = [("cmdline", "manova " + args.strip()), ("cmd", "manova"), ("depvar", " ".join(deps)),
               ("title", "Multivariate model"), ("model", "ols"), ("properties", "nob noV"), ("wtype", wtype)]
-    macros += [(f"term_{j}", t_.name) for j, t_ in enumerate(terms, start=1)]
+    for j, t_ in enumerate(terms, start=1):
+        macros.append((f"term_{j}", t_.name))
+        err = tested.get(j - 1, (None, None))[1]
+        if err is not None:
+            macros.append((f"errorterm_{j}", terms[err].name))
     post_e(s, "manova", scalars, macros, mats, mask, int(N),
            extra={"manova": {"Y": Y, "w": ww, "blocks": blocks, "terms": [t_.name for t_ in terms],
                              "order": _design_order(terms, data),
+                             "fvnames": _design_fvnames(terms, data),
+                             "Xo": np.column_stack([_overparam_block(t_, data) for t_ in terms] + [one]),
                              "ref_blocks": [_reference_block(t_, data) for t_ in terms],
+                             "nested": [bool(t_.nest) for t_ in terms],
                              "E": E, "rank": rank, "df_r": df_r, "deps": deps}})
+
+
+def _error_groups(segments, index) -> list[tuple[list[int], int | None]]:
+    """Which terms are tested against which error term ([MV] manova, nested designs): the terms
+    of a segment are tested against the first term of the next segment (the residual when the
+    next segment is empty, a trailing slash). A term that follows a slash is an error term and is
+    tested only when it is itself followed by a slash, that is, when it is alone in its segment
+    (VERIFY beyond the manual's two examples). Returns [(term indices, error index or None)]."""
+    groups = []
+    last = len(segments) - 1
+    for i, seg in enumerate(segments):
+        ids = [index[id(t_)] for t_ in seg]
+        if i == last:
+            members = ids if i == 0 else ids[1:]
+            err = None
+        else:
+            members = ids if i == 0 or len(ids) == 1 else ids[1:]
+            nxt = segments[i + 1]
+            err = index[id(nxt[0])] if nxt else None
+        if members:
+            groups.append((members, err))
+    return groups
+
+
+def _wrap_label(label: str, width: int = 20) -> list[str]:
+    """The lines of a source label: terms joined by spaces while they fit in the column ("a b",
+    compat 1917), a term longer than the column broken after a | or # (the manual's
+    "associate|store|" + "video"; VERIFY for other shapes)."""
+    pieces = []
+    for term in label.split() or [""]:
+        while len(term) > width:
+            cut = max(term.rfind("|", 0, width), term.rfind("#", 0, width))
+            if cut <= 0:
+                cut = width - 1
+            pieces.append((term[:cut + 1], True))
+            term = term[cut + 1:]
+        pieces.append((term, False))
+    lines: list[str] = []
+    joinable = False
+    for piece, broken in pieces:
+        if lines and joinable and len(lines[-1]) + 1 + len(piece) <= width:
+            lines[-1] += " " + piece
+        else:
+            lines.append(piece)
+        joinable = not broken
+    return lines
+
+
+def _label_df_row(out, label: str, df: float) -> None:
+    pieces = _wrap_label(label)
+    out.write(f"{pieces[0]:>20} |{int(df):>20}\n", "text")
+    for piece in pieces[1:]:
+        out.write(f"{piece:>20} |\n", "text")
+
+
+def _overparam_block(t_, data: dict) -> np.ndarray:
+    """The columns of a term in the overparameterized design (an indicator for every level,
+    continuous variables as they are, crossed for interactions), in manovatest, showorder's
+    order."""
+    mats = []
+    for name, cont in list(t_.comps) + [(v, False) for v in t_.nest]:
+        x, levels = data[name]
+        mats.append(x[:, None] if cont else np.column_stack([(x == lev).astype(float) for lev in levels]))
+    out = mats[0]
+    for m_ in mats[1:]:
+        out = np.einsum("ij,ik->ijk", out, m_).reshape(len(out), -1)
+    return out
+
+
+def _design_fvnames(terms, data: dict) -> list[str]:
+    """Factor-variable names of the overparameterized columns, as the test() constraints are
+    written: 1.group, 1.a#2.b, x, _cons ([MV] manova postestimation, example 2)."""
+    out = []
+    for t_ in terms:
+        labs = [""]
+        for name, cont in list(t_.comps) + [(v, False) for v in t_.nest]:
+            parts = [name] if cont else [f"{lev:g}.{name}" for lev in data[name][1]]
+            labs = [f"{a}#{b}" if a else b for a in labs for b in parts]
+        out += labs
+    return out + ["_cons"]
 
 
 def _design_order(terms, data: dict) -> list[str]:
@@ -434,11 +534,27 @@ def _joint_hypothesis(Y, ww, m, idx):
     test (the model without the term, sum-to-zero coding); several terms drop their columns
     together from the model in the base-level coding, which is what Stata's joint test
     reproduces (compat 1917; VERIFY beyond two main effects next to their interaction)."""
-    blocks = m["blocks"] if len(idx) == 1 else m["ref_blocks"]
+    # nested terms keep their within-cell coding: the base-level coding crosses the nesting
+    # variables as if they were factors (the pooled error of [MV] manova postestimation, example 4)
+    blocks = m["blocks"] if len(idx) == 1 else [b if nested else r for b, r, nested in
+                                                 zip(m["blocks"], m["ref_blocks"], m["nested"])]
     one = np.ones((Y.shape[0], 1))
     E, rank = _resid_sscp(np.column_stack([one] + blocks), Y, ww)
     Er, rk = _resid_sscp(np.column_stack([one] + [b for k, b in enumerate(blocks) if k not in idx]), Y, ww)
     return Er - E, rank - rk
+
+
+def _test_hypothesis(Y, ww, Xo, C):
+    """SSCP matrix and degrees of freedom of the hypothesis C beta = 0 on the overparameterized
+    design ([MV] manova, Methods and formulas): H = (CB)'{C (X'X)^- C'}^-1 (CB), B = (X'X)^- X'Y."""
+    if C.shape[1] != Xo.shape[1]:
+        raise StataError(503, "conformability error")
+    Xw = Xo * ww[:, None]
+    G = np.linalg.pinv(Xo.T @ Xw)
+    B = G @ Xw.T @ Y
+    CB = C @ B
+    M_ = C @ G @ C.T
+    return CB.T @ np.linalg.pinv(M_) @ CB, int(np.linalg.matrix_rank(M_))
 
 
 def _ytransform_lines(Mt, deps) -> list[str]:
@@ -471,8 +587,6 @@ def cmd_manovatest(s: "Session", args: str) -> None:
     c = _find_comma(args)
     body, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
     o = match_options(opt, {"ytransform": 2, "test": 4, "showorder": 5}) if opt.strip() else {}
-    if o.get("test"):
-        raise StataError(198, "manovatest, test() is not available yet in OpenDTA")      # OpenDTA
     m = est.extra["manova"]
     out = s.output
     if o.get("showorder"):
@@ -482,11 +596,19 @@ def cmd_manovatest(s: "Session", args: str) -> None:
         if not body.strip():
             return
     num, _, den = body.partition("/")
-    if not num.strip():
-        raise StataError(198, "invalid syntax")
     Y, ww = m["Y"], m["w"]
     q = len(m["deps"])
-    H, dfh = _joint_hypothesis(Y, ww, m, _manova_terms(num, m["terms"]))
+    Cm = None
+    if isinstance(o.get("test"), str):
+        if body.strip():
+            raise StataError(198, "invalid syntax")
+        Cm = get_matrix(s, o["test"].strip()).data
+        H, dfh = _test_hypothesis(Y, ww, m["Xo"], Cm)
+        num, den = "manovatest", ""
+    elif not num.strip():
+        raise StataError(198, "invalid syntax")
+    else:
+        H, dfh = _joint_hypothesis(Y, ww, m, _manova_terms(num, m["terms"]))
     if den.strip():
         Eh, dfe = _joint_hypothesis(Y, ww, m, _manova_terms(den, m["terms"]))
         elab = " ".join(den.split())
@@ -508,6 +630,11 @@ def cmd_manovatest(s: "Session", args: str) -> None:
         raise StataError(506, "error matrix is singular")                                   # VERIFY
     lam = T.eig_ratio(Eh, H) if dfh > 0 else np.zeros(0)
     stats = T.mv_statistics(lam, q, dfh, dfe) if dfh > 0 else []
+    if Cm is not None:
+        lines = _ytransform_lines(Cm, m["fvnames"])
+        out.write(f"\n Test constraint{'s' if len(lines) > 1 else ''}\n", "text")             # VERIFY: plural
+        for i, line in enumerate(lines, start=1):
+            out.write(f" ({i})    {line} = 0\n", "text")
     if Mt is not None:
         out.write("\n Transformations of the dependent variables\n", "text")
         for i, line in enumerate(_ytransform_lines(Mt, m["deps"]), start=1):
@@ -519,7 +646,8 @@ def cmd_manovatest(s: "Session", args: str) -> None:
     out.write(rule + "\n", "text")
     _stat_rows(out, " ".join(num.split()), stats, dfh)
     out.write(f"{'':>21}|{'-' * 55}\n", "text")
-    out.write(f"{elab:>20} |{int(dfe):>20}\n{'':>10}{'-' * 67}\n", "text")
+    _label_df_row(out, elab, dfe)
+    out.write(f"{'':>10}{'-' * 67}\n", "text")
     out.write(f"{'':>23}e = exact, a = approximate, u = upper bound on F\n", "text")
     # r() as Stata lists it: df, df_r; eigvals (the s = min(q, df) nonzero eigenvalues), aux
     # (s, m, n), stat (4 x 6), E, H (compat 1917); the contents of aux and stat are VERIFY
@@ -538,127 +666,6 @@ def cmd_manovatest(s: "Session", args: str) -> None:
     s.r = {k_: v_ for k_, v_ in s.r.items() if v_ is not None}
 
 
-# ---------------------------------------------------------------------------
-# canon
-# ---------------------------------------------------------------------------
-
-def _split_sets(text: str) -> tuple[str, str, str]:
-    t = text.strip()
-    if not t.startswith("("):
-        raise StataError(198, "invalid syntax")
-    depth, parts, cur, i = 0, [], "", 0
-    while i < len(t):
-        ch = t[i]
-        if ch == "(":
-            depth += 1
-            if depth == 1:
-                cur = ""
-                i += 1
-                continue
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                parts.append(cur)
-                i += 1
-                continue
-        if depth >= 1:
-            cur += ch
-        elif depth == 0 and ch not in " \t" and ch != ",":
-            break
-        i += 1
-    rest = t[i:]
-    if len(parts) != 2:
-        raise StataError(198, "invalid syntax")
-    return parts[0], parts[1], rest
-
-
-@command("canon", "canon")
-def cmd_canon(s: "Session", args: str) -> None:
-    c = _find_comma(args)
-    body, opt = (args, "") if c == -1 else (args[:c], args[c + 1:])
-    set1, set2, rest = _split_sets(body)
-    p = parse_standard("x " + rest + ("," + opt if opt else ""))
-    o = match_options(p.options, {"lc": 2, "noconstant": 3, "stdcoef": 3, "test": 3, "level": 1}) if p.options.strip() else {}
-    n1 = numeric_names(s, set1, 1)
-    n2 = numeric_names(s, set2, 1)
-    X, w, wtype, mask = sample(s, p, n1 + n2)
-    p1, p2 = len(n1), len(n2)
-    noconstant = bool(o.get("noconstant"))
-    if noconstant:
-        n_ = X.shape[0]
-        sw = float(n_ if w is None else w.sum())
-        W = np.ones(n_) if w is None else w
-        C = (X * W[:, None]).T @ X / (sw - 1.0)
-        means = np.zeros(p1 + p2)
-    else:
-        means, C, _, sw = mv.weighted_moments(X, w)
-    N = int(round(sw))
-    S11, S22, S12 = C[:p1, :p1], C[p1:, p1:], C[:p1, p1:]
-    cc = T.canonical(S11, S22, S12)
-    r, A1, A2 = cc["r"], cc["A1"], cc["A2"]
-    # sign convention: the largest coefficient (in absolute value) of each first-set column is positive (VERIFY)
-    for j in range(len(r)):
-        if A1[np.argmax(np.abs(A1[:, j])), j] < 0:
-            A1[:, j] *= -1
-            A2[:, j] *= -1
-    k = len(r)
-    sd1, sd2 = np.sqrt(np.diag(S11)), np.sqrt(np.diag(S22))
-    R11, R22 = S11 / np.outer(sd1, sd1), S22 / np.outer(sd2, sd2)
-    R12 = S12 / np.outer(sd1, sd2)
-    Z1, Z2 = A1 * sd1[:, None], A2 * sd2[:, None]
-    shown1, shown2 = (Z1, Z2) if o.get("stdcoef") else (A1, A2)
-    out = s.output
-    out.write(f"\nCanonical correlation analysis{'':>22}Number of obs ={N:>11}\n", "text")
-    cn = [str(j + 1) for j in range(k)]
-    for title, nm, A_ in (("first", n1, shown1), ("second", n2, shown2)):
-        out.write(f"\n{'Standardized' if o.get('stdcoef') else 'Raw'} coefficients for the {title} variable set\n\n", "text")
-        out.write(f"{'':>17}|" + "".join(f"{c_:>9} " for c_ in cn) + "\n", "text")
-        out.write(f"{'':>4}{'-' * 13}+{'-' * 10 * k}\n", "text")
-        for i, n_ in enumerate(nm):
-            out.write(f"{n_[:15]:>16} |" + "".join(f"{A_[i, j]:>9.4f} " for j in range(k)) + "\n", "text")
-        out.write(f"{'':>4}{'-' * (14 + 10 * k)}\n", "text")
-    rule = "-" * 76
-    out.write(f"\n{rule}\nCanonical correlations:\n  " + "  ".join(f"{x:.4f}" for x in r) + "\n", "text")
-    out.write(f"\n{rule}\nTests of significance of all canonical correlations\n\n", "text")
-    out.write(f"{'Statistic':>34}{'df1':>9}{'df2':>9}{'F':>13}{'Prob>F':>11}\n", "text")
-    lam = r ** 2 / (1.0 - r ** 2)
-    v = N - 1.0 - p2 if not noconstant else N - p2
-    stats = T.mv_statistics(lam, p1, p2, v)
-    names_full = {"W": "Wilks' lambda", "P": "Pillai's trace", "L": "Lawley-Hotelling trace", "R": "Roy's largest root"}
-    for r_ in stats:
-        out.write(f"{names_full[r_['name']]:>22}{_g6(r_['stat']):>12}{_g6(r_['df1']):>9}{_g6(r_['df2']):>9}"
-                  f"{_g6(r_['F']):>13}{r_['p']:>11.4f} {r_['flag']}\n", "text")
-    out.write(f"{rule}\n{'':>28}e = exact, a = approximate, u = upper bound on F\n", "text")
-    # e(b), e(V), e(stat_#) and e(stat_m) have the dimensions of Stata's; their contents are not documented (VERIFY)
-    type_code = {"e": 1.0, "a": 2.0, "u": 3.0}
-    cols = ["statistic", "df1", "df2", "F", "p", "type"]
-    def _row(r_):
-        return [r_["stat"], r_["df1"], r_["df2"], r_["F"], r_["p"], type_code[r_["flag"]]]
-    stat_m = np.array([_row(r_) for r_ in stats])
-    stat_j = []
-    for j in range(k):
-        w_ = T.mv_statistics(lam[j:], p1 - j, p2 - j, v)[0]
-        stat_j.append(np.array([[r[j]] + _row(w_)[:5]]))
-    b = np.concatenate([A1.T.ravel(), A2.T.ravel()]).reshape(1, -1)
-    sc = [("df_r", N - 1.0), ("N", N), ("df", N - 1.0), ("n_cc", k), ("df1", stats[0]["df1"]),
-          ("df2", stats[0]["df2"]), ("rank", b.shape[1])]
-    mats = [("b", matrix(b, ["y1"], [f"c{i + 1}" for i in range(b.shape[1])])),
-            ("V", matrix(np.zeros((b.shape[1], b.shape[1])), [f"c{i + 1}" for i in range(b.shape[1])],
-                         [f"c{i + 1}" for i in range(b.shape[1])]))]
-    mats += [(f"stat_{j + 1}", matrix(stat_j[j], ["stat"], cols)) for j in reversed(range(k))]
-    mats += [("stat_m", matrix(stat_m, ["W", "P", "L", "R"], cols)),
-             ("canload11", matrix(R11 @ Z1, n1, cn)), ("canload22", matrix(R22 @ Z2, n2, cn)),
-             ("canload12", matrix(R12 @ Z2, n1, cn)), ("canload21", matrix(R12.T @ Z1, n2, cn)),
-             ("rawcoef_var1", matrix(A1, n1, cn)), ("rawcoef_var2", matrix(A2, n2, cn)),
-             ("stdcoef_var1", matrix(Z1, n1, cn)), ("stdcoef_var2", matrix(Z2, n2, cn)),
-             ("ccorr", matrix(r.reshape(1, -1), ["ccorr"], cn)),
-             ("corr_var1", matrix(R11, n1, n1)), ("corr_var2", matrix(R22, n2, n2)),
-             ("corr_mixed", matrix(R12, n1, n2))]
-    macros = [("cmdline", "canon " + args.strip()), ("marginsnotok", "_ALL"), ("cmd", "canon"),
-              ("predict", "canon_p"), ("estat_cmd", "canon_estat"), ("properties", "b V")]
-    post_e(s, "canon", sc, macros, mats, mask, N)
-
-
 def _find_comma(text: str) -> int:
     depth = 0
     for i, ch in enumerate(text):
@@ -669,196 +676,3 @@ def _find_comma(text: str) -> int:
         elif ch == "," and depth == 0:
             return i
     return -1
-
-
-# ---------------------------------------------------------------------------
-# mvtest
-# ---------------------------------------------------------------------------
-
-@command("mvtest", "mvtest")
-def cmd_mvtest(s: "Session", args: str) -> None:
-    words = args.strip().split(None, 1)
-    if not words:
-        raise StataError(198, "invalid syntax")
-    sub = words[0].rstrip(",")
-    rest = args.strip()[len(words[0]):] if len(words) > 1 else ""
-    for name, mn, fn in (("means", 1, _mvtest_means), ("covariances", 3, _mvtest_cov), ("correlations", 4, _mvtest_corr),
-                         ("normality", 1, _mvtest_norm)):
-        if len(sub) >= mn and name.startswith(sub):
-            fn(s, rest)
-            return
-    raise StataError(198, "invalid syntax")
-
-
-def _groups(s, p, names, o, allowed=("fweight", "aweight")):
-    by = str(o["by"]).strip() if isinstance(o.get("by"), str) else None
-    X, w, wtype, mask = sample(s, p, names, allowed, extra=[by] if by else [])
-    if by is None:
-        return X, w, None, mask, None
-    g = s.data.get(by).data[mask]
-    return X, w, g, mask, by
-
-
-def _chi_lines(out, title: str, label: str, chi2: float, df: float, p: float) -> None:
-    out.write(f"\n{title}\n\n", "text")
-    out.write(f"{label + '(' + gnum(df) + ') =':>24}{chi2:>10.2f}\n{'Prob > chi2 =':>24}{p:>10.4f}\n", "text")
-
-
-def _mvtest_means(s, rest: str) -> None:
-    p = parse_standard(rest)
-    o = match_options(p.options, {"by": 2, "zero": 4, "equals": 3, "homogeneous": 4, "heterogeneous": 6}) if p.options.strip() else {}
-    names = numeric_names(s, p.varlist, 1)
-    X, w, g, mask, by = _groups(s, p, names, o)
-    out = s.output
-    k = len(names)
-    if g is None:
-        mean, S, R, n = mv.weighted_moments(X, w)
-        if o.get("zero") or isinstance(o.get("equals"), str):
-            mu0 = np.zeros(k)
-            if isinstance(o.get("equals"), str):
-                from .matrix import get_matrix
-                mu0 = get_matrix(s, str(o["equals"]).strip()).data.ravel()
-            r = T.hotelling_one(mean, S, n, mu0)
-            what = "Test that all means are equal to the hypothesized values" if not o.get("zero") else "Test that all means are equal to 0"
-            df1 = k
-        else:
-            if k < 2:
-                raise StataError(102, "too few variables specified")
-            Cm = np.hstack([np.eye(k - 1), -np.ones((k - 1, 1))])
-            r = T.hotelling_one(Cm @ mean, Cm @ S @ Cm.T, n)
-            what = "Test that all means are the same"
-            df1 = k - 1
-        out.write(f"\n{what}\n\n", "text")
-        out.write(f"{'Hotelling T2 =':>24}{r['T2']:>10.2f}\n", "text")
-        out.write(f"{'Hotelling F(' + str(df1) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.2f}\n", "text")
-        out.write(f"{'Prob > F =':>24}{r['p']:>10.4f}\n", "text")
-        s.r = {"T2": r["T2"], "F": r["F"], "df_m": float(df1), "df_r": r["df2"], "p_F": r["p"]}
-        return
-    levels = sorted(set(g.tolist()))
-    if len(levels) < 2:
-        raise StataError(198, "by() must define at least 2 groups")                         # VERIFY
-    E = np.zeros((k, k))
-    gm = np.average(X, axis=0, weights=w)
-    H = np.zeros((k, k))
-    N = float(X.shape[0] if w is None else w.sum())
-    for lv in levels:
-        sel = g == lv
-        ww = np.ones(int(sel.sum())) if w is None else w[sel]
-        xm = (ww[:, None] * X[sel]).sum(0) / ww.sum()
-        Xc = X[sel] - xm
-        E += (Xc * ww[:, None]).T @ Xc
-        d = xm - gm
-        H += ww.sum() * np.outer(d, d)
-    dfh, dfe = len(levels) - 1, N - len(levels)
-    stats = T.mv_statistics(T.eig_ratio(E, H), k, dfh, dfe)
-    out.write(f"\nTest for equality of {len(levels)} group means, assuming homogeneity\n\n", "text")
-    out.write(f"{'':>28}| Statistic   F(df1,     df2)   =  F      Prob>F\n", "text")
-    out.write(f"{'':>5}{'-' * 23}+{'-' * 47}\n", "text")
-    nm = {"W": "Wilks' lambda", "P": "Pillai's trace", "L": "Lawley-Hotelling trace", "R": "Roy's largest root"}
-    for r_ in stats:
-        out.write(f"{nm[r_['name']]:>27} |{r_['stat']:>10.4f}{r_['df1']:>8.1f}{r_['df2']:>10.1f}{r_['F']:>10.2f}"
-                  f"{r_['p']:>9.4f} {r_['flag']}\n", "text")
-    out.write(f"{'':>5}{'-' * 71}\n{'':>28}e = exact, a = approximate, u = upper bound on F\n", "text")
-    s.r = {"p_F": stats[0]["p"], "F": stats[0]["F"], "df_r": stats[0]["df2"], "df_m": stats[0]["df1"]}
-
-
-def _mvtest_cov(s, rest: str) -> None:
-    p = parse_standard(rest)
-    o = match_options(p.options, {"by": 2, "equals": 3, "diagonal": 4, "spherical": 4, "compound": 4, "block": 4}) if p.options.strip() else {}
-    names = numeric_names(s, p.varlist, 2)
-    for opt in ("compound", "block", "equals"):
-        if o.get(opt):
-            raise StataError(198, f"option {opt} is not available yet in OpenDTA")
-    X, w, g, mask, by = _groups(s, p, names, o)
-    out = s.output
-    if g is not None:
-        levels = sorted(set(g.tolist()))
-        Ss, ns = [], []
-        for lv in levels:
-            sel = g == lv
-            _, S_, _, sw = mv.weighted_moments(X[sel], None if w is None else w[sel])
-            Ss.append(S_)
-            ns.append(sw)
-        r = T.box_m(Ss, ns)
-        out.write(f"\nTest of equality of covariance matrices across {len(levels)} samples\n\n", "text")
-        out.write(f"{'Modified LR chi2 =':>24}{r['M']:>10.5f}\n", "text")
-        out.write(f"{'Box F(' + gnum(r['df']) + ',' + gnum(r['df2']) + ') =':>24}{r['F']:>10.2f}"
-                  f"{'Prob > F =':>16}{r['p_F']:>8.4f}\n", "text")
-        out.write(f"{'Box chi2(' + gnum(r['df']) + ') =':>24}{r['chi2']:>10.2f}{'Prob > chi2 =':>16}{r['p']:>8.4f}\n", "text")
-        s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"], "F": r["F"], "df_r": r["df2"], "p_F": r["p_F"]}
-        return
-    mean, S, R, n = mv.weighted_moments(X, w)
-    if o.get("spherical"):
-        r = T.lr_spherical(S, n)
-        _chi_lines(out, "Test that covariance matrix is spherical", "Adjusted LR chi2", r["chi2"], r["df"], r["p"])
-    else:
-        r = T.lr_diagonal(R, n)
-        _chi_lines(out, "Test that covariance matrix is diagonal", "Adjusted LR chi2", r["chi2"], r["df"], r["p"])
-    s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
-
-
-def _mvtest_corr(s, rest: str) -> None:
-    p = parse_standard(rest)
-    o = match_options(p.options, {"by": 2, "zero": 4, "equals": 3, "pairwise": 4}) if p.options.strip() else {}
-    names = numeric_names(s, p.varlist, 2)
-    for opt in ("equals", "pairwise"):
-        if o.get(opt):
-            raise StataError(198, f"option {opt} is not available yet in OpenDTA")
-    X, w, g, mask, by = _groups(s, p, names, o)
-    out = s.output
-    if g is not None:
-        levels = sorted(set(g.tolist()))
-        Rs, ns = [], []
-        for lv in levels:
-            sel = g == lv
-            _, _, R_, sw = mv.weighted_moments(X[sel], None if w is None else w[sel])
-            Rs.append(R_)
-            ns.append(sw)
-        r = T.lr_equal_correlations(Rs, ns)
-        _chi_lines(out, f"Test of equality of correlation matrices across {len(levels)} samples", "chi2", r["chi2"], r["df"], r["p"])
-    else:
-        mean, S, R, n = mv.weighted_moments(X, w)
-        if o.get("zero"):
-            r = T.lr_diagonal(R, n)
-            _chi_lines(out, "Test that all correlations are zero", "chi2", r["chi2"], r["df"], r["p"])      # VERIFY
-        else:
-            r = T.lawley(R, n)
-            _chi_lines(out, "Test that correlation matrix is compound symmetric (all correlations equal)",
-                       "Lawley chi2", r["chi2"], r["df"], r["p"])
-    s.r = {"chi2": r["chi2"], "df": r["df"], "p_chi2": r["p"]}
-
-
-def _mvtest_norm(s, rest: str) -> None:
-    p = parse_standard(rest)
-    o = match_options(p.options, {"stats": 2, "univariate": 3, "bivariate": 3, "by": 2}) if p.options.strip() else {}
-    names = numeric_names(s, p.varlist, 2)
-    for opt in ("univariate", "bivariate", "by"):
-        if o.get(opt):
-            raise StataError(198, f"option {opt} is not available yet in OpenDTA")
-    want = str(o.get("stats", "dhansen")).split() if isinstance(o.get("stats"), str) else ["dhansen"]
-    if want == ["all"]:
-        want = ["dhansen", "skewness", "kurtosis", "hzirkler"]
-    for w_ in want:
-        if not any(w_ == n_[:len(w_)] for n_ in ("dhansen", "skewness", "kurtosis", "hzirkler", "mardia")) or len(w_) < 2:
-            raise StataError(198, f"stats({w_}) invalid")
-    X, w, wtype, mask = sample(s, p, names, ("fweight",))
-    out = s.output
-    out.write("\nTest for multivariate normality\n\n", "text")
-    sres = {}
-    mat = {}
-    if any("dhansen".startswith(x) for x in want):
-        d = T.doornik_hansen(X)
-        out.write(f"{'Doornik-Hansen':>18}{'':>19}chi2({gnum(d['df'])}) = {d['chi2']:>8.3f}   Prob>chi2 = {d['p']:>7.4f}\n", "text")
-        sres.update({"chi2_dh": d["chi2"], "df_dh": d["df"], "p_dh": d["p"]})
-        mat["U_dh"] = matrix(d["U"], names, ["skewness", "kurtosis", "z1", "z2"])     # VERIFY: column contents
-    if any(x in ("mardia", "skewness", "kurtosis") or "skewness".startswith(x) or "kurtosis".startswith(x) for x in want):
-        m = T.mardia(X)
-        out.write(f"{'Mardia mSkewness =':>25}{m['b1']:>12.6f}   chi2({gnum(m['df_skew'])}) = {m['chi2_skew']:>9.3f}   Prob>chi2 = {m['p_skew']:.4f}\n", "text")   # VERIFY
-        out.write(f"{'Mardia mKurtosis =':>25}{m['b2']:>12.6f}   chi2(1) = {m['z_kurt'] ** 2:>11.3f}   Prob>chi2 = {m['p_kurt']:.4f}\n", "text")   # VERIFY
-        sres.update({"p_skew": m["p_skew"], "p_kurt": m["p_kurt"]})
-    if any("hzirkler".startswith(x) for x in want):
-        h = T.henze_zirkler(X)
-        out.write(f"{'Henze-Zirkler =':>25}{h['hz']:>12.6f}   chi2(1) = {h['z'] ** 2:>11.3f}   Prob>chi2 = {h['p']:.4f}\n", "text")   # VERIFY
-        sres["p_hz"] = h["p"]
-    sres.update(mat)
-    s.r = sres

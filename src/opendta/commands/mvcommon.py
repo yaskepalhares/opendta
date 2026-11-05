@@ -36,6 +36,9 @@ def sample(s: "Session", p, names: list[str], allowed=("fweight", "aweight"), ex
     """(X, w, weight type, mask): the rows with the variables (and the `extra` ones) present."""
     ds = s.data
     mask = touse(s, p)
+    group = getattr(s, "_by_group_mask", None)      # the current by group of a byable command
+    if group is not None:
+        mask &= group
     for n in list(names) + list(extra):
         mask &= ds.get(n).data < SYS
     w, wtype, mask = weights(s, p, mask, allowed)

@@ -16,7 +16,7 @@ from ..core import multivariate as mv
 from ..core.dataset import Variable
 from ..core.errors import StataError
 from ..lang.syntax import find_top, match_options, parse_standard
-from .mvcommon import chi2_p, fill_e, g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
+from .mvcommon import chi2_p, g as gnum, lower_matrix, matrix, numeric_names, post_e, sample
 from .registry import command
 
 if TYPE_CHECKING:
@@ -144,7 +144,7 @@ def _print_matrix(out, title: str, names: list[str], M_: np.ndarray, cols: list[
 # ---------------------------------------------------------------------------
 
 _PCA_OPTS = {"components": 4, "mineigen": 4, "correlation": 4, "covariance": 3, "vce": 3, "means": 4,
-             "blanks": 5, "tol": 3, "ignore": 6, "norotated": 5, "level": 3}
+             "blanks": 5, "tol": 3, "ignore": 6, "norotated": 5, "level": 1, "novce": 5, "factors": 3}
 
 
 @command("pca", "pca")
@@ -152,10 +152,11 @@ def cmd_pca(s: "Session", args: str) -> None:
     p = parse_standard(args)
     o = match_options(p.options, _PCA_OPTS) if p.options.strip() else {}
     names = numeric_names(s, p.varlist, 2)
-    if o.get("vce") and str(o["vce"]).strip() != "none":
-        raise StataError(198, "option vce(normal) is not available yet in OpenDTA")
-    if o.get("means"):
-        raise StataError(198, "option means is not available yet in OpenDTA")
+    vce = str(o["vce"]).strip() if isinstance(o.get("vce"), str) else "none"
+    if vce not in ("none", "normal"):
+        raise StataError(198, f"vce({vce}) not allowed")                                    # VERIFY
+    if o.get("factors") and not o.get("components"):
+        o["components"] = o["factors"]
     X, w, wtype, mask = sample(s, p, names)
     means, S, R, sw = mv.weighted_moments(X, w)
     cov = bool(o.get("covariance"))
@@ -178,6 +179,24 @@ def cmd_pca(s: "Session", args: str) -> None:
     rho = float(ev[:k].sum() / fit["trace"])
     out = s.output
     kind = "covariance" if cov else "correlation"
+    if o.get("means"):
+        from .mvtests import _summary_table
+        out.write("\nSummary statistics of the variables\n", "text")                    # VERIFY: title
+        _summary_table(out, s.data, names, X, w, wtype)
+    vres = None
+    if vce == "normal":
+        mtol = float(o["tol"]) if isinstance(o.get("tol"), str) else 1e-5
+        close = ev[-1] < mtol * ev[0] or np.any(np.abs(np.diff(ev)) < mtol * ev[0])
+        if close and not o.get("ignore"):
+            # VERIFY: message and return code
+            raise StataError(498, "eigenvalues are close to zero or to each other; standard errors not computed")
+        vres = mv.pca_vce(ev, V, N, k)
+        vres.update(mv.pca_lr_tests(C, ev, N))
+    if vres is not None and not o.get("novce"):
+        level = float(o["level"]) if isinstance(o.get("level"), str) else float(getattr(s, "level", 95))
+        _pca_vce_display(s, names, kind, N, k, fit["trace"], rho, vres, level)
+        _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, fit["trace"], rho, kind, wtype, w, cov, vres=vres)
+        return
     _header(out, f"Principal components/{kind}", [
         ("", _right("Number of obs", f"{N}")),
         ("", _right("Number of comp.", f"{k}")),
@@ -188,10 +207,46 @@ def cmd_pca(s: "Session", args: str) -> None:
     _table(out, "Principal components (eigenvectors) ", names, [f"Comp{j + 1}" for j in range(k)], A, _f4,
            extra=_unexpl_extra(unexpl), blanks=blanks)
     out.write("\n", "text")
-    _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, fit["trace"], rho, kind, wtype, w, cov)
+    _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, fit["trace"], rho, kind, wtype, w, cov, vres=vres)
 
 
-def _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, trace, rho, kind, wtype, w, cov, rotated=None):
+def _pca_vce_display(s, names, kind, N, k, trace, rho, v, level) -> None:
+    """pca, vce(normal): the eigenvalues and the retained eigenvectors as an estimation table, the
+    LR tests and the explained variance with standard errors ([MV] pca, example; spacing VERIFY)."""
+    from ..estimation.results import CoefRow, coef_table
+    out = s.output
+    pdim = len(names)
+    if kind == "correlation":
+        out.write("(with PCA/correlation, SEs and tests are approximate)\n", "text")
+    _header(out, f"Principal components/{kind}", [
+        ("", _right("Number of obs", f"{N}")), ("", _right("Number of comp.", f"{k}")),
+        ("", _right("Trace", gnum(trace))), ("", _right("Rho", f"{rho:.4f}")),
+        ("SEs assume multivariate normality", _right("SE(Rho)", f"{math.sqrt(v['v_rho']):.4f}"))])
+    out.write("\n", "text")
+    se = np.sqrt(np.maximum(np.diag(v["V"]), 0.0))
+    rows = [CoefRow("eq", "Eigenvalues")]
+    rows += [CoefRow("coef", f"Comp{j + 1}", v["b"][j], se[j]) for j in range(pdim)]
+    for a in range(k):
+        rows.append(CoefRow("sep"))
+        rows.append(CoefRow("eq", f"Comp{a + 1}"))
+        rows += [CoefRow("coef", nm, v["b"][pdim + a * pdim + i], se[pdim + a * pdim + i]) for i, nm in enumerate(names)]
+    coef_table(s, "", rows, stat="z", df=None, level=level)
+    out.write(f"LR test for independence:  chi2({int(v['df_i'])}) = {v['chi2_i']:8.2f}    Prob > chi2 = "
+              f"{chi2_p(v['chi2_i'], v['df_i']):6.4f}\n", "text")
+    out.write(f"LR test for   sphericity:  chi2({int(v['df_s'])}) = {v['chi2_s']:8.2f}    Prob > chi2 = "
+              f"{chi2_p(v['chi2_s'], v['df_s']):6.4f}\n", "text")
+    out.write("\nExplained variance by components\n\n", "text")
+    out.write(f"{RULE}{'-' * 79}\n", "text")
+    out.write(f"{RULE}  Components |  Eigenvalue  Proportion   SE_Prop  Cumulative     SE_Cum       Bias\n", "text")
+    out.write(f"{RULE}{'-' * 13}+{'-' * 65}\n", "text")
+    for j in range(pdim):
+        out.write(f"{RULE}{'Comp' + str(j + 1):>12} |   {gnum(v['b'][j]):>9}      {v['prop'][j]:6.4f}    {v['se_prop'][j]:6.4f}"
+                  f"      {v['cum'][j]:6.4f}     {v['se_cum'][j]:6.4f}  {gnum(v['bias'][j]):>9}\n", "text")
+    out.write(f"{RULE}{'-' * 79}\n", "text")
+
+
+def _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, trace, rho, kind, wtype, w, cov, rotated=None,
+              vres=None):
     pdim = len(names)
     sign, lndet = np.linalg.slogdet(C)
     scalars = [("N", N), ("f", k), ("rho", rho), ("trace", trace), ("lndet", lndet if sign > 0 else SYS),
@@ -208,11 +263,27 @@ def _post_pca(s, p, args, names, mask, N, C, means, S, ev, V, k, trace, rho, kin
             ("Psi", matrix(unexpl.reshape(1, -1), ["Psi"], names)),
             ("Ev", matrix(ev.reshape(1, -1), ["Ev"], comps)),
             ("L", matrix(V[:, :k], names, comps[:k]))]
+    if vres is not None:
+        # VERIFY: the order of these results in ereturn list
+        scalars += [("v_rho", vres["v_rho"]), ("chi2_i", vres["chi2_i"]), ("df_i", vres["df_i"]),
+                    ("p_i", chi2_p(vres["chi2_i"], vres["df_i"])), ("chi2_s", vres["chi2_s"]), ("df_s", vres["df_s"]),
+                    ("p_s", chi2_p(vres["chi2_s"], vres["df_s"])), ("rank", float(np.linalg.matrix_rank(vres["V"])))]
+        macros = [(k_, "b V" if k_ == "properties" else v_) for k_, v_ in macros] + [("vce", "multivariate normality")]
+        eqs = ["Eigenvalues"] * pdim + [f"Comp{a + 1}" for a in range(k) for _ in names]
+        cn = comps + names * k
+        bm = matrix(vres["b"].reshape(1, -1), ["y1"], cn)
+        bm.coleq = eqs
+        Vm = matrix(vres["V"], cn, cn)
+        Vm.roweq, Vm.coleq = eqs, eqs
+        stats_ = np.column_stack([vres["prop"], vres["se_prop"], vres["cum"], vres["se_cum"], vres["bias"]])
+        mats = [("b", bm), ("V", Vm), ("Ev_bias", matrix(vres["bias"].reshape(1, -1), ["Ev_bias"], comps)),
+                ("Ev_stats", matrix(stats_, comps, ["Proportion", "SE_Prop", "Cumulative", "SE_Cum", "Bias"]))] + mats
     mvd = {"kind": "pca", "names": names, "C": C, "means": means, "sds": np.sqrt(np.diag(S)), "S": S, "ev": ev,
            "V": V, "k": k, "N": N, "trace": trace, "cov": cov, "rot": rotated}
     post_e(s, "pca", scalars, macros, mats, mask, N,
            estat={"loadings": (3, _estat_loadings), "residuals": (3, _estat_residuals), "smc": (3, _estat_smc),
-                  "summarize": (3, _estat_summarize), "kmo": (3, _estat_kmo), "anti": (3, _estat_anti)},
+                  "summarize": (3, _estat_summarize), "kmo": (3, _estat_kmo), "anti": (3, _estat_anti),
+                  "rotatecompare": (7, _estat_rotatecompare)},
            predict_multi={"score": lambda ss, ee: _pred_scores(ss, ee, show=True), "": lambda ss, ee: _pred_scores(ss, ee, show=True)},
            predict_opts={"fit": 3, "q": 1, "comp": 4}, extra={"mv": mvd})
 
@@ -327,7 +398,8 @@ def cmd_factor(s: "Session", args: str) -> None:
     post_e(s, "factor", scalars, macros, mats, mask, N,
            estat={"kmo": (3, _estat_kmo), "smc": (3, _estat_smc), "anti": (3, _estat_anti), "summarize": (3, _estat_summarize),
                   "residuals": (3, _estat_residuals), "loadings": (3, _estat_loadings),
-                  "structure": (3, _estat_structure), "common": (3, _estat_common)},
+                  "structure": (3, _estat_structure), "common": (3, _estat_common), "factors": (3, _estat_factors),
+                  "rotatecompare": (7, _estat_rotatecompare)},
            predict_multi={"": lambda ss, ee: _pred_scores(ss, ee, show=True),
                           "regression": lambda ss, ee: _pred_scores(ss, ee, show=True),
                           "bartlett": lambda ss, ee: _pred_scores(ss, ee, "bartlett", show=True)},
@@ -351,118 +423,6 @@ def _factor_head(out, d: dict, desc: str, k: int) -> None:
 
 _METHOD = {"pf": "principal factors", "pcf": "principal-component factors", "ipf": "iterated principal factors",
            "ml": "maximum likelihood"}
-
-
-# ---------------------------------------------------------------------------
-# rotate
-# ---------------------------------------------------------------------------
-
-_ROT = {"varimax": 3, "quartimax": 6, "equamax": 3, "parsimax": 3, "promax": 3, "oblimin": 3, "quartimin": 6,
-        "normalize": 4, "factors": 6, "components": 4, "blanks": 5, "norotated": 5, "oblique": 3, "orthogonal": 4}
-
-
-@command("rotate", "rot")
-def cmd_rotate(s: "Session", args: str) -> None:
-    est = getattr(s, "_estimates", None)
-    d = (getattr(est, "extra", None) or {}).get("mv") if est is not None else None
-    if d is None or d["kind"] not in ("pca", "factor"):
-        raise StataError(301, "last estimates not found")
-    o = match_options(args.strip().lstrip(","), _ROT) if args.strip().lstrip(",").strip() else {}
-    methods = [m for m in ("varimax", "quartimax", "equamax", "parsimax", "promax", "oblimin", "quartimin") if o.get(m)]
-    if len(methods) > 1:
-        raise StataError(198, "only one rotation method may be specified")                   # VERIFY
-    method = methods[0] if methods else "varimax"
-    norm = bool(o.get("normalize"))
-    kind = d["kind"]
-    k = d["k"]
-    kk = int(float(o.get("factors") or o.get("components") or k))
-    if kk < 2:
-        raise StataError(198, "rotation requires at least 2 factors/components")             # VERIFY
-    kk = min(kk, k)
-    # pca rotates the eigenvectors (unit length); the variances are those of the scaled eigenvectors
-    A = d["V"][:, :kk] if kind == "pca" else d["L"][:, :kk]
-    As = A * np.sqrt(np.maximum(d["ev"][:kk], 0)) if kind == "pca" else A
-    pdim = A.shape[0]
-    Phi = np.eye(kk)
-    if method in ("varimax", "quartimax", "equamax", "parsimax"):
-        gamma = {"varimax": 1.0, "quartimax": 0.0, "equamax": kk / 2.0, "parsimax": pdim * (kk - 1) / (pdim + kk - 2.0)}[method]
-        Lr, T, _ = mv.orthomax(A, gamma, normalize=norm)
-        desc = f"orthogonal {method}"
-    elif method == "promax":
-        power = float(o["promax"]) if isinstance(o["promax"], str) else 3.0
-        Lr, T, Phi = mv.promax(A, power, normalize=norm)
-        desc = "oblique promax"
-        ctitle, crit = f"promax({power:g})", "promax"
-    else:
-        gamma = float(o["oblimin"]) if isinstance(o.get("oblimin"), str) else 0.0
-        Lr, T, Phi, _ = mv.oblimin(A, gamma, normalize=norm)
-        T = np.linalg.inv(T).T                      # the rotation matrix shown is the one with Lr = A T
-        desc = "oblique quartimin" if method == "quartimin" else "oblique oblimin"
-        ctitle, crit = f"oblimin({gamma:g})", "oblimin"
-    if method in ("varimax", "quartimax", "equamax", "parsimax"):
-        ctitle = crit = method
-    oblique = method in ("promax", "oblimin", "quartimin")
-    desc += f" (Kaiser {'on' if norm else 'off'})"
-    blanks = float(o["blanks"]) if o.get("blanks") else 0.0
-    out = s.output
-    names = d["names"]
-    N = d["N"]
-    var = ((As @ T) ** 2).sum(0)
-    if kind == "factor" and oblique:
-        var = ((Lr @ Phi) ** 2).sum(0)                  # variance of the structure (VERIFY)
-    if kind == "pca":
-        unexpl = mv.pca_unexplained(d["C"], d["ev"], d["V"], kk)
-        rho = float(d["ev"][:kk].sum() / d["trace"])
-        _header(out, f"Principal components/{'covariance' if d['cov'] else 'correlation'}", [
-            ("", _right("Number of obs", f"{N}")), ("", _right("Number of comp.", f"{kk}")),
-            ("", _right("Trace", gnum(d["trace"]))),
-            (f"    Rotation: {desc}", _right("Rho", f"{rho:.4f}"))])
-        if oblique:
-            _eig_table(out, "Component", var, d["trace"], head="Variance", oblique="Rotated comp. are correlated")
-        else:
-            _eig_table(out, "Component", var, d["trace"], head="Variance")
-        _table(out, "Rotated components", names, [f"Comp{j + 1}" for j in range(kk)], Lr, _f4,
-               extra=_unexpl_extra(unexpl), blanks=blanks)
-        resid = unexpl
-    else:
-        _factor_head(out, d, desc, kk)
-        if oblique:
-            _eig_table(out, "Factor", var, d["evsum"], head="Variance", fixed=True, oblique="Rotated factors are correlated")
-        else:
-            _eig_table(out, "Factor", var, d["evsum"], head="Variance", fixed=True)
-        _lr_line(out, "independent", d["chi_i"], d["df_i"], chi2_p(d["chi_i"], d["df_i"]))
-        if d["ml"] is not None:
-            chi_k, df_k, pk = d["ml"][:3]
-            if df_k > 0:
-                _lr_line(out, f"{kk} factor{'s' if kk != 1 else ''}", chi_k, df_k, pk)
-        _table(out, "Rotated factor loadings (pattern matrix) and unique variances", names, [f"Factor{j + 1}" for j in range(kk)],
-               Lr, _f4, extra=_uniq_extra(d["psi"]), blanks=blanks)
-        resid = d["psi"]
-    cn = ("Comp" if kind == "pca" else "Factor")
-    cols = [f"{cn}{j + 1}" for j in range(kk)]
-    # pca shows the matrix with rotated = unrotated T; factor shows its inverse transpose (VERIFY)
-    Tshow = np.linalg.inv(T).T if kind == "factor" and oblique else T
-    _table(out, ("Component" if kind == "pca" else "Factor") + " rotation matrix", cols, cols, Tshow, _f4, stub="",
-           cw=9 if kind == "pca" else 8)
-    d2 = dict(d)
-    d2["rot"] = {"L": Lr, "T": T, "Phi": Phi, "method": method, "desc": desc, "k": kk, "oblique": oblique,
-                 "ctitle": ctitle, "crit": crit, "norm": norm}
-    est.extra["mv"] = d2
-    base_s, base_m, base_t = est.extra["elist"]
-    # VERIFY: the layout of the r_ results follows the oblimin case of the reference log; r_fmin
-    # (the value of the rotation criterion) is stored only for oblimin
-    rs = [("r_fmin", mv._oblimin_crit(Lr, float(ctitle[8:-1]) if ctitle.startswith("oblimin") else 0.0)[0]),
-          ("r_f", kk)] if method in ("oblimin", "quartimin") else [("r_f", kk)]
-    rm = [("r_normalization", "kaiser" if norm else "none"), ("r_ctitle", ctitle), ("r_criterion", crit),
-          ("r_class", "oblique" if oblique else "orthogonal")]
-    if kind == "factor":
-        rm = [rm[0], rm[3], rm[2], rm[1]]
-    rt = [("r_Ev", matrix(var.reshape(1, -1), ["r_Ev"], cols))]
-    if kind == "factor":
-        rt.append(("r_Phi", matrix(Phi, cols, cols)))
-    rt += [("r_T", matrix(Tshow, cols, cols)), ("r_L", matrix(Lr, names, cols))]
-    base_m = [x for x in base_m if not x[0].startswith("r_")]
-    fill_e(s, [x for x in base_s if not x[0].startswith("r_")] + rs, rm + base_m, rt + [x for x in base_t if not x[0].startswith("r_")])
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +565,75 @@ def _estat_common(s, est, rest):
     _table(s.output, "Correlation matrix of the common factors", cols, cols, Phi, lambda v: gnum(v, "%9.0g"), stub="Factors",
            tri=True)
     s.r = {"Phi": matrix(Phi, cols, cols)}
+
+
+def _estat_factors(s, est, rest):
+    """estat factors [, factors(#) detail]: log likelihood, AIC and BIC of the maximum likelihood
+    models with 1, 2, ... factors ([MV] factor postestimation, example 2)."""
+    from ..lang.syntax import match_options
+    d = _mvd(est)
+    if d["kind"] != "factor":
+        raise StataError(321, "subcommand estat factors is unrecognized")
+    _, opt = _split(rest)
+    o = match_options(opt, {"factors": 3, "detail": 3}) if opt.strip() else {}
+    p_, N = len(d["names"]), d["N"]
+    # VERIFY: the default maximum is the largest number of factors with df_r >= 0
+    kmax = max(k_ for k_ in range(1, p_ + 1) if (p_ - k_) ** 2 - (p_ + k_) >= 0)
+    if isinstance(o.get("factors"), str):
+        kmax = min(int(float(o["factors"])), kmax)
+    if o.get("detail"):
+        # VERIFY: detail shows each maximum likelihood run; it reruns factor quietly here
+        names = " ".join(d["names"])
+        for k_ in range(1, kmax + 1):
+            s.interp._execute_expanded(f"factor {names} if e(sample), ml factors({k_})")
+    rows, heyw = [], False
+    for k_ in range(1, kmax + 1):
+        fit = mv.factor_ml(d["C"], k_)
+        heyw = heyw or bool(fit["heywood"])
+        ll = -0.5 * N * fit["F"]
+        dfm = p_ * k_ - k_ * (k_ - 1) / 2.0
+        dfr = ((p_ - k_) ** 2 - (p_ + k_)) / 2.0
+        rows.append([ll, dfm, dfr, -2 * ll + 2 * dfm, -2 * ll + dfm * math.log(N)])
+    out = s.output
+    # VERIFY: column widths
+    out.write("\nFactor analysis with different numbers of factors (maximum likelihood)\n\n", "text")
+    out.write(f"{RULE}{'#factors':>8} | {'loglik':>10} {'df_m':>6} {'df_r':>6} {'AIC':>10} {'BIC':>10}\n", "text")
+    out.write(f"{RULE}{'-' * 9}+{'-' * 48}\n", "text")
+    for k_, r_ in enumerate(rows, start=1):
+        out.write(f"{RULE}{k_:>8} | {gnum(r_[0]):>10} {r_[1]:>6.0f} {r_[2]:>6.0f} {gnum(r_[3]):>10} {gnum(r_[4]):>10}\n", "text")
+    out.write(f"{RULE}{'-' * 58}\n", "text")
+    out.write("Heywood case(s) encountered\n" if heyw else "no Heywood cases encountered\n", "text")     # VERIFY
+    s.r = {"stats": matrix(np.array(rows), [str(k_) for k_ in range(1, kmax + 1)], ["loglik", "df_m", "df_r", "AIC", "BIC"])}
+
+
+def _estat_rotatecompare(s, est, rest):
+    """estat rotatecompare: the rotation matrix, then the rotated and unrotated loadings side by
+    side ([MV] factor postestimation, [MV] pca postestimation)."""
+    d = _mvd(est)
+    rot = d["rot"]
+    if not rot:
+        raise StataError(321, "rotated results not found")                                # VERIFY
+    kk = rot["k"]
+    pca = d["kind"] == "pca"
+    cn = "Comp" if pca else "Factor"
+    cols = [f"{cn}{j + 1}" for j in range(kk)]
+    T = rot["T"]
+    Tshow = np.linalg.inv(T).T if not pca and rot["oblique"] else T
+    out = s.output
+    _table(out, f"Rotation matrix -- {rot['desc']}", cols, cols, Tshow, _f4, stub="", cw=9 if pca else 8)
+    U = d["V"][:, :kk] if pca else d["L"][:, :kk]
+    both = np.column_stack([rot["L"], U])
+    w = 10 * kk
+    title = "Component loadings" if pca else "Factor loadings"
+    sub = f"{RULE}{'':>12} |{'Rotated':^{w}}|{'Unrotated':^{w}}"           # VERIFY: the group header
+    k2 = 2 * kk
+    top = RULE + "-" * (14 + w * 2 + 1)
+    sep = f"{RULE}{'-' * 13}+{'-' * w}+{'-' * w}"
+    head = f"{RULE}{'Variable':>12} |" + "".join(f"{c:>9} " for c in cols) + "|" + "".join(f"{c:>9} " for c in cols)
+    lines = [f"{RULE}{_abbr(nm):>12} |" + "".join(f"{_f4(both[i][j]):>9} " + ("|" if j == kk - 1 else "")
+                                                     for j in range(k2)) for i, nm in enumerate(d["names"])]
+    out.write("\n" + title + "\n\n" + top + "\n" + sub + "\n" + head + "\n" + sep + "\n" + "\n".join(lines)
+              + "\n" + top + "\n", "text")
 
 
 # ---------------------------------------------------------------------------
@@ -858,3 +887,4 @@ def cmd_loadingplot(s: "Session", args: str) -> None:
 @command("scoreplot", "scoreplot")
 def cmd_scoreplot(s: "Session", args: str) -> None:
     _plot_xy(s, args, True)
+

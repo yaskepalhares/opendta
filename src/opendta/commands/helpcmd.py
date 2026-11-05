@@ -53,7 +53,7 @@ ALIASES = {
     "varstable": "varpost", "varwle": "varpost", "varbasic": "varpost", "fcast": "varpost",
     "vecrank": "vec", "svar": "vec", "arch": "archmodels", "arfima": "archmodels",
     "ucm": "ssm", "sspace": "ssm", "dfactor": "ssm",
-    "factor": "pca", "rotate": "pca", "alpha": "pca", "screeplot": "pca", "loadingplot": "pca", "scoreplot": "pca",
+    "factor": "pca", "rotate": "pca", "rotatemat": "pca", "alpha": "pca", "screeplot": "pca", "loadingplot": "pca", "scoreplot": "pca",
     "mvreg": "hotelling", "manova": "hotelling", "manovatest": "hotelling", "canon": "hotelling", "mvtest": "hotelling",
     "candisc": "discrim", "mca": "ca", "mds": "ca", "mdsmat": "ca", "procrustes": "ca", "biplot": "ca", "camat": "ca", "cabiplot": "ca", "caprojection": "ca", "mcaplot": "ca", "mcaprojection": "ca", "mdslong": "ca", "mdsconfig": "ca", "mdsshepard": "ca", "procoverlay": "ca", "clustermat": "cluster",
     "st": "stset", "streset": "stset", "stdes": "stdescribe", "estat_phtest": "stcox",
