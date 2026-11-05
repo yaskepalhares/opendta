@@ -94,6 +94,25 @@ def test_latin1_in_117(run, tmp_path):
     assert read_dta(p).get("s").data[2] == "José"
 
 
+@pytest.mark.parametrize("entries", [(7,), tuple(range(2, 12))])
+def test_117_zeroed_map_entries(run, tmp_path, entries):
+    # Stata 13 files from stata-press.com hold 0 in map entry 7 (variable_labels)
+    ds = build(run, 117)
+    p = tmp_path / "z.dta"
+    write_dta(ds, p, release=117)
+    raw = bytearray(p.read_bytes())
+    m = raw.index(b"<map>") + 5
+    for k in entries:
+        raw[m + 8 * k:m + 8 * k + 8] = bytes(8)
+    p.write_bytes(raw)
+    back = read_dta(p)
+    _check_same(ds, back)
+    assert back.get("s").label == "Nome"
+    assert back.value_labels["sim"] == ds.value_labels["sim"]
+    assert back.chars["_dta"]["note1"] == "nota do arquivo"
+    assert back.get("longo").data[2] == "x" * 3000
+
+
 # -- independent check through ReadStat -------------------------------------------
 
 def test_readstat_reads_ours(run, tmp_path, release):
