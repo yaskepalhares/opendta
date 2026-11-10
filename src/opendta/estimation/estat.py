@@ -1,4 +1,4 @@
-"""estat: ic, vce, summarize, hettest, ovtest, classification and gof
+"""estat: ic, vce, summarize, hettest, ovtest, dwatson, classification and gof
 ([R] estat, [R] regress postestimation, [R] logistic postestimation).
 
 Formulas from the manuals; layouts checked against the Stata 14 logs
@@ -43,12 +43,12 @@ def cmd_estat(s: "Session", args: str) -> None:
         if len(sub) >= minimum and name.startswith(sub):
             fn(s, est, rest)
             return
-    table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3),
+    table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3), ("dwatson", 3),
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")   # compat 1902
-    fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
+    fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest, "dwatson": _dwatson,
           "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
     if fn is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")
@@ -293,6 +293,29 @@ def _ovtest(s: "Session", est, rest: str) -> None:
     out.write(f"{'F(' + str(q) + ', ' + str(df_r) + ')':>26} = {F:>9.2f}\n", "text")
     out.write(f"{'Prob > F':>26} = {p:>11.4f}\n", "text")
     s.r = dict(reversed([("p", p), ("F", F), ("df", float(q)), ("df_r", float(df_r))]))
+
+
+def _dwatson(s: "Session", est, rest: str) -> None:
+    from ..core.tsstats import durbin_watson
+    from .tsops import require_ts, shift
+    _opts(rest, {})
+    if est.cmd != "regress":
+        raise StataError(321, "estat dwatson not valid")   # VERIFY
+    info = require_ts(s.data)
+    if info.panel:
+        raise StataError(459, "estat dwatson not valid with panel data")   # VERIFY
+    X, y, yhat, mask = _regress_data(s, est)
+    e_all = np.full(s.data.nobs, SYS)
+    e_all[mask] = y - yhat
+    lag = shift(s.data, e_all, 1)[mask]
+    # the lag is missing across gaps and outside e(sample), as with L.e in Stata   VERIFY
+    dw = durbin_watson(y - yhat, np.where(lag < SYS, lag, np.nan))
+    N, k = X.shape
+    out = s.output
+    # VERIFY spacing: %3.0f k, %6.0f N and %9.0g d
+    out.write(f"\nDurbin-Watson d-statistic({k:>3},{N:>6}) = ", "text")
+    out.write(f"{format_value(dw, '%9.0g').strip():>9}\n", "result")
+    s.r = dict(reversed([("dw", dw), ("k", float(k)), ("N", float(N))]))
 
 
 # ---------------------------------------------------------------------------

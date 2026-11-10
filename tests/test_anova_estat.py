@@ -127,3 +127,21 @@ def test_estat_requires_valid_model(run):
     run("quietly logit d x")
     run("capture estat hettest")
     assert run.session.rc == 321
+
+
+def test_estat_dwatson_matches_formula_and_skips_gaps(run):
+    run("clear\nset obs 30\ngen t = _n\ngen x = mod(_n*7, 11)\ngen y = 2 + 0.5*x + sin(_n)")
+    run("quietly regress y x")
+    run("capture estat dwatson")
+    assert run.session.rc == 111
+    run("tsset t\ndrop if t == 10\nquietly regress y x")
+    out = run("estat dwatson")
+    assert "Durbin-Watson d-statistic(  2,    29) =" in out
+    y, x, t = _col(run, "y"), _col(run, "x"), _col(run, "t")
+    X = np.column_stack([x, np.ones_like(x)])
+    e = y - X @ np.linalg.lstsq(X, y, rcond=None)[0]
+    adj = np.diff(t) == 1
+    dw = (np.diff(e)[adj] ** 2).sum() / (e @ e)
+    r = run.session.r
+    assert r["dw"] == pytest.approx(dw, rel=1e-10)
+    assert (r["N"], r["k"]) == (29, 2)
