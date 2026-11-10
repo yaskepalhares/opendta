@@ -6,7 +6,8 @@ Missing values are NaN in the arguments and in the results.
 tsfilter: Hodrick-Prescott, Baxter-King, Christiano-Fitzgerald and Butterworth filters, each
 returning the cyclical component (the trend is y minus the cycle) from the formulas of the
 manual. tssmooth: exponential, double exponential and Holt-Winters recursions with the starting
-values and the penalized criterion described in the manual.
+values and the penalized criterion described in the manual. Also the Durbin-Watson d of
+estat dwatson.
 """
 
 from __future__ import annotations
@@ -403,3 +404,12 @@ def shw_smooth(x: np.ndarray, period: int, *, additive=False, parms=None, s0=Non
             "rss": rss, "prss": prss, "rmse": math.sqrt(rss / n_obs) if n_obs else math.nan,
             "N": n_obs, "N_pre": n0, "s1_0": a0, "s2_0": b0, "constant": a, "linear": b,
             "period": period, "opt": res, "seasonal": sea0}
+
+
+def durbin_watson(e: np.ndarray, e_lag: np.ndarray) -> float:
+    """Durbin-Watson d ([R] regress postestimation time series): the sum of (e_t - e_{t-1})^2
+    over the periods whose previous period is in the sample, over the sum of e_t^2 over all of
+    them. `e_lag` holds e_{t-1}, NaN where the previous period is missing."""
+    ok = ~np.isnan(e_lag)
+    d = e[ok] - e_lag[ok]
+    return float(d @ d / (e @ e))

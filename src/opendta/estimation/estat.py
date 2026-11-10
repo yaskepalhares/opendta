@@ -1,4 +1,4 @@
-"""estat: ic, vce, summarize, hettest, ovtest, classification and gof
+"""estat: ic, vce, summarize, hettest, ovtest, dwatson, classification and gof
 ([R] estat, [R] regress postestimation, [R] logistic postestimation).
 
 Formulas from the manuals; layouts checked against the Stata 14 logs
@@ -43,12 +43,12 @@ def cmd_estat(s: "Session", args: str) -> None:
         if len(sub) >= minimum and name.startswith(sub):
             fn(s, est, rest)
             return
-    table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3),
+    table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3), ("dwatson", 3),
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")   # compat 1902
-    fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest,
+    fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest, "dwatson": _dwatson,
           "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
     if fn is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")
@@ -294,6 +294,34 @@ def _ovtest(s: "Session", est, rest: str) -> None:
     out.write(f"{'Prob > F':>26} = {p:>11.4f}\n", "text")
     s.r = dict(reversed([("p", p), ("F", F), ("df", float(q)), ("df_r", float(df_r))]))
 
+
+def _dwatson(s: "Session", est, rest: str) -> None:
+    from ..core.tsstats import durbin_watson
+    from .tsops import shift, ts_info
+    _opts(rest, {})
+    if est.cmd != "regress":
+        raise StataError(321, "subcommand estat dwatson is unrecognized")   # compat 1932
+    info = ts_info(s.data)
+    if info is None:
+        raise StataError(111, "time variable not set, use tsset varname ...")   # compat 1932
+    X, y, yhat, mask = _regress_data(s, est)
+    if info.panel and len(np.unique(s.data.get(info.panel).data[mask])) > 1:
+        raise StataError(459, "sample may not include multiple panels")   # compat 1932
+    e_all = np.full(s.data.nobs, SYS)
+    e_all[mask] = y - yhat
+    lag = shift(s.data, e_all, 1)[mask]
+    # the lag is missing across gaps and outside e(sample) (compat 1932)
+    lag = np.where(lag < SYS, lag, np.nan)
+    dw = durbin_watson(y - yhat, lag)
+    gaps = int(np.isnan(lag).sum()) - 1
+    N, k = X.shape
+    out = s.output
+    if gaps:
+        out.write("\nNumber of gaps in sample:  ", "text")   # VERIFY width with 10+ gaps
+        out.write(f"{gaps}\n", "result")
+    out.write(f"\nDurbin-Watson d-statistic({k:>3},{N:>6}) = ", "text")   # compat 1932
+    out.write(f"{format_value(dw, '%9.0g').strip():>9}\n", "result")
+    s.r = dict(reversed([("dw", dw), ("k", float(k)), ("N", float(N)), ("N_gaps", float(gaps))]))
 
 # ---------------------------------------------------------------------------
 # logit/probit: classification e gof

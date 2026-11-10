@@ -1,0 +1,98 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta-dwatson/compat/stata/1932_estat_dwatson.log
+  log type:  text
+ opened on:  10 Nov 2026, 09:28:42
+
+. * estat dwatson after regress ([R] regress postestimation time series): layout, r(), a gap in
+. * the time variable, and the errors without tsset, with panel data and after another model.
+. clear
+
+. set obs 30
+number of observations (_N) was 0, now 30
+
+. gen t = _n
+
+. gen x = mod(_n*7, 11)
+
+. gen y = 2 + 0.5*x + sin(_n)
+
+. quietly regress y x
+
+. capture noisily estat dwatson
+time variable not set, use tsset varname ...
+
+. display _rc
+111
+
+. tsset t
+        time variable:  t, 1 to 30
+                delta:  1 unit
+
+. estat dwatson
+
+Durbin-Watson d-statistic(  2,    30) =  .8816304
+
+. return list
+
+scalars:
+                 r(dw) =  .88163042978312
+                  r(k) =  2
+                  r(N) =  30
+             r(N_gaps) =  0
+
+. drop if t == 10
+(1 observation deleted)
+
+. quietly regress y x
+
+. estat dwatson
+
+Number of gaps in sample:  1
+
+Durbin-Watson d-statistic(  2,    29) =   .837601
+
+. quietly regress y x if t > 5
+
+. estat dwat
+
+Number of gaps in sample:  1
+
+Durbin-Watson d-statistic(  2,    24) =  .8713795
+
+. gen id = 1 + (t > 15)
+
+. xtset id t
+       panel variable:  id (unbalanced)
+        time variable:  t, 1 to 30, but with a gap
+                delta:  1 unit
+
+. quietly regress y x
+
+. capture noisily estat dwatson
+sample may not include multiple panels
+
+. display _rc
+459
+
+. tsset t
+        time variable:  t, 1 to 30, but with a gap
+                delta:  1 unit
+
+. gen d = y > 4
+
+. quietly logit d x
+
+. capture noisily estat dwatson
+subcommand estat dwatson is unrecognized
+
+. display _rc
+321
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta-dwatson/compat/stata/1932_estat_dwatson.log
+  log type:  text
+ closed on:  10 Nov 2026, 09:28:42
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
