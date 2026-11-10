@@ -297,26 +297,31 @@ def _ovtest(s: "Session", est, rest: str) -> None:
 
 def _dwatson(s: "Session", est, rest: str) -> None:
     from ..core.tsstats import durbin_watson
-    from .tsops import require_ts, shift
+    from .tsops import shift, ts_info
     _opts(rest, {})
     if est.cmd != "regress":
-        raise StataError(321, "estat dwatson not valid")   # VERIFY
-    info = require_ts(s.data)
-    if info.panel:
-        raise StataError(459, "estat dwatson not valid with panel data")   # VERIFY
+        raise StataError(321, "subcommand estat dwatson is unrecognized")   # compat 1932
+    info = ts_info(s.data)
+    if info is None:
+        raise StataError(111, "time variable not set, use tsset varname ...")   # compat 1932
     X, y, yhat, mask = _regress_data(s, est)
+    if info.panel and len(np.unique(s.data.get(info.panel).data[mask])) > 1:
+        raise StataError(459, "sample may not include multiple panels")   # compat 1932
     e_all = np.full(s.data.nobs, SYS)
     e_all[mask] = y - yhat
     lag = shift(s.data, e_all, 1)[mask]
-    # the lag is missing across gaps and outside e(sample), as with L.e in Stata   VERIFY
-    dw = durbin_watson(y - yhat, np.where(lag < SYS, lag, np.nan))
+    # the lag is missing across gaps and outside e(sample) (compat 1932)
+    lag = np.where(lag < SYS, lag, np.nan)
+    dw = durbin_watson(y - yhat, lag)
+    gaps = int(np.isnan(lag).sum()) - 1
     N, k = X.shape
     out = s.output
-    # VERIFY spacing: %3.0f k, %6.0f N and %9.0g d
-    out.write(f"\nDurbin-Watson d-statistic({k:>3},{N:>6}) = ", "text")
+    if gaps:
+        out.write("\nNumber of gaps in sample:  ", "text")   # VERIFY width with 10+ gaps
+        out.write(f"{gaps}\n", "result")
+    out.write(f"\nDurbin-Watson d-statistic({k:>3},{N:>6}) = ", "text")   # compat 1932
     out.write(f"{format_value(dw, '%9.0g').strip():>9}\n", "result")
-    s.r = dict(reversed([("dw", dw), ("k", float(k)), ("N", float(N))]))
-
+    s.r = dict(reversed([("dw", dw), ("k", float(k)), ("N", float(N)), ("N_gaps", float(gaps))]))
 
 # ---------------------------------------------------------------------------
 # logit/probit: classification e gof

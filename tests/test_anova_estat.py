@@ -136,6 +136,7 @@ def test_estat_dwatson_matches_formula_and_skips_gaps(run):
     assert run.session.rc == 111
     run("tsset t\ndrop if t == 10\nquietly regress y x")
     out = run("estat dwatson")
+    assert "Number of gaps in sample:  1" in out
     assert "Durbin-Watson d-statistic(  2,    29) =" in out
     y, x, t = _col(run, "y"), _col(run, "x"), _col(run, "t")
     X = np.column_stack([x, np.ones_like(x)])
@@ -144,4 +145,4 @@ def test_estat_dwatson_matches_formula_and_skips_gaps(run):
     dw = (np.diff(e)[adj] ** 2).sum() / (e @ e)
     r = run.session.r
     assert r["dw"] == pytest.approx(dw, rel=1e-10)
-    assert (r["N"], r["k"]) == (29, 2)
+    assert (r["N"], r["k"], r["N_gaps"]) == (29, 2, 1)
