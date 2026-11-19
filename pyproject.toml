@@ -24,6 +24,9 @@ dependencies = [
     "scipy>=1.11",
     "PySide6>=6.6",
     "openpyxl>=3.1",
+    # Excel 97-2003 .xls files (import excel with xlrd, export excel and putexcel with xlwt)
+    "xlrd>=2.0",
+    "xlwt>=1.3",
     "matplotlib>=3.7",
     # CA certificates for the update check in the packaged application
     "certifi>=2023.7",
@@ -36,15 +39,13 @@ Download = "https://github.com/yaskepalhares/opendta/releases/latest"
 [project.optional-dependencies]
 # reading old .dta files (formats 114/115 and earlier) through ReadStat
 legacy = ["pyreadstat>=1.3"]
-# old .xls spreadsheets (import excel with xlrd, export excel with xlwt); .xlsx uses openpyxl,
-# already included
-xls = ["xlrd>=2.0", "xlwt>=1.3"]
+# kept so that `pip install opendta[xls]` still works; xlrd and xlwt are now regular dependencies
+xls = []
 # pyreadstat also serves as an independent checker in the .dta tests and reads SAS, SPSS and XPORT files;
-# pandas is only used in the tests (and by export sasxport), to write files through ReadStat; xlrd and
-# xlwt are in the dev extra so that the .xls tests run. pyreadstat 1.3.7 returns an empty strL of
-# 3000 characters for release 119 files (1.2.8 to 1.3.6 read them; our own reader round-trips them),
+# pandas is only used in the tests (and by export sasxport), to write files through ReadStat.
+# pyreadstat 1.3.7 returns an empty strL of 3000 characters for release 119 files (1.2.8 to 1.3.6 read them; our own reader round-trips them),
 # hence the cap in dev until it is checked against a later release.
-dev = ["pytest>=8", "pyreadstat>=1.3,<1.3.7", "pandas>=2", "xlrd>=2.0", "xlwt>=1.3"]
+dev = ["pytest>=8", "pyreadstat>=1.3,<1.3.7", "pandas>=2"]
 
 [project.scripts]
 opendta = "opendta.cli:main"

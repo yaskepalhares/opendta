@@ -44,7 +44,7 @@ Um bloco por área de [Faltam para a 1.0](#faltam-para-a-10): o tamanho é o nú
 
 **1c ✅**
 - [x] Formatos 113–115 (Stata 8–12): leitura própria; gravação 114/115 com `saveold, version(11|12)`
-- [x] `import excel`/`export excel` (.xlsx; .xls com o pacote xlrd)
+- [x] `import excel`/`export excel` (.xlsx e .xls)
 - [x] `infile` (formato livre e com dicionário), `infix`, `file open/write/read/close`
 - [x] Data Editor com edição de células (gera `replace`/`set obs`/`generate`) e Variables Manager
 

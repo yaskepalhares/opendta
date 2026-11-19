@@ -1,17 +1,17 @@
 **English** · [Português](#português)
 
-## What's new in 0.9.0
+## What's new in 0.10.0
 
 New:
 
-- **`power`, part 2**: sample size, power and effect size for `power twoway` (two-way ANOVA), `power repeated` (repeated-measures ANOVA), `power cmh`, `power mcc` (matched case-control), `power trend`, `power cox`, `power exponential` and `power logrank`, with lists of values in tables. The layout and the numbers were checked against the output of a reference run.
+- **Class system**: `class` definitions, `.new`, member programs and variables, `class exit` and `classutil`.
+- **Multivariate statistics, part 3**: more rotation criteria, `pca, vce(normal)`, `estat` after `canon`, `mvtest` and error terms in `manova`.
+- **`estat dwatson`** after `regress`.
 
-Interface:
+Fixes:
 
-- **User menu**: when no item has been added yet, it says so and points to the help page that explains how to add items.
-- **Help → Contents** lists every help page with its title, and **Help → Search** asks for words and lists the pages that contain all of them.
-- The **Graph** button says there is no graph yet when nothing has been drawn.
-- **About** describes OpenDTA as an interpreter with a Stata-style interface.
+- **Excel 97-2003 `.xls` files** now open in the app: `import excel`, `export excel` and `putexcel` no longer ask for an extra package to be installed.
+- `.dta` files (format 117 and later) whose map stores 0 for a section are read correctly.
 
 What is still missing for version 1.0 is listed in the [roadmap](https://github.com/yaskepalhares/opendta/blob/main/ROADMAP.md#missing-for-10).
 
@@ -57,18 +57,18 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.9.0
+### Novidades da 0.10.0
 
 Novo:
 
-- **`power`, parte 2**: tamanho de amostra, poder e tamanho de efeito para `power twoway` (ANOVA de dois fatores), `power repeated` (ANOVA de medidas repetidas), `power cmh`, `power mcc` (caso-controle pareado), `power trend`, `power cox`, `power exponential` e `power logrank`, com listas de valores em tabelas. O layout e os números foram conferidos com a saída de uma execução de referência.
+- **Sistema de classes**: definições com `class`, `.new`, programas e variáveis membros, `class exit` e `classutil`.
+- **Estatística multivariada, parte 3**: mais critérios de rotação, `pca, vce(normal)`, `estat` depois de `canon`, `mvtest` e termos de erro no `manova`.
+- **`estat dwatson`** depois de `regress`.
 
-Interface:
+Correções:
 
-- **Menu User**: enquanto nenhum item foi adicionado, ele avisa e indica a página de ajuda que explica como adicionar itens.
-- **Help → Contents** lista todas as páginas de ajuda com o título, e **Help → Search** pede palavras e lista as páginas que contêm todas elas.
-- O botão **Graph** avisa que ainda não há gráfico quando nada foi desenhado.
-- O **About** descreve o OpenDTA como um interpretador com interface no estilo do Stata.
+- **Planilhas `.xls` do Excel 97-2003** agora abrem no app: `import excel`, `export excel` e `putexcel` não pedem mais a instalação de um pacote extra.
+- Arquivos `.dta` (formato 117 em diante) cujo mapa guarda 0 para uma seção são lidos corretamente.
 
 ### Download
 

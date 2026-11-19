@@ -30,7 +30,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-On Windows, activate the environment with `.venv\Scripts\activate`. Optional extras: `pip install -e ".[legacy]"` reads `.dta` files from Stata 7 and earlier (ReadStat), and `pip install -e ".[xls]"` reads and writes Excel 97-2003 `.xls` files.
+On Windows, activate the environment with `.venv\Scripts\activate`. Optional extras: `pip install -e ".[legacy]"` reads `.dta` files from Stata 7 and earlier (ReadStat). Excel 97-2003 `.xls` files are supported out of the box.
 
 ## Run
 
