@@ -44,7 +44,7 @@ One tile per area of [Missing for 1.0](#missing-for-10): its size is the number 
 
 **1c ✅**
 - [x] Formats 113–115 (Stata 8–12): OpenDTA's own reader; writing 114/115 with `saveold, version(11|12)`
-- [x] `import excel`/`export excel` (.xlsx; .xls with the xlrd package)
+- [x] `import excel`/`export excel` (.xlsx and .xls)
 - [x] `infile` (free format and with a dictionary), `infix`, `file open/write/read/close`
 - [x] Data Editor with cell editing (generates `replace`/`set obs`/`generate`) and Variables Manager
 

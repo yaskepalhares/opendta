@@ -28,7 +28,8 @@ hidden = collect_submodules("opendta")
 datas += [(str(ROOT / "LICENSE"), "."), (str(ROOT / "packaging" / "THIRD_PARTY_NOTICES.md"), ".")]
 for pkg in ("PySide6", "shiboken6", "numpy", "scipy", "matplotlib", "openpyxl", "pillow",
             "pyreadstat", "pandas", "fonttools", "kiwisolver", "contourpy", "cycler", "pyparsing",
-            "python-dateutil", "packaging", "et-xmlfile", "certifi"):
+            "python-dateutil", "packaging", "et-xmlfile", "certifi",
+            "xlrd", "xlwt"):
     try:
         datas += copy_metadata(pkg)
     except Exception:  # noqa: BLE001 - optional package missing from the build environment

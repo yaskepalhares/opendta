@@ -20,6 +20,7 @@ included in the bundle, in its `*.dist-info` folder inside `Contents/Resources`
 | python-dateutil | Apache-2.0 / BSD-3-Clause | https://github.com/dateutil/dateutil |
 | packaging | Apache-2.0 / BSD-2-Clause | https://github.com/pypa/packaging |
 | openpyxl, et-xmlfile | MIT | https://openpyxl.readthedocs.io |
+| xlrd, xlwt | BSD-3-Clause | https://github.com/python-excel |
 | pyreadstat | Apache-2.0 | https://github.com/Roche/pyreadstat |
 | certifi (Mozilla CA bundle) | MPL-2.0 | https://github.com/certifi/python-certifi |
 | ReadStat | MIT | https://github.com/WizardMac/ReadStat |

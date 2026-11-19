@@ -30,7 +30,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-No Windows, ative o ambiente com `.venv\Scripts\activate`. Extras opcionais: `pip install -e ".[legacy]"` lê arquivos `.dta` do Stata 7 e anteriores (ReadStat), e `pip install -e ".[xls]"` lê e grava planilhas `.xls` do Excel 97-2003.
+No Windows, ative o ambiente com `.venv\Scripts\activate`. Extras opcionais: `pip install -e ".[legacy]"` lê arquivos `.dta` do Stata 7 e anteriores (ReadStat). Planilhas `.xls` do Excel 97-2003 já funcionam sem extras.
 
 ## Executar
 
