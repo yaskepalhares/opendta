@@ -1,6 +1,6 @@
 **English** · [Português](#português)
 
-## What's new in 0.10.0
+## What's new in 0.11.0
 
 New:
 
@@ -57,7 +57,7 @@ Personal study project, released under the MIT License. Stata is a registered tr
 
 ## Português
 
-### Novidades da 0.10.0
+### Novidades da 0.11.0
 
 Novo:
 
