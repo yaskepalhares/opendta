@@ -231,9 +231,11 @@ def cmd_rcof(s: "Session", args: str) -> None:
         if end <= 0:
             raise StataError(198, "invalid syntax")
         cmd, cond = strip_outer_quotes(t[:end]), t[end:].strip()
+    # an empty command returns 0 (compat 2005: "_rc == 0" after a command that failed)
+    rc = 0
     if cmd.strip():
         s.interp._execute_expanded("capture " + cmd)
-    rc = s.rc
+        rc = s.rc
     ok = s.eval(f"{rc} {cond}") if cond else 0.0
     if not ok or ok >= 8.98846567431158e307:
         raise StataError(9, f"rcof:  _rc {cond} *NOT TRUE* from\n       _rc == {rc}")

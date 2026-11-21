@@ -127,7 +127,7 @@ def test_numlist_errors(run, arg, rc):
 
 
 def test_rcof(run):
-    out = run("capture noisily rcof\ndisplay _rc").splitlines()
+    out = run("capture display 1/\ncapture noisily rcof\ndisplay _rc").splitlines()
     assert out[-3:] == ["rcof:  _rc  *NOT TRUE* from", "       _rc == 0", "9"]
     assert run('rcof "noisily display 1/" == 198\ndisplay "ok"').splitlines()[-1] == "ok"
     assert run('capture rcof "display 1" != 0\ndisplay _rc').strip() == "9"
