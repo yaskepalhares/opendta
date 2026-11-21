@@ -71,3 +71,20 @@ def test_string_functions(run, expr, value):
 def test_ustrregexs(run):
     run('display ustrregexm("ab12", "([a-z]+)([0-9]+)")')
     assert run.eval("ustrregexs(2)") == "12"
+
+
+@pytest.mark.parametrize("expr, value", [
+    ("binomialp(10,5,.5)", .24609375), ("poissonp(2,2)", .27067057), ("reldif(1,1.1)", .04761905),
+    ("trigamma(1)", math.pi ** 2 / 6), ("logistic(0)", .5), ("tden(5,0)", .37960669),
+    ("invibeta(1,1,.5)", .5), ("nchi2(1,1,1)", .47724987), ("invnchi2(1,1,.5)", 1.1036433),
+    ("hypergeometricp(10,5,3,2)", .41666667), ("nbinomial(5,2,.5)", .2265625),
+    ("binomial(10,4,invbinomial(10,4,.3))", .3), ("binomialtail(10,4,invbinomialtail(10,4,.3))", .3),
+    ("poisson(invpoisson(3,.4),3)", .4), ("poissontail(invpoissontail(3,.4),3)", .4),
+    ("nbinomial(5,2,invnbinomial(5,2,.3))", .3), ("nbinomialtail(5,2,invnbinomialtail(5,2,.3))", .3),
+    ("nchi2(3,npnchi2(3,4,.2),4)", .2), ("gammap(2,invgammap(2,.3))", .3),
+    ("ibetatail(2,3,.4) + ibeta(2,3,.4)", 1), ("cloglog(invcloglog(.7))", .7),
+    ("binormal(0,0,0)", .25), ("hypergeometric(10,5,3,3)", 1),
+    ("nttail(5,0,1)", .18160873), ("nF(2,3,0,1) - F(2,3,1) + 1", 1), ("lnnormalden(0)", -0.91893853),
+])
+def test_math_and_distribution_functions(run, expr, value):
+    assert run.eval(expr) == pytest.approx(value, rel=1e-6)

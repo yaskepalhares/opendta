@@ -555,6 +555,73 @@ register("betaden", 3)(_num(lambda a, b, x: stats.beta.pdf(x, a, b)))
 register("ibeta", 3)(_num(lambda a, b, x: special.betainc(a, b, x)))
 register("gammap", 2)(_num(lambda a, x: special.gammainc(a, x)))
 
+register("binomialp", 3)(_num(lambda n, k, p: stats.binom.pmf(k, n, p)))
+register("invbinomial", 3)(_num(lambda n, k, P: 1 - special.betaincinv(n - k, k + 1, P)
+                                if 0 <= k < n and 0 < P < 1 else None))
+register("invbinomialtail", 3)(_num(lambda n, k, P: special.betaincinv(k, n - k + 1, P)
+                                    if 0 < k <= n and 0 < P < 1 else None))
+register("poissonp", 2)(_num(lambda m, k: stats.poisson.pmf(k, m) if m > 0 else None))
+register("invpoisson", 2)(_num(lambda k, P: special.gammainccinv(k + 1, P) if 0 < P < 1 else None))
+register("invpoissontail", 2)(_num(lambda k, q: special.gammaincinv(k, q)
+                                   if k >= 1 and 0 < q < 1 else None))
+register("nbinomial", 3)(_num(lambda n, k, p: stats.nbinom.cdf(k, n, p)))
+register("nbinomialp", 3)(_num(lambda n, k, p: stats.nbinom.pmf(k, n, p)))
+register("nbinomialtail", 3)(_num(lambda n, k, p: stats.nbinom.sf(k - 1, n, p)))
+register("invnbinomial", 3)(_num(lambda n, k, q: special.betaincinv(n, k + 1, q)
+                                 if 0 < q < 1 else None))
+register("invnbinomialtail", 3)(_num(lambda n, k, q: special.betaincinv(n, k, 1 - q)
+                                     if k >= 1 and 0 < q < 1 else None))
+register("hypergeometricp", 4)(_num(lambda N, K, n, k: stats.hypergeom.pmf(k, N, K, n)))
+register("hypergeometric", 4)(_num(lambda N, K, n, k: stats.hypergeom.cdf(k, N, K, n)))
+register("tden", 2)(_num(lambda df, t: stats.t.pdf(t, df) if df > 0 else None))
+register("ntden", 3)(_num(lambda df, np_, t: stats.nct.pdf(t, df, np_)))
+register("nt", 3)(_num(lambda df, np_, t: stats.nct.cdf(t, df, np_)))
+register("nttail", 3)(_num(lambda df, np_, t: stats.nct.sf(t, df, np_)))
+register("invnttail", 3)(_num(lambda df, np_, p: stats.nct.isf(p, df, np_) if 0 < p < 1 else None))
+register("Fden", 3)(_num(lambda d1, d2, f: stats.f.pdf(f, d1, d2)))
+register("nFden", 4)(_num(lambda d1, d2, np_, f: stats.ncf.pdf(f, d1, d2, np_)))
+register("nF", 4)(_num(lambda d1, d2, np_, f: stats.ncf.cdf(f, d1, d2, np_)))
+register("nFtail", 4)(_num(lambda d1, d2, np_, f: stats.ncf.sf(f, d1, d2, np_)))
+register("invnFtail", 4)(_num(lambda d1, d2, np_, p: stats.ncf.isf(p, d1, d2, np_)
+                              if 0 < p < 1 else None))
+register("chi2den", 2)(_num(lambda df, x: stats.chi2.pdf(x, df) if df > 0 else None))
+register("nchi2", 3)(_num(lambda df, np_, x: stats.ncx2.cdf(x, df, np_)))
+register("nchi2tail", 3)(_num(lambda df, np_, x: stats.ncx2.sf(x, df, np_)))
+register("invnchi2", 3)(_num(lambda df, np_, p: stats.ncx2.ppf(p, df, np_) if 0 < p < 1 else None))
+register("invnchi2tail", 3)(_num(lambda df, np_, p: stats.ncx2.isf(p, df, np_)
+                                 if 0 < p < 1 else None))
+
+
+def _npnchi2(df: float, x: float, p: float) -> float | None:
+    """Noncentrality np such that nchi2(df, np, x) = p (decreasing in np)."""
+    from scipy.optimize import brentq
+    if not (0 < p < 1) or df <= 0 or x <= 0 or stats.chi2.cdf(x, df) < p:
+        return None
+    hi = 1.0
+    while stats.ncx2.cdf(x, df, hi) > p:
+        hi *= 2
+        if hi > 1e7:
+            return None
+    return brentq(lambda np_: stats.ncx2.cdf(x, df, np_) - p, 0.0, hi, xtol=1e-12)
+
+
+register("npnchi2", 3)(_num(_npnchi2))
+register("gammaden", 4)(_num(lambda a, b, g, x: stats.gamma.pdf(x, a, loc=g, scale=b)))
+register("gammaptail", 2)(_num(lambda a, x: special.gammaincc(a, x)))
+register("invgammap", 2)(_num(lambda a, p: special.gammaincinv(a, p) if 0 < p < 1 else None))
+register("invgammaptail", 2)(_num(lambda a, p: special.gammainccinv(a, p) if 0 < p < 1 else None))
+register("ibetatail", 3)(_num(lambda a, b, x: 1 - special.betainc(a, b, x)))
+register("invibeta", 3)(_num(lambda a, b, p: special.betaincinv(a, b, p) if 0 <= p <= 1 else None))
+register("invibetatail", 3)(_num(lambda a, b, p: special.betaincinv(a, b, 1 - p)
+                                 if 0 <= p <= 1 else None))
+register("lnnormalden", 1, 3)(_num(lambda z, m=0.0, s=1.0: stats.norm.logpdf(z, m, s) if s > 0 else None))
+register("binormal", 3)(_num(lambda h, k, r: stats.multivariate_normal.cdf(
+    [h, k], mean=[0, 0], cov=[[1, r], [r, 1]]) if -1 <= r <= 1 else None))
+register("trigamma", 1)(_num(lambda x: float(special.polygamma(1, x))))
+register("reldif", 2)(_num(lambda x, y: abs(x - y) / (abs(y) + 1)))
+register("logistic", 1)(_num(lambda x: 1 / (1 + math.exp(-x)) if x > -700 else 0.0))
+register("cloglog", 1)(_num(lambda x: math.log(-math.log(1 - x)) if 0 < x < 1 else None))
+register("invcloglog", 1)(_num(lambda x: 1 - math.exp(-math.exp(x)) if x < 700 else 1.0))
 
 # -- datas --------------------------------------------------------------------
 
