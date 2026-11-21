@@ -33,6 +33,10 @@ _MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 DEFAULT_GLOBALS = {
     "S_ADO": "BASE;SITE;.;PERSONAL;PLUS;OLDPLACE",
     "S_level": "95",
+    # set when Stata starts (compat/expected/2003)
+    "S_OS": {"Windows": "Windows", "Darwin": "MacOSX"}.get(platform.system(), "Unix"),
+    "S_OSDTL": platform.mac_ver()[0] if platform.system() == "Darwin" else platform.release(),
+    "S_StataSE": "SE",
     "F1": "help advice;",
     "F2": "describe;",
     "F7": "save ",
@@ -138,7 +142,7 @@ class EvalContext:
             return 1.0 if len(m) and m[0] else 0.0
         s = self.s
         if kind == "c":
-            return s.creturn(raw)
+            return s.creturn(raw, strict=True)
         store = {"r": s.r, "e": s.e, "s": s.sret}[kind]
         if raw in store:
             v = store[raw]
@@ -290,7 +294,7 @@ class Session:
     def nobs(self) -> int:
         return self.data.nobs
 
-    def creturn(self, name: str) -> Value:
+    def creturn(self, name: str, *, strict: bool = False) -> Value:
         now = _dt.datetime.now()
         values: dict[str, Value] = {
             "pi": math.pi,
@@ -327,11 +331,86 @@ class Session:
             "alpha": "a b c d e f g h i j k l m n o p q r s t u v w x y z",
             "ALPHA": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z",
             "Mons": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
-            "Weekdays": "Sun Mon Tue Wed Thu Fri Sat",
+            "Months": "January February March April May June July August September October "
+                      "November December",
+            "Wdays": "Sun Mon Tue Wed Thu Fri Sat",
+            "Weekdays": "Sunday Monday Tuesday Wednesday Thursday Friday Saturday",
+            "filedate": self.data.timestamp if self.data.filename else "",
+            **self._c_system(),
         }
         if name not in values:
+            if strict:
+                # c(sortlist), c(eps), c(lastcmd)... do not exist in Stata 14 (compat 2003)
+                raise StataError(133, f"c({name}) undefined")
             return M.SYSMISS
         return values[name]
+
+    def _c_system(self) -> dict[str, Value]:
+        """c() values that describe the system, the limits and the settings, with the values
+        Stata 14 SE reports (compat/expected/2003)."""
+        import getpass
+        import socket
+        import tempfile
+        from .lang.adopath import sysdir
+
+        def setting(name: str, default: str) -> str:
+            return self.settings.get(name, default)
+
+        def number(name: str, default: str) -> float:
+            try:
+                return float(self.settings.get(name, default))
+            except ValueError:
+                return float(default)
+
+        dirs = sysdir(self)
+        osdtl = platform.mac_ver()[0] if platform.system() == "Darwin" else platform.release()
+        try:
+            user = getpass.getuser()
+        except (OSError, KeyError):
+            user = ""
+        # VERIFY: machine_type on Windows and Linux; Stata 14 on any Mac reports Intel
+        machine = {"Darwin": "Macintosh (Intel 64-bit)", "Windows": "PC (64-bit x86-64)"}.get(
+            platform.system(), "PC (64-bit x86-64)")
+        return {
+            "machine_type": machine,
+            "byteorder": "lohi",
+            "username": user,
+            "hostname": socket.gethostname(),
+            "osdtl": osdtl,
+            "tmpdir": tempfile.gettempdir().rstrip(os.sep) + os.sep,
+            "sysdir_stata": dirs["STATA"].rstrip("/") + "/",
+            "sysdir_base": dirs["BASE"].rstrip("/") + "/",
+            "sysdir_site": dirs["SITE"].rstrip("/") + "/",
+            "sysdir_plus": dirs["PLUS"].rstrip("/") + "/",
+            "sysdir_personal": dirs["PERSONAL"].rstrip("/") + "/",
+            "born_date": "02 Apr 2015",   # the Stata 14 build the references come from
+            "SE": 1.0, "MP": 0.0, "processors": 1.0,
+            "mode": "", "console": "",
+            "memory": 33554432.0,   # VERIFY: Stata reports the memory it has allocated
+            "max_N_theory": 2147483647.0, "max_k_theory": 5000.0, "max_width_theory": 1048576.0,
+            "maxvar": number("maxvar", "5000"), "matsize": number("matsize", "400"),
+            "epsfloat": 2.0 ** -23,
+            "maxbyte": 100.0, "minbyte": -127.0, "maxint": 32740.0, "minint": -32767.0,
+            "maxlong": 2147483620.0, "minlong": -2147483647.0,
+            "maxfloat": 1.70141173319e+38, "minfloat": -1.70141173319e+38,
+            "maxstrvarlen": 2045.0, "max_macrolen": 4227143.0, "macrolen": 645200.0,
+            "namelen": 32.0, "cmdlen": 645216.0, "eqlen": 1337.0,
+            "adosize": number("adosize", "1000"), "niceness": number("niceness", "5"),
+            "pagesize": number("pagesize", "37"), "logtype": setting("logtype", "smcl"),
+            "noisily": 0.0 if self.output.quiet_depth and not self.output.noisy_depth else 1.0,
+            "trace": setting("trace", "off"), "tracedepth": number("tracedepth", "32000"),
+            "varabbrev": setting("varabbrev", "on"), "rmsg": setting("rmsg", "off"),
+            "httpproxy": setting("httpproxy", "off"), "checksum": setting("checksum", "off"),
+            "reventries": number("reventries", "5000"), "virtual": setting("virtual", "off"),
+            "scrollbufsize": number("scrollbufsize", "204800"),
+            "emptycells": setting("emptycells", "keep"),
+            "showbaselevels": setting("showbaselevels", ""),
+            "showemptycells": setting("showemptycells", ""),
+            "showomitted": setting("showomitted", ""),
+            "fvwrap": number("fvwrap", "1"), "lstretch": setting("lstretch", ""),
+            "cformat": setting("cformat", ""), "pformat": setting("pformat", ""),
+            "sformat": setting("sformat", ""),
+        }
 
     # -- Mata ---------------------------------------------------------------
     @property

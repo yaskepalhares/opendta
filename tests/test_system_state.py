@@ -40,3 +40,29 @@ def test_python_errors_become_stata_errors(run, monkeypatch):
     spec = registry.REGISTRY["describe"]
     monkeypatch.setitem(registry.REGISTRY, "describe", dataclasses.replace(spec, fn=boom))
     assert run("capture describe\ndisplay _rc").strip() == "198"
+
+
+@pytest.mark.parametrize("name", ["sortlist", "eps", "fastscroll", "lastcmd", "adoplace", "iterlog",
+                                  "nao_existe_xyz"])
+def test_unknown_c_name_is_r133(run, name):
+    out = run(f'capture noisily display "[" c({name}) "]"\ndisplay _rc')
+    assert out.splitlines() == [f"[c({name}) undefined", "133"]
+
+
+def test_c_system_values(run):
+    for name, shown in [("maxbyte", "100"), ("minint", "-32767"), ("maxlong", "2.147e+09"),
+                        ("epsfloat", "1.192e-07"), ("maxfloat", "1.701e+38"), ("namelen", "32"),
+                        ("maxstrvarlen", "2045"), ("matsize", "400"), ("maxvar", "5000"),
+                        ("SE", "1"), ("MP", "0"), ("byteorder", "lohi"), ("logtype", "smcl"),
+                        ("emptycells", "keep"), ("tracedepth", "32000"), ("noisily", "1"),
+                        ("mode", ""), ("showbaselevels", ""), ("filedate", "")]:
+        assert run(f'display "[" c({name}) "]"').strip() == f"[{shown}]", name
+    assert run('display c(Weekdays)').startswith("Sunday Monday")
+    assert run("quietly display c(noisily)") == ""
+    assert run("display c(tmpdir)").strip().endswith("/")
+
+
+def test_s_globals_through_a_local(run):
+    out = run('foreach m in S_level S_ADO S_StataSE S_OS {\ndisplay "`m\'=[${`m\'}]"\n}')
+    assert out.splitlines()[:3] == ["S_level=[95]", "S_ADO=[BASE;SITE;.;PERSONAL;PLUS;OLDPLACE]",
+                                    "S_StataSE=[SE]"]
