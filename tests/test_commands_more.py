@@ -215,3 +215,18 @@ def test_sdtesti(run):
     run("clear\nset obs 20\ngen x = mod(_n * 7, 11)\ngen g = _n > 12")
     out = run("sdtest x, by(g)")
     assert "Variance ratio test" in out and run.eval("r(df_1)") == 11
+
+
+def test_robvar(run):
+    import numpy as np
+    from scipy import stats
+    out = run("clear\ncapture noisily robvar\ndisplay _rc").splitlines()
+    assert out[-2:] == ["varlist required", "100"]
+    run("clear\nset obs 40\ngen g = mod(_n, 3)\ngen x = mod(_n * 7, 13) * (1 + g)")
+    out = run("robvar x, by(g)")
+    assert "Summary of x" in out and "W50 =" in out and "df(2, 37)" in out
+    x = np.array(run.session.data.get("x").data)
+    g = np.array(run.session.data.get("g").data)
+    groups = [x[g == k] for k in range(3)]
+    assert run.eval("r(w0)") == pytest.approx(stats.levene(*groups, center="mean").statistic)
+    assert run.eval("r(w50)") == pytest.approx(stats.levene(*groups, center="median").statistic)

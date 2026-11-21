@@ -14,11 +14,12 @@
 {p 8 16 2}{cmd:swilk} {it:varlist} [{it:if}] [{it:in}]{p_end}
 {p 8 16 2}{cmd:sktest} {it:varlist} [{it:if}] [{it:in}] [{cmd:,} {opt noadj:ust}]{p_end}
 {p 8 16 2}{cmd:sdtest} {it:varname} {cmd:==} {it:#} | {cmd:sdtest} {it:varname} {cmd:,} {opt by(groupvar)}{p_end}
+{p 8 16 2}{cmd:robvar} {it:varname} [{it:if}] [{it:in}]{cmd:,} {opt by(groupvar)}{p_end}
 
 {title:Description}
 
 {pstd}
-{cmd:ranksum}: Wilcoxon rank-sum (Mann-Whitney) test. {cmd:signrank}: Wilcoxon matched-pairs signed-rank test. {cmd:kwallis}: Kruskal-Wallis test. {cmd:spearman}: Spearman's rank correlation. {cmd:swilk}: Shapiro-Wilk normality test. {cmd:sktest}: skewness and kurtosis test for normality, with Royston's adjustment. {cmd:sdtest}: variance-comparison tests.
+{cmd:ranksum}: Wilcoxon rank-sum (Mann-Whitney) test. {cmd:signrank}: Wilcoxon matched-pairs signed-rank test. {cmd:kwallis}: Kruskal-Wallis test. {cmd:spearman}: Spearman's rank correlation. {cmd:swilk}: Shapiro-Wilk normality test. {cmd:sktest}: skewness and kurtosis test for normality, with Royston's adjustment. {cmd:sdtest}: variance-comparison tests. {cmd:robvar}: Levene's test (W0) and the Brown-Forsythe tests with the median (W50) and the 10% trimmed mean (W10), robust to nonnormality.
 {p_end}
 
 {title:Remarks}

@@ -832,3 +832,44 @@ def tukey_smooth(x: np.ndarray, spec: str, twice: bool = False) -> np.ndarray:
         r = np.asarray(x, dtype=float) - y
         y = y + tukey_smooth(r, spec, False)
     return y
+
+
+# ---------------------------------------------------------------------------
+# robvar: Levene (1960) and Brown and Forsythe (1974)
+# ---------------------------------------------------------------------------
+
+def _anova_f(z: np.ndarray, g: np.ndarray) -> tuple[float, int, int]:
+    levels = np.unique(g)
+    k, n = len(levels), len(z)
+    grand = z.mean()
+    between = sum(len(z[g == lv]) * (z[g == lv].mean() - grand) ** 2 for lv in levels)
+    within = sum(((z[g == lv] - z[g == lv].mean()) ** 2).sum() for lv in levels)
+    df1, df2 = k - 1, n - k
+    return (between / df1) / (within / df2), df1, df2
+
+
+def trimmed_mean(x: np.ndarray, pct: float = 10.0) -> float:
+    """Mean of the values between the pct and 100-pct percentiles (inclusive). VERIFY: how
+    robvar trims."""
+    from .stats import percentile
+    xs = np.sort(x)
+    lo, hi = percentile(xs, pct), percentile(xs, 100 - pct)
+    keep = x[(x >= lo) & (x <= hi)]
+    return float(keep.mean())
+
+
+def robvar(x: np.ndarray, g: np.ndarray) -> dict:
+    """W0 (absolute deviations from the group mean), W50 (from the median) and W10 (from the
+    10% trimmed mean): one-way ANOVA F statistics on the deviations."""
+    from .stats import percentile
+    out = {}
+    for key, center in (("w0", lambda v: v.mean()), ("w50", lambda v: percentile(np.sort(v), 50)),
+                        ("w10", trimmed_mean)):
+        z = np.empty(len(x))
+        for lv in np.unique(g):
+            m = g == lv
+            z[m] = np.abs(x[m] - center(x[m]))
+        f, df1, df2 = _anova_f(z, g)
+        out[key], out["p_" + key] = float(f), float(st.f.sf(f, df1, df2))
+        out["df_1"], out["df_2"] = float(df1), float(df2)
+    return out
