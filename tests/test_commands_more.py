@@ -155,3 +155,17 @@ def test_creturn_list_layout(run):
     assert '            c(matalibs) = "lmatabase;lmatamc.."      (set matalibs)' in lines
     assert "Trace (program debugging) settings" in lines
     assert "         c(segmentsize) = 33554432                   (set segmentsize)" in lines
+
+
+def test_fvset_base(run):
+    assert run("clear\ncapture noisily fvset\ndisplay _rc").strip() == "0"
+    run("clear\nset obs 30\ngen g = mod(_n, 3) + 1\ngen y = g * 2 + mod(_n * 7, 5)")
+    run("fvset base 2 g\nquietly regress y i.g")
+    assert run.eval("_b[2.g]") == 0 and run.eval("_b[1.g]") != 0
+    assert "2" in run("fvset report")
+    run("fvset base last g\nquietly regress y i.g")
+    assert run.eval("_b[3.g]") == 0
+    run("quietly regress y ib1.g")
+    assert run.eval("_b[1.g]") == 0
+    run("fvset clear g\nquietly regress y i.g")
+    assert run.eval("_b[1.g]") == 0
