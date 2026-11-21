@@ -410,7 +410,10 @@ def cmd_sort(s: "Session", args: str) -> None:
         ds.sortlist = []
         s.notify_state()
         return
+    # sort does not mark the data as changed (compat 2007)
+    changed = ds.changed
     sorting.sort(ds, names)
+    ds.changed = changed
     s.notify_state()
 
 
@@ -505,8 +508,7 @@ def cmd_compress(s: "Session", args: str) -> None:
             var.vtype = need
     # VERIFY: exact format of the summary
     _note(s, f"  ({saved:,} bytes saved)")
-    if saved:
-        ds.changed = True
+    # the values stay the same: Stata 14 leaves c(changed) as it was (compat 2007)
     s.notify_state()
 
 

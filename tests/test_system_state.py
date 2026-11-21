@@ -66,3 +66,24 @@ def test_s_globals_through_a_local(run):
     out = run('foreach m in S_level S_ADO S_StataSE S_OS {\ndisplay "`m\'=[${`m\'}]"\n}')
     assert out.splitlines()[:3] == ["S_level=[95]", "S_ADO=[BASE;SITE;.;PERSONAL;PLUS;OLDPLACE]",
                                     "S_StataSE=[SE]"]
+
+
+DATA = """clear
+set seed 5
+set obs 50
+gen id = _n
+gen g = mod(_n,3)
+gen x = round(invnormal(runiform()),.01)
+gen str20 s = "abc"
+"""
+
+
+def test_changed_stays_0_after_sort_compress_and_keep(run, tmp_path):
+    f = (tmp_path / "d.dta").as_posix()
+    run(DATA + f'save "{f}"')
+    for cmd in ("sort g x", "compress", "keep if id > 0"):
+        run(cmd)
+        assert run("display c(changed)").strip() == "0", cmd
+    assert "has changed" not in run("describe, short")
+    run("replace x = 1")
+    assert "Note: Dataset has changed since last saved." in run("describe, short")
