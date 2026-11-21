@@ -69,3 +69,14 @@ def test_adjusted_wald_after_svy(svyrun):
     assert "Adjusted Wald test" in svyrun("test ano")
     svyrun("quietly regress pc ano i.sexo")
     assert "Adjusted" not in svyrun("test ano")
+
+
+def test_margins_after_svy_poisson(svyrun):
+    svyrun("quietly svy: poisson pc ano i.sexo ib2.faixa c.idade")
+    out = svyrun("margins sexo")
+    assert "Model VCE    : Linearized\n" in out and "z    P>|z|" in out
+    assert "          0  |   5.551909" in out and "          1  |    6.49882" in out   # weighted
+    out = svyrun("margins faixa, at(ano=(2006 2014))")
+    assert "   _at#faixa |\n        1 1  |   6.173353" in out
+    assert "        2 3  |   6.043762" in out
+    assert "   -.025802" in svyrun("margins, dydx(c.ano)")
