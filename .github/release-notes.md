@@ -1,5 +1,19 @@
 **English** · [Português](#português)
 
+## What's new in 0.11.1
+
+New:
+
+- **`memory`** command, with the layout of Stata 14's report.
+- `$S_DATE`, `$S_TIME` and `c(flavor)`.
+
+Fixes:
+
+- `log using` in a folder that does not exist now fails with r(603) (and can be caught with `capture`) instead of crashing.
+- `use varlist using file` no longer marks the data as changed, so `describe` does not print "Dataset has changed since last saved".
+- A `.dta` file whose sort order repeats a variable now reads as unsorted.
+- `describe` puts the variable label on the next line when the value label name is long.
+
 ## What's new in 0.11.0
 
 New:
@@ -56,6 +70,20 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 0.11.1
+
+Novo:
+
+- Comando **`memory`**, com o layout do relatório do Stata 14.
+- `$S_DATE`, `$S_TIME` e `c(flavor)`.
+
+Correções:
+
+- `log using` numa pasta que não existe agora falha com r(603) (e pode ser capturado com `capture`) em vez de travar.
+- `use varlist using arquivo` não marca mais os dados como alterados, então o `describe` não mostra "Dataset has changed since last saved".
+- Um arquivo `.dta` cuja ordenação repete uma variável agora é lido como não ordenado.
+- O `describe` põe o rótulo da variável na linha seguinte quando o nome do rótulo de valor é longo.
 
 ### Novidades da 0.11.0
 

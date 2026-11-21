@@ -82,7 +82,7 @@ def cmd_use(s: "Session", args: str) -> None:
             s.data = Dataset()
             s.notify_state()
             raise
-    new.changed = bool(want_vars or if_ or in_)
+    new.changed = bool(if_ or in_)   # a varlist alone leaves the data unchanged (Stata 14, Vigitel run)
     s.notify_state()
 
 

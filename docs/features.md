@@ -25,7 +25,7 @@ OpenDTA covers the core commands: the do-file language, data management, descrip
 - `matlist` with equation names (`showcoleq()`, `roweqonly`, `coleqonly`, `keepcoleq`, `lines(eq)`), and the `window` file dialogs, message boxes, User menu and window management in the graphical interface;
 - Viewer with SMCL `help` (OpenDTA's own pages and those of installed packages);
 - data in memory with Stata's storage types (including `float` precision), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` and subscripts;
-- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` and `recast`;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress`, `recast` and `memory`;
 - `.dta` files: OpenDTA's own reader for formats 113 to 119 (Stata 8 onward) and writer for formats 114, 115, 117, 118 and 119, with labels, notes and characteristics; older formats are read through ReadStat when the `pyreadstat` package is installed;
 - `use` (with varlist, `if` and `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
 - delimited text: `import delimited`, `export delimited`, `insheet` and `outsheet`;

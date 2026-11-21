@@ -311,7 +311,7 @@ def _read_old(path: Path) -> Dataset:
         var.label = varlabels[j]
         var.value_label = vlabels[j]
         ds.vars.append(var)
-    ds.sortlist = [names[k - 1] for k in sort_idx if 0 < k <= K]
+    ds.sortlist = _valid_sortlist([names[k - 1] for k in sort_idx if 0 < k <= K])
     ds.label = label
     ds.timestamp = ts
     ds.value_labels = value_labels
@@ -542,6 +542,12 @@ def _cstr(b: bytes, release: int = 118) -> str:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         return raw.decode("latin-1")
+
+
+def _valid_sortlist(order: list[str]) -> list[str]:
+    """A sort order that repeats a variable cannot have been written by Stata: the data count as
+    unsorted (VERIFY: seen in a Vigitel file, where Stata 14 shows an empty "Sorted by:")."""
+    return [] if len(set(order)) != len(order) else order
 
 
 def _fix_text(text: str) -> str:
@@ -785,7 +791,7 @@ def _read_117plus(f, path: Path) -> Dataset:
         var.value_label = vlabels[j]
         ds.vars.append(var)
         cols[j] = None
-    ds.sortlist = [names[k - 1] for k in sort_idx if k > 0 and k <= K]
+    ds.sortlist = _valid_sortlist([names[k - 1] for k in sort_idx if k > 0 and k <= K])
     ds.label = label
     ds.timestamp = ts
     ds.value_labels = value_labels

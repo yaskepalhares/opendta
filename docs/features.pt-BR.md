@@ -25,7 +25,7 @@ O OpenDTA cobre o núcleo dos comandos: a linguagem dos do-files, a manipulaçã
 - `matlist` com nomes de equações (`showcoleq()`, `roweqonly`, `coleqonly`, `keepcoleq`, `lines(eq)`), e as caixas de diálogo de arquivo, caixas de mensagem, o menu User e o controle das janelas de `window` na interface gráfica;
 - Viewer com `help` em SMCL (páginas próprias e as de pacotes instalados);
 - dados em memória com os tipos do Stata (inclusive a precisão de `float`), varlists, `if`/`in`, `by`/`bysort`, `_n`/`_N` e subscritos;
-- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress` e `recast`;
+- `set obs`, `input`, `generate`, `replace`, `drop`, `keep`, `list`, `describe`, `count`, `sort`, `gsort`, `rename`, `order`, `label`, `format`, `compress`, `recast` e `memory`;
 - arquivos `.dta`: leitura própria dos formatos 113 a 119 (Stata 8 em diante) e gravação nos formatos 114, 115, 117, 118 e 119, com rótulos, notas e características; formatos ainda mais antigos são lidos pela ReadStat, se o pacote `pyreadstat` estiver instalado;
 - `use` (com varlist, `if` e `in`), `save`, `saveold`, `notes`, `char`, `type`, `erase`;
 - texto delimitado: `import delimited`, `export delimited`, `insheet` e `outsheet`;

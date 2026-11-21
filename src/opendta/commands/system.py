@@ -163,6 +163,51 @@ def cmd_cd(s: "Session", args: str) -> None:
     s.notify_state()
 
 
+@command("memory", "mem")
+def cmd_memory(s: "Session", args: str) -> None:
+    """memory: the layout of Stata 14's report. VERIFY: OpenDTA does not preallocate, so allocated equals
+    used, and what it does not track (ado-files, Mata, stored results, overhead) is 0; compat/do/2001."""
+    if args.strip():
+        raise StataError(198, "invalid syntax")
+    ds = s.data
+    mats = getattr(s, "matrices", {}) or {}
+    msize = sum(int(getattr(m, "size", 0)) * 8 for m in mats.values())
+    names = sum(len(v.name) + len(v.fmt) + len(v.label) + len(v.value_label) for v in ds.vars)
+    data = ds.nobs * ds.width()
+    rows = {"data": data, "strLs": 0, "names": names, "overhead": 0, "matrices": msize}
+    total = sum(rows.values())
+    w = s.output.write
+
+    def line(label: str, n: int) -> None:
+        w(f"    {label:<30}{n:>14,}{n:>25,}\n", "text")
+
+    rule = "    " + "-" * 69 + "\n"
+    w("\n  Memory usage\n", "text")
+    w(f"{'used':>48}{'allocated':>25}\n", "text")
+    w(rule, "text")
+    line("data", data)
+    line("strLs", 0)
+    w(rule, "text")
+    line("data & strLs", data)
+    w("\n" + rule, "text")
+    line("data & strLs", data)
+    line("var. names, %fmts, ...", names)
+    line("overhead", 0)
+    w("\n", "text")
+    line("Stata matrices", msize)
+    line("ado-files", 0)
+    line("stored results", 0)
+    w("\n", "text")
+    line("Mata matrices", 0)
+    line("Mata functions", 0)
+    w("\n", "text")
+    line("set maxvar usage", 0)
+    w("\n", "text")
+    line("other", 0)
+    w(rule, "text")
+    line("grand total", total)
+
+
 @command("about")
 def cmd_about(s: "Session", args: str) -> None:
     out = s.output
