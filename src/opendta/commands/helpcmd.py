@@ -127,6 +127,8 @@ ALIASES = {
     "viewsource": "progutil", "signestimationsample": "estprog", "checkestimationsample": "estprog",
     "makecns": "estprog", "matcproc": "estprog", "mark": "syntax", "markin": "syntax",
     "sortpreserve": "program", "cutil": "classutil",
+    "hettest": "estat", "ovtest": "estat", "lstat": "estat", "vif": "estat",
+    "treatreg": "treatment", "svydes": "svy", "svylc": "test",
 }
 
 

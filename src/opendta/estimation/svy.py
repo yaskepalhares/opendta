@@ -732,6 +732,8 @@ def subpop_mask(s: "Session", text: str) -> np.ndarray:
 
 def cmd_svydescribe(s: "Session", args: str) -> None:
     from ..commands._util import touse
+    if s.data.nvars == 0:
+        raise StataError(111, "no variables defined")   # compat 2005 (svydes)
     d = require_design(s)
     p = parse_standard(args)
     mask = touse(s, p)
