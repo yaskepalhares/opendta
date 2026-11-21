@@ -389,6 +389,59 @@ def cmd_order(s: "Session", args: str) -> None:
     s.notify_state()
 
 
+@command("aorder")
+def cmd_aorder(s: "Session", args: str) -> None:
+    """aorder [varlist]: the variables in alphabetical order at the front (earlier name of
+    order, alphabetic)."""
+    p = parse_standard(args)
+    match_options(p.options, {})
+    ds = s.data
+    if ds.nvars == 0:
+        return   # compat 2005: rc 0 without data
+    names = unique(expand(ds, p.varlist)) if p.varlist.strip() else [v.name for v in ds.vars]
+    ds.order(sorted(names, key=str.lower))
+    s.notify_state()
+
+
+@command("move")
+def cmd_move(s: "Session", args: str) -> None:
+    """move var1 var2: var1 goes to the position of var2 (earlier name of order, before())."""
+    words = args.split()
+    if not words:
+        raise StataError(100, "varlist required")   # compat 2005
+    ds = s.data
+    names = unique(expand(ds, " ".join(words)))
+    if len(names) < 2:
+        raise StataError(102, "too few variables specified")
+    if len(names) > 2:
+        raise StataError(103, "too many variables specified")
+    if names[0] != names[1]:
+        ds.order([names[0]], before=names[1])
+    s.notify_state()
+
+
+@command("renpfix")
+def cmd_renpfix(s: "Session", args: str) -> None:
+    """renpfix old [new]: renames the variables that begin with old to begin with new
+    (earlier form of rename old* new*). VERIFY: r(varlist) and the message when no variable
+    begins with old."""
+    words = args.split()
+    if len(words) > 2:
+        raise StataError(198, "invalid syntax")
+    old = words[0] if words else ""
+    new = words[1] if len(words) > 1 else ""
+    ds = s.data
+    names = [v.name for v in ds.vars if v.name.startswith(old)] if old or ds.nvars else []
+    if not old or not names:
+        raise StataError(111, f"variable {old}* not found")
+    renamed = []
+    for n in names:
+        ds.rename(n, new + n[len(old):])
+        renamed.append(new + n[len(old):])
+    s.r = {"varlist": " ".join(renamed)}
+    s.notify_state()
+
+
 # ---------------------------------------------------------------------------
 # sort / gsort
 # ---------------------------------------------------------------------------

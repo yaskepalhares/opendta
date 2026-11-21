@@ -12,13 +12,14 @@
 {p 8 16 2}{cmd:sort} {it:varlist} [{it:in}] [{cmd:,} {opt stable}]{p_end}
 {p 8 16 2}{cmd:gsort} [{cmd:+}|{cmd:-}]{it:varname} [...] [{cmd:,} {opt gen:erate(newvar)} {opt m:first}]{p_end}
 {p 8 16 2}{cmd:rename} {it:old} {it:new}  |  {cmd:rename} {cmd:(}{it:old1 old2}{cmd:)} {cmd:(}{it:new1 new2}{cmd:)}{p_end}
+{p 8 16 2}{cmd:aorder} [{it:varlist}]  |  {cmd:move} {it:var1} {it:var2}  |  {cmd:renpfix} {it:old} [{it:new}]{p_end}
 {p 8 16 2}{cmd:order} {it:varlist} [{cmd:,} {opt first} {opt last} {opt before(varname)} {opt after(varname)} {opt alpha:betic}]{p_end}
 {p 8 16 2}{cmd:count} [{it:if}] [{it:in}]{p_end}
 
 {title:Description}
 
 {pstd}
-Basic data management. {cmd:drop} and {cmd:keep} remove variables or observations; {cmd:sort} sorts in ascending order (missing values last; with {it:in}, only the observations in the range) and {cmd:gsort} also in descending order; {cmd:rename} and {cmd:order} change names and the order of the variables; {cmd:count} counts observations.
+Basic data management. {cmd:drop} and {cmd:keep} remove variables or observations; {cmd:sort} sorts in ascending order (missing values last; with {it:in}, only the observations in the range) and {cmd:gsort} also in descending order; {cmd:rename} and {cmd:order} change names and the order of the variables; {cmd:count} counts observations. {cmd:aorder}, {cmd:move} and {cmd:renpfix} are earlier forms of {cmd:order, alphabetic}, {cmd:order, before()} and {cmd:rename} {it:old}{cmd:*} {it:new}{cmd:*}.
 {p_end}
 
 {title:Examples}

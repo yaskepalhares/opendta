@@ -54,3 +54,36 @@ def test_hettest_is_estat_hettest(run):
 def test_prop_abbreviation_replays(run):
     run("clear\nset obs 10\ngen g = mod(_n, 2)\nquietly proportion g")
     assert run("prop") == run("proportion")
+
+
+def _vars(run):
+    return [v.name for v in run.session.data.vars]
+
+
+def test_aorder_move_renpfix(run):
+    assert run("clear\ncapture noisily aorder\ndisplay _rc").strip() == "0"
+    run("clear\nset obs 1\ngen c = 1\ngen a = 2\ngen B = 3\ngen x1 = 4\ngen x2 = 5")
+    run("aorder")
+    assert _vars(run) == ["a", "B", "c", "x1", "x2"]
+    run("move x2 a")
+    assert _vars(run) == ["x2", "a", "B", "c", "x1"]
+    assert run("capture noisily move x2\ndisplay _rc").splitlines()[-1] == "102"
+    run("renpfix x z")
+    assert _vars(run) == ["z2", "a", "B", "c", "z1"]
+    assert run.eval("r(varlist)") == "z2 z1"
+    out = run("clear\ncapture noisily renpfix\ndisplay _rc").splitlines()
+    assert out[-2:] == ["variable * not found", "111"]
+
+
+def test_numlabel(run):
+    out = run("clear\ncapture noisily numlabel\ndisplay _rc").splitlines()
+    assert out[-2:] == ["option add or remove should be specified", "198"]
+    run('label define yn 0 "No" 1 "Yes"\nlabel define g 1 "One"\nnumlabel yn, add')
+    vl = run.session.data.value_labels
+    assert vl["yn"] == {0: "0. No", 1: "1. Yes"} and vl["g"] == {1: "One"}
+    run("numlabel yn, add")
+    assert vl["yn"][0] == "0. No"
+    run('numlabel g, add mask("[#] ")')
+    assert vl["g"] == {1: "[1] One"}
+    run("numlabel yn, remove")
+    assert vl["yn"] == {0: "No", 1: "Yes"}

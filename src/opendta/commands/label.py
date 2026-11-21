@@ -110,3 +110,39 @@ def _define(s: "Session", text: str) -> None:
             raise StataError(180, f"invalid attempt to modify label")
         current[k] = v
     ds.changed = True
+
+
+@command("numlabel")
+def cmd_numlabel(s: "Session", args: str) -> None:
+    """numlabel [lblnamelist], add|remove [mask(str) force] ([D] labelbook): puts the value in
+    front of each value label, or takes it away. VERIFY: force, and labels that already have
+    the prefix."""
+    comma = find_top(args, ",")
+    body, opt = (args, "") if comma == -1 else (args[:comma], args[comma + 1:])
+    o = match_options(opt, {"add": 3, "remove": 6, "mask": 4, "force": 5, "detail": 3})
+    if bool(o.get("add")) == bool(o.get("remove")):
+        if o.get("add"):
+            raise StataError(198, "options add and remove may not be combined")   # VERIFY
+        raise StataError(198, "option add or remove should be specified")   # compat 2005
+    if o.get("detail"):
+        raise StataError(198, "option detail is not available yet in OpenDTA")
+    mask = strip_outer_quotes(str(o["mask"])) if o.get("mask") else "#. "
+    if "#" not in mask:
+        raise StataError(198, "mask() must contain #")   # VERIFY
+    ds = s.data
+    names = split_words(body)
+    if not names or names == ["_all"]:
+        names = list(ds.value_labels)
+    for n in names:
+        if n not in ds.value_labels:
+            raise StataError(111, f"value label {n} not found")
+    for n in names:
+        lab = ds.value_labels[n]
+        for v, text in lab.items():
+            prefix = mask.replace("#", str(v))
+            if o.get("add") and (o.get("force") or not text.startswith(prefix)):
+                lab[v] = (prefix + text)[:32000]
+            elif o.get("remove") and text.startswith(prefix):
+                lab[v] = text[len(prefix):]
+    ds.changed = True
+    s.notify_state()
