@@ -107,3 +107,13 @@ def test_merge_with_using_only_rows_is_not_sorted(run, tmp_path):
     run('clear\ninput id m\n3 1\n1 2\nend\nmerge 1:1 id using "' + f + '", nogenerate')
     assert run("list id, noobs clean").split()[1:] == ["1", "3", "4"]
     assert "Sorted by: \n" in run("describe, short")
+
+
+def test_label_list_after_drop_merge(run, tmp_path):
+    f = (tmp_path / "d.dta").as_posix()
+    run(DATA + 'label define lab 0 "zero"\nlabel values g lab\n' + f'save "{f}"')
+    run(f'merge 1:1 id using "{f}"')
+    assert "_merge:" in run("label list")
+    run("drop _merge")
+    out = run("label list")
+    assert "_merge" not in out and "lab:" in out

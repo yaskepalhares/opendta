@@ -199,7 +199,12 @@ def _drop_keep(s: "Session", args: str, keep: bool) -> None:
         names = unique(expand(ds, p.varlist))
         if keep:
             names = [n for n in ds.names if n not in set(names)]
+        merge_label = any(ds.get(n).value_label == "_merge" for n in names)
         ds.drop_vars(names)
+        if merge_label and not any(v.value_label == "_merge" for v in ds.vars):
+            # merge's own label goes with the last variable that uses it: label list after
+            # merge and drop _merge does not show it (compat 2007; VERIFY: drop or save)
+            ds.value_labels.pop("_merge", None)
         s.notify_state()
         return
     if not (p.if_ or p.in_):
