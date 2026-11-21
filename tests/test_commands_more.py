@@ -187,3 +187,18 @@ def test_bsample(run):
     run("restore\ngen w = .\nbsample, weight(w)")
     assert run.session.data.nobs == 20 and run.session.data.get("w").data.sum() == 20
     assert run("capture bsample 30\ndisplay _rc").strip() == "498"
+
+
+def test_hexdump(run, tmp_path, monkeypatch):
+    out = run("capture noisily hexdump\ndisplay _rc").splitlines()
+    assert out[-2:] == ["invalid file specification", "198"]
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_bytes(b"Ab 1\r\nx\ty\n\xe9")
+    out = run("hexdump a.txt")
+    assert "4162 2031 0d0a 7809 790a e9" in out and "| Ab 1..x.y.." in out
+    run("hexdump a.txt, results")
+    r = {k: run.eval(f"r({k})") for k in ("Windows", "Unix", "uc", "lc", "digit", "tab",
+                                          "blank", "extended", "filesize")}
+    assert r == {"Windows": 1, "Unix": 1, "uc": 1, "lc": 3, "digit": 1, "tab": 1, "blank": 1,
+                 "extended": 1, "filesize": 11}
+    assert "Line-end characters" in run("hexdump a.txt, analyze")

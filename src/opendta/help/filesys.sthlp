@@ -15,12 +15,13 @@
 {p 8 16 2}{cmd:filefilter} {it:oldfile} {it:newfile} {cmd:,} {opt from(oldpattern)} {opt to(newpattern)} [{opt replace}]{p_end}
 {p 8 16 2}{cmd:zipfile} {it:file|directory} [...] {cmd:,} {opt saving(zipfile [, replace])}{p_end}
 {p 8 16 2}{cmd:unzipfile} {it:zipfile} [{cmd:,} {opt replace}]{p_end}
+{p 8 16 2}{cmd:hexdump} {it:filename} [{cmd:,} {opt a:nalyze} {opt r:esults} {opt from(#)} {opt to(#)}]{p_end}
 {p 8 16 2}{cmd:checksum} {it:filename} [{cmd:,} {opt save} {opt saving(filename)} {opt replace}]{p_end}
 
 {title:Description}
 
 {pstd}
-{cmd:copy} copies a file (also from a URL); {cmd:mkdir} and {cmd:rmdir} create and remove a folder (the folder must be empty); {cmd:dir} lists files; {cmd:shell} runs a command of the operating system and shows its output; {cmd:filefilter} copies a text file replacing a pattern (with the codes {cmd:\n}, {cmd:\r}, {cmd:\t} and {cmd:\BS} for backslash); {cmd:zipfile} and {cmd:unzipfile} create and extract zip archives; {cmd:checksum} reports a file's checksum and size.
+{cmd:copy} copies a file (also from a URL); {cmd:mkdir} and {cmd:rmdir} create and remove a folder (the folder must be empty); {cmd:dir} lists files; {cmd:shell} runs a command of the operating system and shows its output; {cmd:filefilter} copies a text file replacing a pattern (with the codes {cmd:\n}, {cmd:\r}, {cmd:\t} and {cmd:\BS} for backslash); {cmd:zipfile} and {cmd:unzipfile} create and extract zip archives; {cmd:checksum} reports a file's checksum and size; {cmd:hexdump} shows the bytes of a file in hexadecimal, or with {cmd:analyze} counts its line ends, blanks, letters, digits and control and extended characters (stored in {cmd:r()}).
 {p_end}
 
 {title:Examples}
