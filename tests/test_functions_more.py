@@ -88,3 +88,31 @@ def test_ustrregexs(run):
 ])
 def test_math_and_distribution_functions(run, expr, value):
     assert run.eval(expr) == pytest.approx(value, rel=1e-6)
+
+
+@pytest.mark.parametrize("expr, value", [
+    ("maxbyte()", 100), ("maxint()", 32740), ("maxlong()", 2147483620), ("minbyte()", -127),
+    ("minint()", -32767), ("minlong()", -2147483647), ("float(maxfloat()) == maxfloat()", 1),
+    ("recode(5,1,3,5)", 5), ("recode(2,1,3,5)", 3), ("recode(9,1,3,5)", 5),
+    ("irecode(5,1,3,5)", 2), ("irecode(0,1,3,5)", 0), ("irecode(9,1,3,5)", 3),
+    ("autocode(5,4,0,10)", 5), ("autocode(5.1,4,0,10)", 7.5), ("autocode(11,4,0,10)", 10),
+    ('fileexists("nada.xyz")', 0),
+])
+def test_constants_recode_files(run, expr, value):
+    assert run.eval(expr) == pytest.approx(value)
+
+
+def test_file_functions(run, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert run.eval('filewrite("a.txt", "hello")') == 5
+    assert run.eval('fileexists("a.txt") + filereadable("a.txt")') == 2
+    assert run.eval('filewrite("a.txt", "x")') < 0
+    assert run.eval('filewrite("a.txt", " world", 2)') == 6
+    assert run.eval('fileread("a.txt")') == "hello world"
+    assert run.eval('fileread("none.txt")').startswith("fileread() error")
+
+
+def test_storage_type_functions_are_unknown(run):
+    # double(), byte(), long() and strdup() are not functions in Stata 14 (compat 2005)
+    out = run("capture noisily display double(5)\ndisplay _rc")
+    assert out.splitlines()[-2:] == ["unknown function double()", "133"]

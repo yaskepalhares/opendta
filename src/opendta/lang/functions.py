@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as _dt
 import fnmatch
 import math
+import os
 import re
 from typing import Any, Callable
 
@@ -770,6 +771,82 @@ register("maxdouble", 0)(lambda: M.MAXDOUBLE)
 register("mindouble", 0)(lambda: M.MINDOUBLE)
 register("epsdouble", 0)(lambda: M.EPSDOUBLE)
 register("smallestdouble", 0)(lambda: 2.0 ** -1022)
+# limits of the storage types (.dta specification); VERIFY: minfloat() is -maxfloat()
+_MAXFLOAT = float(np.frombuffer(bytes.fromhex("7effffff"), dtype=">f4")[0])
+register("maxbyte", 0)(lambda: 100.0)
+register("minbyte", 0)(lambda: -127.0)
+register("maxint", 0)(lambda: 32740.0)
+register("minint", 0)(lambda: -32767.0)
+register("maxlong", 0)(lambda: 2147483620.0)
+register("minlong", 0)(lambda: -2147483647.0)
+register("maxfloat", 0)(lambda: _MAXFLOAT)
+register("minfloat", 0)(lambda: -_MAXFLOAT)
+
+
+# -- recoding ------------------------------------------------------------------------
+
+@register("recode", 3, 10_000)
+def _recode(x: Value, *cuts: Value) -> float:
+    """The first cut that x does not exceed, or the last cut."""
+    x, cs = _n(x), [_n(c) for c in cuts]
+    if M.is_missing(x):
+        return M.SYSMISS
+    return next((c for c in cs if x <= c), cs[-1])
+
+
+@register("irecode", 3, 10_000)
+def _irecode(x: Value, *cuts: Value) -> float:
+    """Index (0 to n) of the interval of x among the cuts."""
+    x, cs = _n(x), [_n(c) for c in cuts]
+    if M.is_missing(x):
+        return M.SYSMISS
+    return float(next((i for i, c in enumerate(cs) if x <= c), len(cs)))
+
+
+@register("autocode", 4)
+def _autocode(x: Value, n: Value, lo: Value, hi: Value) -> float:
+    """Upper bound of the interval of x among n equal intervals from lo to hi. VERIFY: x
+    below lo gives the first bound and x above hi gives hi."""
+    x, n, lo, hi = _n(x), _n(n), _n(lo), _n(hi)
+    if _miss(x, n, lo, hi) or n < 1 or hi <= lo:
+        return M.SYSMISS
+    k = int(n)
+    for i in range(1, k + 1):
+        u = lo + i * (hi - lo) / k
+        if x <= u:
+            return u
+    return hi
+
+
+# -- files (paths relative to the working folder) -----------------------------------------
+
+register("fileexists", 1)(_str1(lambda f: float(os.path.isfile(f))))
+register("filereadable", 1)(_str1(lambda f: float(os.path.isfile(f) and os.access(f, os.R_OK))))
+
+
+@register("fileread", 1)
+def _fileread(f: Value) -> str:
+    """Contents of the file; "fileread() error 601" when it cannot be read (VERIFY: code)."""
+    try:
+        with open(_s(f), "rb") as fh:
+            return fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "fileread() error 601"
+
+
+@register("filewrite", 2, 3)
+def _filewrite(f: Value, text: Value, r: Value = 0.0) -> float:
+    """Writes text to f (r = 1 replaces, r = 2 appends, otherwise f must not exist); returns
+    the bytes written or a negative error code. VERIFY: the error codes."""
+    f, data, r = _s(f), _s(text).encode("utf-8"), _n(r)
+    if r not in (1.0, 2.0) and os.path.exists(f):
+        return -602.0
+    try:
+        with open(f, "ab" if r == 2.0 else "wb") as fh:
+            fh.write(data)
+    except OSError:
+        return -603.0
+    return float(len(data))
 
 
 # -- random numbers (core/rng.py) --------------------------------------------
