@@ -96,3 +96,11 @@ def test_estat_after_svy_poisson(svyrun):
     assert svyrun("estat size").startswith(
         "estimation results from svy:poisson are not supported by estat size")
     assert svyrun("estat summarize").startswith("invalid subcommand summarize")
+
+
+def test_contrast_after_svy_adjusts_F(svyrun):
+    svyrun("quietly svy: poisson pc ano i.sexo ib2.faixa c.idade")
+    out = svyrun("contrast faixa")
+    assert "Design df         =         27\n" in out
+    assert "       faixa |          2        0.10     0.9049\n      Design |         27\n" in out
+    assert out.endswith("Note: F statistics are adjusted for the survey\n      design.\n")
