@@ -428,8 +428,10 @@ def _ctext(est: Estimates, coef: dict, r: float) -> str:
 
 
 def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, header: bool = True,
-          mtest: bool = False) -> None:
+          mtest: bool = False, svyadjust: bool = True) -> None:
     out = s.output
+    # after svy:, test and testparm report the adjusted Wald F ([SVY] svy postestimation; compat 2004)
+    adjusted = svyadjust and s.e.get("prefix") == "svy" and est.stat == "t" and bool(est.df_r)
     k = len(est.b)
     R = np.zeros((len(cons), k))
     r = np.zeros(len(cons))
@@ -437,6 +439,8 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
         for j, v in coef.items():
             R[i, j] = v
         r[i] = rv
+    if adjusted:
+        out.write("\nAdjusted Wald test\n", "text")   # VERIFY the header with nosvyadjust (none here)
     if header:
         out.write("\n", "text")
         for i, (coef, rv) in enumerate(cons):
@@ -473,6 +477,9 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
     if est.stat == "t" and est.df_r:
         F = W / q
         dfr = est.df_r
+        if adjusted:
+            from .svyreg import adjusted_wald
+            F, dfr = adjusted_wald(W, q, est.df_r)   # VERIFY r(df_r) (the denominator df here)
         p = float(st.f.sf(F, q, dfr))
         out.write(f"{'F(' + format(q, '>3') + ',' + format(int(dfr), '>6') + ') =':>22}", "text")
         out.write(f"{F:>8.2f}\n", "result")
@@ -510,7 +517,7 @@ def _split_parens(text: str) -> list[str]:
 def cmd_test(s: "Session", args: str) -> None:
     est = current(s)
     head, comma, opts = args.partition(",")
-    o = match_options(opts, {"accumulate": 3, "notest": 5, "mtest": 2, "coef": 4}) \
+    o = match_options(opts, {"accumulate": 3, "notest": 5, "mtest": 2, "coef": 4, "nosvyadjust": 5}) \
         if comma and opts.strip() else {}
     text = head.strip()
     if not text:
@@ -549,7 +556,7 @@ def cmd_test(s: "Session", args: str) -> None:
         for i, (coef, rv) in enumerate(cons):
             out.write(f" ({i + 1:>2})  {_ctext(est, coef, rv)}\n", "text")
         return
-    _wald(s, est, cons)
+    _wald(s, est, cons, svyadjust=not o.get("nosvyadjust"))
 
 
 def _coef_names(s: "Session", est: Estimates, text: str) -> list[str]:
@@ -591,7 +598,7 @@ def cmd_testparm(s: "Session", args: str) -> None:
             cons.append(({idx[0]: -1.0, j: 1.0}, 0.0))
     else:
         cons = [({i: 1.0}, 0.0) for i in idx]
-    _wald(s, est, cons)
+    _wald(s, est, cons, svyadjust=not o.get("nosvyadjust"))
 
 
 def cmd_lincom(s: "Session", args: str) -> None:

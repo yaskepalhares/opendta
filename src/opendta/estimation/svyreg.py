@@ -55,6 +55,12 @@ def _adjusted_F(b, V, idx, d):
     return F, k, d - k + 1
 
 
+def adjusted_wald(W: float, q: int, d: float) -> tuple[float, float]:
+    """Adjusted Wald F of q restrictions with design df d: F = (d - q + 1) W / (d q) on
+    (q, d - q + 1) degrees of freedom ([SVY] svy postestimation, Methods and formulas)."""
+    return (d - q + 1) / (d * q) * W, d - q + 1
+
+
 def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     d = require_design(s)
     ds = s.data

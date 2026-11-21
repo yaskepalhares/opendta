@@ -52,3 +52,20 @@ def test_equation_prefix_after_svy_logit_and_regress(svyrun):
     svyrun("quietly svy: regress pc ano i.sexo")
     assert " ( 1)  ano = 0\n" in svyrun("lincom ano")
     assert svyrun("lincom [pc]ano").startswith("equation [pc] not found")
+
+
+def test_adjusted_wald_after_svy(svyrun):
+    svyrun("quietly svy: poisson pc ano i.sexo ib2.faixa c.idade")
+    out = svyrun("testparm i.faixa")
+    assert out.startswith("\nAdjusted Wald test\n\n ( 1)  [pc]1.faixa = 0\n")
+    assert "F(  2,    26) =    0.10" in out and "0.9049" in out
+    out = svyrun("test ano")
+    assert "Adjusted Wald test" in out and "F(  1,    27) =    0.33" in out and "0.5707" in out
+    out = svyrun("testparm i.faixa, nosvyadjust")
+    assert "Adjusted" not in out and "F(  2,    27) =    0.10" in out and "0.9015" in out
+    out = svyrun("test 1.sexo, accumulate")
+    assert " ( 2)  [pc]1.sexo = 0" in out and "F(  2,    26)" in out
+    svyrun("quietly svy: regress pc ano i.sexo")
+    assert "Adjusted Wald test" in svyrun("test ano")
+    svyrun("quietly regress pc ano i.sexo")
+    assert "Adjusted" not in svyrun("test ano")
