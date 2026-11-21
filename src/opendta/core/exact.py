@@ -8,7 +8,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from scipy import optimize
+from ..lazy import lazy
+optimize = lazy("scipy.optimize")
 
 
 def _key(vec) -> tuple:

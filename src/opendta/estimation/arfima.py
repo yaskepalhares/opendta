@@ -9,7 +9,9 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import signal, special
+from ..lazy import lazy
+signal = lazy("scipy.signal")
+special = lazy("scipy.special")
 
 from ..core import missing as M
 from ..core.errors import StataError

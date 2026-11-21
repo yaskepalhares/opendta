@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import special, stats as st_
+from ..lazy import lazy
+special = lazy("scipy.special")
+st_ = lazy("scipy.stats")
 
 from ..core import missing as M
 from ..core.errors import StataError
