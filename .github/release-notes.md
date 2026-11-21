@@ -1,5 +1,11 @@
 **English** · [Português](#português)
 
+## What's new in 0.14.0
+
+Changes:
+
+- Lower memory use: OpenDTA no longer loads scipy at start-up, only when a command that needs it runs. In the packaged macOS app, idle memory in Activity Monitor went from 435.6 MB to 188.4 MB.
+
 ## What's new in 0.12.0
 
 Fixes:
@@ -83,6 +89,12 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 0.14.0
+
+Mudanças:
+
+- Menos memória: o OpenDTA não carrega mais o scipy ao abrir, só quando um comando que precisa dele é executado. No app empacotado para macOS, a memória parado no Activity Monitor caiu de 435,6 MB para 188,4 MB.
 
 ### Novidades da 0.12.0
 

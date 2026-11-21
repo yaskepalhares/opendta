@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as st
+from ..lazy import lazy
+st = lazy("scipy.stats")
 
 from ..core import missing as M
 from ..core.errors import StataError

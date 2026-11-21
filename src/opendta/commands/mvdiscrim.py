@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy import stats as sps
+from ..lazy import lazy
+sps = lazy("scipy.stats")
 
 from ..core import discrim as DC
 from ..core import missing as M
