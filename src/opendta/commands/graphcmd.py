@@ -453,5 +453,6 @@ def _base_plot(name: str, abbrev: str | None = None):
 
 for _n, _a in (("quantile", "quantile"), ("symplot", "symplot"), ("serrbar", "serrbar"),
                ("dotplot", "dotplot"), ("sunflower", "sunflower"), ("lpoly", "lpoly"),
-               ("cusum", "cusum"), ("gladder", "gladder")):
+               ("cusum", "cusum"), ("gladder", "gladder"), ("qqplot", "qqplot"),
+               ("qladder", "qladder")):
     _base_plot(_n, _a)

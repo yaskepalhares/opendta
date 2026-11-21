@@ -39,7 +39,7 @@ ALIASES = {
     "testnl": "postest2", "predictnl": "postest2", "linktest": "postest2", "contrast": "postest2", "pwcompare": "postest2", "pwmean": "postest2", "suest": "postest2",
     "bitest": "basetests", "bitesti": "basetests", "ksmirnov": "basetests", "median": "basetests", "nptrend": "basetests", "runtest": "basetests", "tetrachoric": "basetests", "ktau": "basetests", "pcorr": "basetests",
     "ameans": "basestats", "icc": "basestats", "loneway": "basestats", "esize": "basestats", "esizei": "basestats", "lnskew0": "basestats", "ladder": "basestats", "boxcox": "basestats",
-    "quantile": "basegraphs", "symplot": "basegraphs", "serrbar": "basegraphs", "dotplot": "basegraphs", "sunflower": "basegraphs", "lpoly": "basegraphs", "cusum": "basegraphs", "gladder": "basegraphs",
+    "quantile": "basegraphs", "symplot": "basegraphs", "serrbar": "basegraphs", "dotplot": "basegraphs", "sunflower": "basegraphs", "lpoly": "basegraphs", "cusum": "basegraphs", "gladder": "basegraphs", "qqplot": "basegraphs", "qladder": "basegraphs",
     "cumul": "basedisp", "stem": "basedisp", "lv": "basedisp", "smooth": "basedisp",
     "stjoin": "stsplit", "stfill": "stsplit", "stvary": "stsplit", "stgen": "stsplit", "stbase": "stsplit", "snapspan": "stsplit", "stptime": "strate", "stci": "strate", "stir": "strate", "stmh": "strate", "stmc": "strate", "ltable": "strate", "ctset": "ct", "cttost": "ct", "sttoct": "ct", "sttocc": "ct",
     "moptimize": "mata", "optimize": "mata", "m2_class": "mata", "class": "mata",

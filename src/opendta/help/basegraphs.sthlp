@@ -2,12 +2,12 @@
 {title:Title}
 
 {p 4 4 2}
-{bf:quantile}, {bf:symplot}, {bf:serrbar}, {bf:dotplot}, {bf:sunflower}, {bf:lpoly}, {bf:cusum}, {bf:gladder} {hline 2} Distribution and smoothing graphs
+{bf:quantile}, {bf:symplot}, {bf:serrbar}, {bf:dotplot}, {bf:sunflower}, {bf:lpoly}, {bf:cusum}, {bf:gladder}, {bf:qladder}, {bf:qqplot} {hline 2} Distribution and smoothing graphs
 
 {title:Syntax}
 
 {p 8 16 2}
-{cmd:quantile} {it:varname}   {cmd:symplot} {it:varname}   {cmd:gladder} {it:varname}
+{cmd:quantile} {it:varname}   {cmd:symplot} {it:varname}   {cmd:gladder} {it:varname}   {cmd:qladder} {it:varname}   {cmd:qqplot} {it:varname1} {it:varname2}
 
 {p 8 16 2}
 {cmd:serrbar} {it:mvar svar xvar} [{cmd:,} {cmd:scale(}#{cmd:)}]
@@ -27,7 +27,7 @@
 {title:Description}
 
 {pstd}
-{cmd:quantile} plots the ordered values against the fraction of the data and {cmd:symplot} the distances above the median against the distances below it. {cmd:serrbar} plots a mean with error bars. {cmd:dotplot} draws a dot plot. {cmd:sunflower} draws a density-distribution sunflower plot. {cmd:lpoly} draws a local polynomial smooth. {cmd:cusum} plots the cumulative sum of the standardized residuals of the regression of {it:yvar} on {it:xvar}. {cmd:gladder} shows the histograms of the ladder of powers in a 3x3 graph.
+{cmd:quantile} plots the ordered values against the fraction of the data and {cmd:symplot} the distances above the median against the distances below it. {cmd:serrbar} plots a mean with error bars. {cmd:dotplot} draws a dot plot. {cmd:sunflower} draws a density-distribution sunflower plot. {cmd:lpoly} draws a local polynomial smooth. {cmd:cusum} plots the cumulative sum of the standardized residuals of the regression of {it:yvar} on {it:xvar}. {cmd:gladder} shows the histograms of the ladder of powers in a 3x3 graph, and {cmd:qladder} their quantile-normal plots. {cmd:qqplot} plots the quantiles of {it:varname1} against those of {it:varname2}.
 
 {title:Limitations}
 

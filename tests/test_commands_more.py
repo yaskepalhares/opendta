@@ -245,3 +245,21 @@ def test_sfrancia(run):
     W = np.corrcoef(m, x)[0, 1] ** 2
     assert run.eval("r(W)") == pytest.approx(W)
     assert run.eval("r(z)") > 0 and run.eval("r(p)") < .05
+
+
+@pytest.mark.parametrize("cmd", ["qqplot", "qladder"])
+def test_quantile_graphs_need_varlist(run, cmd):
+    out = run(f"clear\ncapture noisily {cmd}\ndisplay _rc").splitlines()
+    assert out[-2:] == ["varlist required", "100"]
+
+
+def test_qqplot_qladder(run):
+    import numpy as np
+    from opendta.graphics.baseplots import matched_quantiles
+    a, b = matched_quantiles(np.array([3.0, 1, 2]), np.array([10.0, 20, 30, 40, 50, 60]))
+    assert a.tolist() == [1, 2, 3] and b.tolist() == [15, 35, 55]
+    run("clear\nset obs 30\ngen x = _n\ngen y = sqrt(_n)")
+    run("qqplot y x, name(q1)\nqladder x, name(q2)")
+    from opendta.graphics.store import store
+    assert store(run.session).get("q2").family == "combine"
+    assert len(store(run.session).get("q2").children) == 9
