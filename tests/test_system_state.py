@@ -153,3 +153,22 @@ def test_compress_keeps_numeric_format(run):
     d = run.session.data
     assert (d.get("id").vtype, d.get("id").fmt) == ("byte", "%9.0g")
     assert (d.get("s").vtype, d.get("s").fmt) == ("str3", "%9s")
+
+
+def test_use_subset_keeps_sort_prefix_and_changed(run, tmp_path):
+    # compat 2001: data sorted by a b c read as `use a c` is sorted by a, and use leaves
+    # c(changed) at 0 even with if
+    f = (tmp_path / "t.dta").as_posix()
+    run(f'clear\nset obs 5\ngen a = _n\ngen b = _n\ngen c = _n\nsort a b c\nsave "{f}"')
+    run(f'use a c using "{f}", clear')
+    assert run.session.data.sortlist == ["a"] and run.eval("c(changed)") == 0
+    run(f'use a c using "{f}" if a > 2, clear')
+    assert run.eval("c(changed)") == 0
+    run(f'use "{f}", clear\ndrop b')
+    assert run.session.data.sortlist == ["a"]
+
+
+def test_batch_log_is_the_unnamed_log(run):
+    run.session.batch_log = True
+    out = run('capture noisily log using "/no/such/x.log", text replace\ndisplay _rc').splitlines()
+    assert out[-2:] == ["log file already open", "604"]

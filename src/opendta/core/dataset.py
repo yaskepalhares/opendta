@@ -324,7 +324,10 @@ class Dataset:
         self.vars = [v for v in self.vars if v.name not in drop]
         for n in drop:
             self.chars.pop(n, None)
-        self.sortlist = [s for s in self.sortlist if s not in drop]
+        # the sort order holds only up to the first variable dropped (compat 2001: use a c of data
+        # sorted by a b c is sorted by a)
+        cut = next((i for i, n in enumerate(self.sortlist) if n in drop), len(self.sortlist))
+        self.sortlist = self.sortlist[:cut]
         if not self.vars:
             self.nobs = 0
         self._touch()
