@@ -105,7 +105,10 @@ def cmd_log(s: "Session", args: str) -> None:
         kind = "smcl" if o.get("smcl") or (path.suffix == ".smcl" and not o.get("text")) else "text"
         if path.exists() and not (o.get("replace") or o.get("append")):
             raise StataError(602, f"file {path} already exists")
-        fh = open(path, "a" if o.get("append") else "w", encoding="utf-8")
+        try:
+            fh = open(path, "a" if o.get("append") else "w", encoding="utf-8")
+        except OSError:
+            raise StataError(603, f"file {path} could not be opened")
         log = LogFile(name, path.resolve(), kind, fh)
         if kind == "smcl" and not o.get("append"):
             fh.write("{smcl}\n")

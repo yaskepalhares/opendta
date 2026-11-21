@@ -359,6 +359,13 @@ def cmd_describe(s: "Session", args: str) -> None:
             star = "*" if ds.chars.get(n, {}).get("note0") else " "
             # formatos longos aparecem cortados ("%tdnn/dd/CCYY" → "%td..")
             fmt = v.fmt if len(v.fmt) <= 9 else v.fmt[:3] + ".."   # VERIFY truncation rule
+            if len(v.value_label) > 9 and v.label:
+                # a long value label name pushes the variable label to the next line, under its
+                # column (seen with a 15-character name; VERIFY the limit, compat/do/2001)
+                line = f"{shown:<{17 if numbers else 16}}{v.vtype:<8}{fmt:<11}{v.value_label}{star}"
+                out.write(line.rstrip() + "\n", "text")
+                out.write(" " * (47 if numbers else 46) + v.label + "\n", "text")
+                continue
             line = f"{shown:<{17 if numbers else 16}}{v.vtype:<8}{fmt:<11}{v.value_label:<9}{star} {v.label}"
             out.write(line.rstrip() + "\n", "text")
     if only_vars:

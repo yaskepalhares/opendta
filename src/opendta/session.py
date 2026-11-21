@@ -301,6 +301,7 @@ class Session:
             "os": {"Windows": "Windows", "Darwin": "MacOSX"}.get(platform.system(), "Unix"),
             "version": self.version,
             "stata_version": 14.0,
+            "flavor": "IC",   # VERIFY: OpenDTA has no Small/IC/SE/MP editions; reports IC
             "opendta_version": __version__,
             "maxdouble": M.MAXDOUBLE,
             "mindouble": M.MINDOUBLE,

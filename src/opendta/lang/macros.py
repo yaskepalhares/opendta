@@ -55,6 +55,14 @@ class MacroStore:
             self.locals[name] = value
 
     def get_global(self, name: str) -> str:
+        if name in ("S_DATE", "S_TIME") and name not in self.globals:
+            # system globals that follow the clock (VERIFY: same text as c(current_date), c(current_time))
+            import datetime as _dt
+            now = _dt.datetime.now()
+            if name == "S_TIME":
+                return now.strftime("%H:%M:%S")
+            months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            return f"{now.day:2d} {months[now.month - 1]} {now.year}"
         return self.globals.get(name, "")
 
     def set_global(self, name: str, value: str) -> None:
