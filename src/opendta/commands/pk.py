@@ -159,7 +159,7 @@ def cmd_pkcollapse(s: "Session", args: str) -> None:
     keys, rows = _per_subject(s, idn, tn, cn, touse(s, p), int(o["fit"]) if o.get("fit") else 3,
                               bool(o.get("trapezoid")))
     stats = strip_outer_quotes(str(o["stat"])).split() if o.get("stat") else _MEASURES
-    keep = expand(s.data, str(o["keep"])) if o.get("keep") else []
+    keep = [k for k in expand(s.data, str(o["keep"])) if k != idn] if o.get("keep") else []
     old = s.data
     ids = old.get(idn).data
     new = Dataset()
