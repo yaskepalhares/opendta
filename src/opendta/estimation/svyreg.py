@@ -169,7 +169,7 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
                      sub=(int(inside.sum()), float(w.sum())) if subpop is not None else None, **extra)
     est.display = _display
     est.svy_effects = dict(V=Vf, srs=(Swor, Swr), labels=[(nm, "") for nm in names], vals=bf, title="Coef.",
-                           vcetype=dd.vcetype, over="", level=smp.level, depvar=smp.depname)
+                           vcetype=dd.vcetype, over="", level=smp.level, depvar=smp.depname, rows=est.rows)
     eform = ""
     if cmd == "logistic" and not smp.o.get("coef"):
         eform = "Odds Ratio"

@@ -80,3 +80,19 @@ def test_margins_after_svy_poisson(svyrun):
     assert "   _at#faixa |\n        1 1  |   6.173353" in out
     assert "        2 3  |   6.043762" in out
     assert "   -.025802" in svyrun("margins, dydx(c.ano)")
+
+
+def test_estat_after_svy_poisson(svyrun):
+    svyrun("quietly svy: poisson pc ano i.sexo ib2.faixa c.idade")
+    out = svyrun("estat effects")
+    assert "      1.sexo |   .1574787   .0501452     1.60997   1.26884\n             |\n       faixa |\n" in out
+    assert "0b.sexo" not in out and "2b.faixa" not in out
+    assert "         SU 1: psu\n" in svyrun("estat svyset")
+    assert "     1 |         0          0           3\n" in svyrun("estat strata")
+    out = svyrun("estat cv")
+    assert "          pc |      Coef.   Std. Err.     CV (%)\n" in out
+    assert "          1  |   .0114818   .0537355     468.004\n" in out
+    assert svyrun("estat sd").startswith("mean estimation results not found")
+    assert svyrun("estat size").startswith(
+        "estimation results from svy:poisson are not supported by estat size")
+    assert svyrun("estat summarize").startswith("invalid subcommand summarize")

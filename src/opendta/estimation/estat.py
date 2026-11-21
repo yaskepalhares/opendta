@@ -43,6 +43,19 @@ def cmd_estat(s: "Session", args: str) -> None:
         if len(sub) >= minimum and name.startswith(sub):
             fn(s, est, rest)
             return
+    if s.e.get("prefix") == "svy":
+        # the svy estat subcommands ([SVY] estat; compat 2004); VERIFY the abbreviations
+        from . import svy as _svy
+        svy_sub = [("svyset", 3, _svy.estat_svyset), ("strata", 3, _svy.estat_strata), ("cv", 2, _svy.estat_cv),
+                   ("sd", 2, None), ("size", 3, None)]
+        for name, minimum, fn in svy_sub:
+            if len(sub) >= minimum and name.startswith(sub):
+                if fn is None:
+                    _svy.estat_unsupported(s, est, name)
+                fn(s, est, rest)
+                return
+        if len(sub) >= 3 and "summarize".startswith(sub):
+            raise StataError(321, "invalid subcommand summarize")   # VERIFY the return code
     table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3), ("dwatson", 3),
              ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
