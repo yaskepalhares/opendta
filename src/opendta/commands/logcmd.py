@@ -96,7 +96,8 @@ def cmd_log(s: "Session", args: str) -> None:
         o = match_options(opts, {"append": 1, "replace": 1, "text": 1, "smcl": 1,
                                  "name": 4}) if comma else {}
         name = str(o.get("name", "<unnamed>")).strip()
-        if name in logs:
+        # in batch mode the batch log is the unnamed log (compat 2001: r(604) before the path)
+        if name in logs or (name == "<unnamed>" and getattr(s, "batch_log", False)):
             # VERIFY: Stata 14 text
             raise StataError(604, "log file already open")
         path = Path(strip_outer_quotes(head.strip())).expanduser()

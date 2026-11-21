@@ -72,6 +72,7 @@ def run_batch(dofile: str, args: list[str]) -> int:
         do_path = do_path.with_suffix(".do")
     log_path = Path.cwd() / (do_path.stem + ".log")
     s = Session()
+    s.batch_log = True
     with log_path.open("w", encoding="utf-8") as log:
         log.write(_log_header(log_path))
         s.output.add_listener(lambda text, style: log.write(text))
