@@ -165,8 +165,8 @@ def _export(s: "Session", args: str, opts: WriteOptions, spec: dict[str, int], *
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     try:
         write_delimited(ds, path, names, rows, opts)
-    except OSError as e:
-        raise StataError(603, f"file {path} could not be opened ({e.strerror})")
+    except OSError:
+        raise StataError(603, f"file {path} could not be opened")
     if not old:
         s.output.write(f"file {path} saved\n", "text")   # outsheet does not show it
 

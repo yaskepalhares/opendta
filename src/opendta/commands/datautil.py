@@ -66,11 +66,16 @@ def cmd_copy(s: "Session", args: str) -> None:
     p = _path(src)
     if not p.exists():
         raise StataError(601, f"file {src} not found")
-    if o.get("text"):
-        data = p.read_bytes().replace(b"\r\n", b"\n")
-        target.write_bytes(data.replace(b"\n", os.linesep.encode()))
-    else:
-        shutil.copyfile(p, target)
+    if o.get("replace") and not target.exists():
+        s.output.write(f"(note: file {dst} not found)\n", "text")
+    try:
+        if o.get("text"):
+            data = p.read_bytes().replace(b"\r\n", b"\n")
+            target.write_bytes(data.replace(b"\n", os.linesep.encode()))
+        else:
+            shutil.copyfile(p, target)
+    except OSError:
+        raise StataError(603, f"file {dst} could not be opened")
 
 
 @command("mkdir", "mkdir")

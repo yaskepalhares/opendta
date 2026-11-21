@@ -114,8 +114,8 @@ def cmd_postfile(s: "Session", args: str) -> None:
     post = _Post(path, names, types)
     try:
         write_dta(_dataset(post), path)
-    except OSError as e:
-        raise StataError(603, f"file {path} could not be opened ({e.strerror})")
+    except OSError:
+        raise StataError(603, f"file {path} could not be opened")
     posts[postname] = post
 
 
@@ -190,8 +190,8 @@ def _close(s: "Session", name: str) -> None:
     post = _posts(s).pop(name)
     try:
         write_dta(_dataset(post), post.path)
-    except OSError as e:
-        raise StataError(603, f"file {post.path} could not be opened ({e.strerror})")
+    except OSError:
+        raise StataError(603, f"file {post.path} could not be opened")
 
 
 @command("postclose")

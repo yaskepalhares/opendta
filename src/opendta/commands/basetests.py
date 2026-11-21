@@ -138,6 +138,8 @@ def _ties_note(s: "Session", x: np.ndarray, what: str) -> None:
 @command("ksmirnov", "ksmirnov")
 def cmd_ksmirnov(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"by": 2, "exact": 1}) if p.options.strip() else {}
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
     mask = touse(s, p) & S.valid(v.data)
@@ -329,6 +331,8 @@ def cmd_nptrend(s: "Session", args: str) -> None:
 @command("runtest", "runtest")
 def cmd_runtest(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"threshold": 1, "continuity": 1, "drop": 1, "split": 1}) \
         if p.options.strip() else {}
     v = numeric_vars(s, p.varlist, allow_string=False)[0]

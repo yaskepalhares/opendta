@@ -639,7 +639,10 @@ class Interpreter:
         if self.s.by_groups is not None and not spec.byable and not spec.prefix:
             raise StataError(190, f"{spec.name} may not be combined with by")
         try:
-            spec.fn(self.s, rest)
+            try:
+                spec.fn(self.s, rest)
+            except (OSError, IndexError, KeyError, ValueError) as exc:
+                raise _as_stata_error(exc) from exc
         except StataError as err:
             if err.context is None:
                 err.context = (spec.name, text)   # for the error explanation
@@ -691,6 +694,15 @@ class Interpreter:
                 (lambda: self._with_prefixes(tail, action) if tail else action())()
             finally:
                 out.noisy_depth -= 1
+
+
+def _as_stata_error(exc: Exception) -> StataError:
+    """Python error escaped from a command, as a Stata error that `capture` takes: a file that
+    cannot be read or written is r(603) (compat/do/2006); the rest falls back on r(198)."""
+    if isinstance(exc, OSError):
+        name = f" {exc.filename}" if exc.filename else ""
+        return StataError(603, f"file{name} could not be opened")
+    return StataError(198, "invalid syntax")
 
 
 def _forvalues_range(rng: str) -> list[float]:

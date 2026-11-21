@@ -464,6 +464,8 @@ def _row(name, x):
 @command("sdtest", "sdtest")
 def cmd_sdtest(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"by": 2, "level": 1})
     level = _level(s, o)
     if p.exp is None and "==" in p.varlist:

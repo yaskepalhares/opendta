@@ -105,10 +105,13 @@ def cmd_log(s: "Session", args: str) -> None:
         kind = "smcl" if o.get("smcl") or (path.suffix == ".smcl" and not o.get("text")) else "text"
         if path.exists() and not (o.get("replace") or o.get("append")):
             raise StataError(602, f"file {path} already exists")
+        if o.get("replace") and not path.exists():
+            # Stata shows the full path here (compat/do/2006)
+            s.output.write(f"(note: file {path.absolute()} not found)\n", "text")
         try:
             fh = open(path, "a" if o.get("append") else "w", encoding="utf-8")
         except OSError:
-            raise StataError(603, f"file {path} could not be opened")
+            raise StataError(603, f"file {path.absolute()} could not be opened")
         log = LogFile(name, path.resolve(), kind, fh)
         if kind == "smcl" and not o.get("append"):
             fh.write("{smcl}\n")
