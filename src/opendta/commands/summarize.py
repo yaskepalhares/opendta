@@ -578,7 +578,31 @@ def cmd_tabstat(s: "Session", args: str) -> None:
     bv = s.data.get(s.expand_varlist(str(o["by"]).strip())[0])
     cats, labels, ok = _categories(s, bv, base, missing=bool(o.get("missing")), nolabel=False)
     codes = _codes(bv, cats)
+    # labelwidth(16) by default: longer labels are cut (compat 2007)
+    lw = int(o["labelwidth"]) if o.get("labelwidth") not in (None, True) else 16
+    labels = [x[:lw] for x in labels]
     W = max([8, len(bv.name)] + [len(x) for x in labels])
+    groups = [(labels[k], ok & (codes == k)) for k in range(len(cats))]
+    if not o.get("nototal"):
+        groups.append(("Total", ok))
+    if cols_stats or (len(vars_) == 1 and not o.get("columns")):
+        # one variable: the statistics are the columns (compat 2007). VERIFY: several variables
+        # with columns(statistics)
+        heads = [_TS_LABEL.get(st_, st_) for st_ in stats]
+        out.write(f"\nSummary for variables: {' '.join(v.name for v in vars_)}\n", "text")
+        label = f" ({bv.label})" if bv.label else ""
+        out.write(f"     by categories of: {bv.name}{label}\n\n", "text")
+        out.write(f"{_abbrev(bv.name, W):>{W}} |" + "".join(f"{h:>10}" for h in heads) + "\n", "text")
+        sep = "-" * (W + 1) + "+" + "-" * (10 * len(heads)) + "\n"
+        out.write(sep, "text")
+        for gi, (label, mask) in enumerate(groups):
+            if label == "Total" and gi:
+                out.write(sep, "text")
+            for j, v in enumerate(vars_):
+                out.write(f"{(label if j == 0 else ''):>{W}} |", "text")
+                out.write("".join(f"{fmtv(value(st_, v, mask)):>10}" for st_ in stats) + "\n", "result")
+        out.write("-" * (W + 2 + 10 * len(heads)) + "\n", "text")
+        return
     names = ", ".join(_TS_LABEL.get(st_, st_) for st_ in stats)
     if len(stats) > 1 or len(vars_) > 1:
         lead = f"Summary statistics: {names}" if len(stats) > 1 else \
@@ -590,9 +614,6 @@ def cmd_tabstat(s: "Session", args: str) -> None:
         f"{_abbrev(v.name, 8):>10}" for v in vars_) + "\n", "text")
     sep = "-" * (W + 1) + "+" + "-" * (10 * len(vars_)) + "\n"
     out.write(sep, "text")
-    groups = [(labels[k], ok & (codes == k)) for k in range(len(cats))]
-    if not o.get("nototal"):
-        groups.append(("Total", ok))
     for gi, (label, mask) in enumerate(groups):
         if label == "Total" and gi:
             out.write(sep, "text")
