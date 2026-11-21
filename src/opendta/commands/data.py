@@ -685,7 +685,8 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                     v = M.SYSMISS
                 else:
                     try:
-                        v = M.missing_code(raw) if raw.startswith(".") else float(raw)
+                        # .a-.z are missing codes; .5 is a number
+                        v = M.missing_code(raw) if re.fullmatch(r"\.[a-z]", raw) else float(raw)
                     except ValueError:
                         raise StataError(198, f"'{raw}' cannot be read as a number")
                 fitted, _ = fit_numeric(np.array([v]), var.vtype)

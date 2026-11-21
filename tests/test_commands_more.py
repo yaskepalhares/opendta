@@ -288,3 +288,9 @@ def test_quantile_regressions(run):
     run("quietly sqreg y x z, q(.25 .75) reps(10)")
     assert run.eval("_b[q25:x]") == pytest.approx(b25) and run.eval("_b[q75:x]") == pytest.approx(b75)
     assert run.eval("e(n_q)") == 2 and run.eval('e(eqnames) == "q25 q75"') == 1
+
+
+def test_input_leading_decimal_point(run):
+    run("clear\ninput x\n.5\n-.25\n.a\nend")
+    assert list(run.session.data.get("x").data[:2]) == [.5, -.25]
+    assert run.eval("x[3] == .a") == 1
