@@ -7,7 +7,8 @@ with a numerical Jacobian. No Session and no output."""
 from __future__ import annotations
 
 import numpy as np
-from scipy import stats
+from ..lazy import lazy
+stats = lazy("scipy.stats")
 
 
 # ---------------------------------------------------------------------------

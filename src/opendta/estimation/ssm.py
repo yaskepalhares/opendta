@@ -10,7 +10,8 @@ filter)."""
 from __future__ import annotations
 
 import numpy as np
-from scipy import linalg
+from ..lazy import lazy
+linalg = lazy("scipy.linalg")
 
 KAPPA = 1e7
 

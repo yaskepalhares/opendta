@@ -6,7 +6,9 @@ and no output; the commands are in estimation/choice.py."""
 from __future__ import annotations
 
 import numpy as np
-from scipy import special, stats
+from ..lazy import lazy
+special = lazy("scipy.special")
+stats = lazy("scipy.stats")
 
 
 def group_index(gid: np.ndarray) -> list[np.ndarray]:
