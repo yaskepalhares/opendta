@@ -797,7 +797,7 @@ def test_dofile_editor_toolbar_layout(app):
     w.show_dofile_editor("")
     de = w.dofile_editor
     names = [a.data()[0] for a in de.findChild(QToolBar, "DoToolbar").actions() if a.data()]
-    assert names[-3:] == ["play-line", "play-quiet", "play"]        # Do at the far right
+    assert names[-1] == "play" and "play-line" not in names and "play-quiet" not in names   # only Do, at the far right
     assert "floppy" in names and "floppy-saveas" in names
     assert de.tabs.count() == 1
     de.new_tab_button.click()                                       # the + at the end of the tab bar

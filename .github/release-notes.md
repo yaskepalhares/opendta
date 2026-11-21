@@ -1,5 +1,11 @@
 **English** · [Português](#português)
 
+## What's new in 0.11.2
+
+Changes:
+
+- The Do-file Editor toolbar no longer has the **Do line** and **Run** buttons; **Do** stays.
+
 ## What's new in 0.11.1
 
 New:
@@ -70,6 +76,12 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 0.11.2
+
+Mudanças:
+
+- A barra do Editor de do-files não tem mais os botões **Executar linha** e **Executar sem eco**; o **Executar** continua.
 
 ### Novidades da 0.11.1
 
