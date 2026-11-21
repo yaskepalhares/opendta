@@ -169,3 +169,21 @@ def test_fvset_base(run):
     assert run.eval("_b[1.g]") == 0
     run("fvset clear g\nquietly regress y i.g")
     assert run.eval("_b[1.g]") == 0
+
+
+def test_bsample(run):
+    assert run("clear\ncapture noisily bsample\ndisplay _rc").strip() == "0"
+    run("clear\nset obs 20\ngen id = _n\ngen h = id > 10\ngen c = ceil(id / 2)\nset seed 1")
+    run("preserve\nbsample")
+    assert run.session.data.nobs == 20
+    vals = run.session.data.get("id").data
+    assert set(vals) <= set(range(1, 21)) and len(set(vals)) < 20
+    run("restore\npreserve\nbsample 5, strata(h)")
+    h = run.session.data.get("h").data
+    assert len(h) == 10 and h.sum() == 5
+    run("restore\npreserve\nbsample, cluster(c) idcluster(nc)")
+    ds = run.session.data
+    assert ds.nobs == 20 and sorted(set(ds.get("nc").data)) == list(range(1, 11))
+    run("restore\ngen w = .\nbsample, weight(w)")
+    assert run.session.data.nobs == 20 and run.session.data.get("w").data.sum() == 20
+    assert run("capture bsample 30\ndisplay _rc").strip() == "498"
