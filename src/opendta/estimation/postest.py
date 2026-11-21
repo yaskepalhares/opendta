@@ -282,6 +282,8 @@ def _strip_marks(n: str) -> str:
         p = re.sub(r"^(\d+)(?:b|o|bn)+\.", r"\1.", p)
         p = re.sub(r"^(?:o|co)\.", lambda m: "c." if m.group(0) == "co." else "", p)
         out.append(p)
+    if len(out) == 1 and out[0].startswith("c."):
+        out[0] = out[0][2:]    # c.x and x name the same plain continuous coefficient
     return "#".join(out)
 
 
@@ -609,7 +611,8 @@ def cmd_lincom(s: "Session", args: str) -> None:
         coef_table(s, dep, [CoefRow("coef", "(1)", val, se)], stat=est.stat, df=est.df_r,
                    level=lev)
     # r(): only estimate, se and df in Stata 14 (compat 0504); the list comes out reversed
-    s.r = {"estimate": val, "se": se}
+    # with eform, r(estimate) and r(se) are the exponentiated estimate and its standard error (Stata 14)
+    s.r = {"estimate": float(np.exp(val)), "se": float(np.exp(val) * se)} if eform else {"estimate": val, "se": se}
     if est.df_r:
         s.r["df"] = float(est.df_r)
 

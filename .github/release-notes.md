@@ -1,5 +1,12 @@
 **English** · [Português](#português)
 
+## What's new in 0.12.0
+
+Fixes:
+
+- `lincom`, `test` and related commands accept `c.x` for a plain continuous coefficient (`lincom c.year, eform` no longer fails with "not found").
+- With `eform` (or `or`, `hr`, `irr`, `rrr`), `lincom` now stores the exponentiated estimate and its standard error in `r(estimate)` and `r(se)`, as Stata 14 does.
+
 ## What's new in 0.11.2
 
 Changes:
@@ -76,6 +83,13 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 0.12.0
+
+Correções:
+
+- `lincom`, `test` e comandos relacionados aceitam `c.x` para um coeficiente contínuo simples (`lincom c.ano, eform` não falha mais com "not found").
+- Com `eform` (ou `or`, `hr`, `irr`, `rrr`), o `lincom` agora guarda em `r(estimate)` e `r(se)` a estimativa exponenciada e seu erro padrão, como o Stata 14.
 
 ### Novidades da 0.11.2
 
