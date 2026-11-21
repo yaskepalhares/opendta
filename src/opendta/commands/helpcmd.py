@@ -93,7 +93,7 @@ ALIASES = {
     "xtset": "xtreg", "tsset": "xtreg", "testparm": "test", "lincom": "test", "nlcom": "test",
     "est": "estimates", "estimates_table": "estimates", "estimates_store": "estimates",
     "proportion": "mean", "ratio": "mean", "total": "mean", "ranksum": "nptests",
-    "signrank": "nptests", "kwallis": "nptests", "spearman": "nptests", "swilk": "nptests",
+    "signrank": "nptests", "kwallis": "nptests", "spearman": "nptests", "swilk": "nptests", "sfrancia": "nptests",
     "sktest": "nptests", "sdtest": "nptests", "robvar": "nptests", "cii": "immediate", "tabi": "immediate",
     "ttesti": "immediate", "sdtesti": "immediate", "prtesti": "immediate", "drop": "datamgmt", "keep": "datamgmt",
     "sort": "datamgmt", "gsort": "datamgmt", "rename": "datamgmt", "order": "datamgmt",

@@ -230,3 +230,18 @@ def test_robvar(run):
     groups = [x[g == k] for k in range(3)]
     assert run.eval("r(w0)") == pytest.approx(stats.levene(*groups, center="mean").statistic)
     assert run.eval("r(w50)") == pytest.approx(stats.levene(*groups, center="median").statistic)
+
+
+def test_sfrancia(run):
+    import numpy as np
+    from scipy import stats
+    out = run("clear\ncapture noisily sfrancia\ndisplay _rc").splitlines()
+    assert out[-2:] == ["varlist required", "100"]
+    run("clear\nset obs 50\ngen x = invnormal((_n - .5) / 50) + (_n > 45) * 3")
+    out = run("sfrancia x")
+    assert "Shapiro-Francia W' test for normal data" in out
+    x = np.sort(np.array(run.session.data.get("x").data))
+    m = stats.norm.ppf((np.arange(1, 51) - .375) / 50.25)
+    W = np.corrcoef(m, x)[0, 1] ** 2
+    assert run.eval("r(W)") == pytest.approx(W)
+    assert run.eval("r(z)") > 0 and run.eval("r(p)") < .05

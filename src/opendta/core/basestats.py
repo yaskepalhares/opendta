@@ -873,3 +873,29 @@ def robvar(x: np.ndarray, g: np.ndarray) -> dict:
         out[key], out["p_" + key] = float(f), float(st.f.sf(f, df1, df2))
         out["df_1"], out["df_2"] = float(df1), float(df2)
     return out
+
+
+# ---------------------------------------------------------------------------
+# sfrancia: Shapiro and Francia (1972), with Royston's (1993) normalizing transformation
+# ---------------------------------------------------------------------------
+
+def shapiro_francia(x: np.ndarray, ties: bool = True) -> dict:
+    """W', V' = (1 - W')/exp(mu), z and Prob>z. The expected normal order statistics are
+    Blom's invnormal((i - 3/8)/(n + 1/4)); with ties, tied values share the mean of theirs.
+    VERIFY: Stata's treatment of ties and its V'."""
+    xs = np.sort(np.asarray(x, dtype=float))
+    n = len(xs)
+    m = st.norm.ppf((np.arange(1, n + 1) - 0.375) / (n + 0.25))
+    if ties:
+        for v in np.unique(xs):
+            idx = xs == v
+            if idx.sum() > 1:
+                m[idx] = m[idx].mean()
+    d = xs - xs.mean()
+    W = float((m @ xs) ** 2 / ((m @ m) * (d @ d)))
+    u = math.log(n)
+    v = math.log(u)
+    mu = -1.2725 + 1.0521 * (v - u)
+    sigma = 1.0308 - 0.26758 * (v + 2 / u)
+    z = (math.log(1 - W) - mu) / sigma if W < 1 else -math.inf
+    return {"W": W, "V": (1 - W) / math.exp(mu), "z": z, "p": float(st.norm.sf(z)), "N": float(n)}

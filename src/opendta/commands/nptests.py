@@ -558,3 +558,32 @@ def cmd_sdtest(s: "Session", args: str) -> None:
                "sd_2": sd2, "sd_1": sd1, "N_2": float(len(x2)), "N_1": float(len(x1))}
         return
     sd_one(s, v.name, x, float(s.eval(rhs)), level)
+
+
+@command("sfrancia")
+def cmd_sfrancia(s: "Session", args: str) -> None:
+    """sfrancia varlist [if] [in] [, noties]. VERIFY: the layout, the limits on the number of
+    observations and the boxcox option."""
+    from ..core.basestats import shapiro_francia
+    p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")   # compat 2005
+    o = match_options(p.options, {"boxcox": 1, "noties": 5})
+    if o.get("boxcox"):
+        raise StataError(198, "option boxcox is not available yet in OpenDTA")
+    vars_ = numeric_vars(s, p.varlist, allow_string=False)
+    base = touse(s, p)
+    out = s.output
+    out.write("\n" + " " * 18 + "Shapiro-Francia W' test for normal data\n\n", "text")
+    out.write("    Variable |" + "Obs".rjust(11) + "W'".rjust(9) + "V'".rjust(12) + "z".rjust(9)
+              + "Prob>z".rjust(13) + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * 54 + "\n", "text")
+    for v in vars_:
+        x = v.data[base & S.valid(v.data)]
+        if len(x) < 5:
+            raise StataError(2001, "insufficient observations")
+        r = shapiro_francia(x, ties=not o.get("noties"))
+        out.write(f"{name12(v.name):>12} |", "text")
+        out.write(f"{len(x):>11}{r['W']:>11.5f}{r['V']:>11.3f}{r['z']:>10.3f}{r['p']:>11.5f}\n",
+                  "result")
+        _set_r(s, [("p", r["p"]), ("z", r["z"]), ("V", r["V"]), ("W", r["W"]), ("N", r["N"])])
