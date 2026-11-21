@@ -294,3 +294,49 @@ def test_input_leading_decimal_point(run):
     run("clear\ninput x\n.5\n-.25\n.a\nend")
     assert list(run.session.data.get("x").data[:2]) == [.5, -.25]
     assert run.eval("x[3] == .a") == 1
+
+
+_PK = ("clear\ninput id t c\n" + "\n".join(
+    f"{i} {t} {c}" for i, rows in ((1, [(0, 0), (.5, 3.1), (1, 4.8), (2, 4.2), (4, 3), (8, 1.6), (12, .8)]),
+                                   (2, [(0, 0), (.5, 2.5), (1, 4.1), (2, 4.5), (4, 3.4), (8, 1.9), (12, 1.1)]))
+    for t, c in rows) + "\nend")
+
+
+@pytest.mark.parametrize("cmd", ["pkexamine", "pksumm", "pkshape", "pkcross", "pkequiv",
+                                 "pkcollapse"])
+def test_pk_needs_varlist(run, cmd):
+    out = run(f"clear\ncapture noisily {cmd}\ndisplay _rc").splitlines()
+    assert out[-2:] == ["varlist required", "100"]
+
+
+def test_pkexamine_measures(run):
+    import math
+    import numpy as np
+    run(_PK)
+    run("pkexamine t c if id == 1, trapezoid")
+    t = np.array([0, .5, 1, 2, 4, 8, 12])
+    c = np.array([0, 3.1, 4.8, 4.2, 3, 1.6, .8])
+    assert run.eval("r(auc)") == pytest.approx(np.sum((c[1:] + c[:-1]) / 2 * np.diff(t)), rel=1e-6)
+    b = np.polyfit(t[-3:], np.log(c[-3:]), 1)[0]
+    assert run.eval("r(ke)") == pytest.approx(-b, rel=1e-6)
+    assert run.eval("r(half)") == pytest.approx(math.log(2) / -b, rel=1e-6)
+    assert run.eval("r(cmax)") == pytest.approx(4.8) and run.eval("r(tomc)") == 1
+    assert run.eval("r(auc_ln) - r(auc)") == pytest.approx(.8 / -b, rel=1e-6)
+    assert "auclog" in run("pksumm id t c")
+    run("pkcollapse t c, id(id) stat(auc cmax)")
+    assert [v.name for v in run.session.data.vars] == ["id", "auc_c", "cmax_c"]
+    assert run.session.data.nobs == 2
+
+
+def test_pkshape_pkcross_pkequiv(run):
+    run("clear\ninput id seq p1 p2\n1 1 10 12\n2 1 11 13\n3 1 9 11\n4 2 12 10\n5 2 13 12\n"
+        "6 2 11 10\nend\npkshape id seq p1 p2, order(ab ba)")
+    ds = run.session.data
+    assert ds.nobs == 12 and [v.name for v in ds.vars] == ["id", "sequence", "outcome", "treat",
+                                                           "carry", "period"]
+    assert list(ds.get("treat").data[6:8]) == [2, 1] and list(ds.get("carry").data[6:8]) == [0, 2]
+    out = run("pkcross outcome")
+    assert "Treatment effect" in out and "Carryover effect" not in out
+    run("pkequiv outcome treat period sequence id")
+    assert run.eval("r(delta)") == pytest.approx(62 / 6 - 12)
+    assert run.eval("r(lower)") < run.eval("r(delta)") < run.eval("r(upper)")
