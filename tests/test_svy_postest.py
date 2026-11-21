@@ -104,3 +104,12 @@ def test_contrast_after_svy_adjusts_F(svyrun):
     assert "Design df         =         27\n" in out
     assert "       faixa |          2        0.10     0.9049\n      Design |         27\n" in out
     assert out.endswith("Note: F statistics are adjusted for the survey\n      design.\n")
+
+
+def test_pwcompare_after_svy(svyrun):
+    svyrun("quietly svy: poisson pc ano i.sexo ib2.faixa c.idade")
+    lines = svyrun("pwcompare faixa").splitlines()
+    assert any(ln.strip().startswith("Design df") and ln.rstrip().endswith("27") for ln in lines)
+    k = next(i for i, ln in enumerate(lines) if ln.endswith("Unadjusted"))
+    assert lines[k + 1].endswith("[95% Conf. Interval]")
+    assert lines[k + 3] == "pc           |" and lines[k + 4] == "       faixa |"
