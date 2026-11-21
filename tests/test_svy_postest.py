@@ -40,6 +40,7 @@ def test_equation_prefix_after_svy_poisson(svyrun):
         assert svyrun(f"display {e}").strip() == "-.0042621", e
     assert svyrun("display _b[2b.faixa]").strip() == "0"
     assert svyrun("display _b[c.idade]").strip() == ".00090785"
+    assert svyrun("lincom ib2.faixa").startswith("ib2:  operator invalid")
 
 
 def test_equation_prefix_after_svy_logit_and_regress(svyrun):

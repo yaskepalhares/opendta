@@ -379,6 +379,11 @@ class _Lin:
             return self._coef(m.group(2), m.group(1)), 0.0
         if re.fullmatch(r"\d+\.\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|\d+(?:[eE][-+]?\d+)?", t):
             return {}, float(t)
+        m = re.match(r"(i\w*)\.", t)
+        if m:
+            # lincom ib2.faixa: factor operators other than #. name no coefficient (compat 2004);
+            # VERIFY the return code and i.x
+            raise StataError(198, f"{m.group(1)}:  operator invalid")
         return self._coef(t), 0.0
 
     def _coef(self, name: str, eq: str = "") -> dict:
