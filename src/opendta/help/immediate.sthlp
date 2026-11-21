@@ -13,6 +13,7 @@
 {p 8 16 2}{cmd:cii variances} {it:#obs} {it:#variance} [{cmd:,} {opt l:evel(#)} {opt sd}]  ({opt sd}: the second number is a standard deviation){p_end}
 {p 8 16 2}{cmd:tabi} {it:#11} {it:#12} [...] {cmd:\} {it:#21} {it:#22} [...] [{cmd:,} {it:tabulate options}]{p_end}
 {p 8 16 2}{cmd:ttesti} {it:#obs} {it:#mean} {it:#sd} {it:#val}  |  {cmd:ttesti} {it:#obs1} {it:#mean1} {it:#sd1} {it:#obs2} {it:#mean2} {it:#sd2}{p_end}
+{p 8 16 2}{cmd:sdtesti} {it:#obs} {it:#mean} {it:#sd} {it:#val}  |  {cmd:sdtesti} {it:#obs1} {it:#mean1} {it:#sd1} {it:#obs2} {it:#mean2} {it:#sd2}{p_end}
 {p 8 16 2}{cmd:prtesti} {it:#obs} {it:#p1} {it:#p2}  |  {cmd:prtesti} {it:#obs1} {it:#p1} {it:#obs2} {it:#p2}{p_end}
 
 {title:Description}

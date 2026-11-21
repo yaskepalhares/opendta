@@ -202,3 +202,16 @@ def test_hexdump(run, tmp_path, monkeypatch):
     assert r == {"Windows": 1, "Unix": 1, "uc": 1, "lc": 3, "digit": 1, "tab": 1, "blank": 1,
                  "extended": 1, "filesize": 11}
     assert "Line-end characters" in run("hexdump a.txt, analyze")
+
+
+def test_sdtesti(run):
+    out = run("capture noisily sdtesti\ndisplay _rc").splitlines()
+    assert out[-2:] == ["either four arguments for a one-sample test or six arguments for a "
+                        "two-sample test must be specified", "198"]
+    run("sdtesti 20 5 2 1.5")
+    assert run.eval("r(chi2)") == pytest.approx(19 * 4 / 2.25)
+    run("sdtesti 20 5 2 15 4 3")
+    assert run.eval("r(F)") == pytest.approx(4 / 9) and run.eval("r(df_2)") == 14
+    run("clear\nset obs 20\ngen x = mod(_n * 7, 11)\ngen g = _n > 12")
+    out = run("sdtest x, by(g)")
+    assert "Variance ratio test" in out and run.eval("r(df_1)") == 11

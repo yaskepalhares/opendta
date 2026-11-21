@@ -95,7 +95,7 @@ ALIASES = {
     "proportion": "mean", "ratio": "mean", "total": "mean", "ranksum": "nptests",
     "signrank": "nptests", "kwallis": "nptests", "spearman": "nptests", "swilk": "nptests",
     "sktest": "nptests", "sdtest": "nptests", "cii": "immediate", "tabi": "immediate",
-    "ttesti": "immediate", "prtesti": "immediate", "drop": "datamgmt", "keep": "datamgmt",
+    "ttesti": "immediate", "sdtesti": "immediate", "prtesti": "immediate", "drop": "datamgmt", "keep": "datamgmt",
     "sort": "datamgmt", "gsort": "datamgmt", "rename": "datamgmt", "order": "datamgmt",
     "count": "datamgmt", "notes": "label", "char": "label", "recast": "format",
     "compress": "format", "di": "display", "local": "macro", "global": "macro",
