@@ -117,3 +117,39 @@ def test_label_list_after_drop_merge(run, tmp_path):
     run("drop _merge")
     out = run("label list")
     assert "_merge" not in out and "lab:" in out
+
+
+_LONG = "zero com texto bem comprido para testar quebra"
+
+
+def _labeled(run):
+    run(f'clear\nset obs 6\ngen g = mod(_n, 3)\ngen x = _n\ngen str3 s = "abc"\n'
+        f'label define lg 0 "{_LONG}" 1 "um" 2 "dois"\nlabel values g lg')
+
+
+def test_tab_long_labels(run):
+    # compat 2007: one-way tables widen the column up to 39 characters, two-way to 21
+    _labeled(run)
+    lines = run("tab g").splitlines()
+    assert lines[1] == " " * 38 + "g |      Freq.     Percent        Cum."
+    assert lines[3].startswith(_LONG[:39] + " |")
+    lines = run("tab g s").splitlines()
+    assert lines[2] == " " * 20 + "g |       abc |     Total"
+    assert lines[4].startswith(_LONG[:21] + " |")
+
+
+def test_tabstat_one_variable_by(run):
+    # compat 2007: with one variable the statistics are the columns; labels cut to 16
+    _labeled(run)
+    lines = run("tabstat x, by(g) stat(mean sd n)").splitlines()
+    assert lines[1:3] == ["Summary for variables: x", "     by categories of: g"]
+    assert lines[4] == "               g |      mean        sd         N"
+    assert lines[6].startswith(_LONG[:16] + " |")
+    assert lines[-2].startswith("           Total |")
+
+
+def test_compress_keeps_numeric_format(run):
+    run('clear\nset obs 3\ngen id = _n\ngen str20 s = "abc"\nquietly compress')
+    d = run.session.data
+    assert (d.get("id").vtype, d.get("id").fmt) == ("byte", "%9.0g")
+    assert (d.get("s").vtype, d.get("s").fmt) == ("str3", "%9s")

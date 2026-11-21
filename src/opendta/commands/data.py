@@ -563,8 +563,7 @@ def cmd_compress(s: "Session", args: str) -> None:
             # a float only goes down to an integer type if all values are integers
             _note(s, f"  variable {n} was {var.vtype} now {need}")
             saved += (_BYTES[var.vtype] - _BYTES[need]) * ds.nobs
-            if var.fmt == default_format(var.vtype):
-                var.fmt = default_format(need)
+            # the display format stays (compat 2007: float %9.0g becomes byte %9.0g)
             var.vtype = need
     # VERIFY: exact format of the summary
     _note(s, f"  ({saved:,} bytes saved)")
