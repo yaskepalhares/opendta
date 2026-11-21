@@ -263,3 +263,28 @@ def test_qqplot_qladder(run):
     from opendta.graphics.store import store
     assert store(run.session).get("q2").family == "combine"
     assert len(store(run.session).get("q2").children) == 9
+
+
+@pytest.mark.parametrize("cmd", ["iqreg", "sqreg", "bsqreg"])
+def test_quantile_regressions_replay(run, cmd):
+    out = run(f"clear\ncapture noisily {cmd}\ndisplay _rc").splitlines()
+    assert out[-2:] == ["last estimates not found", "301"]
+
+
+def test_quantile_regressions(run):
+    run("clear\nset obs 60\ngen x = mod(_n*7,13)\ngen z = mod(_n*5,7)\n"
+        "gen y = 2 + x + .5*z + mod(_n*11,9)\nset seed 1")
+    run("quietly qreg y x z")
+    b50 = run.eval("_b[x]")
+    run("quietly qreg y x z, q(.25)")
+    b25 = run.eval("_b[x]")
+    run("quietly qreg y x z, q(.75)")
+    b75 = run.eval("_b[x]")
+    out = run("bsqreg y x z, reps(10)")
+    assert "Median regression, bootstrap(10) SEs" in out and run.eval("_b[x]") == pytest.approx(b50)
+    assert run.eval("_se[x]") > 0 and run.eval("e(reps)") == 10
+    run("quietly iqreg y x z, reps(10)")
+    assert run.eval("_b[x]") == pytest.approx(b75 - b25)
+    run("quietly sqreg y x z, q(.25 .75) reps(10)")
+    assert run.eval("_b[q25:x]") == pytest.approx(b25) and run.eval("_b[q75:x]") == pytest.approx(b75)
+    assert run.eval("e(n_q)") == 2 and run.eval('e(eqnames) == "q25 q75"') == 1

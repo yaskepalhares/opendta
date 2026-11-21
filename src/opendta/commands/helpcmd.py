@@ -128,7 +128,7 @@ ALIASES = {
     "makecns": "estprog", "matcproc": "estprog", "mark": "syntax", "markin": "syntax",
     "sortpreserve": "program", "cutil": "classutil",
     "hettest": "estat", "ovtest": "estat", "lstat": "estat", "vif": "estat",
-    "hexdump": "filesys", "bsample": "bootstrap", "rcof": "progutil", "query": "interface", "set_defaults": "interface",
+    "bsqreg": "qreg", "iqreg": "qreg", "sqreg": "qreg", "hexdump": "filesys", "bsample": "bootstrap", "rcof": "progutil", "query": "interface", "set_defaults": "interface",
     "mkmat": "matrix", "svmat": "matrix", "numlist": "macro",
     "aorder": "datamgmt", "move": "datamgmt", "renpfix": "datamgmt", "numlabel": "label",
     "treatreg": "treatment", "svydes": "svy", "svylc": "test",

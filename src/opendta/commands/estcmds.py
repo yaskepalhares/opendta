@@ -36,6 +36,7 @@ lazy_commands("mltools", "mleval", "mlsum", "mlvecsum", "mlmatsum")
 lazy_commands("fpoly", "fp", "mfp", prefix=True)
 lazy_commands("postest2", "testnl", "predictnl", "linktest", "contrast", "pwcompare", "pwmean", "suest")
 lazy_commands("extra", "lrtest", "hausman", "xtsum", ("xtdescribe", "xtdes"), "qreg")
+lazy_commands("qregfam", "bsqreg", "iqreg", "sqreg")
 lazy_commands("panel2", "xtpoisson", "xtlogit")
 lazy_commands("xtre", ("xtprobit", "xtprob"), "xtcloglog", "xtologit", "xtoprobit", "xttobit", "xtintreg",
                       "xtnbreg")
