@@ -87,3 +87,40 @@ def test_numlabel(run):
     assert vl["g"] == {1: "[1] One"}
     run("numlabel yn, remove")
     assert vl["yn"] == {0: "No", 1: "Yes"}
+
+
+def test_mkmat_svmat(run):
+    out = run("clear\ncapture noisily mkmat\ndisplay _rc").splitlines()
+    assert out[-2:] == ["varlist required", "100"]
+    out = run("capture noisily svmat\ndisplay _rc").splitlines()
+    assert out[-2:] == ["matrix  not found", "111"]
+    run('clear\ninput a b str3 id\n1 2 "x"\n3 . "y"\n5 6 "z"\nend')
+    run("mkmat a b, matrix(A) rownames(id)")
+    A = run.session.matrices["A"]
+    assert A.rownames == ["x", "y", "z"] and A.colnames == ["a", "b"]
+    assert A.data[2].tolist() == [5, 6]
+    run("mkmat a b, matrix(B) nomissing")
+    assert run.session.matrices["B"].rows == 2
+    run("mkmat a")
+    assert run.session.matrices["a"].colnames == ["a"]
+    run("matrix C = (1, 2 \\ 3, 4 \\ 5, 6 \\ 7, 8)\nmatrix colnames C = u v\nsvmat C")
+    assert run.session.data.nobs == 4 and run.eval("C2[4]") == 8
+    run("svmat C, names(col)")
+    assert run.eval("u[2] + v[1]") == 5
+
+
+@pytest.mark.parametrize("arg, result", [
+    ('"1/4"', "1 2 3 4"), ('"1(2)7 10"', "1 3 5 7 10"), ('"3 1 2", sort', "1 2 3"),
+    ('".5 1.5"', ".5 1.5"),
+])
+def test_numlist(run, arg, result):
+    run(f"numlist {arg}")
+    assert run.eval("r(numlist)") == result
+
+
+@pytest.mark.parametrize("arg, rc", [
+    ("", 122), ('"1/3", max(2)', 123), ('"3 1", ascending', 124), ('"1/3", range(>=2)', 125),
+    ('"1.5", integer', 126), ('"1 ."', 127), ('"a"', 121),
+])
+def test_numlist_errors(run, arg, rc):
+    assert run(f"capture numlist {arg}\ndisplay _rc").strip() == str(rc)

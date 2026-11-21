@@ -11,12 +11,13 @@
 {p 8 16 2}{cmd:global} {it:name} [{cmd:=}{it:exp} | {cmd:"}{it:text}{cmd:"} | {cmd::}{it:extended_fcn}]{p_end}
 {p 8 16 2}{cmd:macro list}  |  {cmd:macro drop} {it:names}{p_end}
 {p 8 16 2}{cmd:scalar} [{cmd:define}] {it:name} {cmd:=} {it:exp}  |  {cmd:scalar list}  |  {cmd:scalar drop}{p_end}
+{p 8 16 2}{cmd:numlist} {cmd:"}{it:numlist}{cmd:"} [{cmd:,} {opt a:scending} {opt d:escending} {opt int:eger} {opt miss:ingokay} {opt min(#)} {opt max(#)} {opt r:ange(operator # ...)} {opt sort}]{p_end}
 {p 8 16 2}{cmd:tokenize} [{cmd:"}]{it:string}[{cmd:"}] [{cmd:,} {opt p:arse(pchars)}]{p_end}
 
 {title:Description}
 
 {pstd}
-Local macros ({cmd:`name'}) live in the do-file or program that created them; global macros ({cmd:$name}) in the whole session. Extended functions include {cmd:word # of}, {cmd:list}, {cmd:subinstr}, {cmd:variable label}, {cmd:value label}, {cmd:dir}, {cmd:piece} and others. {cmd:tokenize} splits a string into {cmd:`1'}, {cmd:`2'}, ...
+Local macros ({cmd:`name'}) live in the do-file or program that created them; global macros ({cmd:$name}) in the whole session. Extended functions include {cmd:word # of}, {cmd:list}, {cmd:subinstr}, {cmd:variable label}, {cmd:value label}, {cmd:dir}, {cmd:piece} and others. {cmd:tokenize} splits a string into {cmd:`1'}, {cmd:`2'}, ... {cmd:numlist} expands a numlist into {cmd:r(numlist)}.
 {p_end}
 
 {title:Examples}

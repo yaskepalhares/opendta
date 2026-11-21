@@ -128,6 +128,7 @@ ALIASES = {
     "makecns": "estprog", "matcproc": "estprog", "mark": "syntax", "markin": "syntax",
     "sortpreserve": "program", "cutil": "classutil",
     "hettest": "estat", "ovtest": "estat", "lstat": "estat", "vif": "estat",
+    "mkmat": "matrix", "svmat": "matrix", "numlist": "macro",
     "aorder": "datamgmt", "move": "datamgmt", "renpfix": "datamgmt", "numlabel": "label",
     "treatreg": "treatment", "svydes": "svy", "svylc": "test",
 }
