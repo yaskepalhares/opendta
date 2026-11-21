@@ -410,10 +410,12 @@ def cmd_sort(s: "Session", args: str) -> None:
         ds.sortlist = []
         s.notify_state()
         return
-    # sort does not mark the data as changed (compat 2007)
+    # sort does not mark the data as changed, and the sort marker keeps repeated names
+    # (sort g g x: "Sorted by: g  g  x", compat 2007; VERIFY: by g x: afterwards)
     changed = ds.changed
     sorting.sort(ds, names)
     ds.changed = changed
+    ds.sortlist = expand(ds, p.varlist, allow_empty=False)
     s.notify_state()
 
 

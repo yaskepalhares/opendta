@@ -87,3 +87,23 @@ def test_changed_stays_0_after_sort_compress_and_keep(run, tmp_path):
     assert "has changed" not in run("describe, short")
     run("replace x = 1")
     assert "Note: Dataset has changed since last saved." in run("describe, short")
+
+
+def test_sort_marker_keeps_repeated_names(run):
+    run(DATA + "sort g g x")
+    assert "Sorted by: g  g  x\n" in run("describe, short")
+
+
+def test_merge_1_1_is_sorted_by_the_key(run, tmp_path):
+    f = (tmp_path / "d.dta").as_posix()
+    run(DATA + f'save "{f}"\nsort g x\nmerge 1:1 id using "{f}", nogenerate')
+    assert "Sorted by: id\n" in run("describe, short")
+    assert run("list id in 1/3, noobs clean").split()[1:] == ["1", "2", "3"]
+
+
+def test_merge_with_using_only_rows_is_not_sorted(run, tmp_path):
+    f = (tmp_path / "u.dta").as_posix()
+    run(f'clear\ninput id u\n4 1\n1 2\nend\nsave "{f}"')
+    run('clear\ninput id m\n3 1\n1 2\nend\nmerge 1:1 id using "' + f + '", nogenerate')
+    assert run("list id, noobs clean").split()[1:] == ["1", "3", "4"]
+    assert "Sorted by: \n" in run("describe, short")
