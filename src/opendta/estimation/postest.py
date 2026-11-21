@@ -244,6 +244,8 @@ def _coef_index(est: Estimates, s: "Session", name: str, eq: str = "") -> int:
     name = name.strip()
     names = est.names
     eqs = est.eqnames or [""] * len(names)
+    if eq and eq not in eqs:
+        raise StataError(303, f"equation [{eq}] not found")   # VERIFY the return code (compat 2004)
 
     def match(target: str) -> int | None:
         for i, n in enumerate(names):
@@ -296,7 +298,8 @@ class _Lin:
 
     def __init__(self, s: "Session", est: Estimates, text: str):
         self.s, self.est = s, est
-        self.toks = re.findall(r"_b\[[^\]]*\]|_coef\[[^\]]*\]|\[[^\]]*\]\s*_?[\w.#]+|"
+        self.toks = re.findall(r"_b\[[^\]]*\]|_coef\[[^\]]*\]|\[[^\]]*\]\s*_(?:b|coef)\[[^\]]*\]|"
+                               r"\[[^\]]*\]\s*_?[\w.#]+|"
                                r"\d+[bno]*\.[A-Za-z_][\w.#]*|"
                                r"\d+\.\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|\d+(?:[eE][-+]?\d+)?|"
                                r"[A-Za-z_][\w.#~]*|[-+*/()]", text)
@@ -368,6 +371,9 @@ class _Lin:
         m = re.fullmatch(r"_(?:b|coef)\[([^\]]*)\]", t)
         if m:
             return self._coef(m.group(1)), 0.0
+        m = re.fullmatch(r"\[([^\]]*)\]\s*_(?:b|coef)\[([^\]]*)\]", t)
+        if m:
+            return self._coef(m.group(2), m.group(1)), 0.0
         m = re.fullmatch(r"\[([^\]]*)\]\s*(\S+)", t)
         if m:
             return self._coef(m.group(2), m.group(1)), 0.0
@@ -504,7 +510,12 @@ def cmd_test(s: "Session", args: str) -> None:
     text = head.strip()
     if not text:
         raise StataError(198, "invalid syntax")
-    if text.startswith("("):
+    eqm = re.fullmatch(r"\[([^\]]+)\]\s*:\s*(.+)", text)
+    if eqm:
+        # test [eq]: varlist, each coefficient of the equation = 0
+        eq = eqm.group(1).strip()
+        exprs = [f"[{eq}]{nm}" for nm in _coef_names(s, est, eqm.group(2))]
+    elif text.startswith("("):
         exprs = _split_parens(text)
     elif "=" in text or re.search(r"[-+*/]|_b\[|\[", text):
         exprs = [text]
@@ -512,7 +523,7 @@ def cmd_test(s: "Session", args: str) -> None:
         # test varlist: each coefficient = 0 (accepts factor variables and wildcards)
         exprs = _coef_names(s, est, text)
     multi = est.eqnames and len(set(est.eqnames)) > 1
-    if multi and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
+    if multi and not eqm and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
         # several equations: the variable in all equations in which it is estimated (VERIFY the
         # order and mlogit's base equations)
         cons = []

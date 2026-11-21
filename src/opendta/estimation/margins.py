@@ -540,12 +540,15 @@ def cmd_nlcom(s: "Session", args: str) -> None:
 
         def fn(bb):
             def rep(m):
-                kind, name = m.group(1), m.group(2)
-                idx = _coef_index(est, s, name)
+                eq, kind, name = m.group(1) or "", m.group(2), m.group(3)
+                if ":" in name and not eq:
+                    eq, name = name.split(":", 1)
+                idx = _coef_index(est, s, name, eq.strip())
                 if kind == "_se":
                     return repr(float(np.sqrt(max(est.V[idx, idx], 0))))
                 return f"({float(bb[idx])!r})"
-            t = re.sub(r"(_b|_coef|_se)\[([^\]]+)\]", rep, expr)
+            # _b[x], _b[eq:x] and [eq]_b[x] (compat 2004)
+            t = re.sub(r"(?:\[([^\]]+)\]\s*)?(_b|_coef|_se)\[([^\]]+)\]", rep, expr)
             v = s.eval(t)
             return float(v)
         return fn

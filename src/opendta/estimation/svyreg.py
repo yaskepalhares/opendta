@@ -153,6 +153,10 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     est.level = smp.level
     est.vcetype = dd.vcetype
     est.ml_cmd = cmd if cmd != "regress" else "regress"
+    if cmd != "regress":
+        # e(b) of svy: poisson/logit has the equation named after the depvar ([pc]ano in lincom
+        # and test, compat 2004); svy: regress has none
+        est.eqnames = [smp.depname] * kk
     N = int(est_mask.sum())
     pop = float(dd.w[est_mask[full]].sum())
     est.extra = dict(N=N, pop=pop, df=df, F=F, df1=df1, df2=df2, strata=dd.n_strata, psu=dd.n_psu, n_rep=n_rep,

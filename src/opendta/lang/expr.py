@@ -85,6 +85,23 @@ def tokenize(text: str, *, stop_on_unknown: bool = False) -> list[Tok]:
             toks.append(Tok("str", text[i + 2:j - 2], i))
             i = j
             continue
+        if c == "[" and (not toks or toks[-1].kind == "op" and toks[-1].value not in (")", "]")):
+            # [eq]_b[x], [eq]_se[x] and [eq]x name a coefficient: _b[eq:x] (compat 2004)
+            m = _EQ_COEF.match(text, i)
+            if m:
+                sub = m.group(2) or "_b"
+                toks += [Tok("name", sub, i), Tok("op", "[", i),
+                         Tok("raw", f"{m.group(1).strip()}:{(m.group(3) or m.group(4)).strip()}", i),
+                         Tok("op", "]", m.end() - 1)]
+                i = m.end()
+                continue
+        if c == "[" and toks and toks[-1].kind == "name" and toks[-1].value in _RAW_SUBSCRIPTS:
+            # _b[...] takes a coefficient name as it is: _b[pc:ano], _b[2b.x], _b[1.a#c.b]
+            j = text.find("]", i)
+            if j != -1:
+                toks += [Tok("op", "[", i), Tok("raw", text[i + 1:j].strip(), i + 1), Tok("op", "]", j)]
+                i = j + 1
+                continue
         m = _NUM.match(text, i)
         if m and (c.isdigit() or (c == "." and i + 1 < n and text[i + 1].isdigit())):
             toks.append(Tok("num", float(m.group(0)), i))
@@ -183,6 +200,7 @@ _NOT_BP = 80
 _RAW_ARG_FUNCS = {"r", "e", "c", "s"}
 # _b[x], _se[x]: the index is a name
 _RAW_SUBSCRIPTS = {"_b", "_se", "_coef"}
+_EQ_COEF = re.compile(r"\[([^\]\[]+)\]\s*(?:(_b|_se|_coef)\[([^\]]*)\]|([A-Za-z_][\w.#]*))")
 
 
 class Parser:
@@ -291,6 +309,10 @@ class Parser:
             return Call(name, args)
         if nxt.kind == "op" and nxt.value == "[":
             self.advance()
+            if name in _RAW_SUBSCRIPTS and self.tok.kind == "raw":
+                raw = self.advance().value
+                self.expect_op("]")
+                return Subscript(name, raw)
             if name in _RAW_SUBSCRIPTS:
                 start = self.tok.pos
                 while not (self.tok.kind == "op" and self.tok.value == "]"):
