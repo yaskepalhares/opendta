@@ -45,3 +45,29 @@ def test_date_functions_missing(run, expr):
 def test_date_functions_in_generate(run):
     out = run('clear\nset obs 3\ngen m = ym(2020, _n)\ngen d = dofm(m)\nformat d %td\nlist, noobs')
     assert "01mar2020" in out
+
+
+@pytest.mark.parametrize("expr, value", [
+    ('strtoname("a b")', "a_b"), ('strtoname("1x")', "_1x"), ('strtoname("1x", 0)', "1x"),
+    ('strtoname("' + "a" * 40 + '")', "a" * 32),
+    ('plural(2,"cat")', "cats"), ('plural(1,"cat")', "cat"), ('plural(2,"box","+es")', "boxes"),
+    ('plural(2,"glasses","-es")', "glass"), ('plural(2,"man","men")', "men"),
+    ('soundex("robert")', "R163"), ('soundex("Rupert")', "R163"), ('soundex("Tymczak")', "T522"),
+    ('soundex_nara("Ashcraft")', "A261"),
+    ('strrpos("abcb","b")', 4), ('strrpos("abc","z")', 0), ('indexnot("a","b")', 1),
+    ('indexnot("aab","a")', 3), ('indexnot("aa","a")', 0),
+    ('ustrpos("abc","b")', 2), ('ustrpos("abcb","b",3)', 4), ('ustrrpos("abcb","b")', 4),
+    ('usubstr("ação",2,2)', "çã"), ('ustrleft("abc",1)', "a"), ('ustrright("abc",2)', "bc"),
+    ('ustrtrim(" a ")', "a"), ('ustrltrim(" a ")', "a "), ('ustrreverse("ação")', "oãça"),
+    ('ustrword("a b c",-1)', "c"), ('ustrword("a b c",2)', "b"), ('ustrwordcount("a b c")', 3),
+    ('ustrregexm("abc","b")', 1), ('ustrregexm("ABC","b",1)', 1), ('ustrregexm("ABC","b")', 0),
+    ('ustrregexra("abab","b","x")', "axax"), ('ustrregexrf("abab","b","x")', "axab"),
+    ('uchar(231)', "ç"),
+])
+def test_string_functions(run, expr, value):
+    assert run.eval(expr) == value
+
+
+def test_ustrregexs(run):
+    run('display ustrregexm("ab12", "([a-z]+)([0-9]+)")')
+    assert run.eval("ustrregexs(2)") == "12"

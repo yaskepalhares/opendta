@@ -373,6 +373,162 @@ def _regexs(n: Value) -> str:
     return m.group(k) or ""
 
 
+@register("strrpos", 2)
+def _strrpos(s1: Value, s2: Value) -> float:
+    return float(_s(s1).rfind(_s(s2)) + 1) if _s(s2) else 0.0
+
+
+@register("indexnot", 2)
+def _indexnot(s1: Value, s2: Value) -> float:
+    """Position of the first character of s1 not found in s2; 0 if there is none."""
+    s1, s2 = _s(s1), _s(s2)
+    return float(next((i + 1 for i, ch in enumerate(s1) if ch not in s2), 0))
+
+
+@register("plural", 2, 3)
+def _plural(n: Value, s: Value, p: Value | None = None) -> str:
+    """plural(n, "cat") = "cats"; with p, "+x" adds x, "-x" removes x, anything else replaces."""
+    n, s = _n(n), _s(s)
+    if n in (1.0, -1.0):
+        return s
+    if p is None:
+        return s + "s"
+    p = _s(p)
+    if p.startswith("+"):
+        return s + p[1:]
+    if p.startswith("-"):
+        return s[: len(s) - len(p) + 1] if p[1:] and s.endswith(p[1:]) else s
+    return p
+
+
+@register("strtoname", 1, 2)
+def _strtoname(s: Value, p: Value = 1.0) -> str:
+    """A valid Stata name: other characters become _, a leading digit gets _ in front (unless p
+    is 0), and the result has at most 32 characters. VERIFY: strtoname("") is "_"."""
+    s, p = _s(s), _n(p)
+    out = re.sub(r"[^A-Za-z0-9_]", "_", s)
+    if out == "":
+        out = "_"
+    elif out[0].isdigit() and p != 0:
+        out = "_" + out
+    return out[:32]
+
+
+_SOUNDEX = {**dict.fromkeys("bfpv", "1"), **dict.fromkeys("cgjkqsxz", "2"),
+            **dict.fromkeys("dt", "3"), "l": "4", **dict.fromkeys("mn", "5"), "r": "6"}
+
+
+def _soundex_code(s: str, nara: bool) -> str:
+    """Soundex code; with nara, letters with the same code separated by h or w count once (the
+    rule of the U.S. National Archives). VERIFY: the variant soundex() uses."""
+    letters = [c for c in s.lower() if c.isascii() and c.isalpha()]
+    if not letters:
+        return ""
+    out, last = [letters[0].upper()], _SOUNDEX.get(letters[0], "")
+    for c in letters[1:]:
+        code = _SOUNDEX.get(c, "")
+        if code and code != last:
+            out.append(code)
+        if not (nara and c in "hw"):
+            last = code
+    return ("".join(out) + "000")[:4]
+
+
+register("soundex", 1)(_str1(lambda s: _soundex_code(s, False)))
+register("soundex_nara", 1)(_str1(lambda s: _soundex_code(s, True)))
+
+
+# -- Unicode strings (characters, not bytes) ---------------------------------------------------
+
+@register("ustrpos", 2, 3)
+def _ustrpos(s1: Value, s2: Value, n: Value = 1.0) -> float:
+    s1, s2, n = _s(s1), _s(s2), _n(n)
+    start = 0 if M.is_missing(n) else max(int(n), 1) - 1
+    return float(s1.find(s2, start) + 1) if s2 else 0.0
+
+
+@register("ustrrpos", 2, 3)
+def _ustrrpos(s1: Value, s2: Value, n: Value | None = None) -> float:
+    s1, s2 = _s(s1), _s(s2)
+    end = len(s1) if n is None or M.is_missing(_n(n)) else int(_n(n))
+    return float(s1.rfind(s2, 0, end) + 1) if s2 else 0.0
+
+
+FUNCTIONS["usubstr"] = FUNCTIONS["substr"]
+
+
+@register("ustrleft", 2)
+def _ustrleft(s: Value, n: Value) -> str:
+    s, n = _s(s), _n(n)
+    return s if M.is_missing(n) else s[: max(int(n), 0)]
+
+
+@register("ustrright", 2)
+def _ustrright(s: Value, n: Value) -> str:
+    s, n = _s(s), _n(n)
+    if M.is_missing(n):
+        return s
+    return s[len(s) - int(n):] if int(n) > 0 else ""
+
+
+register("ustrtrim", 1)(_str1(lambda s: s.strip()))
+register("ustrltrim", 1)(_str1(lambda s: s.lstrip()))
+register("ustrrtrim", 1)(_str1(lambda s: s.rstrip()))
+register("ustrreverse", 1)(_str1(lambda s: s[::-1]))
+register("ustrwordcount", 1, 2)(lambda s, loc=None: float(len(_s(s).split())))
+
+
+@register("ustrword", 2, 3)
+def _ustrword(s: Value, n: Value, loc: Value | None = None) -> str:
+    """nth word; a negative n counts from the end."""
+    words, n = _s(s).split(), _n(n)
+    if M.is_missing(n) or n == 0:
+        return ""
+    k = int(n) - 1 if n > 0 else len(words) + int(n)
+    return words[k] if 0 <= k < len(words) else ""
+
+
+@register("uchar", 1)
+def _uchar(n: Value) -> str:
+    n = _n(n)
+    if M.is_missing(n) or not 0 <= n <= 0x10FFFF:
+        return ""
+    return chr(int(n))
+
+
+def _uflags(noc: Value | None) -> int:
+    """The case-insensitive flag of ustrregex*(); missing counts as not 0, like true."""
+    return re.IGNORECASE if noc is not None and _n(noc) != 0 else 0
+
+
+_ulast_match: list[re.Match[str] | None] = [None]
+
+
+@register("ustrregexm", 2, 3)
+def _ustrregexm(s: Value, pattern: Value, noc: Value | None = None) -> float:
+    m = re.search(_s(pattern), _s(s), _uflags(noc))
+    _ulast_match[0] = m
+    return 1.0 if m else 0.0
+
+
+@register("ustrregexrf", 3, 4)
+def _ustrregexrf(s: Value, pattern: Value, repl: Value, noc: Value | None = None) -> str:
+    return re.sub(_s(pattern), _s(repl).replace("\\", "\\\\"), _s(s), count=1, flags=_uflags(noc))
+
+
+@register("ustrregexra", 3, 4)
+def _ustrregexra(s: Value, pattern: Value, repl: Value, noc: Value | None = None) -> str:
+    return re.sub(_s(pattern), _s(repl).replace("\\", "\\\\"), _s(s), flags=_uflags(noc))
+
+
+@register("ustrregexs", 1)
+def _ustrregexs(n: Value) -> str:
+    m, k = _ulast_match[0], int(_n(n))
+    if m is None or not 0 <= k <= m.re.groups:
+        return ""
+    return m.group(k) or ""
+
+
 # -- distributions ---------------------------------------------------------------
 
 register("normal", 1)(_num(lambda z: stats.norm.cdf(z)))
