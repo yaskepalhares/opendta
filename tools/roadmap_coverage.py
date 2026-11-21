@@ -65,6 +65,9 @@ MODULE_AREA = {
     "epitab": "Epidemiology", "epiodds": "Epidemiology", "stdize": "Epidemiology",
     "kappa": "Epidemiology", "roc": "Epidemiology", "rocreg": "Epidemiology",
     "datautil": "Data management", "datacmds": "Data management", "datasets": "Data management",
+    "oldnames": "Base statistics", "matdata": "Programming", "fvset": "Base statistics",
+    "bsample": "Base statistics", "hexdump": "Data management", "pk": "Base statistics",
+    "qregfam": "Base statistics", "forecast": "Time series",
 }
 AREA_OF = {
     "preserve": "Data management", "restore": "Data management",
