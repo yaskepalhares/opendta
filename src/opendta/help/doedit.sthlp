@@ -21,7 +21,6 @@ nothing.
 
 {p2colset 9 30 32 2}{...}
 {p2col :{bf:Do} (Ctrl+D)}execute the selection, or the whole file, with {cmd:do}{p_end}
-{p2col :{bf:Run} (Ctrl+R)}the same with {cmd:run}, without echoing commands{p_end}
 {p2col :{bf:Find} (Ctrl+F)}find and replace{p_end}
 {p2colreset}{...}
 

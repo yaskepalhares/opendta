@@ -456,13 +456,9 @@ class DoFileEditor(QMainWindow):
              ("Indent", "indent", lambda: edit(lambda e: e.transform_lines(indent_lines)), "Ctrl+]", True),
              ("Outdent", "outdent", lambda: edit(lambda e: e.transform_lines(outdent_lines)), "Ctrl+[", True)],
             # on the right, as in Stata 14, with Do at the far end
-            [("Do line", "play-line", self.do_line, "Ctrl+Return", True),
-             ("Run", "play-quiet", self.run_selection, "Ctrl+R", True),
-             ("Do", "play", self.do_selection, "Ctrl+D", True)],
+            [("Do", "play", self.do_selection, "Ctrl+D", True)],
         ]
-        tips = {"Do": "Execute the selection, or the whole file (do)",
-                "Run": "Execute the selection, or the whole file, without showing commands (run)",
-                "Do line": "Execute the current line (do)"}
+        tips = {"Do": "Execute the selection, or the whole file (do)"}
         self.tool_actions: dict[str, QAction] = {}
         for gi, group in enumerate(groups):
             if gi == len(groups) - 1:
