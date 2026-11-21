@@ -31,8 +31,9 @@ def test_use_varlist_does_not_mark_changed(run, tmp_path):
     f = tmp_path / "d.dta"
     run(f'clear\nset obs 3\ngen a = _n\ngen b = _n\nsave "{f}"\nuse a using "{f}", clear')
     assert run.eval("c(changed)") == 0
+    # with if as well (Stata 14 log of compat 2001)
     run(f'use a using "{f}" if a > 1, clear')
-    assert run.eval("c(changed)") == 1
+    assert run.eval("c(changed)") == 0
 
 
 def test_sortlist_with_repeated_variable_is_unsorted():
