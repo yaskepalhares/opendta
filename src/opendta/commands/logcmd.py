@@ -314,13 +314,101 @@ def cmd_timer(s: "Session", args: str) -> None:
 # creturn list
 # ---------------------------------------------------------------------------
 
+# groups, rows and annotations of Stata 14's creturn list (compat 2003)
 _CRETURN_GROUPS = [
-    ("System values", ["current_date", "current_time", "rmsg_time", "stata_version", "version",
-                       "opendta_version", "N", "k", "width", "changed", "filename", "rc"]),
-    ("Directories and paths", ["pwd", "dirsep"]),
-    ("System limits and constants", ["maxdouble", "mindouble", "epsdouble", "smallestdouble", "pi"]),
-    ("Settings", ["os", "level", "more", "dp", "linesize", "type", "seed"]),
-    ("Other", ["alpha", "ALPHA", "Mons", "Weekdays"]),
+    ("System values", [
+        "-", "current_date", "current_time", ("rmsg_time", "seconds, from set rmsg"), "-",
+        "stata_version", ("version", "version"), ("userversion", "version"), "-", "born_date",
+        "flavor", "bit", "SE", "MP", ("processors", "Stata/MP, set processors"),
+        "processors_lic", "processors_mach", "processors_max", "mode", "console", "-", "os",
+        "osdtl", "hostname", "machine_type", "byteorder", "username", "-",
+    ]),
+    ("Directories and paths", [
+        "-", ("sysdir_stata", "sysdir"), ("sysdir_base", "sysdir"), ("sysdir_site", "sysdir"),
+        ("sysdir_plus", "sysdir"), ("sysdir_personal", "sysdir"), ("sysdir_oldplace", "sysdir"),
+        "tmpdir", "-", ("adopath", "adopath"), ("pwd", "cd"), "dirsep", "-",
+    ]),
+    ("System limits", [
+        "-", "max_N_theory", ("max_k_theory", "set maxvar"), ("max_width_theory", "set maxvar"),
+        "-", "max_matsize", "min_matsize", "-", "max_macrolen", ("macrolen", "set maxvar"),
+        "charlen", "max_cmdlen", ("cmdlen", "set maxvar"), "namelenbyte", "namelenchar", "eqlen",
+        "-",
+    ]),
+    ("Numerical and string limits", [
+        "-", "mindouble", "maxdouble", "epsdouble", "smallestdouble", "-", "minfloat",
+        "maxfloat", "epsfloat", "-", "minlong", "maxlong", "-", "minint", "maxint", "-",
+        "minbyte", "maxbyte", "-", "maxstrvarlen", "maxstrlvarlen", "maxvlabellen", "-",
+    ]),
+    ("Current dataset", [
+        "-", "N", "k", "width", "changed", "filename", "filedate", "-",
+    ]),
+    ("Memory settings", [
+        "-", "memory", ("maxvar", "set maxvar"), ("matsize", "set matsize"),
+        ("niceness", "set min_memory"), ("min_memory", "set min_memory"),
+        ("max_memory", "set max_memory"), ("segmentsize", "set segmentsize"), "-",
+    ]),
+    ("Output settings", [
+        "-", ("more", "set more"), ("rmsg", "set rmsg"), ("dp", "set dp"),
+        ("linesize", "set linesize"), ("pagesize", "set pagesize"), ("logtype", "set logtype"),
+        "noisily", ("eolchar", "set eolchar"), ("notifyuser", "set notifyuser"),
+        ("playsnd", "set playsnd"), ("include_bitmap", "set include_bitmap"), "-",
+        ("level", "set level"), ("clevel", "set clevel"), "-",
+        ("showbaselevels", "set showbaselevels"), ("showemptycells", "set showemptycells"),
+        ("showomitted", "set showomitted"), ("fvlabel", "set fvlabel"), ("fvwrap", "set fvwrap"),
+        ("fvwrapon", "set fvwrapon"), ("lstretch", "set lstretch"), "-",
+        ("cformat", "set cformat"), ("sformat", "set sformat"), ("pformat", "set pformat"), "-",
+        ("coeftabresults", "set coeftabresults"),
+    ]),
+    ("Interface settings", [
+        "-", ("reventries", "set reventries"), ("revkeyboard", "set revkeyboard"),
+        ("varkeyboard", "set varkeyboard"), ("smoothfonts", "set smoothfonts"),
+        ("linegap", "set linegap"), ("scrollbufsize", "set scrollbufsize"),
+        ("maxdb", "set maxdb"), "-",
+    ]),
+    ("Graphics settings", [
+        "-", ("graphics", "set graphics"), ("scheme", "set scheme"),
+        ("printcolor", "set printcolor"), ("copycolor", "set copycolor"), "-",
+    ]),
+    ("Efficiency settings", [
+        "-", ("adosize", "set adosize"), "-",
+    ]),
+    ("Network settings", [
+        "-", ("checksum", "set checksum"), ("timeout1", "set timeout1"),
+        ("timeout2", "set timeout2"), "-", ("httpproxy", "set httpproxy"),
+        ("httpproxyhost", "set httpproxyhost"), ("httpproxyport", "set httpproxyport"), "-",
+        ("httpproxyauth", "set httpproxyauth"), ("httpproxyuser", "set httpproxyuser"),
+        ("httpproxypw", "set httpproxypw"), "-",
+    ]),
+    ("Update settings", [
+        "-", ("update_query", "set update_query"), ("update_interval", "set update_interval"),
+        ("update_prompt", "set update_prompt"), "-",
+    ]),
+    ("Trace (program debugging) settings", [
+        "-", ("trace", "set trace"), ("tracedepth", "set tracedepth"),
+        ("tracesep", "set tracesep"), ("traceindent", "set traceindent"),
+        ("traceexpand", "set traceexpand"), ("tracenumber", "set tracenumber"),
+        ("tracehilite", "set tracehilite"), "-",
+    ]),
+    ("Mata settings", [
+        "-", ("matastrict", "set matastrict"), ("matalnum", "set matalnum"),
+        ("mataoptimize", "set mataoptimize"), ("matafavor", "set matafavor"),
+        ("matacache", "set matacache"), ("matalibs", "set matalibs"),
+        ("matamofirst", "set matamofirst"), "-",
+    ]),
+    ("Unicode settings", [
+        "-", ("locale_ui", "set locale_ui"), ("locale_functions", "set locale_functions"),
+        ("locale_icudflt", "unicode locale"), "-",
+    ]),
+    ("Other settings", [
+        "-", ("type", "set type"), ("maxiter", "set maxiter"),
+        ("searchdefault", "set searchdefault"), ("rng", "set rng"), "rng_current",
+        ("rngstate", "set rngstate"), ("varabbrev", "set varabbrev"),
+        ("emptycells", "set emptycells"), ("odbcmgr", "set odbcmgr"), "-",
+    ]),
+    ("Other", [
+        "-", "pi", "alpha", "ALPHA", "Mons", "Months", "Wdays", "Weekdays", ("rc", "capture"),
+        "-",
+    ]),
 ]
 
 
@@ -329,19 +417,21 @@ def cmd_creturn(s: "Session", args: str) -> None:
     if args.strip() not in ("list", "l", "li", "lis"):
         raise StataError(198, "invalid syntax")
     out = s.output
-    for title, names in _CRETURN_GROUPS:
-        out.write("\n" + "-" * 79 + "\n", "text")
-        out.write(f"    {title}\n", "text")
-        out.write("-" * 79 + "\n", "text")
-        for n in names:
+    rule = "    " + "-" * (int(s.settings.get("linesize", "80")) - 4)
+    for title, rows in _CRETURN_GROUPS:
+        out.write(f"\n{title}\n\n", "text")
+        for row in rows:
+            if row == "-":
+                out.write(rule + "\n", "text")
+                continue
+            n, note = row if isinstance(row, tuple) else (row, "")
             v = s.creturn(n)
             if isinstance(v, str):
-                shown = f'"{v}"'
+                # VERIFY: strings longer than 19 characters are cut to 17 and ".."
+                shown = '"' + (v if len(v) <= 19 else v[:17] + "..") + '"'
             elif v >= M.SYSMISS:
                 shown = "."
             else:
                 shown = format_value(float(v), "%18.0g", pad=False).strip()
-            out.write(f"{'c(' + n + ')':>22} = ", "text")
-            out.write(shown + "\n", "result")
-
-
+            out.write(f"{'c(' + n + ')':>23} = ", "text")
+            out.write((f"{shown:<27}({note})" if note else shown) + "\n", "result")

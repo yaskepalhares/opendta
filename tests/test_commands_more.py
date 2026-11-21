@@ -124,3 +124,34 @@ def test_numlist(run, arg, result):
 ])
 def test_numlist_errors(run, arg, rc):
     assert run(f"capture numlist {arg}\ndisplay _rc").strip() == str(rc)
+
+
+def test_rcof(run):
+    out = run("capture noisily rcof\ndisplay _rc").splitlines()
+    assert out[-3:] == ["rcof:  _rc  *NOT TRUE* from", "       _rc == 0", "9"]
+    assert run('rcof "noisily display 1/" == 198\ndisplay "ok"').splitlines()[-1] == "ok"
+    assert run('capture rcof "display 1" != 0\ndisplay _rc').strip() == "9"
+
+
+def test_query_memory_and_set_defaults(run):
+    run("set linesize 80")
+    lines = run("query memory").splitlines()
+    assert lines[0] == "-" * 80 and lines[1] == "    Memory settings"
+    assert lines[2] == "      set maxvar           5000       2048-32767; max. vars allowed"
+    assert lines[-1] == "      set segmentsize      32m        1m-32g"
+    out = run("capture noisily set_defaults\ndisplay _rc").splitlines()
+    assert out[-3:-1] == ["set category required", "    Nothing was found where memory, output, "
+                          "interface, efficiency, network, update, trace, mata, unicode, other, "
+                          "or _all expected."]
+    run("set level 90\nset eolchar mac\nset_defaults output")
+    assert run.eval("c(level)") == 95 and run.eval("c(eolchar)") == "unix"
+
+
+def test_creturn_list_layout(run):
+    run("set linesize 80")
+    lines = run("creturn list").splitlines()
+    assert lines[1] == "System values" and lines[3] == "    " + "-" * 76
+    assert "           c(rmsg_time) = 0                          (seconds, from set rmsg)" in lines
+    assert '            c(matalibs) = "lmatabase;lmatamc.."      (set matalibs)' in lines
+    assert "Trace (program debugging) settings" in lines
+    assert "         c(segmentsize) = 33554432                   (set segmentsize)" in lines

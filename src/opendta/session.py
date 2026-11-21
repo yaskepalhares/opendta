@@ -8,6 +8,7 @@ the dataset.
 from __future__ import annotations
 
 import datetime as _dt
+import functools
 import math
 import os
 import platform
@@ -59,6 +60,23 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "graphics": "on",
     "scheme": "s2color",
 }
+
+
+@functools.lru_cache(maxsize=1)
+def _locale() -> str:
+    """en_ and the region of the system locale (Stata 14 on a Mac set to Brazil: en_BR)."""
+    import locale
+    import subprocess
+    loc = ""
+    if platform.system() == "Darwin":
+        try:
+            loc = subprocess.run(["defaults", "read", "-g", "AppleLocale"], capture_output=True,
+                                 text=True, timeout=2).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            loc = ""
+    loc = loc or locale.getlocale()[0] or os.environ.get("LANG", "")
+    region = loc.split(".")[0].split("@")[0].split("_")[1] if "_" in loc else "US"
+    return "en_" + region
 
 
 class EvalContext:
@@ -387,7 +405,7 @@ class Session:
             "SE": 1.0, "MP": 0.0, "processors": 1.0,
             "mode": "", "console": "",
             "memory": 33554432.0,   # VERIFY: Stata reports the memory it has allocated
-            "max_N_theory": 2147483647.0, "max_k_theory": 5000.0, "max_width_theory": 1048576.0,
+            "max_N_theory": 2147483620.0, "max_k_theory": 5000.0, "max_width_theory": 1048576.0,
             "maxvar": number("maxvar", "5000"), "matsize": number("matsize", "400"),
             "epsfloat": 2.0 ** -23,
             "maxbyte": 100.0, "minbyte": -127.0, "maxint": 32740.0, "minint": -32767.0,
@@ -410,6 +428,50 @@ class Session:
             "fvwrap": number("fvwrap", "1"), "lstretch": setting("lstretch", ""),
             "cformat": setting("cformat", ""), "pformat": setting("pformat", ""),
             "sformat": setting("sformat", ""),
+            # the rest of creturn list, with Stata 14's defaults (compat 2003)
+            "rmsg_time": number("rmsg_time", "0"), "userversion": float(self.version),
+            "bit": 64.0, "processors_lic": 1.0, "processors_mach": M.SYSMISS,
+            "processors_max": 1.0, "sysdir_oldplace": "~/ado/",
+            "adopath": "BASE;SITE;.;PERSONAL;PLUS;OLDPLACE",
+            "max_matsize": 11000.0, "min_matsize": 10.0, "charlen": 67783.0,
+            "max_cmdlen": 4227159.0, "namelenbyte": 128.0, "namelenchar": 32.0,
+            "maxstrlvarlen": 2000000000.0, "maxvlabellen": 32000.0,
+            "min_memory": number("min_memory", "0"),
+            "max_memory": number("max_memory", str(M.SYSMISS)) if setting("max_memory", ".") != "."
+            else M.SYSMISS,
+            "segmentsize": number("segmentsize", "33554432"),
+            "eolchar": setting("eolchar", "unix"), "notifyuser": setting("notifyuser", "on"),
+            "playsnd": setting("playsnd", "off"), "include_bitmap": setting("include_bitmap", "on"),
+            "clevel": number("clevel", "95"), "fvlabel": setting("fvlabel", "on"),
+            "fvwrapon": setting("fvwrapon", "word"),
+            "coeftabresults": setting("coeftabresults", "on"),
+            "revkeyboard": setting("revkeyboard", "on"), "varkeyboard": setting("varkeyboard", "on"),
+            "smoothfonts": setting("smoothfonts", "on"), "linegap": number("linegap", "1"),
+            "maxdb": number("maxdb", "50"), "printcolor": setting("printcolor", "automatic"),
+            "copycolor": setting("copycolor", "automatic"),
+            "timeout1": number("timeout1", "30"), "timeout2": number("timeout2", "180"),
+            "httpproxyhost": setting("httpproxyhost", ""),
+            "httpproxyport": number("httpproxyport", "80"),
+            "httpproxyauth": setting("httpproxyauth", "off"),
+            "httpproxyuser": setting("httpproxyuser", ""), "httpproxypw": setting("httpproxypw", ""),
+            "update_query": setting("update_query", "on"),
+            "update_interval": number("update_interval", "7"),
+            "update_prompt": setting("update_prompt", "off"),
+            "tracesep": setting("tracesep", "on"), "traceindent": setting("traceindent", "on"),
+            "traceexpand": setting("traceexpand", "on"), "tracenumber": setting("tracenumber", "off"),
+            "tracehilite": setting("tracehilite", ""),
+            "matastrict": setting("matastrict", "off"), "matalnum": setting("matalnum", "off"),
+            "mataoptimize": setting("mataoptimize", "on"), "matafavor": setting("matafavor", "space"),
+            "matacache": number("matacache", "2000"),
+            # VERIFY: the full list (the log shows "lmatabase;lmatamc..")
+            "matalibs": setting("matalibs", "lmatabase;lmatamcmc;lmatasem;lmatagsem;lmatami;"
+                                            "lmatapss;lmatasvy;lmatafc;lmatanumlib"),
+            "matamofirst": setting("matamofirst", "off"),
+            # VERIFY: Stata built the locale from the interface language and the region
+            "locale_ui": setting("locale_ui", _locale()), "locale_functions": setting(
+                "locale_functions", _locale()), "locale_icudflt": _locale(),
+            "maxiter": number("maxiter", "16000"), "searchdefault": setting("searchdefault", "all"),
+            "odbcmgr": setting("odbcmgr", "iodbc"),
         }
 
     # -- Mata ---------------------------------------------------------------

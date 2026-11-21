@@ -97,6 +97,96 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
     s.settings["seed"] = str(seed)
 
 
+# ---------------------------------------------------------------------------
+# query and set_defaults ([R] query, [R] set_defaults)
+# ---------------------------------------------------------------------------
+
+_CATEGORIES = {"memory": "Memory settings", "output": "Output settings",
+               "interface": "Interface settings", "graphics": "Graphics settings",
+               "efficiency": "Efficiency settings", "network": "Network settings",
+               "update": "Update settings", "trace": "Trace (program debugging) settings",
+               "mata": "Mata settings", "unicode": "Unicode settings", "other": "Other settings"}
+
+# the ranges query memory shows (compat 2005)
+_MEMORY_NOTES = {"maxvar": "2048-32767; max. vars allowed", "matsize": "10-11000; max. # vars in models",
+                 "niceness": "0-10", "min_memory": "0-1600g", "max_memory": "32m-1600g or .",
+                 "segmentsize": "1m-32g"}
+
+
+def _settable(category: str) -> list[str]:
+    """The settings of a category: the c() rows creturn list annotates with "set name"."""
+    from .logcmd import _CRETURN_GROUPS
+    rows = dict(_CRETURN_GROUPS)[_CATEGORIES[category]]
+    return [r[0] for r in rows if isinstance(r, tuple) and r[1].startswith("set ")]
+
+
+def _bytes(x: float) -> str:
+    for unit, k in (("g", 1024 ** 3), ("m", 1024 ** 2), ("k", 1024)):
+        if x and x % k == 0:
+            return f"{int(x // k)}{unit}"
+    return f"{int(x)}"
+
+
+def _shown(s: "Session", name: str) -> str:
+    from ..core import missing as M
+    v = s.creturn(name)
+    if isinstance(v, str):
+        return v
+    if v >= M.SYSMISS:
+        return "."
+    if name in ("segmentsize", "min_memory", "max_memory"):
+        return _bytes(v)
+    return f"{v:g}"
+
+
+@command("query", "q")
+def cmd_query(s: "Session", args: str) -> None:
+    """query [category]. VERIFY: the layout and notes of the categories other than memory
+    (compat 2005 has only query memory)."""
+    word = args.strip()
+    cats = list(_CATEGORIES)
+    if word:
+        match = [c for c in cats if c.startswith(word) and len(word) >= 3] or \
+            ([word] if word in cats else [])
+        if not match:
+            raise StataError(198, f"{word} invalid")   # VERIFY
+        cats = match[:1]
+    out = s.output
+    out.write("-" * int(s.settings.get("linesize", "80")) + "\n", "text")
+    for k, cat in enumerate(cats):
+        if k:
+            out.write("\n", "text")
+        out.write(f"    {_CATEGORIES[cat]}\n", "text")
+        for name in _settable(cat):
+            note = _MEMORY_NOTES.get(name, "")
+            line = f"      set {name:<17}{_shown(s, name):<11}{note}"
+            out.write(line.rstrip() + "\n", "text")
+
+
+@command("set_defaults")
+def cmd_set_defaults(s: "Session", args: str) -> None:
+    """set_defaults category|_all [, permanently]: back to the default values. VERIFY: what
+    Stata displays after resetting."""
+    from ..session import DEFAULT_SETTINGS
+    body, _, opts = args.partition(",")
+    word = body.strip()
+    if opts.strip() and not "permanently".startswith(opts.strip()):
+        raise StataError(198, f"option {opts.strip()} not allowed")
+    names = [c for c in _CATEGORIES if c != "graphics"] + ["_all"]
+    if word not in names:
+        if not word:
+            raise StataError(100, "set category required\n    Nothing was found where " +
+                             ", ".join(names[:-1]) + ", or _all expected.")   # compat 2005
+        raise StataError(198, f"{word} invalid")   # VERIFY
+    cats = names[:-1] if word == "_all" else [word]
+    for cat in cats:
+        for name in _settable(cat):
+            if name in DEFAULT_SETTINGS:
+                cmd_set(s, f"{name} {DEFAULT_SETTINGS[name]}")
+            else:
+                s.settings.pop(name, None)
+
+
 @command("version", "vers")
 def cmd_version(s: "Session", args: str) -> None:
     t = args.strip()

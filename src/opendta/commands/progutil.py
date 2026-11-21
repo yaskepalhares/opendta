@@ -213,3 +213,27 @@ def cmd_numlist(s: "Session", args: str) -> None:
     if o.get("sort"):
         nums = sorted(nums)
     s.r = {"numlist": " ".join("." if x >= 8.98846567431158e307 else num_str(x) for x in nums)}
+
+
+# ---------------------------------------------------------------------------
+# rcof
+# ---------------------------------------------------------------------------
+
+@command("rcof")
+def cmd_rcof(s: "Session", args: str) -> None:
+    """rcof "[noisily] command" rc_condition: runs the command under capture and fails with
+    r(9) when the return code does not satisfy the condition. VERIFY: the second line of the
+    message shows the return code the command left."""
+    t = args.strip()
+    cmd, cond = "", t
+    if t.startswith('"') or t.startswith("`\""):
+        end = t.find('"\'', 2) + 2 if t.startswith("`\"") else t.find('"', 1) + 1
+        if end <= 0:
+            raise StataError(198, "invalid syntax")
+        cmd, cond = strip_outer_quotes(t[:end]), t[end:].strip()
+    if cmd.strip():
+        s.interp._execute_expanded("capture " + cmd)
+    rc = s.rc
+    ok = s.eval(f"{rc} {cond}") if cond else 0.0
+    if not ok or ok >= 8.98846567431158e307:
+        raise StataError(9, f"rcof:  _rc {cond} *NOT TRUE* from\n       _rc == {rc}")
