@@ -340,3 +340,29 @@ def test_pkshape_pkcross_pkequiv(run):
     run("pkequiv outcome treat period sequence id")
     assert run.eval("r(delta)") == pytest.approx(62 / 6 - 12)
     assert run.eval("r(lower)") < run.eval("r(delta)") < run.eval("r(upper)")
+
+
+def test_forecast(run):
+    out = run("clear\ncapture noisily forecast\ndisplay _rc").splitlines()
+    assert out[-3] == "missing forecast subcommand" and out[-1] == "198"
+    assert out[-2].startswith("    forecast subcommands are create, estimates, identity")
+    run("clear\nset obs 30\ngen t = _n\ntsset t\ngen x = mod(_n*7, 11)\ngen y = 5 if _n == 1\n"
+        "replace y = 2 + .5*L.y + .3*x + mod(_n*3,5)/10 if _n > 1\nreplace y = . if _n > 25\n"
+        "quietly regress y L.y x\nestimates store m1")
+    b = {k: run.eval(f"_b[{k}]") for k in ("L.y", "x", "_cons")}
+    run("forecast create m\nforecast estimates m1\nforecast identity z = y + x, generate\n"
+        "forecast exogenous x\nforecast solve")
+    d = run.session.data
+    fy, x, y = d.get("f_y").data, d.get("x").data, d.get("y").data
+    assert fy[25] == pytest.approx(b["_cons"] + b["L.y"] * y[24] + b["x"] * x[25], rel=1e-6)
+    assert fy[26] == pytest.approx(b["_cons"] + b["L.y"] * fy[25] + b["x"] * x[26], rel=1e-6)
+    assert d.get("f_z").data[26] == pytest.approx(fy[26] + x[26], rel=1e-6)
+    assert fy[24] >= 8.9e307
+    run("forecast adjust y = y + 1\nforecast solve, prefix(a_) log(off)")
+    assert d.get("a_y").data[25] == pytest.approx(fy[25] + 1, rel=1e-6)
+    run("forecast solve, prefix(s_) static begin(20) log(off)")
+    sy = run.session.data.get("s_y").data
+    assert sy[20] == pytest.approx(b["_cons"] + b["L.y"] * y[19] + b["x"] * x[20] + 1, rel=1e-6)
+    assert run("forecast query").strip() == "Forecast model m has been started."
+    run("forecast drop\nforecast clear")
+    assert run("forecast query").strip() == "No forecast model has been started."
