@@ -104,7 +104,9 @@ def _oneway(s: "Session", v: Variable, mask, w, wtype, o: dict) -> None:
     if v.value_label and not o.get("nolabel"):
         all_labels = list(s.data.value_labels.get(v.value_label, {}).values())
     W = max([11] + [len(lb) for lb in labels] + [len(lb) for lb in all_labels])
-    W = min(W, 30)
+    # a long label widens the column up to 39 characters (compat 2007: 46 cut to 39). VERIFY:
+    # the limit and whether the cut follows words
+    W = min(W, 39)
     out.write("\n", "text")
     head = _header_lines(title, W)
     for k, line in enumerate(head):
@@ -207,7 +209,9 @@ def _twoway(s: "Session", rv: Variable, cv: Variable, mask, w, wtype, o: dict) -
                 res.append(f"{100 * f / N:.2f}")
         return res
 
-    W = min(30, max([10] + [len(x) for x in rlabels]))
+    # the row labels of a two-way table take at most 21 characters (compat 2007). VERIFY: the
+    # limit at other line sizes and numbers of columns
+    W = min(21, max([10] + [len(x) for x in rlabels]))
     rtitle = rv.label or rv.name
     ctitle = cv.label or cv.name
     per_panel = max(1, (79 - (W + 2) - 11) // 11)   # VERIFY: splitting into panels
