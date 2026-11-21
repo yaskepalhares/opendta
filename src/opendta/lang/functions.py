@@ -19,6 +19,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ..core import missing as M
+from ..core import stdate
 from ..core.errors import StataError, type_mismatch
 from ..core.formats import STATA_EPOCH, format_value, parse_format
 from ..lazy import lazy
@@ -461,32 +462,82 @@ register("dow", 1)(_date_part(lambda d: (d.weekday() + 1) % 7))
 register("doy", 1)(_date_part(lambda d: d.timetuple().tm_yday))
 register("quarter", 1)(_date_part(lambda d: (d.month - 1) // 3 + 1))
 
-_MONTH_NAMES = {m: i + 1 for i, m in enumerate(
-    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+def _numf(fn: Callable[..., float | None]) -> Impl:
+    """Like _num, but the arguments are truncated to integers first (date components)."""
+    return _num(lambda *xs: fn(*[math.floor(x) for x in xs]))
 
 
-@register("date", 2, 3)
-def _date(s: Value, mask: Value, topyear: Value | None = None) -> float:
-    """Subset of date(): masks with D, M and Y, numeric or named month."""
-    text, mask = _s(s).strip().lower(), _s(mask).upper()
-    parts = re.findall(r"[a-z]+|\d+", text)
-    order = [c for c in mask if c in "DMY"]
-    if len(parts) != len(order):
-        return M.SYSMISS
-    values: dict[str, int] = {}
-    for p, c in zip(parts, order):
-        if c == "M" and p.isalpha():
-            if p[:3] not in _MONTH_NAMES:
-                return M.SYSMISS
-            values["M"] = _MONTH_NAMES[p[:3]]
-        elif p.isdigit():
-            values[c] = int(p)
-        else:
-            return M.SYSMISS
-    try:
-        return float((_dt.date(values["Y"], values["M"], values["D"]) - STATA_EPOCH).days)
-    except (KeyError, ValueError):
-        return M.SYSMISS
+def _opt_top(topyear: Value | None) -> float | None:
+    if topyear is None:
+        return None
+    t = _n(topyear)
+    return None if M.is_missing(t) else math.floor(t)
+
+
+def _strdate(fn: Callable[..., float | None]) -> Impl:
+    def wrapped(s: Value, mask: Value, topyear: Value | None = None) -> float:
+        r = fn(_s(s), _s(mask), _opt_top(topyear))
+        return M.SYSMISS if r is None else float(r)
+    return wrapped
+
+
+register("date", 2, 3)(_strdate(stdate.daily))
+alias("daily", "date")
+register("clock", 2, 3)(_strdate(stdate.clock))
+register("Clock", 2, 3)(_strdate(lambda s, m, t: None if (c := stdate.clock(s, m, t)) is None
+                                  else stdate.Cofc(c)))
+register("monthly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "M", 12, t)))
+register("quarterly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "Q", 4, t)))
+register("halfyearly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "H", 2, t)))
+register("weekly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "W", 52, t)))
+register("yearly", 2, 3)(_strdate(lambda s, m, t: None if (f := stdate.parse(s, m, t)) is None
+                                   else f.get("Y")))
+
+# periods since 1960 from their components, and back
+register("ym", 2)(_numf(lambda y, m: 12 * (y - 1960) + m - 1 if 1 <= m <= 12 else None))
+register("yq", 2)(_numf(lambda y, q: 4 * (y - 1960) + q - 1 if 1 <= q <= 4 else None))
+register("yh", 2)(_numf(lambda y, h: 2 * (y - 1960) + h - 1 if 1 <= h <= 2 else None))
+register("yw", 2)(_numf(lambda y, w: 52 * (y - 1960) + w - 1 if 1 <= w <= 52 else None))
+register("dofm", 1)(_numf(lambda p: stdate.dofperiod(p, 12)))
+register("dofq", 1)(_numf(lambda p: stdate.dofperiod(p, 4)))
+register("dofh", 1)(_numf(lambda p: stdate.dofperiod(p, 2)))
+register("dofw", 1)(_numf(stdate.dofw))
+register("dofy", 1)(_numf(lambda y: stdate.mdy(1, 1, y)))
+register("week", 1)(_date_part(stdate.week))
+register("halfyear", 1)(_date_part(lambda d: 1 if d.month <= 6 else 2))
+register("yofd", 1)(_date_part(lambda d: d.year))
+register("mofd", 1)(_date_part(lambda d: 12 * (d.year - 1960) + d.month - 1))
+register("qofd", 1)(_date_part(lambda d: 4 * (d.year - 1960) + (d.month - 1) // 3))
+register("hofd", 1)(_date_part(lambda d: 2 * (d.year - 1960) + (d.month > 6)))
+register("wofd", 1)(_date_part(lambda d: 52 * (d.year - 1960) + stdate.week(d) - 1))
+
+# times in milliseconds: %tc without leap seconds, %tC with them
+_MS_DAY = stdate.MS_DAY
+register("hms", 3)(_num(stdate.hms))
+register("dhms", 4)(_num(lambda d, h, m, s: math.floor(d) * _MS_DAY + stdate.hms(h, m, s)))
+register("mdyhms", 6)(_num(lambda mo, d, y, h, mi, s: None if (td := stdate.mdy(mo, d, y)) is None
+                           else td * _MS_DAY + stdate.hms(h, mi, s)))
+register("Cmdyhms", 6)(_num(lambda mo, d, y, h, mi, s: None if (td := stdate.mdy(mo, d, y)) is None
+                            else stdate.Cofc(td * _MS_DAY + stdate.hms(h, mi, s))))
+register("cofd", 1)(_num(lambda d: math.floor(d) * _MS_DAY))
+register("Cofd", 1)(_num(lambda d: stdate.Cofc(math.floor(d) * _MS_DAY)))
+register("dofc", 1)(_num(lambda c: math.floor(c / _MS_DAY)))
+register("dofC", 1)(_num(lambda c: math.floor(stdate.cofC(c) / _MS_DAY)))
+register("Cofc", 1)(_num(stdate.Cofc))
+register("cofC", 1)(_num(stdate.cofC))
+register("hh", 1)(_num(lambda c: math.floor((c % _MS_DAY) / 3_600_000)))
+register("mm", 1)(_num(lambda c: math.floor((c % 3_600_000) / 60_000)))
+register("ss", 1)(_num(lambda c: (c % 60_000) / 1000))
+# VERIFY: hhC(), mmC() and ssC() inside a leap second (Stata shows 23:59:60)
+register("hhC", 1)(_num(lambda c: math.floor((stdate.cofC(c) % _MS_DAY) / 3_600_000)))
+register("mmC", 1)(_num(lambda c: math.floor((stdate.cofC(c) % 3_600_000) / 60_000)))
+register("ssC", 1)(_num(lambda c: (stdate.cofC(c) % 60_000) / 1000))
+register("hours", 1)(_num(lambda ms: ms / 3_600_000))
+register("minutes", 1)(_num(lambda ms: ms / 60_000))
+register("seconds", 1)(_num(lambda ms: ms / 1000))
+register("msofhours", 1)(_num(lambda h: h * 3_600_000))
+register("msofminutes", 1)(_num(lambda m: m * 60_000))
+register("msofseconds", 1)(_num(lambda s: s * 1000))
 
 
 # -- constantes -------------------------------------------------------------------

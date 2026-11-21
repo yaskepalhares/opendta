@@ -1,0 +1,47 @@
+"""Functions of manual [FN] that research do-files use (compat 2005 and 2008): dates and times,
+strings, mathematics, distributions, constants and files."""
+
+import math
+
+import pytest
+
+from opendta.core import missing as M
+
+
+@pytest.mark.parametrize("expr, value", [
+    ("ym(2020,1)", 720), ("yq(2020,1)", 240), ("yw(2020,1)", 3120), ("yh(2020,1)", 120),
+    ("mofd(21915)", 720), ("dofm(720)", 21915), ("qofd(21915)", 240), ("yofd(21915)", 2020),
+    ("wofd(21915)", 3120), ("week(21915)", 1), ("halfyear(21915)", 1),
+    ("dofq(241)", 22006), ("dofh(121)", 22097), ("dofw(3121)", 21922), ("dofy(2020)", 21915),
+    ("hofd(22097)", 121), ("week(mdy(12,31,2020))", 52),
+    ("daily(\"01jan2020\",\"DMY\")", 21915), ("monthly(\"2020m1\",\"YM\")", 720),
+    ("quarterly(\"2020q3\",\"YQ\")", 242), ("halfyearly(\"2020h2\",\"YH\")", 121),
+    ("weekly(\"2020w2\",\"YW\")", 3121), ("yearly(\"2020\",\"Y\")", 2020),
+    ("date(\"20200105\",\"YMD\")", 21919), ("date(\"1/2/99\",\"MDY\",2020)", 14246),
+    ("date(\"1/2/99\",\"MD19Y\")", 14246),
+    ("hours(3600000)", 1), ("dhms(1,1,1,1)", 90061000), ("msofhours(1)", 3600000),
+    ("cofd(21915)", 1893456000000), ("dofc(1893456000000)", 21915),
+    ("mdyhms(1,1,2020,1,1,1)", 1893456000000 + 3661000),
+    ("clock(\"01jan2020 10:00\",\"DMYhm\")", 1893456000000 + 36000000),
+    ("clock(\"5mar2020 3:04:05.5 pm\",\"DMYhms\")", (21979 * 86400 + 15 * 3600 + 245.5) * 1000),
+    ("hh(clock(\"5mar2020 3:04:05.5 pm\",\"DMYhms\"))", 15),
+    ("ss(clock(\"5mar2020 3:04:05.5 pm\",\"DMYhms\"))", 5.5),
+    # 27 leap seconds from 1972 to 2016
+    ("Cofc(1893456000000)", 1893456027000), ("cofC(1893456027000)", 1893456000000),
+    ("dofC(Cofd(21915))", 21915),
+])
+def test_date_functions(run, expr, value):
+    assert run.eval(expr) == pytest.approx(value)
+
+
+@pytest.mark.parametrize("expr", [
+    "ym(2020,13)", "daily(\"31feb2020\",\"DMY\")", "daily(\"1/2/99\",\"MDY\")",
+    "monthly(\"2020m13\",\"YM\")", "clock(\"01jan2020 25:00\",\"DMYhm\")", "mofd(.)",
+])
+def test_date_functions_missing(run, expr):
+    assert M.is_missing(run.eval(expr))
+
+
+def test_date_functions_in_generate(run):
+    out = run('clear\nset obs 3\ngen m = ym(2020, _n)\ngen d = dofm(m)\nformat d %td\nlist, noobs')
+    assert "01mar2020" in out
