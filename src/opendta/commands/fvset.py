@@ -22,7 +22,7 @@ def _base_spec(text: str) -> str:
             return full
     if re.fullmatch(r"\d+", t):
         return t
-    raise StataError(198, f"invalid base specification '{t}'")   # VERIFY
+    raise StataError(198, "invalid base specification")   # compat 2008
 
 
 def _design_spec(text: str) -> str:
@@ -68,10 +68,17 @@ def cmd_fvset(s: "Session", args: str) -> None:
             if b or d:
                 rows.append((n, b, d))
         if rows:
+            # compat 2008: each column as wide as its longest entry plus 4 (the last without
+            # the 4), between rules of dashes. VERIFY: long variable names
             out = s.output
-            out.write("\n  Variable    Base       Design\n" + "-" * 33 + "\n", "text")
+            wn = max([8] + [len(r[0]) for r in rows]) + 4
+            wb = max([4] + [len(r[1]) for r in rows]) + 4
+            wd = max([6] + [len(r[2]) for r in rows])
+            rule = "  " + "-" * (wn + wb + wd) + "\n"
+            out.write(f"\n  {'Variable':<{wn}}{'Base':<{wb}}Design\n" + rule, "text")
             for n, b, d in rows:
-                out.write(f"  {n[:10]:<10}  {b:<9}  {d}\n".rstrip() + "\n", "result")
+                out.write(f"  {n:<{wn}}{b:<{wb}}{d}".rstrip() + "\n", "result")
+            out.write(rule, "text")
         return
     if sub == "clear":
         names = expand(ds, rest)

@@ -42,6 +42,14 @@ def test_estat_vif(run):
     run("quietly regress y x1 x2 x3, noconstant")
     assert run("capture estat vif\ndisplay _rc").strip() == "301"
     assert "_cons" not in run("estat vif, uncentered")
+    # compat 2008: return list from the last result; the values are floats; not after logit
+    run("quietly regress y x1 x2 x3\nquietly estat vif")
+    words = run("return list").split()
+    assert [w for w in words if w.startswith("r(vif")] == ["r(vif_3)", "r(vif_2)", "r(vif_1)"]
+    assert run.eval("r(vif_1)") == pytest.approx(8.756916999816895, abs=1e-12)
+    run("gen yb = y > 15\nquietly logit yb x1")
+    out = run("capture noisily estat vif\ndisplay _rc").splitlines()
+    assert out[-2:] == ["subcommand estat vif is unrecognized", "321"]
 
 
 def test_hettest_is_estat_hettest(run):
@@ -198,7 +206,11 @@ def test_fvset_base(run):
     run("clear\nset obs 30\ngen g = mod(_n, 3) + 1\ngen y = g * 2 + mod(_n * 7, 5)")
     run("fvset base 2 g\nquietly regress y i.g")
     assert run.eval("_b[2.g]") == 0 and run.eval("_b[1.g]") != 0
-    assert "2" in run("fvset report")
+    # compat 2008: columns as wide as their entries plus 4, between rules
+    assert run("fvset report").splitlines()[1:] == [
+        "  Variable    Base    Design", "  " + "-" * 26, "  g           2", "  " + "-" * 26]
+    out = run("capture noisily fvset base bad g\ndisplay _rc").splitlines()
+    assert out[-2:] == ["invalid base specification", "198"]
     run("fvset base last g\nquietly regress y i.g")
     assert run.eval("_b[3.g]") == 0
     run("quietly regress y ib1.g")
@@ -246,7 +258,12 @@ def test_sdtesti(run):
                         "two-sample test must be specified", "198"]
     run("sdtesti 20 5 2 1.5")
     assert run.eval("r(chi2)") == pytest.approx(19 * 4 / 2.25)
-    run("sdtesti 20 5 2 15 4 3")
+    out = run("return list").split("scalars:")[1].split()
+    assert [w for w in out if w.startswith("r(")] == ["r(p)", "r(p_l)", "r(p_u)", "r(sd)",
+                                                     "r(chi2)", "r(df)", "r(N)"]
+    out = run("sdtesti 20 5 2 15 4 3").splitlines()
+    # the immediate form has no heading over the names (compat 2008)
+    assert any(line.startswith("         |     Obs") for line in out)
     assert run.eval("r(F)") == pytest.approx(4 / 9) and run.eval("r(df_2)") == 14
     run("clear\nset obs 20\ngen x = mod(_n * 7, 11)\ngen g = _n > 12")
     out = run("sdtest x, by(g)")
@@ -260,7 +277,8 @@ def test_robvar(run):
     assert out[-2:] == ["varlist required", "100"]
     run("clear\nset obs 40\ngen g = mod(_n, 3)\ngen x = mod(_n * 7, 13) * (1 + g)")
     out = run("robvar x, by(g)")
-    assert "Summary of x" in out and "W50 =" in out and "df(2, 37)" in out
+    assert "Summary of x" in out and "df(2, 37)" in out
+    assert "W0  =  7.5583963   df(2, 37)     Pr > F = 0.00176866" in out   # compat 2008
     x = np.array(run.session.data.get("x").data)
     g = np.array(run.session.data.get("g").data)
     groups = [x[g == k] for k in range(3)]
@@ -281,6 +299,12 @@ def test_sfrancia(run):
     W = np.corrcoef(m, x)[0, 1] ** 2
     assert run.eval("r(W)") == pytest.approx(W)
     assert run.eval("r(z)") > 0 and run.eval("r(p)") < .05
+    # with ties, Blom's scores of the average ranks (compat 2008: W' = 0.94865)
+    run("clear\nset obs 40\ngen g = mod(_n, 3)\ngen x = mod(_n * 7, 13) * (1 + g)")
+    assert "        40    0.94865      2.250     1.512    0.06526" in run("sfrancia x")
+    out = run("capture noisily sfrancia x if _n < 5\ndisplay _rc").splitlines()
+    assert "           x |         4          .          .         .          ." in out
+    assert out[-1] == "0"
 
 
 @pytest.mark.parametrize("cmd", ["qqplot", "qladder"])

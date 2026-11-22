@@ -258,12 +258,14 @@ def cmd_sdtesti(s: "Session", args: str) -> None:
         n, mean, sd, sd0 = vals
         if n < 2:
             raise StataError(2001, "insufficient observations")
-        sd_one(s, "x", _synthetic(int(n), mean, sd), sd0, level)
+        # the immediate form leaves the name column without a heading (compat 2008)
+        sd_one(s, "x", _synthetic(int(n), mean, sd), sd0, level, head="")
         return
     n1, m1, sd1, n2, m2, sd2 = vals
     if min(n1, n2) < 2:
         raise StataError(2001, "insufficient observations")
-    sd_two_groups(s, ("x", "y"), _synthetic(int(n1), m1, sd1), _synthetic(int(n2), m2, sd2), level)
+    sd_two_groups(s, ("x", "y"), _synthetic(int(n1), m1, sd1), _synthetic(int(n2), m2, sd2), level,
+                  head="")
 
 
 @command("prtesti", "prtesti")

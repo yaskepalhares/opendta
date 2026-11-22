@@ -491,11 +491,13 @@ def sd_two_groups(s: "Session", names: tuple[str, str], x1: np.ndarray, x2: np.n
                ("N", float(len(allx)))])
 
 
-def sd_one(s: "Session", name: str, x: np.ndarray, sd0: float, level: float) -> None:
+def sd_one(s: "Session", name: str, x: np.ndarray, sd0: float, level: float,
+           head: str = "Variable") -> None:
     """One-sample test of variance (sdtest var == #, sdtesti)."""
     out = s.output
     n = len(x)
-    _ttest_table(s, [_sd_row(name, x, level)], level, title="One-sample test of variance")
+    _ttest_table(s, [_sd_row(name, x, level)], level, title="One-sample test of variance",
+                 head=head)
     sd = S.moments(x).sd
     c = (n - 1) * sd ** 2 / sd0 ** 2
     num = format(sd0, "g")
@@ -506,7 +508,8 @@ def sd_one(s: "Session", name: str, x: np.ndarray, sd0: float, level: float) -> 
     mid = f"2*Pr(C < c) = {two:.4f}" if lo < up else f"2*Pr(C > c) = {two:.4f}"
     _ha3(s, [f"Ha: sd < {num}", f"Ha: sd != {num}", f"Ha: sd > {num}"],
          [f"Pr(C < c) = {lo:.4f}", mid, f"Pr(C > c) = {up:.4f}"])
-    s.r = {"p": two, "p_u": up, "p_l": lo, "chi2": c, "df": float(n - 1), "sd": sd, "N": float(n)}
+    _set_r(s, [("p", two), ("p_l", lo), ("p_u", up), ("sd", sd), ("chi2", c),
+               ("df", float(n - 1)), ("N", float(n))])   # compat 2008
 
 
 @command("sdtest", "sdtest")
@@ -575,15 +578,24 @@ def cmd_sfrancia(s: "Session", args: str) -> None:
     base = touse(s, p)
     out = s.output
     out.write("\n" + " " * 18 + "Shapiro-Francia W' test for normal data\n\n", "text")
-    out.write("    Variable |" + "Obs".rjust(11) + "W'".rjust(9) + "V'".rjust(12) + "z".rjust(9)
+    out.write("    Variable |" + "Obs".rjust(10) + "W'".rjust(9) + "V'".rjust(12) + "z".rjust(9)
               + "Prob>z".rjust(13) + "\n", "text")
-    out.write("-" * 13 + "+" + "-" * 54 + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * 53 + "\n", "text")
+    note = False
     for v in vars_:
         x = v.data[base & S.valid(v.data)]
-        if len(x) < 5:
-            raise StataError(2001, "insufficient observations")
-        r = shapiro_francia(x, ties=not o.get("noties"))
         out.write(f"{name12(v.name):>12} |", "text")
-        out.write(f"{len(x):>11}{r['W']:>11.5f}{r['V']:>11.3f}{r['z']:>10.3f}{r['p']:>11.5f}\n",
+        note = note or not 10 <= len(x) <= 5000
+        if len(x) < 5:
+            # compat 2008: missing results and no error. VERIFY: the limit of 5
+            out.write(f"{len(x):>10}{'.':>11}{'.':>11}{'.':>10}{'.':>11}\n", "result")
+            s.r = {}
+            continue
+        r = shapiro_francia(x, ties=not o.get("noties"))
+        out.write(f"{len(x):>10}{r['W']:>11.5f}{r['V']:>11.3f}{r['z']:>10.3f}{r['p']:>11.5f}\n",
                   "result")
-        _set_r(s, [("p", r["p"]), ("z", r["z"]), ("V", r["V"]), ("W", r["W"]), ("N", r["N"])])
+        # return list shows z V W N p (compat 2008)
+        _set_r(s, [("z", r["z"]), ("V", r["V"]), ("W", r["W"]), ("N", r["N"]), ("p", r["p"])])
+    if note:
+        out.write("\nNote: The normal approximation to the sampling distribution of W'\n"
+                  "      is valid for 10<=n<=5000 under the log transformation.\n", "text")

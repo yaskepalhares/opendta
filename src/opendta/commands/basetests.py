@@ -565,8 +565,7 @@ def cmd_pcorr(s: "Session", args: str) -> None:
 @command("robvar")
 def cmd_robvar(s: "Session", args: str) -> None:
     """robvar varname [if] [in], by(groupvar): the summary table of tabulate, summarize() and
-    Levene's W0 with Brown and Forsythe's W50 and W10. VERIFY: the layout of the W lines and
-    the r() results."""
+    Levene's W0 with Brown and Forsythe's W50 and W10 (layout and r() of compat 2008)."""
     from .registry import REGISTRY
     p = parse_standard(args)
     if not p.varlist.strip():
@@ -589,6 +588,10 @@ def cmd_robvar(s: "Session", args: str) -> None:
     r = B.robvar(v.data[mask].astype(float), np.asarray(gv))
     out = s.output
     df = f"df({int(r['df_1'])}, {int(r['df_2'])})"
+    from ..core.formats import format_value
     for lab, k in (("W0 ", "w0"), ("W50", "w50"), ("W10", "w10")):
-        out.write(f"\n{lab} = {g9(r[k]):>10}   {df:<13} Pr > F = {r['p_' + k]:.8f}\n", "result")
-    s.r = {"N": float(mask.sum()), **r}
+        w = format_value(r[k], "%10.0g")   # compat 2008: 7.5583963
+        out.write(f"\n{lab} = {w}   {df:<13} Pr > F = {r['p_' + k]:.8f}\n", "result")
+    # return list shows N w10 p_w10 w50 p_w50 w0 p_w0 df_1 df_2 (compat 2008)
+    _set_r(s, [("N", float(mask.sum()))] + [(k, r[k]) for k in
+               ("w10", "p_w10", "w50", "p_w50", "w0", "p_w0", "df_1", "df_2")])

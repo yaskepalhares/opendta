@@ -330,7 +330,7 @@ def _vif(s: "Session", est, rest: str) -> None:
     rows of the uncentered table."""
     _, o = _opts(rest, {"uncentered": 3})
     if est.cmd != "regress":
-        raise StataError(321, "estat vif not valid")
+        raise StataError(321, "subcommand estat vif is unrecognized")   # compat 2008
     X, _, _, _ = _regress_data(s, est)
     names = [n for n, k in zip(est.names, np.abs(np.diag(est.V)) > 0) if k]
     has_cons = bool(names) and names[-1] == "_cons"
@@ -348,11 +348,12 @@ def _vif(s: "Session", est, rest: str) -> None:
         out.write(f"{_short(names[j]):>12} | {v[j]:>9.2f}    {1 / v[j]:.6f}\n", "text")
     out.write("-------------+----------------------\n", "text")
     out.write(f"{'Mean VIF':>12} | {v.mean():>9.2f}\n", "text")
+    # compat 2008: r(vif_#) holds the float value, and return list shows them from the last
     r = {}
     for i, j in enumerate(order, 1):
-        r[f"vif_{i}"] = float(v[j])
+        r[f"vif_{i}"] = float(np.float32(v[j]))
         r[f"name_{i}"] = names[j]
-    s.r = dict(reversed(list(r.items())))
+    s.r = r
 
 def _dwatson(s: "Session", est, rest: str) -> None:
     from ..core.tsstats import durbin_watson

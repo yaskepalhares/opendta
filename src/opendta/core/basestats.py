@@ -880,19 +880,16 @@ def robvar(x: np.ndarray, g: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def shapiro_francia(x: np.ndarray, ties: bool = True) -> dict:
-    """W', V' = (1 - W')/exp(mu), z and Prob>z. The expected normal order statistics are
-    Blom's invnormal((i - 3/8)/(n + 1/4)); with ties, tied values share the mean of theirs.
-    VERIFY: Stata's treatment of ties and its V'."""
+    """W' (the squared correlation of the data with the expected normal order statistics),
+    V' = (1 - W')/exp(mu), z and Prob>z. The order statistics are Blom's
+    invnormal((i - 3/8)/(n + 1/4)); with ties, i is the average rank of the tied values (this
+    reproduces compat 2008)."""
     xs = np.sort(np.asarray(x, dtype=float))
     n = len(xs)
-    m = st.norm.ppf((np.arange(1, n + 1) - 0.375) / (n + 0.25))
-    if ties:
-        for v in np.unique(xs):
-            idx = xs == v
-            if idx.sum() > 1:
-                m[idx] = m[idx].mean()
-    d = xs - xs.mean()
-    W = float((m @ xs) ** 2 / ((m @ m) * (d @ d)))
+    i = st.rankdata(xs) if ties else np.arange(1, n + 1)
+    m = st.norm.ppf((i - 0.375) / (n + 0.25))
+    d, dm = xs - xs.mean(), m - m.mean()
+    W = float((dm @ d) ** 2 / ((dm @ dm) * (d @ d)))
     u = math.log(n)
     v = math.log(u)
     mu = -1.2725 + 1.0521 * (v - u)
