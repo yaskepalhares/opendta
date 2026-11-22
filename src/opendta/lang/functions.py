@@ -405,12 +405,10 @@ def _plural(n: Value, s: Value, p: Value | None = None) -> str:
 @register("strtoname", 1, 2)
 def _strtoname(s: Value, p: Value = 1.0) -> str:
     """A valid Stata name: other characters become _, a leading digit gets _ in front (unless p
-    is 0), and the result has at most 32 characters. VERIFY: strtoname("") is "_"."""
+    is 0), and the result has at most 32 characters; strtoname("") is "" (compat 2008)."""
     s, p = _s(s), _n(p)
     out = re.sub(r"[^A-Za-z0-9_]", "_", s)
-    if out == "":
-        out = "_"
-    elif out[0].isdigit() and p != 0:
+    if out and out[0].isdigit() and p != 0:
         out = "_" + out
     return out[:32]
 

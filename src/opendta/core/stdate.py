@@ -13,14 +13,16 @@ import re
 EPOCH = _dt.date(1960, 1, 1)
 MS_DAY = 86_400_000.0
 
-# Days after which a leap second was added (23:59:60 UTC), from the IERS bulletins.
+# Days after which a leap second was added (23:59:60 UTC), from the IERS bulletins, up to the
+# one Stata 14 knows: its log (compat 2008) counts 26 leap seconds before 2017, so the one of
+# 31dec2016 is left out.
 _LEAP_DAYS = [
     (1972, 6, 30), (1972, 12, 31), (1973, 12, 31), (1974, 12, 31), (1975, 12, 31),
     (1976, 12, 31), (1977, 12, 31), (1978, 12, 31), (1979, 12, 31), (1981, 6, 30),
     (1982, 6, 30), (1983, 6, 30), (1985, 6, 30), (1987, 12, 31), (1989, 12, 31),
     (1990, 12, 31), (1992, 6, 30), (1993, 6, 30), (1994, 6, 30), (1995, 12, 31),
     (1997, 6, 30), (1998, 12, 31), (2005, 12, 31), (2008, 12, 31), (2012, 6, 30),
-    (2015, 6, 30), (2016, 12, 31),
+    (2015, 6, 30),
 ]
 # %tc value of the midnight that follows each leap second
 _LEAP_TC = [((_dt.date(*d) - EPOCH).days + 1) * MS_DAY for d in _LEAP_DAYS]

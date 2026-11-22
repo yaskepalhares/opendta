@@ -27,7 +27,7 @@ from opendta.core import missing as M
     ("hh(clock(\"5mar2020 3:04:05.5 pm\",\"DMYhms\"))", 15),
     ("ss(clock(\"5mar2020 3:04:05.5 pm\",\"DMYhms\"))", 5.5),
     # 27 leap seconds from 1972 to 2016
-    ("Cofc(1893456000000)", 1893456027000), ("cofC(1893456027000)", 1893456000000),
+    ("Cofc(1893456000000)", 1893456026000), ("cofC(1893456027000)", 1893456001000),
     ("dofC(Cofd(21915))", 21915),
 ])
 def test_date_functions(run, expr, value):
@@ -48,7 +48,7 @@ def test_date_functions_in_generate(run):
 
 
 @pytest.mark.parametrize("expr, value", [
-    ('strtoname("a b")', "a_b"), ('strtoname("1x")', "_1x"), ('strtoname("1x", 0)', "1x"),
+    ('strtoname("a b")', "a_b"), ('strtoname("1x")', "_1x"), ('strtoname("1x", 0)', "1x"), ('strtoname("")', ""),
     ('strtoname("' + "a" * 40 + '")', "a" * 32),
     ('plural(2,"cat")', "cats"), ('plural(1,"cat")', "cat"), ('plural(2,"box","+es")', "boxes"),
     ('plural(2,"glasses","-es")', "glass"), ('plural(2,"man","men")', "men"),
