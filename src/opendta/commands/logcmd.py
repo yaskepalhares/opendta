@@ -22,6 +22,7 @@ from ..lang.syntax import Parsed, match_options, parse_standard
 from ..lang.words import strip_outer_quotes
 from ._util import eval_vector, touse
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -105,14 +106,14 @@ def cmd_log(s: "Session", args: str) -> None:
             path = path.with_suffix(".log" if o.get("text") else ".smcl")
         kind = "smcl" if o.get("smcl") or (path.suffix == ".smcl" and not o.get("text")) else "text"
         if path.exists() and not (o.get("replace") or o.get("append")):
-            raise StataError(602, f"file {path} already exists")
+            raise StataError(602, f"file {shown_path(path)} already exists")
         if o.get("replace") and not path.exists():
             # Stata shows the full path here (compat/do/2006)
-            s.output.write(f"(note: file {path.absolute()} not found)\n", "text")
+            s.output.write(f"(note: file {shown_path(path.absolute())} not found)\n", "text")
         try:
             fh = open(path, "a" if o.get("append") else "w", encoding="utf-8")
         except OSError:
-            raise StataError(603, f"file {path.absolute()} could not be opened")
+            raise StataError(603, f"file {shown_path(path.absolute())} could not be opened")
         log = LogFile(name, path.resolve(), kind, fh)
         if kind == "smcl" and not o.get("append"):
             fh.write("{smcl}\n")
@@ -202,7 +203,7 @@ def cmd_cmdlog(s: "Session", args: str) -> None:
         if path.suffix == "":
             path = path.with_suffix(".txt")
         if path.exists() and not (o.get("replace") or o.get("append")):
-            raise StataError(602, f"file {path} already exists")
+            raise StataError(602, f"file {shown_path(path)} already exists")
         s.cmdlog = {"path": path.resolve(), "fh": open(path, "a" if o.get("append") else "w",
                                                        encoding="utf-8"), "on": True}
         s.output.write(f"(cmdlog {path.resolve()} opened)\n", "text")

@@ -12,6 +12,7 @@ from ..core.errors import (BreakLoop, ContinueLoop, ExitRequest, StataError,
 from ..lang.lexer import split_commands
 from ..lang.words import split_words
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -36,7 +37,7 @@ def _resolve_do(path: str) -> Path:
     if p.suffix == "":
         p = p.with_suffix(".do")
     if not p.exists():
-        raise StataError(601, f"file {p} not found")
+        raise StataError(601, f"file {shown_path(p)} not found")
     return p
 
 
@@ -203,9 +204,9 @@ def cmd_confirm(s: "Session", args: str) -> None:
         path = m.group(2).strip().strip('"')
         exists = Path(path).exists()
         if m.group(1) and exists:
-            raise StataError(602, f"file {path} already exists")
+            raise StataError(602, f"file {shown_path(path)} already exists")
         if not m.group(1) and not exists:
-            raise StataError(601, f"file {path} not found")
+            raise StataError(601, f"file {shown_path(path)} not found")
         return
     m = re.match(r"^names?\s+(.*)$", t)
     if m:

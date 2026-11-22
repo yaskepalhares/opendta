@@ -22,6 +22,7 @@ from ..lang.words import strip_outer_quotes
 from ._util import eval_vector, touse
 from .data import _note
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -797,9 +798,9 @@ def cmd_outfile(s: "Session", args: str) -> None:
     if path.suffix == "":
         path = path.with_suffix(".dct" if o.get("dictionary") else ".raw")
     if path.exists() and not o.get("replace"):
-        raise StataError(602, f"file {path} already exists")
+        raise StataError(602, f"file {shown_path(path)} already exists")
     if not path.exists() and o.get("replace"):
-        s.output.write(f"(note: file {path.name if not os.path.dirname(strip_outer_quotes(p.using)) else path} "
+        s.output.write(f"(note: file {path.name if not os.path.dirname(strip_outer_quotes(p.using)) else shown_path(path)} "
                        "not found)\n", "text")
     mask = touse(s, p)
     from .inspect import cell_text

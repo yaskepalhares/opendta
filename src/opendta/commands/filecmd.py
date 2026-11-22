@@ -20,6 +20,7 @@ from ..lang.syntax import match_options
 from ..lang.words import strip_outer_quotes
 from .display import _literal
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -69,15 +70,15 @@ def _open(s: "Session", rest: str) -> None:
         mode = "rw"
     elif o.get("write"):
         if path.exists() and not (o.get("replace") or o.get("append")):
-            raise StataError(602, f"file {file} already exists")
+            raise StataError(602, f"file {shown_path(file)} already exists")
         if o.get("replace") and not path.exists():
-            s.output.write(f"(note: file {file} not found)\n", "text")
+            s.output.write(f"(note: file {shown_path(file)} not found)\n", "text")
         mode = "a" if o.get("append") else "w"
         fh = open(path, mode + "b") if binary else open(path, mode, encoding="utf-8", newline="")
         mode = "w"
     elif o.get("read"):
         if not path.exists():
-            raise StataError(601, f"file {file} not found")
+            raise StataError(601, f"file {shown_path(file)} not found")
         fh = open(path, "rb") if binary else open(path, "r", encoding="utf-8", errors="replace", newline="")
         mode = "r"
     else:

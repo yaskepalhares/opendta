@@ -11,6 +11,7 @@ as Stata does.
 
 from __future__ import annotations
 
+import os
 import re
 from typing import TYPE_CHECKING
 
@@ -700,7 +701,8 @@ def _as_stata_error(exc: Exception) -> StataError:
     """Python error escaped from a command, as a Stata error that `capture` takes: a file that
     cannot be read or written is r(603) (compat/do/2006); the rest falls back on r(198)."""
     if isinstance(exc, OSError):
-        name = f" {exc.filename}" if exc.filename else ""
+        # the name with /, as typed and as Stata shows it on every system
+        name = f" {str(exc.filename).replace(os.sep, '/')}" if exc.filename else ""
         return StataError(603, f"file{name} could not be opened")
     return StataError(198, "invalid syntax")
 

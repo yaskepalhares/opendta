@@ -17,6 +17,7 @@ from ..io.excel import ExcelOptions, ExcelWriteOptions, describe_excel, read_exc
 from ..lang.syntax import Parsed, match_options, parse_standard
 from ..lang.words import strip_outer_quotes
 from ._util import touse
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -67,7 +68,7 @@ def import_excel(s: "Session", args: str) -> None:
                                   "allstring": 9, "clear": 5, "describe": 8, "locale": 6})
     path = excel_path(file, must_exist=True)
     if not path.exists():
-        raise StataError(601, f"file {path} not found")
+        raise StataError(601, f"file {shown_path(path)} not found")
     if o.get("describe"):
         rows = describe_excel(path)
         out = s.output
@@ -136,10 +137,10 @@ def export_excel(s: "Session", args: str) -> None:
     elif o.get("replace"):
         opts.mode = "replace"
     if path.exists() and opts.mode == "new":
-        raise StataError(602, f"file {path} already exists")
+        raise StataError(602, f"file {shown_path(path)} already exists")
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     try:
         write_excel(ds, path, names, rows, opts)
     except OSError as e:
-        raise StataError(603, f"file {path} could not be opened ({e.strerror})")
-    s.output.write(f"file {path} saved\n", "text")
+        raise StataError(603, f"file {shown_path(path)} could not be opened ({e.strerror})")
+    s.output.write(f"file {shown_path(path)} saved\n", "text")

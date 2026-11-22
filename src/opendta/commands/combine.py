@@ -32,6 +32,7 @@ from ..lang.syntax import match_options, parse_standard
 from ..lang.words import split_words
 from .files import dta_path
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
 def load_using(text: str) -> Dataset:
     path = dta_path(text)
     if not path.exists():
-        raise StataError(601, f"file {path} not found")
+        raise StataError(601, f"file {shown_path(path)} not found")
     return read_dta(path)
 
 

@@ -81,6 +81,13 @@ def touse(s: "Session", p: Parsed) -> np.ndarray:
     return mask
 
 
+def shown_path(p: Any) -> str:
+    """A file name as messages show it: what was typed, and for a Path the form with /, which
+    Stata uses on every system (on Windows str() of a Path would turn the typed / into \\)."""
+    from pathlib import PurePath
+    return p.as_posix() if isinstance(p, PurePath) else str(p)
+
+
 def plural(n: int, word: str, plural_word: str | None = None) -> str:
     return f"{n:,} {word if n == 1 else (plural_word or word + 's')}"
 
