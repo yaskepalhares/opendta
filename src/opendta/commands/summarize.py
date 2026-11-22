@@ -605,9 +605,8 @@ def cmd_tabstat(s: "Session", args: str) -> None:
         return
     names = ", ".join(_TS_LABEL.get(st_, st_) for st_ in stats)
     if len(stats) > 1 or len(vars_) > 1:
-        lead = f"Summary statistics: {names}" if len(stats) > 1 else \
-            f"Summary for variables: {' '.join(v.name for v in vars_)}"
-        out.write(f"\n{lead}\n", "text")
+        # the statistics are named even when there is one (compat 2008)
+        out.write(f"\nSummary statistics: {names}\n", "text")
         label = f" ({bv.label})" if bv.label else ""
         out.write(f"  by categories of: {bv.name}{label}\n", "text")
     out.write("\n" + f"{_abbrev(bv.name, W):>{W}} |" + "".join(

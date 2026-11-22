@@ -146,6 +146,18 @@ def test_tabstat_one_variable_by(run):
     assert lines[4] == "               g |      mean        sd         N"
     assert lines[6].startswith(_LONG[:16] + " |")
     assert lines[-2].startswith("           Total |")
+    # several variables and one statistic: the statistic is named (compat 2008)
+    lines = run("tabstat x x, by(g) stat(mean)").splitlines()
+    assert lines[1:3] == ["Summary statistics: mean", "  by categories of: g"]
+
+
+def test_label_values_widens_format(run):
+    # compat 2008: %9.0g becomes the length of the longest label when label values attaches it
+    run('clear\nset obs 2\ngen g = _n\nlabel define lg 1 "' + "x" * 46 + '" 2 "two"')
+    run("label values g lg")
+    assert run.session.data.get("g").fmt == "%46.0g"
+    run('label define sh 1 "a"\ngen h = _n\nlabel values h sh')
+    assert run.session.data.get("h").fmt == "%9.0g"
 
 
 def test_compress_keeps_numeric_format(run):
