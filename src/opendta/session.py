@@ -395,7 +395,8 @@ class Session:
             "username": user,
             "hostname": socket.gethostname(),
             "osdtl": osdtl,
-            "tmpdir": tempfile.gettempdir().rstrip(os.sep) + os.sep,
+            # ends with / on every system, like c(dirsep) (VERIFY on Windows)
+            "tmpdir": tempfile.gettempdir().rstrip("/\\") + "/",
             "sysdir_stata": dirs["STATA"].rstrip("/") + "/",
             "sysdir_base": dirs["BASE"].rstrip("/") + "/",
             "sysdir_site": dirs["SITE"].rstrip("/") + "/",
