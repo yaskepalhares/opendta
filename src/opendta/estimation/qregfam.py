@@ -104,10 +104,20 @@ def _setup(s: "Session", cmd: str, args: str, extra: dict):
 
 def _bootstrap(s: "Session", X, y, qs, reps, o) -> np.ndarray:
     from ..core import rng
-    s.output.write("(fitting base model)\n", "text")
+    if not o.get("nodots"):
+        s.output.write("(fitting base model)\n", "text")   # not with nodots (compat 2008)
     show = _dots(s, "Bootstrap replications", reps, o)
     cb = (lambda ok, r: _dot(s, ok, r, reps)) if show else None
     return boot_coefs(X, y, qs, reps, rng.RNG.uniform, cb)
+
+
+def _eqnames(qs: list[float]) -> list[str]:
+    """q and the quantile with as many decimals as the most precise one needs, at least two
+    (compat 2008: .25 .5 .75 give q25 q50 q75; .1 .333 give q100 q333)."""
+    d = 2
+    while d < 8 and any(abs(q * 10 ** d - round(q * 10 ** d)) > 1e-9 for q in qs):
+        d += 1
+    return [f"q{round(q * 10 ** d)}" for q in qs]
 
 
 def _qlabel(q: float) -> str:
@@ -119,10 +129,18 @@ def _rows(names: list[str], b: np.ndarray, V: np.ndarray, eq: str = "") -> list[
     return [CoefRow("coef", n, float(bi), float(si), eq=eq, name=n) for n, bi, si in zip(names, b, se)]
 
 
-def _macros(cmd: str, args: str, depvar: str, extra=()) -> list[tuple[str, str]]:
-    return [("cmd", cmd), ("cmdline", f"{cmd} {args.strip()}"), *extra, ("vce", "bootstrap"),
-            ("vcetype", "Bootstrap"), ("properties", "b V"), ("predict", "sqreg_p"),
-            ("depvar", depvar)]
+def _macros(cmd: str, args: str, depvar: str, seed: str, extra=()) -> list[tuple[str, str]]:
+    """e() macros in the order ereturn list shows them (compat 2008); e(seed) is the state of
+    the random-number generator before the replications."""
+    return [("cmd", cmd), ("cmdline", f"{cmd} {args.strip()}"),
+            ("predict", "sqreg_p" if cmd == "sqreg" else "qreg_p"),
+            ("marginsnotok", "stdp stddp Residuals"),
+            *([("vcetype", "Bootstrap")] if cmd != "bsqreg" else []), *extra,
+            ("depvar", depvar), ("seed", seed), ("properties", "b V")]
+
+
+def _seed(s: "Session") -> str:
+    return str(s.creturn("rngstate"))
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +157,7 @@ def cmd_bsqreg(s: "Session", args: str) -> None:
     q = _quantile(smp.o["quantile"]) if smp.o.get("quantile") else 0.5
     b = _qfit(X, y, q)
     raw, mn, yq = deviations(X, y, q, b)
+    seed = _seed(s)
     V = boot_vce(_bootstrap(s, X, y, [q], reps, smp.o))
     n, k = X.shape
     est = Estimates("bsqreg", smp.depname, names, b, V, n, "t", float(n - k))
@@ -147,9 +166,9 @@ def cmd_bsqreg(s: "Session", args: str) -> None:
     est.extra = {"q": q, "raw": raw, "min": mn, "yq": yq, "r2_p": 1 - mn / raw if raw > 0 else SYS,
                  "N": n, "reps": reps}
     est.display = _display_bsqreg
-    scalars = [("N", float(n)), ("df_r", float(n - k)), ("q", q), ("q_v", yq), ("sum_adev", mn),
-               ("sum_rdev", raw), ("reps", float(reps)), ("rank", float(k)), ("convcode", 0.0)]
-    post(s, est, scalars, _macros("bsqreg", args, smp.depname), smp.mask)
+    scalars = [("reps", float(reps)), ("N", float(n)), ("df_r", float(n - k)), ("q_v", yq),
+               ("sum_rdev", raw), ("q", q), ("sum_adev", mn), ("convcode", 0.0), ("rank", float(k))]
+    post(s, est, scalars, _macros("bsqreg", args, smp.depname, seed), smp.mask)
     _display_bsqreg(s, est)
 
 
@@ -166,8 +185,8 @@ def _display_bsqreg(s, est, *, header=True, table=True, level=None, **_kw) -> No
         out.write(f"  Min sum of deviations {g9(x['min'], '%9.0g'):>8}{'':<20}Pseudo R2     = ", "text")
         out.write(f"{x['r2_p']:>10.4f}\n\n", "result")
     if table:
-        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level,
-                   vcetype="Bootstrap")
+        # no Bootstrap heading over the table (compat 2008)
+        coef_table(s, est.depvar, est.rows, stat="t", df=est.df_r, level=level or est.level)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +208,7 @@ def cmd_iqreg(s: "Session", args: str) -> None:
     b0, b1 = _qfit(X, y, lo), _qfit(X, y, hi)
     b = b1 - b0
     k = X.shape[1]
+    seed = _seed(s)
     R = _bootstrap(s, X, y, [lo, hi], reps, smp.o)
     V = boot_vce(R[:, k:] - R[:, :k])
     n = len(y)
@@ -201,11 +221,12 @@ def cmd_iqreg(s: "Session", args: str) -> None:
     est.level = smp.level
     est.extra = {"q0": lo, "q1": hi, "r2": r2, "N": n, "reps": reps}
     est.display = _display_iqreg
-    scalars = [("N", float(n)), ("df_r", float(n - k)), ("q0", lo), ("q1", hi), ("reps", float(reps)),
-               ("sumrdv0", deviations(X, y, lo, b0)[0]), ("sumrdv1", deviations(X, y, hi, b1)[0]),
-               ("sumadv0", deviations(X, y, lo, b0)[1]), ("sumadv1", deviations(X, y, hi, b1)[1]),
-               ("rank", float(k)), ("convcode", 0.0)]
-    post(s, est, scalars, _macros("iqreg", args, smp.depname), smp.mask)
+    # compat 2008: the sums with index 0 are those of the upper quantile
+    d_hi, d_lo = deviations(X, y, hi, b1), deviations(X, y, lo, b0)
+    scalars = [("reps", float(reps)), ("N", float(n)), ("df_r", float(n - k)), ("q0", lo), ("q1", hi),
+               ("sumrdev0", d_hi[0]), ("sumrdev1", d_lo[0]), ("sumadev0", d_hi[1]),
+               ("sumadev1", d_lo[1]), ("convcode", 0.0), ("rank", float(k))]
+    post(s, est, scalars, _macros("iqreg", args, smp.depname, seed), smp.mask)
     _display_iqreg(s, est)
 
 
@@ -241,14 +262,16 @@ def cmd_sqreg(s: "Session", args: str) -> None:
         if smp.o.get("quantiles") else [0.5]
     bs = [_qfit(X, y, q) for q in qs]
     b = np.concatenate(bs)
+    seed = _seed(s)
     V = boot_vce(_bootstrap(s, X, y, qs, reps, smp.o))
     n, k = X.shape
-    eqs = [f"q{round(q * 100):d}" if abs(q * 100 - round(q * 100)) < 1e-9 else f"q{q * 100:g}".replace(".", "_")
-           for q in qs]
+    eqs = _eqnames(qs)
     rows: list[CoefRow] = []
     r2 = []
     for j, (q, eq, bq) in enumerate(zip(qs, eqs, bs)):
-        rows.append(CoefRow("header", eq))
+        if j:
+            rows.append(CoefRow("sep", ""))
+        rows.append(CoefRow("eq", eq))
         sl = slice(j * k, (j + 1) * k)
         rows += _rows(names, bq, V[sl, sl], eq=eq)
         raw, mn, _ = deviations(X, y, q, bq)
@@ -260,12 +283,13 @@ def cmd_sqreg(s: "Session", args: str) -> None:
     est.level = smp.level
     est.extra = {"qs": qs, "r2": r2, "N": n, "reps": reps}
     est.display = _display_sqreg
-    scalars = [("N", float(n)), ("df_r", float(n - k)), ("n_q", float(len(qs))), ("reps", float(reps))]
+    scalars = [("reps", float(reps)), ("N", float(n)), ("df_r", float(n - k))]
     for j, q in enumerate(qs, 1):
         raw, mn, _ = deviations(X, y, q, bs[j - 1])
         scalars += [(f"q{j}", q), (f"sumrdv{j}", raw), (f"sumadv{j}", mn)]
-    scalars += [("rank", float(k * len(qs))), ("convcode", 0.0)]
-    post(s, est, scalars, _macros("sqreg", args, smp.depname, [("eqnames", " ".join(eqs))]), smp.mask)
+    scalars += [("n_q", float(len(qs))), ("convcode", 0.0), ("rank", float(k * len(qs)))]
+    post(s, est, scalars, _macros("sqreg", args, smp.depname, seed, [("eqnames", " ".join(eqs))]),
+         smp.mask)
     _display_sqreg(s, est)
 
 
@@ -277,7 +301,8 @@ def _display_sqreg(s, est, *, header=True, table=True, level=None, **_kw) -> Non
         out.write(f"{x['N']:>10,}\n", "result")
         for j, (q, r2) in enumerate(zip(x["qs"], x["r2"])):
             left = f"  bootstrap({x['reps']}) SEs" if j == 0 else ""
-            out.write(f"{left:<52}{_qlabel(q) + ' Pseudo R2':>13} = ", "text")
+            lab = f"{q:.2f}".lstrip("0")   # compat 2008: .10, .33, .50
+            out.write(f"{left:<52}{lab + ' Pseudo R2':>13} = ", "text")
             out.write(f"{r2:>10.4f}\n", "result")
         out.write("\n", "text")
     if table:

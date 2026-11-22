@@ -56,7 +56,7 @@ def cmd_mkmat(s: "Session", args: str) -> None:
     if o.get("rownames"):
         rnames = _name_values(s, str(o["rownames"]), rows, nchar)
     elif o.get("obs"):
-        rnames = [str(i + 1) for i in rows]
+        rnames = [f"r{i + 1}" for i in rows]   # compat 2008: r and the observation number
     else:
         # rowprefix() replaces the r of r1, r2... (compat 2008: p1 p2)
         pre = strip_outer_quotes(str(o["rowprefix"])) if o.get("rowprefix") else "r"

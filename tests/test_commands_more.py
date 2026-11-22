@@ -105,7 +105,7 @@ def test_numlabel(run):
 def test_mkmat_svmat_names(run):
     # compat 2008: default row names r1 r2..., rowprefix() replaces the r; eqcol joins directly
     run("clear\ninput a b\n1 2\n3 .\n5 6\nend")
-    run("mkmat a b, matrix(B)\nmkmat a b, matrix(C) nomissing rowprefix(p)")
+    run("mkmat a b, matrix(B) obs\nmkmat a b, matrix(C) nomissing rowprefix(p)")
     assert "r1" in run("matrix list B") and run("matrix list C").splitlines()[-1].startswith("p2")
     run("matrix D = (1, 2 \\ 3, 4)\nmatrix colnames D = u v\nmatrix coleq D = e1 e2")
     run("svmat D, names(eqcol)\nsvmat D, names(matcol)")
@@ -359,6 +359,13 @@ def test_quantile_regressions(run):
     run("quietly sqreg y x z, q(.25 .75) reps(10)")
     assert run.eval("_b[q25:x]") == pytest.approx(b25) and run.eval("_b[q75:x]") == pytest.approx(b75)
     assert run.eval("e(n_q)") == 2 and run.eval('e(eqnames) == "q25 q75"') == 1
+    # compat 2008: names, labels and e() of Stata 14
+    assert "(fitting base model)" not in run("iqreg y x z, reps(10) nodots")
+    assert run.eval("e(sumrdev0)") == pytest.approx(82.625) and run.eval('e(predict) == "qreg_p"')
+    out = run("sqreg y x z, q(.1 .333) reps(10) nodots").splitlines()
+    assert "q100         |" in out and "q333         |" in out
+    assert any(".10 Pseudo R2 =" in line for line in out)
+    assert run('ereturn list').count("e(vce)") == 0
 
 
 def test_input_leading_decimal_point(run):
