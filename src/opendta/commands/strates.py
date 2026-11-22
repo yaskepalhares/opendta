@@ -24,6 +24,7 @@ from ..lang.syntax import match_options, parse_standard
 from ..lang.words import parse_numlist
 from ._util import touse
 from .summarize import _level, weights
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -134,7 +135,7 @@ def _show_or_save(s: "Session", shown: Dataset, o, saved: Dataset | None = None)
         head, _, rest = str(o["output"]).partition(",")
         path = dta_path(head)
         if path.exists() and "replace" not in rest:
-            raise StataError(602, f"file {path} already exists")
+            raise StataError(602, f"file {shown_path(path)} already exists")
         write_dta(saved, path)
 
 

@@ -17,6 +17,7 @@ from ..lang.syntax import Parsed, match_options, parse_standard
 from ..lang.words import strip_outer_quotes
 from ._util import touse
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..core.dataset import Dataset
@@ -33,7 +34,7 @@ def _path(text: str, ext: str) -> Path:
     if p.suffix == "":
         p = p.with_suffix(ext)
     if not p.exists():
-        raise StataError(601, f"file {p} not found")
+        raise StataError(601, f"file {shown_path(p)} not found")
     return p
 
 

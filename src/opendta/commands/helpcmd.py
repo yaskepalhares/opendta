@@ -16,6 +16,7 @@ from ..core.smcl import render_text
 from ..lang.adopath import find_file
 from ..lang.words import strip_outer_quotes
 from .registry import REGISTRY, command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -188,7 +189,7 @@ def cmd_view(s: "Session", args: str) -> None:
         t = t[5:]
     path = Path(strip_outer_quotes(t)).expanduser()
     if not path.exists():
-        raise StataError(601, f"file {path} not found")
+        raise StataError(601, f"file {shown_path(path)} not found")
     hook = s.ui_hooks.get("view")
     if hook is not None:
         hook(path, path.name)

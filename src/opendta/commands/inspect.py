@@ -17,6 +17,7 @@ from ..core.varlist import expand
 from ..lang.syntax import match_options, parse_standard
 from ._util import touse
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..core.dataset import Dataset, Variable
@@ -392,7 +393,7 @@ def _describe_using(s: "Session", p, opts: dict) -> None:
     if path.suffix == "":
         path = path.with_suffix(".dta")
     if not path.exists():
-        raise StataError(601, f"file {path} not found")
+        raise StataError(601, f"file {shown_path(path)} not found")
     saved, saved_r = s.data, s.r
     try:
         new = read_dta(path)

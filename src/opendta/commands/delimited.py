@@ -18,6 +18,7 @@ from ..lang.syntax import Parsed, match_options, parse_standard
 from ..lang.words import parse_numlist, strip_outer_quotes
 from ._util import touse
 from .registry import command
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -62,7 +63,7 @@ def _load(s: "Session", path: Path, opts: ReadOptions, clear: bool, names: list[
     if ds.changed and ds.nvars and not clear:
         raise StataError(4, "no; data in memory would be lost")
     if not path.exists():
-        raise StataError(601, f"file {path} not found")
+        raise StataError(601, f"file {shown_path(path)} not found")
     new = read_delimited(path, opts)
     for k, n in enumerate(names):
         if k < new.nvars:
@@ -159,16 +160,16 @@ def _export(s: "Session", args: str, opts: WriteOptions, spec: dict[str, int], *
         opts.never_quote = True
     existed = path.exists()
     if existed and not o.get("replace"):
-        raise StataError(602, f"file {path} already exists")
+        raise StataError(602, f"file {shown_path(path)} already exists")
     if not existed and o.get("replace"):
-        s.output.write(f"(note: file {path} not found)\n", "text")
+        s.output.write(f"(note: file {shown_path(path)} not found)\n", "text")
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     try:
         write_delimited(ds, path, names, rows, opts)
     except OSError:
-        raise StataError(603, f"file {path} could not be opened")
+        raise StataError(603, f"file {shown_path(path)} could not be opened")
     if not old:
-        s.output.write(f"file {path} saved\n", "text")   # outsheet does not show it
+        s.output.write(f"file {shown_path(path)} saved\n", "text")   # outsheet does not show it
 
 
 def export_delimited(s: "Session", args: str) -> None:

@@ -20,6 +20,7 @@ from ..io import statpkg
 from ..lang.syntax import Parsed, match_options, parse_standard
 from ..lang.words import strip_outer_quotes
 from ._util import touse
+from ._util import shown_path
 
 if TYPE_CHECKING:
     from ..session import Session
@@ -33,7 +34,7 @@ def _file(text: str, ext: str, *, must_exist: bool = True) -> Path:
     if p.suffix == "":
         p = p.with_suffix(ext)
     if must_exist and not p.exists():
-        raise StataError(601, f"file {p} not found")
+        raise StataError(601, f"file {shown_path(p)} not found")
     return p
 
 
@@ -159,7 +160,7 @@ def import_sasxport(s: "Session", args: str) -> None:
     try:
         members = xport.read(path)
     except (IndexError, ValueError, struct.error):
-        raise StataError(610, f"file {path} not SAS XPORT format")
+        raise StataError(610, f"file {shown_path(path)} not SAS XPORT format")
     m = _pick(members, member) if member else members[0]
     cols = {v.name: [(float("nan") if x is None else x) if v.numeric else x for x in
                      (row[k] for row in m.rows)] for k, v in enumerate(m.variables)}
@@ -236,12 +237,12 @@ def export_sasxport(s: "Session", args: str) -> None:
     labnames = _sas_names(used, rename, "value label")
     path = _file(file, ".xpt", must_exist=False)
     if path.exists() and not o.get("replace"):
-        raise StataError(602, f"file {path} already exists")
+        raise StataError(602, f"file {shown_path(path)} already exists")
     rows = np.flatnonzero(touse(s, Parsed(if_=p.if_, in_=p.in_)))
     formats = {newnames[n]: labnames[ds.get(n).value_label].upper() for n in names
                if ds.get(n).value_label in labnames}
     statpkg.write_xport(ds, path, names, rows, rename=newnames, formats=formats)
-    s.output.write(f"file {path} saved\n", "text")
+    s.output.write(f"file {shown_path(path)} saved\n", "text")
     sas = path.with_suffix(".sas")
     if vallab in ("xpf", "none") and sas.exists():
         sas.unlink()        # Stata leaves no .sas file of an earlier export (compat 1911; VERIFY)
@@ -249,7 +250,7 @@ def export_sasxport(s: "Session", args: str) -> None:
         sets = {labnames[n]: ds.value_labels[n] for n in used}
         if vallab in ("sascode", "both"):
             _write_sascode(sas, sets)
-            s.output.write(f"file {sas} saved\n", "text")
+            s.output.write(f"file {shown_path(sas)} saved\n", "text")
         if vallab in ("xpf", "both"):
             statpkg.write_formats_xpf(path.parent / "formats.xpf", sets)
             s.output.write("file formats.xpf saved\n", "text")

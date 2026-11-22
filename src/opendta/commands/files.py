@@ -36,8 +36,8 @@ def dta_path(text: str) -> Path:
 
 
 def _shown(p: Path) -> str:
-    """File name as Stata shows it in messages (what was typed)."""
-    return str(p)
+    """File name as Stata shows it in messages (what was typed, with /)."""
+    return p.as_posix()
 
 
 # ---------------------------------------------------------------------------
