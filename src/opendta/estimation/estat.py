@@ -43,13 +43,28 @@ def cmd_estat(s: "Session", args: str) -> None:
         if len(sub) >= minimum and name.startswith(sub):
             fn(s, est, rest)
             return
+    if s.e.get("prefix") == "svy":
+        # the svy estat subcommands ([SVY] estat; compat 2004); VERIFY the abbreviations
+        from . import svy as _svy
+        svy_sub = [("svyset", 3, _svy.estat_svyset), ("strata", 3, _svy.estat_strata), ("cv", 2, _svy.estat_cv),
+                   ("sd", 2, None), ("size", 3, None)]
+        for name, minimum, fn in svy_sub:
+            if len(sub) >= minimum and name.startswith(sub):
+                if fn is None:
+                    _svy.estat_unsupported(s, est, name)
+                fn(s, est, rest)
+                return
+        if len(sub) >= 3 and "summarize".startswith(sub):
+            raise StataError(321, "invalid subcommand summarize")   # VERIFY the return code
     table = [("ic", 2), ("vce", 3), ("summarize", 3), ("hettest", 3), ("ovtest", 3), ("dwatson", 3),
-             ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3)]
+             ("classification", 5), ("gof", 3), ("esample", 7), ("bootstrap", 4), ("effects", 3),
+             ("vif", 3)]
     full = next((n for n, m in table if len(sub) >= m and n.startswith(sub)), None)
     if full is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")   # compat 1902
     fn = {"ic": _ic, "vce": _vce, "summarize": _summarize, "hettest": _hettest, "ovtest": _ovtest, "dwatson": _dwatson,
-          "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects}.get(full)
+          "classification": _classification, "gof": _gof, "bootstrap": _bootstrap, "effects": _effects,
+          "vif": _vif}.get(full)
     if fn is None:
         raise StataError(321, f"subcommand estat {sub} is unrecognized")
     fn(s, est, rest)
@@ -294,6 +309,51 @@ def _ovtest(s: "Session", est, rest: str) -> None:
     out.write(f"{'Prob > F':>26} = {p:>11.4f}\n", "text")
     s.r = dict(reversed([("p", p), ("F", F), ("df", float(q)), ("df_r", float(df_r))]))
 
+
+
+def vif_values(X: np.ndarray, uncentered: bool = False) -> np.ndarray:
+    """Variance inflation factor of each column of X: 1/(1 - R2) of the regression of the
+    column on the others; R2 is centered (with a constant) unless uncentered."""
+    out = []
+    for j in range(X.shape[1]):
+        y, Z = X[:, j], np.delete(X, j, axis=1)
+        if not uncentered:
+            Z = np.column_stack([Z, np.ones(len(y))])
+        _, e = _ols(Z, y)
+        tss = y @ y if uncentered else ((y - y.mean()) @ (y - y.mean()))
+        out.append(tss / (e @ e) if e @ e > 0 else math.inf)
+    return np.array(out)
+
+
+def _vif(s: "Session", est, rest: str) -> None:
+    """estat vif ([R] regress postestimation). VERIFY: the layout, the order of ties and the
+    rows of the uncentered table."""
+    _, o = _opts(rest, {"uncentered": 3})
+    if est.cmd != "regress":
+        raise StataError(321, "subcommand estat vif is unrecognized")   # compat 2008
+    X, _, _, _ = _regress_data(s, est)
+    names = [n for n, k in zip(est.names, np.abs(np.diag(est.V)) > 0) if k]
+    has_cons = bool(names) and names[-1] == "_cons"
+    unc = bool(o.get("uncentered"))
+    if not has_cons and not unc:
+        raise StataError(301, "not appropriate after regress, nocons;\n"
+                              "use option uncentered to get uncentered VIFs")
+    if not unc:
+        X, names = X[:, :-1], names[:-1]
+    v = vif_values(X, unc)
+    order = sorted(range(len(v)), key=lambda j: -v[j])
+    out = s.output
+    out.write("\n    Variable |       VIF       1/VIF  \n-------------+----------------------\n", "text")
+    for j in order:
+        out.write(f"{_short(names[j]):>12} | {v[j]:>9.2f}    {1 / v[j]:.6f}\n", "text")
+    out.write("-------------+----------------------\n", "text")
+    out.write(f"{'Mean VIF':>12} | {v.mean():>9.2f}\n", "text")
+    # compat 2008: r(vif_#) holds the float value, and return list shows them from the last
+    r = {}
+    for i, j in enumerate(order, 1):
+        r[f"vif_{i}"] = float(np.float32(v[j]))
+        r[f"name_{i}"] = names[j]
+    s.r = r
 
 def _dwatson(s: "Session", est, rest: str) -> None:
     from ..core.tsstats import durbin_watson

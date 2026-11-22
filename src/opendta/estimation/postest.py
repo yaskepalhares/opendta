@@ -244,6 +244,8 @@ def _coef_index(est: Estimates, s: "Session", name: str, eq: str = "") -> int:
     name = name.strip()
     names = est.names
     eqs = est.eqnames or [""] * len(names)
+    if eq and eq not in eqs:
+        raise StataError(303, f"equation [{eq}] not found")   # VERIFY the return code (compat 2004)
 
     def match(target: str) -> int | None:
         for i, n in enumerate(names):
@@ -296,7 +298,8 @@ class _Lin:
 
     def __init__(self, s: "Session", est: Estimates, text: str):
         self.s, self.est = s, est
-        self.toks = re.findall(r"_b\[[^\]]*\]|_coef\[[^\]]*\]|\[[^\]]*\]\s*_?[\w.#]+|"
+        self.toks = re.findall(r"_b\[[^\]]*\]|_coef\[[^\]]*\]|\[[^\]]*\]\s*_(?:b|coef)\[[^\]]*\]|"
+                               r"\[[^\]]*\]\s*_?[\w.#]+|"
                                r"\d+[bno]*\.[A-Za-z_][\w.#]*|"
                                r"\d+\.\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|\d+(?:[eE][-+]?\d+)?|"
                                r"[A-Za-z_][\w.#~]*|[-+*/()]", text)
@@ -368,11 +371,19 @@ class _Lin:
         m = re.fullmatch(r"_(?:b|coef)\[([^\]]*)\]", t)
         if m:
             return self._coef(m.group(1)), 0.0
+        m = re.fullmatch(r"\[([^\]]*)\]\s*_(?:b|coef)\[([^\]]*)\]", t)
+        if m:
+            return self._coef(m.group(2), m.group(1)), 0.0
         m = re.fullmatch(r"\[([^\]]*)\]\s*(\S+)", t)
         if m:
             return self._coef(m.group(2), m.group(1)), 0.0
         if re.fullmatch(r"\d+\.\d*(?:[eE][-+]?\d+)?|\.\d+(?:[eE][-+]?\d+)?|\d+(?:[eE][-+]?\d+)?", t):
             return {}, float(t)
+        m = re.match(r"(i\w*)\.", t)
+        if m:
+            # lincom ib2.faixa: factor operators other than #. name no coefficient (compat 2004);
+            # VERIFY the return code and i.x
+            raise StataError(198, f"{m.group(1)}:  operator invalid")
         return self._coef(t), 0.0
 
     def _coef(self, name: str, eq: str = "") -> dict:
@@ -417,8 +428,10 @@ def _ctext(est: Estimates, coef: dict, r: float) -> str:
 
 
 def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, header: bool = True,
-          mtest: bool = False) -> None:
+          mtest: bool = False, svyadjust: bool = True) -> None:
     out = s.output
+    # after svy:, test and testparm report the adjusted Wald F ([SVY] svy postestimation; compat 2004)
+    adjusted = svyadjust and s.e.get("prefix") == "svy" and est.stat == "t" and bool(est.df_r)
     k = len(est.b)
     R = np.zeros((len(cons), k))
     r = np.zeros(len(cons))
@@ -426,6 +439,8 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
         for j, v in coef.items():
             R[i, j] = v
         r[i] = rv
+    if adjusted:
+        out.write("\nAdjusted Wald test\n", "text")   # VERIFY the header with nosvyadjust (none here)
     if header:
         out.write("\n", "text")
         for i, (coef, rv) in enumerate(cons):
@@ -462,6 +477,9 @@ def _wald(s: "Session", est: Estimates, cons: list[tuple[dict, float]], *, heade
     if est.stat == "t" and est.df_r:
         F = W / q
         dfr = est.df_r
+        if adjusted:
+            from .svyreg import adjusted_wald
+            F, dfr = adjusted_wald(W, q, est.df_r)   # VERIFY r(df_r) (the denominator df here)
         p = float(st.f.sf(F, q, dfr))
         out.write(f"{'F(' + format(q, '>3') + ',' + format(int(dfr), '>6') + ') =':>22}", "text")
         out.write(f"{F:>8.2f}\n", "result")
@@ -499,12 +517,17 @@ def _split_parens(text: str) -> list[str]:
 def cmd_test(s: "Session", args: str) -> None:
     est = current(s)
     head, comma, opts = args.partition(",")
-    o = match_options(opts, {"accumulate": 3, "notest": 5, "mtest": 2, "coef": 4}) \
+    o = match_options(opts, {"accumulate": 3, "notest": 5, "mtest": 2, "coef": 4, "nosvyadjust": 5}) \
         if comma and opts.strip() else {}
     text = head.strip()
     if not text:
         raise StataError(198, "invalid syntax")
-    if text.startswith("("):
+    eqm = re.fullmatch(r"\[([^\]]+)\]\s*:\s*(.+)", text)
+    if eqm:
+        # test [eq]: varlist, each coefficient of the equation = 0
+        eq = eqm.group(1).strip()
+        exprs = [f"[{eq}]{nm}" for nm in _coef_names(s, est, eqm.group(2))]
+    elif text.startswith("("):
         exprs = _split_parens(text)
     elif "=" in text or re.search(r"[-+*/]|_b\[|\[", text):
         exprs = [text]
@@ -512,7 +535,7 @@ def cmd_test(s: "Session", args: str) -> None:
         # test varlist: each coefficient = 0 (accepts factor variables and wildcards)
         exprs = _coef_names(s, est, text)
     multi = est.eqnames and len(set(est.eqnames)) > 1
-    if multi and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
+    if multi and not eqm and not text.startswith("(") and "=" not in text and not re.search(r"[-+*/\[]", text):
         # several equations: the variable in all equations in which it is estimated (VERIFY the
         # order and mlogit's base equations)
         cons = []
@@ -533,7 +556,7 @@ def cmd_test(s: "Session", args: str) -> None:
         for i, (coef, rv) in enumerate(cons):
             out.write(f" ({i + 1:>2})  {_ctext(est, coef, rv)}\n", "text")
         return
-    _wald(s, est, cons)
+    _wald(s, est, cons, svyadjust=not o.get("nosvyadjust"))
 
 
 def _coef_names(s: "Session", est: Estimates, text: str) -> list[str]:
@@ -575,7 +598,7 @@ def cmd_testparm(s: "Session", args: str) -> None:
             cons.append(({idx[0]: -1.0, j: 1.0}, 0.0))
     else:
         cons = [({i: 1.0}, 0.0) for i in idx]
-    _wald(s, est, cons)
+    _wald(s, est, cons, svyadjust=not o.get("nosvyadjust"))
 
 
 def cmd_lincom(s: "Session", args: str) -> None:

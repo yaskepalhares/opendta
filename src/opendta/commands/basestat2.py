@@ -476,6 +476,8 @@ def ladder_table(x: np.ndarray, adjust: bool = True):
 @command("ladder", "ladder", byable=True)
 def cmd_ladder(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"generate": 1, "noadjust": 3, "histogram": 4}) \
         if p.options.strip() else {}
     v = numeric_vars(s, p.varlist, allow_string=False)[0]

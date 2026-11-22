@@ -1,0 +1,275 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2007_probe_dataset_state.log
+  log type:  text
+ opened on:  21 Nov 2026, 10:27:26
+
+. * Probe (survey): c(changed), c(sortlist), long value-label names, number and date formats.
+. version 14
+
+. set more off
+
+. clear
+
+. set seed 5
+
+. set obs 50
+number of observations (_N) was 0, now 50
+
+. gen id = _n
+
+. gen g = mod(_n,3)
+
+. gen x = round(invnormal(runiform()),.01)
+
+. gen str20 s = "abc"
+
+. label define rotulo_valor_muito_longo_30ch 0 "zero com texto bem comprido para testar quebra" 1 "um" 2 "dois"
+
+. label values g rotulo_valor_muito_longo_30ch
+
+. save "odta_probe_state.dta", replace
+(note: file odta_probe_state.dta not found)
+file odta_probe_state.dta saved
+
+. display "after save: changed=" c(changed)
+after save: changed=0
+
+. use id x using "odta_probe_state.dta", clear
+
+. display "use varlist using: changed=" c(changed)
+use varlist using: changed=0
+
+. use "odta_probe_state.dta", clear
+
+. display "use: changed=" c(changed)
+use: changed=0
+
+. capture noisily display "c(sortlist)=[" c(sortlist) "]"
+c(sortlist)=[c(sortlist) undefined
+
+. display "  rc=" _rc
+  rc=133
+
+. sort g g x
+
+. display "sort g g x: changed=" c(changed)
+sort g g x: changed=0
+
+. describe, short
+
+Contains data from odta_probe_state.dta
+  obs:            50                          
+ vars:             4                          21 Nov 2026 10:27
+ size:         1,600                          
+Sorted by: g  g  x
+
+. save "odta_probe_state.dta", replace
+file odta_probe_state.dta saved
+
+. compress
+  variable id was float now byte
+  variable g was float now byte
+  variable s was str20 now str3
+  (1,150 bytes saved)
+
+. display "compress (nothing to do): changed=" c(changed)
+compress (nothing to do): changed=0
+
+. keep if id > 0
+(0 observations deleted)
+
+. display "keep (all kept): changed=" c(changed)
+keep (all kept): changed=0
+
+. save "odta_probe_state.dta", replace
+file odta_probe_state.dta saved
+
+. preserve
+
+. replace x = 1
+(50 real changes made)
+
+. restore
+
+. display "preserve/restore: changed=" c(changed)
+preserve/restore: changed=0
+
+. merge 1:1 id using "odta_probe_state.dta"
+(label rotulo_valor_muito_longo_30ch already defined)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                                50  (_merge==3)
+    -----------------------------------------
+
+. display "merge: changed=" c(changed)
+merge: changed=1
+
+. drop _merge
+
+. save "odta_probe_state.dta", replace
+file odta_probe_state.dta saved
+
+. append using "odta_probe_state.dta"
+(label rotulo_valor_muito_longo_30ch already defined)
+
+. display "append: changed=" c(changed)
+append: changed=1
+
+. use "odta_probe_state.dta", clear
+
+. describe
+
+Contains data from odta_probe_state.dta
+  obs:            50                          
+ vars:             4                          21 Nov 2026 10:27
+ size:           450                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+id              byte    %9.0g                 
+g               byte    %46.0g     rotulo_valor_muito_longo_30ch
+                                              
+x               float   %9.0g                 
+s               str3    %9s                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: id
+
+. tab g
+
+                                      g |      Freq.     Percent        Cum.
+----------------------------------------+-----------------------------------
+zero com texto bem comprido para testar |         16       32.00       32.00
+                                     um |         17       34.00       66.00
+                                   dois |         17       34.00      100.00
+----------------------------------------+-----------------------------------
+                                  Total |         50      100.00
+
+. tab g, missing
+
+                                      g |      Freq.     Percent        Cum.
+----------------------------------------+-----------------------------------
+zero com texto bem comprido para testar |         16       32.00       32.00
+                                     um |         17       34.00       66.00
+                                   dois |         17       34.00      100.00
+----------------------------------------+-----------------------------------
+                                  Total |         50      100.00
+
+. tabstat x, by(g) stat(mean sd n)
+
+Summary for variables: x
+     by categories of: g 
+
+               g |      mean        sd         N
+-----------------+------------------------------
+zero com texto b |  -.278125  .7435072        16
+              um |  .3882353  .9404071        17
+            dois | -.5517647  1.142121        17
+-----------------+------------------------------
+           Total |    -.1446  1.022632        50
+------------------------------------------------
+
+. list in 1/3
+
+     +-------------------------------------------------------------------+
+     | id                                                g       x     s |
+     |-------------------------------------------------------------------|
+  1. |  1                                               um     .45   abc |
+  2. |  2                                             dois   -1.77   abc |
+  3. |  3   zero com texto bem comprido para testar quebra    -.75   abc |
+     +-------------------------------------------------------------------+
+
+. label list
+rotulo_valor_muito_longo_30ch:
+           0 zero com texto bem comprido para testar quebra
+           1 um
+           2 dois
+
+. set linesize 255
+
+. tab g s
+
+                      |     s
+                    g |       abc |     Total
+----------------------+-----------+----------
+zero com texto bem co |        16 |        16 
+                   um |        17 |        17 
+                 dois |        17 |        17 
+----------------------+-----------+----------
+                Total |        50 |        50 
+
+
+. gen double big = 123456789012 * _n
+
+. format big %15.0fc
+
+. list big in 1/3
+
+     +-----------------+
+     |             big |
+     |-----------------|
+  1. | 123,456,789,012 |
+  2. | 246,913,578,024 |
+  3. | 370,370,367,036 |
+     +-----------------+
+
+. capture noisily gen m = ym(2020,1) + _n
+
+. capture noisily format m %tm
+
+. capture noisily list m in 1/2
+
+     +--------+
+     |      m |
+     |--------|
+  1. | 2020m2 |
+  2. | 2020m3 |
+     +--------+
+
+. gen d = mdy(1,1,2020) + _n
+
+. format d %td
+
+. list d in 1/2
+
+     +-----------+
+     |         d |
+     |-----------|
+  1. | 02jan2020 |
+  2. | 03jan2020 |
+     +-----------+
+
+. format d %tdDay,_DD_Mon_CCYY
+
+. list d in 1/2
+
+     +------------------+
+     |                d |
+     |------------------|
+  1. | Thu, 02 Jan 2020 |
+  2. | Fri, 03 Jan 2020 |
+     +------------------+
+
+. format d %tdnn/dd/CCYY
+
+. list d in 1/2
+
+     +----------+
+     |        d |
+     |----------|
+  1. | 1/2/2020 |
+  2. | 1/3/2020 |
+     +----------+
+
+. erase "odta_probe_state.dta"
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2007_probe_dataset_state.log
+  log type:  text
+ closed on:  21 Nov 2026, 10:27:26
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

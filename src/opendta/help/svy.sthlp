@@ -60,3 +60,6 @@ variance relative to sampling with replacement).
 BRR without replicate weights uses Hadamard matrices of order 4, 8, 16...
 Stata may use other orders (12, 20...), giving a different number of
 replicates for some numbers of strata.
+
+{pstd}
+{cmd:svydes} is the earlier name of {cmd:svydescribe}.

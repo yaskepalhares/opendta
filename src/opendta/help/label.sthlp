@@ -12,13 +12,14 @@
 {p 8 16 2}{cmd:label define} {it:lblname} {it:#} {cmd:"}{it:text}{cmd:"} [...] [{cmd:,} {opt add} {opt modify} {opt replace}]{p_end}
 {p 8 16 2}{cmd:label values} {it:varlist} [{it:lblname}|{cmd:.}]{p_end}
 {p 8 16 2}{cmd:label list} [{it:lblnames}]  |  {cmd:label dir}  |  {cmd:label drop} {it:lblnames}|{cmd:_all}{p_end}
+{p 8 16 2}{cmd:numlabel} [{it:lblnames}]{cmd:,} {opt add}|{opt remove} [{opt mask(str)} {opt force}]{p_end}
 {p 8 16 2}{cmd:notes} [{it:evarname}]{cmd::} {it:text}  |  {cmd:notes} [{cmd:list}]  |  {cmd:notes drop} ...{p_end}
 {p 8 16 2}{cmd:char} {it:evarname}{cmd:[}{it:charname}{cmd:]} [{it:text}]  |  {cmd:char list}{p_end}
 
 {title:Description}
 
 {pstd}
-Labels describe the data and are saved with the {cmd:.dta} file. Value labels attach text to numeric codes and are shown by {cmd:list}, {cmd:tabulate} and the Data Editor. {cmd:notes} and {cmd:char} keep notes and characteristics.
+Labels describe the data and are saved with the {cmd:.dta} file. Value labels attach text to numeric codes and are shown by {cmd:list}, {cmd:tabulate} and the Data Editor. {cmd:notes} and {cmd:char} keep notes and characteristics. {cmd:numlabel} puts each value in front of its label ({cmd:mask()} is "#. " by default) or removes it.
 {p_end}
 
 {title:Examples}

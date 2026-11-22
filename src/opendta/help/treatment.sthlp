@@ -25,3 +25,6 @@ Binary treatments, and in {cmd:teffects ra}, {cmd:ipw}, {cmd:ipwra} and {cmd:aip
 
 {pstd}
 Not available: multivalued treatments in the matching estimators, other outcome models, {cmd:stteffects wra}, {cmd:predict} after {cmd:teffects}.
+
+{pstd}
+{cmd:treatreg} is the name of {cmd:etregress} in earlier versions of Stata; it still runs.

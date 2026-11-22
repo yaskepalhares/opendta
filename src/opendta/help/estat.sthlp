@@ -11,6 +11,7 @@
 {p 8 16 2}{cmd:estat summarize} [{it:varlist}]{p_end}
 {p 8 16 2}{cmd:estat hettest} [{it:varlist}] [{cmd:,} {cmd:rhs} {cmd:iid} {cmd:fstat}]  (after {cmd:regress}){p_end}
 {p 8 16 2}{cmd:estat ovtest} [{cmd:,} {cmd:rhs}]  (after {cmd:regress}){p_end}
+{p 8 16 2}{cmd:estat vif} [{cmd:,} {cmd:uncentered}]  (after {cmd:regress}){p_end}
 {p 8 16 2}{cmd:estat classification} [{cmd:,} {cmd:cutoff(}{it:#}{cmd:)}]  (after {cmd:logit}, {cmd:logistic}, {cmd:probit}){p_end}
 {p 8 16 2}{cmd:estat gof} [{cmd:,} {cmd:group(}{it:#}{cmd:)}]  (after {cmd:logit}, {cmd:logistic}, {cmd:probit}){p_end}
 
@@ -25,7 +26,17 @@ the fitted values and the normal-errors version; {cmd:iid} uses N R2 from the
 regression of the squared residuals.{p_end}
 {phang}{cmd:estat ovtest}: Ramsey RESET test with the 2nd to 4th powers of the
 standardized fitted values.{p_end}
+{phang}{cmd:estat vif}: variance inflation factors, 1/(1 - R2) of the regression of
+each covariate on the others; {cmd:uncentered} uses the uncentered R2 (needed after
+{cmd:regress, noconstant}).{p_end}
 {phang}{cmd:estat classification}: classification table and sensitivity,
 specificity and predictive values at the cutoff (default .5).{p_end}
 {phang}{cmd:estat gof}: Pearson chi-squared over covariate patterns, or the
 Hosmer-Lemeshow test with {cmd:group()}.{p_end}
+
+{title:Earlier names}
+
+{p 4 4 2}
+{cmd:hettest}, {cmd:ovtest}, {cmd:vif} and {cmd:lstat} are the names of {cmd:estat hettest},
+{cmd:estat ovtest}, {cmd:estat vif} and {cmd:estat classification} in earlier versions of
+Stata; they still run.

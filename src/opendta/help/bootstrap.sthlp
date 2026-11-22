@@ -22,7 +22,17 @@
 {it:name}{cmd:=}{it:exp} or {cmd:(}{it:name}{cmd::} {it:exp}{cmd:)}. Without
 {it:exp_list}, an estimation command is bootstrapped with {cmd:_b}.
 
+{p 8 16 2}
+{cmd:bsample} [{it:exp}] [{it:if}] [{it:in}] [{cmd:,} {opt str:ata(varlist)} {opt cl:uster(varlist)} {opt id:cluster(newvar)} {opt weight(varname)}]
+
 {title:Description}
+
+{pstd}
+{cmd:bsample} replaces the data with a bootstrap sample of size {it:exp} (default: all the
+observations, or all the clusters with {cmd:cluster()}), drawn with replacement within the
+strata; {cmd:idcluster()} numbers the drawn clusters, and {cmd:weight()} keeps the data and
+stores in {it:varname} how many times each observation was drawn.
+{p_end}
 
 {pstd}
 {cmd:bootstrap} runs {it:command} on the data once, then {cmd:reps()} times

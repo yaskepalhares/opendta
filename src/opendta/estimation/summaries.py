@@ -348,17 +348,34 @@ def summary_table(s: "Session", column: str, labels, vals, se, df, level, vcetyp
     out.write("-" * width + "\n", "text")
 
 
+def _replay(s: "Session", cmd: str, args: str) -> bool:
+    """Without a varlist the command shows its last results (compat 2005: prop -> r(301))."""
+    if args.strip() and not args.strip().startswith(","):
+        return False
+    from .postest import replay
+    replay(s, cmd, args)
+    return True
+
+
 def cmd_mean(s: "Session", args: str) -> None:
+    if _replay(s, "mean", args):
+        return
     summary_stat(s, "mean", args)
 
 
 def cmd_proportion(s: "Session", args: str) -> None:
+    if _replay(s, "proportion", args):
+        return
     summary_stat(s, "proportion", args)
 
 
 def cmd_total(s: "Session", args: str) -> None:
+    if _replay(s, "total", args):
+        return
     summary_stat(s, "total", args)
 
 
 def cmd_ratio(s: "Session", args: str) -> None:
+    if _replay(s, "ratio", args):
+        return
     summary_stat(s, "ratio", args)

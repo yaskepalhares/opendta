@@ -55,6 +55,12 @@ def _adjusted_F(b, V, idx, d):
     return F, k, d - k + 1
 
 
+def adjusted_wald(W: float, q: int, d: float) -> tuple[float, float]:
+    """Adjusted Wald F of q restrictions with design df d: F = (d - q + 1) W / (d q) on
+    (q, d - q + 1) degrees of freedom ([SVY] svy postestimation, Methods and formulas)."""
+    return (d - q + 1) / (d * q) * W, d - q + 1
+
+
 def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     d = require_design(s)
     ds = s.data
@@ -153,13 +159,17 @@ def svy_model(s: "Session", cmd: str, args: str, svyopts: str) -> None:
     est.level = smp.level
     est.vcetype = dd.vcetype
     est.ml_cmd = cmd if cmd != "regress" else "regress"
+    if cmd != "regress":
+        # e(b) of svy: poisson/logit has the equation named after the depvar ([pc]ano in lincom
+        # and test, compat 2004); svy: regress has none
+        est.eqnames = [smp.depname] * kk
     N = int(est_mask.sum())
     pop = float(dd.w[est_mask[full]].sum())
     est.extra = dict(N=N, pop=pop, df=df, F=F, df1=df1, df2=df2, strata=dd.n_strata, psu=dd.n_psu, n_rep=n_rep,
                      sub=(int(inside.sum()), float(w.sum())) if subpop is not None else None, **extra)
     est.display = _display
     est.svy_effects = dict(V=Vf, srs=(Swor, Swr), labels=[(nm, "") for nm in names], vals=bf, title="Coef.",
-                           vcetype=dd.vcetype, over="", level=smp.level, depvar=smp.depname)
+                           vcetype=dd.vcetype, over="", level=smp.level, depvar=smp.depname, rows=est.rows)
     eform = ""
     if cmd == "logistic" and not smp.o.get("coef"):
         eform = "Odds Ratio"

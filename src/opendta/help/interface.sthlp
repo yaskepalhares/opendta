@@ -11,9 +11,17 @@
 {p 8 16 2}{cmd:edit} [{it:varlist}] [{it:if}] [{it:in}]{p_end}
 {p 8 16 2}{cmd:varmanage}  |  {cmd:doedit} [{it:filename}]{p_end}
 {p 8 16 2}{cmd:help} [{it:topic}]  |  {cmd:search} {it:word}  |  {cmd:view} {it:filename}{p_end}
+{p 8 16 2}{cmd:query} [{it:category}]  |  {cmd:set_defaults} {it:category}|{cmd:_all}{p_end}
 {p 8 16 2}{cmd:about}  |  {cmd:creturn list}  |  {cmd:clear} [{cmd:all}|{cmd:results}|{cmd:programs}|{cmd:mata}]{p_end}
 
 {title:Description}
+
+{pstd}
+{cmd:query} lists the settings of a category ({cmd:memory}, {cmd:output}, {cmd:interface},
+{cmd:graphics}, {cmd:efficiency}, {cmd:network}, {cmd:update}, {cmd:trace}, {cmd:mata},
+{cmd:unicode}, {cmd:other}) or all of them; {cmd:set_defaults} puts the settings of a category
+back to their default values. {cmd:creturn list} shows every {cmd:c()} value.
+{p_end}
 
 {pstd}
 {cmd:browse} and {cmd:edit} open the Data Editor, read-only or editable (each edit becomes a command in Results and Review). {cmd:varmanage} opens the Variables Manager; {cmd:doedit} the Do-file Editor; {cmd:help} and {cmd:view} the Viewer.

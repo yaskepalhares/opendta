@@ -520,7 +520,16 @@ def cmd_merge(s: "Session", args: str) -> None:
         new.vars.append(Variable(genname, "byte", codes.astype(np.float64), fmt="%23.0g",
                                  value_label="_merge"))
         new.value_labels["_merge"] = dict(_MERGE_LABELS)
-    new.sortlist = []          # Stata 14 does not mark the result as sorted
+    if not by_n:
+        # the master observations go in key order, even when the master was sorted by something
+        # else (compat 2007; VERIFY the order within a key in m:1 and 1:m)
+        from ..core.sorting import sort_order
+        order = sort_order(new, list(keys))
+        order = np.concatenate([order[codes[order] != 2], np.flatnonzero(codes == 2)])
+        if not np.array_equal(order, np.arange(new.nobs)):
+            new.reorder_obs(order)
+            codes, keep = codes[order], keep[order]
+    new.sortlist = []
     new.changed = True
     if opts.get("assert") not in (None, True):
         allowed = _results(str(opts["assert"]))
@@ -532,6 +541,10 @@ def cmd_merge(s: "Session", args: str) -> None:
     if not keep.all():
         new.keep_obs(keep)
         codes = codes[keep]
+    if not by_n and not (codes == 2).any():
+        # the result is in key order with the using-only observations at the end; with none of
+        # them, Stata 14 marks it as sorted by the keys (compat 0308 and 2007)
+        new.sortlist = list(keys)
     s.data = new
     if not opts.get("noreport"):
         _report(s, codes, None if nogen else genname, update)

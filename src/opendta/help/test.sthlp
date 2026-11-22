@@ -25,3 +25,6 @@
 {phang2}{cmd:. testparm i.g}{p_end}
 {phang2}{cmd:. lincom x1 + x2}{p_end}
 {phang2}{cmd:. nlcom ratio: _b[x1]/_b[x2]}{p_end}
+
+{pstd}
+{cmd:svylc} {it:exp} is the name of {cmd:lincom} after {cmd:svy} in earlier versions of Stata.

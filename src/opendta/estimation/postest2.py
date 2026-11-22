@@ -415,7 +415,12 @@ def cmd_contrast(s: "Session", args: str) -> None:
             labels = []
         joint, rank = _wald_L(L, m, Vm)
         results.append((tok, labels, L, m, Vm, joint, rank))
+    svy = bool(df_r) and s.e.get("prefix") == "svy"
     out.write("\nContrasts of marginal linear predictions\n\n", "text")
+    if svy:
+        # after svy: the design df in the header, adjusted F and a "Design" row (compat 2004)
+        out.write(f"{'':48}{'Design df':<18}= ", "text")
+        out.write(f"{int(df_r):>10}\n\n", "result")
     out.write(f"Margins      : {'asbalanced' if asbal else 'asobserved'}\n\n", "text")
     hdr = f"{'df':>11}{stat_name:>12}{'P>' + stat_name:>11}"
     width = 13 + 1 + 34
@@ -424,7 +429,12 @@ def cmd_contrast(s: "Session", args: str) -> None:
     out.write("-" * 13 + "+" + "-" * 34 + "\n", "text")
 
     def line(label: str, df: int, w: float) -> None:
-        if df_r:
+        if svy:
+            from .svyreg import adjusted_wald
+            f_, d2 = adjusted_wald(w, df, df_r)
+            pv = float(st.f.sf(f_, df, d2))
+            val = f_
+        elif df_r:
             f_ = w / df
             pv = float(st.f.sf(f_, df, df_r))
             val = f_
@@ -444,10 +454,15 @@ def cmd_contrast(s: "Session", args: str) -> None:
             line(lab, rk, w)
             eff_rows.append((lab, float(row @ m), float(np.sqrt(max(row @ Vm @ row, 0)))))
         line("Joint", rank, joint)
-    out.write(f"{'':>13}|\n", "text")
-    if df_r:
-        out.write(f"{'Denominator':>12} |{int(df_r):>11}\n", "text")
-    out.write("-" * width + "\n", "text")
+    if svy:
+        out.write(f"{'Design':>12} |{int(df_r):>11}\n", "text")
+        out.write("-" * width + "\n", "text")
+        out.write("Note: F statistics are adjusted for the survey\n      design.\n", "text")
+    else:
+        out.write(f"{'':>13}|\n", "text")
+        if df_r:
+            out.write(f"{'Denominator':>12} |{int(df_r):>11}\n", "text")
+        out.write("-" * width + "\n", "text")
     if o.get("effects") and eff_rows:
         out.write("\n", "text")
         rws = [CoefRow("coef", lab, b_, se_) for lab, b_, se_ in eff_rows]
@@ -504,7 +519,9 @@ def _adjust(method: str, tval: float, df, m: int, k: int, level: float):
 
 
 def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarray, Vm: np.ndarray,
-                    df, o: dict, lev: float, title_lines: list[str], lhs: str = "") -> None:
+                    df, o: dict, lev: float, title_lines: list[str], lhs: str = "", eq: str = "") -> None:
+    """eq: after svy, the equation row above the term and the method label even without an
+    adjustment (compat 2004)."""
     out = s.output
     method = str(o.get("mcompare") or "noadjust").lower()
     k = len(labels)
@@ -544,10 +561,12 @@ def _pairwise_table(s: "Session", term: str, labels: list[str], means: np.ndarra
         out.write(f"{lhs:>12} |   Contrast   Std. Err.      {'t' if df else 'z'}    P>|{'t' if df else 'z'}|     "
                   f"[{lv}% Conf. Interval]\n", "text")
     else:
-        if adj:
+        if adj or eq:
             out.write(f"{'':>13}|{' ' * (38 - (len(tag) + 1) // 2)}{tag}\n", "text")
         out.write(f"{lhs:>12} |   Contrast   Std. Err.     [{lv}% Conf. Interval]\n", "text")
     out.write("-" * 13 + "+" + "-" * (cw - 14) + "\n", "text")
+    if eq:
+        out.write(f"{eq:<13}|\n", "text")
     out.write(f"{term:>12} |\n", "text")
     for lab, d, se, tv, p, c in rows:
         out.write(f"{lab + ' ':>12} |", "text")
@@ -579,9 +598,13 @@ def cmd_pwcompare(s: "Session", args: str) -> None:
         Vm = A @ np.asarray(est.V, dtype=float) @ A.T
         m = A @ np.asarray(est.b, dtype=float)
         labels = ["#".join(_label_level(s, v, lv) for v, lv in zip(vars_, c)) for c in cells]
-        head = ["\nPairwise comparisons of marginal linear predictions\n\n",
-                f"Margins      : {'asbalanced' if asbal else 'asobserved'}\n\n"]
-        _pairwise_table(s, "#".join(vars_), labels, m, Vm, df, o, lev, head)
+        svy = bool(df) and s.e.get("prefix") == "svy"
+        head = ["\nPairwise comparisons of marginal linear predictions\n\n"]
+        if svy:
+            head.append(f"{'':48}{'Design df':<18}= {int(df):>10}\n\n")
+        head.append(f"Margins      : {'asbalanced' if asbal else 'asobserved'}\n\n")
+        _pairwise_table(s, "#".join(vars_), labels, m, Vm, df, o, lev, head,
+                        eq=est.depvar if svy else "")
 
 
 def cells_of(s: "Session", overs: list[str], mask: np.ndarray):

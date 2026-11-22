@@ -22,7 +22,7 @@ from ..lazy import lazy
 from ._util import eval_vector, touse
 from .nptests import _groups, _set_r
 from .registry import command
-from .summarize import _corr_table, name12, numeric_vars, weights
+from .summarize import _corr_table, g9, name12, numeric_vars, weights
 
 st = lazy("scipy.stats")
 
@@ -138,6 +138,8 @@ def _ties_note(s: "Session", x: np.ndarray, what: str) -> None:
 @command("ksmirnov", "ksmirnov")
 def cmd_ksmirnov(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"by": 2, "exact": 1}) if p.options.strip() else {}
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
     mask = touse(s, p) & S.valid(v.data)
@@ -329,6 +331,8 @@ def cmd_nptrend(s: "Session", args: str) -> None:
 @command("runtest", "runtest")
 def cmd_runtest(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"threshold": 1, "continuity": 1, "drop": 1, "split": 1}) \
         if p.options.strip() else {}
     v = numeric_vars(s, p.varlist, allow_string=False)[0]
@@ -552,3 +556,42 @@ def cmd_pcorr(s: "Session", args: str) -> None:
     col = lambda a: Matrix(np.asarray(a, dtype=float).reshape(-1, 1).copy(), names, ["c1"])  # noqa: E731
     s.r = {"N": nobs, "df": float(res["df"]), "p_corr": col(res["partial"]),
            "sp_corr": col(res["semipartial"])}
+
+
+# ---------------------------------------------------------------------------
+# robvar ([R] sdtest)
+# ---------------------------------------------------------------------------
+
+@command("robvar")
+def cmd_robvar(s: "Session", args: str) -> None:
+    """robvar varname [if] [in], by(groupvar): the summary table of tabulate, summarize() and
+    Levene's W0 with Brown and Forsythe's W50 and W10 (layout and r() of compat 2008)."""
+    from .registry import REGISTRY
+    p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")   # compat 2005
+    o = match_options(p.options, {"by": 2})
+    if not o.get("by"):
+        raise StataError(198, "option by() required")
+    v = numeric_vars(s, p.varlist, allow_string=False)
+    if len(v) > 1:
+        raise StataError(103, "too many variables specified")
+    v = v[0]
+    by = s.expand_varlist(str(o["by"]))[0]
+    g = s.data.get(by)
+    mask = touse(s, p) & S.valid(v.data) & (g.data != "" if g.is_string else g.data < SYS)
+    cond = " ".join(x for x in (p.if_ and f"if {p.if_}", p.in_ and f"in {p.in_}") if x)
+    REGISTRY["tabulate"].fn(s, f"{by} {cond}, summarize({v.name})")
+    gv = g.data[mask]
+    if len(np.unique(gv)) < 2:
+        raise StataError(420, "1 group found, 2 required")   # VERIFY
+    r = B.robvar(v.data[mask].astype(float), np.asarray(gv))
+    out = s.output
+    df = f"df({int(r['df_1'])}, {int(r['df_2'])})"
+    from ..core.formats import format_value
+    for lab, k in (("W0 ", "w0"), ("W50", "w50"), ("W10", "w10")):
+        w = format_value(r[k], "%10.0g")   # compat 2008: 7.5583963
+        out.write(f"\n{lab} = {w}   {df:<13} Pr > F = {r['p_' + k]:.8f}\n", "result")
+    # return list shows N w10 p_w10 w50 p_w50 w0 p_w0 df_1 df_2 (compat 2008)
+    _set_r(s, [("N", float(mask.sum()))] + [(k, r[k]) for k in
+               ("w10", "p_w10", "w50", "p_w50", "w0", "p_w0", "df_1", "df_2")])

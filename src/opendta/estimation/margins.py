@@ -238,8 +238,19 @@ def cmd_margins(s: "Session", args: str) -> None:
                 ov[var] = np.full(len(rows), float(val))
         return ov
 
+    # after svy: the margins are averages weighted by the sampling weights (compat 2004)
+    wv = None
+    if s.e.get("prefix") == "svy":
+        from .svy import get_design
+        d_ = get_design(ds)
+        if d_ is not None and d_.weight and d_.weight in ds.names:
+            wv = ds.get(d_.weight).data[rows].astype(float)
+
+    def avg(x):
+        return float(np.average(x, weights=wv)) if wv is not None else float(np.mean(x))
+
     def margin_fn(ov):
-        return lambda bb: float(np.mean(f(_xb(s, est, bb, rows, ov), bb)))
+        return lambda bb: avg(f(_xb(s, est, bb, rows, ov), bb))
 
     factor_vars = {c.var for t in est.terms for c in t.comps if c.factor}
     for ai, at in enumerate(ats):
@@ -280,7 +291,7 @@ def cmd_margins(s: "Session", args: str) -> None:
                         d = d * x
                     elif dydx_kind == "eydx":
                         d = d / f(_xb(s, est, bb, rows, ov0), bb)
-                    return float(np.mean(d))
+                    return avg(d)
                 results.append(("", var, fn, at_lab))
         elif terms:
             for t in terms:
@@ -298,6 +309,10 @@ def cmd_margins(s: "Session", args: str) -> None:
                     results.append((head, lab, margin_fn(ov), at_lab))
         else:
             results.append(("", "_cons", margin_fn(ov0), at_lab))
+    if len(ats) > 1 and any(h for h, *_ in results) and not dydx_vars:
+        # margins faixa, at(...): one _at#faixa block per term, _at outermost (compat 2004)
+        heads = list(dict.fromkeys(h for h, *_ in results))
+        results.sort(key=lambda r_: heads.index(r_[0]))
     vals = np.array([fn(b) for _, _, fn, _ in results])
     J = np.vstack([_jacobian(fn, b) for _, _, fn, _ in results])
     Vm = J @ V @ J.T
@@ -310,9 +325,11 @@ def cmd_margins(s: "Session", args: str) -> None:
         title = "Adjusted predictions"
     else:
         title = "Predictive margins"
+    svy = s.e.get("prefix") == "svy"
     vce_label = {"regress": "OLS"}.get(est.cmd, "Robust" if est.vcetype else "OIM")
     if est.vcetype:
-        vce_label = "Robust"
+        # after svy: the design VCE (Linearized, compat 2004; VERIFY the replication methods)
+        vce_label = est.vcetype if svy else "Robust"
     out.write("\n", "text")
     out.write(f"{title:<48}{'Number of obs':<18}= ", "text")
     out.write(f"{len(rows):>10,}\n", "result")
@@ -331,6 +348,8 @@ def cmd_margins(s: "Session", args: str) -> None:
         _at_legend(s, est, ats, means, rows, atmeans)
     out.write("\n", "text")
     stat = "t" if (est.df_r and getattr(est, "cmd", "") != "tobit") else "z"      # VERIFY: z after tobit (compat 1903)
+    if svy and est.cmd != "regress":
+        stat = "z"   # z after svy: poisson (compat 2004); VERIFY svy: logit and the other svy models
     rws = []
     last_head = None
     multi_at = len(ats) > 1
@@ -341,6 +360,8 @@ def cmd_margins(s: "Session", args: str) -> None:
                 last_head = "_at"
             rws.append(CoefRow("coef", f"{at_lab} ", vals[i], se[i]))
             continue
+        if head and multi_at and not dydx_vars:
+            head, lab = f"_at#{head}", f"{at_lab} {lab}"
         if head:
             if head != last_head:
                 if rws and rws[-1].kind != "blank":
@@ -364,6 +385,9 @@ def cmd_margins(s: "Session", args: str) -> None:
         out.write("Note: dy/dx for factor levels is the discrete change from the base level.\n", "text")
     from ..commands.matrix import Matrix
     names = [f"{lab}.{h}" if h else lab for h, lab, *_ in results]
+    if multi_at and not dydx_vars:
+        names = [f"{a}._at#" + "#".join(f"{lv}.{v}" for lv, v in zip(lab.split("#"), h.split("#")))
+                 if h else nm for nm, (h, lab, _f, a) in zip(names, results)]   # VERIFY r(b) names
     km = len(results)
     c = crit(stat, lev, est.df_r)
     tvals = np.where(se > 0, vals / np.where(se > 0, se, 1), SYS)
@@ -401,7 +425,7 @@ def cmd_margins(s: "Session", args: str) -> None:
     r["table"] = Matrix(table, ["b", "se", "z" if stat == "z" else "t", "pvalue", "ll", "ul", "df", "crit",
                                 "eform"], names)
     r["title"] = title
-    r["model_vce"] = {"regress": "ols"}.get(est.cmd, "robust" if est.vcetype else "oim")
+    r["model_vce"] = vce_label.lower()   # VERIFY "linearized" after svy
     r["vce"] = "delta"
     r["vcetype"] = "Delta-method"
     if terms:
@@ -540,12 +564,15 @@ def cmd_nlcom(s: "Session", args: str) -> None:
 
         def fn(bb):
             def rep(m):
-                kind, name = m.group(1), m.group(2)
-                idx = _coef_index(est, s, name)
+                eq, kind, name = m.group(1) or "", m.group(2), m.group(3)
+                if ":" in name and not eq:
+                    eq, name = name.split(":", 1)
+                idx = _coef_index(est, s, name, eq.strip())
                 if kind == "_se":
                     return repr(float(np.sqrt(max(est.V[idx, idx], 0))))
                 return f"({float(bb[idx])!r})"
-            t = re.sub(r"(_b|_coef|_se)\[([^\]]+)\]", rep, expr)
+            # _b[x], _b[eq:x] and [eq]_b[x] (compat 2004)
+            t = re.sub(r"(?:\[([^\]]+)\]\s*)?(_b|_coef|_se)\[([^\]]+)\]", rep, expr)
             v = s.eval(t)
             return float(v)
         return fn

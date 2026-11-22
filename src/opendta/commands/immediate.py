@@ -243,6 +243,31 @@ def cmd_ttesti(s: "Session", args: str) -> None:
     raise StataError(198, "invalid syntax")
 
 
+@command("sdtesti")
+def cmd_sdtesti(s: "Session", args: str) -> None:
+    """sdtesti #obs mean sd #val | #obs1 mean1 sd1 #obs2 mean2 sd2 [, level(#)]."""
+    from .nptests import sd_one, sd_two_groups
+    words, opt = _split(args)
+    o = match_options(opt, {"level": 1})
+    level = _level(s, o)
+    if len(words) not in (4, 6):
+        raise StataError(198, "either four arguments for a one-sample test or six arguments "
+                              "for a two-sample test must be specified")   # compat 2005
+    vals = _nums(words)
+    if len(vals) == 4:
+        n, mean, sd, sd0 = vals
+        if n < 2:
+            raise StataError(2001, "insufficient observations")
+        # the immediate form leaves the name column without a heading (compat 2008)
+        sd_one(s, "x", _synthetic(int(n), mean, sd), sd0, level, head="")
+        return
+    n1, m1, sd1, n2, m2, sd2 = vals
+    if min(n1, n2) < 2:
+        raise StataError(2001, "insufficient observations")
+    sd_two_groups(s, ("x", "y"), _synthetic(int(n1), m1, sd1), _synthetic(int(n2), m2, sd2), level,
+                  head="")
+
+
 @command("prtesti", "prtesti")
 def cmd_prtesti(s: "Session", args: str) -> None:
     words, opt = _split(args)

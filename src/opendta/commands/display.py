@@ -42,7 +42,8 @@ def cmd_display(s: "Session", args: str) -> None:
     text = args
     n = len(text)
 
-    # output is accumulated and written only at the end: if there is an error, nothing appears
+    # output is accumulated and written only at the end; when an expression fails, what
+    # came before goes in front of the message
     pending: list[tuple[str, str]] = []
     col = out.column
     last_literal: str | None = None
@@ -152,6 +153,11 @@ def cmd_display(s: "Session", args: str) -> None:
             # (VERIFY a regra geral desta mensagem)
             if e.rc == 198 and last_literal is not None and rest.lstrip().startswith("+"):
                 raise StataError(198, f'{last_literal}{"".join(rest.split())} invalid name')
+            # what came before stays on screen and the message follows on the same line:
+            # display "[" c(nao_existe) "]" shows [c(nao_existe) undefined (compat 2003; VERIFY
+            # for errors other than r(133))
+            if pending and "\n" not in "".join(p for p, _ in pending):
+                e.message = "".join(p for p, _ in pending) + e.message
             raise
         consumed = p.offset
         if consumed == 0:

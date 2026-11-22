@@ -11,6 +11,7 @@
 {cmd:pause} {c -(}{cmd:on} | {cmd:off} | [{it:message}]{c )-}{break}
 {cmd:sleep} {it:#}{break}
 {cmd:viewsource} {it:filename}{break}
+{cmd:rcof} {cmd:"}[{cmd:noisily}] {it:command}{cmd:"} {it:rc_condition}{break}
 {cmd:program} {it:handle}{cmd:, plugin} [{cmd:using(}{it:filespec}{cmd:)}]{break}
 {cmd:window} {c -(}{cmd:fopen} | {cmd:fsave}{c )-} {it:macroname} {cmd:"}{it:title}{cmd:"}
 {cmd:"}{it:filter}{cmd:"} [{it:extension}]{break}
@@ -18,6 +19,10 @@
 {cmd:window} {c -(}{cmd:push} | {cmd:manage} | {cmd:menu}{c )-} ...
 
 {title:Description}
+
+{pstd}
+{cmd:rcof} runs a command under {cmd:capture} and stops with {cmd:r(9)} unless its return code
+meets the condition, as in {cmd:rcof "noisily regress" == 301}.
 
 {pstd}
 With {cmd:pause on}, a {cmd:pause} {it:message} inside a program shows the message and

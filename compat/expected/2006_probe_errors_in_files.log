@@ -1,0 +1,115 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2006_probe_errors_in_files.log
+  log type:  text
+ opened on:  21 Nov 2026, 10:22:25
+
+. * Probe (survey): commands that must fail with a Stata error code (not abort) under capture.
+. * In OpenDTA several of these raised Python exceptions. Each block is independent.
+. version 14
+
+. set more off
+
+. clear
+
+. display "=== bare commands that need arguments"
+=== bare commands that need arguments
+
+. foreach c in ksmirnov ladder prtest runtest sdtest {
+  2.     capture noisily `c'
+  3.     display "  rc=" _rc " for `c'"
+  4. }
+varlist required
+  rc=100 for ksmirnov
+varlist required
+  rc=100 for ladder
+varlist required
+  rc=100 for prtest
+varlist required
+  rc=100 for runtest
+varlist required
+  rc=100 for sdtest
+
+. display "=== file operations on a folder that does not exist"
+=== file operations on a folder that does not exist
+
+. set obs 5
+number of observations (_N) was 0, now 5
+
+. gen x = _n
+
+. capture noisily copy "do/2006_probe_errors_in_files.do" "pasta_inexistente_xyz/b.txt", replace
+(note: file pasta_inexistente_xyz/b.txt not found)
+file pasta_inexistente_xyz/b.txt could not be opened
+
+. display "  rc=" _rc " copy"
+  rc=603 copy
+
+. capture noisily file open fh using "pasta_inexistente_xyz/a.txt", write replace
+(note: file pasta_inexistente_xyz/a.txt not found)
+file pasta_inexistente_xyz/a.txt could not be opened
+
+. display "  rc=" _rc " file open write"
+  rc=603 file open write
+
+. capture noisily outfile x using "pasta_inexistente_xyz/a.txt", replace
+(note: file pasta_inexistente_xyz/a.txt not found)
+file pasta_inexistente_xyz/a.txt could not be opened
+
+. display "  rc=" _rc " outfile"
+  rc=603 outfile
+
+. capture noisily log using "pasta_inexistente_xyz/x.log", replace name(probe)
+(note: file /Users/yaskepalhares/opendta/compat/pasta_inexistente_xyz/x.log not found)
+file /Users/yaskepalhares/opendta/compat/pasta_inexistente_xyz/x.log could not be opened
+
+. display "  rc=" _rc " log using"
+  rc=603 log using
+
+. capture noisily save "pasta_inexistente_xyz/a.dta", replace
+(note: file pasta_inexistente_xyz/a.dta not found)
+file pasta_inexistente_xyz/a.dta could not be opened
+
+. display "  rc=" _rc " save"
+  rc=603 save
+
+. capture noisily export delimited "pasta_inexistente_xyz/a.csv", replace
+(note: file pasta_inexistente_xyz/a.csv not found)
+file pasta_inexistente_xyz/a.csv could not be opened
+
+. display "  rc=" _rc " export delimited"
+  rc=603 export delimited
+
+. capture noisily graph twoway scatter x x
+
+. capture noisily graph export "pasta_inexistente_xyz/g.png", replace
+
+. display "  rc=" _rc " graph export"
+  rc=1 graph export
+
+. capture noisily postfile pf x using "pasta_inexistente_xyz/p.dta", replace
+(note: file pasta_inexistente_xyz/p.dta not found)
+file pasta_inexistente_xyz/p.dta could not be opened
+
+. display "  rc=" _rc " postfile"
+  rc=603 postfile
+
+. capture noisily use "pasta_inexistente_xyz/a.dta", clear
+file pasta_inexistente_xyz/a.dta not found
+
+. display "  rc=" _rc " use"
+  rc=601 use
+
+. capture noisily mkdir "pasta_inexistente_xyz/a/b"
+could not create directory pasta_inexistente_xyz/a/b
+
+. display "  rc=" _rc " mkdir"
+  rc=693 mkdir
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2006_probe_errors_in_files.log
+  log type:  text
+ closed on:  21 Nov 2026, 10:22:26
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

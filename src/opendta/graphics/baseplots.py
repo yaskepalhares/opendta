@@ -1,5 +1,5 @@
 """Graph commands of the base-statistics block: quantile, symplot, serrbar, dotplot, sunflower,
-lpoly, cusum and gladder ([R] quantile, [R] diagnostic plots, [G-2] graph twoway, [R] dotplot,
+lpoly, cusum, gladder, qqplot and qladder ([R] quantile, [R] diagnostic plots, [G-2] graph twoway, [R] dotplot,
 [R] sunflower, [R] lpoly, [R] cusum, [R] ladder).
 
 The drawing is OpenDTA's engine; the default titles and axes follow the manuals and the details
@@ -412,6 +412,76 @@ def gladder(s: "Session", text: str):
         kid.opts = {k: val for k, val in kid.opts.items() if k not in ("name", "saving", "nodraw")}
         kid.opts["_xtitle"], kid.opts["_ytitle"] = form if form != "x" else D.var_title(s, v), "Density"
         kid.opts["title"] = {"lines": [lab]}
+        kids.append(kid)
+    opts = graph_options(graw)
+    opts["cols"] = 3
+    return Graph(family="combine", opts=opts, children=kids), graw
+
+
+# ---------------------------------------------------------------------------
+# qqplot, qladder ([R] diagnostic plots, [R] ladder)
+# ---------------------------------------------------------------------------
+
+def matched_quantiles(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Sorted values of the smaller sample and the quantiles of the larger one at the same
+    positions (i - .5)/n, by linear interpolation. VERIFY: Stata's interpolation."""
+    a, b = np.sort(a), np.sort(b)
+    if len(a) == len(b):
+        return a, b
+    small, large = (a, b) if len(a) < len(b) else (b, a)
+    n, m = len(small), len(large)
+    pos = (np.arange(1, n + 1) - 0.5) / n * m + 0.5
+    q = np.interp(pos, np.arange(1, m + 1), large)
+    return (small, q) if len(a) < len(b) else (q, small)
+
+
+def qqplot(s: "Session", text: str):
+    """Quantiles of varname1 against those of varname2, with the line y = x."""
+    p, lopts, graw = _split(s, text, {"grid": 4})
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")   # compat 2005
+    vy, vx = _vars(s, p, 2)
+    y, x = D.numeric(s, vy), D.numeric(s, vx)
+    base = D.base_mask(s, p)
+    ys, xs = y[base & D.valid(y)], x[base & D.valid(x)]
+    if len(ys) < 1 or len(xs) < 1:
+        raise StataError(2000, "no observations")
+    qy, qx = matched_quantiles(ys, xs)
+    lo, hi = float(min(qx.min(), qy.min())), float(max(qx.max(), qy.max()))
+    layers = [Layer("scatter", qx.tolist(), qy.tolist(), {}, _own(lopts, {"grid"}), D.var_title(s, vy)),
+              Layer("line", [lo, hi], [lo, hi], {}, {"lcolor": "gs8"}, "")]
+    return _graph(s, graw, layers, D.var_title(s, vx), D.var_title(s, vy),
+                  title="Quantile-Quantile Plot"), graw
+
+
+def qladder(s: "Session", text: str):
+    """Quantile-normal plots of the variable under the ladder-of-powers transformations, in
+    a 3x3 graph. VERIFY: the titles and the axes of each panel."""
+    from ..commands.basestat2 import _LADDER
+    p, lopts, graw = _split(s, text, {"grid": 4, "ycommon": 4, "xcommon": 4})
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")   # compat 2005
+    v = _vars(s, p, 1)[0]
+    x = D.numeric(s, v)
+    xs = x[D.base_mask(s, p) & D.valid(x)]
+    if len(xs) < 2:
+        raise StataError(2000, "no observations")
+    kids = []
+    for lab, form, f in _LADDER:
+        with np.errstate(all="ignore"):
+            t = np.sort(f(xs))
+        t = t[np.isfinite(t)]
+        if len(t) < 2:
+            kids.append(Graph(family="twoway", opts={"legend": {"off": True}, "title": {"lines": [lab]}},
+                              panels=[Panel("", [])]))
+            continue
+        n = len(t)
+        q = st.norm.ppf((np.arange(1, n + 1) - 0.5) / n) * t.std(ddof=1) + t.mean()
+        lo, hi = float(min(q.min(), t.min())), float(max(q.max(), t.max()))
+        layers = [Layer("scatter", q.tolist(), t.tolist(), {}, {}, ""),
+                  Layer("line", [lo, hi], [lo, hi], {}, {"lcolor": "gs8"}, "")]
+        kid = _graph(s, {}, layers, "Inverse Normal", form if form != "x" else D.var_title(s, v),
+                     title=lab)
         kids.append(kid)
     opts = graph_options(graw)
     opts["cols"] = 3

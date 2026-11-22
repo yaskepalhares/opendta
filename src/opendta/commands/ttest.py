@@ -353,6 +353,8 @@ def _ttest_two(s, vname, gname, x1, x2, level, unequal, welch, *, names):
 def cmd_prtest(s: "Session", args: str) -> None:
     """prtest varname == #p, prtest varname1 == varname2 and prtest varname, by(groupvar)."""
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"by": 2, "level": 1}) if p.options.strip() else {}
     level = _level(s, o)
     mask = touse(s, p)

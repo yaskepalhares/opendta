@@ -86,12 +86,12 @@ def test_syntax_varlist_if_in_options(run):
 
 def test_syntax_required_and_errors(run):
     _data(run)
-    run("program q\n syntax varname [using/] [fweight] =/exp , Gen(name)\n"
+    run("program qtest\n syntax varname [using/] [fweight] =/exp , Gen(name)\n"
         " display \"`varlist'|`using'|`weight'|`exp'|`gen'\"\nend")
-    assert run("q idade = 2*3 using \"a b.dta\", gen(z)") == "idade|a b.dta||2*3|z\n"
-    run("q idade = 1")
+    assert run("qtest idade = 2*3 using \"a b.dta\", gen(z)") == "idade|a b.dta||2*3|z\n"
+    run("qtest idade = 1")
     assert run.rc == 198                                     # gen() required
-    run("q idade renda = 1, gen(z)")
+    run("qtest idade renda = 1, gen(z)")
     assert run.rc == 103
     run("program r\n syntax [anything] [, opt]\n display `\"`anything'\"'\nend")
     assert run('r a "b c" (d)') == 'a "b c" (d)\n'

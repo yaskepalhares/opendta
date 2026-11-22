@@ -732,6 +732,8 @@ def subpop_mask(s: "Session", text: str) -> np.ndarray:
 
 def cmd_svydescribe(s: "Session", args: str) -> None:
     from ..commands._util import touse
+    if s.data.nvars == 0:
+        raise StataError(111, "no variables defined")   # compat 2005 (svydes)
     d = require_design(s)
     p = parse_standard(args)
     mask = touse(s, p)
@@ -838,12 +840,19 @@ def estat_effects(s: "Session", est, rest: str) -> None:
     out.write("-" * 13 + "+" + "-" * 44 + "\n", "text")
     last = None
     deffs, defts = [], []
-    for j, ((var, grp), b) in enumerate(zip(info["labels"], info["vals"])):
+    for j in range(len(info["vals"])):
         v = V[j, j]
-        deff = v / Vwor[j, j] if Vwor[j, j] > 0 else SYS
-        deft = float(np.sqrt(v / Vwr[j, j])) if Vwr[j, j] > 0 else SYS
-        deffs.append(deff)
-        defts.append(deft)
+        deffs.append(v / Vwor[j, j] if Vwor[j, j] > 0 else SYS)
+        defts.append(float(np.sqrt(v / Vwr[j, j])) if Vwr[j, j] > 0 else SYS)
+    if info.get("rows"):
+        # svy: regression models: the rows of the coefficient table (factor levels grouped under
+        # their variable, no base levels; compat 2004)
+        _svy_rows(s, info, lambda j: f"{_g6(deffs[j]):>12}{_g6(defts[j]):>10}")
+    for j, ((var, grp), b) in enumerate(zip(info["labels"], info["vals"])):
+        if info.get("rows"):
+            break
+        v = V[j, j]
+        deff, deft = deffs[j], defts[j]
         if grp:
             if var != last:
                 if last is not None:
@@ -859,3 +868,82 @@ def estat_effects(s: "Session", est, rest: str) -> None:
     from ..commands.matrix import Matrix
     cn = [f"{a}:{b}" if b else a for a, b in info["labels"]]
     s.r = {"deft": Matrix(np.array([defts]), ["r1"], cn), "deff": Matrix(np.array([deffs]), ["r1"], cn)}
+
+
+def _svy_rows(s: "Session", info: dict, extra) -> None:
+    """Rows of estat effects and estat cv after svy: regression models: b, its standard error and
+    extra(j), laid out as in the coefficient table."""
+    out = s.output
+    names = [nm for nm, _ in info["labels"]]
+    V = np.asarray(info["V"], dtype=float)
+    for row in info["rows"]:
+        if row.kind == "blank":
+            out.write(f"{'':>12} |\n", "text")
+        elif row.kind == "header":
+            out.write(f"{row.label[:12]:>12} |\n", "text")
+        elif row.kind == "coef":
+            j = names.index(row.name)
+            out.write(f"{row.label[:12]:>12} |", "text")
+            out.write(f"  {g9(info['vals'][j]):>9}  {g9(float(np.sqrt(max(V[j, j], 0)))):>9}{extra(j)}\n",
+                      "result")
+
+
+def _svy_cmd(s: "Session") -> str:
+    return str(s.e.get("cmdname") or s.e.get("cmd") or "")
+
+
+def estat_svyset(s: "Session", est, rest: str) -> None:
+    """estat svyset: the design settings, as svyset shows them (compat 2004)."""
+    d = get_design(s.data)
+    if d is None or not d.is_set:
+        raise StataError(119, "data not set up for svy, use svyset")   # VERIFY
+    _show_design(s, d)
+
+
+def estat_strata(s: "Session", est, rest: str) -> None:
+    """estat strata: the number of singleton, certainty and all strata per stage (compat 2004)."""
+    from .postest import esample
+    d = require_design(s)
+    dd = DesignData(s, d, esample(s))
+    single = int(sum(len(set(dd.u_inv[dd.h_inv == h].tolist())) == 1 for h in range(dd.n_strata)))
+    certain = 0   # VERIFY strata with fpc() = 1 (certainty units)
+    out = s.output
+    out.write("\n" + "-" * 41 + "\n", "text")
+    out.write("       | Singleton  Certainty       Total\n", "text")
+    out.write(" Stage |    strata     strata      strata\n", "text")
+    out.write("-------+" + "-" * 33 + "\n", "text")
+    out.write(f"{1:>6} |", "text")
+    out.write(f"{single:>10}{certain:>11}{dd.n_strata:>12}\n", "result")
+    out.write("-" * 41 + "\n", "text")
+
+
+def estat_cv(s: "Session", est, rest: str) -> None:
+    """estat cv: coefficient of variation 100 se/|b| ([SVY] estat; layout of compat 2004)."""
+    info = getattr(est, "svy_effects", None)
+    if info is None or not info.get("rows"):
+        raise StataError(199, "estat cv after this command not yet supported by OpenDTA")
+    V = np.asarray(info["V"], dtype=float)
+    vals = np.asarray(info["vals"], dtype=float)
+    cv = [100 * float(np.sqrt(max(V[j, j], 0))) / abs(vals[j]) if vals[j] != 0 else SYS
+          for j in range(len(vals))]
+    out = s.output
+    out.write("\n" + "-" * 48 + "\n", "text")
+    vt = info["vcetype"]
+    start = 28 + (9 - len(vt)) // 2
+    out.write(f"{'':>12} |" + " " * (start - 14) + vt + "\n", "text")
+    out.write(f"{info.get('depvar', '')[:12]:>12} | {info['title']:>10}   Std. Err.     CV (%)\n", "text")
+    out.write("-" * 13 + "+" + "-" * 34 + "\n", "text")
+    _svy_rows(s, info, lambda j: f"{_g6(cv[j]):>12}")
+    out.write("-" * 48 + "\n", "text")
+    from ..commands.matrix import Matrix
+    s.r = {"cv": Matrix(np.array([cv]), ["r1"], [nm for nm, _ in info["labels"]])}   # VERIFY r()
+
+
+def estat_unsupported(s: "Session", est, sub: str) -> None:
+    """estat sd and estat size work only after svy: mean, proportion, ratio and total."""
+    cmd = _svy_cmd(s)
+    if cmd in ("mean", "proportion", "ratio", "total"):
+        raise StataError(199, f"estat {sub} not yet supported by OpenDTA")
+    if sub == "sd":
+        raise StataError(301, "mean estimation results not found")   # VERIFY the return code
+    raise StataError(301, f"estimation results from svy:{cmd} are not supported by estat size")   # VERIFY rc

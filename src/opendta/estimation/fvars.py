@@ -351,6 +351,10 @@ def _levels(ds: "Dataset", c: Component, x: np.ndarray) -> tuple[list[float], fl
     if not levels:
         return [], None
     b = c.base
+    if b == "":
+        # the base that fvset base stored with the variable (char _fv_base)
+        b = {"none": "n", "frequent": "freq", "default": ""}.get(
+            ds.chars.get(c.var, {}).get("_fv_base", ""), ds.chars.get(c.var, {}).get("_fv_base", ""))
     if b == "n":
         return levels, None
     if b == "" or b == "first":

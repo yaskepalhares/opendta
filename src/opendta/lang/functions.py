@@ -13,12 +13,14 @@ from __future__ import annotations
 import datetime as _dt
 import fnmatch
 import math
+import os
 import re
 from typing import Any, Callable
 
 import numpy as np
 
 from ..core import missing as M
+from ..core import stdate
 from ..core.errors import StataError, type_mismatch
 from ..core.formats import STATA_EPOCH, format_value, parse_format
 from ..lazy import lazy
@@ -372,6 +374,160 @@ def _regexs(n: Value) -> str:
     return m.group(k) or ""
 
 
+@register("strrpos", 2)
+def _strrpos(s1: Value, s2: Value) -> float:
+    return float(_s(s1).rfind(_s(s2)) + 1) if _s(s2) else 0.0
+
+
+@register("indexnot", 2)
+def _indexnot(s1: Value, s2: Value) -> float:
+    """Position of the first character of s1 not found in s2; 0 if there is none."""
+    s1, s2 = _s(s1), _s(s2)
+    return float(next((i + 1 for i, ch in enumerate(s1) if ch not in s2), 0))
+
+
+@register("plural", 2, 3)
+def _plural(n: Value, s: Value, p: Value | None = None) -> str:
+    """plural(n, "cat") = "cats"; with p, "+x" adds x, "-x" removes x, anything else replaces."""
+    n, s = _n(n), _s(s)
+    if n in (1.0, -1.0):
+        return s
+    if p is None:
+        return s + "s"
+    p = _s(p)
+    if p.startswith("+"):
+        return s + p[1:]
+    if p.startswith("-"):
+        return s[: len(s) - len(p) + 1] if p[1:] and s.endswith(p[1:]) else s
+    return p
+
+
+@register("strtoname", 1, 2)
+def _strtoname(s: Value, p: Value = 1.0) -> str:
+    """A valid Stata name: other characters become _, a leading digit gets _ in front (unless p
+    is 0), and the result has at most 32 characters; strtoname("") is "" (compat 2008)."""
+    s, p = _s(s), _n(p)
+    out = re.sub(r"[^A-Za-z0-9_]", "_", s)
+    if out and out[0].isdigit() and p != 0:
+        out = "_" + out
+    return out[:32]
+
+
+_SOUNDEX = {**dict.fromkeys("bfpv", "1"), **dict.fromkeys("cgjkqsxz", "2"),
+            **dict.fromkeys("dt", "3"), "l": "4", **dict.fromkeys("mn", "5"), "r": "6"}
+
+
+def _soundex_code(s: str, nara: bool) -> str:
+    """Soundex code; with nara, letters with the same code separated by h or w count once (the
+    rule of the U.S. National Archives). VERIFY: the variant soundex() uses."""
+    letters = [c for c in s.lower() if c.isascii() and c.isalpha()]
+    if not letters:
+        return ""
+    out, last = [letters[0].upper()], _SOUNDEX.get(letters[0], "")
+    for c in letters[1:]:
+        code = _SOUNDEX.get(c, "")
+        if code and code != last:
+            out.append(code)
+        if not (nara and c in "hw"):
+            last = code
+    return ("".join(out) + "000")[:4]
+
+
+register("soundex", 1)(_str1(lambda s: _soundex_code(s, False)))
+register("soundex_nara", 1)(_str1(lambda s: _soundex_code(s, True)))
+
+
+# -- Unicode strings (characters, not bytes) ---------------------------------------------------
+
+@register("ustrpos", 2, 3)
+def _ustrpos(s1: Value, s2: Value, n: Value = 1.0) -> float:
+    s1, s2, n = _s(s1), _s(s2), _n(n)
+    start = 0 if M.is_missing(n) else max(int(n), 1) - 1
+    return float(s1.find(s2, start) + 1) if s2 else 0.0
+
+
+@register("ustrrpos", 2, 3)
+def _ustrrpos(s1: Value, s2: Value, n: Value | None = None) -> float:
+    s1, s2 = _s(s1), _s(s2)
+    end = len(s1) if n is None or M.is_missing(_n(n)) else int(_n(n))
+    return float(s1.rfind(s2, 0, end) + 1) if s2 else 0.0
+
+
+FUNCTIONS["usubstr"] = FUNCTIONS["substr"]
+
+
+@register("ustrleft", 2)
+def _ustrleft(s: Value, n: Value) -> str:
+    s, n = _s(s), _n(n)
+    return s if M.is_missing(n) else s[: max(int(n), 0)]
+
+
+@register("ustrright", 2)
+def _ustrright(s: Value, n: Value) -> str:
+    s, n = _s(s), _n(n)
+    if M.is_missing(n):
+        return s
+    return s[len(s) - int(n):] if int(n) > 0 else ""
+
+
+register("ustrtrim", 1)(_str1(lambda s: s.strip()))
+register("ustrltrim", 1)(_str1(lambda s: s.lstrip()))
+register("ustrrtrim", 1)(_str1(lambda s: s.rstrip()))
+register("ustrreverse", 1)(_str1(lambda s: s[::-1]))
+register("ustrwordcount", 1, 2)(lambda s, loc=None: float(len(_s(s).split())))
+
+
+@register("ustrword", 2, 3)
+def _ustrword(s: Value, n: Value, loc: Value | None = None) -> str:
+    """nth word; a negative n counts from the end."""
+    words, n = _s(s).split(), _n(n)
+    if M.is_missing(n) or n == 0:
+        return ""
+    k = int(n) - 1 if n > 0 else len(words) + int(n)
+    return words[k] if 0 <= k < len(words) else ""
+
+
+@register("uchar", 1)
+def _uchar(n: Value) -> str:
+    n = _n(n)
+    if M.is_missing(n) or not 0 <= n <= 0x10FFFF:
+        return ""
+    return chr(int(n))
+
+
+def _uflags(noc: Value | None) -> int:
+    """The case-insensitive flag of ustrregex*(); missing counts as not 0, like true."""
+    return re.IGNORECASE if noc is not None and _n(noc) != 0 else 0
+
+
+_ulast_match: list[re.Match[str] | None] = [None]
+
+
+@register("ustrregexm", 2, 3)
+def _ustrregexm(s: Value, pattern: Value, noc: Value | None = None) -> float:
+    m = re.search(_s(pattern), _s(s), _uflags(noc))
+    _ulast_match[0] = m
+    return 1.0 if m else 0.0
+
+
+@register("ustrregexrf", 3, 4)
+def _ustrregexrf(s: Value, pattern: Value, repl: Value, noc: Value | None = None) -> str:
+    return re.sub(_s(pattern), _s(repl).replace("\\", "\\\\"), _s(s), count=1, flags=_uflags(noc))
+
+
+@register("ustrregexra", 3, 4)
+def _ustrregexra(s: Value, pattern: Value, repl: Value, noc: Value | None = None) -> str:
+    return re.sub(_s(pattern), _s(repl).replace("\\", "\\\\"), _s(s), flags=_uflags(noc))
+
+
+@register("ustrregexs", 1)
+def _ustrregexs(n: Value) -> str:
+    m, k = _ulast_match[0], int(_n(n))
+    if m is None or not 0 <= k <= m.re.groups:
+        return ""
+    return m.group(k) or ""
+
+
 # -- distributions ---------------------------------------------------------------
 
 register("normal", 1)(_num(lambda z: stats.norm.cdf(z)))
@@ -398,6 +554,73 @@ register("betaden", 3)(_num(lambda a, b, x: stats.beta.pdf(x, a, b)))
 register("ibeta", 3)(_num(lambda a, b, x: special.betainc(a, b, x)))
 register("gammap", 2)(_num(lambda a, x: special.gammainc(a, x)))
 
+register("binomialp", 3)(_num(lambda n, k, p: stats.binom.pmf(k, n, p)))
+register("invbinomial", 3)(_num(lambda n, k, P: 1 - special.betaincinv(n - k, k + 1, P)
+                                if 0 <= k < n and 0 < P < 1 else None))
+register("invbinomialtail", 3)(_num(lambda n, k, P: special.betaincinv(k, n - k + 1, P)
+                                    if 0 < k <= n and 0 < P < 1 else None))
+register("poissonp", 2)(_num(lambda m, k: stats.poisson.pmf(k, m) if m > 0 else None))
+register("invpoisson", 2)(_num(lambda k, P: special.gammainccinv(k + 1, P) if 0 < P < 1 else None))
+register("invpoissontail", 2)(_num(lambda k, q: special.gammaincinv(k, q)
+                                   if k >= 1 and 0 < q < 1 else None))
+register("nbinomial", 3)(_num(lambda n, k, p: stats.nbinom.cdf(k, n, p)))
+register("nbinomialp", 3)(_num(lambda n, k, p: stats.nbinom.pmf(k, n, p)))
+register("nbinomialtail", 3)(_num(lambda n, k, p: stats.nbinom.sf(k - 1, n, p)))
+register("invnbinomial", 3)(_num(lambda n, k, q: special.betaincinv(n, k + 1, q)
+                                 if 0 < q < 1 else None))
+register("invnbinomialtail", 3)(_num(lambda n, k, q: special.betaincinv(n, k, 1 - q)
+                                     if k >= 1 and 0 < q < 1 else None))
+register("hypergeometricp", 4)(_num(lambda N, K, n, k: stats.hypergeom.pmf(k, N, K, n)))
+register("hypergeometric", 4)(_num(lambda N, K, n, k: stats.hypergeom.cdf(k, N, K, n)))
+register("tden", 2)(_num(lambda df, t: stats.t.pdf(t, df) if df > 0 else None))
+register("ntden", 3)(_num(lambda df, np_, t: stats.nct.pdf(t, df, np_)))
+register("nt", 3)(_num(lambda df, np_, t: stats.nct.cdf(t, df, np_)))
+register("nttail", 3)(_num(lambda df, np_, t: stats.nct.sf(t, df, np_)))
+register("invnttail", 3)(_num(lambda df, np_, p: stats.nct.isf(p, df, np_) if 0 < p < 1 else None))
+register("Fden", 3)(_num(lambda d1, d2, f: stats.f.pdf(f, d1, d2)))
+register("nFden", 4)(_num(lambda d1, d2, np_, f: stats.ncf.pdf(f, d1, d2, np_)))
+register("nF", 4)(_num(lambda d1, d2, np_, f: stats.ncf.cdf(f, d1, d2, np_)))
+register("nFtail", 4)(_num(lambda d1, d2, np_, f: stats.ncf.sf(f, d1, d2, np_)))
+register("invnFtail", 4)(_num(lambda d1, d2, np_, p: stats.ncf.isf(p, d1, d2, np_)
+                              if 0 < p < 1 else None))
+register("chi2den", 2)(_num(lambda df, x: stats.chi2.pdf(x, df) if df > 0 else None))
+register("nchi2", 3)(_num(lambda df, np_, x: stats.ncx2.cdf(x, df, np_)))
+register("nchi2tail", 3)(_num(lambda df, np_, x: stats.ncx2.sf(x, df, np_)))
+register("invnchi2", 3)(_num(lambda df, np_, p: stats.ncx2.ppf(p, df, np_) if 0 < p < 1 else None))
+register("invnchi2tail", 3)(_num(lambda df, np_, p: stats.ncx2.isf(p, df, np_)
+                                 if 0 < p < 1 else None))
+
+
+def _npnchi2(df: float, x: float, p: float) -> float | None:
+    """Noncentrality np such that nchi2(df, np, x) = p (decreasing in np)."""
+    from scipy.optimize import brentq
+    if not (0 < p < 1) or df <= 0 or x <= 0 or stats.chi2.cdf(x, df) < p:
+        return None
+    hi = 1.0
+    while stats.ncx2.cdf(x, df, hi) > p:
+        hi *= 2
+        if hi > 1e7:
+            return None
+    return brentq(lambda np_: stats.ncx2.cdf(x, df, np_) - p, 0.0, hi, xtol=1e-12)
+
+
+register("npnchi2", 3)(_num(_npnchi2))
+register("gammaden", 4)(_num(lambda a, b, g, x: stats.gamma.pdf(x, a, loc=g, scale=b)))
+register("gammaptail", 2)(_num(lambda a, x: special.gammaincc(a, x)))
+register("invgammap", 2)(_num(lambda a, p: special.gammaincinv(a, p) if 0 < p < 1 else None))
+register("invgammaptail", 2)(_num(lambda a, p: special.gammainccinv(a, p) if 0 < p < 1 else None))
+register("ibetatail", 3)(_num(lambda a, b, x: 1 - special.betainc(a, b, x)))
+register("invibeta", 3)(_num(lambda a, b, p: special.betaincinv(a, b, p) if 0 <= p <= 1 else None))
+register("invibetatail", 3)(_num(lambda a, b, p: special.betaincinv(a, b, 1 - p)
+                                 if 0 <= p <= 1 else None))
+register("lnnormalden", 1, 3)(_num(lambda z, m=0.0, s=1.0: stats.norm.logpdf(z, m, s) if s > 0 else None))
+register("binormal", 3)(_num(lambda h, k, r: stats.multivariate_normal.cdf(
+    [h, k], mean=[0, 0], cov=[[1, r], [r, 1]]) if -1 <= r <= 1 else None))
+register("trigamma", 1)(_num(lambda x: float(special.polygamma(1, x))))
+register("reldif", 2)(_num(lambda x, y: abs(x - y) / (abs(y) + 1)))
+register("logistic", 1)(_num(lambda x: 1 / (1 + math.exp(-x)) if x > -700 else 0.0))
+register("cloglog", 1)(_num(lambda x: math.log(-math.log(1 - x)) if 0 < x < 1 else None))
+register("invcloglog", 1)(_num(lambda x: 1 - math.exp(-math.exp(x)) if x < 700 else 1.0))
 
 # -- datas --------------------------------------------------------------------
 
@@ -461,32 +684,82 @@ register("dow", 1)(_date_part(lambda d: (d.weekday() + 1) % 7))
 register("doy", 1)(_date_part(lambda d: d.timetuple().tm_yday))
 register("quarter", 1)(_date_part(lambda d: (d.month - 1) // 3 + 1))
 
-_MONTH_NAMES = {m: i + 1 for i, m in enumerate(
-    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+def _numf(fn: Callable[..., float | None]) -> Impl:
+    """Like _num, but the arguments are truncated to integers first (date components)."""
+    return _num(lambda *xs: fn(*[math.floor(x) for x in xs]))
 
 
-@register("date", 2, 3)
-def _date(s: Value, mask: Value, topyear: Value | None = None) -> float:
-    """Subset of date(): masks with D, M and Y, numeric or named month."""
-    text, mask = _s(s).strip().lower(), _s(mask).upper()
-    parts = re.findall(r"[a-z]+|\d+", text)
-    order = [c for c in mask if c in "DMY"]
-    if len(parts) != len(order):
-        return M.SYSMISS
-    values: dict[str, int] = {}
-    for p, c in zip(parts, order):
-        if c == "M" and p.isalpha():
-            if p[:3] not in _MONTH_NAMES:
-                return M.SYSMISS
-            values["M"] = _MONTH_NAMES[p[:3]]
-        elif p.isdigit():
-            values[c] = int(p)
-        else:
-            return M.SYSMISS
-    try:
-        return float((_dt.date(values["Y"], values["M"], values["D"]) - STATA_EPOCH).days)
-    except (KeyError, ValueError):
-        return M.SYSMISS
+def _opt_top(topyear: Value | None) -> float | None:
+    if topyear is None:
+        return None
+    t = _n(topyear)
+    return None if M.is_missing(t) else math.floor(t)
+
+
+def _strdate(fn: Callable[..., float | None]) -> Impl:
+    def wrapped(s: Value, mask: Value, topyear: Value | None = None) -> float:
+        r = fn(_s(s), _s(mask), _opt_top(topyear))
+        return M.SYSMISS if r is None else float(r)
+    return wrapped
+
+
+register("date", 2, 3)(_strdate(stdate.daily))
+alias("daily", "date")
+register("clock", 2, 3)(_strdate(stdate.clock))
+register("Clock", 2, 3)(_strdate(lambda s, m, t: None if (c := stdate.clock(s, m, t)) is None
+                                  else stdate.Cofc(c)))
+register("monthly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "M", 12, t)))
+register("quarterly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "Q", 4, t)))
+register("halfyearly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "H", 2, t)))
+register("weekly", 2, 3)(_strdate(lambda s, m, t: stdate.period(s, m, "W", 52, t)))
+register("yearly", 2, 3)(_strdate(lambda s, m, t: None if (f := stdate.parse(s, m, t)) is None
+                                   else f.get("Y")))
+
+# periods since 1960 from their components, and back
+register("ym", 2)(_numf(lambda y, m: 12 * (y - 1960) + m - 1 if 1 <= m <= 12 else None))
+register("yq", 2)(_numf(lambda y, q: 4 * (y - 1960) + q - 1 if 1 <= q <= 4 else None))
+register("yh", 2)(_numf(lambda y, h: 2 * (y - 1960) + h - 1 if 1 <= h <= 2 else None))
+register("yw", 2)(_numf(lambda y, w: 52 * (y - 1960) + w - 1 if 1 <= w <= 52 else None))
+register("dofm", 1)(_numf(lambda p: stdate.dofperiod(p, 12)))
+register("dofq", 1)(_numf(lambda p: stdate.dofperiod(p, 4)))
+register("dofh", 1)(_numf(lambda p: stdate.dofperiod(p, 2)))
+register("dofw", 1)(_numf(stdate.dofw))
+register("dofy", 1)(_numf(lambda y: stdate.mdy(1, 1, y)))
+register("week", 1)(_date_part(stdate.week))
+register("halfyear", 1)(_date_part(lambda d: 1 if d.month <= 6 else 2))
+register("yofd", 1)(_date_part(lambda d: d.year))
+register("mofd", 1)(_date_part(lambda d: 12 * (d.year - 1960) + d.month - 1))
+register("qofd", 1)(_date_part(lambda d: 4 * (d.year - 1960) + (d.month - 1) // 3))
+register("hofd", 1)(_date_part(lambda d: 2 * (d.year - 1960) + (d.month > 6)))
+register("wofd", 1)(_date_part(lambda d: 52 * (d.year - 1960) + stdate.week(d) - 1))
+
+# times in milliseconds: %tc without leap seconds, %tC with them
+_MS_DAY = stdate.MS_DAY
+register("hms", 3)(_num(stdate.hms))
+register("dhms", 4)(_num(lambda d, h, m, s: math.floor(d) * _MS_DAY + stdate.hms(h, m, s)))
+register("mdyhms", 6)(_num(lambda mo, d, y, h, mi, s: None if (td := stdate.mdy(mo, d, y)) is None
+                           else td * _MS_DAY + stdate.hms(h, mi, s)))
+register("Cmdyhms", 6)(_num(lambda mo, d, y, h, mi, s: None if (td := stdate.mdy(mo, d, y)) is None
+                            else stdate.Cofc(td * _MS_DAY + stdate.hms(h, mi, s))))
+register("cofd", 1)(_num(lambda d: math.floor(d) * _MS_DAY))
+register("Cofd", 1)(_num(lambda d: stdate.Cofc(math.floor(d) * _MS_DAY)))
+register("dofc", 1)(_num(lambda c: math.floor(c / _MS_DAY)))
+register("dofC", 1)(_num(lambda c: math.floor(stdate.cofC(c) / _MS_DAY)))
+register("Cofc", 1)(_num(stdate.Cofc))
+register("cofC", 1)(_num(stdate.cofC))
+register("hh", 1)(_num(lambda c: math.floor((c % _MS_DAY) / 3_600_000)))
+register("mm", 1)(_num(lambda c: math.floor((c % 3_600_000) / 60_000)))
+register("ss", 1)(_num(lambda c: (c % 60_000) / 1000))
+# VERIFY: hhC(), mmC() and ssC() inside a leap second (Stata shows 23:59:60)
+register("hhC", 1)(_num(lambda c: math.floor((stdate.cofC(c) % _MS_DAY) / 3_600_000)))
+register("mmC", 1)(_num(lambda c: math.floor((stdate.cofC(c) % 3_600_000) / 60_000)))
+register("ssC", 1)(_num(lambda c: (stdate.cofC(c) % 60_000) / 1000))
+register("hours", 1)(_num(lambda ms: ms / 3_600_000))
+register("minutes", 1)(_num(lambda ms: ms / 60_000))
+register("seconds", 1)(_num(lambda ms: ms / 1000))
+register("msofhours", 1)(_num(lambda h: h * 3_600_000))
+register("msofminutes", 1)(_num(lambda m: m * 60_000))
+register("msofseconds", 1)(_num(lambda s: s * 1000))
 
 
 # -- constantes -------------------------------------------------------------------
@@ -496,6 +769,82 @@ register("maxdouble", 0)(lambda: M.MAXDOUBLE)
 register("mindouble", 0)(lambda: M.MINDOUBLE)
 register("epsdouble", 0)(lambda: M.EPSDOUBLE)
 register("smallestdouble", 0)(lambda: 2.0 ** -1022)
+# limits of the storage types (.dta specification); VERIFY: minfloat() is -maxfloat()
+_MAXFLOAT = float(np.frombuffer(bytes.fromhex("7effffff"), dtype=">f4")[0])
+register("maxbyte", 0)(lambda: 100.0)
+register("minbyte", 0)(lambda: -127.0)
+register("maxint", 0)(lambda: 32740.0)
+register("minint", 0)(lambda: -32767.0)
+register("maxlong", 0)(lambda: 2147483620.0)
+register("minlong", 0)(lambda: -2147483647.0)
+register("maxfloat", 0)(lambda: _MAXFLOAT)
+register("minfloat", 0)(lambda: -_MAXFLOAT)
+
+
+# -- recoding ------------------------------------------------------------------------
+
+@register("recode", 3, 10_000)
+def _recode(x: Value, *cuts: Value) -> float:
+    """The first cut that x does not exceed, or the last cut."""
+    x, cs = _n(x), [_n(c) for c in cuts]
+    if M.is_missing(x):
+        return M.SYSMISS
+    return next((c for c in cs if x <= c), cs[-1])
+
+
+@register("irecode", 3, 10_000)
+def _irecode(x: Value, *cuts: Value) -> float:
+    """Index (0 to n) of the interval of x among the cuts."""
+    x, cs = _n(x), [_n(c) for c in cuts]
+    if M.is_missing(x):
+        return M.SYSMISS
+    return float(next((i for i, c in enumerate(cs) if x <= c), len(cs)))
+
+
+@register("autocode", 4)
+def _autocode(x: Value, n: Value, lo: Value, hi: Value) -> float:
+    """Upper bound of the interval of x among n equal intervals from lo to hi. VERIFY: x
+    below lo gives the first bound and x above hi gives hi."""
+    x, n, lo, hi = _n(x), _n(n), _n(lo), _n(hi)
+    if _miss(x, n, lo, hi) or n < 1 or hi <= lo:
+        return M.SYSMISS
+    k = int(n)
+    for i in range(1, k + 1):
+        u = lo + i * (hi - lo) / k
+        if x <= u:
+            return u
+    return hi
+
+
+# -- files (paths relative to the working folder) -----------------------------------------
+
+register("fileexists", 1)(_str1(lambda f: float(os.path.isfile(f))))
+register("filereadable", 1)(_str1(lambda f: float(os.path.isfile(f) and os.access(f, os.R_OK))))
+
+
+@register("fileread", 1)
+def _fileread(f: Value) -> str:
+    """Contents of the file; "fileread() error 601" when it cannot be read (VERIFY: code)."""
+    try:
+        with open(_s(f), "rb") as fh:
+            return fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "fileread() error 601"
+
+
+@register("filewrite", 2, 3)
+def _filewrite(f: Value, text: Value, r: Value = 0.0) -> float:
+    """Writes text to f (r = 1 replaces, r = 2 appends, otherwise f must not exist); returns
+    the bytes written or a negative error code. VERIFY: the error codes."""
+    f, data, r = _s(f), _s(text).encode("utf-8"), _n(r)
+    if r not in (1.0, 2.0) and os.path.exists(f):
+        return -602.0
+    try:
+        with open(f, "ab" if r == 2.0 else "wb") as fh:
+            fh.write(data)
+    except OSError:
+        return -603.0
+    return float(len(data))
 
 
 # -- random numbers (core/rng.py) --------------------------------------------

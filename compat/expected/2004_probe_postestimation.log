@@ -1,0 +1,1018 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2004_probe_postestimation.log
+  log type:  text
+ opened on:  21 Nov 2026, 10:22:23
+
+. * Probe (survey): factor notation and equation names in post-estimation after svy: poisson/logit/regress/glm.
+. * Each block runs under capture noisily so that one run shows every command.
+. version 14
+
+. set more off
+
+. clear
+
+. set seed 123
+
+. set obs 600
+number of observations (_N) was 0, now 600
+
+. gen psu = ceil(_n/20)
+
+. gen strat = mod(psu,3)+1
+
+. gen w = 1+round(runiform()*3,.1)
+
+. gen ano = 2006 + floor(runiform()*10)
+
+. gen sexo = runiform()<.5
+
+. gen idade = 18+floor(runiform()*60)
+
+. gen faixa = 1+floor(runiform()*3)
+
+. gen pc = 1+floor(runiform()*10)+sexo
+
+. gen yb = runiform() < .3+.1*sexo
+
+. svyset psu [pw=w], strata(strat)
+
+      pweight: w
+          VCE: linearized
+  Single unit: missing
+     Strata 1: strat
+         SU 1: psu
+        FPC 1: <zero>
+
+. 
+. display "=== svy: poisson, naming forms"
+=== svy: poisson, naming forms
+
+. capture noisily svy: poisson pc ano i.sexo ib2.faixa c.idade
+(running poisson on estimation sample)
+
+Survey: Poisson regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Design df         =         27
+                                                F(   5,     23)   =       2.82
+                                                Prob > F          =     0.0394
+
+------------------------------------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+      1.sexo |   .1574787   .0501452     3.14   0.004     .0545892    .2603683
+             |
+       faixa |
+          1  |   .0114818   .0537355     0.21   0.832    -.0987743     .121738
+          3  |   .0243633   .0540151     0.45   0.656    -.0864665    .1351931
+             |
+       idade |   .0009079   .0013969     0.65   0.521    -.0019583     .003774
+       _cons |   10.22895   14.93819     0.68   0.499    -20.42169     40.8796
+------------------------------------------------------------------------------
+
+. foreach e in "ano" "c.ano" "1.sexo" "3.faixa" "_b[ano]" "[pc]ano" "[pc]_b[ano]" "[pc]c.idade" "ib2.faixa" "ano + [pc]c.idade" {
+  2.     display "--- lincom `e'"
+  3.     capture noisily lincom `e'
+  4. }
+--- lincom ano
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+------------------------------------------------------------------------------
+--- lincom c.ano
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+------------------------------------------------------------------------------
+--- lincom 1.sexo
+
+ ( 1)  [pc]1.sexo = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .1574787   .0501452     3.14   0.004     .0545892    .2603683
+------------------------------------------------------------------------------
+--- lincom 3.faixa
+
+ ( 1)  [pc]3.faixa = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .0243633   .0540151     0.45   0.656    -.0864665    .1351931
+------------------------------------------------------------------------------
+--- lincom _b[ano]
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+------------------------------------------------------------------------------
+--- lincom [pc]ano
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+------------------------------------------------------------------------------
+--- lincom [pc]_b[ano]
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0042621   .0074253    -0.57   0.571    -.0194975    .0109733
+------------------------------------------------------------------------------
+--- lincom [pc]c.idade
+
+ ( 1)  [pc]idade = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .0009079   .0013969     0.65   0.521    -.0019583     .003774
+------------------------------------------------------------------------------
+--- lincom ib2.faixa
+ib2:  operator invalid
+--- lincom ano + [pc]c.idade
+
+ ( 1)  [pc]ano + [pc]idade = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0033542   .0077191    -0.43   0.667    -.0191924    .0124839
+------------------------------------------------------------------------------
+
+. display "--- lincom eform / irr then return list"
+--- lincom eform / irr then return list
+
+. capture noisily lincom ano, eform
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |     exp(b)   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |    .995747   .0073937    -0.57   0.571     .9806913    1.011034
+------------------------------------------------------------------------------
+
+. return list
+
+scalars:
+                 r(df) =  27
+                 r(se) =  .0073937011322441
+           r(estimate) =  .9957469662618089
+
+. capture noisily lincom ano, irr
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |        IRR   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |    .995747   .0073937    -0.57   0.571     .9806913    1.011034
+------------------------------------------------------------------------------
+
+. return list
+
+scalars:
+                 r(df) =  27
+                 r(se) =  .0073937011322441
+           r(estimate) =  .9957469662618089
+
+. foreach e in "ano" "[pc]ano" "c.ano" "_b[ano] = 0" "[pc]_b[ano] = 0" "3.faixa = 1.faixa" "1.sexo = c.idade" {
+  2.     display "--- test `e'"
+  3.     capture noisily test `e'
+  4. }
+--- test ano
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+--- test [pc]ano
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+--- test c.ano
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+--- test _b[ano] = 0
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+--- test [pc]_b[ano] = 0
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+--- test 3.faixa = 1.faixa
+
+Adjusted Wald test
+
+ ( 1)  - [pc]1.faixa + [pc]3.faixa = 0
+
+       F(  1,    27) =    0.07
+            Prob > F =    0.7919
+--- test 1.sexo = c.idade
+
+Adjusted Wald test
+
+ ( 1)  [pc]1.sexo - [pc]idade = 0
+
+       F(  1,    27) =    9.54
+            Prob > F =    0.0046
+
+. capture noisily test [pc]: ano
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+
+. capture noisily testparm i.sexo
+
+Adjusted Wald test
+
+ ( 1)  [pc]1.sexo = 0
+
+       F(  1,    27) =    9.86
+            Prob > F =    0.0041
+
+. capture noisily testparm c.ano
+
+Adjusted Wald test
+
+ ( 1)  [pc]ano = 0
+
+       F(  1,    27) =    0.33
+            Prob > F =    0.5707
+
+. capture noisily testparm i.faixa
+
+Adjusted Wald test
+
+ ( 1)  [pc]1.faixa = 0
+ ( 2)  [pc]3.faixa = 0
+
+       F(  2,    26) =    0.10
+            Prob > F =    0.9049
+
+. capture noisily testparm i(1 3).faixa
+
+Adjusted Wald test
+
+ ( 1)  [pc]1.faixa = 0
+ ( 2)  [pc]3.faixa = 0
+
+       F(  2,    26) =    0.10
+            Prob > F =    0.9049
+
+. capture noisily nlcom exp(_b[ano])
+
+       _nl_1:  exp(_b[ano])
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _nl_1 |    .995747   .0073937   134.68   0.000     .9812556    1.010238
+------------------------------------------------------------------------------
+
+. capture noisily nlcom [pc]_b[ano]
+
+       _nl_1:  [pc]_b[ano]
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _nl_1 |  -.0042621   .0074253    -0.57   0.566    -.0188154    .0102912
+------------------------------------------------------------------------------
+
+. capture noisily nlcom (r: exp(_b[ano]))
+
+           r:  exp(_b[ano])
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+           r |    .995747   .0073937   134.68   0.000     .9812556    1.010238
+------------------------------------------------------------------------------
+
+. foreach e in "_b[ano]" "_se[ano]" "_b[pc:ano]" "[pc]_b[ano]" "[pc]ano" "_b[1.sexo]" "_b[3.faixa]" "_b[2b.faixa]" "_b[c.idade]" {
+  2.     display "--- display `e'"
+  3.     capture noisily display `e'
+  4. }
+--- display _b[ano]
+-.0042621
+--- display _se[ano]
+.00742528
+--- display _b[pc:ano]
+-.0042621
+--- display [pc]_b[ano]
+-.0042621
+--- display [pc]ano
+-.0042621
+--- display _b[1.sexo]
+.15747874
+--- display _b[3.faixa]
+.02436327
+--- display _b[2b.faixa]
+0
+--- display _b[c.idade]
+.00090785
+
+. display "--- margins/contrast/estat"
+--- margins/contrast/estat
+
+. capture noisily margins sexo
+
+Predictive margins                              Number of obs     =        600
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+        sexo |
+          0  |   5.551909   .1871228    29.67   0.000     5.185155    5.918663
+          1  |    6.49882   .1854061    35.05   0.000     6.135431    6.862209
+------------------------------------------------------------------------------
+
+. capture noisily margins r.sexo
+
+Contrasts of predictive margins
+
+Number of strata   =         0
+Number of PSUs     =         0
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+
+------------------------------------------------
+             |         df        chi2     P>chi2
+-------------+----------------------------------
+        sexo |          1        9.99     0.0016
+------------------------------------------------
+
+--------------------------------------------------------------
+             |            Delta-method
+             |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+        sexo |
+   (1 vs 0)  |   .9469107   .2996058      .3596942    1.534127
+--------------------------------------------------------------
+
+. capture noisily margins ar.faixa
+
+Contrasts of predictive margins
+
+Number of strata   =         0
+Number of PSUs     =         0
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+
+------------------------------------------------
+             |         df        chi2     P>chi2
+-------------+----------------------------------
+       faixa |
+   (2 vs 1)  |          1        0.05     0.8309
+   (3 vs 2)  |          1        0.20     0.6518
+      Joint  |          2        0.21     0.9012
+------------------------------------------------
+
+--------------------------------------------------------------
+             |            Delta-method
+             |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+       faixa |
+   (2 vs 1)  |  -.0690766    .323432     -.7029916    .5648384
+   (3 vs 2)  |   .1475233   .3269334     -.4932543    .7883009
+--------------------------------------------------------------
+
+. capture noisily margins faixa, at(ano=(2006 2014))
+
+Predictive margins                              Number of obs     =        600
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+
+1._at        : ano             =        2006
+
+2._at        : ano             =        2014
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+   _at#faixa |
+        1 1  |   6.173353   .2879828    21.44   0.000     5.608917    6.737788
+        1 2  |   6.102877   .2802872    21.77   0.000     5.553524    6.652229
+        1 3  |   6.253389   .3496531    17.88   0.000     5.568081    6.938696
+        2 1  |   5.966409   .2899749    20.58   0.000     5.398069    6.534749
+        2 2  |   5.898295   .2658389    22.19   0.000     5.377261     6.41933
+        2 3  |   6.043762   .2008932    30.08   0.000     5.650019    6.437505
+------------------------------------------------------------------------------
+
+. capture noisily margins, dydx(c.ano)
+
+Average marginal effects                        Number of obs     =        600
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+dy/dx w.r.t. : ano
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      dy/dx   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |   -.025802   .0449618    -0.57   0.566    -.1139255    .0623216
+------------------------------------------------------------------------------
+
+. capture noisily margins, eydx(ano)
+
+Average marginal effects                        Number of obs     =        600
+Model VCE    : Linearized
+
+Expression   : Predicted number of events, predict()
+ey/dx w.r.t. : ano
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |      ey/dx   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0042621   .0074253    -0.57   0.566    -.0188154    .0102912
+------------------------------------------------------------------------------
+
+. capture noisily margins, expression(exp(xb()))
+
+Predictive margins                              Number of obs     =        600
+Model VCE    : Linearized
+
+Expression   : exp(xb())
+
+------------------------------------------------------------------------------
+             |            Delta-method
+             |     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+       _cons |   6.053807   .1109903    54.54   0.000      5.83627    6.271344
+------------------------------------------------------------------------------
+
+. capture noisily contrast faixa
+
+Contrasts of marginal linear predictions
+
+                                                Design df         =         27
+
+Margins      : asbalanced
+
+------------------------------------------------
+             |         df           F        P>F
+-------------+----------------------------------
+       faixa |          2        0.10     0.9049
+      Design |         27
+------------------------------------------------
+Note: F statistics are adjusted for the survey
+      design.
+
+. capture noisily pwcompare faixa
+
+Pairwise comparisons of marginal linear predictions
+
+                                                Design df         =         27
+
+Margins      : asbalanced
+
+--------------------------------------------------------------
+             |                                 Unadjusted
+             |   Contrast   Std. Err.     [95% Conf. Interval]
+-------------+------------------------------------------------
+pc           |
+       faixa |
+     2 vs 1  |  -.0114818   .0537355      -.121738    .0987743
+     3 vs 1  |   .0128814   .0483402     -.0863045    .1120674
+     3 vs 2  |   .0243633   .0540151     -.0864665    .1351931
+--------------------------------------------------------------
+
+. capture noisily predictnl p = exp(xb()), se(sep)
+
+. foreach s in vce effects svyset sd strata size cv summarize {
+  2.     display "--- estat `s'"
+  3.     capture noisily estat `s'
+  4. }
+--- estat vce
+
+Covariance matrix of coefficients of poisson model
+
+             | pc                                                                     
+             |                      1.          1.          3.                        
+        e(V) |        ano        sexo       faixa       faixa       idade       _cons 
+-------------+------------------------------------------------------------------------
+pc           |                                                                        
+         ano |  .00005513                                                             
+      1.sexo |  .00005928   .00251455                                                 
+     1.faixa |  .00001649  -.00038305    .0028875                                     
+     3.faixa | -.00012147  -.00061512   .00173418   .00291763                         
+       idade |  1.249e-06   -.0000264   .00001869   9.565e-06   1.951e-06             
+       _cons | -.11091898  -.11902987  -.03516487    .2426187  -.00259636   223.14963 
+--- estat effects
+
+----------------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.       DEFF      DEFT
+-------------+--------------------------------------------
+         ano |  -.0042621   .0074253     1.32617   1.15159
+      1.sexo |   .1574787   .0501452     1.60997   1.26884
+             |
+       faixa |
+          1  |   .0114818   .0537355     1.29622   1.13852
+          3  |   .0243633   .0540151     1.28145   1.13201
+             |
+       idade |   .0009079   .0013969     1.50331    1.2261
+       _cons |   10.22895   14.93819     1.32732    1.1521
+----------------------------------------------------------
+--- estat svyset
+
+      pweight: w
+          VCE: linearized
+  Single unit: missing
+     Strata 1: strat
+         SU 1: psu
+        FPC 1: <zero>
+--- estat sd
+mean estimation results not found
+--- estat strata
+
+-----------------------------------------
+       | Singleton  Certainty       Total
+ Stage |    strata     strata      strata
+-------+---------------------------------
+     1 |         0          0           3
+-----------------------------------------
+--- estat size
+estimation results from svy:poisson are not supported by estat size
+--- estat cv
+
+------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.     CV (%)
+-------------+----------------------------------
+         ano |  -.0042621   .0074253     174.216
+      1.sexo |   .1574787   .0501452     31.8425
+             |
+       faixa |
+          1  |   .0114818   .0537355     468.004
+          3  |   .0243633   .0540151     221.707
+             |
+       idade |   .0009079   .0013969     153.866
+       _cons |   10.22895   14.93819     146.038
+------------------------------------------------
+--- estat summarize
+invalid subcommand summarize
+
+. display "=== svy with subpop and interaction"
+=== svy with subpop and interaction
+
+. capture noisily svy, subpop(if sexo==1): poisson pc ano c.idade
+(running poisson on estimation sample)
+
+Survey: Poisson regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Subpop. no. obs   =        313
+                                                Subpop. size      = 804.199999
+                                                Design df         =         27
+                                                F(   2,     26)   =       0.14
+                                                Prob > F          =     0.8688
+
+------------------------------------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0056761   .0111589    -0.51   0.615    -.0285722      .01722
+       idade |  -.0004107   .0016322    -0.25   0.803    -.0037597    .0029383
+       _cons |   13.30428   22.44143     0.59   0.558    -32.74174     59.3503
+------------------------------------------------------------------------------
+
+. capture noisily lincom ano, irr
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |        IRR   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |     .99434   .0110957    -0.51   0.615     .9718321    1.017369
+------------------------------------------------------------------------------
+
+. return list
+
+scalars:
+                 r(df) =  27
+                 r(se) =  .0110957118881802
+           r(estimate) =  .9943399518726385
+
+. capture noisily svy: poisson pc ano i.sexo##c.idade, irr
+(running poisson on estimation sample)
+
+Survey: Poisson regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Design df         =         27
+                                                F(   4,     24)   =       3.76
+                                                Prob > F          =     0.0164
+
+------------------------------------------------------------------------------
+             |             Linearized
+          pc |        IRR   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |   .9960189   .0074624    -0.53   0.599     .9808244    1.011449
+      1.sexo |   1.362336   .1569267     2.68   0.012     1.075571    1.725557
+       idade |   1.002755   .0019633     1.41   0.171     .9987345    1.006791
+             |
+sexo#c.idade |
+          1  |     .99686    .002178    -1.44   0.162      .992401    1.001339
+             |
+       _cons |   14796.42   223161.7     0.64   0.530     5.38e-10    4.07e+17
+------------------------------------------------------------------------------
+
+. capture noisily lincom 1.sexo + 30*1.sexo#c.idade
+
+ ( 1)  [pc]1.sexo + 30*[pc]1.sexo#c.idade = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .2148526   .0627449     3.42   0.002     .0861108    .3435944
+------------------------------------------------------------------------------
+
+. capture noisily margins sexo#c.idade
+only factor variables and their interactions are allowed
+
+. display "=== svy: logit, or"
+=== svy: logit, or
+
+. capture noisily svy: logit yb ano i.sexo i.faixa, or
+(running logit on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Design df         =         27
+                                                F(   4,     24)   =       3.96
+                                                Prob > F          =     0.0132
+
+------------------------------------------------------------------------------
+             |             Linearized
+          yb | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |   1.002844   .0351068     0.08   0.936      .933337    1.077527
+      1.sexo |   1.603774   .2472396     3.06   0.005     1.168882    2.200473
+             |
+       faixa |
+          2  |   .8049638   .1507549    -1.16   0.257     .5481381    1.182123
+          3  |   .6978351   .1333136    -1.88   0.070     .4715398    1.032731
+             |
+       _cons |   .0015727   .1106341    -0.09   0.928     3.25e-66    7.61e+59
+------------------------------------------------------------------------------
+
+. capture noisily lincom ano, or
+
+ ( 1)  [yb]ano = 0
+
+------------------------------------------------------------------------------
+          yb | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   1.002844   .0351068     0.08   0.936      .933337    1.077527
+------------------------------------------------------------------------------
+
+. return list
+
+scalars:
+                 r(df) =  27
+                 r(se) =  .0351067898676428
+           r(estimate) =  1.002844035465318
+
+. capture noisily lincom [yb]ano, or
+
+ ( 1)  [yb]ano = 0
+
+------------------------------------------------------------------------------
+          yb | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   1.002844   .0351068     0.08   0.936      .933337    1.077527
+------------------------------------------------------------------------------
+
+. capture noisily lincom 2.faixa - 3.faixa, or
+
+ ( 1)  [yb]2.faixa - [yb]3.faixa = 0
+
+------------------------------------------------------------------------------
+          yb | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   1.153516   .2610351     0.63   0.533      .725057    1.835164
+------------------------------------------------------------------------------
+
+. capture noisily test [yb]ano
+
+Adjusted Wald test
+
+ ( 1)  [yb]ano = 0
+
+       F(  1,    27) =    0.01
+            Prob > F =    0.9359
+
+. display "=== svy: regress"
+=== svy: regress
+
+. capture noisily svy: regress pc ano i.sexo
+(running regress on estimation sample)
+
+Survey: Linear regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Design df         =         27
+                                                F(   2,     26)   =       5.54
+                                                Prob > F          =     0.0099
+                                                R-squared         =     0.0279
+
+------------------------------------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0276529    .044226    -0.63   0.537    -.1183971    .0630913
+      1.sexo |   .9517863   .2982905     3.19   0.004     .3397447    1.563828
+       _cons |   61.15232   88.95665     0.69   0.498    -121.3717    243.6763
+------------------------------------------------------------------------------
+
+. capture noisily lincom ano
+
+ ( 1)  ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0276529    .044226    -0.63   0.537    -.1183971    .0630913
+------------------------------------------------------------------------------
+
+. capture noisily lincom [pc]ano
+equation [pc] not found
+
+. display "=== glm and svy: glm"
+=== glm and svy: glm
+
+. capture noisily glm pc ano i.sexo, family(poisson) link(log) vce(robust) eform
+
+Iteration 0:   log pseudolikelihood = -1502.3737  
+Iteration 1:   log pseudolikelihood = -1500.8299  
+Iteration 2:   log pseudolikelihood = -1500.8296  
+Iteration 3:   log pseudolikelihood = -1500.8296  
+
+Generalized linear models                         No. of obs      =        600
+Optimization     : ML                             Residual df     =        597
+                                                  Scale parameter =          1
+Deviance         =   887.019532                   (1/df) Deviance =   1.485795
+Pearson          =  810.4102193                   (1/df) Pearson  =   1.357471
+
+Variance function: V(u) = u                       [Poisson]
+Link function    : g(u) = ln(u)                   [Log]
+
+                                                  AIC             =   5.012765
+Log pseudolikelihood = -1500.829618               BIC             =  -2931.947
+
+------------------------------------------------------------------------------
+             |               Robust
+          pc |        IRR   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |   .9937633   .0064204    -0.97   0.333     .9812589    1.006427
+      1.sexo |   1.150597   .0449872     3.59   0.000     1.065718    1.242237
+       _cons |    1631331   2.12e+07     1.10   0.271     .0000143    1.87e+17
+------------------------------------------------------------------------------
+
+. return list
+
+scalars:
+              r(level) =  95
+
+macros:
+             r(label2) : "(base)"
+
+matrices:
+              r(table) :  9 x 4
+
+. capture noisily lincom ano, eform
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |     exp(b)   Std. Err.      z    P>|z|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .9937633   .0064204    -0.97   0.333     .9812589    1.006427
+------------------------------------------------------------------------------
+
+. capture noisily svy: glm pc ano i.sexo, family(poisson) link(log)
+(running glm on estimation sample)
+
+Survey: Generalized linear models
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Design df         =         27
+
+------------------------------------------------------------------------------
+             |             Linearized
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0045522   .0072736    -0.63   0.537    -.0194763    .0103719
+      1.sexo |   .1582959   .0499118     3.17   0.004     .0558853    .2607065
+       _cons |   10.86689   14.63013     0.74   0.464    -19.15166    40.88544
+------------------------------------------------------------------------------
+
+. capture noisily lincom [pc]ano
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |  -.0045522   .0072736    -0.63   0.537    -.0194763    .0103719
+------------------------------------------------------------------------------
+
+. capture noisily lincom ano, irr
+
+ ( 1)  [pc]ano = 0
+
+------------------------------------------------------------------------------
+          pc |        IRR   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         (1) |   .9954581   .0072405    -0.63   0.537     .9807121    1.010426
+------------------------------------------------------------------------------
+
+. ereturn list
+
+scalars:
+               e(k_eq) =  1
+               e(df_r) =  27
+                  e(N) =  600
+                e(aic) =  12.67870106638325
+                 e(rc) =  0
+          e(converged) =  1
+               e(k_dv) =  1
+                  e(k) =  4
+                 e(ic) =  3
+               e(nbml) =  0
+                e(bic) =  -1567.013327160724
+         e(dispers_ps) =  3.448680630465627
+        e(deviance_ps) =  2058.862336387979
+          e(dispers_p) =  3.448680630465627
+         e(deviance_p) =  2058.862336387979
+          e(dispers_s) =  3.77211671189835
+         e(deviance_s) =  2251.953677003315
+            e(dispers) =  3.77211671189835
+           e(deviance) =  2251.953677003315
+               e(rank) =  3
+             e(census) =  0
+          e(singleton) =  0
+      e(N_strata_omit) =  0
+              e(N_psu) =  30
+           e(N_strata) =  3
+              e(N_pop) =  1518.399999976158
+             e(stages) =  1
+              e(power) =  0
+                 e(df) =  597
+                 e(vf) =  1
+                e(phi) =  1
+         e(k_eq_model) =  0
+
+macros:
+                e(cmd) : "glm"
+            e(cmdline) : "svy : glm pc ano i.sexo, family(poisson) link(log)"
+             e(prefix) : "svy"
+            e(cmdname) : "glm"
+            e(command) : "glm pc ano i.sexo, family(poisson) link(log)"
+               e(wexp) : "= w"
+              e(wtype) : "pweight"
+          e(estat_cmd) : "svy_estat"
+                e(vce) : "linearized"
+            e(vcetype) : "Linearized"
+              e(title) : "Survey: Generalized linear models"
+               e(wvar) : "w"
+         e(singleunit) : "missing"
+                e(su1) : "psu"
+            e(strata1) : "strat"
+         e(properties) : "b V"
+             e(depvar) : "pc"
+              e(which) : "max"
+          e(technique) : "nr"
+          e(ml_method) : "e2"
+               e(user) : "glim_lf"
+                e(opt) : "moptimize"
+               e(link) : "glim_l03"
+            e(varfunc) : "glim_v3"
+                  e(m) : "1"
+               e(opt1) : "ML"
+           e(varfuncf) : "u"
+           e(varfunct) : "Poisson"
+              e(linkf) : "ln(u)"
+              e(linkt) : "Log"
+            e(hac_lag) : "598"
+          e(marginsok) : "default"
+       e(marginsnotok) : "stdp Anscombe Cooksd Deviance Hat Likelihood Pearson Response Score Working ADJusted STAndardized STUdentized MODified"
+            e(predict) : "glim_p"
+
+matrices:
+                  e(b) :  1 x 4
+                  e(V) :  4 x 4
+                e(Cns) :  1 x 5
+       e(V_modelbased) :  4 x 4
+              e(V_srs) :  4 x 4
+  e(_N_strata_certain) :  1 x 1
+   e(_N_strata_single) :  1 x 1
+          e(_N_strata) :  1 x 1
+           e(gradient) :  1 x 4
+               e(ilog) :  1 x 20
+
+functions:
+             e(sample)   
+
+. display "=== replicate-weight prefixes"
+=== replicate-weight prefixes
+
+. capture noisily svy bootstrap: poisson pc ano
+svy bootstrap requires that the replicate weight variables were svyset using option bsrweight()
+
+. capture noisily svy jackknife: poisson pc ano
+(running poisson on estimation sample)
+
+Jackknife replications (30)
+----+--- 1 ---+--- 2 ---+--- 3 ---+--- 4 ---+--- 5 
+..............................
+
+Survey: Poisson regression
+
+Number of strata   =         3                  Number of obs     =        600
+Number of PSUs     =        30                  Population size   =    1,518.4
+                                                Replications      =         30
+                                                Design df         =         27
+                                                F(   1,     27)   =       0.54
+                                                Prob > F          =     0.4675
+
+------------------------------------------------------------------------------
+             |              Jackknife
+          pc |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+         ano |  -.0053508   .0072604    -0.74   0.467    -.0202479    .0095463
+       _cons |   12.55961    14.5988     0.86   0.397    -17.39465    42.51387
+------------------------------------------------------------------------------
+
+. 
+end of do-file
+      name:  <unnamed>
+       log:  /Users/yaskepalhares/opendta/compat/stata/2004_probe_postestimation.log
+  log type:  text
+ closed on:  21 Nov 2026, 10:22:25
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

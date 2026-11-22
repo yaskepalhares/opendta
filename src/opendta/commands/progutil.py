@@ -1,5 +1,5 @@
-"""pause, sleep, window, plugin and viewsource ([P] pause, [P] sleep, [P] window, [P] plugin,
-[P] viewsource).
+"""pause, sleep, window, plugin, viewsource and numlist ([P] pause, [P] sleep, [P] window,
+[P] plugin, [P] viewsource, [P] numlist).
 
 The commands that need the graphical interface (window fopen, fsave, stopbox, push, manage and
 menu) call a hook in `Session.ui_hooks`; without the interface they do what the manual says for a
@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 
 from ..core.errors import StataError
 from ..lang.adopath import find_file
-from ..lang.words import strip_outer_quotes
+from ..lang.syntax import find_top, match_options
+from ..lang.words import check_numlist, num_str, parse_numlist, strip_outer_quotes
 from .registry import command, lookup
 
 if TYPE_CHECKING:
@@ -184,3 +185,60 @@ def cmd_viewsource(s: "Session", args: str) -> None:
             raise StataError(601, f'file "{fname}" not found')
     for line in text.splitlines():
         s.output.write(line + "\n", "text")
+
+
+# ---------------------------------------------------------------------------
+# numlist
+# ---------------------------------------------------------------------------
+
+@command("numlist")
+def cmd_numlist(s: "Session", args: str) -> None:
+    """numlist "numlist" [, ascending descending integer missingokay min() max() range() sort]:
+    the expanded list in r(numlist). With no max(), the list has no limit (compat 2008:
+    1/2000 is accepted)."""
+    comma = find_top(args, ",")
+    body, opt = (args, "") if comma == -1 else (args[:comma], args[comma + 1:])
+    o = match_options(opt, {"ascending": 1, "descending": 1, "integer": 3, "missingokay": 7,
+                            "min": 3, "max": 3, "range": 1, "sort": 4})
+    nums = parse_numlist(strip_outer_quotes(body.strip()))
+    bounds = []
+    if o.get("range"):
+        toks = re.findall(r"(>=|<=|>|<)\s*(-?[0-9.eE+-]+)", str(o["range"]))
+        if not toks:
+            raise StataError(198, "invalid range()")
+        bounds = [(op, float(v)) for op, v in toks]
+    check_numlist(nums, ascending=bool(o.get("ascending")), descending=bool(o.get("descending")),
+                  integer=bool(o.get("integer")), missingokay=bool(o.get("missingokay")),
+                  minimum=int(o["min"]) if o.get("min") else 1,
+                  maximum=int(o["max"]) if o.get("max") else None, bounds=bounds)
+    if o.get("sort"):
+        nums = sorted(nums)
+    s.r = {"numlist": " ".join("." if x >= 8.98846567431158e307 else num_str(x) for x in nums)}
+
+
+# ---------------------------------------------------------------------------
+# rcof
+# ---------------------------------------------------------------------------
+
+@command("rcof")
+def cmd_rcof(s: "Session", args: str) -> None:
+    """rcof "[noisily] command" rc_condition: runs the command under capture and fails with
+    r(9) when the return code does not satisfy the condition. VERIFY: the second line of the
+    message shows the return code the command left."""
+    t = args.strip()
+    cmd, cond = "", t
+    if t.startswith('"') or t.startswith("`\""):
+        end = t.find('"\'', 2) + 2 if t.startswith("`\"") else t.find('"', 1) + 1
+        if end <= 0:
+            raise StataError(198, "invalid syntax")
+        cmd, cond = strip_outer_quotes(t[:end]), t[end:].strip()
+    # an empty command returns 0 (compat 2005: "_rc == 0" after a command that failed)
+    rc = 0
+    if cmd.strip():
+        s.interp._execute_expanded("capture " + cmd)
+        rc = s.rc
+    ok = s.eval(f"{rc} {cond}") if cond else 0.0
+    if not ok or ok >= 8.98846567431158e307:
+        # compat 2005 and 2008: the condition, then the command, then the return code
+        cond = " " + cond if cond else ""
+        raise StataError(9, f"\nrcof:  _rc {cond} *NOT TRUE* from\n       {cmd}\n       _rc == {rc}")

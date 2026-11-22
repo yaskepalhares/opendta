@@ -199,7 +199,12 @@ def _drop_keep(s: "Session", args: str, keep: bool) -> None:
         names = unique(expand(ds, p.varlist))
         if keep:
             names = [n for n in ds.names if n not in set(names)]
+        merge_label = any(ds.get(n).value_label == "_merge" for n in names)
         ds.drop_vars(names)
+        if merge_label and not any(v.value_label == "_merge" for v in ds.vars):
+            # merge's own label goes with the last variable that uses it: label list after
+            # merge and drop _merge does not show it (compat 2007; VERIFY: drop or save)
+            ds.value_labels.pop("_merge", None)
         s.notify_state()
         return
     if not (p.if_ or p.in_):
@@ -384,6 +389,61 @@ def cmd_order(s: "Session", args: str) -> None:
     s.notify_state()
 
 
+@command("aorder")
+def cmd_aorder(s: "Session", args: str) -> None:
+    """aorder [varlist]: the variables in alphabetical order at the front (earlier name of
+    order, alphabetic)."""
+    p = parse_standard(args)
+    match_options(p.options, {})
+    ds = s.data
+    if ds.nvars == 0:
+        return   # compat 2005: rc 0 without data
+    names = unique(expand(ds, p.varlist)) if p.varlist.strip() else [v.name for v in ds.vars]
+    # compat 2008: B a1 a2 a10 c (character codes, with the digits compared as numbers)
+    ds.order(sorted(names, key=lambda n: [(0, int(c), "") if c.isdigit() else (1, 0, c)
+                                          for c in re.findall(r"\d+|\D+", n)]))
+    s.notify_state()
+
+
+@command("move")
+def cmd_move(s: "Session", args: str) -> None:
+    """move var1 var2: var1 goes to the position of var2 (earlier name of order, before())."""
+    words = args.split()
+    if not words:
+        raise StataError(100, "varlist required")   # compat 2005
+    ds = s.data
+    names = unique(expand(ds, " ".join(words)))
+    if len(names) < 2:
+        raise StataError(102, "too few variables specified")
+    if len(names) > 2:
+        raise StataError(103, "too many variables specified")
+    if names[0] != names[1]:
+        ds.order([names[0]], before=names[1])
+    s.notify_state()
+
+
+@command("renpfix")
+def cmd_renpfix(s: "Session", args: str) -> None:
+    """renpfix old [new]: renames the variables that begin with old to begin with new
+    (earlier form of rename old* new*). VERIFY: r(varlist) and the message when no variable
+    begins with old."""
+    words = args.split()
+    if len(words) > 2:
+        raise StataError(198, "invalid syntax")
+    old = words[0] if words else ""
+    new = words[1] if len(words) > 1 else ""
+    ds = s.data
+    names = [v.name for v in ds.vars if v.name.startswith(old)] if old or ds.nvars else []
+    if not old or not names:
+        raise StataError(111, f"variable {old}* not found")
+    renamed = []
+    for n in names:
+        ds.rename(n, new + n[len(old):])
+        renamed.append(new + n[len(old):])
+    s.r = {"varlist": " ".join(renamed)}
+    s.notify_state()
+
+
 # ---------------------------------------------------------------------------
 # sort / gsort
 # ---------------------------------------------------------------------------
@@ -410,7 +470,12 @@ def cmd_sort(s: "Session", args: str) -> None:
         ds.sortlist = []
         s.notify_state()
         return
+    # sort does not mark the data as changed, and the sort marker keeps repeated names
+    # (sort g g x: "Sorted by: g  g  x", compat 2007; VERIFY: by g x: afterwards)
+    changed = ds.changed
     sorting.sort(ds, names)
+    ds.changed = changed
+    ds.sortlist = expand(ds, p.varlist, allow_empty=False)
     s.notify_state()
 
 
@@ -500,13 +565,11 @@ def cmd_compress(s: "Session", args: str) -> None:
             # a float only goes down to an integer type if all values are integers
             _note(s, f"  variable {n} was {var.vtype} now {need}")
             saved += (_BYTES[var.vtype] - _BYTES[need]) * ds.nobs
-            if var.fmt == default_format(var.vtype):
-                var.fmt = default_format(need)
+            # the display format stays (compat 2007: float %9.0g becomes byte %9.0g)
             var.vtype = need
     # VERIFY: exact format of the summary
     _note(s, f"  ({saved:,} bytes saved)")
-    if saved:
-        ds.changed = True
+    # the values stay the same: Stata 14 leaves c(changed) as it was (compat 2007)
     s.notify_state()
 
 
@@ -623,7 +686,8 @@ def run_input(s: "Session", spec: str, rows: list[str]) -> None:
                     v = M.SYSMISS
                 else:
                     try:
-                        v = M.missing_code(raw) if raw.startswith(".") else float(raw)
+                        # .a-.z are missing codes; .5 is a number
+                        v = M.missing_code(raw) if re.fullmatch(r"\.[a-z]", raw) else float(raw)
                     except ValueError:
                         raise StataError(198, f"'{raw}' cannot be read as a number")
                 fitted, _ = fit_numeric(np.array([v]), var.vtype)

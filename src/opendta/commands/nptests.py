@@ -461,9 +461,62 @@ def _row(name, x):
     return [name, n, m.mean, se, m.sd, lo, hi]
 
 
+def _sd_row(name, x, level):
+    r = _row(name, x)
+    if r[1] > 1:
+        r[5], r[6] = S.t_ci(r[2], r[3], r[1] - 1, level)
+    return tuple(r)
+
+
+def sd_two_groups(s: "Session", names: tuple[str, str], x1: np.ndarray, x2: np.ndarray,
+                  level: float, head: str = "Variable") -> None:
+    """Variance ratio test of two independent samples (sdtest, by() and sdtesti)."""
+    out = s.output
+    allx = np.concatenate([x1, x2])
+    _ttest_table(s, [_sd_row(names[0], x1, level), _sd_row(names[1], x2, level)], level,
+                 title="Variance ratio test", foot_rows=[_sd_row("combined", allx, level)], head=head)
+    sd1, sd2 = S.moments(x1).sd, S.moments(x2).sd
+    f = sd1 ** 2 / sd2 ** 2
+    df1, df2 = len(x1) - 1, len(x2) - 1
+    out.write(f"    ratio = sd({names[0]}) / sd({names[1]})".ljust(66) + f"f = {f:>8.4f}\n", "text")
+    out.write("Ho: ratio = 1".ljust(49) + "degrees of freedom = " + f"{df1}, {df2}".rjust(8) + "\n", "text")
+    lo = float(st.f.cdf(f, df1, df2))
+    up = float(st.f.sf(f, df1, df2))
+    two = 2 * min(lo, up)
+    mid = f"2*Pr(F < f) = {two:.4f}" if lo < up else f"2*Pr(F > f) = {two:.4f}"
+    _ha3(s, ["Ha: ratio < 1", "Ha: ratio != 1", "Ha: ratio > 1"],
+         [f"Pr(F < f) = {lo:.4f}", mid, f"Pr(F > f) = {up:.4f}"])
+    _set_r(s, [("sd", S.moments(allx).sd), ("p", two), ("p_l", lo), ("p_u", up), ("sd_2", sd2),
+               ("sd_1", sd1), ("F", f), ("df_2", float(df2)), ("df_1", float(df1)),
+               ("N", float(len(allx)))])
+
+
+def sd_one(s: "Session", name: str, x: np.ndarray, sd0: float, level: float,
+           head: str = "Variable") -> None:
+    """One-sample test of variance (sdtest var == #, sdtesti)."""
+    out = s.output
+    n = len(x)
+    _ttest_table(s, [_sd_row(name, x, level)], level, title="One-sample test of variance",
+                 head=head)
+    sd = S.moments(x).sd
+    c = (n - 1) * sd ** 2 / sd0 ** 2
+    num = format(sd0, "g")
+    out.write(f"    sd = sd({name})".ljust(59) + f"c = chi2 = {c:>8.4f}\n", "text")
+    out.write(f"Ho: sd = {num}".ljust(49) + f"degrees of freedom = {n - 1:>8}\n", "text")
+    lo, up = float(st.chi2.cdf(c, n - 1)), float(st.chi2.sf(c, n - 1))
+    two = 2 * min(lo, up)
+    mid = f"2*Pr(C < c) = {two:.4f}" if lo < up else f"2*Pr(C > c) = {two:.4f}"
+    _ha3(s, [f"Ha: sd < {num}", f"Ha: sd != {num}", f"Ha: sd > {num}"],
+         [f"Pr(C < c) = {lo:.4f}", mid, f"Pr(C > c) = {up:.4f}"])
+    _set_r(s, [("p", two), ("p_l", lo), ("p_u", up), ("sd", sd), ("chi2", c),
+               ("df", float(n - 1)), ("N", float(n))])   # compat 2008
+
+
 @command("sdtest", "sdtest")
 def cmd_sdtest(s: "Session", args: str) -> None:
     p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")
     o = match_options(p.options, {"by": 2, "level": 1})
     level = _level(s, o)
     if p.exp is None and "==" in p.varlist:
@@ -473,34 +526,15 @@ def cmd_sdtest(s: "Session", args: str) -> None:
     mask = touse(s, p) & S.valid(v.data)
 
     def row(name, x):
-        r = _row(name, x)
-        if r[1] > 1:
-            r[5], r[6] = S.t_ci(r[2], r[3], r[1] - 1, level)
-        return tuple(r)
+        return _sd_row(name, x, level)
 
     out = s.output
     if isinstance(o.get("by"), str):
         g, groups = _groups(s, o["by"], mask)
         if len(groups) != 2:
             raise StataError(420, f"{len(groups)} groups found, 2 required")   # VERIFY
-        x1, x2 = v.data[groups[0][2]], v.data[groups[1][2]]
-        allx = np.concatenate([x1, x2])
-        _ttest_table(s, [row(groups[0][1], x1), row(groups[1][1], x2)], level, title="Variance ratio test",
-                     foot_rows=[row("combined", allx)], head="Group")
-        sd1, sd2 = S.moments(x1).sd, S.moments(x2).sd
-        f = sd1 ** 2 / sd2 ** 2
-        df1, df2 = len(x1) - 1, len(x2) - 1
-        out.write(f"    ratio = sd({groups[0][1]}) / sd({groups[1][1]})".ljust(66) + f"f = {f:>8.4f}\n", "text")
-        out.write("Ho: ratio = 1".ljust(49) + "degrees of freedom = " + f"{df1}, {df2}".rjust(8) + "\n", "text")
-        lo = float(st.f.cdf(f, df1, df2))
-        up = float(st.f.sf(f, df1, df2))
-        two = 2 * min(lo, up)
-        mid = f"2*Pr(F < f) = {two:.4f}" if lo < up else f"2*Pr(F > f) = {two:.4f}"
-        _ha3(s, ["Ha: ratio < 1", "Ha: ratio != 1", "Ha: ratio > 1"],
-             [f"Pr(F < f) = {lo:.4f}", mid, f"Pr(F > f) = {up:.4f}"])
-        _set_r(s, [("sd", S.moments(allx).sd), ("p", two), ("p_l", lo), ("p_u", up), ("sd_2", sd2),
-                   ("sd_1", sd1), ("F", f), ("df_2", float(df2)), ("df_1", float(df1)),
-                   ("N", float(len(allx)))])
+        sd_two_groups(s, (groups[0][1], groups[1][1]), v.data[groups[0][2]], v.data[groups[1][2]],
+                      level, head="Group")
         return
     if p.exp is None:
         raise StataError(198, "option by() required")   # VERIFY
@@ -526,17 +560,42 @@ def cmd_sdtest(s: "Session", args: str) -> None:
         s.r = {"p": two, "p_u": up, "p_l": lo, "F": f, "df_2": float(df2), "df_1": float(df1),
                "sd_2": sd2, "sd_1": sd1, "N_2": float(len(x2)), "N_1": float(len(x1))}
         return
-    sd0 = float(s.eval(rhs))
-    n = len(x)
-    _ttest_table(s, [row(v.name, x)], level, title="One-sample test of variance")
-    sd = S.moments(x).sd
-    c = (n - 1) * sd ** 2 / sd0 ** 2
-    num = format(sd0, "g")
-    out.write(f"    sd = sd({v.name})".ljust(59) + f"c = chi2 = {c:>8.4f}\n", "text")
-    out.write(f"Ho: sd = {num}".ljust(49) + f"degrees of freedom = {n - 1:>8}\n", "text")
-    lo, up = float(st.chi2.cdf(c, n - 1)), float(st.chi2.sf(c, n - 1))
-    two = 2 * min(lo, up)
-    mid = f"2*Pr(C < c) = {two:.4f}" if lo < up else f"2*Pr(C > c) = {two:.4f}"
-    _ha3(s, [f"Ha: sd < {num}", f"Ha: sd != {num}", f"Ha: sd > {num}"],
-         [f"Pr(C < c) = {lo:.4f}", mid, f"Pr(C > c) = {up:.4f}"])
-    s.r = {"p": two, "p_u": up, "p_l": lo, "chi2": c, "df": float(n - 1), "sd": sd, "N": float(n)}
+    sd_one(s, v.name, x, float(s.eval(rhs)), level)
+
+
+@command("sfrancia")
+def cmd_sfrancia(s: "Session", args: str) -> None:
+    """sfrancia varlist [if] [in] [, noties]. VERIFY: the layout, the limits on the number of
+    observations and the boxcox option."""
+    from ..core.basestats import shapiro_francia
+    p = parse_standard(args)
+    if not p.varlist.strip():
+        raise StataError(100, "varlist required")   # compat 2005
+    o = match_options(p.options, {"boxcox": 1, "noties": 5})
+    if o.get("boxcox"):
+        raise StataError(198, "option boxcox is not available yet in OpenDTA")
+    vars_ = numeric_vars(s, p.varlist, allow_string=False)
+    base = touse(s, p)
+    out = s.output
+    out.write("\n" + " " * 18 + "Shapiro-Francia W' test for normal data\n\n", "text")
+    out.write("    Variable |" + "Obs".rjust(10) + "W'".rjust(9) + "V'".rjust(12) + "z".rjust(9)
+              + "Prob>z".rjust(13) + "\n", "text")
+    out.write("-" * 13 + "+" + "-" * 53 + "\n", "text")
+    note = False
+    for v in vars_:
+        x = v.data[base & S.valid(v.data)]
+        out.write(f"{name12(v.name):>12} |", "text")
+        note = note or not 10 <= len(x) <= 5000
+        if len(x) < 5:
+            # compat 2008: missing results and no error. VERIFY: the limit of 5
+            out.write(f"{len(x):>10}{'.':>11}{'.':>11}{'.':>10}{'.':>11}\n", "result")
+            s.r = {}
+            continue
+        r = shapiro_francia(x, ties=not o.get("noties"))
+        out.write(f"{len(x):>10}{r['W']:>11.5f}{r['V']:>11.3f}{r['z']:>10.3f}{r['p']:>11.5f}\n",
+                  "result")
+        # return list shows z V W N p (compat 2008)
+        _set_r(s, [("z", r["z"]), ("V", r["V"]), ("W", r["W"]), ("N", r["N"]), ("p", r["p"])])
+    if note:
+        out.write("\nNote: The normal approximation to the sampling distribution of W'\n"
+                  "      is valid for 10<=n<=5000 under the log transformation.\n", "text")

@@ -82,7 +82,7 @@ def cmd_use(s: "Session", args: str) -> None:
             s.data = Dataset()
             s.notify_state()
             raise
-    new.changed = bool(if_ or in_)   # a varlist alone leaves the data unchanged (Stata 14, Vigitel run)
+    new.changed = False   # also with a varlist, if or in (compat 2001)
     s.notify_state()
 
 
@@ -136,8 +136,8 @@ def _save(s: "Session", args: str, release: int, extra_opts: dict | None = None,
                 s.output.write(f"(note: variable {name} truncated to str244)\n", "text")
     try:
         ds.timestamp = write_dta(ds, path, release=release)
-    except OSError as e:
-        raise StataError(603, f"file {shown} could not be opened ({e.strerror})")
+    except OSError:
+        raise StataError(603, f"file {shown} could not be opened")
     if head.strip():
         ds.filename = str(path)
     ds.fullpath = str(path.resolve())

@@ -8,6 +8,7 @@ the dataset.
 from __future__ import annotations
 
 import datetime as _dt
+import functools
 import math
 import os
 import platform
@@ -33,6 +34,10 @@ _MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 DEFAULT_GLOBALS = {
     "S_ADO": "BASE;SITE;.;PERSONAL;PLUS;OLDPLACE",
     "S_level": "95",
+    # set when Stata starts (compat/expected/2003)
+    "S_OS": {"Windows": "Windows", "Darwin": "MacOSX"}.get(platform.system(), "Unix"),
+    "S_OSDTL": platform.mac_ver()[0] if platform.system() == "Darwin" else platform.release(),
+    "S_StataSE": "SE",
     "F1": "help advice;",
     "F2": "describe;",
     "F7": "save ",
@@ -55,6 +60,33 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "graphics": "on",
     "scheme": "s2color",
 }
+
+
+@functools.lru_cache(maxsize=1)
+def _locale() -> str:
+    """en_ and the region of the system locale (Stata 14 on a Mac set to Brazil: en_BR)."""
+    import locale
+    import subprocess
+    loc = ""
+    if platform.system() == "Darwin":
+        try:
+            loc = subprocess.run(["defaults", "read", "-g", "AppleLocale"], capture_output=True,
+                                 text=True, timeout=2).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            loc = ""
+    elif platform.system() == "Windows":
+        try:   # "en-US"; locale.getlocale() gives "English_United States" there
+            import ctypes
+            buf = ctypes.create_unicode_buffer(85)
+            if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
+                loc = buf.value.replace("-", "_")
+        except (OSError, AttributeError):
+            loc = ""
+    loc = loc or locale.getlocale()[0] or os.environ.get("LANG", "")
+    region = loc.split(".")[0].split("@")[0].split("_")[1] if "_" in loc else "US"
+    if not (len(region) == 2 and region.isalpha()):
+        region = "US"
+    return "en_" + region
 
 
 class EvalContext:
@@ -138,7 +170,7 @@ class EvalContext:
             return 1.0 if len(m) and m[0] else 0.0
         s = self.s
         if kind == "c":
-            return s.creturn(raw)
+            return s.creturn(raw, strict=True)
         store = {"r": s.r, "e": s.e, "s": s.sret}[kind]
         if raw in store:
             v = store[raw]
@@ -290,7 +322,7 @@ class Session:
     def nobs(self) -> int:
         return self.data.nobs
 
-    def creturn(self, name: str) -> Value:
+    def creturn(self, name: str, *, strict: bool = False) -> Value:
         now = _dt.datetime.now()
         values: dict[str, Value] = {
             "pi": math.pi,
@@ -327,11 +359,131 @@ class Session:
             "alpha": "a b c d e f g h i j k l m n o p q r s t u v w x y z",
             "ALPHA": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z",
             "Mons": "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
-            "Weekdays": "Sun Mon Tue Wed Thu Fri Sat",
+            "Months": "January February March April May June July August September October "
+                      "November December",
+            "Wdays": "Sun Mon Tue Wed Thu Fri Sat",
+            "Weekdays": "Sunday Monday Tuesday Wednesday Thursday Friday Saturday",
+            "filedate": self.data.timestamp if self.data.filename else "",
+            **self._c_system(),
         }
         if name not in values:
+            if strict:
+                # c(sortlist), c(eps), c(lastcmd)... do not exist in Stata 14 (compat 2003)
+                raise StataError(133, f"c({name}) undefined")
             return M.SYSMISS
         return values[name]
+
+    def _c_system(self) -> dict[str, Value]:
+        """c() values that describe the system, the limits and the settings, with the values
+        Stata 14 SE reports (compat/expected/2003)."""
+        import getpass
+        import socket
+        import tempfile
+        from .lang.adopath import sysdir
+
+        def setting(name: str, default: str) -> str:
+            return self.settings.get(name, default)
+
+        def number(name: str, default: str) -> float:
+            try:
+                return float(self.settings.get(name, default))
+            except ValueError:
+                return float(default)
+
+        dirs = sysdir(self)
+        osdtl = platform.mac_ver()[0] if platform.system() == "Darwin" else platform.release()
+        try:
+            user = getpass.getuser()
+        except (OSError, KeyError):
+            user = ""
+        # VERIFY: machine_type on Windows and Linux; Stata 14 on any Mac reports Intel
+        machine = {"Darwin": "Macintosh (Intel 64-bit)", "Windows": "PC (64-bit x86-64)"}.get(
+            platform.system(), "PC (64-bit x86-64)")
+        return {
+            "machine_type": machine,
+            "byteorder": "lohi",
+            "username": user,
+            "hostname": socket.gethostname(),
+            "osdtl": osdtl,
+            # ends with / on every system, like c(dirsep) (VERIFY on Windows)
+            "tmpdir": tempfile.gettempdir().rstrip("/\\") + "/",
+            "sysdir_stata": dirs["STATA"].rstrip("/") + "/",
+            "sysdir_base": dirs["BASE"].rstrip("/") + "/",
+            "sysdir_site": dirs["SITE"].rstrip("/") + "/",
+            "sysdir_plus": dirs["PLUS"].rstrip("/") + "/",
+            "sysdir_personal": dirs["PERSONAL"].rstrip("/") + "/",
+            "born_date": "02 Apr 2015",   # the Stata 14 build the references come from
+            "SE": 1.0, "MP": 0.0, "processors": 1.0,
+            "mode": "", "console": "",
+            "memory": 33554432.0,   # VERIFY: Stata reports the memory it has allocated
+            "max_N_theory": 2147483620.0, "max_k_theory": 5000.0, "max_width_theory": 1048576.0,
+            "maxvar": number("maxvar", "5000"), "matsize": number("matsize", "400"),
+            "epsfloat": 2.0 ** -23,
+            "maxbyte": 100.0, "minbyte": -127.0, "maxint": 32740.0, "minint": -32767.0,
+            "maxlong": 2147483620.0, "minlong": -2147483647.0,
+            "maxfloat": 1.70141173319e+38, "minfloat": -1.70141173319e+38,
+            "maxstrvarlen": 2045.0, "max_macrolen": 4227143.0, "macrolen": 645200.0,
+            "namelen": 32.0, "cmdlen": 645216.0, "eqlen": 1337.0,
+            "adosize": number("adosize", "1000"), "niceness": number("niceness", "5"),
+            "pagesize": number("pagesize", "37"), "logtype": setting("logtype", "smcl"),
+            "noisily": 0.0 if self.output.quiet_depth and not self.output.noisy_depth else 1.0,
+            "trace": setting("trace", "off"), "tracedepth": number("tracedepth", "32000"),
+            "varabbrev": setting("varabbrev", "on"), "rmsg": setting("rmsg", "off"),
+            "httpproxy": setting("httpproxy", "off"), "checksum": setting("checksum", "off"),
+            "reventries": number("reventries", "5000"), "virtual": setting("virtual", "off"),
+            "scrollbufsize": number("scrollbufsize", "204800"),
+            "emptycells": setting("emptycells", "keep"),
+            "showbaselevels": setting("showbaselevels", ""),
+            "showemptycells": setting("showemptycells", ""),
+            "showomitted": setting("showomitted", ""),
+            "fvwrap": number("fvwrap", "1"), "lstretch": setting("lstretch", ""),
+            "cformat": setting("cformat", ""), "pformat": setting("pformat", ""),
+            "sformat": setting("sformat", ""),
+            # the rest of creturn list, with Stata 14's defaults (compat 2003)
+            "rmsg_time": number("rmsg_time", "0"), "userversion": float(self.version),
+            "bit": 64.0, "processors_lic": 1.0, "processors_mach": M.SYSMISS,
+            "processors_max": 1.0, "sysdir_oldplace": "~/ado/",
+            "adopath": "BASE;SITE;.;PERSONAL;PLUS;OLDPLACE",
+            "max_matsize": 11000.0, "min_matsize": 10.0, "charlen": 67783.0,
+            "max_cmdlen": 4227159.0, "namelenbyte": 128.0, "namelenchar": 32.0,
+            "maxstrlvarlen": 2000000000.0, "maxvlabellen": 32000.0,
+            "min_memory": number("min_memory", "0"),
+            "max_memory": number("max_memory", str(M.SYSMISS)) if setting("max_memory", ".") != "."
+            else M.SYSMISS,
+            "segmentsize": number("segmentsize", "33554432"),
+            "eolchar": setting("eolchar", "unix"), "notifyuser": setting("notifyuser", "on"),
+            "playsnd": setting("playsnd", "off"), "include_bitmap": setting("include_bitmap", "on"),
+            "clevel": number("clevel", "95"), "fvlabel": setting("fvlabel", "on"),
+            "fvwrapon": setting("fvwrapon", "word"),
+            "coeftabresults": setting("coeftabresults", "on"),
+            "revkeyboard": setting("revkeyboard", "on"), "varkeyboard": setting("varkeyboard", "on"),
+            "smoothfonts": setting("smoothfonts", "on"), "linegap": number("linegap", "1"),
+            "maxdb": number("maxdb", "50"), "printcolor": setting("printcolor", "automatic"),
+            "copycolor": setting("copycolor", "automatic"),
+            "timeout1": number("timeout1", "30"), "timeout2": number("timeout2", "180"),
+            "httpproxyhost": setting("httpproxyhost", ""),
+            "httpproxyport": number("httpproxyport", "80"),
+            "httpproxyauth": setting("httpproxyauth", "off"),
+            "httpproxyuser": setting("httpproxyuser", ""), "httpproxypw": setting("httpproxypw", ""),
+            "update_query": setting("update_query", "on"),
+            "update_interval": number("update_interval", "7"),
+            "update_prompt": setting("update_prompt", "off"),
+            "tracesep": setting("tracesep", "on"), "traceindent": setting("traceindent", "on"),
+            "traceexpand": setting("traceexpand", "on"), "tracenumber": setting("tracenumber", "off"),
+            "tracehilite": setting("tracehilite", ""),
+            "matastrict": setting("matastrict", "off"), "matalnum": setting("matalnum", "off"),
+            "mataoptimize": setting("mataoptimize", "on"), "matafavor": setting("matafavor", "space"),
+            "matacache": number("matacache", "2000"),
+            # the list query shows (compat 2008)
+            "matalibs": setting("matalibs", "lmatabase;lmatamcmc;lmatasem;lmatagsem;lmatapss;"
+                                            "lmatapostest;lmatapath;lmataopt;lmataado;lmatafc"),
+            "matamofirst": setting("matamofirst", "off"),
+            # VERIFY: Stata built the locale from the interface language and the region
+            "locale_ui": setting("locale_ui", _locale()), "locale_functions": setting(
+                "locale_functions", _locale()), "locale_icudflt": _locale(),
+            "maxiter": number("maxiter", "16000"), "searchdefault": setting("searchdefault", "all"),
+            "odbcmgr": setting("odbcmgr", "iodbc"),
+        }
 
     # -- Mata ---------------------------------------------------------------
     @property
