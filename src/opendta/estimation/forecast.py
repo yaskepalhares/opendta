@@ -1,9 +1,8 @@
 """forecast ([TS] forecast): models made of stored estimation results, identities and exogenous
 variables, solved period by period (Gauss-Seidel within each period) into forecast variables.
 
-VERIFY: the layouts of solve, describe, list and query, and the defaults of begin() (compat
-2008). Estimation equations use the linear prediction of single-equation models; stochastic
-simulation (simulate()) is not available yet."""
+The layouts and the default begin() follow compat 2008. Estimation equations use the linear
+prediction of single-equation models; stochastic simulation (simulate()) is not available yet."""
 
 from __future__ import annotations
 
@@ -38,6 +37,7 @@ class Model:
     exog: list[str] = field(default_factory=list)
     adjust: dict[str, list[str]] = field(default_factory=dict)
     commands: list[str] = field(default_factory=list)
+    solved: bool = False
     created: list[str] = field(default_factory=list)   # variables made by forecast solve
 
     def endogenous(self) -> list[str]:
@@ -48,10 +48,13 @@ def _model(s: "Session") -> Model | None:
     return getattr(s, "_forecast_model", None)
 
 
-def _need(s: "Session") -> Model:
+def _need(s: "Session", sub: str) -> Model:
     m = _model(s)
     if m is None:
-        raise StataError(198, "no forecast model has been started")   # VERIFY
+        # compat 2008 (forecast describe); VERIFY: the other subcommands
+        raise StataError(111, "forecast problem not found\n    Before you can issue forecast "
+                              f"{sub} you must begin the forecast problem by issuing forecast "
+                              "create.")
     return m
 
 
@@ -85,12 +88,12 @@ def _create(s, rest, full) -> None:
     name = body.strip() or "forecast"
     s._forecast_model = Model(name)
     s._forecast_model.commands.append("forecast " + full)
-    s.output.write(f"(Forecast model {name} started.)\n", "text")
+    s.output.write(f"  Forecast model {name} started.\n", "text")   # compat 2008
 
 
 def _estimates(s, rest, full) -> None:
     from .postest import _stored
-    m = _need(s)
+    m = _need(s, "estimates")
     body, opt = _split(rest)
     o = match_options(opt, {"predict": 4, "names": 2, "advise": 3})
     if o.get("predict"):
@@ -106,7 +109,9 @@ def _estimates(s, rest, full) -> None:
     depvar = (o.get("names") and str(o["names"]).split(",")[0].strip()) or est.depvar
     if depvar in m.endogenous():
         raise StataError(110, f"{depvar} is already an endogenous variable in the model")   # VERIFY
-    m.equations.append(("estimates", depvar, copy.deepcopy(est)))
+    est = copy.deepcopy(est)
+    est._stored_name = name   # forecast describe lists it
+    m.equations.append(("estimates", depvar, est))
     m.commands.append("forecast " + full)
     s.output.write(f"  Added estimation results from {est.cmd}.\n"
                    f"  Forecast model {m.name} now contains {len(m.equations)} endogenous "
@@ -114,7 +119,7 @@ def _estimates(s, rest, full) -> None:
 
 
 def _identity(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "identity")
     body, opt = _split(rest)
     o = match_options(opt, {"generate": 3})
     var, eq, exp = body.partition("=")
@@ -127,7 +132,14 @@ def _identity(s, rest, full) -> None:
     if not s.data.has(var):
         if not o.get("generate"):
             raise StataError(111, f"variable {var} not found")
-        s.data.add(Variable(var, "float", np.full(s.data.nobs, SYS)))
+        # generate fills the variable with the expression (compat 2008: f_z holds y + x before
+        # the forecast)
+        from ..commands._util import eval_vector
+        vec = np.broadcast_to(np.asarray(eval_vector(s, exp.strip()), dtype=float), (s.data.nobs,))
+        ok = vec < SYS
+        col = np.full(s.data.nobs, SYS)
+        col[ok] = vec[ok].astype(np.float32)
+        s.data.add(Variable(var, "float", col))
     m.equations.append(("identity", var, exp.strip()))
     m.commands.append("forecast " + full)
     s.output.write(f"  Forecast model {m.name} now contains {len(m.equations)} endogenous "
@@ -139,7 +151,7 @@ def _coefvector(s, rest, full) -> None:
 
 
 def _exogenous(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "exogenous")
     names = s.expand_varlist(rest)
     if not names:
         raise StataError(100, "varlist required")
@@ -152,13 +164,16 @@ def _exogenous(s, rest, full) -> None:
 
 
 def _adjust(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "adjust")
     var, eq, exp = rest.partition("=")
     var = var.strip()
     if not eq or var not in m.endogenous():
         raise StataError(198, f"{var} is not an endogenous variable of the model")   # VERIFY
     m.adjust.setdefault(var, []).append(exp.strip())
     m.commands.append("forecast " + full)
+    k = len(m.adjust[var])
+    s.output.write(f"  Endogenous variable {var} now has {k} adjustment{'s' if k > 1 else ''}.\n",
+                   "text")   # compat 2008
 
 
 def _clear(s, rest, full) -> None:
@@ -168,32 +183,73 @@ def _clear(s, rest, full) -> None:
 def _query(s, rest, full) -> None:
     m = _model(s)
     if m is None:
-        s.output.write("No forecast model has been started.\n", "text")
+        s.output.write("  No forecast model exists.\n", "text")   # compat 2008
     else:
-        s.output.write(f"Forecast model {m.name} has been started.\n", "text")
+        s.output.write(f"  Forecast model {m.name} exists.\n", "text")
 
 
 def _list(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "list")
     for c in m.commands:
         s.output.write(c + "\n", "text")
 
 
 def _describe(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "describe")
+    # layout of compat 2008. VERIFY: the wording of the empty and solved cases
     out = s.output
-    out.write(f"\n  Forecast model {m.name} contains {len(m.equations)} endogenous variable"
-              f"{'s' if len(m.equations) != 1 else ''}:\n\n", "text")
-    out.write(f"  {'Variable':<14}Source\n  " + "-" * 40 + "\n", "text")
-    for kind, var, obj in m.equations:
-        src = obj.cmd if kind == "estimates" else "identity"
-        out.write(f"  {var:<14}{src}\n", "result")
+    rule = "-" * 65 + "\n"
+
+    def center(x: str) -> str:
+        pad = max(21 - len(x), 0)
+        return " " * (pad // 2) + x + " " * (pad - pad // 2)
+
+    def head(n: int, one: str, many: str) -> None:
+        what = f"no {many}" if n == 0 else f"{n} {one if n == 1 else many}"
+        out.write(f"\nForecast model {m.name} contains {what}{'.' if n == 0 else ':'}\n", "text")
+
+    ests = [(v, o) for k, v, o in m.equations if k == "estimates"]
+    ids = [v for k, v, _ in m.equations if k == "identity"]
+    head(len(ests), "estimation result", "estimation results")
+    if ests:
+        out.write(rule + "       Estimation    |                     |\n"
+                  "         result      |       Command       |   # LHS variables\n" + rule, "text")
+        for i, (v, o) in enumerate(ests, 1):
+            name = getattr(o, "_stored_name", "") or v
+            out.write(f"  {f'{i}. {name}':<20}{center(o.cmd)}{1:>13}\n", "result")
+        out.write(rule, "text")
+    head(len(ids), "identity", "identities")
+    if ids:
+        out.write(rule + "       Endogenous variable\n" + rule, "text")
+        for i, v in enumerate(ids, 1):
+            out.write(f"  {i}. {v}\n", "result")
+        out.write(rule, "text")
+    head(0, "coefficient vector", "coefficient vectors")
+    head(len(m.exog), "declared exogenous variable", "declared exogenous variables")
     if m.exog:
-        out.write(f"\n  Declared exogenous variables: {' '.join(m.exog)}\n", "text")
+        out.write(rule, "text")
+        for i, v in enumerate(m.exog, 1):
+            out.write(f"  {i}. {v}\n", "result")
+        out.write(rule, "text")
+    head(len(m.equations), "endogenous variable", "endogenous variables")
+    if m.equations:
+        out.write(rule + "       Variable      |       Source        |    # adjustments\n" + rule,
+                  "text")
+        for i, (k, v, _) in enumerate(m.equations, 1):
+            out.write(f"  {f'{i}. {v}':<20}{center(k)}{len(m.adjust.get(v, [])):>13}\n", "result")
+        out.write(rule, "text")
+    adj = [v for v in m.endogenous() if m.adjust.get(v)]
+    head(len(adj), "variable with adjustments", "variables with adjustments")
+    if adj:
+        out.write(rule, "text")
+        for i, v in enumerate(adj, 1):
+            out.write(f"  {i}. {v}\n", "result")
+        out.write(rule, "text")
+    out.write(f"\nForecast model {m.name} has {'' if m.solved else 'not '}been solved.\n", "text")
 
 
 def _drop(s, rest, full) -> None:
-    m = _need(s)
+    m = _need(s, "drop")
     _, opt = _split(rest)
     o = match_options(opt, {"prefix": 3, "suffix": 3})
     names = [n for n in m.created if s.data.has(n)]
@@ -247,7 +303,7 @@ def _time_index(s, tvar: str, text: str) -> int:
 def _solve(s, rest, full) -> None:
     from .postest import xb_all
     from .tsops import ts_info
-    m = _need(s)
+    m = _need(s, "solve")
     _, opt = _split(rest)
     o = match_options(opt, {"prefix": 3, "suffix": 3, "begin": 3, "end": 3, "periods": 3,
                             "static": 4, "actuals": 3, "log": 3, "simulate": 3, "double": 6,
@@ -272,8 +328,8 @@ def _solve(s, rest, full) -> None:
     if o.get("begin"):
         begin = _time_index(s, info.tvar, str(o["begin"]))
     else:
-        # VERIFY: the period after the last one in which every endogenous variable that has
-        # data is nonmissing (variables made by identity, generate have none)
+        # the period after the last one in which every endogenous variable that has data is
+        # nonmissing (compat 2008: 26). VERIFY: models whose variables end at different times
         full = np.ones(n, dtype=bool)
         for v in endo:
             if (actual[v] < SYS).any():
@@ -290,6 +346,7 @@ def _solve(s, rest, full) -> None:
         if ds.has(nm):
             raise StataError(110, f"variable {nm} already defined")
     cols = {v: np.where(np.arange(n) < begin, actual[v], SYS) for v in endo}
+    # the forecast variables hold the actual values before the first period (compat 2008)
     static, use_actuals = bool(o.get("static")), bool(o.get("actuals"))
     work = ds.copy()
 
@@ -333,12 +390,28 @@ def _solve(s, rest, full) -> None:
     out.write(f"Forecast {'prefix' if pre else 'suffix'}:  {pre or suf}\n\n", "text")
     show = str(o.get("log") or "brief") not in ("off", "quietly")
     for t in range(begin, end + 1):
-        its = solve_period(t, model_eval, endo, cols)
         if show:
-            out.write(f"{_period_label(s, info.tvar, t)}: " + "." * its + "\n", "text")
+            out.write(f"{_period_label(s, info.tvar, t)}: ", "text")
+        its = solve_period(t, model_eval, endo, cols)
+        bad = [v for v in endo if not cols[v][t] < SYS]
+        if bad:
+            # compat 2008 (a static forecast reaching missing lagged values)
+            if show:
+                out.write("\n", "text")
+            listed = bad[0] if len(bad) == 1 else (" and ".join(bad) if len(bad) == 2 else
+                                                     ", ".join(bad[:-1]) + ", and " + bad[-1])
+            raise StataError(416, "missing values encountered\n    Missing values were encountered "
+                                  "while attempting to solve the model at time "
+                                  f"{_period_label(s, info.tvar, t)}.  "
+                                  f"Variable{'s' if len(bad) > 1 else ''} {listed} evaluate"
+                                  f"{'' if len(bad) > 1 else 's'} to missing.")
+        if show:
+            # VERIFY: Stata's solver takes more iterations (one dot each) than this one
+            out.write(" " + "." * its + "\n", "text")
     vtype = "double" if o.get("double") else "float"
+    m.solved = True
     for v, nm in zip(endo, names):
-        col = np.where((np.arange(n) >= begin) & (np.arange(n) <= end), cols[v], SYS)
+        col = np.where(np.arange(n) <= end, cols[v], SYS)
         ds.add(Variable(nm, vtype, col))
         m.created.append(nm)
     foot = (f"Forecast {len(endo)} variable{'s' if len(endo) != 1 else ''} spanning "

@@ -447,12 +447,26 @@ def test_forecast(run):
     assert fy[25] == pytest.approx(b["_cons"] + b["L.y"] * y[24] + b["x"] * x[25], rel=1e-6)
     assert fy[26] == pytest.approx(b["_cons"] + b["L.y"] * fy[25] + b["x"] * x[26], rel=1e-6)
     assert d.get("f_z").data[26] == pytest.approx(fy[26] + x[26], rel=1e-6)
-    assert fy[24] >= 8.9e307
-    run("forecast adjust y = y + 1\nforecast solve, prefix(a_) log(off)")
+    # compat 2008: the actual values before the first forecast period
+    assert fy[24] == pytest.approx(y[24]) and fy[0] == pytest.approx(y[0])
+    out = run("forecast describe").splitlines()
+    assert "  1. m1                      regress                   1" in out
+    assert "  2. z                      identity                   0" in out
+    assert out[-1] == "Forecast model m has been solved."
+    out = run("forecast adjust y = y + 1")
+    assert out.strip() == "Endogenous variable y now has 1 adjustment."
+    run("forecast solve, prefix(a_) log(off)")
     assert d.get("a_y").data[25] == pytest.approx(fy[25] + 1, rel=1e-6)
-    run("forecast solve, prefix(s_) static begin(20) log(off)")
+    run("forecast solve, prefix(s_) static begin(20) end(26) log(off)")
     sy = run.session.data.get("s_y").data
     assert sy[20] == pytest.approx(b["_cons"] + b["L.y"] * y[19] + b["x"] * x[20] + 1, rel=1e-6)
-    assert run("forecast query").strip() == "Forecast model m has been started."
+    # a static forecast stops where the lagged actual values are missing (compat 2008)
+    out = run("capture noisily forecast solve, prefix(t_) static begin(20)\ndisplay _rc")
+    assert "Missing values were encountered while attempting to solve the model at time 27.  " \
+           "Variables y and z evaluate to missing." in out and out.splitlines()[-1] == "416"
+    assert run("forecast query").strip() == "Forecast model m exists."
     run("forecast drop\nforecast clear")
-    assert run("forecast query").strip() == "No forecast model has been started."
+    assert run("forecast query").strip() == "No forecast model exists."
+    out = run("capture noisily forecast describe\ndisplay _rc").splitlines()
+    assert out[-3:-1] == ["forecast problem not found", "    Before you can issue forecast describe "
+                          "you must begin the forecast problem by issuing forecast create."]
