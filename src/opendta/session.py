@@ -463,9 +463,9 @@ class Session:
             "matastrict": setting("matastrict", "off"), "matalnum": setting("matalnum", "off"),
             "mataoptimize": setting("mataoptimize", "on"), "matafavor": setting("matafavor", "space"),
             "matacache": number("matacache", "2000"),
-            # VERIFY: the full list (the log shows "lmatabase;lmatamc..")
-            "matalibs": setting("matalibs", "lmatabase;lmatamcmc;lmatasem;lmatagsem;lmatami;"
-                                            "lmatapss;lmatasvy;lmatafc;lmatanumlib"),
+            # the list query shows (compat 2008)
+            "matalibs": setting("matalibs", "lmatabase;lmatamcmc;lmatasem;lmatagsem;lmatapss;"
+                                            "lmatapostest;lmatapath;lmataopt;lmataado;lmatafc"),
             "matamofirst": setting("matamofirst", "off"),
             # VERIFY: Stata built the locale from the interface language and the region
             "locale_ui": setting("locale_ui", _locale()), "locale_functions": setting(

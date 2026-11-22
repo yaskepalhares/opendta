@@ -65,6 +65,10 @@ def cmd_set(s: "Session", args: str) -> None:
         if hook is not None:
             hook()
     s.settings[name] = value.split(",")[0].strip()
+    if name.startswith("httpproxy"):
+        # these are always remembered (compat 2008 shows it for httpproxyhost; VERIFY the
+        # other httpproxy settings)
+        s.output.write(f"(set {name} preference recorded)\n", "text")
     opts = value.partition(",")[2].strip()
     if opts and "permanently".startswith(opts.split()[0]) and len(opts.split()[0]) >= 4:
         hook = s.ui_hooks.get("set_permanently")
@@ -104,20 +108,71 @@ def _set_rng(s: "Session", name: str, value: str) -> None:
 _CATEGORIES = {"memory": "Memory settings", "output": "Output settings",
                "interface": "Interface settings", "graphics": "Graphics settings",
                "efficiency": "Efficiency settings", "network": "Network settings",
-               "update": "Update settings", "trace": "Trace (program debugging) settings",
-               "mata": "Mata settings", "unicode": "Unicode settings", "other": "Other settings"}
+               "update": "Update settings", "trace": "Trace (programming debugging) settings",
+               "mata": "Mata settings", "unicode": "Unicode", "other": "Other settings"}
 
-# the ranges query memory shows (compat 2005)
-_MEMORY_NOTES = {"maxvar": "2048-32767; max. vars allowed", "matsize": "10-11000; max. # vars in models",
-                 "niceness": "0-10", "min_memory": "0-1600g", "max_memory": "32m-1600g or .",
-                 "segmentsize": "1m-32g"}
+# What query shows, category by category, as Stata 14 lists it (compat 2005 and 2008): the
+# setting and its note; "-" is a separator line inside the category.
+_P, _E3 = "may be empty, off, or on", "may be empty or a numerical format"
+_QUERY = {
+    "memory": [("maxvar", "2048-32767; max. vars allowed"),
+               ("matsize", "10-11000; max. # vars in models"), ("niceness", "0-10"),
+               ("min_memory", "0-1600g"), ("max_memory", "32m-1600g or ."),
+               ("segmentsize", "1m-32g")],
+    "output": [("more", ""), ("rmsg", ""), ("dp", "may be period or comma"),
+               ("linesize", "characters"), ("pagesize", "lines"), "-",
+               ("level", "percent confidence intervals"),
+               ("clevel", "percent credible intervals"), "-",
+               ("showbaselevels", "may be empty, off, on, or all"), ("showemptycells", _P),
+               ("showomitted", _P), ("fvlabel", ""), ("fvwrap", ""),
+               ("fvwrapon", "may be word or width"), "-", ("lstretch", _P), "-",
+               ("cformat", _E3), ("pformat", _E3), ("sformat", _E3), "-",
+               ("coeftabresults", ""), "-", ("logtype", "may be smcl or text"), "-",
+               ("eolchar", "may be mac or unix"), ("notifyuser", ""), ("playsnd", ""),
+               ("include_bitmap", "")],
+    "interface": [("revkeyboard", ""), ("varkeyboard", ""), ("smoothfonts", ""), "-",
+                  ("linegap", "pixels"), ("scrollbufsize", "characters"),
+                  ("varlabelpos", "(not relevant)"), ("reventries", "lines"), "-",
+                  ("maxdb", "dialog boxes")],
+    "graphics": [("graphics", ""), ("scheme", ""),
+                 ("printcolor", "may be automatic, asis, gs1, gs2, gs3"),
+                 ("copycolor", "may be automatic, asis, gs1, gs2, gs3")],
+    "efficiency": [("adosize", "kilobytes")],
+    "network": [("checksum", ""), ("timeout1", "seconds"), ("timeout2", "seconds"), "-",
+                ("httpproxy", ""), ("httpproxyhost", ""), ("httpproxyport", ""), "-",
+                ("httpproxyauth", ""), ("httpproxyuser", ""), ("httpproxypw", "")],
+    "update": [("update_query", ""), ("update_interval", ""), ("update_prompt", "")],
+    "trace": [("trace", ""), ("tracedepth", ""), ("traceexpand", ""), ("tracesep", ""),
+              ("traceindent", ""), ("tracenumber", ""), ("tracehilite", "")],
+    "mata": [("matastrict", ""), ("matalnum", ""), ("mataoptimize", ""),
+             ("matafavor", "may be space or speed"), ("matacache", "kilobytes"),
+             ("matalibs", ""), ("matamofirst", "")],
+    "unicode": [("locale_ui", ""), ("locale_functions", "")],
+    "other": [("type", "may be float or double"),
+              ("maxiter", "max iterations for estimation commands"),
+              ("searchdefault", "may be local, net, or all"),
+              ("rng", "may be default, mt64, or kiss32"), ("rngstate", ""), ("varabbrev", ""),
+              ("emptycells", "may be keep or drop"), ("processors", ""),
+              ("odbcmgr", "may be iodbc or unixodbc"), ("odbcdriver", "may be ansi or utf16")],
+}
+# settings query shows that have no c() value
+_NOT_IN_C = {"odbcdriver": "ansi"}
+
+# What set_defaults output resets, in order (compat 2008): linesize and pagesize are left as
+# they are, and the settings after logtype are not touched. VERIFY: the other categories, which
+# here reset every setting query lists that has a known default.
+_RESET = {"output": ["more", "rmsg", "dp", "linesize", "pagesize", "level", "clevel",
+                     "showbaselevels", "showemptycells", "showomitted", "fvlabel", "fvwrap",
+                     "fvwrapon", "lstretch", "cformat", "pformat", "sformat",
+                     "coeftabresults", "logtype"]}
+_DEFAULTS = {"more": "on", "rmsg": "off", "dp": "period", "level": "95", "clevel": "95",
+             "showbaselevels": "", "showemptycells": "", "showomitted": "", "fvlabel": "on",
+             "fvwrap": "1", "fvwrapon": "word", "lstretch": "", "cformat": "", "pformat": "",
+             "sformat": "", "coeftabresults": "on", "logtype": "smcl"}
 
 
 def _settable(category: str) -> list[str]:
-    """The settings of a category: the c() rows creturn list annotates with "set name"."""
-    from .logcmd import _CRETURN_GROUPS
-    rows = dict(_CRETURN_GROUPS)[_CATEGORIES[category]]
-    return [r[0] for r in rows if isinstance(r, tuple) and r[1].startswith("set ")]
+    return [r[0] for r in _QUERY[category] if isinstance(r, tuple)]
 
 
 def _bytes(x: float) -> str:
@@ -129,9 +184,14 @@ def _bytes(x: float) -> str:
 
 def _shown(s: "Session", name: str) -> str:
     from ..core import missing as M
+    if name == "varlabelpos":
+        return ""
+    if name in _NOT_IN_C:
+        return s.settings.get(name, _NOT_IN_C[name])
     v = s.creturn(name)
     if isinstance(v, str):
-        return v
+        # VERIFY: the cut of long values (the log shows only rngstate cut, at 40 characters)
+        return v[:40] + "..." if name == "rngstate" and len(v) > 40 else v
     if v >= M.SYSMISS:
         return "."
     if name in ("segmentsize", "min_memory", "max_memory"):
@@ -141,8 +201,8 @@ def _shown(s: "Session", name: str) -> str:
 
 @command("query", "q")
 def cmd_query(s: "Session", args: str) -> None:
-    """query [category]. VERIFY: the layout and notes of the categories other than memory
-    (compat 2005 has only query memory)."""
+    """query [category], in the layout of Stata 14 (compat 2005 and 2008). VERIFY: query with
+    no category, shown here as every category in turn."""
     word = args.strip()
     cats = list(_CATEGORIES)
     if word:
@@ -152,39 +212,45 @@ def cmd_query(s: "Session", args: str) -> None:
             raise StataError(198, f"{word} invalid")   # VERIFY
         cats = match[:1]
     out = s.output
-    out.write("-" * int(s.settings.get("linesize", "80")) + "\n", "text")
-    for k, cat in enumerate(cats):
-        if k:
-            out.write("\n", "text")
+    ls = int(s.settings.get("linesize", "80"))
+    for cat in cats:
+        out.write("-" * ls + "\n", "text")
         out.write(f"    {_CATEGORIES[cat]}\n", "text")
-        for name in _settable(cat):
-            note = _MEMORY_NOTES.get(name, "")
+        for row in _QUERY[cat]:
+            if row == "-":
+                out.write("      " + "-" * (ls - 6) + "\n", "text")
+                continue
+            name, note = row
             line = f"      set {name:<17}{_shown(s, name):<11}{note}"
             out.write(line.rstrip() + "\n", "text")
 
 
 @command("set_defaults")
 def cmd_set_defaults(s: "Session", args: str) -> None:
-    """set_defaults category|_all [, permanently]: back to the default values. VERIFY: what
-    Stata displays after resetting."""
-    from ..session import DEFAULT_SETTINGS
+    """set_defaults category|_all [, permanently]: back to the default values, listing each
+    setting as Stata 14 does (compat 2008)."""
     body, _, opts = args.partition(",")
     word = body.strip()
     if opts.strip() and not "permanently".startswith(opts.strip()):
         raise StataError(198, f"option {opts.strip()} not allowed")
     names = [c for c in _CATEGORIES if c != "graphics"] + ["_all"]
+    expected = ", ".join(names[:-1]) + ", or _all expected."
     if word not in names:
         if not word:
             raise StataError(100, "set category required\n    Nothing was found where " +
-                             ", ".join(names[:-1]) + ", or _all expected.")   # compat 2005
-        raise StataError(198, f"{word} invalid")   # VERIFY
-    cats = names[:-1] if word == "_all" else [word]
-    for cat in cats:
-        for name in _settable(cat):
-            if name in DEFAULT_SETTINGS:
-                cmd_set(s, f"{name} {DEFAULT_SETTINGS[name]}")
-            else:
-                s.settings.pop(name, None)
+                             expected)   # compat 2005
+        # the stray quote is in Stata's message (compat 2008)
+        raise StataError(198, f'    {word} found where" {expected}')
+    out = s.output
+    for cat in (names[:-1] if word == "_all" else [word]):
+        for name in _RESET.get(cat, _settable(cat)):
+            if name in ("linesize", "pagesize"):
+                out.write(f"-> ({name} left at current value)\n", "text")
+            elif name in _DEFAULTS:
+                value = _DEFAULTS[name]
+                out.write(f"-> set {name} {value}".rstrip() + "\n", "text")
+                cmd_set(s, f"{name} {value}")
+    out.write("(preferences reset)\n", "text")
 
 
 @command("version", "vers")

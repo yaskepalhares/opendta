@@ -143,8 +143,24 @@ def test_query_memory_and_set_defaults(run):
     assert out[-3:-1] == ["set category required", "    Nothing was found where memory, output, "
                           "interface, efficiency, network, update, trace, mata, unicode, other, "
                           "or _all expected."]
-    run("set level 90\nset eolchar mac\nset_defaults output")
-    assert run.eval("c(level)") == 95 and run.eval("c(eolchar)") == "unix"
+    out = run("set level 90\nset eolchar mac\nset_defaults output").splitlines()
+    assert out[:4] == ["-> set more on", "-> set rmsg off", "-> set dp period",
+                       "-> (linesize left at current value)"]
+    assert out[-2:] == ["-> set logtype smcl", "(preferences reset)"]
+    # eolchar is not among the settings set_defaults output resets (compat 2008)
+    assert run.eval("c(level)") == 95 and run.eval("c(eolchar)") == "mac"
+    out = run("capture noisily set_defaults foo\ndisplay _rc").splitlines()
+    assert out[-2].startswith('    foo found where" memory, output,') and out[-1] == "198"
+
+
+def test_query_output_layout(run):
+    run("set linesize 80")
+    lines = run("query output").splitlines()
+    assert lines[:4] == ["-" * 80, "    Output settings", "      set more             off",
+                         "      set rmsg             off"]
+    assert "      set dp               period     may be period or comma" in lines
+    assert lines[7] == "      " + "-" * 74
+    assert run("set httpproxyhost abc").strip() == "(set httpproxyhost preference recorded)"
 
 
 def test_creturn_list_layout(run):
