@@ -399,7 +399,9 @@ def cmd_aorder(s: "Session", args: str) -> None:
     if ds.nvars == 0:
         return   # compat 2005: rc 0 without data
     names = unique(expand(ds, p.varlist)) if p.varlist.strip() else [v.name for v in ds.vars]
-    ds.order(sorted(names, key=str.lower))
+    # compat 2008: B a1 a2 a10 c (character codes, with the digits compared as numbers)
+    ds.order(sorted(names, key=lambda n: [(0, int(c), "") if c.isdigit() else (1, 0, c)
+                                          for c in re.findall(r"\d+|\D+", n)]))
     s.notify_state()
 
 

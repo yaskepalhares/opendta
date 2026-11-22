@@ -62,14 +62,16 @@ def _vars(run):
 
 def test_aorder_move_renpfix(run):
     assert run("clear\ncapture noisily aorder\ndisplay _rc").strip() == "0"
-    run("clear\nset obs 1\ngen c = 1\ngen a = 2\ngen B = 3\ngen x1 = 4\ngen x2 = 5")
-    run("aorder")
-    assert _vars(run) == ["a", "B", "c", "x1", "x2"]
-    run("move x2 a")
-    assert _vars(run) == ["x2", "a", "B", "c", "x1"]
+    run("clear\nset obs 1\ngen c = 1\ngen a = 2\ngen B = 3\ngen x10 = 4\ngen x2 = 5\n"
+        "rename x10 x1")
+    run("gen x10 = 6\naorder")
+    # compat 2008: upper case first, digits compared as numbers
+    assert _vars(run) == ["B", "a", "c", "x1", "x2", "x10"]
+    run("drop x10\nmove x2 a")
+    assert _vars(run) == ["B", "x2", "a", "c", "x1"]
     assert run("capture noisily move x2\ndisplay _rc").splitlines()[-1] == "102"
     run("renpfix x z")
-    assert _vars(run) == ["z2", "a", "B", "c", "z1"]
+    assert _vars(run) == ["B", "z2", "a", "c", "z1"]
     assert run.eval("r(varlist)") == "z2 z1"
     out = run("clear\ncapture noisily renpfix\ndisplay _rc").splitlines()
     assert out[-2:] == ["variable * not found", "111"]
@@ -81,8 +83,11 @@ def test_numlabel(run):
     run('label define yn 0 "No" 1 "Yes"\nlabel define g 1 "One"\nnumlabel yn, add')
     vl = run.session.data.value_labels
     assert vl["yn"] == {0: "0. No", 1: "1. Yes"} and vl["g"] == {1: "One"}
-    run("numlabel yn, add")
-    assert vl["yn"][0] == "0. No"
+    for opt in ("add", "add force"):
+        assert run(f"numlabel yn, {opt}").strip() == "(no value label to be modified)"
+        assert vl["yn"][0] == "0. No"
+    out = run("capture noisily numlabel yn, add remove\ndisplay _rc").splitlines()
+    assert out[-2:] == ["options add and remove must not be both specified", "198"]
     run('numlabel g, add mask("[#] ")')
     assert vl["g"] == {1: "[1] One"}
     run("numlabel yn, remove")
