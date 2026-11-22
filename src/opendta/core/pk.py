@@ -30,15 +30,17 @@ def auc(t: np.ndarray, c: np.ndarray, trapezoid: bool = False) -> float:
 def measures(t: np.ndarray, c: np.ndarray, fit: int = 3, trapezoid: bool = False) -> dict:
     """The measures of pkexamine: cmax, tomc (time of cmax), tmax (last time), auc on
     [0, tmax], the elimination rate ke and half-life from the regression of ln(c) on t over the
-    last `fit` points, and three AUCs on [0, inf): adding c_last/ke (auc_ln), the area under the
-    linear fit of c on t (auc_line) and under the exponential fit (auc_exp)."""
+    last `fit` points, and three AUCs on [0, inf): adding c_last/ke (auc_ln), the triangle under
+    the linear fit of c on t (auc_line) and the area under the exponential fit (auc_exp).
+    VERIFY: auc_exp, about 1e-4 above this in compat 2008."""
     o = np.argsort(t, kind="stable")
     t, c = np.asarray(t, dtype=float)[o], np.asarray(c, dtype=float)[o]
     if t[0] > 0:
-        t, c = np.concatenate([[0.0], t]), np.concatenate([[0.0], c])   # VERIFY
+        t, c = np.concatenate([[0.0], t]), np.concatenate([[0.0], c])   # compat 2008
     i = int(np.argmax(c))
+    # the area is kept as a float, and the extrapolations add to it (compat 2008)
     out = {"cmax": float(c[i]), "tomc": float(t[i]), "tmax": float(t[-1]),
-           "auc": auc(t, c, trapezoid)}
+           "auc": float(np.float32(auc(t, c, trapezoid)))}
     k = min(fit, len(t))
     tt, cc = t[-k:], c[-k:]
     ok = cc > 0
@@ -51,11 +53,12 @@ def measures(t: np.ndarray, c: np.ndarray, fit: int = 3, trapezoid: bool = False
             auc_ln = out["auc"] + c[-1] / ke
             auc_exp = out["auc"] + math.exp(a + b * t[-1]) / ke
     if len(tt) >= 2:
+        # the triangle from the last concentration to the time where the fitted line reaches
+        # zero (compat 2008)
         b1, a1 = np.polyfit(tt, cc, 1)
         if b1 < 0:
-            c_end = a1 + b1 * t[-1]
             t0 = -a1 / b1
-            auc_line = out["auc"] + max(c_end, 0.0) * max(t0 - t[-1], 0.0) / 2
+            auc_line = out["auc"] + c[-1] * max(t0 - t[-1], 0.0) / 2
     out.update({"ke": ke, "half": half, "auc_ln": auc_ln, "auc_exp": auc_exp, "auc_line": auc_line})
     return out
 
@@ -69,7 +72,7 @@ def summary(x: np.ndarray) -> dict:
     m2 = (d ** 2).mean()
     skew = (d ** 3).mean() / m2 ** 1.5 if m2 > 0 else math.nan
     kurt = (d ** 4).mean() / m2 ** 2 if m2 > 0 else math.nan
-    p = float(st.shapiro(x).pvalue) if n >= 3 and m2 > 0 else math.nan
+    p = float(st.shapiro(x).pvalue) if n >= 4 and m2 > 0 else math.nan   # compat 2008: . with 3
     return {"mean": float(x.mean()), "median": float(np.median(x)),
             "var": float(x.var(ddof=1)) if n > 1 else math.nan, "skew": skew, "kurt": kurt, "p": p}
 
@@ -94,7 +97,18 @@ def equivalence(y: np.ndarray, treat: np.ndarray, period: np.ndarray, seq: np.nd
     p_in = float(st.t.cdf((eq - diff) / se, df) - st.t.cdf((-eq - diff) / se, df))
     return {"diff": diff, "lo": lo, "hi": hi, "eq_lo": -eq, "eq_hi": eq, "ratio": mt / mr,
             "rlo": 1 + lo / mr, "rhi": 1 + hi / mr, "p": p_in, "se": se, "df": df,
-            "mean_t": mt, "mean_r": mr}
+            "mean_t": mt, "mean_r": mr, "mse": mse}
+
+
+def separability(treat: np.ndarray, carry: np.ndarray) -> float:
+    """1 minus the largest canonical correlation between the treatment and carryover dummies
+    (pkcross; compat 2008: 29.2893% in a 2x2 design). VERIFY: designs with more treatments."""
+    A, B = _dummies(treat), _dummies(carry)
+    if not A.shape[1] or not B.shape[1]:
+        return math.nan
+    qa = np.linalg.qr(A - A.mean(0))[0]
+    qb = np.linalg.qr(B - B.mean(0))[0]
+    return float(1 - np.linalg.svd(qa.T @ qb, compute_uv=False).max())
 
 
 def _dummies(x: np.ndarray) -> np.ndarray:

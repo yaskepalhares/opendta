@@ -400,6 +400,13 @@ def test_pkexamine_measures(run):
     assert run.eval("r(half)") == pytest.approx(math.log(2) / -b, rel=1e-6)
     assert run.eval("r(cmax)") == pytest.approx(4.8) and run.eval("r(tomc)") == 1
     assert run.eval("r(auc_ln) - r(auc)") == pytest.approx(.8 / -b, rel=1e-6)
+    # compat 2008: auc kept as a float, the line triangle from the last concentration, layout
+    run("pkexamine t c if id == 1, trapezoid fit(4)")
+    assert run.eval("r(auc)") == pytest.approx(28.45000076293945, abs=1e-12)
+    assert run.eval("r(auc_line)") == pytest.approx(29.13979678642299, rel=1e-9)
+    out = run("pkexamine t c if id == 1 & t > 0").splitlines()
+    assert "    Warning: the point (0, 0) is not in your data.  It will be added." in out
+    assert " " * 42 + "Maximum concentration =       4.8" in out
     assert "auclog" in run("pksumm id t c")
     run("pkcollapse t c, id(id) stat(auc cmax)")
     assert [v.name for v in run.session.data.vars] == ["id", "auc_c", "cmax_c"]
@@ -412,12 +419,17 @@ def test_pkshape_pkcross_pkequiv(run):
     ds = run.session.data
     assert ds.nobs == 12 and [v.name for v in ds.vars] == ["id", "sequence", "outcome", "treat",
                                                            "carry", "period"]
-    assert list(ds.get("treat").data[6:8]) == [2, 1] and list(ds.get("carry").data[6:8]) == [0, 2]
+    # compat 2008: the first period of every subject, then the second
+    assert list(ds.get("period").data[5:7]) == [1, 2] and list(ds.get("treat").data[6:10]) == [2, 2, 2, 1]
+    assert list(ds.get("carry").data[9:]) == [2, 2, 2]
     out = run("pkcross outcome")
     assert "Treatment effect" in out and "Carryover effect" not in out
-    run("pkequiv outcome treat period sequence id")
-    assert run.eval("r(delta)") == pytest.approx(62 / 6 - 12)
-    assert run.eval("r(lower)") < run.eval("r(delta)") < run.eval("r(upper)")
+    assert "    Omnibus measure of separability of treatment and carryover =   29.2893%" in out
+    out = run("pkequiv outcome treat period sequence id")
+    assert "      Note: Reference treatment = 1" in out
+    assert run.eval("r(lci)") == pytest.approx(1.311358867621937, rel=1e-8)
+    assert run.eval("r(uci)") == pytest.approx(2.021974465711403, rel=1e-8)
+    assert run.eval("r(stddev)") == pytest.approx(.2041241459923532, rel=1e-8)
 
 
 def test_forecast(run):

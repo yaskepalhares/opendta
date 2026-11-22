@@ -1,5 +1,5 @@
 """The pk suite ([R] pk): pkexamine, pksumm, pkcollapse, pkshape, pkequiv and pkcross. The
-measures and tests are in core/pk.py; the layouts are marked VERIFY (compat 2008)."""
+measures and tests are in core/pk.py; the layouts follow compat 2008."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def _fmt(x: float, f: str = "%9.0g") -> str:
 
 @command("pkexamine")
 def cmd_pkexamine(s: "Session", args: str) -> None:
-    """pkexamine time concentration [if] [in] [, fit(#) trapezoid]. VERIFY: the layout."""
+    """pkexamine time concentration [if] [in] [, fit(#) trapezoid]."""
     p = parse_standard(args)
     tname, cname = _vars(s, p, 2)
     o = match_options(p.options, {"fit": 1, "trapezoid": 4, "graph": 2, "line": 1, "log": 3,
@@ -75,21 +75,29 @@ def cmd_pkexamine(s: "Session", args: str) -> None:
     fit = int(o["fit"]) if o.get("fit") else 3
     m = P.measures(t, c, fit, bool(o.get("trapezoid")))
     out = s.output
-    out.write(f"\n{'Maximum concentration':<32}= {_fmt(m['cmax']):>9}\n", "result")
-    out.write(f"{'Time of maximum concentration':<32}= {_fmt(m['tomc']):>9}\n", "result")
-    out.write(f"{'Time of last observation (Tmax)':<32}= {_fmt(m['tmax']):>9}\n", "result")
-    out.write(f"{'Elimination rate':<32}= {_fmt(m['ke'], '%9.4f'):>9}\n", "result")
-    out.write(f"{'Half life':<32}= {_fmt(m['half'], '%9.4f'):>9}\n", "result")
-    out.write("\nArea under the curve\n\n", "text")
-    out.write(f"{'':13}|{'AUC [0, inf.)':>17}{'AUC [0, inf.)':>17}{'AUC [0, inf.)':>17}\n", "text")
-    out.write(f"{'AUC [0, Tmax]':>13}|{'Linear of log conc.':>20}{'Linear fit':>14}{'Exponential fit':>17}\n", "text")
-    out.write("-" * 13 + "+" + "-" * 51 + "\n", "text")
-    out.write(f"{_fmt(m['auc'], '%9.2f'):>12} |{_fmt(m['auc_ln'], '%9.2f'):>17}"
-              f"{_fmt(m['auc_line'], '%9.2f'):>17}{_fmt(m['auc_exp'], '%9.2f'):>17}\n", "result")
-    out.write(f"\nFit based on last {min(fit, len(t))} points.\n", "text")
-    s.r = {k: _num(m[v]) for k, v in (("auc", "auc"), ("auc_ln", "auc_ln"), ("auc_line", "auc_line"),
-                                      ("auc_exp", "auc_exp"), ("half", "half"), ("ke", "ke"),
-                                      ("tmax", "tmax"), ("tomc", "tomc"), ("cmax", "cmax"))}
+    # layout of compat 2008
+    if not (np.any((t == 0) & (c == 0))):
+        out.write("\n    Warning: the point (0, 0) is not in your data.  It will be added.\n", "text")
+    out.write("\n", "text")
+    for label, k, f in (("Maximum concentration", "cmax", "%9.0g"),
+                        ("Time of maximum concentration", "tomc", "%9.0g"),
+                        ("Time of last observation (Tmax)", "tmax", "%9.0g"),
+                        ("Elimination rate", "ke", "%9.4f"), ("Half life", "half", "%9.4f")):
+        out.write(f"{label:>63} = {_fmt(m[k], f):>9}\n", "result")
+    rule = "    " + "-" * 71 + "\n"
+    out.write("\n    Area under the curve\n" + rule, "text")
+    out.write("                    |    AUC [0, inf.)    | AUC [0, inf.) |  AUC [0, inf.)\n"
+              "     AUC [0, Tmax]  | Linear of log conc. |   Linear fit  | Exponential fit\n"
+              "    ----------------+---------------------+---------------+----------------\n",
+              "text")
+    out.write(f"    {_fmt(m['auc'], '%9.2f'):>10}      |{_fmt(m['auc_ln'], '%9.3f'):>15}      |"
+              f"{_fmt(m['auc_line'], '%9.3f'):>11}    |{_fmt(m['auc_exp'], '%9.3f'):>12}\n", "result")
+    out.write(rule + f"    Fit based on last {min(fit, len(t))} points.\n", "text")
+    # return list shows auc_line auc_exp auc_ln auc half ke cmax tomc tmax
+    s.r = {k: _num(m[v]) for k, v in (("tmax", "tmax"), ("tomc", "tomc"), ("cmax", "cmax"),
+                                      ("ke", "ke"), ("half", "half"), ("auc", "auc"),
+                                      ("auc_ln", "auc_ln"), ("auc_exp", "auc_exp"),
+                                      ("auc_line", "auc_line"))}
 
 
 def _per_subject(s: "Session", idname: str, tname: str, cname: str, mask, fit: int,
@@ -114,7 +122,7 @@ def _per_subject(s: "Session", idname: str, tname: str, cname: str, mask, fit: i
 @command("pksumm")
 def cmd_pksumm(s: "Session", args: str) -> None:
     """pksumm id time concentration [, fit(#) trapezoid stat(measure) nodots notimechk].
-    VERIFY: the layout and the normality test of the p-value column."""
+    The p-value is Shapiro-Wilk's, missing below 4 subjects (compat 2008 shows . with 3)."""
     p = parse_standard(args)
     idn, tn, cn = _vars(s, p, 3)
     o = match_options(p.options, {"fit": 1, "trapezoid": 4, "stat": 4, "nodots": 5, "notimechk": 6,
@@ -123,21 +131,24 @@ def cmd_pksumm(s: "Session", args: str) -> None:
         raise StataError(198, "option graph is not available yet in OpenDTA")
     keys, rows = _per_subject(s, idn, tn, cn, touse(s, p), int(o["fit"]) if o.get("fit") else 3,
                               bool(o.get("trapezoid")))
-    stats = [strip_outer_quotes(str(o["stat"]))] if o.get("stat") else _MEASURES
+    if o.get("stat"):
+        st_ = strip_outer_quotes(str(o["stat"]))
+        if st_ not in _KEY:
+            raise StataError(198, f"stat({st_}) invalid")   # VERIFY
     out = s.output
-    out.write("\nSummary statistics for the pharmacokinetic measures\n\n", "text")
-    out.write(f"{'':41}Number of observations = {len(keys):>9}\n\n", "text")
-    out.write(f"{'Measure':>18} |{'Mean':>11}{'Median':>11}{'Variance':>11}{'Skewness':>11}"
-              f"{'Kurtosis':>11}{'p-value':>10}\n", "text")
-    out.write("-" * 19 + "+" + "-" * 65 + "\n", "text")
-    for m in stats:
-        if m not in _KEY:
-            raise StataError(198, f"stat({m}) invalid")   # VERIFY
+    if not o.get("nodots"):
+        out.write("." * len(keys) + "\n", "text")
+    # compat 2008: the table has every measure even with stat(), which picks the graphed one
+    out.write("\n Summary statistics for the pharmacokinetic measures\n\n", "text")
+    out.write(f"{'':49}Number of observations = {len(keys):>5}\n\n", "text")
+    out.write("     Measure |      Mean     Median     Variance  Skewness   Kurtosis   p-value\n"
+              + "-" * 13 + "+" + "-" * 65 + "\n", "text")
+    for m in _MEASURES:
         x = np.array([r[_KEY[m]] for r in rows], dtype=float)
         z = P.summary(x)
-        out.write(f"{m:>18} |" + "".join(f"{_fmt(z[k], '%9.2f'):>11}" for k in
-                                         ("mean", "median", "var", "skew", "kurt"))
-                  + f"{_fmt(z['p'], '%9.2f'):>10}\n", "result")
+        cells = [_fmt(z[k], "%9.2f") for k in ("mean", "median", "var", "skew", "kurt", "p")]
+        out.write(f"{m:>12} |" + "".join(f"{v:>{w}}" for v, w in zip(cells, (10, 11, 13, 10, 11, 10)))
+                  + "\n", "result")
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +159,7 @@ def cmd_pksumm(s: "Session", args: str) -> None:
 def cmd_pkcollapse(s: "Session", args: str) -> None:
     """pkcollapse time concentration [if], id(idvar) [stat(list) keep(varlist) fit(#)
     trapezoid force nodots]: one observation per subject with the measures, named
-    measure_concentration. VERIFY: the variable names and their order."""
+    measure_concentration, in the order of compat 2008."""
     p = parse_standard(args)
     tn, cn = _vars(s, p, 2)
     o = match_options(p.options, {"id": 2, "stat": 4, "keep": 4, "fit": 1, "trapezoid": 4,
@@ -158,7 +169,11 @@ def cmd_pkcollapse(s: "Session", args: str) -> None:
     idn = expand(s.data, str(o["id"]))[0]
     keys, rows = _per_subject(s, idn, tn, cn, touse(s, p), int(o["fit"]) if o.get("fit") else 3,
                               bool(o.get("trapezoid")))
-    stats = strip_outer_quotes(str(o["stat"])).split() if o.get("stat") else _MEASURES
+    # tmax comes before tomc here (compat 2008)
+    stats = strip_outer_quotes(str(o["stat"])).split() if o.get("stat") else \
+        ["auc", "aucline", "aucexp", "auclog", "half", "ke", "cmax", "tmax", "tomc"]
+    if not o.get("nodots"):
+        s.output.write("." * len(keys) + "\n", "text")
     keep = [k for k in expand(s.data, str(o["keep"])) if k != idn] if o.get("keep") else []
     old = s.data
     ids = old.get(idn).data
@@ -208,6 +223,7 @@ def cmd_pkshape(s: "Session", args: str) -> None:
     ds = s.data
     ids, seq = ds.get(idn).data, ds.get(seqn).data.astype(float)
     rows = []
+    # one block per period, the subjects in their order inside it (compat 2008)
     for i in range(ds.nobs):
         k = int(seq[i]) - 1
         if not 0 <= k < len(orders):
@@ -217,6 +233,7 @@ def cmd_pkshape(s: "Session", args: str) -> None:
             tr = code[orders[k][j]]
             rows.append((ids[i], k + 1, ds.get(pv).data[i], tr, prev, j + 1))
             prev = tr
+    rows.sort(key=lambda r: r[5])
     new = Dataset()
     new.set_obs(len(rows))
     cols = list(zip(*rows)) if rows else [[]] * 6
@@ -238,8 +255,8 @@ def cmd_pkshape(s: "Session", args: str) -> None:
 @command("pkequiv")
 def cmd_pkequiv(s: "Session", args: str) -> None:
     """pkequiv outcome treatment period sequence id [, compare(# #) limit(#) level(#)]: the
-    classic confidence interval for bioequivalence. VERIFY: the layout, fieller, symmetric,
-    anderson and tost."""
+    classic confidence interval for bioequivalence (layout of compat 2008). fieller, symmetric,
+    anderson and tost are not available yet."""
     p = parse_standard(args)
     yn, tn, pn, sn, idn = _vars(s, p, 5)
     o = match_options(p.options, {"compare": 4, "limit": 3, "level": 1, "noboot": 4, "fieller": 4,
@@ -254,22 +271,25 @@ def cmd_pkequiv(s: "Session", args: str) -> None:
     else:
         if len(levels) != 2:
             raise StataError(198, "compare() required with more than two treatments")   # VERIFY
-        test, ref = levels[0], levels[1]
+        test, ref = levels[1], levels[0]   # the first treatment is the reference (compat 2008)
     limit = float(o["limit"]) if o.get("limit") else 0.2
     level = float(o["level"]) if o.get("level") else 90.0
     r = P.equivalence(y, t, per, seq, ident, test, ref, level, limit)
     out = s.output
-    out.write("\nClassic confidence interval for bioequivalence\n\n", "text")
-    out.write(f"{'':23}[equivalence limits]{'':7}[{'test limits':^17}]\n", "text")
-    out.write("  " + "-" * 64 + "\n", "text")
-    out.write(f"{'difference':>14}{_fmt(r['eq_lo'], '%10.3f'):>11}{_fmt(r['eq_hi'], '%10.3f'):>11}"
-              f"{_fmt(r['lo'], '%10.3f'):>17}{_fmt(r['hi'], '%10.3f'):>11}\n", "result")
-    out.write(f"{'ratio':>14}{_fmt(100 * (1 - limit), '%9.0g') + '%':>11}"
-              f"{_fmt(100 * (1 + limit), '%9.0g') + '%':>11}{_fmt(100 * r['rlo'], '%9.3f') + '%':>17}"
-              f"{_fmt(100 * r['rhi'], '%9.3f') + '%':>11}\n", "result")
-    out.write("  " + "-" * 64 + "\n", "text")
-    out.write(f"\nprobability test limits are within equivalence limits = {r['p']:>10.4f}\n", "result")
-    s.r = {"lower": r["lo"], "upper": r["hi"], "delta": r["diff"], "p": r["p"]}
+    rule = "      " + "-" * 70 + "\n"
+    out.write("\n      Classic confidence interval for bioequivalence\n" + rule
+              + "                         [equivalence limits]        [    test limits   ]\n"
+              + rule, "text")
+    out.write(f"{'difference:':>22}{_fmt(r['eq_lo'], '%10.3f'):>10}{_fmt(r['eq_hi'], '%10.3f'):>13}"
+              f"{_fmt(r['lo'], '%10.3f'):>15}{_fmt(r['hi'], '%10.3f'):>13}\n", "result")
+    out.write(f"{'ratio:':>22}{_fmt(100 * (1 - limit), '%9.0g') + '%':>10}"
+              f"{_fmt(100 * (1 + limit), '%9.0g') + '%':>13}{_fmt(100 * r['rlo'], '%9.3f') + '%':>16}"
+              f"{_fmt(100 * r['rhi'], '%9.3f') + '%':>13}\n", "result")
+    # VERIFY: the probability (compat 2008 shows .6550 and .9700 where this gives others)
+    out.write(rule + f"      Probability test limits are within equivalence limits = {r['p']:>9.4f}\n"
+              f"      Note: Reference treatment = {_fmt(ref)}\n", "result")
+    # return list shows stddev uci lci (compat 2008); stddev is sqrt(MSE/2)
+    s.r = {"lci": r["lo"], "uci": r["hi"], "stddev": math.sqrt(r["mse"] / 2)}
 
 
 @command("pkcross")
@@ -297,21 +317,42 @@ def cmd_pkcross(s: "Session", args: str) -> None:
     cols = _columns(s, names, touse(s, p))
     a = P.anova_crossover(*cols[:5], cols[5] if len(cols) > 5 else None)
     out = s.output
-    out.write(f"\n{'':10}sequence variable = {seqn}\n{'':12}period variable = {pn}\n"
-              f"{'':9}treatment variable = {tn}\n{'':9}carryover variable = {carry}\n"
-              f"{'':16}id variable = {idn}\n\n", "text")
-    out.write(f" Analysis of variance (ANOVA) for a crossover study\n", "text")
-    out.write(f"{'Source of Variation':>20} |{'SS':>11}{'df':>7}{'MS':>11}{'F':>10}{'Prob > F':>10}\n", "text")
-    out.write("-" * 21 + "+" + "-" * 49 + "\n", "text")
-    labels = {"sequence": "Sequence effect", "id|sequence": "Residuals", "period": "Period effect",
-              "treatment": "Treatment effect", "carryover": "Carryover effect"}
-    for row in a["rows"]:
-        if not row["df"]:
-            continue   # aliased with the terms before it (VERIFY: Stata's note)
-        out.write(f"{labels[row['term']]:>20} |{_fmt(row['ss'], '%10.2f'):>11}{row['df']:>7}"
-                  f"{_fmt(row['ms'], '%10.2f'):>11}{_fmt(row['F'], '%9.2f'):>10}"
-                  f"{_fmt(row['p'], '%9.4f'):>10}\n", "result")
-    out.write(f"{'Residuals':>20} |{_fmt(a['rss'], '%10.2f'):>11}{a['df_r']:>7}"
-              f"{_fmt(a['mse'], '%10.2f'):>11}\n", "result")
-    out.write("-" * 21 + "+" + "-" * 49 + "\n", "text")
-    out.write(f"{'Total':>20} |{_fmt(a['tss'], '%10.2f'):>11}{a['n'] - 1:>7}\n", "result")
+    # layout of compat 2008 (a 2x2 design)
+    shown = "" if carry == "none" else carry
+    for label, v in (("sequence variable", seqn), ("period variable", pn),
+                     ("treatment variable", tn), ("carryover variable", shown), ("id variable", idn)):
+        out.write(f"{label:>66} = {v}\n", "text")
+    nseq, nper = len(np.unique(cols[1])), len(np.unique(cols[3]))
+    design = f"a {nseq}x{nper} crossover study" if nseq == nper == 2 else "a crossover study"   # VERIFY
+    rule = "    " + "-" * 22 + "+" + "-" * 50 + "\n"
+    out.write(f"\n               Analysis of variance (ANOVA) for {design}\n"
+              "     Source of Variation  | Partial SS   df        MS          F     Prob > F\n"
+              + rule, "text")
+
+    def line(label, ss, df, ms=None, F=None, pv=None):
+        txt = f"{label:>25} |{_fmt(ss, '%10.2f'):>11}{df:>5}"
+        if ms is not None:
+            txt += f"{_fmt(ms, '%10.2f'):>12}"
+        if F is not None:
+            txt += f"{_fmt(F, '%9.2f'):>10}{_fmt(pv, '%9.4f'):>12}"
+        out.write(txt + "\n", "result")
+    rows = {r["term"]: r for r in a["rows"] if r["df"]}   # aliased terms are left out
+    out.write("     Intersubjects        |\n", "text")
+    for term, label in (("sequence", "Sequence effect"), ("id|sequence", "Residuals")):
+        if term in rows:
+            r = rows[term]
+            # the subjects within sequence are tested against the residual
+            line(label, r["ss"], r["df"], r["ms"], r["F"], r["p"])
+    out.write(rule + "     Intrasubjects        |\n", "text")
+    for term, label in (("treatment", "Treatment effect"), ("carryover", "Carryover effect"),
+                        ("period", "Period effect")):
+        if term in rows:
+            r = rows[term]
+            line(label, r["ss"], r["df"], r["ms"], r["F"], r["p"])
+    line("Residuals", a["rss"], a["df_r"], a["mse"])
+    out.write(rule, "text")
+    line("Total", a["tss"], a["n"] - 1)
+    if carry != "none":
+        sep = P.separability(cols[4], cols[5])
+        out.write(f"\n    Omnibus measure of separability of treatment and carryover = "
+                  f"{_fmt(100 * sep, '%9.4f'):>9}%\n", "result")
