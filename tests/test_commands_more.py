@@ -250,6 +250,17 @@ def test_hexdump(run, tmp_path, monkeypatch):
     assert r == {"Windows": 1, "Unix": 1, "uc": 1, "lc": 3, "digit": 1, "tab": 1, "blank": 1,
                  "extended": 1, "filesize": 11}
     assert "Line-end characters" in run("hexdump a.txt, analyze")
+    # compat 2008: the layouts and r() of Stata 14
+    (tmp_path / "b.txt").write_bytes(b"Ab 1\nx\ty\n")
+    out = run("hexdump b.txt").splitlines()
+    assert out[2] == "         address |  0 1  2 3  4 5  6 7  8 9  a b  c d  e f | 0123456789abcdef"
+    assert out[4] == "               0 | 4162 2031 0a78 0979 0a                  | Ab 1.x.y."
+    out = run("hexdump b.txt, analyze").splitlines()
+    assert out[2] == ("    \\r\\n         (Windows)              0      minimum"
+                      "                        3")
+    assert out[-1] == "     \\t \\n blank 1 A b x y"
+    assert run.eval("r(lnum)") == 2 and run.eval("r(eoleof)") == 1 and run.eval("r(l1)") == 4
+    assert run.eval("r(format)") == "ASCII"
 
 
 def test_sdtesti(run):
