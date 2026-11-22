@@ -94,6 +94,16 @@ def test_numlabel(run):
     assert vl["yn"] == {0: "No", 1: "Yes"}
 
 
+def test_mkmat_svmat_names(run):
+    # compat 2008: default row names r1 r2..., rowprefix() replaces the r; eqcol joins directly
+    run("clear\ninput a b\n1 2\n3 .\n5 6\nend")
+    run("mkmat a b, matrix(B)\nmkmat a b, matrix(C) nomissing rowprefix(p)")
+    assert "r1" in run("matrix list B") and run("matrix list C").splitlines()[-1].startswith("p2")
+    run("matrix D = (1, 2 \\ 3, 4)\nmatrix colnames D = u v\nmatrix coleq D = e1 e2")
+    run("svmat D, names(eqcol)\nsvmat D, names(matcol)")
+    assert _vars(run)[-4:] == ["e1u", "e2v", "Du", "Dv"]
+
+
 def test_mkmat_svmat(run):
     out = run("clear\ncapture noisily mkmat\ndisplay _rc").splitlines()
     assert out[-2:] == ["varlist required", "100"]
@@ -133,7 +143,12 @@ def test_numlist_errors(run, arg, rc):
 
 def test_rcof(run):
     out = run("capture display 1/\ncapture noisily rcof\ndisplay _rc").splitlines()
-    assert out[-3:] == ["rcof:  _rc  *NOT TRUE* from", "       _rc == 0", "9"]
+    assert out[-4:] == ["rcof:  _rc  *NOT TRUE* from", "       ", "       _rc == 0", "9"]
+    out = run('capture noisily rcof "display 1/" == 0').splitlines()
+    assert out[-3:] == ["rcof:  _rc  == 0 *NOT TRUE* from", "       display 1/",
+                        "       _rc == 198"]
+    run('numlist "1/2000"')
+    assert len(run.eval("r(numlist)").split()) == 2000
     assert run('rcof "noisily display 1/" == 198\ndisplay "ok"').splitlines()[-1] == "ok"
     assert run('capture rcof "display 1" != 0\ndisplay _rc').strip() == "9"
 

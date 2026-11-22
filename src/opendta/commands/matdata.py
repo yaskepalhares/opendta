@@ -58,10 +58,12 @@ def cmd_mkmat(s: "Session", args: str) -> None:
     elif o.get("obs"):
         rnames = [str(i + 1) for i in rows]
     else:
-        rnames = [f"r{i}" for i in range(1, len(rows) + 1)]
-    if o.get("rowprefix"):
+        # rowprefix() replaces the r of r1, r2... (compat 2008: p1 p2)
+        pre = strip_outer_quotes(str(o["rowprefix"])) if o.get("rowprefix") else "r"
+        rnames = [f"{pre}{i}"[:nchar] for i in range(1, len(rows) + 1)]
+    if o.get("rowprefix") and (o.get("rownames") or o.get("obs")):
         pre = strip_outer_quotes(str(o["rowprefix"]))
-        rnames = [(pre + r)[:nchar] for r in rnames]
+        rnames = [(pre + r)[:nchar] for r in rnames]   # VERIFY
     req = _name_values(s, str(o["roweq"]), rows, nchar) if o.get("roweq") else []
     store = _store(s)
     if o.get("matrix"):
@@ -90,8 +92,9 @@ def cmd_svmat(s: "Session", args: str) -> None:
     if how == "col":
         vnames = list(A.colnames)
     elif how == "eqcol":
-        vnames = [(eq + "_" if eq != "_" else "") + c for eq, c in zip(A.coleq, A.colnames)]
-    elif how == "matcol":   # VERIFY: matcol and eqcol name joining
+        # compat 2008: e1u, Du (the parts joined with nothing between)
+        vnames = [(eq if eq != "_" else "") + c for eq, c in zip(A.coleq, A.colnames)]
+    elif how == "matcol":
         vnames = [name + c for c in A.colnames]
     else:
         stub = how or name

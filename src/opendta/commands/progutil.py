@@ -194,7 +194,8 @@ def cmd_viewsource(s: "Session", args: str) -> None:
 @command("numlist")
 def cmd_numlist(s: "Session", args: str) -> None:
     """numlist "numlist" [, ascending descending integer missingokay min() max() range() sort]:
-    the expanded list in r(numlist). VERIFY: the default max(1600)."""
+    the expanded list in r(numlist). With no max(), the list has no limit (compat 2008:
+    1/2000 is accepted)."""
     comma = find_top(args, ",")
     body, opt = (args, "") if comma == -1 else (args[:comma], args[comma + 1:])
     o = match_options(opt, {"ascending": 1, "descending": 1, "integer": 3, "missingokay": 7,
@@ -209,7 +210,7 @@ def cmd_numlist(s: "Session", args: str) -> None:
     check_numlist(nums, ascending=bool(o.get("ascending")), descending=bool(o.get("descending")),
                   integer=bool(o.get("integer")), missingokay=bool(o.get("missingokay")),
                   minimum=int(o["min"]) if o.get("min") else 1,
-                  maximum=int(o["max"]) if o.get("max") else 1600, bounds=bounds)
+                  maximum=int(o["max"]) if o.get("max") else None, bounds=bounds)
     if o.get("sort"):
         nums = sorted(nums)
     s.r = {"numlist": " ".join("." if x >= 8.98846567431158e307 else num_str(x) for x in nums)}
@@ -238,4 +239,6 @@ def cmd_rcof(s: "Session", args: str) -> None:
         rc = s.rc
     ok = s.eval(f"{rc} {cond}") if cond else 0.0
     if not ok or ok >= 8.98846567431158e307:
-        raise StataError(9, f"rcof:  _rc {cond} *NOT TRUE* from\n       _rc == {rc}")
+        # compat 2005 and 2008: the condition, then the command, then the return code
+        cond = " " + cond if cond else ""
+        raise StataError(9, f"\nrcof:  _rc {cond} *NOT TRUE* from\n       {cmd}\n       _rc == {rc}")
