@@ -74,8 +74,18 @@ def _locale() -> str:
                                  text=True, timeout=2).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             loc = ""
+    elif platform.system() == "Windows":
+        try:   # "en-US"; locale.getlocale() gives "English_United States" there
+            import ctypes
+            buf = ctypes.create_unicode_buffer(85)
+            if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
+                loc = buf.value.replace("-", "_")
+        except (OSError, AttributeError):
+            loc = ""
     loc = loc or locale.getlocale()[0] or os.environ.get("LANG", "")
     region = loc.split(".")[0].split("@")[0].split("_")[1] if "_" in loc else "US"
+    if not (len(region) == 2 and region.isalpha()):
+        region = "US"
     return "en_" + region
 
 
