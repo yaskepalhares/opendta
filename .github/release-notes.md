@@ -1,5 +1,13 @@
 **English** · [Português](#português)
 
+## What's new in 0.14.1
+
+Fixes:
+
+- On Windows, file messages ("file ... not found", "could not be opened", "already exists", "saved") show the path with `/`, as Stata does, instead of `\`.
+
+Also in 0.14.0 (missing from its notes): many differences from Stata 14 found with research do-files were fixed: date, string and distribution functions; `bsqreg`, `iqreg` and `sqreg`; the pk commands; `forecast`; `estat vif`; `robvar`, `sfrancia` and `sdtesti`; `mkmat` and `svmat`; `hexdump`; `numlabel`; `query` and `set_defaults`; `creturn list`; and `label values`, which now widens the display format to the longest label.
+
 ## What's new in 0.14.0
 
 Changes:
@@ -89,6 +97,14 @@ Personal study project, released under the MIT License. Stata is a registered tr
 ---
 
 ## Português
+
+### Novidades da 0.14.1
+
+Correções:
+
+- No Windows, as mensagens de arquivo ("file ... not found", "could not be opened", "already exists", "saved") mostram o caminho com `/`, como o Stata, e não com `\`.
+
+Também na 0.14.0 (faltou nas notas dela): muitas diferenças em relação ao Stata 14 encontradas com do-files de pesquisa foram corrigidas: funções de data, texto e distribuição; `bsqreg`, `iqreg` e `sqreg`; os comandos pk; `forecast`; `estat vif`; `robvar`, `sfrancia` e `sdtesti`; `mkmat` e `svmat`; `hexdump`; `numlabel`; `query` e `set_defaults`; `creturn list`; e `label values`, que agora alarga o formato até o rótulo mais longo.
 
 ### Novidades da 0.14.0
 
